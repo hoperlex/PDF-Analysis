@@ -69,7 +69,7 @@ class LiveAdapter:
                 stage_id=STAGE_ID,
                 reason="provider_sdk_version_mismatch",
             )
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._client = anthropic.Anthropic(api_key=api_key, max_retries=0)
 
     @property
     def provider_mode(self) -> ProviderMode:

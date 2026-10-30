@@ -1,0 +1,1643 @@
+{
+  "format": "extended-section-sources/1",
+  "repository": "https://github.com/SU10KAZ/PDF-proverka",
+  "commit": "3c99481719218b9cfa7560886529916646c61939",
+  "historical_norms_only": true,
+  "sections": {
+    "AR": {
+      "title": "Архитектурные решения",
+      "legacy_profile": "AR",
+      "visual_catalog": "AR",
+      "adaptation": "adapted/AR.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/AR/role.md",
+          "disciplines/AR/drawing_types.md",
+          "disciplines/AR/checklist.md",
+          "reference_catalog/profiles/AR.md"
+        ],
+        "comprehensive": [
+          "disciplines/AR/checklist.md",
+          "disciplines/AR/project_params.md"
+        ],
+        "critic": [
+          "disciplines/AR/finding_categories.md",
+          "disciplines/AR/triage_table.md",
+          "disciplines/AR/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/AR/compact_strategy.md",
+          "disciplines/AR/checklist.md"
+        ],
+        "norm": [
+          "disciplines/AR/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "AI": {
+      "title": "Архитектурные решения (интерьер)",
+      "legacy_profile": "AI",
+      "visual_catalog": "AR",
+      "adaptation": "adapted/AI.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/AI/role.md",
+          "disciplines/AI/drawing_types.md",
+          "disciplines/AI/checklist.md",
+          "reference_catalog/profiles/AR.md"
+        ],
+        "comprehensive": [
+          "disciplines/AI/checklist.md",
+          "disciplines/AI/project_params.md"
+        ],
+        "critic": [
+          "disciplines/AI/finding_categories.md",
+          "disciplines/AI/triage_table.md",
+          "disciplines/AI/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/AI/compact_strategy.md",
+          "disciplines/AI/checklist.md"
+        ],
+        "norm": [
+          "disciplines/AI/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "PS": {
+      "title": "Пояснительная записка",
+      "legacy_profile": "PS",
+      "visual_catalog": null,
+      "adaptation": "adapted/PS.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/PS/role.md",
+          "disciplines/PS/drawing_types.md",
+          "disciplines/PS/checklist.md"
+        ],
+        "comprehensive": [
+          "disciplines/PS/checklist.md",
+          "disciplines/PS/project_params.md"
+        ],
+        "critic": [
+          "disciplines/PS/finding_categories.md",
+          "disciplines/PS/triage_table.md",
+          "disciplines/PS/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/PS/compact_strategy.md",
+          "disciplines/PS/checklist.md"
+        ],
+        "norm": [
+          "disciplines/PS/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "POS": {
+      "title": "Проект организации строительства",
+      "legacy_profile": "POS",
+      "visual_catalog": "GP",
+      "adaptation": "adapted/POS.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/POS/role.md",
+          "disciplines/POS/drawing_types.md",
+          "disciplines/POS/checklist.md",
+          "reference_catalog/profiles/GP.md"
+        ],
+        "comprehensive": [
+          "disciplines/POS/checklist.md",
+          "disciplines/POS/project_params.md"
+        ],
+        "critic": [
+          "disciplines/POS/finding_categories.md",
+          "disciplines/POS/triage_table.md",
+          "disciplines/POS/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/POS/compact_strategy.md",
+          "disciplines/POS/checklist.md"
+        ],
+        "norm": [
+          "disciplines/POS/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "TX": {
+      "title": "Технологические решения",
+      "legacy_profile": "TX",
+      "visual_catalog": "TX",
+      "adaptation": "adapted/TX.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/TX/role.md",
+          "disciplines/TX/drawing_types.md",
+          "disciplines/TX/checklist.md",
+          "reference_catalog/profiles/TX.md"
+        ],
+        "comprehensive": [
+          "disciplines/TX/checklist.md",
+          "disciplines/TX/project_params.md"
+        ],
+        "critic": [
+          "disciplines/TX/finding_categories.md",
+          "disciplines/TX/triage_table.md",
+          "disciplines/TX/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/TX/compact_strategy.md",
+          "disciplines/TX/checklist.md"
+        ],
+        "norm": [
+          "disciplines/TX/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "KJ": {
+      "title": "Конструкции железобетонные",
+      "legacy_profile": "KJ",
+      "visual_catalog": "KJ",
+      "adaptation": "adapted/KJ.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/KJ/role.md",
+          "disciplines/KJ/drawing_types.md",
+          "disciplines/KJ/checklist.md",
+          "reference_catalog/profiles/KJ.md"
+        ],
+        "comprehensive": [
+          "disciplines/KJ/checklist.md",
+          "disciplines/KJ/project_params.md"
+        ],
+        "critic": [
+          "disciplines/KJ/finding_categories.md",
+          "disciplines/KJ/triage_table.md",
+          "disciplines/KJ/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/KJ/compact_strategy.md",
+          "disciplines/KJ/checklist.md"
+        ],
+        "norm": [
+          "disciplines/KJ/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "KM": {
+      "title": "Конструкции металлические",
+      "legacy_profile": "KM",
+      "visual_catalog": "KM",
+      "adaptation": "adapted/KM.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/KM/role.md",
+          "disciplines/KM/drawing_types.md",
+          "disciplines/KM/checklist.md",
+          "reference_catalog/profiles/KM.md"
+        ],
+        "comprehensive": [
+          "disciplines/KM/checklist.md",
+          "disciplines/KM/project_params.md"
+        ],
+        "critic": [
+          "disciplines/KM/finding_categories.md",
+          "disciplines/KM/triage_table.md",
+          "disciplines/KM/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/KM/compact_strategy.md",
+          "disciplines/KM/checklist.md"
+        ],
+        "norm": [
+          "disciplines/KM/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "OV": {
+      "title": "Отопление, вентиляция и кондиционирование",
+      "legacy_profile": "OV",
+      "visual_catalog": "HVAC",
+      "adaptation": "adapted/OV.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/OV/role.md",
+          "disciplines/OV/drawing_types.md",
+          "disciplines/OV/checklist.md",
+          "reference_catalog/profiles/HVAC.md"
+        ],
+        "comprehensive": [
+          "disciplines/OV/checklist.md",
+          "disciplines/OV/project_params.md"
+        ],
+        "critic": [
+          "disciplines/OV/finding_categories.md",
+          "disciplines/OV/triage_table.md",
+          "disciplines/OV/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/OV/compact_strategy.md",
+          "disciplines/OV/checklist.md"
+        ],
+        "norm": [
+          "disciplines/OV/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "VK": {
+      "title": "Водоснабжение и канализация",
+      "legacy_profile": "VK",
+      "visual_catalog": "VK",
+      "adaptation": "adapted/VK.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/VK/role.md",
+          "disciplines/VK/drawing_types.md",
+          "disciplines/VK/checklist.md",
+          "reference_catalog/profiles/VK.md"
+        ],
+        "comprehensive": [
+          "disciplines/VK/checklist.md",
+          "disciplines/VK/project_params.md"
+        ],
+        "critic": [
+          "disciplines/VK/finding_categories.md",
+          "disciplines/VK/triage_table.md",
+          "disciplines/VK/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/VK/compact_strategy.md",
+          "disciplines/VK/checklist.md"
+        ],
+        "norm": [
+          "disciplines/VK/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "PT": {
+      "title": "Противопожарный водопровод",
+      "legacy_profile": "PT",
+      "visual_catalog": "VK",
+      "adaptation": "adapted/PT.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/PT/role.md",
+          "disciplines/PT/drawing_types.md",
+          "disciplines/PT/checklist.md",
+          "reference_catalog/profiles/VK.md"
+        ],
+        "comprehensive": [
+          "disciplines/PT/checklist.md",
+          "disciplines/PT/project_params.md"
+        ],
+        "critic": [
+          "disciplines/PT/finding_categories.md",
+          "disciplines/PT/triage_table.md",
+          "disciplines/PT/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/PT/compact_strategy.md",
+          "disciplines/PT/checklist.md"
+        ],
+        "norm": [
+          "disciplines/PT/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "EOM": {
+      "title": "Электроснабжение и электрооборудование",
+      "legacy_profile": "EOM",
+      "visual_catalog": "EOM",
+      "adaptation": "adapted/EOM.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/EOM/role.md",
+          "disciplines/EOM/drawing_types.md",
+          "disciplines/EOM/checklist.md",
+          "reference_catalog/profiles/EOM.md"
+        ],
+        "comprehensive": [
+          "disciplines/EOM/checklist.md",
+          "disciplines/EOM/project_params.md"
+        ],
+        "critic": [
+          "disciplines/EOM/finding_categories.md",
+          "disciplines/EOM/triage_table.md",
+          "disciplines/EOM/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/EOM/checklist.md"
+        ],
+        "norm": [
+          "disciplines/EOM/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "SS": {
+      "title": "Слаботочные системы",
+      "legacy_profile": "SS",
+      "visual_catalog": "SS",
+      "adaptation": "adapted/SS.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/SS/role.md",
+          "disciplines/SS/drawing_types.md",
+          "disciplines/SS/checklist.md",
+          "reference_catalog/profiles/SS.md"
+        ],
+        "comprehensive": [
+          "disciplines/SS/checklist.md",
+          "disciplines/SS/project_params.md"
+        ],
+        "critic": [
+          "disciplines/SS/finding_categories.md",
+          "disciplines/SS/triage_table.md",
+          "disciplines/SS/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/SS/compact_strategy.md",
+          "disciplines/SS/checklist.md"
+        ],
+        "norm": [
+          "disciplines/SS/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "ITP": {
+      "title": "Индивидуальный тепловой пункт",
+      "legacy_profile": "ITP",
+      "visual_catalog": "HVAC",
+      "adaptation": "adapted/ITP.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/ITP/role.md",
+          "disciplines/ITP/drawing_types.md",
+          "disciplines/ITP/checklist.md",
+          "reference_catalog/profiles/HVAC.md"
+        ],
+        "comprehensive": [
+          "disciplines/ITP/checklist.md",
+          "disciplines/ITP/project_params.md"
+        ],
+        "critic": [
+          "disciplines/ITP/finding_categories.md",
+          "disciplines/ITP/triage_table.md",
+          "disciplines/ITP/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/ITP/compact_strategy.md",
+          "disciplines/ITP/checklist.md"
+        ],
+        "norm": [
+          "disciplines/ITP/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "GP": {
+      "title": "Генеральный план",
+      "legacy_profile": "GP",
+      "visual_catalog": "GP",
+      "adaptation": "adapted/GP.md",
+      "phase_assets": {
+        "block": [
+          "disciplines/GP/role.md",
+          "disciplines/GP/drawing_types.md",
+          "disciplines/GP/checklist.md",
+          "reference_catalog/profiles/GP.md"
+        ],
+        "comprehensive": [
+          "disciplines/GP/checklist.md",
+          "disciplines/GP/project_params.md"
+        ],
+        "critic": [
+          "disciplines/GP/finding_categories.md",
+          "disciplines/GP/triage_table.md",
+          "disciplines/GP/checklist.md"
+        ],
+        "corrector": [
+          "disciplines/GP/compact_strategy.md",
+          "disciplines/GP/checklist.md"
+        ],
+        "norm": [
+          "disciplines/GP/norms_reference.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    },
+    "PB": {
+      "title": "Пожарная безопасность",
+      "legacy_profile": null,
+      "visual_catalog": null,
+      "adaptation": "adapted/PB.md",
+      "phase_assets": {
+        "block": [
+          "adapted/PB-fire-source-excerpts.md"
+        ],
+        "comprehensive": [
+          "adapted/PB-fire-source-excerpts.md"
+        ],
+        "critic": [
+          "adapted/PB-fire-source-excerpts.md"
+        ],
+        "corrector": [
+          "adapted/PB-fire-source-excerpts.md"
+        ],
+        "norm": [
+          "adapted/PB-fire-source-excerpts.md"
+        ],
+        "report": []
+      },
+      "normative_authority": "historical context only; supplied current corpus quotes required"
+    }
+  },
+  "assets": [
+    {
+      "local_path": "disciplines/AR/checklist.md",
+      "source_path": "prompts/disciplines/AR/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "eccb7879023a126427fd61a0ed36237eb42bbebd4bec63c4009004247d7f3179",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/compact_strategy.md",
+      "source_path": "prompts/disciplines/AR/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5004efa53188a2423dedc3605ca261f628ff449e01dfbe18cf81cf3ef00ddea9",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/config.json",
+      "source_path": "prompts/disciplines/AR/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "ece283a76e7975a79c92b998eaf6e4babc129ca2c862dbd610633cccfc2d36b5",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/drawing_types.md",
+      "source_path": "prompts/disciplines/AR/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "38ef910c11c71d03819a37c258933bcf4c851ac2cce31bace2681d8fde8fa45e",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/finding_categories.md",
+      "source_path": "prompts/disciplines/AR/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "e0591c94b2f385a837872f37f5ef32eb057131265c32283e5f732b2c1fa236ce",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/norms_reference.md",
+      "source_path": "prompts/disciplines/AR/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "15362a671e97f9ac97cb9b0b161acc0f047befaa9207a4185f1805d4ade55bad",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/project_params.md",
+      "source_path": "prompts/disciplines/AR/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5d827feac80cf85760af4a1d3f8509e15defb0df771c09ea83e475e172a80f35",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/role.md",
+      "source_path": "prompts/disciplines/AR/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "fda944f74c4a0bd7cd77339f2c2f8519f55d59e899be03da212f93d2ad432203",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AR/triage_table.md",
+      "source_path": "prompts/disciplines/AR/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "837ab2bbfdc0dbb1c0c62754326869fe2f94e4e09f0b510d9b6ed643de64385a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/checklist.md",
+      "source_path": "prompts/disciplines/AI/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "3834f9d05d42d67b000fa97e9acaaed7fe312487bca74ef346f22f568a9db743",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/compact_strategy.md",
+      "source_path": "prompts/disciplines/AI/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5f2a12ad3f27494642a2c2f27a3bf83b5fbc7810a4fe00ffbada2e8b9950f056",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/config.json",
+      "source_path": "prompts/disciplines/AI/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8485b59a96a3a51ac05b5751c633bb2e8571097e9ccce458bc82e349d93d1a8d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/drawing_types.md",
+      "source_path": "prompts/disciplines/AI/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "222a05aafc2a3f5eb6ec95afed033715daf12ca9dd760e6f8807a26b19b897de",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/finding_categories.md",
+      "source_path": "prompts/disciplines/AI/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "70d3e0e5c4556583141dd41b9220a4c4917d8c12c541e810a802ac03f1f02946",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/norms_reference.md",
+      "source_path": "prompts/disciplines/AI/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "ebcfdd8e0406c40575e344476e814d79c12b0b3bb2522dd0487386be5d4be735",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/project_params.md",
+      "source_path": "prompts/disciplines/AI/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "4e793ef3c1ea30f97387d91ed584447542c9d2aeaa3411f11588bc6ffce2961e",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/role.md",
+      "source_path": "prompts/disciplines/AI/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "189b4d80aa2669e073b564323c77670b6116255ac9ca8741d5e885725f449f0d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/AI/triage_table.md",
+      "source_path": "prompts/disciplines/AI/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "dab2af143eed545c943425ddda175cdf91da0ee15d7013dae16c0ce16806e97b",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/checklist.md",
+      "source_path": "prompts/disciplines/PS/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "c3dd8f7b7f84ecd23de8e353071b0f400ef9be4863de1c6b3691083ffeee9a93",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/compact_strategy.md",
+      "source_path": "prompts/disciplines/PS/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9a8eab48c86069ca5044bf811e61a746e0042f25d66610dd392c2bf0538ab991",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/config.json",
+      "source_path": "prompts/disciplines/PS/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "523c94a444dc7d6a1fccfb71a4e777286bddf16da907a6a791658a0191682e64",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/drawing_types.md",
+      "source_path": "prompts/disciplines/PS/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "bfbf147ce3449ee293f194430d1aafa91898036f09f3cf9fe250c3c41cbee7d4",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/finding_categories.md",
+      "source_path": "prompts/disciplines/PS/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "60dfdf036131121a97477e7cd0630f89fdf36a56d7c3e93dbb6123bfe204d907",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/norms_reference.md",
+      "source_path": "prompts/disciplines/PS/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a214ab8323559c3caf83fdf9508b05cc7e7749d539cb9d622ea4a1534a483c67",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/project_params.md",
+      "source_path": "prompts/disciplines/PS/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "eb8dcb54b22371673195d0985d8bca6ca4a01d152d590567abdddb7313376a51",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/role.md",
+      "source_path": "prompts/disciplines/PS/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9999c2e3398db818d1b85941473db785b8b132558c95661c016ad845a437b7fa",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PS/triage_table.md",
+      "source_path": "prompts/disciplines/PS/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "ddd2bb7796e41d15b54c56eeba9c94227f9b1bdc7a020261f4c555562c73796a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/checklist.md",
+      "source_path": "prompts/disciplines/POS/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a4c5bba5d83e46841e1182f714adb4b459ce646f49b511b3f05ebac215d6a722",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/compact_strategy.md",
+      "source_path": "prompts/disciplines/POS/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "3dad9cc87813ca44ad70e2859109e3c23c6b9a9a89979dde0e7a53d59ee3ba4b",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/config.json",
+      "source_path": "prompts/disciplines/POS/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "830b66ccd177c73f439707c2508d07ec365e80b21c56aaea0d7f327724aeb282",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/drawing_types.md",
+      "source_path": "prompts/disciplines/POS/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "cf608107fe49ba9fb0de02cd8522381e638e66563ce07f0b33fefd11bcb1ebb5",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/finding_categories.md",
+      "source_path": "prompts/disciplines/POS/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "6c10f378c333711e58a00cabd2853ff1e4097723cb4550a079a4b8ddc920c816",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/norms_reference.md",
+      "source_path": "prompts/disciplines/POS/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "1bde97a86ecaed8861a6b3087883b669ac9edb87f7473b43e93e93d13e4f5d43",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/project_params.md",
+      "source_path": "prompts/disciplines/POS/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "42f8346450816b49b00082f91a3b798e4714fe2264e0be6a1ecc499537939032",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/role.md",
+      "source_path": "prompts/disciplines/POS/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "19e2951c15fe0cb0ae328eb8fdcb60861265df8a2749296b49c811116b89e8cb",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/POS/triage_table.md",
+      "source_path": "prompts/disciplines/POS/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9f783f4ff55d86a4c58b76660ef3e8d46dbe32d5b33b8fb75c8119bbc537cae1",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/checklist.md",
+      "source_path": "prompts/disciplines/TX/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "1ac7f1cc6b994952f2fa74b56b72db010e4c7c6e0a05d54801940408d76f1bbf",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/compact_strategy.md",
+      "source_path": "prompts/disciplines/TX/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "72be8238f5f428b2c269081130213cc59dbaadb16ee51ae5713962c79e120817",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/config.json",
+      "source_path": "prompts/disciplines/TX/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8024ac7040825c4a1e5b0addca38cc41b0e19196590a0bc4da8767edd2aead5d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/drawing_types.md",
+      "source_path": "prompts/disciplines/TX/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "25adf17e19e877514a047342bb4b40b79389a8b0f2f5fe974f7ccf896780dbb4",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/finding_categories.md",
+      "source_path": "prompts/disciplines/TX/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "345de86c9456996ea95858548929cfc09dd60c4e51cc3c95c7f7fc71589fbe55",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/norms_reference.md",
+      "source_path": "prompts/disciplines/TX/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "7bd06ae66756148e30f006f13aa9193f9633b4bcbe14f544efdb5b17fd0bc937",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/project_params.md",
+      "source_path": "prompts/disciplines/TX/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "213459e8dd3bfd9b8a1c03969ef42b5d0edb1bb417f66637582289595262de02",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/role.md",
+      "source_path": "prompts/disciplines/TX/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "c7613a8b11f2cfef40eac29b68343d62dbfec3d8811c82445e0be49162bbc30d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/TX/triage_table.md",
+      "source_path": "prompts/disciplines/TX/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9eaa3b1fac4079925a8685e6bb3c7ee9f44f72925334e36a92e2b083bc063a5a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/checklist.md",
+      "source_path": "prompts/disciplines/KJ/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "07ecdfce7696f16d004877117a58479edafca6f2fa8d81d530c6b20201b12801",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/compact_strategy.md",
+      "source_path": "prompts/disciplines/KJ/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8b7b39a41b7e5796d95d61682f0eb1b0a764ee6e748ed6c05fba66badea9c429",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/config.json",
+      "source_path": "prompts/disciplines/KJ/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "6baf50a6affe2639d60609f1db94238b67827937f98eba02556e55a46d13c013",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/drawing_types.md",
+      "source_path": "prompts/disciplines/KJ/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a50d6c11bcdd38e4678dbd380fda27869c27bfd718070600b15eed57b2761db8",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/finding_categories.md",
+      "source_path": "prompts/disciplines/KJ/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9efdf059b322a51cbb5109e06190948cd30f6ea50e901c9d47d8a79ffbce48ee",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/norms_reference.md",
+      "source_path": "prompts/disciplines/KJ/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "3a0072cb6e560f3b1ecb832c5bfa8d6f37f3bf3358cf4cbdcbb7dca166ae922e",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/project_params.md",
+      "source_path": "prompts/disciplines/KJ/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "0a32c5a0eede3b3b69af0676a087220b30ad724a3dcfdee9b877e41fc7cdbafb",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/role.md",
+      "source_path": "prompts/disciplines/KJ/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "29004c6454798d53b5eb518b25990f39b223ce1b7b0b86c85aa723e85fe0f2af",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KJ/triage_table.md",
+      "source_path": "prompts/disciplines/KJ/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "e0a3d1dbb330d087a3b599787382a2db15e5b01050a51fb2d778700676bed30d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/checklist.md",
+      "source_path": "prompts/disciplines/KM/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "544487191d8d819081298ed15ef532be9c5db6196942b4e959eb79de4d7bf993",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/compact_strategy.md",
+      "source_path": "prompts/disciplines/KM/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "b1e9f6f9606d2d64cf4eff1bf4d1bd6352dfd7aeb8e878fc55e25bffa67dd574",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/config.json",
+      "source_path": "prompts/disciplines/KM/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a0de4025b1f51e10f9a430bcd00022da8cb9ce64de4a4ce6af4ce09787ad8e0d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/drawing_types.md",
+      "source_path": "prompts/disciplines/KM/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "63e89356ed9e993d1872af34c92e96d974e5920cd08e5d5307f7615582509bb3",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/finding_categories.md",
+      "source_path": "prompts/disciplines/KM/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "c6002c08dfbf69b88a38b5127e25a8d016a57947dceff04a7a6deb0f179c29af",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/norms_reference.md",
+      "source_path": "prompts/disciplines/KM/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8fe088d2eb7b0557b682a84c05011bbac3c9c7555972780d235a665707647c58",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/project_params.md",
+      "source_path": "prompts/disciplines/KM/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8ddfed0a615de7c59cc6d1c38f1de402a0a79ff859474ee65d8dbbe8bdb4e6af",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/role.md",
+      "source_path": "prompts/disciplines/KM/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "e07abb3b3a69300b01bf2e974ed1fa35c93c41068d96cabe83775291de071920",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/KM/triage_table.md",
+      "source_path": "prompts/disciplines/KM/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "36398f51b22e2ee47ce9d4a99342751016c1bdb2285ab7810a945c89c074d4d0",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/checklist.md",
+      "source_path": "prompts/disciplines/OV/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "bf246ffd2bea9f32f64105f4fc5425b54517554222483f635787d27cace09c2d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/compact_strategy.md",
+      "source_path": "prompts/disciplines/OV/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "30321d1c5d92edfffcf914fe78932ccd5304038e24a409fe413fdbd3f19a88b9",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/config.json",
+      "source_path": "prompts/disciplines/OV/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "6667ef5443f31bee2fbecb52e7f16ff37e03cfe3b556e82616cd6ee271f61b79",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/drawing_types.md",
+      "source_path": "prompts/disciplines/OV/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "2d51c69768a68ba1da1f590358512a56b9404478fb9aa870967dc7b527c97eee",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/finding_categories.md",
+      "source_path": "prompts/disciplines/OV/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "87c0747badf050cf95ecc58e5f37307f5746e9c034a4d1dc11790ab795ca99b0",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/norms_reference.md",
+      "source_path": "prompts/disciplines/OV/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "dbfabbdcce1116ffe7dbc9766f33a44a10b57a3e8aa1d26800246a6e86c0ea5d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/project_params.md",
+      "source_path": "prompts/disciplines/OV/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "f62c496f6e7a301424284ded3735bad8d0067479c71ecdbeae0b35594c14bc88",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/role.md",
+      "source_path": "prompts/disciplines/OV/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "7de3df5fd806e2e114e67993e2e9b8683a8a2d5a15fac46df185f3f780732858",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/OV/triage_table.md",
+      "source_path": "prompts/disciplines/OV/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "fed7305041dc635fcb5646764f6c52e78bac63bf3682f4aae83c64f92f533bdf",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/checklist.md",
+      "source_path": "prompts/disciplines/VK/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5bcccef4fbe706983b1f125dbdcded15d97ba697677eb8b07998da72147eabd1",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/compact_strategy.md",
+      "source_path": "prompts/disciplines/VK/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "b7f11c94097b6a0b1def5c02c8a30bd8a79ab8a646947cf2ca6fb40ba12925d7",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/config.json",
+      "source_path": "prompts/disciplines/VK/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9996f9c156013d8fa80242eb96549d3eba8617e8e12be2875657e1086212fe6a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/drawing_types.md",
+      "source_path": "prompts/disciplines/VK/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "b6e1ed44f153d0e3e61f25c17da7aff5bd5bdd917356e48b6a0336302e802a20",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/finding_categories.md",
+      "source_path": "prompts/disciplines/VK/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "84f8c7bb03f58c603ae42c8e9286872142922e5bbeef84a27e1f47b6feff5977",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/norms_reference.md",
+      "source_path": "prompts/disciplines/VK/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "1537cf81e0dfb35902acbd78e7bf24530c66b6ff58b3f63155c1acb885d71a1a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/project_params.md",
+      "source_path": "prompts/disciplines/VK/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "45c73d4b95b95da870598020fc4f747d8201adab0dde1d5d9e13cfb1b6905724",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/role.md",
+      "source_path": "prompts/disciplines/VK/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5140872cd9a8be7e6ca091fcc95a11e54c665b5a93ae5004f93e1377b5927781",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/VK/triage_table.md",
+      "source_path": "prompts/disciplines/VK/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "78b404fdea10851a5752722b0f871549306e032c2d0682fd3d6f4df9da1df9aa",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/checklist.md",
+      "source_path": "prompts/disciplines/PT/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "64e1b131ba76fc6c86d0844728c8ed3ce21c02e69a325c244eb93b0155c39bc7",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/compact_strategy.md",
+      "source_path": "prompts/disciplines/PT/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8afdd8f2f8644bdace43aa1a55ebc8fa953afdc80f99f2a0d1da059610a7df5c",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/config.json",
+      "source_path": "prompts/disciplines/PT/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "f791f51d1fb82e305356fbacd1169d2efe0cedfa952b8da18ad840f4f4b07e89",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/drawing_types.md",
+      "source_path": "prompts/disciplines/PT/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "ddb28b04a734d033de15b72bfea23662b9362abe142f7b550abb80cf1588e9cc",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/finding_categories.md",
+      "source_path": "prompts/disciplines/PT/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "03e4ca176804c587c489939913747b97fd51d8b36b9f1c12b73170ab018f913e",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/norms_reference.md",
+      "source_path": "prompts/disciplines/PT/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "ae886c3b5bc3314a939f894598b6e286d8618f43789c54c27ce71b722fc0350f",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/project_params.md",
+      "source_path": "prompts/disciplines/PT/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "97d008af80e8d984715ccadca0a0fc1bb0c228f584851ae1155c519e462e230a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/role.md",
+      "source_path": "prompts/disciplines/PT/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8d9136f0d6bcc1434ed0569106c4c9cd65e7658e72e13ba8fbe97964322bbbb3",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/PT/triage_table.md",
+      "source_path": "prompts/disciplines/PT/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "6bfa50de31dbf0ce0f92b4f27ea914f4c7190ff94f283e565b1e36c5e19ef6cd",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/checklist.md",
+      "source_path": "prompts/disciplines/EOM/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "2835479eeb630d894349903ad601d3b6ce2cac1c05386f1a5601b58390d8664e",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/config.json",
+      "source_path": "prompts/disciplines/EOM/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "d6bdeb5bf43177880184fc25f94fedccbcfbe7c80ad0910f31cf27b6bb895d3c",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/drawing_types.md",
+      "source_path": "prompts/disciplines/EOM/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "4ccdc7c558465433e0f250114594fcb6b9b0a12dab0dc6f4a29fcf317a7574ed",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/finding_categories.md",
+      "source_path": "prompts/disciplines/EOM/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "902fce3a4a4854dbb94bd86b042860d5ea2b0f8ad6d8ae8b85905498cf00475d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/norms_reference.md",
+      "source_path": "prompts/disciplines/EOM/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "83043fbd2ff89ef61efd37577b80b597529d4801fb63a5568027068d5ad2dedd",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/project_params.md",
+      "source_path": "prompts/disciplines/EOM/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "28506c8d3f9fc26addc6034f9529a5202229d49e0ec557f00c9832ca65a45c0b",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/role.md",
+      "source_path": "prompts/disciplines/EOM/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "949c503f0eca15b1fd99e29e3abcdaa801cbfd7481ed698e492f1cbcbaef53f0",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/EOM/triage_table.md",
+      "source_path": "prompts/disciplines/EOM/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5bcc50b4b352f6287c6b6d167f39da1863c92eb02c0752abf5eaf345546a61db",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/checklist.md",
+      "source_path": "prompts/disciplines/SS/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "4efe2296d18124aae441a05d01f8ea70ddace7ec4cd6608362796a0003b020f6",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/compact_strategy.md",
+      "source_path": "prompts/disciplines/SS/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a250d799d740c7f3573fc38bc7e684df32e7a413046230f44c4b3a76944e7a35",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/config.json",
+      "source_path": "prompts/disciplines/SS/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8db02b7818f2d8a52a1830641aabfd8b2094c9d9b8967985451d2df0b44a8ca2",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/drawing_types.md",
+      "source_path": "prompts/disciplines/SS/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8a2e1c23105da4aca67eadf9e811e38508607c4b8e865b3844af0a1bbf6366e2",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/finding_categories.md",
+      "source_path": "prompts/disciplines/SS/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "ff8193946f57ecfbc0e9c10f4be0f41f74c3decfe67257f16d9ebb398b0719c9",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/norms_reference.md",
+      "source_path": "prompts/disciplines/SS/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a3f7dcf0b5b9e5f4dc7718563294ab500d7a7b28f462e0a6d2b101feb8c14780",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/project_params.md",
+      "source_path": "prompts/disciplines/SS/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "d36990b5b154eb3351939f5f1a6d4457db17c6da9caf475e7c84bbdc2ca03637",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/role.md",
+      "source_path": "prompts/disciplines/SS/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "bce9846d362a4994e82dd6fbc9c026c96de91c8eb27a4c654bb2b403cf48fc7f",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/SS/triage_table.md",
+      "source_path": "prompts/disciplines/SS/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9a5faba0e7f6d17395321af983fc10ca3dd0d9490d12b08e3554bdbc0d72f36a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/checklist.md",
+      "source_path": "prompts/disciplines/ITP/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "22aa3697b2557feb65e2e25f1478e81ec2d48ba815818f62eef40a8059f0dbb1",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/compact_strategy.md",
+      "source_path": "prompts/disciplines/ITP/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "1d0adfd9a5e9ee13a7c92951d65c7136b6bcd7599e528029856eaed53d7134f3",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/config.json",
+      "source_path": "prompts/disciplines/ITP/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "265041b46246dbb226579e1d86d0d11658a27d66e2180a882e8e4d22233bc2c6",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/drawing_types.md",
+      "source_path": "prompts/disciplines/ITP/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5ba8823dd2d2a8291dd9c17dc4a9d9a480af8dc3ade9b8a48efa652d0858b1ee",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/finding_categories.md",
+      "source_path": "prompts/disciplines/ITP/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "113fe584e10e12b5c28ec4bb4342b58bd8277e1724cbfb8a712ac53fbdbe7e13",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/norms_reference.md",
+      "source_path": "prompts/disciplines/ITP/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "6f2006a9f1af5b1585ac84ed1a920c670be82c634d02acc79fb9354213a05b79",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/project_params.md",
+      "source_path": "prompts/disciplines/ITP/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "0fbb238e3fe676e744610e4af63caed85014e30a4b3eb9b0652bc1f4fba19796",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/role.md",
+      "source_path": "prompts/disciplines/ITP/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "18cb5f3e4f321b3f9eb526e0702d3f7bc49e972c4555bd0ab02b0f86d1bc2ca1",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/ITP/triage_table.md",
+      "source_path": "prompts/disciplines/ITP/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a22cb4330d06008dd6fa49530ceadea9ecc60d59760a0aeb3b6cd475d7fd996a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/checklist.md",
+      "source_path": "prompts/disciplines/GP/checklist.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "c6d42f648e73bde0e434efe54e6c544d3eaf181c594b27d76eb6041b7e1fc247",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/compact_strategy.md",
+      "source_path": "prompts/disciplines/GP/compact_strategy.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "b2c15301a4a4e68acbedc7678ce89acb93a674f98cd7cf44cc13c9bb82b9c984",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/config.json",
+      "source_path": "prompts/disciplines/GP/config.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "73b679f7067d095ff94134339cc0f9b9d140210f96d8bf5188b0398949624367",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/drawing_types.md",
+      "source_path": "prompts/disciplines/GP/drawing_types.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "e382963ebbe0ce8b14e27e51fa9b914b8a6aa07ed643f1404f82c88ec08bf799",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/finding_categories.md",
+      "source_path": "prompts/disciplines/GP/finding_categories.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "0568f133ba2cc85e85078f6f2c949b1839dc0a015b674ce26a0d988704d2107d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/norms_reference.md",
+      "source_path": "prompts/disciplines/GP/norms_reference.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "560bc4ad59700e9ad073c7bfb054edb73811fa4e8176dcf3e0f6cead1bdafb63",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/project_params.md",
+      "source_path": "prompts/disciplines/GP/project_params.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "fe02d212adddc7dba97962328862428051951b1e2e32fc2d0b4ecf6d3e6caa93",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/role.md",
+      "source_path": "prompts/disciplines/GP/role.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "3a5fdbafcca2b0ada0ad50d53145599b45c771bd3bfa95d1c157469d1b44bd0a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/GP/triage_table.md",
+      "source_path": "prompts/disciplines/GP/triage_table.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5e17ae57da9bd13ff52be867e1a65c2a6625dc6662d42d8b120e89edfa1eb4eb",
+      "kind": "copied"
+    },
+    {
+      "local_path": "disciplines/_registry.json",
+      "source_path": "prompts/disciplines/_registry.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9a926e56e3a8b90c054b70fe4ff2f70673a2aad3f000142209c68f96ebe7daa4",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/README.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/README.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "cc486ee8b628dfb07511d69dab51fa0984ec2ae913a856dfb88931f682f17486",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/AR.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/AR.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "221f30918bcaded66cfbd6f564f8286ba6332b3353cf83d0b850f3c0c2892ada",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/EOM.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/EOM.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "a4b2c4899f17b8385e1841222cdc260ae2f69189e8b81e52bc6c3af187a6d776",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/GP.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/GP.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5ea44c012dcf5f70c75ac324d6d2b6482d4bbf2d01216733d7c8223e960cd7bd",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/HVAC.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/HVAC.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "9b5944050eacd852265029b86dc31d13be22285cc215295149ba0ee3396ae54d",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/KJ.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/KJ.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "d71495beb8edc83a42b81167bc3b212c1cdbaaf9cb485130d462a325c4449dd1",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/KM.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/KM.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "b2c7f235f35cc5043d2bc838730e102e2d51372a0245e8ba2b9826af1cee477c",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/SS.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/SS.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "cdbe181cc0d62c6d4a7fe281d3bb1b897c22367bfe9e4c2e837607cad710a115",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/TX.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/TX.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "3e1e54ff51ed910962d5c1a3652d02e87ea92e123d0caaa959bcecd1fce4c3fd",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/disciplines/VK.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/disciplines/VK.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "7623cdb7b8d8793f13072f90b5aa6d7d351e030fa95ee5e649fc6863534aa4f7",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/manifest.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/manifest.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "94fff9d8db1867eca331ee494a52a3424340fb60da4978c872b3b155f43ac537",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/AR.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/AR.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "dabde9f3385d113cf86ba026d892e27d72da161f7ecffe144b29a00ba7085287",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/EOM.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/EOM.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "aa7825bba01974c78f531104231d3152d0334ccb5b23cf856e7d155c6332ced5",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/GP.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/GP.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "6852367f00e5e41408da9dc296a6d9bc1e73958656050b46153ca0e1a417abf8",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/HVAC.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/HVAC.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "5a27f433b7f26c9d38e6b336504bc2da31bd91edbbd7f1b6b886c1b372372bdc",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/KJ.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/KJ.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "e0a27fd0be16a38e2855ddc1084f94dc478e7034ce25a301f88589aac845fd26",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/KM.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/KM.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "74f9368c9bf696280cec913460f1e5240beee3b35db85deb01bca457b6f2550e",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/SS.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/SS.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "444d4b4f57f3705e46defc3edbaf05dd3fc660d12882531a20a6370db1aff50a",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/TX.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/TX.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "50276594f7cd5d44f75645edf5d3c86260cb39862b51bb92aa21f7325841756b",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/profiles/VK.md",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/profiles/VK.md",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "60acc2cca36403fcb951170a11be214a4e384852355d78033781a129ce58fc3b",
+      "kind": "copied"
+    },
+    {
+      "local_path": "reference_catalog/rules.json",
+      "source_path": "backend/app/pipeline/stages/block_context/reference_catalog/rules.json",
+      "source_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "sha256": "8a82def0065e14919c953597664b0f59e6f4ecddcc040c56f66a18ac06d0def3",
+      "kind": "copied"
+    },
+    {
+      "local_path": "adapted/PB-fire-source-excerpts.md",
+      "source_path": [
+        "prompts/disciplines/AR/checklist.md",
+        "prompts/disciplines/PT/checklist.md",
+        "prompts/disciplines/SS/checklist.md",
+        "prompts/disciplines/OV/checklist.md"
+      ],
+      "sha256": "eeb66c85d724a316c7f380f1ba658c38c3e38a814decc38d74b9df7253a48535",
+      "kind": "adapted excerpts",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/AR.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped AR resources",
+      "sha256": "ca39ab80e1a883b4c5866b988c59c24b42f0338af459ba07fe438e423c8451ea",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/AI.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped AI resources",
+      "sha256": "16c1421dd6aa1a3576b04ec7b4e88b10f85bd95fb19cfc8ef8103c49353dc5c5",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/PS.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped PS resources",
+      "sha256": "acc24e8912e17f6a2b98eb51c5ce73b310461e32be4a8d4c6cc4b7c8df113c39",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/POS.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped POS resources",
+      "sha256": "2c45e4b8fd8e26623515ddd7d877a9005fdbb900cdb4a9251b886ceb96a4fabe",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/TX.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped TX resources",
+      "sha256": "225c4802ca5d209d418044869e126452bb1bfe7628124960d72616261d3b66bf",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/KJ.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped KJ resources",
+      "sha256": "0491533a8522f521aaafcea64f7f74f003d99537a732e9e0c505397f65b87dd7",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/KM.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped KM resources",
+      "sha256": "8b7716a316b9c11cec5768aa9054180eb50ff7c1386f2ce86ef4ce427755a1a3",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/OV.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped OV resources",
+      "sha256": "83c505f0f254f7a8c17a77e9e2705ae3276170cada9e9f40502ebfcc8f33e92e",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/VK.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped VK resources",
+      "sha256": "fbfd0aeda5e7f072b3e3329f176fae0e31650991a4bf56d244ff47f4e8300be3",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/PT.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped PT resources",
+      "sha256": "bfabf5cdf78ce87b7e2cb0dda0b4374bd806046677e7ddcfe32ef8db0b89cc4d",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/EOM.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped EOM resources",
+      "sha256": "f7f2bcb1d437aacf260539e17340d53e88ce027d1c93825f54344e28363ca868",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/SS.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped SS resources",
+      "sha256": "d6622afb1971a26b8ca01ea570f59aa1f571199f725434fe59ca7c02e3ece181",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/ITP.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped ITP resources",
+      "sha256": "4637a94d1d9d45ead5bbaa5c4175dc6e68f5e612dd59029e9383dbbb3eba53e0",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/GP.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped GP resources",
+      "sha256": "b5ef1ef375874a0f0cb63fe07442104a19b77e74494428bf032e97ecc9375536",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    },
+    {
+      "local_path": "adapted/PB.md",
+      "source_path": "SPRINT-SECTION-EXPERIENCE-1030 adaptation of mapped PB resources",
+      "sha256": "03d865d81be39967cdd1bd4e2ecbc0b7115b68baf59e908e8be5fe9fcf4f792a",
+      "kind": "adaptation",
+      "derived_from_commit": "3c99481719218b9cfa7560886529916646c61939",
+      "source_commit": null
+    }
+  ]
+}

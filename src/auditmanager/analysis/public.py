@@ -378,3 +378,95 @@ def parse_norm_review(*args, **kwargs):
 
 
 __all__.extend(["build_norm_review_request", "parse_norm_review"])
+
+
+def estimate_extended_visual_scope(**kwargs):
+    from auditmanager.analysis.extended.estimate import estimate_visual_scope
+    return estimate_visual_scope(**kwargs)
+
+
+def extended_workflow_procedures_v3(**kwargs):
+    from auditmanager.analysis.extended.workflow import workflow_procedures_v3
+    return workflow_procedures_v3(**kwargs)
+
+
+def build_comprehensive_request_v3(**kwargs):
+    from auditmanager.analysis.extended.workflow import build_comprehensive_request_v3 as build
+    return build(**kwargs)
+
+
+def build_extended_critic_request(**kwargs):
+    from auditmanager.analysis.extended.review import build_critic_request
+    return build_critic_request(**kwargs)
+
+
+def parse_extended_critic_reply(*args, **kwargs):
+    from auditmanager.analysis.extended.review import parse_critic_reply
+    return parse_critic_reply(*args, **kwargs)
+
+
+def build_extended_corrector_request(**kwargs):
+    from auditmanager.analysis.extended.review import build_corrector_request
+    return build_corrector_request(**kwargs)
+
+
+def parse_extended_corrector_reply(*args, **kwargs):
+    from auditmanager.analysis.extended.review import parse_corrector_reply
+    return parse_corrector_reply(*args, **kwargs)
+
+
+def extended_review_bundle_digest(section):
+    from auditmanager.analysis.extended.workflow import review_bundle_digest
+    return review_bundle_digest(section)
+
+
+__all__.extend(["estimate_extended_visual_scope", "extended_workflow_procedures_v3",
+    "build_comprehensive_request_v3", "build_extended_critic_request", "parse_extended_critic_reply",
+    "build_extended_corrector_request", "parse_extended_corrector_reply", "extended_review_bundle_digest"])
+
+
+# Explicit workflow-oriented spellings consumed by the v3 orchestrator.
+build_critic_request = build_extended_critic_request
+parse_critic_reply = parse_extended_critic_reply
+build_corrector_request = build_extended_corrector_request
+parse_corrector_reply = parse_extended_corrector_reply
+
+__all__.extend(["build_critic_request", "parse_critic_reply",
+                "build_corrector_request", "parse_corrector_reply"])
+
+
+def build_norm_review_request_v3(**kwargs):
+    from auditmanager.analysis.extended.workflow import build_norm_review_request_v3 as build
+    return build(**kwargs)
+
+
+def deterministic_extended_merge_v3(*args, **kwargs):
+    from auditmanager.analysis.extended.workflow import deterministic_lossless_merge_v3
+    return deterministic_lossless_merge_v3(*args, **kwargs)
+
+
+__all__.extend(["build_norm_review_request_v3", "deterministic_extended_merge_v3"])
+
+
+def build_extended_request_v3(**kwargs):
+    from auditmanager.analysis.extended.core import build_request_v3
+    return build_request_v3(**kwargs)
+
+
+__all__.append("build_extended_request_v3")
+
+
+def empty_native_text_observations(**kwargs):
+    from auditmanager.analysis.text.artifact import empty_native_text_observations as empty
+    return empty(**kwargs)
+
+
+__all__.append("empty_native_text_observations")
+
+
+def run_document_context_with_visual_pages(context, *, allow_visual_only_pages=False):
+    from auditmanager.analysis.stages.document_context_build import run
+    return run(context, allow_visual_only_pages=allow_visual_only_pages)
+
+
+__all__.append("run_document_context_with_visual_pages")

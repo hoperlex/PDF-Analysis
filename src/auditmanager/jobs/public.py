@@ -67,3 +67,7 @@ __all__ = [
 from auditmanager.jobs.extended_review import extended_unit
 
 __all__.append("extended_unit")
+
+from auditmanager.jobs.extended_review import has_ambiguous_provider_effect
+
+__all__.append("has_ambiguous_provider_effect")

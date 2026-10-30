@@ -34,5 +34,5 @@ export class IntentKey {
 export const STAGE_RUN_KEYS = {
   list: (pairId: string) => ['stage-full-runs', pairId] as const,
   run: (runId: string) => ['stage-full-run', runId] as const,
-  map: (pairId: string) => ['stage-run-map', pairId] as const,
+  map: (pairId: string) => ['stage-sheet-map', pairId, 'current'] as const,
 };

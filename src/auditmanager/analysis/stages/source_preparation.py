@@ -28,7 +28,10 @@ Section 4.2 (``R-116``). A page with no extractable embedded text is refused wit
 least one block (of any type) on that page. Such a page is admitted with
 ``has_text_layer: false`` and ``char_count: 0``, and its text-layer entry is empty
 (``char_start == char_end``): its text exists only in ``prepared.recognised_text``,
-marked ``recognised``. A version without a bundle keeps the rule as it was.
+marked ``recognised``. A version without a bundle keeps the rule as it was,
+unless the caller explicitly supplies the fresh-v3 ``allow_visual_only_pages``
+authority. That path admits fully interpreted valid PDF pages with empty native
+text; it performs and claims no OCR, and leaves canonical native-text findings empty.
 
 The recognised text never reaches the text layer
 ------------------------------------------------
@@ -92,8 +95,11 @@ REASON_PORTAL_UNREADABLE: Final[str] = "portal_input_unreadable"
 def run(
     context: StageContext, *, progress: Progress | None = None,
     checkpoint: Checkpoint | None = None, expected_page_count: int | None = None,
+    allow_visual_only_pages: bool = False,
 ) -> StageProduction:
     """Extract the source document and publish the prepared artifacts."""
+    if type(allow_visual_only_pages) is not bool:
+        raise ValueError("allow_visual_only_pages must be boolean")
     source_blob = context.blob(ROLE_SOURCE_DOCUMENT)
 
     completed_pages, total_pages = 0, expected_page_count or 0
@@ -126,7 +132,8 @@ def run(
             )
         )
         _refuse_pages_without_text(
-            document, frozenset() if portal is None else portal.pages_with_block
+            document, frozenset() if portal is None else portal.pages_with_block,
+            allow_visual_only_pages=allow_visual_only_pages,
         )
         if checkpoint is not None:
             checkpoint()
@@ -163,6 +170,10 @@ def run(
         "extractor_name": EXTRACTOR_NAME,
         "extractor_version": extractor_version(),
     }
+    if allow_visual_only_pages:
+        metrics.update(visual_only_pages_allowed=True,
+            visual_only_page_count=sum(1 for page in document.pages if page.char_count == 0),
+            ocr_performed=False)
     if portal is not None and portal_members is not None:
         recognised = build_recognised_text(
             portal, version_uid=context.version_uid, markdown=portal_members[0]
@@ -187,11 +198,11 @@ _PROGRESS_REASONS = frozenset({
 
 def run_source_preparation_with_progress(
     context: StageContext, *, progress: Progress, checkpoint: Checkpoint,
-    expected_page_count: int,
+    expected_page_count: int, allow_visual_only_pages: bool = False,
 ) -> StageProduction:
     """Public worker handler seam; the caller owns durable authority and progress."""
     return run(context, progress=progress, checkpoint=checkpoint,
-               expected_page_count=expected_page_count)
+               expected_page_count=expected_page_count, allow_visual_only_pages=allow_visual_only_pages)
 
 
 @contextmanager
@@ -272,11 +283,11 @@ def _read_member(store: BlobStore, blob_id: BlobId) -> bytes:
 
 
 def _refuse_pages_without_text(
-    document: ExtractedDocument, pages_with_block: frozenset[int]
+    document: ExtractedDocument, pages_with_block: frozenset[int], *, allow_visual_only_pages: bool = False,
 ) -> None:
     """Section 4.2: a page needs embedded text, or a portal block (``R-116``)."""
     for page in document.pages:
-        if page.char_count == 0 and page.page_number not in pages_with_block:
+        if page.char_count == 0 and page.page_number not in pages_with_block and not allow_visual_only_pages:
             raise DomainError(
                 ErrorCode.VALIDATION_FAILED,
                 message=(
@@ -316,8 +327,9 @@ def _build_page_inventory(
     source_sha256: str,
 ) -> dict[str, Any]:
     """Section 4.2. ``page_number`` is 1-based and contiguous, and is the only
-    page addressing in this system. ``has_text_layer`` is ``false`` only on a page
-    :func:`_refuse_pages_without_text` admitted for its portal block."""
+    page addressing in this system. ``has_text_layer`` is ``false`` on a page
+    admitted for its portal block or the explicit fresh-v3 visual-only authority;
+    neither admission fabricates native text or OCR."""
     return envelope(
         ROLE_PAGE_INVENTORY,
         version_uid,

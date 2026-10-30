@@ -198,27 +198,41 @@ class RunCostPreflight:
         fixed = len(bundle.system_prompt) + len(_json(bundle.response_schema)) + 12_000
         input_tokens = math.ceil(Fraction((2 * chars + fixed * windows) * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
-        # Fresh consent reserves a conservative upper envelope for the admitted document.
-        # The ingest caps (100 image blocks per page, 1,000 per bundle) are technical
-        # source limits; they do not select a smaller review window. Historical accepted
-        # commands retain their own frozen 16-block authority.
+        # A new plan is accepted explicitly. Previous accepted v1/v2 commands keep
+        # their historical semantics and never acquire this larger call allowance.
         extended = None
         extra_calls = 0
         if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() not in {"0", "false", "off"}:
-            extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
-            possible_images = source["image_block_count"]
-            if possible_images is None:
-                possible_images = min(1_000, version.page_count * 100)
-            elif possible_images == 0:
-                possible_images = version.page_count
-            image_calls = math.ceil(possible_images / 8)
-            comprehensive_calls = version.page_count + math.ceil(chars / 40_000) + image_calls + windows
-            # Every model call can return forty observations. Reserve one normative
-            # batch per forty such results plus the base text windows.
-            norm_calls = image_calls + comprehensive_calls + windows
-            extra_calls = image_calls + comprehensive_calls + norm_calls
-            input_tokens += image_calls * 40_000 + comprehensive_calls * 80_000 + norm_calls * 100_000
-            output_tokens += (image_calls + comprehensive_calls) * 6_000 + norm_calls * 12_000
+            requested = os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3").strip().lower()
+            if requested in {"v3", "extended-review-v3"}:
+                from auditmanager.analysis.public import estimate_extended_visual_scope, extended_review_bundle_digest
+                visual = estimate_extended_visual_scope(version=version, blob_store=self.blob_store)
+                section = version.classification.section_code
+                extended = {"enabled": True, "plan_version": "extended-review-v3",
+                    "max_blocks": visual["max_blocks"], "window_size": visual["window_size"],
+                    "max_windows": visual["max_windows"], "text_page_limit": visual["text_page_limit"], "review": True,
+                    "review_scope": "full_document", "rules_sha256": extended_review_bundle_digest(section), "section_code": section}
+                extra_calls = visual["max_windows"] * 6
+                input_tokens += visual["max_windows"] * 600_000
+                output_tokens += visual["max_windows"] * 72_000
+                source["visual_scope"] = visual
+            elif requested in {"v2", "extended-review-v2"}:
+                extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+                possible_images = source["image_block_count"]
+                if possible_images is None:
+                    possible_images = min(1_000, version.page_count * 100)
+                elif possible_images == 0:
+                    possible_images = version.page_count
+                image_calls = math.ceil(possible_images / 8)
+                comprehensive_calls = version.page_count + math.ceil(chars / 40_000) + image_calls + windows
+                # Every model call can return forty observations. Reserve one normative
+                # batch per forty such results plus the base text windows.
+                norm_calls = image_calls + comprehensive_calls + windows
+                extra_calls = image_calls + comprehensive_calls + norm_calls
+                input_tokens += image_calls * 40_000 + comprehensive_calls * 80_000 + norm_calls * 100_000
+                output_tokens += (image_calls + comprehensive_calls) * 6_000 + norm_calls * 12_000
+            else:
+                raise _invalid("analysis_workflow", "unsupported_plan")
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended)

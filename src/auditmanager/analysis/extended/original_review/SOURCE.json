@@ -1,0 +1,41 @@
+{
+  "repository": "https://github.com/SU10KAZ/PDF-proverka",
+  "commit": "3c99481719218b9cfa7560886529916646c61939",
+  "files": {
+    "models.py": {
+      "source": "backend/app/pipeline/stages/findings_review/critic_v2/models.py",
+      "sha256": "6a64b44fd5310b6a2c8ca19ccc41443e9a1f7937d62d249f303e5460d99936f3"
+    },
+    "normalize.py": {
+      "source": "backend/app/pipeline/stages/findings_review/critic_v2/normalize.py",
+      "sha256": "3f866ef8aa6452113f6c8d57ca38e9bd52deb52751f1e61f55f4b9b9aee805d6"
+    },
+    "rule_filter.py": {
+      "source": "backend/app/pipeline/stages/findings_review/critic_v2/rule_filter.py",
+      "sha256": "6454aae878bc07ec888e07bb214b511d390c879bc49e12be20af56513f54371c"
+    },
+    "scorer.py": {
+      "source": "backend/app/pipeline/stages/findings_review/critic_v2/scorer.py",
+      "sha256": "2f236603a2650bfe3ce659a668a0d5b422c3636417b34631d78e85c836496b05"
+    },
+    "prompts/human_taxonomy.ru.md": {
+      "source": "backend/app/pipeline/stages/findings_review/critic_v2/prompts/llm_gate_human_taxonomy.ru.md",
+      "sha256": "ae286b9f6bb9f81afd8f00832e823e02007b67899769521ce991d1ce481e7e11"
+    },
+    "prompts/quality_criteria.md": {
+      "source": "backend/app/pipeline/stages/findings_review/CRITIC_QUALITY_CRITERIA.md",
+      "sha256": "b6d80944f7152b8a3b0dde0be2d4b345168b619b7bf1dc4aaa715987c9a19385"
+    },
+    "deterministic_corrector.source.txt": {
+      "source": "backend/app/pipeline/stages/findings_review/deterministic_corrector.py",
+      "sha256": "2191ceb8df8553b351d9d97fc9a0d8e6357de1c116cc89d46a729e5dad3e0e5e"
+    },
+    "deterministic_critic.source.txt": {
+      "source": "backend/app/pipeline/stages/findings_review/deterministic_critic.py",
+      "sha256": "b34ca5a2af88f7edf47381b5d1e3f87d99762e8741502a4a410b21d8e12e0e6a"
+    }
+  },
+  "active_adaptation": "Pure normalize/rule_filter/scorer are advisory input signals; bounded model critic and targeted proposal-only corrector are implemented in review.py.",
+  "production_scope": "Original current production structural critic/corrector are deterministic. Copied critic_v2 taxonomy is originally offline/experimental; this new v3 path does not claim identical original production behavior.",
+  "safety": "No original filesystem/provider/job module is imported. Reference .source.txt files are provenance only. Original observations and expert decisions are not overwritten."
+}

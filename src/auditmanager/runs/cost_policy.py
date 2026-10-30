@@ -47,13 +47,31 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         model, rates = consent["model_id"], consent["rate_sha256"]
         revision = consent.get("connection_revision_id")
         extended = consent.get("extended_review")
-        if extended is not None and (
-            not isinstance(extended, dict) or extended.get("enabled") is not True
-            or extended.get("plan_version") not in {"extended-review-v1", "extended-review-v2"}
-            or not (type(extended.get("max_blocks")) is int and extended["max_blocks"] == 16
-                    or extended.get("plan_version") == "extended-review-v2" and extended.get("max_blocks") == "all")
-        ):
-            raise ValueError()
+        if extended is not None:
+            if not isinstance(extended, dict) or extended.get("enabled") is not True:
+                raise ValueError()
+            plan = extended.get("plan_version")
+            blocks = extended.get("max_blocks")
+            if plan in {"extended-review-v1", "extended-review-v2"}:
+                if not (type(blocks) is int and blocks == 16 or plan == "extended-review-v2" and blocks == "all"):
+                    raise ValueError()
+            elif plan == "extended-review-v3":
+                rules = extended.get("rules_sha256")
+                text_limit = extended.get("text_page_limit")
+                section = extended.get("section_code")
+                if (not isinstance(section, str) or not 1 <= len(section) <= 8
+                        or any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for character in section)
+                        or type(blocks) is not int or not 1 <= blocks <= 1000
+                        or type(extended.get("window_size")) is not int or extended["window_size"] != 16
+                        or type(extended.get("max_windows")) is not int
+                        or type(text_limit) is not int or not 1 <= text_limit <= 500
+                        or extended["max_windows"] != max((blocks + 15) // 16, (text_limit + 15) // 16)
+                        or extended.get("review") is not True
+                        or not isinstance(rules, str) or len(rules) != 64
+                        or any(character not in "0123456789abcdef" for character in rules)):
+                    raise ValueError()
+            else:
+                raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)
                 or billing not in {"metered", "unmetered"} or type(ceiling) is not int or ceiling < 0
                 or billing == "metered" and ceiling == 0

@@ -6,6 +6,12 @@ import { getExtendedRunReview, portalBlockCropUrl } from '@/shared/api';
 import type { ExtendedRunReview } from '@/shared/api';
 import { LoadingState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
+import { formatExtendedRunReport } from '@/entities/audit-run';
+import type { ExtendedReportFormat } from '@/entities/audit-run';
+import { MachineAdvice } from './machine-advice';
+import { WindowProgress } from './window-progress';
+import { extendedCandidateCounts } from './extended-review-summary';
+import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
 function object(value: unknown): RecordValue | null {
@@ -44,6 +50,8 @@ export function extendedReviewDefinitive(reading: ExtendedRunReview | undefined)
   const result = object(reading.result);
   const procedures = objects(result?.procedures);
   if (procedures.some((item) => !FINAL_STATES.has(text(item.status)))) return false;
+  if (objects(result?.windows).some((window) => !FINAL_STATES.has(text(window.status))
+    || objects(window.procedures).some((item) => !FINAL_STATES.has(text(item.status))))) return false;
   return FINAL_STATES.has(reading.status);
 }
 
@@ -75,6 +83,34 @@ function SourceCrop({ versionUid, blockId, page }: { versionUid: string; blockId
   return <figure>{failed ? <p role="status">Изображение блока недоступно.</p> : <img src={src} alt={`Исходный блок на странице ${page}`} loading="lazy" decoding="async" style={{ maxWidth: '100%', maxHeight: 400, objectFit: 'contain' }} onError={() => setFailed(true)} />}<figcaption><a href={src} target="_blank" rel="noopener noreferrer">Открыть исходный фрагмент целиком</a></figcaption></figure>;
 }
 
+function ReportDownloads({ reading }: { readonly reading: ExtendedRunReview }) {
+  const [failure, setFailure] = useState<string | null>(null);
+  const download = (format: ExtendedReportFormat) => {
+    setFailure(null);
+    try {
+      const report = formatExtendedRunReport(reading, format);
+      const url = URL.createObjectURL(new Blob([report.content], { type: report.mediaType }));
+      try {
+        const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = report.fileName; anchor.rel = 'noopener';
+        document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      } finally { URL.revokeObjectURL(url); }
+    } catch (error) { setFailure(error instanceof Error && error.message.startsWith('Технический XLSX:') ? error.message : 'Не удалось сформировать выгрузку текущей записи. Обновите данные и повторите; полные данные доступны в JSON.'); }
+  };
+  return <section aria-label="Скачать отчёт анализа раздела">
+    <h3>Отчёт по текущей записи</h3>
+    <p>Выгрузка содержит все переданные наблюдения, исходные и исправленные кандидаты, рекомендации, источники и покрытие. Фильтр по модельному принятию или отклонению не применяется. Новые обращения к модели не запускаются.</p>
+    <div className={styles.downloads}>
+      <button type="button" className="am-button am-button--quiet" onClick={() => download('md')}>Скачать отчёт MD</button>
+      <button type="button" className="am-button am-button--quiet" onClick={() => download('html')}>Скачать отчёт HTML</button>
+      <button type="button" className="am-button am-button--quiet" onClick={() => download('json')}>Скачать все данные JSON</button>
+      <button type="button" className="am-button am-button--quiet" onClick={() => download('xlsx')}>Технический XLSX</button>
+    </div>
+    <p>Технический XLSX содержит предварительные данные и происхождение, включая исходные и предложенные формулировки. Он не заменяет экспертный экспорт из «Разбора».</p>
+    {failure === null ? null : <p role="alert">{failure}</p>}
+  </section>;
+}
+
 export function ExtendedReview({ runId, active, projectUid }: { runId: string; active: boolean; projectUid?: string }) {
   const activeRef = useRef(active);
   activeRef.current = active;
@@ -93,8 +129,8 @@ export function ExtendedReview({ runId, active, projectUid }: { runId: string; a
     if (wasActive.current && !active) { setTerminalReads(0); void query.refetch(); }
     wasActive.current = active;
   }, [active, query.refetch]);
-  if (query.isPending) return <LoadingState what="предварительный обзор блоков" />;
-  if (query.isError && query.data === undefined) return <section aria-label="Полная цепочка анализа"><h2>Полная цепочка анализа</h2><p role="status">Не удалось прочитать состояние процедур. <button type="button" onClick={() => { setTerminalReads(0); void query.refetch(); }}>Повторить</button></p></section>;
+  if (query.isPending) return <section id="extended-analysis"><LoadingState what="предварительный обзор блоков" /></section>;
+  if (query.isError && query.data === undefined) return <section id="extended-analysis" aria-label="Полная цепочка анализа"><h2>Полная цепочка анализа</h2><p role="status">Не удалось прочитать состояние процедур. <button type="button" onClick={() => { setTerminalReads(0); void query.refetch(); }}>Повторить</button></p></section>;
   if (query.data === undefined) return null;
   return <>
     {query.isError ? <p role="status">Не удалось обновить состояние. Ниже последняя полученная запись.</p> : null}
@@ -108,43 +144,68 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
   const result = object(reading.result);
   const procedures = objects(result?.procedures);
   const v2 = result?.workflow_version === 'extended-review-v2';
+  const v3 = result?.workflow_version === 'extended-review-v3';
+  const full = v2 || v3;
+  const report = object(result?.report);
+  const reportStatus = text(report?.status) || text(procedures.find((procedure) => procedure.id === 'report_generation')?.status);
   const coverage = object(result?.coverage);
+  const textCoverage = object(result?.text_coverage);
   const fullWindow = result?.review_scope === 'full_document';
   const sources = objects(result?.sources);
   const observations = objects(result?.observations);
-  return <section aria-label={v2 ? 'Полная цепочка анализа' : 'Предварительный обзор блоков'} data-extended-review={reading.status} data-workflow-version={text(result?.workflow_version)}>
-    <h2>{v2 ? 'Полная цепочка анализа · расширенные процедуры' : 'Предварительный обзор блоков'}</h2>
+  const counts = extendedCandidateCounts(result);
+  return <section id="extended-analysis" className={styles.panel} aria-label={full ? 'Полная цепочка анализа' : 'Предварительный обзор блоков'} data-extended-review={reading.status} data-workflow-version={text(result?.workflow_version)}>
+    <h2>{v3 ? 'Анализ раздела · полный расширенный план' : v2 && fullWindow ? 'Полная цепочка анализа · расширенные процедуры' : v2 ? 'Расширенный анализ · предыдущий план' : 'Предварительный обзор блоков'}</h2>
     <p><strong>{labels[reading.status] ?? 'Состояние неизвестно'}</strong>. {fullWindow ? 'План включает все доступные блоки; текст страниц обрабатывается по частям.' : 'Изображения и текст проверяются в ограниченном одобренном окне.'} Это наблюдения для экспертной сверки, а не подтверждённые нарушения или решения эксперта.</p>
+    {Array.isArray(result?.observations) ? <p data-extended-analysis-counts="">Сохранено предварительных кандидатов: <strong>{counts.candidates}</strong> · рекомендаций критика: <strong>{counts.criticRecommendations}</strong> · предложений исправления: <strong>{counts.correctionProposals}</strong>.</p> : <p>Записи кандидатов и рекомендаций ещё не переданы. Их отсутствие в ответе не подтверждает пустой результат анализа.</p>}
+    <p>Эти счётчики относятся к расширенному машинному анализу. Канонические находки и сохранённые решения эксперта рассматриваются отдельно в «Разборе».</p>
+    {text(result?.section) ? <p>Раздел: <strong>{text(result?.section)}</strong>.</p> : null}
+    {v2 ? <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Новые критика, исправление и подготовка отчёта V3 ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
+    {v3 ? <p>Рубрики учитывают специфику раздела. Числовые пороги и ссылки из исторических материалов — контекст, а не подтверждённые действующие нормы. Критика и исправление — рекомендации модели, решение остаётся за экспертом.</p> : null}
+    {text(result?.rules_sha256) ? <details><summary>Происхождение рубрик раздела</summary><p>Отпечаток набора: <code>{text(result?.rules_sha256)}</code>.</p>{object(result?.source_provenance) ? <pre>{JSON.stringify(result?.source_provenance, null, 2)}</pre> : null}</details> : null}
     {typeof result?.reason === 'string' ? <p role="status">{reasonLabels[result.reason] ?? 'Сервер сообщил ограничение выполнения; полное завершение не подтверждено.'}</p> : null}
-    {v2 ? <>
+    {full ? <>
       <p>Продолжение базовых этапов. Ход расширенных процедур показан ниже.</p>
-      {procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol aria-label="План полного анализа" data-extended-procedure-plan="">
+      {procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol className={styles.procedures} aria-label="План полного анализа" data-extended-procedure-plan="">
         {procedures.map((procedure, index) => <li key={text(procedure.id) || index} data-extended-procedure={text(procedure.id)} data-procedure-status={text(procedure.status)}>
           <strong>{text(procedure.title) || 'Название процедуры не передано'}</strong> · {procedureLabels[text(procedure.status)] ?? 'Состояние не передано'}
           {text(procedure.reason) ? <p>{reasonLabels[text(procedure.reason)] ?? 'Есть ограничение выполнения; проверьте источники и состояние прогона.'}</p> : null}
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}
-    {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. В плане: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
+    {v3 ? <WindowProgress windows={result?.windows} progress={result?.window_progress} /> : null}
+    {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
+    {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
+    {textCoverage === null ? null : <p data-extended-text-coverage="">Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>. Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p>}
     {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
-    {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждение отсутствия проблем в документе.</p> : <ol>{observations.map((item, index) => <li key={text(item.observation_id) || index}>
+    <h3>Все наблюдения текущего свода</h3>
+    {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждение отсутствия проблем в документе.</p> : <ol className={styles.observations}>{observations.map((item, index) => <li key={text(item.observation_id) || index}>
       <h3>{text(item.title)}</h3><p>{text(item.description)}</p>
+      <MachineAdvice review={item.review ?? item.critic} correction={item.correction} reviewStatus={item.review_status} reviewReason={item.review_reason} />
       {object(item.norm_assessment) && <aside data-norm-model-review="provisional"><strong>Модельная сверка по цитате; нужна проверка эксперта</strong><p>{assessmentLabels[text(object(item.norm_assessment)?.relation)] ?? 'Результат требует проверки'}</p><p>{text(object(item.norm_assessment)?.explanation)}</p><ul>{objects(object(item.norm_assessment)?.citations).map((citation, n) => <li key={text(citation.paragraph_id) || n}><code>{text(citation.paragraph_id)}</code><blockquote>{text(citation.quote)}</blockquote></li>)}</ul><small>Действующая редакция и применимость нормы не подтверждены.</small></aside>}
       <p>{normLabels[text(item.norm_status)] ?? 'Нормативные основания требуют проверки'}</p>
       {objects(item.norm_candidates).length > 0 && <ul>{objects(item.norm_candidates).map((norm, n) => <li key={text(norm.paragraph_id) || n}><strong>{text(norm.designation)}</strong>{text(norm.document_id) && <>{' — '}<Link href={routes.normDocument(text(norm.document_id))}>Открыть документ нормы</Link></>}{text(norm.clause_number) && `, п. ${text(norm.clause_number)}`} — стр. {text(norm.page_label) || count(norm.page_label)}<blockquote>{text(norm.quote)}</blockquote><small>Кандидат из корпуса, актуальность и применимость не подтверждены.</small></li>)}</ul>}
       <details><summary>Источники наблюдения</summary><ul>{(Array.isArray(item.source_ids) ? item.source_ids : []).map((sourceId, n) => {
         const source = sources.find((s) => s.source_id === sourceId);
         const native = source?.source_type === 'native_page' || source?.source_kind === 'native_page';
+        const recognised = source?.source_type === 'recognised_text' || source?.quote_source === 'recognised';
         const version = text(source?.version_uid) || text(result?.version_uid);
         const portal = source?.kind === 'image' && !native && (source?.source_type === undefined || source.source_type === 'portal_block');
-        return <li key={text(sourceId) || n}>Страница {count(source?.page_number)}; {native ? 'страница PDF' : source?.kind === 'image' ? 'изображение блока' : 'текстовое наблюдение'} <code>{text(sourceId)}</code>
+        return <li key={text(sourceId) || n}>Страница {count(source?.page_number)}; {native ? 'страница PDF' : recognised ? 'распознанный текст' : source?.kind === 'image' ? 'изображение блока' : 'текстовое наблюдение'} <code>{text(sourceId)}</code>
           {source?.quote ? <blockquote>{text(source.quote)}</blockquote> : null}
+          {recognised ? <p>Цитата из сохранённого распознанного слоя, отдельно от native-текста PDF. Точные native-координаты по этой цитате не утверждаются.</p> : null}
           {native ? <p data-native-page-source="">Исходная версия PDF: <code>{version || 'Не передана'}</code>. {projectUid && version ? <Link href={routes.version(projectUid, version)}>Открыть исходную версию PDF</Link> : 'Для просмотра откройте PDF указанной версии.'}</p> : null}
           {portal && version && text(sourceId) ? <SourceCrop versionUid={version} blockId={text(sourceId)} page={count(source?.page_number)} /> : null}
           {source?.crop_sha256 ? <small> SHA256: <code>{text(source.crop_sha256)}</code></small> : null}
+          {recognised && text(source?.artifact_sha256) ? <small> Отпечаток слоя: <code>{text(source?.artifact_sha256)}</code>.</small> : null}
         </li>;
       })}</ul></details>
     </li>)}</ol>}
     {coverage && objects(coverage.skipped).length > 0 && <details><summary>Непроверенные блоки ({objects(coverage.skipped).length})</summary><ul>{objects(coverage.skipped).map((item, i) => <li key={text(item.block_id) || i}>Стр. {count(item.page_number)}, <code>{text(item.block_id)}</code> — {item.reason === 'outside_approved_window' ? 'за пределами одобренного окна' : 'изображение или геометрия недоступны'}</li>)}</ul></details>}
+    {report === null ? null : <section aria-label="Состояние отчёта раздела"><h3>Подготовка отчёта</h3><p>{procedureLabels[reportStatus] ?? 'Состояние не передано'} · записей: {count(report.observation_count)}.</p>
+      {text(report.markdown) ? <details><summary>Сохранённый текст отчёта</summary><pre>{text(report.markdown)}</pre></details> : null}
+      <p>Это предварительный отчёт с ограничениями покрытия и непроверенными нормативными основаниями, не экспертное заключение.</p>
+    </section>}
+    <ReportDownloads reading={reading} />
   </section>;
 }

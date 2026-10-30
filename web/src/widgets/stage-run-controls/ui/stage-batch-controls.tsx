@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import type { ComparisonAiEstimate, StageChainBatch, StageChainBatchSelection, StagePair } from '@/shared/api';
-import { cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageChainBatch,
+import { ApiError, cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageChainBatch,
   getStageSheetMap, newIdempotencyKey, pauseStageChainBatch, resumeStageChainBatch, startStageChainBatch } from '@/shared/api';
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
@@ -19,6 +19,9 @@ import styles from './stage-run-controls.module.css';
 export const STAGE_REVIEW_POLL_MS = 1500;
 
 interface PreparedPair { pair: StagePair; revisionId: string; estimate?: ComparisonAiEstimate }
+class MissingStageMap extends Error {
+  constructor(readonly correlationId: string | null) { super('Stage pair has no saved sheet map.'); }
+}
 export interface StageBatchControlsProps {
   readonly projectUid: string;
   readonly selectedPairs: readonly StagePair[];
@@ -30,7 +33,11 @@ export interface StageBatchControlsProps {
 
 async function preparePairs(pairs: readonly StagePair[], withAi: boolean, engine: StageEngine): Promise<PreparedPair[]> {
   return Promise.all(pairs.map(async (pair) => {
-    const map = (await getStageSheetMap({ path: { stage_pair_id: pair.pair_id } })).data;
+    const map = await getStageSheetMap({ path: { stage_pair_id: pair.pair_id } }).then((response) => response.data,
+      (failure: unknown) => {
+        if (failure instanceof ApiError && failure.status === 404) throw new MissingStageMap(failure.correlationId);
+        throw failure;
+      });
     const estimate = withAi ? (await estimateStageChainRun({ path: { stage_link_revision_id: map.revision_id }, query: { engine } })).data : undefined;
     return { pair, revisionId: map.revision_id, ...(estimate === undefined ? {} : { estimate }) };
   }));
@@ -89,7 +96,10 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
     finally { setBusy(false); }
   };
   const failure = error ?? prepared.error ?? status.error;
-  const message = failure === null ? null : failureMessage(failure);
+  const missingMap = prepared.error === failure && failure instanceof MissingStageMap;
+  const message = failure === null ? null : missingMap
+    ? { detail: 'Для выбранной пары нет сохранённой карты листов. Откройте «2. Сопоставление листов» и нажмите «Сохранить решение эксперта», затем подготовьте запуск снова.', correlationId: failure.correlationId }
+    : failureMessage(failure);
   return <section className={styles.batch} aria-label="Очередь сравнения стадий">
     <h3>Сравнить выбранные пары</h3>
     <p>Выбрано: {selectedPairs.length}. Пары выполнятся по очереди.</p>
@@ -112,7 +122,7 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
         onClick={() => void start()}>Поставить в очередь</button>
         <button type="button" className="am-button" disabled={busy} onClick={() => setPreparing(false)}>Отмена</button></div>
     </div> : null}
-    {message === null ? null : <ErrorState title="Очередь не открыта или команда не выполнена" detail={message.detail} correlationId={message.correlationId} />}
+    {message === null ? null : <ErrorState title={missingMap ? 'Сначала сохраните карту листов' : 'Очередь не открыта или команда не выполнена'} detail={message.detail} correlationId={message.correlationId} />}
     {batch === null ? null : <div>
       <p>{RUN_WORDS[batch.state]} · {formatInstant(batch.created_at)}</p>
       <dl>{Object.entries(batch.counts).map(([name, count]) => <div key={name}><dt>{name}</dt><dd>{count}</dd></div>)}</dl>
