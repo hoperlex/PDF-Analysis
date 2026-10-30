@@ -276,7 +276,7 @@ describe('the run list of a comparison-only version', () => {
       failed,
       queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
       new ApiError(503, {
-        contract_version: '1.11.0', error_code: 'dependency_unavailable', message: 'm',
+        contract_version: '1.12.0', error_code: 'dependency_unavailable', message: 'm',
         correlation_id: 'c', retryable: true,
       }, 'c'),
     );

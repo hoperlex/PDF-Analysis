@@ -109,6 +109,9 @@ describe('the seam operations', () => {
       'appendDecision',
       // `CMP-SEAL-C1`: the eight keyed writes of the version comparison core (ADR-0025 decision 19) sit in this list in order.
       'applyComparisonMatrixEdits',
+      // `CMP-SEAL-C3`: all sixteen stage writes are keyed expert commands, including
+      // the resumable part receipt and cancellation controls.
+      'applyStageSheetMap',
       'approveRegistration',
       // `COMPARE-PERSISTED-SUMMARY-01`: approving a sheet pairing appends a row of the
       // comparison's history, keyed like `carryOverDecision`.
@@ -125,11 +128,16 @@ describe('the seam operations', () => {
       'cancelComparisonSpecification',
       'cancelComparisonUpload',
       'cancelRun',
+      'cancelStageChainRun',
+      'cancelStageUpload',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
       'clearComparisonLaunchQueue',
       'completeComparisonUploadFile',
+      'completeStageUploadFile',
       'confirmComparisonUploadSet',
+      'confirmStagePair',
+      'confirmStageUploadCandidate',
       'continueComparisonReport',
       // `ANALYSIS-PRESETS-01`: saving, revising and archiving a preset each append a revision, keyed
       // like the executor writes (a preset is executor configuration).
@@ -138,6 +146,8 @@ describe('the seam operations', () => {
       'createComparisonUpload',
       'createExecutorConnection',
       'createProject',
+      'createStageAssembly',
+      'createStageUpload',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
       'deleteComparisonReport',
@@ -158,10 +168,13 @@ describe('the seam operations', () => {
       'pauseComparisonLaunchQueue',
       'pauseComparisonSeries',
       'pauseComparisonUpload',
+      'pauseStageUpload',
       'prepareComparisonClientReport',
       'prepareComparisonMatrix',
       'reauditRun',
       'rebuildComparisonReportPdf',
+      'recomputeStageTextEvidence',
+      'rejectStageUploadCandidate',
       'removeComparisonLaunchEntry',
       'requestExecutorProbe',
       'resumeComparisonAiPairCheck',
@@ -169,15 +182,18 @@ describe('the seam operations', () => {
       'resumeComparisonLaunchQueue',
       'resumeComparisonSeries',
       'resumeComparisonUpload',
+      'resumeStageUpload',
       'retryComparisonAiSheetChanges',
       'retryComparisonUploadSet',
       'reviseAnalysisPreset',
       'reviseExecutorConnection',
+      'reviseStageAssembly',
       'revokeRunnerToken',
       'setExecutionPaused',
       'setExecutorRoute',
       'setExecutorSecret',
       'setJobPriority',
+      'setStagePairCompleteness',
       // `W54-SEAL-01`: the worker intake switch is keyed like the other execution controls.
       'setWorkerIntake',
       'startArV3BetaGroup',
@@ -190,6 +206,7 @@ describe('the seam operations', () => {
       'startComparisonSpecification',
       'startOptimisationPass',
       'startRun',
+      'startStageChainRun',
       'undoComparisonMatrixEdit',
       'uploadComparisonReportSource',
       'uploadComparisonUploadPart',
@@ -198,6 +215,7 @@ describe('the seam operations', () => {
       'uploadDocumentVersion',
       // `W60-PRICE-LIST-01`: a price-list upload stores a file and a revision, keyed like an upload.
       'uploadPriceList',
+      'uploadStageUploadPart',
       // `COMPARE-PERSISTED-SUMMARY-01`: ending a sheet link appends a row too, keyed like its approval.
       'withdrawSheetPairing',
     ]);

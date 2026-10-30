@@ -38,6 +38,10 @@ _CATALOG.append(
 _CATALOG.append(
     {"schema_name": "public", "table_name": "comparison_report_artifact", "column_name": "blob_id"}
 )
+_CATALOG.extend([
+    {"schema_name": "public", "table_name": "stage_upload_file", "column_name": "source_blob_id"},
+    {"schema_name": "public", "table_name": "stage_upload_candidate", "column_name": "pdf_blob_id"},
+])
 
 
 class _Rows:
@@ -83,6 +87,10 @@ class _Session:
             key = "pair_masks"
         elif "FROM public.comparison_report_artifact" in sql:
             key = "report_artifacts"
+        elif "FROM public.stage_upload_file" in sql:
+            key = "stage_files"
+        elif "FROM public.stage_upload_candidate" in sql:
+            key = "stage_candidates"
         else:
             raise AssertionError(f"unexpected SQL: {sql}")
         return _Rows(self.data[key])
@@ -127,6 +135,8 @@ def _data() -> dict[str, list[dict[str, object]]]:
         "pair_masks": [{"owner_id": "csp_one", "mask_blob_id": blob_id}],
         # `0040_comparison_ai_reports`: the stored files of a report.
         "report_artifacts": [{"owner_id": "cra_one", "blob_id": blob_id}],
+        "stage_files": [{"owner_id": "suf_one", "state": "ready", "source_blob_id": blob_id}],
+        "stage_candidates": [{"owner_id": "suc_one", "state": "published", "pdf_blob_id": blob_id}],
     }
 
 
@@ -164,16 +174,17 @@ def test_healthy_database_returns_all_available_blob_facts_and_reads_only() -> N
         ("norm_retrieval_set", 0), ("price_list_revision", 1),
         ("comparison_upload_file", 1), ("comparison_page_profile", 1), ("comparison_sheet_pair_result", 1),
         ("comparison_report_artifact", 1),
+        ("stage_upload_file", 1), ("stage_upload_candidate", 1),
     )
     assert audit_blob_references(session) == result  # type: ignore[arg-type]
     assert data == session.data
-    assert len(session.statements) == 26  # two audits x thirteen SELECTs
+    assert len(session.statements) == 30  # two audits x fifteen SELECTs
 
 
 def test_verified_retrieval_set_reads_both_0023_blob_columns() -> None:
     data = _data_with_verified_set()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
-    assert result.source_counts[-6] == ("norm_retrieval_set", 1)
+    assert result.source_counts[-8] == ("norm_retrieval_set", 1)
     assert {fact.blob_id for fact in result.available_blobs} == {
         row["blob_id"] for row in data["blob"]
     }
@@ -211,7 +222,7 @@ def test_rejected_set_has_no_blob_references() -> None:
     row = data["retrieval_sets"][0]
     row.update(state="rejected", set_blob_id=None, set_size_bytes=None,
                catalogue_blob_id=None, catalogue_size_bytes=None)
-    assert audit_blob_references(_Session(data)).source_counts[-6] == (  # type: ignore[arg-type]
+    assert audit_blob_references(_Session(data)).source_counts[-8] == (  # type: ignore[arg-type]
         "norm_retrieval_set", 1,
     )
     row["catalogue_blob_id"] = data["blob"][2]["blob_id"]
@@ -229,7 +240,8 @@ def test_price_list_revision_is_a_declared_blob_reference_source() -> None:
 
 @pytest.mark.parametrize(
     "table",
-    ("comparison_upload_file", "comparison_page_profile", "comparison_sheet_pair_result", "comparison_report_artifact"),
+    ("comparison_upload_file", "comparison_page_profile", "comparison_sheet_pair_result",
+     "comparison_report_artifact", "stage_upload_file", "stage_upload_candidate"),
 )
 def test_the_comparison_tables_are_declared_blob_reference_sources(table: str) -> None:
     """`0038_comparison_foundation` added four Blob references, `0039_comparison_core` a fifth and
@@ -271,6 +283,8 @@ def test_a_comparison_blob_reference_must_name_an_available_blob(change: str, re
         data["comparison_files"] = []
         data["pair_masks"] = []
         data["report_artifacts"] = []
+        data["stage_files"] = []
+        data["stage_candidates"] = []
     with pytest.raises(BlobReferenceAuditRefused, match=reason):
         audit_blob_references(_Session(data))  # type: ignore[arg-type]
 
@@ -370,6 +384,8 @@ def test_pending_and_rejected_admissions_need_no_published_object() -> None:
     data["page_profiles"].clear()
     data["pair_masks"].clear()
     data["report_artifacts"].clear()
+    data["stage_files"].clear()
+    data["stage_candidates"].clear()
     data["blob"].clear()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
     assert result.available_blobs == ()
@@ -389,6 +405,8 @@ def test_unsettled_artifact_can_hold_incomplete_temporary_blob() -> None:
     data["page_profiles"].clear()
     data["pair_masks"].clear()
     data["report_artifacts"].clear()
+    data["stage_files"].clear()
+    data["stage_candidates"].clear()
     data["artifacts"][0]["state"] = "abandoned"
     data["blob"][0].update(state="temporary", sha256=None, size_bytes=None, media_type=None)
     assert audit_blob_references(_Session(data)).available_blobs == ()  # type: ignore[arg-type]

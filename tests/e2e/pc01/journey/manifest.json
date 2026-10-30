@@ -801,6 +801,27 @@
       "follow": null
     },
     {
+      "name": "stage-compare",
+      "path": "/stage-comparison",
+      "page_module": "web/src/app/stage-comparison/page.tsx",
+      "$comment": [
+        "«Сравнение стадий» (CMP-STAGE-PAIR-01) reads projects, account roles and module state on a cold route.",
+        "A single visible project opens its confirmed pair catalog and nonbinding suggestions. A reader with several",
+        "projects chooses one before those operations are sent. Confirming a pair is an explicit expert action."
+      ],
+      "expects_api": [
+        {"method": "GET", "path": "/projects", "operationId": "listProjects"},
+        {"method": "GET", "path": "/me", "operationId": "getMe"}
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "the shell reads release notes for an active complete session"},
+        {"method": "GET", "path": "/system/version", "operationId": "getProductVersion", "$why_optional": "the screen checks whether the stages module is on"},
+        {"method": "GET", "path": "/projects/{project_uid}/stage-pairs", "operationId": "listStagePairs", "$why_optional": "read after a project is selected, automatically for exactly one project"},
+        {"method": "GET", "path": "/projects/{project_uid}/stage-pair-suggestions", "operationId": "listStagePairSuggestions", "$why_optional": "read after a project is selected, automatically for exactly one project"}
+      ],
+      "follow": null
+    },
+    {
       "name": "version-comparison",
       "path": "/version-comparison",
       "page_module": "web/src/app/version-comparison/page.tsx",

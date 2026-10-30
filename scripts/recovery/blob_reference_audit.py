@@ -39,6 +39,9 @@ _SOURCES = frozenset({
     ("public", "comparison_sheet_pair_result", "mask_blob_id"),
     # `0040_comparison_ai_reports`: a stored file of a report (the PDF, the exact MD, the report text).
     ("public", "comparison_report_artifact", "blob_id"),
+    # `0041_comparison_stage_core`: the uploaded raw PDF/ZIP and each validated PDF candidate.
+    ("public", "stage_upload_file", "source_blob_id"),
+    ("public", "stage_upload_candidate", "pdf_blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -122,6 +125,17 @@ _REPORT_ARTIFACTS = text("""
     SELECT comparison_report_artifact_id AS owner_id, blob_id
       FROM public.comparison_report_artifact
      ORDER BY comparison_report_artifact_id COLLATE "C"
+""")
+
+_STAGE_UPLOAD_FILES = text("""
+    SELECT stage_upload_file_id AS owner_id, state, source_blob_id
+      FROM public.stage_upload_file WHERE source_blob_id IS NOT NULL
+     ORDER BY stage_upload_file_id COLLATE "C"
+""")
+_STAGE_UPLOAD_CANDIDATES = text("""
+    SELECT stage_upload_candidate_id AS owner_id, state, pdf_blob_id
+      FROM public.stage_upload_candidate WHERE pdf_blob_id IS NOT NULL
+     ORDER BY stage_upload_candidate_id COLLATE "C"
 """)
 
 
@@ -320,6 +334,16 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
     for row in report_artifacts:
         _require_available(blobs, row["blob_id"], "comparison_report_artifact")
     counts.append(("comparison_report_artifact", len(report_artifacts)))
+
+    stage_files = _rows(session, _STAGE_UPLOAD_FILES)
+    for row in stage_files:
+        _require_available(blobs, row["source_blob_id"], "stage_upload_file")
+    counts.append(("stage_upload_file", len(stage_files)))
+
+    stage_candidates = _rows(session, _STAGE_UPLOAD_CANDIDATES)
+    for row in stage_candidates:
+        _require_available(blobs, row["pdf_blob_id"], "stage_upload_candidate")
+    counts.append(("stage_upload_candidate", len(stage_candidates)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 

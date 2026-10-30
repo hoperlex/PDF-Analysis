@@ -431,6 +431,40 @@ GUARDED = (
         "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/runner-tokens/"
         "ern_01M2545JSD15ETSNNV904X991K/revoke",
     ),
+    # `CMP-SEAL-C3`. Sweep every sealed stage operation through the same authentication
+    # seam before body validation, the module flag or an unwired lane can answer.
+    ("createStageAssembly", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-assemblies"),
+    ("listStagePairSuggestions", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-pair-suggestions"),
+    ("listStagePairs", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-pairs"),
+    ("confirmStagePair", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-pairs"),
+    ("listStageUploads", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-uploads"),
+    ("createStageUpload", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-uploads"),
+    ("reviseStageAssembly", "POST", "/stage-assemblies/sas_01M2545JSD15ETSNNV904X991K/members"),
+    ("getStageChainRun", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K"),
+    ("cancelStageChainRun", "POST", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("getStageSheetMapRevision", "GET", "/stage-link-revisions/slk_01M2545JSD15ETSNNV904X991K"),
+    ("listStageRawDifferences", "GET", "/stage-link-revisions/slk_01M2545JSD15ETSNNV904X991K/raw-differences"),
+    ("recomputeStageTextEvidence", "POST", "/stage-link-revisions/slk_01M2545JSD15ETSNNV904X991K/text-evidence/recomputation"),
+    ("listStageTextExclusions", "GET", "/stage-link-revisions/slk_01M2545JSD15ETSNNV904X991K/text-exclusions"),
+    ("listStageTextHints", "GET", "/stage-link-revisions/slk_01M2545JSD15ETSNNV904X991K/text-hints"),
+    ("getStagePair", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K"),
+    ("listStageChainRuns", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/chain-runs"),
+    ("startStageChainRun", "POST", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/chain-runs"),
+    ("setStagePairCompleteness", "POST", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/completeness"),
+    ("getStageSheetMap", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/sheet-map"),
+    ("applyStageSheetMap", "POST", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/sheet-map"),
+    ("listStageSheetMapHistory", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/sheet-map/revisions"),
+    ("listStageSheetPassports", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/sheet-passports"),
+    ("listStageSheetSuggestions", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/sheet-suggestions"),
+    ("listStageTextFragments", "GET", "/stage-pairs/stp_01M2545JSD15ETSNNV904X991K/text-fragments"),
+    ("confirmStageUploadCandidate", "POST", "/stage-upload-candidates/suc_01M2545JSD15ETSNNV904X991K/confirmation"),
+    ("rejectStageUploadCandidate", "POST", "/stage-upload-candidates/suc_01M2545JSD15ETSNNV904X991K/rejection"),
+    ("getStageUpload", "GET", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K"),
+    ("cancelStageUpload", "POST", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("completeStageUploadFile", "POST", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/files/suf_01M2545JSD15ETSNNV904X991K/completion"),
+    ("uploadStageUploadPart", "PUT", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/files/suf_01M2545JSD15ETSNNV904X991K/parts"),
+    ("pauseStageUpload", "POST", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/pause"),
+    ("resumeStageUpload", "POST", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/resume"),
 )
 
 #: `EXEC-PULL-01`. The four operations a runner calls with a runner token, and the fifth that
@@ -1018,6 +1052,13 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "comparison_reports.py",
         "comparison_series.py",
         "comparison_specification.py",
+        # `CMP-SEAL-C3`: the stage writes pass the verified actor to the eventual expert
+        # command; role admission stays in the seam and the command boundary.
+        "comparison_stage_links.py",
+        "comparison_stage_pairs.py",
+        "comparison_stage_runs.py",
+        "comparison_stage_text.py",
+        "comparison_stage_uploads.py",
         # `CMP-SEAL-C0`: the comparison writes record WHO declared, confirmed, paused or cancelled an
         # upload batch and WHO appended an order revision (the actor of its rows); that only an expert
         # may is the role register's and the command's own re-read of the role set. The reads and the

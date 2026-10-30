@@ -5,7 +5,7 @@ process dies before ``comparison_upload_file.blob_id`` is written: the Blob row 
 nothing references it. ``audit_blob_references`` cannot see that (it starts from the references); the
 report does, and each rule is shown failing on a database made to break it:
 
-* a Blob that a source names -- each of the thirteen registered columns in turn -- is never reported;
+* a Blob that a source names -- each of the fifteen registered columns in turn -- is never reported;
 * a Blob nothing names is reported, attributed to the comparison file whose declared bytes it has, or
   not attributed when no file explains it;
 * the report refuses a database whose set of blob-referencing columns is not the closed set (a new
@@ -73,6 +73,9 @@ SOURCES = [
     ("norm_retrieval_set", "catalogue_blob_id"),
     ("norm_retrieval_set", "set_blob_id"),
     ("price_list_revision", "blob_id"),
+    # `0041_comparison_stage_core`: stage source files and validated PDF candidates.
+    ("stage_upload_candidate", "pdf_blob_id"),
+    ("stage_upload_file", "source_blob_id"),
 ]
 
 
@@ -218,7 +221,7 @@ def _file(db: Session, upload: str, label: str, *, size: int = 100, blob: str | 
     return file
 
 
-def test_the_registered_sources_are_the_thirteen_the_report_checks() -> None:
+def test_the_registered_sources_are_the_fifteen_the_report_checks() -> None:
     assert sorted((table, column) for _, table, column in audit._SOURCES) == SOURCES
     statement = str(audit._unreferenced_statement())
     for table, column in SOURCES:
@@ -290,6 +293,42 @@ class TestWhatIsReported:
         report = report_unreferenced_comparison_blobs(session)
 
         assert (report.attributed, report.unattributed) == ((), ())
+
+    def test_stage_source_and_pdf_candidate_blobs_are_not_reported_as_orphans(
+        self, session: Session,
+    ) -> None:
+        source = _blob(session, "stage-source")
+        candidate_blob = _blob(session, "stage-candidate")
+        project = str(ProjectUid.new())
+        command, upload, file_id, candidate = (
+            f"{prefix}_{new_ulid()}" for prefix in ("cmd", "stu", "suf", "suc")
+        )
+        session.execute(text(
+            "INSERT INTO project (project_uid, name) VALUES (:p, 'stage')"), {"p": project})
+        session.execute(text(
+            "INSERT INTO command_record (command_id, command_type, idempotency_key, "
+            "payload_fingerprint) VALUES (:c, 'create_stage_upload', :k, :sha)"),
+            {"c": command, "k": secrets.token_hex(8), "sha": "a" * 64})
+        session.execute(text(
+            "INSERT INTO stage_upload (stage_upload_id, project_uid, declared_files, "
+            "declared_bytes, actor_user_uid, command_id, state) "
+            "VALUES (:u, :p, 1, 100, :a, :c, 'completed')"),
+            {"u": upload, "p": project, "a": ACTOR, "c": command})
+        session.execute(text(
+            "INSERT INTO stage_upload_file (stage_upload_file_id, stage_upload_id, media_kind, "
+            "display_name, declared_size_bytes, declared_sha256, source_blob_id, state) "
+            "VALUES (:f, :u, 'zip', 'bundle.zip', 100, :sha, :b, 'ready')"),
+            {"f": file_id, "u": upload, "sha": _sha("stage-source"), "b": source})
+        session.execute(text(
+            "INSERT INTO stage_upload_candidate (stage_upload_candidate_id, stage_upload_file_id, "
+            "member_number, display_name, pdf_blob_id) "
+            "VALUES (:candidate, :f, 1, 'sheet.pdf', :b)"),
+            {"candidate": candidate, "f": file_id, "b": candidate_blob})
+
+        report = report_unreferenced_comparison_blobs(session)
+        assert (report.attributed, report.unattributed) == ((), ())
+        counts = dict(audit_blob_references(session).source_counts)
+        assert counts["stage_upload_file"] == counts["stage_upload_candidate"] == 1
 
     def test_a_blob_a_manifest_entry_names_is_not_reported(self, session: Session) -> None:
         """Content-addressed: the same bytes uploaded as a portal bundle are referenced, not orphaned."""

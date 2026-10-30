@@ -260,6 +260,30 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "startComparisonReport",
             "continueComparisonReport",
             "prepareComparisonClientReport",
+            # `CMP-SEAL-C3`: twenty-two stage operations accept a body, a query bound or
+            # a part number and declare the catalog's validation envelope.
+            "applyStageSheetMap",
+            "completeStageUploadFile",
+            "confirmStagePair",
+            "confirmStageUploadCandidate",
+            "createStageAssembly",
+            "createStageUpload",
+            "listStageChainRuns",
+            "listStagePairSuggestions",
+            "listStagePairs",
+            "listStageRawDifferences",
+            "listStageSheetMapHistory",
+            "listStageSheetPassports",
+            "listStageSheetSuggestions",
+            "listStageTextExclusions",
+            "listStageTextFragments",
+            "listStageTextHints",
+            "listStageUploads",
+            "recomputeStageTextEvidence",
+            "reviseStageAssembly",
+            "setStagePairCompleteness",
+            "startStageChainRun",
+            "uploadStageUploadPart",
         }, declared_422
 
     def test_no_schema_property_declares_a_default(self) -> None:

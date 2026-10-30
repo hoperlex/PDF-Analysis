@@ -1941,3 +1941,141 @@ class ComparisonReportPort(Protocol):
 
     def read_report_source_md(self, *, report_id: str) -> bytes:
         """The exact MD the report was built from."""
+
+
+@runtime_checkable
+class ComparisonStagePairPort(Protocol):
+    """C3 document pairs and assemblies. Suggestions are reads; confirmations and
+    membership/completeness changes are keyed expert acts."""
+
+    def list_pairs(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.StagePairPage: ...
+
+    def get_pair(self, *, pair_id: str) -> models.StagePair: ...
+
+    def list_suggestions(
+        self, *, project_uid: str, cursor: str | None, limit: int
+    ) -> models.StagePairSuggestionPage: ...
+
+    def confirm_pair(
+        self, *, project_uid: str, body: models.ConfirmStagePairRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StagePair: ...
+
+    def create_assembly(
+        self, *, project_uid: str, body: models.CreateStageAssemblyRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageAssembly: ...
+
+    def revise_assembly(
+        self, *, assembly_id: str, body: models.ReviseStageAssemblyRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageAssembly: ...
+
+    def set_completeness(
+        self, *, pair_id: str, body: models.SetStagePairCompletenessRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StagePair: ...
+
+
+@runtime_checkable
+class ComparisonStageUploadPort(Protocol):
+    """The separate C3 PDF/ZIP upload seam. The caller that implements this port
+    must satisfy D-262 before invoking the ZIP reader or publishing any PDF."""
+
+    def create_upload(
+        self, *, project_uid: str, body: models.CreateStageUploadRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload: ...
+
+    def list_uploads(
+        self, *, project_uid: str, cursor: str | None, limit: int,
+    ) -> models.StageUploadPage: ...
+
+    def get_upload(self, *, upload_id: str) -> models.StageUpload: ...
+
+    def put_part(
+        self, *, upload_id: str, file_id: str, part_number: int, content: bytes,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadPartReceipt: ...
+
+    def complete_file(
+        self, *, upload_id: str, file_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadFile: ...
+
+    def confirm_candidate(
+        self, *, candidate_id: str, body: models.ConfirmStageUploadCandidateRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadCandidate: ...
+
+    def reject_candidate(
+        self, *, candidate_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUploadCandidate: ...
+
+    def pause_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload: ...
+
+    def resume_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload: ...
+
+    def cancel_upload(
+        self, *, upload_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageUpload: ...
+
+
+@runtime_checkable
+class ComparisonStageLinkPort(Protocol):
+    """Sheet passports, suggestions and full append-only map revisions."""
+
+    def list_passports(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetPassportPage: ...
+
+    def list_suggestions(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageSheetSuggestionPage: ...
+
+    def get_current_map(self, *, pair_id: str) -> models.StageLinkRevision: ...
+
+    def apply_map(
+        self, *, pair_id: str, body: models.ApplyStageSheetMapRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageLinkRevision: ...
+
+    def list_history(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageLinkRevisionPage: ...
+
+    def get_revision(self, *, revision_id: str) -> models.StageLinkRevision: ...
+
+
+@runtime_checkable
+class ComparisonStageTextPort(Protocol):
+    """Separate immutable raw evidence from deterministic recomputation."""
+
+    def list_fragments(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageTextFragmentPage: ...
+
+    def list_exclusions(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextExclusionPage: ...
+
+    def list_differences(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextDifferencePage: ...
+
+    def list_hints(self, *, revision_id: str, cursor: str | None, limit: int) -> models.StageTextHintPage: ...
+
+    def recompute(
+        self, *, revision_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun: ...
+
+
+@runtime_checkable
+class ComparisonStageRunPort(Protocol):
+    """Durable seven-step run lifecycle pinned to one link revision."""
+
+    def start_run(
+        self, *, pair_id: str, body: models.StartStageChainRunRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun: ...
+
+    def list_runs(self, *, pair_id: str, cursor: str | None, limit: int) -> models.StageChainRunPage: ...
+
+    def get_run(self, *, run_id: str) -> models.StageChainRun: ...
+
+    def cancel_run(
+        self, *, run_id: str, user_uid: str, idempotency_key: str,
+    ) -> models.StageChainRun: ...

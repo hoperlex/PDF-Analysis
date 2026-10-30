@@ -497,6 +497,62 @@ class ComparisonLaunchEntryId(OpaqueId, prefix="cle", entity="ComparisonLaunchEn
     """Identity of one selected step of one document set in the launch queue of a project (`CMP-SEAL-C2`, migration ``0040``)."""
 
 
+class StageUploadId(OpaqueId, prefix="stu", entity="StageUpload"):
+    """Identity of one resumable stage-comparison upload batch."""
+
+
+class StageUploadFileId(OpaqueId, prefix="suf", entity="StageUploadFile"):
+    """Identity of one declared PDF or ZIP file; its name is only a hint."""
+
+
+class StageUploadCandidateId(OpaqueId, prefix="suc", entity="StageUploadCandidate"):
+    """Identity of one proposed document from a stage upload."""
+
+
+class StagePairId(OpaqueId, prefix="stp", entity="StagePair"):
+    """Identity of a confirmed П-to-Р document comparison."""
+
+
+class StageAssemblyId(OpaqueId, prefix="sas", entity="StageAssembly"):
+    """Identity of a Р-side assembly of several documents."""
+
+
+class StageAssemblyMemberId(OpaqueId, prefix="sam", entity="StageAssemblyMember"):
+    """Identity of one document's membership in an assembly."""
+
+
+class StageLinkRevisionId(OpaqueId, prefix="slk", entity="StageLinkRevision"):
+    """Identity of an append-only expert sheet-link revision."""
+
+
+class StageLinkItemId(OpaqueId, prefix="sli", entity="StageLinkItem"):
+    """Identity of one linked or explicitly unpaired sheet row in a revision."""
+
+
+class StageTextFragmentId(OpaqueId, prefix="stf", entity="StageTextFragment"):
+    """Identity of a deterministic, content-keyed text fragment."""
+
+
+class StageTextExclusionId(OpaqueId, prefix="ste", entity="StageTextExclusion"):
+    """Identity of one immutable same-text exclusion proof."""
+
+
+class StageTextDifferenceId(OpaqueId, prefix="std", entity="StageTextDifference"):
+    """Identity of one raw deterministic text difference."""
+
+
+class StageTextHintId(OpaqueId, prefix="sth", entity="StageTextHint"):
+    """Identity of a recommendation to inspect a cross-sheet text link."""
+
+
+class StageChainRunId(OpaqueId, prefix="crn", entity="StageChainRun"):
+    """Identity of one pinned seven-step comparison of a stage pair."""
+
+
+class StageChainStepId(OpaqueId, prefix="cst", entity="StageChainStep"):
+    """Identity of one step of a stage chain run."""
+
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

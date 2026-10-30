@@ -114,6 +114,7 @@ import { RunPage } from '@/_pages/run';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { SignInPage } from '@/_pages/sign-in';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
+import { StageComparePage } from '@/_pages/stage-compare';
 import { VersionComparePage } from '@/_pages/version-compare';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { WorkersPage } from '@/_pages/workers';
@@ -508,6 +509,12 @@ export const SEEDS: readonly Seed[] = [
     address: '/version-comparison',
     name: 'version-compare',
     make: () => createElement(VersionComparePage, {}),
+    discipline: {},
+  },
+  {
+    address: '/stage-comparison',
+    name: 'stage-compare',
+    make: () => createElement(StageComparePage, {}),
     discipline: {},
   },
   {

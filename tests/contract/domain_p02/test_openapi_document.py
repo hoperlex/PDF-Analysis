@@ -304,6 +304,17 @@ REQUIRED_OPERATIONS = {
     "extendExecutorTaskClaim",
     "submitExecutorTaskAnswer",
     "failExecutorTask",
+    # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
+    "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
+    "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
+    "createStageUpload", "listStageUploads", "getStageUpload", "uploadStageUploadPart",
+    "completeStageUploadFile", "confirmStageUploadCandidate", "rejectStageUploadCandidate",
+    "pauseStageUpload", "resumeStageUpload", "cancelStageUpload",
+    "listStageSheetPassports", "listStageSheetSuggestions", "getStageSheetMap",
+    "applyStageSheetMap", "listStageSheetMapHistory", "getStageSheetMapRevision",
+    "listStageTextFragments", "listStageTextExclusions", "listStageRawDifferences",
+    "listStageTextHints", "recomputeStageTextEvidence", "startStageChainRun",
+    "listStageChainRuns", "getStageChainRun", "cancelStageChainRun",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -424,6 +435,12 @@ WRITE_OPERATIONS = {
     # answer is accepted, a different one is a conflict).
     "issueRunnerToken",
     "revokeRunnerToken",
+    # `CMP-SEAL-C3`: every new stage command is keyed and expert-only.
+    "createStageUpload", "uploadStageUploadPart", "completeStageUploadFile",
+    "confirmStageUploadCandidate", "rejectStageUploadCandidate", "pauseStageUpload",
+    "resumeStageUpload", "cancelStageUpload", "confirmStagePair", "createStageAssembly",
+    "reviseStageAssembly", "setStagePairCompleteness", "applyStageSheetMap",
+    "recomputeStageTextEvidence", "startStageChainRun", "cancelStageChainRun",
 }
 
 PAGINATED_OPERATIONS = {

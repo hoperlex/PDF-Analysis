@@ -43,6 +43,9 @@ export const routes = {
   /** «Сравнение версий»: the projects and steps of the version comparison, and the sheet matrix (`CMP-VC-UI-01`). */
   versionComparison: (): string => '/version-comparison',
 
+  /** «Сравнение стадий»: catalog of expert-confirmed П↔Р pairs. */
+  stageComparison: (): string => '/stage-comparison',
+
   /** The worker registry, «Исполнители» (`W54-WORKERS-WEB`). */
   workers: (): string => '/workers',
 

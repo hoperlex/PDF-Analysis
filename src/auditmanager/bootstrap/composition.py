@@ -70,6 +70,11 @@ from auditmanager.bootstrap.adapters import (
     ComparisonLaunchQueueAdapter,
     ComparisonMatrixAdapter,
     ComparisonReportAdapter,
+    ComparisonStagePairAdapter,
+    ComparisonStageUploadAdapter,
+    ComparisonStageLinkAdapter,
+    ComparisonStageTextAdapter,
+    ComparisonStageRunAdapter,
     ComparisonSpecificationAdapter,
     ComparisonOverviewAdapter,
     ComparisonPairTileAdapter,
@@ -587,6 +592,19 @@ def build_application(
             sessions, blob_store=store, comparison_modules=comparison_modules,
             provider_mode=_provenance_mode(resolved.provider_mode),
         ),
+        comparison_stage_pairs=ComparisonStagePairAdapter(
+            sessions, comparison_modules=comparison_modules,
+        ),
+        comparison_stage_uploads=ComparisonStageUploadAdapter(
+            sessions, blob_store=store, comparison_modules=comparison_modules,
+        ),
+        comparison_stage_links=ComparisonStageLinkAdapter(
+            sessions, comparison_modules=comparison_modules,
+        ),
+        comparison_stage_text=ComparisonStageTextAdapter(
+            sessions, comparison_modules=comparison_modules,
+        ),
+        comparison_stage_runs=ComparisonStageRunAdapter(comparison_modules=comparison_modules),
         execution=ExecutionAdapter(sessions, runs=run_adapter),
         # `W55A-SEAL-01` sealed them; `W55A-SEARCH-01` serves them. The norms reads and the
         # designation over the same session factory, every search under the operator's

@@ -299,13 +299,16 @@ from sqlalchemy import Engine, text
 #: sequences, policies and the state topology are unchanged: ``0015`` adds no machine to
 #: ``contract_state_transition`` (the seal adds ``app_user`` and ``registration_request``
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
+#: `CMP-SEAL-C3` adds fifteen tables, 144 columns, 192 constraints, 39 indexes, 28 triggers and nine
+#: functions (one callable profile-scope predicate); views, extensions, sequences, policies and the
+#: state topology remain unchanged. The counts and hashes below were measured on a fresh 0041 DB.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1188, "dd3e2c0d32ff1d1c33124c374fa849547f7b375ce60ac19f849dc02cbc139028"),
-    "relations": (107, "945eacba1b4a42d2dedbf09aaf1c33924d9a821b109618c49447cb6921d941bc"),
-    "constraints": (1403, "fa7954fd3c28cddaefd0bcc3cfeaf03a85e77aa274ba067735d2ad32a706abb4"),
-    "indexes": (347, "6e643ded8ce7d0594943a89ced01f03526bafed0215d9c281a681c7df5266e85"),
-    "triggers": (171, "5c4f87f975a5dd52e6be9fd2389609380da6f901ec6e551135b6686328744fd7"),
-    "functions": (60, "4e6453585e36ffa87eae51876e5b0b36a034fe1ed9e2d6100f30ccc3cea57b07"),
+    "columns": (1332, "8e7a2a6f5f563b85265a88de82d1325c939d8e0b4ec6b544657a845e4eadca08"),
+    "relations": (122, "048791816fd0f1182b1df4bf48aea1d634752e4400c2038c043b96526cb6c97f"),
+    "constraints": (1595, "b9e805c49e1a856159af7b46def5788ef8fca58c7b816a4c8388009a3640d8ae"),
+    "indexes": (386, "e5906e97fdcc9f2d3e8c21611de11c36a0bd731e4a8f3f9720c2e388ddb9fa52"),
+    "triggers": (199, "d6f9ec422ab162c10bcc6fd5a88caa4845be171edf112078c9534868efd46ac9"),
+    "functions": (69, "be1d82b8ed99c91cddaa1d8dcda2d4805b5e634511551a5e9e1230ad4c9dc7df"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

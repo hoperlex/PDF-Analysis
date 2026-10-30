@@ -178,6 +178,12 @@ PORT_FOR_ARGUMENT = {
     "comparison_specifications": "ComparisonSpecificationPort",
     "comparison_launch_queue": "ComparisonLaunchQueuePort",
     "comparison_reports": "ComparisonReportPort",
+    # `CMP-SEAL-C3`: the five stage ports are checked for every shipped and suite wiring.
+    "comparison_stage_uploads": "ComparisonStageUploadPort",
+    "comparison_stage_pairs": "ComparisonStagePairPort",
+    "comparison_stage_links": "ComparisonStageLinkPort",
+    "comparison_stage_text": "ComparisonStageTextPort",
+    "comparison_stage_runs": "ComparisonStageRunPort",
 }
 
 

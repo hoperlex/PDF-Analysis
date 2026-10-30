@@ -1,0 +1,46 @@
+.panel {
+  display: grid;
+  gap: 0.9rem;
+  margin-block: 1.5rem;
+}
+
+.form,
+.batch,
+.card {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--am-border, #d5dce3);
+  border-radius: 0.5rem;
+  padding: 0.9rem 1rem;
+}
+
+.form label {
+  display: grid;
+  gap: 0.3rem;
+  max-width: 36rem;
+}
+
+.form input,
+.form select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.heading,
+.file,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.card {
+  background: var(--am-surface, #fff);
+}
+
+.card code,
+.heading code {
+  overflow-wrap: anywhere;
+}

@@ -129,6 +129,19 @@ from auditmanager.comparison.spend.model import (
 )
 from auditmanager.comparison.spend.repository import ComparisonSpendRepository
 from auditmanager.comparison.spend.settler import settle_lost_attempt
+from auditmanager.comparison.stage.admission import StageCandidateAdmissionService
+from auditmanager.comparison.stage.candidates import StageCandidateDecisionService
+from auditmanager.comparison.stage.completion import StageRawCompletionService
+from auditmanager.comparison.stage.lifecycle import StageUploadLifecycleService
+from auditmanager.comparison.stage.publication import StageCandidatePublicationService
+from auditmanager.comparison.stage.uploads import (
+    StageDeclaredFile, StageUploadPartService, StageUploadService,
+)
+from auditmanager.comparison.stage_links.map import LinkInput, StageSheetMapService
+from auditmanager.comparison.stage_links.read import StageSheetReadService
+from auditmanager.comparison.stage_text.read import StageTextReadService
+from auditmanager.comparison.stage_text.recompute import StageTextRecomputeService
+from auditmanager.comparison.stage_text.handler import stage_text_recompute_handler
 from auditmanager.comparison.work.errors import (
     HandlerRegistryError,
     UnhandledKindError,
@@ -313,6 +326,7 @@ HANDLER_FACTORIES: tuple[HandlerFactory, ...] = (
     sheet_changes_handler,  # `CMP-VC-AISHEET-01`: kind ``comparison_sheet_changes``
     spec_handler,  # `CMP-VC-SPEC-01`: kind ``comparison_spec``
     comparison_launch_handler,  # `CMP-VC-QUEUE-01`: kind ``comparison_launch``
+    stage_text_recompute_handler,  # `CMP-STAGE-TEXT-RECOMPUTE-01`: deterministic C3 evidence
 )
 
 #: `CMP-WORK-01`. Called inside the reclaim transaction for each attempt whose lease was lost:
@@ -363,6 +377,20 @@ from auditmanager.comparison.tiles.reader import PairTileReader
 PAGE_PROFILE_WORK_KIND = "page_profile"
 
 __all__ = [
+    "LinkInput",
+    "StageSheetMapService",
+    "StageSheetReadService",
+    "StageTextReadService",
+    "StageTextRecomputeService",
+    "stage_text_recompute_handler",
+    "StageCandidateAdmissionService",
+    "StageCandidateDecisionService",
+    "StageCandidatePublicationService",
+    "StageDeclaredFile",
+    "StageRawCompletionService",
+    "StageUploadLifecycleService",
+    "StageUploadPartService",
+    "StageUploadService",
     "PAIR_CHECK_KIND",
     "PAIR_CHECK_PROMPT_VERSION",
     "AiPairModelBinder",

@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 176,
+    "path_count": 204,
     "operations": [
       [
         "POST",
@@ -992,6 +992,166 @@
         "GET",
         "/comparison-reports/{comparison_report_id}/source-md",
         "streamComparisonReportSourceMd"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/stage-pairs",
+        "listStagePairs"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-pairs",
+        "confirmStagePair"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}",
+        "getStagePair"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/stage-pair-suggestions",
+        "listStagePairSuggestions"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-assemblies",
+        "createStageAssembly"
+      ],
+      [
+        "POST",
+        "/stage-assemblies/{stage_assembly_id}/members",
+        "reviseStageAssembly"
+      ],
+      [
+        "POST",
+        "/stage-pairs/{stage_pair_id}/completeness",
+        "setStagePairCompleteness"
+      ],
+      [
+        "POST",
+        "/projects/{project_uid}/stage-uploads",
+        "createStageUpload"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/stage-uploads",
+        "listStageUploads"
+      ],
+      [
+        "GET",
+        "/stage-uploads/{stage_upload_id}",
+        "getStageUpload"
+      ],
+      [
+        "PUT",
+        "/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts",
+        "uploadStageUploadPart"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion",
+        "completeStageUploadFile"
+      ],
+      [
+        "POST",
+        "/stage-upload-candidates/{stage_upload_candidate_id}/confirmation",
+        "confirmStageUploadCandidate"
+      ],
+      [
+        "POST",
+        "/stage-upload-candidates/{stage_upload_candidate_id}/rejection",
+        "rejectStageUploadCandidate"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/pause",
+        "pauseStageUpload"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/resume",
+        "resumeStageUpload"
+      ],
+      [
+        "POST",
+        "/stage-uploads/{stage_upload_id}/cancellation",
+        "cancelStageUpload"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-passports",
+        "listStageSheetPassports"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-suggestions",
+        "listStageSheetSuggestions"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-map",
+        "getStageSheetMap"
+      ],
+      [
+        "POST",
+        "/stage-pairs/{stage_pair_id}/sheet-map",
+        "applyStageSheetMap"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/sheet-map/revisions",
+        "listStageSheetMapHistory"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}",
+        "getStageSheetMapRevision"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/text-fragments",
+        "listStageTextFragments"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/text-exclusions",
+        "listStageTextExclusions"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/raw-differences",
+        "listStageRawDifferences"
+      ],
+      [
+        "GET",
+        "/stage-link-revisions/{stage_link_revision_id}/text-hints",
+        "listStageTextHints"
+      ],
+      [
+        "POST",
+        "/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation",
+        "recomputeStageTextEvidence"
+      ],
+      [
+        "POST",
+        "/stage-pairs/{stage_pair_id}/chain-runs",
+        "startStageChainRun"
+      ],
+      [
+        "GET",
+        "/stage-pairs/{stage_pair_id}/chain-runs",
+        "listStageChainRuns"
+      ],
+      [
+        "GET",
+        "/stage-chain-runs/{stage_chain_run_id}",
+        "getStageChainRun"
+      ],
+      [
+        "POST",
+        "/stage-chain-runs/{stage_chain_run_id}/cancellation",
+        "cancelStageChainRun"
       ]
     ],
     "schema_names": [
@@ -1511,13 +1671,66 @@
       "PrepareComparisonClientReportRequest",
       "ResumeComparisonAiJobRequest",
       "StartComparisonAiJobRequest",
-      "StartComparisonAiSheetChangesRequest"
+      "StartComparisonAiSheetChangesRequest",
+      "ApplyStageSheetMapRequest",
+      "ConfirmStagePairRequest",
+      "ConfirmStageUploadCandidateRequest",
+      "CreateStageAssemblyRequest",
+      "CreateStageUploadRequest",
+      "ReviseStageAssemblyRequest",
+      "SetStagePairCompletenessRequest",
+      "StageAssembly",
+      "StageAssemblyId",
+      "StageAssemblyMember",
+      "StageChainRun",
+      "StageChainRunId",
+      "StageChainRunPage",
+      "StageChainStep",
+      "StageChainStepId",
+      "StageLinkInput",
+      "StageLinkItem",
+      "StageLinkItemId",
+      "StageLinkRevision",
+      "StageLinkRevisionId",
+      "StageLinkRevisionPage",
+      "StagePair",
+      "StagePairId",
+      "StagePairPage",
+      "StagePairSuggestion",
+      "StagePairSuggestionPage",
+      "StageSheetPassport",
+      "StageSheetPassportPage",
+      "StageSheetSuggestion",
+      "StageSheetSuggestionPage",
+      "StageTextDifference",
+      "StageTextDifferenceId",
+      "StageTextDifferencePage",
+      "StageTextExclusion",
+      "StageTextExclusionId",
+      "StageTextExclusionPage",
+      "StageTextFragment",
+      "StageTextFragmentId",
+      "StageTextFragmentPage",
+      "StageTextHint",
+      "StageTextHintId",
+      "StageTextHintPage",
+      "StageUpload",
+      "StageUploadCandidate",
+      "StageUploadCandidateId",
+      "StageUploadFile",
+      "StageUploadFileDeclaration",
+      "StageUploadFileId",
+      "StageUploadFileKind",
+      "StageUploadId",
+      "StageUploadPage",
+      "StageUploadPartReceipt",
+      "StartStageChainRunRequest"
     ]
   },
   "error_catalog": {
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0040_comparison_ai_reports",
-  "contract_version": "1.11.0"
+  "migration_head": "0041_comparison_stage_core",
+  "contract_version": "1.12.0"
 }

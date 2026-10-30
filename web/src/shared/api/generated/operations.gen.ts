@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.11.0 (OpenAPI 3.1.0)
- *   sha256 44c565cf7bc8dd3211758ea0be03a7379af6608fd7964582019fde57a5191162
+ *   AuditManager PC-01 API 1.12.0 (OpenAPI 3.1.0)
+ *   sha256 4a2c3bf4077838cc97d4922e6282fdd70d61064594e37252cd906dcf2c977e94
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -24,6 +24,7 @@ import type {
   AppendDecisionRequest,
   AppendDecisionResponse,
   ApplyComparisonMatrixEditsRequest,
+  ApplyStageSheetMapRequest,
   ApproveRegistrationRequest,
   ApproveSheetPairingRequest,
   ArV3BetaGroup,
@@ -91,6 +92,8 @@ import type {
   ComparisonVersionOrder,
   ComparisonVersionOrderList,
   ConfirmComparisonUploadSetRequest,
+  ConfirmStagePairRequest,
+  ConfirmStageUploadCandidateRequest,
   CorrectVersionClassificationRequest,
   CorrelationId,
   CreateAssignmentRequest,
@@ -98,6 +101,8 @@ import type {
   CreateComparisonUploadRequest,
   CreateExecutorConnectionRequest,
   CreateProjectRequest,
+  CreateStageAssemblyRequest,
+  CreateStageUploadRequest,
   Cursor,
   DashboardSummary,
   DecideOptimisationProposalRequest,
@@ -183,6 +188,7 @@ import type {
   ResetUserPasswordRequest,
   ResumeComparisonAiJobRequest,
   ReviseExecutorConnectionRequest,
+  ReviseStageAssemblyRequest,
   RunId,
   RunNormReferences,
   RunStatus,
@@ -200,15 +206,43 @@ import type {
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
+  SetStagePairCompletenessRequest,
   SetWorkerIntakeRequest,
   SheetLinkId,
   SheetPairingEvent,
   SpecificationPrices,
+  StageAssembly,
+  StageAssemblyId,
+  StageChainRun,
+  StageChainRunId,
+  StageChainRunPage,
+  StageLinkRevision,
+  StageLinkRevisionId,
+  StageLinkRevisionPage,
+  StagePair,
+  StagePairId,
+  StagePairPage,
+  StagePairSuggestionPage,
+  StageSheetPassportPage,
+  StageSheetSuggestionPage,
+  StageTextDifferencePage,
+  StageTextExclusionPage,
+  StageTextFragmentPage,
+  StageTextHintPage,
+  StageUpload,
+  StageUploadCandidate,
+  StageUploadCandidateId,
+  StageUploadFile,
+  StageUploadFileId,
+  StageUploadId,
+  StageUploadPage,
+  StageUploadPartReceipt,
   StartArV3BetaGroupRequest,
   StartComparisonAiJobRequest,
   StartComparisonAiSheetChangesRequest,
   StartComparisonSeriesRequest,
   StartRunRequest,
+  StartStageChainRunRequest,
   SubmitExecutorTaskAnswerRequest,
   SubmitRegistrationRequest,
   TransitionAssignmentRequest,
@@ -236,6 +270,7 @@ export const OPERATION_IDS = [
   'appendComparisonVersionOrder',
   'appendDecision',
   'applyComparisonMatrixEdits',
+  'applyStageSheetMap',
   'approveRegistration',
   'approveSheetPairing',
   'archiveAnalysisPreset',
@@ -248,6 +283,8 @@ export const OPERATION_IDS = [
   'cancelComparisonSpecification',
   'cancelComparisonUpload',
   'cancelRun',
+  'cancelStageChainRun',
+  'cancelStageUpload',
   'carryOverDecision',
   'changePassword',
   'claimExecutorTask',
@@ -255,7 +292,10 @@ export const OPERATION_IDS = [
   'clearComparisonLaunchQueue',
   'compareDocumentVersions',
   'completeComparisonUploadFile',
+  'completeStageUploadFile',
   'confirmComparisonUploadSet',
+  'confirmStagePair',
+  'confirmStageUploadCandidate',
   'continueComparisonReport',
   'correctVersionClassification',
   'createAnalysisPreset',
@@ -264,6 +304,8 @@ export const OPERATION_IDS = [
   'createComparisonUpload',
   'createExecutorConnection',
   'createProject',
+  'createStageAssembly',
+  'createStageUpload',
   'decideOptimisationProposal',
   'deleteComparisonReport',
   'dequeueComparisonAiSheetChanges',
@@ -315,6 +357,11 @@ export const OPERATION_IDS = [
   'getRunStatus',
   'getSectionSpecification',
   'getSpecificationPrices',
+  'getStageChainRun',
+  'getStagePair',
+  'getStageSheetMap',
+  'getStageSheetMapRevision',
+  'getStageUpload',
   'getUser',
   'getVersionBlocks',
   'getVersionPageProfile',
@@ -358,6 +405,17 @@ export const OPERATION_IDS = [
   'listReleases',
   'listRunFindings',
   'listRuns',
+  'listStageChainRuns',
+  'listStagePairSuggestions',
+  'listStagePairs',
+  'listStageRawDifferences',
+  'listStageSheetMapHistory',
+  'listStageSheetPassports',
+  'listStageSheetSuggestions',
+  'listStageTextExclusions',
+  'listStageTextFragments',
+  'listStageTextHints',
+  'listStageUploads',
   'listUsers',
   'listVersionPageProfiles',
   'listVersionPortalBlocks',
@@ -369,13 +427,16 @@ export const OPERATION_IDS = [
   'pauseComparisonLaunchQueue',
   'pauseComparisonSeries',
   'pauseComparisonUpload',
+  'pauseStageUpload',
   'prepareComparisonClientReport',
   'prepareComparisonMatrix',
   'purgeUser',
   'readRegistrationStatus',
   'reauditRun',
   'rebuildComparisonReportPdf',
+  'recomputeStageTextEvidence',
   'rejectRegistration',
+  'rejectStageUploadCandidate',
   'removeComparisonLaunchEntry',
   'requestExecutorProbe',
   'resetUserPassword',
@@ -385,10 +446,12 @@ export const OPERATION_IDS = [
   'resumeComparisonLaunchQueue',
   'resumeComparisonSeries',
   'resumeComparisonUpload',
+  'resumeStageUpload',
   'retryComparisonAiSheetChanges',
   'retryComparisonUploadSet',
   'reviseAnalysisPreset',
   'reviseExecutorConnection',
+  'reviseStageAssembly',
   'revokeRunnerToken',
   'searchNorms',
   'setCurrentNormSnapshot',
@@ -398,6 +461,7 @@ export const OPERATION_IDS = [
   'setGlobalVendorList',
   'setJobPriority',
   'setProjectVendorList',
+  'setStagePairCompleteness',
   'setWorkerIntake',
   'startArV3BetaGroup',
   'startComparisonAiPairCheck',
@@ -408,6 +472,7 @@ export const OPERATION_IDS = [
   'startComparisonSpecification',
   'startOptimisationPass',
   'startRun',
+  'startStageChainRun',
   'streamComparisonPairTile',
   'streamComparisonReportPdf',
   'streamComparisonReportSourceMd',
@@ -430,6 +495,7 @@ export const OPERATION_IDS = [
   'uploadDocument',
   'uploadDocumentVersion',
   'uploadPriceList',
+  'uploadStageUploadPart',
   'withdrawSheetPairing',
 ] as const;
 
@@ -529,6 +595,32 @@ export type ApplyComparisonMatrixEditsInput = {
 
 /** Success body of `applyComparisonMatrixEdits` (`application/json`, HTTP 200). */
 export type ApplyComparisonMatrixEditsResult = ComparisonMatrix;
+
+// ------------------------------------------------------------------------------------
+// applyStageSheetMap - POST /stage-pairs/{stage_pair_id}/sheet-map
+// ------------------------------------------------------------------------------------
+
+/** Apply Stage Sheet Map */
+export type ApplyStageSheetMapInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/sheet-map`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ApplyStageSheetMapRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `applyStageSheetMap` (`application/json`, HTTP 201). */
+export type ApplyStageSheetMapResult = StageLinkRevision;
 
 // ------------------------------------------------------------------------------------
 // approveRegistration - POST /registrations/{request_id}/approve
@@ -860,6 +952,54 @@ export type CancelRunInput = {
 export type CancelRunResult = RunStatus;
 
 // ------------------------------------------------------------------------------------
+// cancelStageChainRun - POST /stage-chain-runs/{stage_chain_run_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/** Cancel Stage Chain Run */
+export type CancelStageChainRunInput = {
+  /** Path parameters, substituted into `/stage-chain-runs/{stage_chain_run_id}/cancellation`. */
+  path: {
+    stage_chain_run_id: StageChainRunId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelStageChainRun` (`application/json`, HTTP 200). */
+export type CancelStageChainRunResult = StageChainRun;
+
+// ------------------------------------------------------------------------------------
+// cancelStageUpload - POST /stage-uploads/{stage_upload_id}/cancellation
+// ------------------------------------------------------------------------------------
+
+/** Cancel Stage Upload */
+export type CancelStageUploadInput = {
+  /** Path parameters, substituted into `/stage-uploads/{stage_upload_id}/cancellation`. */
+  path: {
+    stage_upload_id: StageUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `cancelStageUpload` (`application/json`, HTTP 200). */
+export type CancelStageUploadResult = StageUpload;
+
+// ------------------------------------------------------------------------------------
 // carryOverDecision - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/carryovers
 // ------------------------------------------------------------------------------------
 
@@ -1062,6 +1202,31 @@ export type CompleteComparisonUploadFileInput = {
 export type CompleteComparisonUploadFileResult = ComparisonUploadFile;
 
 // ------------------------------------------------------------------------------------
+// completeStageUploadFile - POST /stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion
+// ------------------------------------------------------------------------------------
+
+/** Complete Stage Upload File */
+export type CompleteStageUploadFileInput = {
+  /** Path parameters, substituted into `/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion`. */
+  path: {
+    stage_upload_file_id: StageUploadFileId;
+    stage_upload_id: StageUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `completeStageUploadFile` (`application/json`, HTTP 200). */
+export type CompleteStageUploadFileResult = StageUploadFile;
+
+// ------------------------------------------------------------------------------------
 // confirmComparisonUploadSet - POST /comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation
 // ------------------------------------------------------------------------------------
 
@@ -1091,6 +1256,58 @@ export type ConfirmComparisonUploadSetInput = {
 
 /** Success body of `confirmComparisonUploadSet` (`application/json`, HTTP 200). */
 export type ConfirmComparisonUploadSetResult = ComparisonProposalSet;
+
+// ------------------------------------------------------------------------------------
+// confirmStagePair - POST /projects/{project_uid}/stage-pairs
+// ------------------------------------------------------------------------------------
+
+/** Confirm Stage Pair */
+export type ConfirmStagePairInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/stage-pairs`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ConfirmStagePairRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `confirmStagePair` (`application/json`, HTTP 201). */
+export type ConfirmStagePairResult = StagePair;
+
+// ------------------------------------------------------------------------------------
+// confirmStageUploadCandidate - POST /stage-upload-candidates/{stage_upload_candidate_id}/confirmation
+// ------------------------------------------------------------------------------------
+
+/** Confirm Stage Upload Candidate */
+export type ConfirmStageUploadCandidateInput = {
+  /** Path parameters, substituted into `/stage-upload-candidates/{stage_upload_candidate_id}/confirmation`. */
+  path: {
+    stage_upload_candidate_id: StageUploadCandidateId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ConfirmStageUploadCandidateRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `confirmStageUploadCandidate` (`application/json`, HTTP 200). */
+export type ConfirmStageUploadCandidateResult = StageUploadCandidate;
 
 // ------------------------------------------------------------------------------------
 // continueComparisonReport - POST /comparison-reports/{comparison_report_id}/continuation
@@ -1299,6 +1516,58 @@ export type CreateProjectInput = {
 
 /** Success body of `createProject` (`application/json`, HTTP 201). */
 export type CreateProjectResult = Project;
+
+// ------------------------------------------------------------------------------------
+// createStageAssembly - POST /projects/{project_uid}/stage-assemblies
+// ------------------------------------------------------------------------------------
+
+/** Create Stage Assembly */
+export type CreateStageAssemblyInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/stage-assemblies`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CreateStageAssemblyRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createStageAssembly` (`application/json`, HTTP 201). */
+export type CreateStageAssemblyResult = StageAssembly;
+
+// ------------------------------------------------------------------------------------
+// createStageUpload - POST /projects/{project_uid}/stage-uploads
+// ------------------------------------------------------------------------------------
+
+/** Create Stage Upload */
+export type CreateStageUploadInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/stage-uploads`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CreateStageUploadRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createStageUpload` (`application/json`, HTTP 201). */
+export type CreateStageUploadResult = StageUpload;
 
 // ------------------------------------------------------------------------------------
 // decideOptimisationProposal - POST /optimisation-proposals/{optimisation_proposal_id}/decisions
@@ -2500,6 +2769,101 @@ export type GetSpecificationPricesInput = {
 export type GetSpecificationPricesResult = SpecificationPrices;
 
 // ------------------------------------------------------------------------------------
+// getStageChainRun - GET /stage-chain-runs/{stage_chain_run_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Stage Chain Run */
+export type GetStageChainRunInput = {
+  /** Path parameters, substituted into `/stage-chain-runs/{stage_chain_run_id}`. */
+  path: {
+    stage_chain_run_id: StageChainRunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getStageChainRun` (`application/json`, HTTP 200). */
+export type GetStageChainRunResult = StageChainRun;
+
+// ------------------------------------------------------------------------------------
+// getStagePair - GET /stage-pairs/{stage_pair_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Stage Pair */
+export type GetStagePairInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getStagePair` (`application/json`, HTTP 200). */
+export type GetStagePairResult = StagePair;
+
+// ------------------------------------------------------------------------------------
+// getStageSheetMap - GET /stage-pairs/{stage_pair_id}/sheet-map
+// ------------------------------------------------------------------------------------
+
+/** Get Stage Sheet Map */
+export type GetStageSheetMapInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/sheet-map`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getStageSheetMap` (`application/json`, HTTP 200). */
+export type GetStageSheetMapResult = StageLinkRevision;
+
+// ------------------------------------------------------------------------------------
+// getStageSheetMapRevision - GET /stage-link-revisions/{stage_link_revision_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Stage Sheet Map Revision */
+export type GetStageSheetMapRevisionInput = {
+  /** Path parameters, substituted into `/stage-link-revisions/{stage_link_revision_id}`. */
+  path: {
+    stage_link_revision_id: StageLinkRevisionId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getStageSheetMapRevision` (`application/json`, HTTP 200). */
+export type GetStageSheetMapRevisionResult = StageLinkRevision;
+
+// ------------------------------------------------------------------------------------
+// getStageUpload - GET /stage-uploads/{stage_upload_id}
+// ------------------------------------------------------------------------------------
+
+/** Get Stage Upload */
+export type GetStageUploadInput = {
+  /** Path parameters, substituted into `/stage-uploads/{stage_upload_id}`. */
+  path: {
+    stage_upload_id: StageUploadId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getStageUpload` (`application/json`, HTTP 200). */
+export type GetStageUploadResult = StageUpload;
+
+// ------------------------------------------------------------------------------------
 // getUser - GET /users/{user_uid}
 // ------------------------------------------------------------------------------------
 
@@ -3667,6 +4031,270 @@ export type ListRunsInput = {
 export type ListRunsResult = RunStatusPage;
 
 // ------------------------------------------------------------------------------------
+// listStageChainRuns - GET /stage-pairs/{stage_pair_id}/chain-runs
+// ------------------------------------------------------------------------------------
+
+/** List Stage Chain Runs */
+export type ListStageChainRunsInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/chain-runs`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageChainRuns` (`application/json`, HTTP 200). */
+export type ListStageChainRunsResult = StageChainRunPage;
+
+// ------------------------------------------------------------------------------------
+// listStagePairSuggestions - GET /projects/{project_uid}/stage-pair-suggestions
+// ------------------------------------------------------------------------------------
+
+/** List Stage Pair Suggestions */
+export type ListStagePairSuggestionsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/stage-pair-suggestions`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStagePairSuggestions` (`application/json`, HTTP 200). */
+export type ListStagePairSuggestionsResult = StagePairSuggestionPage;
+
+// ------------------------------------------------------------------------------------
+// listStagePairs - GET /projects/{project_uid}/stage-pairs
+// ------------------------------------------------------------------------------------
+
+/** List Stage Pairs */
+export type ListStagePairsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/stage-pairs`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStagePairs` (`application/json`, HTTP 200). */
+export type ListStagePairsResult = StagePairPage;
+
+// ------------------------------------------------------------------------------------
+// listStageRawDifferences - GET /stage-link-revisions/{stage_link_revision_id}/raw-differences
+// ------------------------------------------------------------------------------------
+
+/** List Stage Raw Differences */
+export type ListStageRawDifferencesInput = {
+  /** Path parameters, substituted into `/stage-link-revisions/{stage_link_revision_id}/raw-differences`. */
+  path: {
+    stage_link_revision_id: StageLinkRevisionId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageRawDifferences` (`application/json`, HTTP 200). */
+export type ListStageRawDifferencesResult = StageTextDifferencePage;
+
+// ------------------------------------------------------------------------------------
+// listStageSheetMapHistory - GET /stage-pairs/{stage_pair_id}/sheet-map/revisions
+// ------------------------------------------------------------------------------------
+
+/** List Stage Sheet Map History */
+export type ListStageSheetMapHistoryInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/sheet-map/revisions`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageSheetMapHistory` (`application/json`, HTTP 200). */
+export type ListStageSheetMapHistoryResult = StageLinkRevisionPage;
+
+// ------------------------------------------------------------------------------------
+// listStageSheetPassports - GET /stage-pairs/{stage_pair_id}/sheet-passports
+// ------------------------------------------------------------------------------------
+
+/** List Stage Sheet Passports */
+export type ListStageSheetPassportsInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/sheet-passports`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageSheetPassports` (`application/json`, HTTP 200). */
+export type ListStageSheetPassportsResult = StageSheetPassportPage;
+
+// ------------------------------------------------------------------------------------
+// listStageSheetSuggestions - GET /stage-pairs/{stage_pair_id}/sheet-suggestions
+// ------------------------------------------------------------------------------------
+
+/** List Stage Sheet Suggestions */
+export type ListStageSheetSuggestionsInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/sheet-suggestions`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageSheetSuggestions` (`application/json`, HTTP 200). */
+export type ListStageSheetSuggestionsResult = StageSheetSuggestionPage;
+
+// ------------------------------------------------------------------------------------
+// listStageTextExclusions - GET /stage-link-revisions/{stage_link_revision_id}/text-exclusions
+// ------------------------------------------------------------------------------------
+
+/** List Stage Text Exclusions */
+export type ListStageTextExclusionsInput = {
+  /** Path parameters, substituted into `/stage-link-revisions/{stage_link_revision_id}/text-exclusions`. */
+  path: {
+    stage_link_revision_id: StageLinkRevisionId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageTextExclusions` (`application/json`, HTTP 200). */
+export type ListStageTextExclusionsResult = StageTextExclusionPage;
+
+// ------------------------------------------------------------------------------------
+// listStageTextFragments - GET /stage-pairs/{stage_pair_id}/text-fragments
+// ------------------------------------------------------------------------------------
+
+/** List Stage Text Fragments */
+export type ListStageTextFragmentsInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/text-fragments`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageTextFragments` (`application/json`, HTTP 200). */
+export type ListStageTextFragmentsResult = StageTextFragmentPage;
+
+// ------------------------------------------------------------------------------------
+// listStageTextHints - GET /stage-link-revisions/{stage_link_revision_id}/text-hints
+// ------------------------------------------------------------------------------------
+
+/** List Stage Text Hints */
+export type ListStageTextHintsInput = {
+  /** Path parameters, substituted into `/stage-link-revisions/{stage_link_revision_id}/text-hints`. */
+  path: {
+    stage_link_revision_id: StageLinkRevisionId;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageTextHints` (`application/json`, HTTP 200). */
+export type ListStageTextHintsResult = StageTextHintPage;
+
+// ------------------------------------------------------------------------------------
+// listStageUploads - GET /projects/{project_uid}/stage-uploads
+// ------------------------------------------------------------------------------------
+
+/** List Stage Uploads */
+export type ListStageUploadsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/stage-uploads`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listStageUploads` (`application/json`, HTTP 200). */
+export type ListStageUploadsResult = StageUploadPage;
+
+// ------------------------------------------------------------------------------------
 // listUsers - GET /users
 // ------------------------------------------------------------------------------------
 
@@ -3974,6 +4602,30 @@ export type PauseComparisonUploadInput = {
 export type PauseComparisonUploadResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
+// pauseStageUpload - POST /stage-uploads/{stage_upload_id}/pause
+// ------------------------------------------------------------------------------------
+
+/** Pause Stage Upload */
+export type PauseStageUploadInput = {
+  /** Path parameters, substituted into `/stage-uploads/{stage_upload_id}/pause`. */
+  path: {
+    stage_upload_id: StageUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `pauseStageUpload` (`application/json`, HTTP 200). */
+export type PauseStageUploadResult = StageUpload;
+
+// ------------------------------------------------------------------------------------
 // prepareComparisonClientReport - POST /comparison-reports/{comparison_report_id}/client-report
 // ------------------------------------------------------------------------------------
 
@@ -4133,6 +4785,30 @@ export type RebuildComparisonReportPdfInput = {
 export type RebuildComparisonReportPdfResult = ComparisonReport;
 
 // ------------------------------------------------------------------------------------
+// recomputeStageTextEvidence - POST /stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation
+// ------------------------------------------------------------------------------------
+
+/** Recompute Stage Text Evidence */
+export type RecomputeStageTextEvidenceInput = {
+  /** Path parameters, substituted into `/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation`. */
+  path: {
+    stage_link_revision_id: StageLinkRevisionId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `recomputeStageTextEvidence` (`application/json`, HTTP 202). */
+export type RecomputeStageTextEvidenceResult = StageChainRun;
+
+// ------------------------------------------------------------------------------------
 // rejectRegistration - POST /registrations/{request_id}/reject
 // ------------------------------------------------------------------------------------
 
@@ -4156,6 +4832,30 @@ export type RejectRegistrationInput = {
 
 /** Success body of `rejectRegistration` (`application/json`, HTTP 200). */
 export type RejectRegistrationResult = RegistrationRequest;
+
+// ------------------------------------------------------------------------------------
+// rejectStageUploadCandidate - POST /stage-upload-candidates/{stage_upload_candidate_id}/rejection
+// ------------------------------------------------------------------------------------
+
+/** Reject Stage Upload Candidate */
+export type RejectStageUploadCandidateInput = {
+  /** Path parameters, substituted into `/stage-upload-candidates/{stage_upload_candidate_id}/rejection`. */
+  path: {
+    stage_upload_candidate_id: StageUploadCandidateId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `rejectStageUploadCandidate` (`application/json`, HTTP 200). */
+export type RejectStageUploadCandidateResult = StageUploadCandidate;
 
 // ------------------------------------------------------------------------------------
 // removeComparisonLaunchEntry - POST /comparison-launch-entries/{comparison_launch_entry_id}/removal
@@ -4402,6 +5102,30 @@ export type ResumeComparisonUploadInput = {
 export type ResumeComparisonUploadResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
+// resumeStageUpload - POST /stage-uploads/{stage_upload_id}/resume
+// ------------------------------------------------------------------------------------
+
+/** Resume Stage Upload */
+export type ResumeStageUploadInput = {
+  /** Path parameters, substituted into `/stage-uploads/{stage_upload_id}/resume`. */
+  path: {
+    stage_upload_id: StageUploadId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `resumeStageUpload` (`application/json`, HTTP 200). */
+export type ResumeStageUploadResult = StageUpload;
+
+// ------------------------------------------------------------------------------------
 // retryComparisonAiSheetChanges - POST /comparison-ai-sheet-jobs/{comparison_ai_job_id}/retry
 // ------------------------------------------------------------------------------------
 
@@ -4515,6 +5239,32 @@ export type ReviseExecutorConnectionInput = {
 
 /** Success body of `reviseExecutorConnection` (`application/json`, HTTP 201). */
 export type ReviseExecutorConnectionResult = ExecutorRevision;
+
+// ------------------------------------------------------------------------------------
+// reviseStageAssembly - POST /stage-assemblies/{stage_assembly_id}/members
+// ------------------------------------------------------------------------------------
+
+/** Revise Stage Assembly */
+export type ReviseStageAssemblyInput = {
+  /** Path parameters, substituted into `/stage-assemblies/{stage_assembly_id}/members`. */
+  path: {
+    stage_assembly_id: StageAssemblyId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ReviseStageAssemblyRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviseStageAssembly` (`application/json`, HTTP 200). */
+export type ReviseStageAssemblyResult = StageAssembly;
 
 // ------------------------------------------------------------------------------------
 // revokeRunnerToken - POST /executor-connections/{connection_id}/runner-tokens/{token_id}/revoke
@@ -4737,6 +5487,32 @@ export type SetProjectVendorListInput = {
 
 /** Success body of `setProjectVendorList` (`application/json`, HTTP 200). */
 export type SetProjectVendorListResult = SectionVendorList;
+
+// ------------------------------------------------------------------------------------
+// setStagePairCompleteness - POST /stage-pairs/{stage_pair_id}/completeness
+// ------------------------------------------------------------------------------------
+
+/** Set Stage Pair Completeness */
+export type SetStagePairCompletenessInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/completeness`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetStagePairCompletenessRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setStagePairCompleteness` (`application/json`, HTTP 200). */
+export type SetStagePairCompletenessResult = StagePair;
 
 // ------------------------------------------------------------------------------------
 // setWorkerIntake - PUT /execution/workers/{worker_id}/intake
@@ -5030,6 +5806,32 @@ export type StartRunInput = {
 
 /** Success body of `startRun` (`application/json`, HTTP 202). */
 export type StartRunResult = RunStatus;
+
+// ------------------------------------------------------------------------------------
+// startStageChainRun - POST /stage-pairs/{stage_pair_id}/chain-runs
+// ------------------------------------------------------------------------------------
+
+/** Start Stage Chain Run */
+export type StartStageChainRunInput = {
+  /** Path parameters, substituted into `/stage-pairs/{stage_pair_id}/chain-runs`. */
+  path: {
+    stage_pair_id: StagePairId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: StartStageChainRunRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `startStageChainRun` (`application/json`, HTTP 201). */
+export type StartStageChainRunResult = StageChainRun;
 
 // ------------------------------------------------------------------------------------
 // streamComparisonPairTile - GET /comparison-sheet-pairs/{comparison_sheet_pair_id}/tile
@@ -5629,6 +6431,37 @@ export type UploadPriceListInput = {
 export type UploadPriceListResult = PriceListRevision;
 
 // ------------------------------------------------------------------------------------
+// uploadStageUploadPart - PUT /stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts
+// ------------------------------------------------------------------------------------
+
+/** Upload Stage Upload Part */
+export type UploadStageUploadPartInput = {
+  /** Path parameters, substituted into `/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts`. */
+  path: {
+    stage_upload_file_id: StageUploadFileId;
+    stage_upload_id: StageUploadId;
+  };
+  /** Query string parameters. */
+  query: {
+    part_number: number;
+  };
+  /** Request body, sent as `application/octet-stream`. */
+  body: Blob;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `uploadStageUploadPart` (`application/json`, HTTP 200). */
+export type UploadStageUploadPartResult = StageUploadPartReceipt;
+
+// ------------------------------------------------------------------------------------
 // withdrawSheetPairing - POST /projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison/sheet-pairings/{sheet_link_id}/withdrawals
 // ------------------------------------------------------------------------------------
 
@@ -5709,6 +6542,20 @@ export const OPERATIONS = {
     requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  applyStageSheetMap: {
+    operationId: 'applyStageSheetMap',
+    method: 'POST',
+    path: '/stage-pairs/{stage_pair_id}/sheet-map',
+    pathParams: ['stage_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
@@ -5880,6 +6727,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  cancelStageChainRun: {
+    operationId: 'cancelStageChainRun',
+    method: 'POST',
+    path: '/stage-chain-runs/{stage_chain_run_id}/cancellation',
+    pathParams: ['stage_chain_run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
+  cancelStageUpload: {
+    operationId: 'cancelStageUpload',
+    method: 'POST',
+    path: '/stage-uploads/{stage_upload_id}/cancellation',
+    pathParams: ['stage_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   carryOverDecision: {
     operationId: 'carryOverDecision',
     method: 'POST',
@@ -5978,11 +6853,53 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  completeStageUploadFile: {
+    operationId: 'completeStageUploadFile',
+    method: 'POST',
+    path: '/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/completion',
+    pathParams: ['stage_upload_file_id', 'stage_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
   confirmComparisonUploadSet: {
     operationId: 'confirmComparisonUploadSet',
     method: 'POST',
     path: '/comparison-uploads/{comparison_upload_id}/sets/{comparison_upload_set_id}/confirmation',
     pathParams: ['comparison_upload_id', 'comparison_upload_set_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  confirmStagePair: {
+    operationId: 'confirmStagePair',
+    method: 'POST',
+    path: '/projects/{project_uid}/stage-pairs',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  confirmStageUploadCandidate: {
+    operationId: 'confirmStageUploadCandidate',
+    method: 'POST',
+    path: '/stage-upload-candidates/{stage_upload_candidate_id}/confirmation',
+    pathParams: ['stage_upload_candidate_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
@@ -6103,6 +7020,34 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['projects'],
+  },
+  createStageAssembly: {
+    operationId: 'createStageAssembly',
+    method: 'POST',
+    path: '/projects/{project_uid}/stage-assemblies',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  createStageUpload: {
+    operationId: 'createStageUpload',
+    method: 'POST',
+    path: '/projects/{project_uid}/stage-uploads',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   decideOptimisationProposal: {
     operationId: 'decideOptimisationProposal',
@@ -6818,6 +7763,76 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['optimisation'],
   },
+  getStageChainRun: {
+    operationId: 'getStageChainRun',
+    method: 'GET',
+    path: '/stage-chain-runs/{stage_chain_run_id}',
+    pathParams: ['stage_chain_run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getStagePair: {
+    operationId: 'getStagePair',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}',
+    pathParams: ['stage_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getStageSheetMap: {
+    operationId: 'getStageSheetMap',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}/sheet-map',
+    pathParams: ['stage_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getStageSheetMapRevision: {
+    operationId: 'getStageSheetMapRevision',
+    method: 'GET',
+    path: '/stage-link-revisions/{stage_link_revision_id}',
+    pathParams: ['stage_link_revision_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
+  getStageUpload: {
+    operationId: 'getStageUpload',
+    method: 'GET',
+    path: '/stage-uploads/{stage_upload_id}',
+    pathParams: ['stage_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['comparison'],
+  },
   getUser: {
     operationId: 'getUser',
     method: 'GET',
@@ -7420,6 +8435,160 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['runs'],
   },
+  listStageChainRuns: {
+    operationId: 'listStageChainRuns',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}/chain-runs',
+    pathParams: ['stage_pair_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStagePairSuggestions: {
+    operationId: 'listStagePairSuggestions',
+    method: 'GET',
+    path: '/projects/{project_uid}/stage-pair-suggestions',
+    pathParams: ['project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStagePairs: {
+    operationId: 'listStagePairs',
+    method: 'GET',
+    path: '/projects/{project_uid}/stage-pairs',
+    pathParams: ['project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageRawDifferences: {
+    operationId: 'listStageRawDifferences',
+    method: 'GET',
+    path: '/stage-link-revisions/{stage_link_revision_id}/raw-differences',
+    pathParams: ['stage_link_revision_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageSheetMapHistory: {
+    operationId: 'listStageSheetMapHistory',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}/sheet-map/revisions',
+    pathParams: ['stage_pair_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageSheetPassports: {
+    operationId: 'listStageSheetPassports',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}/sheet-passports',
+    pathParams: ['stage_pair_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageSheetSuggestions: {
+    operationId: 'listStageSheetSuggestions',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}/sheet-suggestions',
+    pathParams: ['stage_pair_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageTextExclusions: {
+    operationId: 'listStageTextExclusions',
+    method: 'GET',
+    path: '/stage-link-revisions/{stage_link_revision_id}/text-exclusions',
+    pathParams: ['stage_link_revision_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageTextFragments: {
+    operationId: 'listStageTextFragments',
+    method: 'GET',
+    path: '/stage-pairs/{stage_pair_id}/text-fragments',
+    pathParams: ['stage_pair_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageTextHints: {
+    operationId: 'listStageTextHints',
+    method: 'GET',
+    path: '/stage-link-revisions/{stage_link_revision_id}/text-hints',
+    pathParams: ['stage_link_revision_id'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
+  listStageUploads: {
+    operationId: 'listStageUploads',
+    method: 'GET',
+    path: '/projects/{project_uid}/stage-uploads',
+    pathParams: ['project_uid'],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['comparison'],
+  },
   listUsers: {
     operationId: 'listUsers',
     method: 'GET',
@@ -7574,6 +8743,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
+  pauseStageUpload: {
+    operationId: 'pauseStageUpload',
+    method: 'POST',
+    path: '/stage-uploads/{stage_upload_id}/pause',
+    pathParams: ['stage_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   prepareComparisonClientReport: {
     operationId: 'prepareComparisonClientReport',
     method: 'POST',
@@ -7658,6 +8841,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
+  recomputeStageTextEvidence: {
+    operationId: 'recomputeStageTextEvidence',
+    method: 'POST',
+    path: '/stage-link-revisions/{stage_link_revision_id}/text-evidence/recomputation',
+    pathParams: ['stage_link_revision_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [202],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
+  },
   rejectRegistration: {
     operationId: 'rejectRegistration',
     method: 'POST',
@@ -7671,6 +8868,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['registrations'],
+  },
+  rejectStageUploadCandidate: {
+    operationId: 'rejectStageUploadCandidate',
+    method: 'POST',
+    path: '/stage-upload-candidates/{stage_upload_candidate_id}/rejection',
+    pathParams: ['stage_upload_candidate_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
   },
   removeComparisonLaunchEntry: {
     operationId: 'removeComparisonLaunchEntry',
@@ -7798,6 +9009,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
+  resumeStageUpload: {
+    operationId: 'resumeStageUpload',
+    method: 'POST',
+    path: '/stage-uploads/{stage_upload_id}/resume',
+    pathParams: ['stage_upload_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 500, 503],
+    tags: ['comparison'],
+  },
   retryComparisonAiSheetChanges: {
     operationId: 'retryComparisonAiSheetChanges',
     method: 'POST',
@@ -7853,6 +9078,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  reviseStageAssembly: {
+    operationId: 'reviseStageAssembly',
+    method: 'POST',
+    path: '/stage-assemblies/{stage_assembly_id}/members',
+    pathParams: ['stage_assembly_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   revokeRunnerToken: {
     operationId: 'revokeRunnerToken',
@@ -7979,6 +9218,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  setStagePairCompleteness: {
+    operationId: 'setStagePairCompleteness',
+    method: 'POST',
+    path: '/stage-pairs/{stage_pair_id}/completeness',
+    pathParams: ['stage_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   setWorkerIntake: {
     operationId: 'setWorkerIntake',
@@ -8119,6 +9372,20 @@ export const OPERATIONS = {
     successStatuses: [202],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['runs'],
+  },
+  startStageChainRun: {
+    operationId: 'startStageChainRun',
+    method: 'POST',
+    path: '/stage-pairs/{stage_pair_id}/chain-runs',
+    pathParams: ['stage_pair_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   streamComparisonPairTile: {
     operationId: 'streamComparisonPairTile',
@@ -8427,6 +9694,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['optimisation'],
+  },
+  uploadStageUploadPart: {
+    operationId: 'uploadStageUploadPart',
+    method: 'PUT',
+    path: '/stage-uploads/{stage_upload_id}/files/{stage_upload_file_id}/parts',
+    pathParams: ['stage_upload_file_id', 'stage_upload_id'],
+    queryParams: ['part_number'],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/octet-stream',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['comparison'],
   },
   withdrawSheetPairing: {
     operationId: 'withdrawSheetPairing',
