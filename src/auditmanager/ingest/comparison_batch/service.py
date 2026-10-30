@@ -33,13 +33,16 @@ named by any statement it makes, and the store is touched only by the sweep, fro
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.access.public import UserUid
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.ingest.commands import CommandRepository, CommandReplay, CommandStarted, payload_fingerprint
 from auditmanager.ingest.comparison_batch.lifecycle import BatchLifecycle
@@ -68,12 +71,22 @@ from auditmanager.ingest.comparison_pdf.public import (
 from auditmanager.ingest.comparison_pdf.repository import SetRow, UploadRow
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import IdempotencyKey, ProjectUid
+from auditmanager.shared.identity import (
+    AuditEventId, CommandId, ComparisonUploadId, ComparisonUploadSetId,
+    IdempotencyKey, ProjectUid,
+)
 
 __all__ = ["ComparisonBatchService"]
 
 #: ``decide(session, upload, set_row)``: the act itself, run under the batch's lock after the key is claimed.
 _Decide = Callable[[Session, UploadRow, "SetRow | None"], None]
+_AUDIT_TYPES = {
+    COMMAND_EXCLUDE_SET: "comparison.upload_set_excluded",
+    COMMAND_RETRY_SET: "comparison.upload_set_retried",
+    COMMAND_PAUSE_UPLOAD: "comparison.upload_paused",
+    COMMAND_RESUME_UPLOAD: "comparison.upload_resumed",
+    COMMAND_CANCEL_UPLOAD: "comparison.upload_cancelled",
+}
 
 
 def _conflict(reason: str) -> DomainError:
@@ -288,7 +301,29 @@ class ComparisonBatchService:
                 return
             assert isinstance(claim, CommandStarted)
             decide(session, upload, row)
+            # The keyed receipt and journal belong to the same transaction as
+            # decide. Any append failure must roll back the entire expert act.
+            self._audit_act(session, command_type=command_type, upload=upload,
+                            set_id=set_id, user_uid=user_uid, command_id=str(claim.command_id))
             self._commands.succeed(session, claim.command_id, outcome)
+
+    @staticmethod
+    def _audit_act(session: Session, *, command_type: str, upload: UploadRow,
+                   set_id: str | None, user_uid: str, command_id: str) -> None:
+        payload = {
+            "comparison_upload_id": str(ComparisonUploadId.parse(upload.upload_id)),
+            "project_uid": str(ProjectUid.parse(upload.project_uid)),
+            "actor_uid": str(UserUid.parse(user_uid)),
+            "command_id": str(CommandId.parse(command_id)),
+        }
+        if set_id is not None:
+            payload["set_id"] = str(ComparisonUploadSetId.parse(set_id))
+        session.execute(text(
+            "INSERT INTO audit_event(audit_event_id,event_type,aggregate_type,aggregate_id,payload) "
+            "VALUES(:event,:type,:aggregate,:id,CAST(:payload AS jsonb))"
+        ), {"event": str(AuditEventId.new()), "type": _AUDIT_TYPES[command_type],
+            "aggregate": "ComparisonUploadSet" if set_id is not None else "ComparisonUpload",
+            "id": set_id or upload.upload_id, "payload": json.dumps(payload, sort_keys=True)})
 
     def _settle(self, session: Session, upload_id: str) -> None:
         """After a set was left out: a batch with nothing left to decide is finished (see the lifecycle)."""

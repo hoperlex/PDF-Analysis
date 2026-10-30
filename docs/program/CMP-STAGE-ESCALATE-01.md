@@ -1,0 +1,11 @@
+# CMP-STAGE-ESCALATE-01 — expert raw evidence escalation
+
+Completed 2026-10-30 over root escalation seal `80b6b9e3`. Root owns transport/wiring/schema and remote refs; only review runtime/tests/task/report are authored here.
+
+`StageReviewService.promote(run_id, source_ids, reason, *, user_uid, actor_roles, idempotency_key) -> dict` enforces expert role in the business method, typed distinct 1..100 source IDs, trimmed nonempty reason up to 2000 characters and a current completed run under the pair map lock. Sources are effective-revision std/sge evidence, or stf fragments whose actual profile belongs to the pair's current effective map and pinned versions. Masked/excluded fragments are intentionally eligible. They are loaded only for this command and never become automatic fallback cards.
+
+The command creates an immutable REVIEW/uncertain/unknown card with exact raw quotes and per-side source anchors, leaves source exclusions/differences/AI/service rows untouched and infers no acceptance. A pre-existing identical REVIEW identity is reused: A-10 card identity remains class + sorted atomic IDs. The keyed receipt and `stage.review_card_created` audit row commit atomically with any new card/evidence. The audit keeps source/card/actor/command IDs and the explicit expert comment, never copies document excerpts. Replaying a successful key returns its recorded card; a changed reason/source/actor under the key refuses.
+
+Focused evidence: **3 actual-0042 PostgreSQL tests passed in 2.04 s** (masked fragment escalation with original exclusion retained and one audit on replay, new REVIEW over SERVICE_STRUCTURE evidence while the original class remains immutable, role/input/foreign/incomplete-state refusals and rollback). Existing pure review/export suite **9 passed**. `git diff --check` clean. No model call, full gate/build/browser check, schema/migration change, deployment or remote-ref update.
+
+Authored files: `comparison/stage_review/service.py`, `tests/integration/comparison/stage_review/test_promote.py`, this report and its task. Root can merge this provider and wire the already sealed createStageReviewCard operation. The existing card text/source budgets apply and refuse rather than truncate. Existing historical verdicts and raw rows remain immutable.

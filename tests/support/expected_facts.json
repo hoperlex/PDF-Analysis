@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 227,
+    "path_count": 228,
     "operations": [
       [
         "POST",
@@ -1267,6 +1267,11 @@
         "GET",
         "/stage-assemblies/{stage_assembly_id}",
         "getStageAssembly"
+      ],
+      [
+        "POST",
+        "/stage-chain-runs/{stage_chain_run_id}/review-cards",
+        "createStageReviewCard"
       ]
     ],
     "schema_names": [
@@ -1519,6 +1524,7 @@
       "CreateExecutorConnectionRequest",
       "CreateProjectRequest",
       "CreateStageAssemblyRequest",
+      "CreateStageReviewCardRequest",
       "CreateStageUploadRequest",
       "Cursor",
       "DashboardSummary",
@@ -1889,6 +1895,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0042_comparison_stage_review",
+  "migration_head": "0043_stage_ai_generations",
   "contract_version": "1.13.0"
 }

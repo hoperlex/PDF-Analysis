@@ -59,7 +59,7 @@ def _update(card, decision="accepted", revision=0, reason=""):
 def test_fenced_deterministic_cards_replay_and_accepted_exports(comparison_session):
     service, _, _, _, actor, run, item = _fixture(comparison_session)
     counts = service.advance(item, run)
-    assert counts == {"total": 1, "review": 1, "project_changes": 0, "conflicts": 0, "high_importance": 0}
+    assert counts == {"total": 1, "review": 1, "project_changes": 0, "conflicts": 0, "high_importance": 0, "importance_unknown": 1}
     assert service.advance(item, run) == counts
     cards, after, _ = service.page(run, limit=1)
     assert after is None and len(cards) == 1
