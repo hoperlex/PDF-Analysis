@@ -39,6 +39,18 @@ describe('server-frozen extended workflow', () => {
     expect(html).toContain('Результат обращения к исполнителю неизвестен');
   });
 
+  it('shows document-wide coverage and a concrete corpus absence reason', () => {
+    const html = render(v2({ status: 'partial', result: { workflow_version: 'extended-review-v2', review_scope: 'full_document',
+      coverage: { blocks_total: 47, blocks_selected: 47, blocks_processed: 47, blocks_remaining: 0, skipped: [] },
+      warnings: ['visual_context_bounded_full_text_reviewed'],
+      procedures: [{ id: 'norm_verification', title: 'Проверка нормативных ссылок', status: 'unavailable', reason: 'corpus_unavailable' }],
+    } }));
+    expect(html).toContain('План включает все доступные блоки');
+    expect(html).toContain('полный текст страниц передан');
+    expect(html).toContain('нет доступного нормативного корпуса');
+    expect(html).not.toContain('ограниченном одобренном окне');
+  });
+
   it('keeps legacy policy visible and never assigns a v2 plan to it', () => {
     const html = render({ run_id: runId, status: 'unavailable', result: { reason: 'not_in_accepted_policy', procedures: [] } });
     expect(html).toContain('полная цепочка не была предусмотрена');

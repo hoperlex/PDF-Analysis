@@ -1,5 +1,6 @@
 """Source-bound monetary consent, all ordinary sections and provider pre-call caps."""
 from dataclasses import replace
+from hashlib import sha256
 from types import SimpleNamespace as NS
 
 import json
@@ -11,6 +12,7 @@ from auditmanager.analysis.text.adapter import ModelRequest
 from auditmanager.analysis.text.profile_registry import load_text_profile_registry
 from auditmanager.runs import preflight
 from auditmanager.shared.errors import DomainError, ErrorCode
+from auditmanager.storage.public import derive_blob_id
 
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"
 MODEL = "claude-opus-5"
@@ -48,14 +50,32 @@ def test_all_fourteen_sections_price_before_start_and_large_normal_inputs_get_ex
     for section in registry.entries:
         small = estimate(policy, version(section, 500, 1))
         large = estimate(policy, version(section, 20_000_000, 500))
-        assert small.as_dict()["calls"] == 5
-        assert json.loads(small.authority_json)["extended_review"]["max_blocks"] == 16
+        assert small.as_dict()["calls"] >= 5
+        assert json.loads(small.authority_json)["extended_review"]["max_blocks"] == "all"
         assert large.as_dict()["calls"] > 12
         assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
         accepted = large.approve(consent(large), actor_user_uid="expert")
         assert accepted["extended_review"]["plan_version"] == "extended-review-v2"
         assert accepted["max_windows"] >= large.as_dict()["windows"]
         assert accepted["approved_by_user_uid"] == "expert"
+
+
+def test_fresh_full_review_prices_exact_immutable_image_count_when_companion_is_available(registry):
+    raw = json.dumps({'blocks': [{'block_type': 'image'} for _ in range(47)] +
+        [{'block_type': 'text'} for _ in range(12)]}).encode()
+    digest = sha256(raw).hexdigest()
+    source = version('AI', 300_000, 30)
+    source.manifest += (NS(role='source.structured_companion',
+        blob_id=str(derive_blob_id(sha256=digest, size=len(raw))), sha256=digest, size_bytes=len(raw)),)
+    precise = service(registry, blob_store=NS(read=lambda *_args, **_kw: raw))
+    assert precise._image_block_count(source) == 47
+    exact = estimate(precise, source)
+    fallback = estimate(service(registry), source)
+    assert exact.as_dict()['calls'] < fallback.as_dict()['calls']
+    assert exact.as_dict()['estimated_cost_micros'] < fallback.as_dict()['estimated_cost_micros']
+    with pytest.raises(DomainError) as failure:
+        estimate(service(registry, blob_store=NS(read=lambda *_args, **_kw: b'bad')), source)
+    assert failure.value.detail_fields['reason'] == 'cost_blocks_source_invalid'
 
 
 def test_exact_micro_cost_does_not_round_fractions_down():
@@ -85,7 +105,7 @@ def test_raised_output_price_and_route_rate_preset_changes_are_bound(registry):
     source = version()
     old = estimate(policy, source, preset_id="preset1")
     raised = estimate(policy, source, preset_id="preset1", relaxed_limits=True)
-    assert raised.as_dict()["output_tokens"] - 48_000 == (old.as_dict()["output_tokens"] - 48_000) * 4
+    assert raised.as_dict()["output_tokens"] - old.as_dict()["output_tokens"] == old.as_dict()["windows"] * 48_000
     assert raised.estimate_digest != old.estimate_digest
     revision.revision_id = "erev2"
     assert estimate(policy, source, preset_id="preset1").estimate_digest != old.estimate_digest

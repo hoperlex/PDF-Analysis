@@ -17,6 +17,7 @@ PLAN_VERSION_V2 = "extended-review-v2"
 RESULT_ROLE = "analysis.extended_review"
 REPLY_ROLE = "analysis.extended_reply"
 MAX_BLOCKS = 16
+FULL_DOCUMENT = "all"
 BATCH_SIZE = 8
 MAX_ITEMS = 40
 
@@ -30,27 +31,35 @@ def digest(value: object) -> str:
 
 
 def enabled(policy: object) -> bool:
-    return (isinstance(policy, dict) and policy.get("enabled") is True
-            and policy.get("plan_version") in (PLAN_VERSION, PLAN_VERSION_V2) and type(policy.get("max_blocks")) is int
-            and policy["max_blocks"] == MAX_BLOCKS)
+    if not isinstance(policy, dict) or policy.get("enabled") is not True:
+        return False
+    if policy.get("plan_version") == PLAN_VERSION:
+        return type(policy.get("max_blocks")) is int and policy["max_blocks"] == MAX_BLOCKS
+    return (policy.get("plan_version") == PLAN_VERSION_V2
+            and (type(policy.get("max_blocks")) is int and policy["max_blocks"] == MAX_BLOCKS
+                 or policy.get("max_blocks") == FULL_DOCUMENT))
 
 
 def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], manifest: Mapping[str, Any],
                 text_layer: Mapping[str, Any], graph: Mapping[str, Any], observations: Mapping[str, Any] | None,
                 recognised: Mapping[str, Any] | None = None,
-                native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION) -> dict:
+                native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION,
+                full_document: bool = False) -> dict:
     if plan_version not in {PLAN_VERSION, PLAN_VERSION_V2}:
         raise ValueError("extended_plan_version_invalid")
+    if type(full_document) is not bool or full_document and plan_version != PLAN_VERSION_V2:
+        raise ValueError("extended_full_document_policy_invalid")
     if native_sources is not None and plan_version != PLAN_VERSION_V2:
         raise ValueError("native_sources_require_v2")
     if native_sources is None:
         cohort = prepare_image_crop_cohort(version_uid=version_uid,
             portal_blocks_document=portal, crop_manifest_document=manifest)
         ordered = sorted(cohort.crops, key=lambda c: (c.page_number, c.portal_block_id))
-        selected = ordered[:MAX_BLOCKS]
+        selected = ordered if full_document else ordered[:MAX_BLOCKS]
     else:
         selected = list(native_sources["sources"])
-        if len(selected) > MAX_BLOCKS or any(source.get("kind") != "image" for source in selected):
+        if (not full_document and len(selected) > MAX_BLOCKS
+                or any(source.get("kind") != "image" for source in selected)):
             raise ValueError("native_sources_window_invalid")
     pages = {p["page_number"]: p.get("text", "") for p in text_layer.get("pages", [])}
     ocr: dict[int, list[str]] = {}
@@ -72,7 +81,8 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             "blob_id": crop.blob.blob_id, "size_bytes": crop.blob.size_bytes,
             "context": neighbors})
     text_items = []
-    for i, item in enumerate((observations or {}).get("observations", [])[:MAX_ITEMS]):
+    text_observations = (observations or {}).get("observations", [])
+    for i, item in enumerate(text_observations if full_document else text_observations[:MAX_ITEMS]):
         evidence = item.get("evidence", [])
         if not evidence:
             continue
@@ -83,8 +93,9 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             "description": str(item.get("finding_text", ""))[:3000], "source_ids": [source_id], "norm_queries": []})
     if native_sources is None:
         skipped = [{"block_id": c.portal_block_id, "page_number": c.page_number, "reason": c.reason} for c in cohort.skipped]
-        skipped.extend({"block_id": c.portal_block_id, "page_number": c.page_number, "reason": "outside_approved_window"}
-                       for c in ordered[MAX_BLOCKS:])
+        if not full_document:
+            skipped.extend({"block_id": c.portal_block_id, "page_number": c.page_number, "reason": "outside_approved_window"}
+                           for c in ordered[MAX_BLOCKS:])
         total = len(ordered) + len(cohort.skipped)
     else:
         skipped = deepcopy(native_sources.get("coverage", {}).get("skipped", []))
@@ -97,6 +108,8 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             "blocks_processed": 0, "blocks_remaining": total, "skipped": skipped},
         "context_sections": [{"title": str(s.get("title", ""))[:160]} for s in graph.get("sections", [])[:30]],
         "text_items": text_items}
+    if full_document:
+        result["review_scope"] = "full_document"
     result["source_sha256"] = digest({"version_uid": version_uid, "section": section,
         "portal": portal, "manifest": manifest, "text_layer": text_layer, "graph": graph, "text_observations": observations,
         "recognised": recognised})
@@ -106,15 +119,16 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
         result["source_sha256"] = digest({"base": result["source_sha256"], "workflow_version": plan_version,
             "native_sources_sha256": None if native_sources is None else native_sources["source_sha256"],
             "native_source_facts": None if native_sources is None else
-                {"sources": native_sources["sources"], "coverage": native_sources.get("coverage", {})}})
-    if (native_sources is None and len(ordered) > MAX_BLOCKS
+                {"sources": native_sources["sources"], "coverage": native_sources.get("coverage", {})}} |
+            ({"full_document": True} if full_document else {}))
+    if (native_sources is None and not full_document and len(ordered) > MAX_BLOCKS
             or native_sources is not None and total > len(selected)):
         result["warnings"].append("remaining_blocks_not_reviewed")
     if native_sources is None and cohort.skipped:
         result["warnings"].append("geometry_blocks_not_available")
     if native_sources is not None:
         result["warnings"].extend(native_sources.get("warnings", []))
-    if len((observations or {}).get("observations", [])) > MAX_ITEMS:
+    if not full_document and len(text_observations) > MAX_ITEMS:
         result["warnings"].append("text_observations_outside_merge_window")
     if any(n["context_truncated"] for s in sources for n in s.get("context", [])):
         result["warnings"].append("page_context_truncated")

@@ -93,9 +93,9 @@ def build_comprehensive_request(*, model_id, run_id, section, payload):
         idempotency_scope=f"{run_id}:comprehensive:{digest(body)}")
 
 
-def deterministic_lossless_merge(items):
+def deterministic_lossless_merge(items, *, full_document=False):
     """Collapse exact duplicate content only; keep every original and source binding."""
-    if not isinstance(items, list) or len(items) > MAX_MERGED_INPUTS:
+    if not isinstance(items, list) or not full_document and len(items) > MAX_MERGED_INPUTS:
         raise ValueError("extended_merge_window_exceeded")
     ignored = {"source_ids", "norm_queries", "norm_candidates", "observation_id", "source_kind",
                "input_ids", "provenance", "merged_observations"}
@@ -110,6 +110,12 @@ def deterministic_lossless_merge(items):
             by_key[key] = item
             continue
         target = by_key[key]
+        if full_document and (len(set(target.get("source_ids", [])) | set(original.get("source_ids", []))) > 16
+                or len(set(target.get("norm_queries", [])) | set(original.get("norm_queries", []))) > 2):
+            item = deepcopy(original)
+            output.append(item)
+            by_key[key] = item
+            continue
         target.setdefault("merged_observations", [deepcopy(target)]).append(deepcopy(original))
         for field in ("source_ids", "norm_queries", "norm_candidates", "input_ids"):
             if field not in original and field not in target:

@@ -14,6 +14,7 @@ from auditmanager.documents.public import DocumentRepository
 from auditmanager.norms.public import PromotionRefused, current_snapshot, qualification, select_verified_retrieval_set
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
+from auditmanager.storage.public import parse_blob_id
 
 from .commands import _freeze_for, refuse_comparison_only_version, route_classified_version
 
@@ -86,11 +87,32 @@ class RunCostPreflight:
     """No I/O in construction; every estimate is recomputed in the start transaction."""
 
     def __init__(self, *, section_profiles, text_profiles, provider_config, provider_mode,
-                 connection_route=None, preset_resolver=None, pack_registry=None, prices=None):
+                 connection_route=None, preset_resolver=None, pack_registry=None, prices=None,
+                 blob_store=None):
         self.sections, self.profiles = section_profiles, text_profiles
         self.config, self.mode = provider_config, provider_mode
         self.route, self.presets, self.packs = connection_route, preset_resolver, pack_registry
         self.prices = prices or pinned_models
+        self.blob_store = blob_store
+
+    def _image_block_count(self, version):
+        member = next((item for item in version.manifest
+            if str(item.role) == "source.structured_companion"), None)
+        if member is None or self.blob_store is None:
+            return None
+        raw = self.blob_store.read(parse_blob_id(member.blob_id), verify=True)
+        try:
+            if (len(raw) != member.size_bytes or hashlib.sha256(raw).hexdigest() != member.sha256):
+                raise ValueError()
+            document = json.loads(raw)
+            blocks = document["blocks"]
+            if not isinstance(blocks, list) or any(not isinstance(block, dict)
+                    or block.get("block_type") not in {"image", "text"} for block in blocks):
+                raise ValueError()
+            return sum(block["block_type"] == "image" for block in blocks)
+        except (KeyError, TypeError, ValueError):
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis",
+                reason="cost_blocks_source_invalid") from None
 
     def _source(self, session, version_uid, version=None):
         version = version or DocumentRepository().get_version(session, VersionUid.parse(version_uid))
@@ -164,6 +186,7 @@ class RunCostPreflight:
         resolve = self.profiles.resolve if hasattr(self.profiles, "resolve") else self.profiles
         profile = resolve(routed.analysis_profile_id, routed.prompt_bundle_id)
         pin, pricing, frozen, chosen = self._route(session, executor_connection_id=executor_connection_id, preset_id=preset_id)
+        source["image_block_count"] = self._image_block_count(version)
         bundle = profile.prompt_bundle
         window = relaxed_window_characters(pin.model_id, bundle)
         if window <= 0:
@@ -175,16 +198,27 @@ class RunCostPreflight:
         fixed = len(bundle.system_prompt) + len(_json(bundle.response_schema)) + 12_000
         input_tokens = math.ceil(Fraction((2 * chars + fixed * windows) * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
-        # HOTFIX-PRESENTATION: fresh consent covers two bounded image batches, a comprehensive cross-check and
-        # one independent normative quote review. Historical accepted commands lack this authority and
-        # cannot acquire extra paid calls merely because the worker was upgraded.
+        # Fresh consent reserves a conservative upper envelope for the admitted document.
+        # The ingest caps (100 image blocks per page, 1,000 per bundle) are technical
+        # source limits; they do not select a smaller review window. Historical accepted
+        # commands retain their own frozen 16-block authority.
         extended = None
         extra_calls = 0
         if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() not in {"0", "false", "off"}:
-            extended = {"enabled": True, "max_blocks": 16, "plan_version": "extended-review-v2"}
-            extra_calls = 4
-            input_tokens += 400_000
-            output_tokens += 48_000
+            extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
+            possible_images = source["image_block_count"]
+            if possible_images is None:
+                possible_images = min(1_000, version.page_count * 100)
+            elif possible_images == 0:
+                possible_images = version.page_count
+            image_calls = math.ceil(possible_images / 8)
+            comprehensive_calls = version.page_count + math.ceil(chars / 40_000) + image_calls + windows
+            # Every model call can return forty observations. Reserve one normative
+            # batch per forty such results plus the base text windows.
+            norm_calls = image_calls + comprehensive_calls + windows
+            extra_calls = image_calls + comprehensive_calls + norm_calls
+            input_tokens += image_calls * 40_000 + comprehensive_calls * 80_000 + norm_calls * 100_000
+            output_tokens += (image_calls + comprehensive_calls) * 6_000 + norm_calls * 12_000
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended)

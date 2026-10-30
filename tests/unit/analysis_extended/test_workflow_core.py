@@ -12,6 +12,8 @@ def test_old_and_new_exact_policy_and_four_fresh_procedures():
         assert core.enabled(dict(enabled=True, plan_version=version, max_blocks=16))
         assert not core.enabled(dict(enabled=True, plan_version=version, max_blocks=15))
     assert not core.enabled(dict(enabled=True, plan_version=[], max_blocks=16))
+    assert core.enabled(dict(enabled=True, plan_version=w.PLAN_VERSION_V2, max_blocks='all'))
+    assert not core.enabled(dict(enabled=True, plan_version=core.PLAN_VERSION, max_blocks='all'))
     procedures=w.workflow_procedures()
     assert [p['id'] for p in procedures]==['block_analysis','comprehensive_analysis','finding_merge','norm_verification']
     assert all(p['status']=='queued' for p in procedures)
