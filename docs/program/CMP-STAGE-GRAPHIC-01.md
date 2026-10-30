@@ -36,3 +36,7 @@ Source crops reuse `ProfileMaterial` and `PageProfileReader` tile-pyramid seams.
 Root wires advance into chain step3 and preserves Yielded until every link is recorded. The AI lane consumes the evidence/crop seam and keeps the frozen maximum of eight attached images per request. Existing engine caps remain (2000 raw regions and its child CPU/wall/memory limits); this bridge caps 1024 links. Bad source registration produces explicit status, not an empty positive result. Root separately assigned `CMP-STAGE-REVIEW-GRAPHIC-01` to bind review digests/anchors to stable engine evidence across runs; that is not claimed by this bridge commit.
 
 Authored files are this report/task, `comparison/stage_graphic/{__init__,evidence,service}.py`, its pure unit test and `tests/integration/comparison/stage_graphic/{conftest,test_service,test_actual_engine}.py`. Root can integrate this local provider now and perform the deferred broader checks tomorrow.
+
+## Repair-revision followup
+
+The AI/crop evidence read now joins each graphic receipt's link item to the run's current effective revision (original when absent). Repair leaves old receipts in the history page, while AI/crop plans and review consume only the new map. A focused actual-0042 test switches the effective map, verifies old/current receipt isolation and source crop refusal for the previous revision, then verifies review receives only the current graphic ID.

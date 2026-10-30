@@ -15,3 +15,5 @@ Focused evidence:
 The test uses real engine-result FK rows and the GRAPHIC projection; the underlying real PDF engine/profile/crop path was separately proven by `CMP-STAGE-GRAPHIC-01`. Previously materialized cards retain their historical digests; this task does not reinterpret their accepted evidence. Full gate/build/browser/live-model/deployment/remote-ref actions remain deferred/unperformed.
 
 Authored files: `comparison/stage_review/service.py`, `tests/integration/comparison/stage_review/test_graphic_carryover.py`, this report and its task. Root can merge this local followup after `76a1db92`; StageReviewService method signatures and frozen transport DTOs are unchanged. Forbidden hotspots are untouched.
+
+Repair-revision followup: the GRAPHIC projection also filters the receipt's link item by the requested effective revision. Earlier receipts remain immutable history and cannot duplicate current card evidence after repair. The shared focused GRAPHIC DB test exercises this handoff with two revisions of one run.
