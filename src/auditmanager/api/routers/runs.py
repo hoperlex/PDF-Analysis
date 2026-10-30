@@ -35,6 +35,7 @@ from auditmanager.api.routers.wire import WireResponse, encode_json, json_respon
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate
 from auditmanager.api.schemas.runs import run_status_body
+from auditmanager.api.security import CurrentSubject
 
 __all__ = ["build_run_routes"]
 
@@ -66,6 +67,7 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
     def start_run(
         body: models.StartRunRequest,
         idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
     ) -> WireResponse:
         view = runs.start_run(
             version_uid=body.version_uid,
@@ -74,7 +76,8 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             executor_connection_id=body.executor_connection_id,
             preset_id=body.preset_id,
             relaxed_limits=body.relaxed_limits is True,
-            **({"cost_consent": body.cost_consent.model_dump(mode="json")} if body.cost_consent is not None else {}),
+            **({"cost_consent": body.cost_consent.model_dump(mode="json"), "cost_actor_uid": subject.user_uid}
+               if body.cost_consent is not None else {}),
         )
         # 202, and the same 202 for a replay under the same key and payload: the run
         # exists either way, and the frozen document gives both the one status.

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import Any, Mapping
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -169,7 +170,7 @@ def _validate_pack(pack: TrustedPack) -> object:
     return profile
 
 
-def _fingerprint(version_uid: str, provider_mode: str, pack_sha256: str, relaxed_limits: bool = False):
+def _fingerprint(version_uid: str, provider_mode: str, pack_sha256: str, relaxed_limits: bool = False, cost_consent=None):
     payload = {
         "version_uid": version_uid,
         "provider_mode": provider_mode,
@@ -178,6 +179,8 @@ def _fingerprint(version_uid: str, provider_mode: str, pack_sha256: str, relaxed
     # Preserve the fingerprint of groups accepted before this temporary option existed.
     if relaxed_limits:
         payload["relaxed_limits"] = True
+    if cost_consent is not None:
+        payload["cost_consent"] = dict(cost_consent)
     return payload_fingerprint(payload)
 
 
@@ -218,6 +221,9 @@ def start_ar_v3_group(
     input_budget_characters: int | None,
     connection_route: RouteFreezer | None = None,
     relaxed_limits: bool = False,
+    cost_preflight: Any = None,
+    cost_consent: Mapping[str, Any] | None = None,
+    cost_actor_uid: str | None = None,
 ) -> StartedGroup:
     if type(relaxed_limits) is not bool:
         raise ValueError("relaxed_limits must be a boolean")
@@ -233,7 +239,7 @@ def start_ar_v3_group(
         previous = get_ar_v3_group(session, previous_id)
         claimed = commands.begin(
             session, command_type=COMMAND_TYPE, idempotency_key=key,
-            fingerprint=_fingerprint(version_id, provider_mode, previous.pack_sha256, relaxed_limits),
+            fingerprint=_fingerprint(version_id, provider_mode, previous.pack_sha256, relaxed_limits, cost_consent),
         )
         assert isinstance(claimed, CommandReplay)
         return StartedGroup(previous, True)
@@ -243,7 +249,7 @@ def start_ar_v3_group(
     pack_digest = pack.sha256
     claimed = commands.begin(
         session, command_type=COMMAND_TYPE, idempotency_key=key,
-        fingerprint=_fingerprint(version_id, provider_mode, pack_digest, relaxed_limits),
+        fingerprint=_fingerprint(version_id, provider_mode, pack_digest, relaxed_limits, cost_consent),
     ) if known is not None else None
     if isinstance(claimed, CommandReplay):
         previous_id = claimed.outcome.get("group_id")
@@ -263,14 +269,23 @@ def start_ar_v3_group(
     blob_ids = {entry.role: str(entry.blob_id) for entry in version.manifest}
     if MANIFEST_ROLE_SOURCE_DOCUMENT not in blob_ids:
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, reason="missing_required_input")
-    frozen_route = None if connection_route is None else connection_route(session)
+    approved_cost = None
+    if cost_preflight is not None:
+        estimate = cost_preflight.estimate_group(session, version_uid=version_id, relaxed_limits=relaxed_limits,
+            version_record=version)
+        approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
+        frozen_route = estimate.frozen_route
+    elif cost_consent is not None:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+    else:
+        frozen_route = None if connection_route is None else connection_route(session)
     budget = _checked_budget(
         input_budget_characters if frozen_route is None else frozen_route.input_budget_characters
     )
     # This preflight is derived from the dollar ceiling, so the temporary mode
     # disables it together with the worker's dollar halt. Provider context limits
     # remain provider refusals; they are never silently truncated here.
-    if not relaxed_limits:
+    if not relaxed_limits and approved_cost is None:
         _refuse_over_budget(version.text_character_count, budget)
     current = current_snapshot(session)
     if current is None or current.norms_snapshot_id != profile.snapshot_id:
@@ -297,7 +312,7 @@ def start_ar_v3_group(
     # Claim only after every mutable environmental precondition has passed.
     claimed = commands.begin(
         session, command_type=COMMAND_TYPE, idempotency_key=key,
-        fingerprint=_fingerprint(version_id, provider_mode, pack_digest, relaxed_limits),
+        fingerprint=_fingerprint(version_id, provider_mode, pack_digest, relaxed_limits, cost_consent),
     )
     if isinstance(claimed, CommandReplay):
         previous_id = claimed.outcome.get("group_id")
@@ -323,8 +338,22 @@ def start_ar_v3_group(
         "policy_sha256": profile.policy_sha256, "provider_mode": provider_mode,
     })
     runs = RunRepository()
+    run_limits = {}
+    scope_costs = {} if approved_cost is None else approved_cost.get("scope_costs_micros", {})
+    if approved_cost is not None and (set(scope_costs) != {scope.scope_id for scope in pack.scopes}
+            or any(type(value) is not int or value < 0 for value in scope_costs.values())
+            or approved_cost["billing"] == "metered" and any(value == 0 for value in scope_costs.values())):
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="AR v3 cost scope authority is invalid")
+    scope_total = sum(scope_costs.values())
+    left_cap = 0 if approved_cost is None else approved_cost["ceiling_micros"]
     for ordinal, (scope, ref) in enumerate(zip(pack.scopes, selected, strict=True), 1):
         run_id = str(RunId.new())
+        if approved_cost is not None:
+            share = 0 if scope_total == 0 else (approved_cost["ceiling_micros"] * scope_costs[scope.scope_id] // scope_total)
+            if ordinal == 6 and scope_total:
+                share = left_cap
+            run_limits[run_id] = share
+            left_cap -= share
         digest = frozen_input_digest(
             version_uid=version_id, blob_ids=blob_ids,
             analysis_profile_id=str(profile.analysis_profile_id),
@@ -356,5 +385,6 @@ def start_ar_v3_group(
     commands.succeed(session, claimed.command_id, {
         "group_id": group_id,
         "relaxed_limits": relaxed_limits,
+        **({"cost_consent": dict(approved_cost, run_limits_micros=run_limits)} if approved_cost is not None else {}),
     })
     return StartedGroup(get_ar_v3_group(session, group_id), False)

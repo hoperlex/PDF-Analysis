@@ -522,6 +522,7 @@ class ArV3GroupPort(Protocol):
     def start_ar_v3_group(
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
+        cost_actor_uid: str | None = None,
     ) -> models.ArV3BetaGroup:
         """Create six pinned runs, or replay the same group."""
 
@@ -556,6 +557,7 @@ class RunPort(Protocol):
         preset_id: str | None = None,
         relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
+        cost_actor_uid: str | None = None,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 

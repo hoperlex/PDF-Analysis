@@ -47,6 +47,7 @@ Before ordinary section analysis or the six-check AR v3 group starts, the applic
 - `src/auditmanager/runs/cost_policy.py`
 - `src/auditmanager/runs/v3_group.py`
 - `src/auditmanager/runs/v3_worker.py`
+- `src/auditmanager/runs/v3_provider_call.py`
 - `src/auditmanager/runs/public.py`
 - `src/auditmanager/analysis/text/cost.py`
 - `src/auditmanager/analysis/text/config.py`
@@ -67,6 +68,7 @@ Before ordinary section analysis or the six-check AR v3 group starts, the applic
 - `contracts/**`
 - `web/openapi/**`
 - `web/src/shared/api/generated/**`
+- `web/src/shared/api/authorization.ts`
 - `web/FRONTEND_LOCK.json`
 - `web/src/features/start-run/**`
 - `web/src/features/start-ar-v3-group/**`

@@ -503,6 +503,7 @@ def build_application(
         # ``test_the_served_application_routes_by_section``.
         section_profiles=text_profiles.section_profiles(),
         text_profiles=text_profiles.resolve,
+        require_cost_consent=True,
         # `EXEC-HTTP-01`. Which source serves a run: ``providers.freeze`` is set for the
         # ``database`` source only, and then runs freeze their connection revision at start.
         providers=providers.resolve,

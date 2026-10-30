@@ -298,6 +298,7 @@ def start_run_fingerprint(
     executor_connection_id: str | None = None,
     preset_id: str | None = None,
     relaxed_limits: bool = False,
+    cost_consent: Mapping[str, Any] | None = None,
 ) -> PayloadFingerprint:
     """The comparison value that distinguishes a repeat from a same-key conflict.
 
@@ -340,6 +341,8 @@ def start_run_fingerprint(
         document["preset_id"] = preset_id
     if relaxed_limits:
         document["relaxed_limits"] = True
+    if cost_consent is not None:
+        document["cost_consent"] = dict(cost_consent)
     return payload_fingerprint(document)
 
 
@@ -552,6 +555,9 @@ def start_audit_run(
     relaxed_limits: bool = False,
     text_profiles: Any = None,
     operational_model_id: str | None = None,
+    cost_preflight: Any = None,
+    cost_consent: Mapping[str, Any] | None = None,
+    cost_actor_uid: str | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -638,7 +644,7 @@ def start_audit_run(
     known = (
         command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
         if budget is not None or section_profiles is not None or connection_route is not None
-        or executor_connection_id is not None or preset_id is not None
+        or executor_connection_id is not None or preset_id is not None or cost_preflight is not None or cost_consent is not None
         else None
     )
     if section_profiles is not None:
@@ -673,7 +679,17 @@ def start_audit_run(
     # as a replay, whatever today's budget is.
     frozen: FrozenRoute | None = None
     chosen_preset: ChosenPreset | None = None
-    if preset_id is not None and known is None:
+    approved_cost = None
+    if known is None and cost_preflight is not None:
+        estimate = cost_preflight.estimate_run(session, version_uid=str(resolved_version),
+            executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
+            version_record=version_record)
+        approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
+        frozen, chosen_preset = estimate.frozen_route, estimate.chosen_preset
+        budget = approved_cost["window_characters"]
+    elif known is None and cost_consent is not None:
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+    if preset_id is not None and known is None and approved_cost is None:
         # `ANALYSIS-PRESETS-01`. Before the freezer: the preset only fills the field a person could
         # fill by hand, and everything after this line is the hand-chosen executor's start.
         if preset_resolver is None:
@@ -684,18 +700,19 @@ def start_audit_run(
         executor_connection_id = chosen_preset.executor_connection_id
     if executor_connection_id is not None and connection_route is None and known is None:
         raise _chosen_executor_unserved()
-    if connection_route is not None and known is None:
+    if connection_route is not None and known is None and approved_cost is None:
         frozen = _freeze_for(session, connection_route, executor_connection_id)
         budget = frozen.input_budget_characters
-    if relaxed_limits and known is None:
+    if relaxed_limits and known is None and approved_cost is None:
         model_id = frozen.model_id if frozen is not None else operational_model_id
         if model_id is None or text_profiles is None:
             raise ValueError("relaxed section start needs a pinned model and profile resolver")
-        normal_profile = text_profiles.resolve(*standard_pair)
+        resolve = text_profiles.resolve if hasattr(text_profiles, "resolve") else text_profiles
+        normal_profile = resolve(*standard_pair)
         budget = relaxed_window_characters(model_id, normal_profile.prompt_bundle)
     # Even with monetary halts disabled, 12 whole-page windows remain the worker's
     # watchdog-bound execution envelope. Refuse before claiming the key.
-    if budget is not None and known is None:
+    if budget is not None and known is None and approved_cost is None:
         _refuse_over_window_budget(_version.text_character_count, budget)
 
     basis = input_basis_digest(
@@ -719,6 +736,7 @@ def start_audit_run(
         executor_connection_id=None if preset_id is not None else executor_connection_id,
         preset_id=preset_id,
         relaxed_limits=relaxed_limits,
+        cost_consent=cost_consent,
     )
 
     claimed = command_repo.begin(
@@ -767,7 +785,8 @@ def start_audit_run(
     _journal_standby(session, run_id, frozen)
     _journal_executor_choice(session, run_id, frozen)
     command_repo.succeed(session, claimed.command_id, {
-        "run_id": run_id, **({"relaxed_limits": True} if relaxed_limits else {})
+        "run_id": run_id, **({"relaxed_limits": True} if relaxed_limits else {}),
+        **({"cost_consent": approved_cost} if approved_cost is not None else {}),
     })
     return StartedRun(
         run_id=run_id, command_id=str(claimed.command_id), replayed=False
