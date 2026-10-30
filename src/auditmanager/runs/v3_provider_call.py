@@ -20,12 +20,17 @@ from auditmanager.analysis.public import (
     ProviderMode,
     ProxyDispatchError,
     V3GenerationSettings,
+    CostMeter,
+    pinned_models,
+    request_cost_upper_usd,
+    require_approved_model,
 )
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.jobs.public import AttemptAuthority, JobRepository
 from auditmanager.runs.executor import _publication_store
 from auditmanager.runs.provider import ProviderBinding
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.cost_policy import RunCostPolicy
 from auditmanager.runs.v3_execution_binding import resolve_v3_execution_binding
 from auditmanager.runs.v3_execution_request import (
     V3PreparedExecutionRequest,
@@ -162,6 +167,7 @@ def dispatch_v3_provider_call(
     runs: RunRepository | None = None,
     documents: DocumentRepository | None = None,
     blobs: BlobMetadataRepository | None = None,
+    cost_policy: RunCostPolicy | None = None,
 ) -> V3ProviderCallReceipt:
     """Commit intent, send the exact v3 body once, then journal the received answer.
 
@@ -205,6 +211,20 @@ def dispatch_v3_provider_call(
         raise _refuse("group_binding_changed_before_intent")
 
     request = prepared.model_request
+    if cost_policy is not None and cost_policy.approved:
+        from dataclasses import replace
+        approved_config = replace(config, approved_cost_ceiling=True,
+            approved_model_id=cost_policy.model_id, approved_rate_sha256=cost_policy.rate_sha256,
+            approved_connection_revision_id=cost_policy.connection_revision_id)
+        pin = next((row for row in pinned_models() if row.model_id == request.model_id), None)
+        if pin is None:
+            raise _refuse("cost_model_price_unavailable")
+        require_approved_model(approved_config, pin, call)
+        prior = run_repo.cost(session, authority.run_id)
+        CostMeter(ceiling_usd=cost_policy.ceiling_usd,
+            spent_usd=0 if prior is None else prior.cost_micros / 1_000_000,
+            enforce_ceiling=cost_policy.enforce_ceiling).check_before_call(
+                pending_cost_usd=request_cost_upper_usd(pin, request))
     parameters = {
         **request.parameters,
         "ar_v3_candidate_sha256": prepared.candidate_sha256,

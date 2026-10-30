@@ -99,7 +99,11 @@ def fail_reclaimed_run(
     )
 
 
+from .cost_policy import RunCostPolicy, read_run_cost_policy
+
 __all__ = [
+    "RunCostPolicy",
+    "read_run_cost_policy",
     "PACK_MANIFEST_ENV",
     "PackManifestRefused",
     "ParsedPackManifest",

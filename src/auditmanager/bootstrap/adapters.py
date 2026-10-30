@@ -225,7 +225,8 @@ class ExecutionAdapter(_SessionHolder):
             return _run_status_view(session, run_id)
         return self._write(write)
 
-    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str) -> RunStatusView:
+    def reaudit_run(self, *, run_id: str, user_uid: str, idempotency_key: str,
+                    cost_consent: dict[str, Any] | None = None) -> RunStatusView:
         from auditmanager.runs.commands import reaudit_run
 
         profile, bundle, mode = self._runs.current_configuration()
@@ -251,6 +252,8 @@ class ExecutionAdapter(_SessionHolder):
                                  idempotency_key=idempotency_key,
                                  provider_mode=mode, input_budget_characters=budget,
                                  connection_route=self._runs.route_freezer,
+                                 cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
+                                 cost_consent=cost_consent, cost_actor_uid=user_uid,
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -867,6 +870,7 @@ class RunAdapter(_SessionHolder):
         ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
         cost_preflight: Any = None,
+        require_cost_consent: bool = False,
     ) -> None:
         super().__init__(session_factory)
         # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
@@ -914,13 +918,31 @@ class RunAdapter(_SessionHolder):
         # ``test_the_served_application_always_passes_a_budget`` is red for any path that
         # does not.
         self._input_budget_characters = input_budget_characters
+        self._require_cost_consent = require_cost_consent
+        if self._cost_preflight is None and section_profiles is not None and text_profiles is not None:
+            from auditmanager.runs.preflight import RunCostPreflight
+            self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
+                provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
+                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry)
+        if require_cost_consent and self._cost_preflight is None:
+            raise ValueError("served analysis starts require a cost preflight policy")
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
+                          reaudit_of_run_id: str | None = None,
                           preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-        value = self._read(lambda session: self._cost_preflight.estimate_run(session, version_uid=version_uid,
-            executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits))
+        def estimate(session):
+            if reaudit_of_run_id is not None:
+                if executor_connection_id is not None or preset_id is not None or relaxed_limits:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="reaudit_of_run_id", constraint="server_selected_route")
+                value = self._cost_preflight.estimate_reaudit(session, run_id=reaudit_of_run_id)
+                if value.as_dict()["version_uid"] != version_uid:
+                    raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
+                return value
+            return self._cost_preflight.estimate_run(session, version_uid=version_uid,
+                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits)
+        value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
 
     def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
@@ -933,6 +955,7 @@ class RunAdapter(_SessionHolder):
     def start_ar_v3_group(
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
+        cost_actor_uid: str | None = None,
     ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
@@ -950,9 +973,6 @@ class RunAdapter(_SessionHolder):
         from auditmanager.runs import RunRepository
         from auditmanager.runs.public import get_ar_v3_group, start_ar_v3_group
 
-        if cost_consent is not None:
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-
         def work(session: Session) -> Any:
             started = start_ar_v3_group(
                 session,
@@ -964,6 +984,9 @@ class RunAdapter(_SessionHolder):
                       else self._ar_v3_pack_registry.select_beta()),
                 input_budget_characters=self._input_budget_characters,
                 connection_route=self._route_freezer,
+                cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
+                cost_consent=cost_consent,
+                cost_actor_uid=cost_actor_uid,
             )
             if started.replayed:
                 return started
@@ -1028,6 +1051,7 @@ class RunAdapter(_SessionHolder):
         preset_id: str | None = None,
         relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
+        cost_actor_uid: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1045,9 +1069,6 @@ class RunAdapter(_SessionHolder):
         the run records the preset revision. Together with ``executor_connection_id`` it is refused.
         """
         from auditmanager.runs import start_audit_run
-
-        if cost_consent is not None:
-            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
 
         if provider_mode is not None and provider_mode != self._provider_mode:
             raise DomainError(
@@ -1090,6 +1111,9 @@ class RunAdapter(_SessionHolder):
                 relaxed_limits=relaxed_limits,
                 text_profiles=self._text_profiles,
                 operational_model_id=self._provider_config.model_id,
+                cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
+                cost_consent=cost_consent,
+                cost_actor_uid=cost_actor_uid,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1185,6 +1209,14 @@ class RunAdapter(_SessionHolder):
         """`EXEC-HTTP-01`: the run-start freezer of the ``database`` source, or ``None``.
         ``ExecutionAdapter.reaudit_run`` passes it so a re-audit freezes today's route."""
         return self._route_freezer
+
+    @property
+    def cost_preflight(self) -> Any:
+        return self._cost_preflight
+
+    @property
+    def require_cost_consent(self) -> bool:
+        return self._require_cost_consent
 
     @property
     def section_profiles(self) -> Mapping[str, tuple[str, str]] | None:

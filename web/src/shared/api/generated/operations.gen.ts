@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
- *   sha256 383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2
+ *   sha256 1b0074fc8ad7c003efa244b21f4f1cb759fa675e33f76bb9088331a5316049fa
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -181,6 +181,7 @@ import type {
   ProposalDecisionList,
   ProposalDecisionResult,
   ProposalDecisionState,
+  ReauditRunRequest,
   RegistrationRequest,
   RegistrationRequestId,
   RegistrationRequestPage,
@@ -1935,7 +1936,7 @@ export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
 /**
  * Estimate selected section analysis before spend.
  *
- * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest.
  */
 export type EstimateRunCostInput = {
   /** Request body, sent as `application/json`. */
@@ -5220,13 +5221,15 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
   path: {
     run_id: RunId;
   };
+  /** Request body, sent as `application/json`. */
+  body: ReauditRunRequest;
   /**
    * Required `Idempotency-Key`. Mint it once per intent and reuse the same
    * value on every retry: a new key is a new command, not a retry.
@@ -9731,7 +9734,7 @@ export const OPERATIONS = {
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,
-    requestMediaType: null,
+    requestMediaType: 'application/json',
     responseMediaType: 'application/json',
     successStatuses: [202],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],

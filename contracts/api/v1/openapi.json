@@ -3462,7 +3462,17 @@
             "$ref": "#/components/responses/DependencyUnavailable"
           }
         },
-        "description": "A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection."
+        "description": "A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReauditRunRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/execution/queue/{job_id}/priority": {
@@ -20660,7 +20670,7 @@
           "runs"
         ],
         "summary": "Estimate selected section analysis before spend.",
-        "description": "Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.",
+        "description": "Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -23905,7 +23915,7 @@
           },
           "provider_mode": {
             "$ref": "#/components/schemas/ProviderMode",
-            "description": "Defaults to the server's configured mode. A client asking for `live` is asking to spend money; the OD-03 ceiling applies unless relaxed_limits is true."
+            "description": "Defaults to the configured mode. A new served paid start requires fresh confirmed cost consent; the approved cap applies in both output-limit modes."
           },
           "executor_connection_id": {
             "$ref": "#/components/schemas/ExecutorConnectionId",
@@ -23917,7 +23927,7 @@
           },
           "relaxed_limits": {
             "type": "boolean",
-            "description": "Temporary section-analysis option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens under a distinct immutable profile and bundle identity. The 12-window operational document-size limit remains. The provider may enforce a lower output maximum. The choice is part of the idempotency payload and persists for the Run."
+            "description": "Default off. False requests up to16,000 output tokens; true requests up to64,000 using a distinct immutable profile/bundle. A fresh approved cost cap applies in either mode. Explicit consent may approve more than12 whole-page windows. Historical accepted commands retain their original policy; provider context/output bounds still apply."
           },
           "cost_consent": {
             "$ref": "#/components/schemas/RunCostConsent",
@@ -32339,7 +32349,7 @@
           },
           "relaxed_limits": {
             "type": "boolean",
-            "description": "Temporary AR v3 option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens; the provider may enforce a lower maximum. The choice is part of the idempotency payload and persists for all six Runs."
+            "description": "Default off. False requests up to16,000 output tokens per scope; true requests up to64,000. Fresh approved group cost is allocated among its six Runs and applies in either mode. Historical accepted commands retain their original policy; provider bounds still apply."
           },
           "cost_consent": {
             "$ref": "#/components/schemas/RunCostConsent",
@@ -40819,6 +40829,9 @@
           "version_uid": {
             "$ref": "#/components/schemas/VersionUid"
           },
+          "reaudit_of_run_id": {
+            "$ref": "#/components/schemas/RunId"
+          },
           "executor_connection_id": {
             "$ref": "#/components/schemas/ExecutorConnectionId"
           },
@@ -40962,6 +40975,16 @@
           "relaxed_limits"
         ],
         "title": "RunCostEstimate",
+        "type": "object"
+      },
+      "ReauditRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_consent": {
+            "$ref": "#/components/schemas/RunCostConsent"
+          }
+        },
+        "title": "ReauditRunRequest",
         "type": "object"
       }
     }
