@@ -5054,3 +5054,7 @@ how long it was wrong.
 | the gate carried as convention in three of its four parts | wave 7, integrator; `make gate` |
 
 2026-10-30 one-hour section sprint addendum: D-290 also covers **all verification of `SPRINT-SECTION-INT-1030` and its fresh extended-review-v3 code**. The owner explicitly prohibited checks for this sprint. Syntax/imports, build/typecheck/lint, API/worker/DB/recovery/cost behavior, browser/download compatibility, live model output and section presentation journeys remain unexecuted. Prior v2 focused PASS results do not establish v3 correctness. Synthetic inputs are another session's responsibility. Original-derived rubric presence does not close full original parity or normative/expert acceptance.
+
+2026-10-30 second-hour addendum: D-290 also covers all verification of SPRINT2-INT-1030: batched-v1 cost/cap/recovery/text-range coverage, new normative annotation parser, filtered/paged UI and real source navigation, Stage V3 parameter/sign/provenance reports and XLSX/JSON/CSV/HTML downloads. No tests/build/compile/typecheck/lint/browser/DB/model execution in this hour; earlier evidence does not apply. Synthetic inputs remain another session responsibility.
+
+SPRINT2 archive addendum: D-290 also includes protected metadata/PDF retrieval, full-byte SHA/size checks, generated ZIP/OOXML validity,64MiB boundaries, cancellation and browser memory/compatibility for features/export-evidence-package and both consumers. Source-only implementation; no archive was generated or opened in this hour.

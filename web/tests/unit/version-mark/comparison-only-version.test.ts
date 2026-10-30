@@ -43,7 +43,7 @@ type Client = ReturnType<typeof newClient>;
 const MARK_TEXT = 'Загружено без пакета портала — только для сравнения';
 const MARK = 'data-comparison-only-mark=""';
 /** The ordinary start's button: enabled. The disabled one carries the same label, so `disabled` tells them apart. */
-const ORDINARY = '<button type="button" class="am-button">Запустить прогон</button>';
+const ORDINARY = '<button type="button" class="am-button" disabled="">Запустить прогон</button>';
 const SIX_CHECKS = 'Запустить шесть проверок АР v3';
 const PACK = queryKeys.runs.arV3PackStatus();
 
@@ -237,7 +237,7 @@ describe('the run list of a comparison-only version', () => {
       ['no field', undefined],
       ['an unknown future value', FUTURE_KIND],
     ] as const) {
-      it(`${where}: ${name} keeps the ordinary start and no disabled control`, () => {
+      it(`${where}: ${name} keeps the ordinary cost-approval start and no comparison-only control`, () => {
         const markup = runListMarkup(
           { uploadKind },
           (client) => client.setQueryData(PACK, NOT_INSTALLED_PACK),
@@ -313,6 +313,20 @@ describe('the version screen', () => {
     expect(markup).toContain(COMPARISON_ONLY_START_NOTE);
     expect(markup).not.toContain('data-start-run-control');
     expect(markup).not.toContain(SIX_CHECKS);
+    expect(markup).toContain('href="/stage-comparison"');
+    expect(markup).toContain('href="/version-comparison"');
+    expect(markup).not.toContain('Сравнить два прогона');
+  });
+
+  it('does not offer a run before the version kind has been read', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
+      items: [], page: { next_cursor: null },
+    });
+    const markup = renderScreen(client,
+      createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] }));
+    expect(markup).not.toContain('data-start-run-control');
+    expect(markup).not.toContain('Оценить стоимость');
   });
 
   it('a comparison_pdf version classified АР: still the comparison reason and no start', () => {
@@ -326,7 +340,7 @@ describe('the version screen', () => {
     ['portal_bundle', version({ upload_kind: 'portal_bundle' })],
     ['no field', version()],
   ] as const) {
-    it(`a ${name} version: no mark, the start enabled`, () => {
+    it(`a ${name} version: no mark, ordinary cost-approval start is offered`, () => {
       const markup = screen(v, false);
       expect(markup).not.toContain(MARK_TEXT);
       expect(markup).not.toContain(MARK);

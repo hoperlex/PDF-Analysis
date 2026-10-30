@@ -341,10 +341,11 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
                 if terminal and any(row.stage_id != "text_analysis" and row.status in {"failed","partial"} for row in rows):
                     reason = "source_preparation_failed"
                 return {"run_id":run_id,"status":"unavailable" if terminal else "not_started",
-                    "result":planned_workflow_result(reason=reason,terminal=terminal,policy=policy)}
+                    "result":dict(planned_workflow_result(reason=reason,terminal=terminal,policy=policy),
+                        version_uid=run.version_uid)}
             return {"run_id":run_id,"status":"unavailable","result":{
                 "workflow_version":"extended-review-v1" if policy else None,"procedures":[],
-                "reason":"legacy_policy_no_v2_workflow" if policy else "not_in_accepted_policy"}}
+                "version_uid":run.version_uid,"reason":"legacy_policy_no_v2_workflow" if policy else "not_in_accepted_policy"}}
 
         version_uid = run.version_uid
     raw = blob_store.read(parse_blob_id(ref["blob_id"]), verify=True)
@@ -356,7 +357,14 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
         if (doc.get("artifact_role") != EXTENDED_REVIEW_ROLE or doc.get("version_uid") != version_uid
                 or doc.get("run_id") != run_id or status not in {"running","completed","partial","failed","unavailable"}):
             raise ValueError()
-        return {"run_id": run_id, "status": status, "result": doc["result"]}
+        result = doc["result"]
+        if not isinstance(result, dict) or result.get("version_uid", version_uid) != version_uid:
+            raise ValueError()
+        # Read projection from the already checked envelope/Run binding. Older
+        # workflow snapshots did not repeat the source identity inside result.
+        # This adds no observation, anchor, paid request or guessed source.
+        return {"run_id": run_id, "status": status,
+            "result": dict(result, version_uid=version_uid)}
     except (ValueError, KeyError, TypeError):
         raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
 
@@ -376,7 +384,10 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
     return {"format":version,"workflow_version":version,"preliminary":True,
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
             "rules_sha256":policy["rules_sha256"],"section":policy.get("section_code"),"primary_text_status":"pending",
-            "review_scope":"full_document"} if v3 else {}),
+            "review_scope":"full_document",
+            **({"coverage_version":"batched-v1","phase_call_limits":dict(policy["phase_call_limits"]),
+                "phase_coverage":{},"batches":[],"phase_call_counts":{}}
+                if policy.get("coverage_version")=="batched-v1" else {})} if v3 else {}),
         "observations":[],"sources":[],"warnings":[],"procedures":procedures,"ocr_status":"not_performed",
         "reason":reason,"coverage":{"blocks_total":0,"blocks_selected":0,"blocks_processed":0,
             "blocks_remaining":0,"skipped":[]}}
@@ -499,11 +510,13 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         build_comprehensive_request, deterministic_extended_merge,
         build_norm_review_request, parse_norm_review)
     v3=window_context is not None
+    batched=v3 and window_context["policy"].get("coverage_version")=="batched-v1"
     state = planned_workflow_result(policy=None if not v3 else window_context["policy"])
     if v3:
         state["window_id"]=window_context["window_id"]
         state["primary_text_status"]=window_context.get("primary_text_status","pending")
     current = None
+    used_batches={}
     def save(status):
         public = {k:v for k,v in state.items() if k not in {"text_items","context_sections"}}
         public["sources"] = [{k:v for k,v in s.items() if k != "context"} for s in state["sources"]]
@@ -516,10 +529,40 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         if reason: procedure["reason"] = reason
         save("running")
     def call(request, identity):
-        response, _ = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
+        receipt=None
+        if batched:
+            raw_kind, raw_index=identity.split(":",1)
+            kind={"blocks":"block_analysis"}.get(raw_kind,raw_kind)
+            index=int(raw_index.removeprefix("b"))
+            keys=used_batches.setdefault(kind,set())
+            if identity not in keys and len(keys)>=window_context["policy"]["phase_call_limits"][kind]:
+                raise _refuse("approved_phase_call_limit")
+            keys.add(identity)
+            key=f'{window_context["window_id"]}:{kind}:b{index:03d}'
+            receipt=next((row for row in state.setdefault("batches",[]) if row["batch_key"]==key),None)
+            if receipt is None:
+                payload=json.loads(request.body["messages"][0]["content"])
+                source_rows=payload.get("sources",[])
+                receipt={"batch_key":key,"window_id":window_context["window_id"],"procedure":kind,
+                    "index":index,"input_ids":[],"source_ids":[row["source_id"] for row in source_rows],
+                    "page_numbers":sorted({row["page_number"] for row in source_rows}),
+                    "input_count":len(source_rows),"input_characters":0}
+                state["batches"].append(receipt)
+                state.setdefault("phase_coverage",{}).setdefault(kind,{"planned":0,"completed":0,
+                    "remaining":0,"limit":window_context["policy"]["phase_call_limits"][kind],
+                    "processed_items":0,"total_items":0,"characters_processed":0,"characters_total":0})
+                coverage=state["phase_coverage"][kind]
+                coverage["planned"]+=1;coverage["remaining"]+=1;coverage["total_items"]+=len(source_rows)
+            receipt.update(status="running",request_sha256=request.request_sha256)
+            save("running")
+        response, replayed = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
             binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
             source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
             global_unknown_fence=v3)
+        if receipt is not None:
+            receipt.update(response_received=True,replayed=replayed)
+            counts=state.setdefault("phase_call_counts",{}).setdefault(kind,{"completed_calls":0,"replayed":0})
+            counts["replayed" if replayed else "completed_calls"]+=1
         if response.truncated: raise _refuse("extended_response_truncated")
         return response
     save("running")
@@ -584,6 +627,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             text_layer=data["prepared.text_layer"],graph=data["context.document_graph"],
             observations=observations_document,recognised=data.get("prepared.recognised_text"),
             native_sources=native,plan_version="extended-review-v3" if v3 else "extended-review-v2",full_document=full_document,
+            **({"coverage_version":"batched-v1"} if batched else {}),
             **({"source_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
         if v3:
             window_total=(native["source_window"]["slots"] if native is not None else len([s for s in planned["sources"] if s["kind"]=="image"]))
@@ -596,6 +640,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         state["source_sha256"] = extended_digest({"source":state["source_sha256"],"workflow_version":"extended-review-v2",
             "profile_sha256":profile_sha256,"norms_snapshot_id":snapshot_id,"run_input_digest":getattr(run,"frozen_input_digest",None)})
         if v3: state["source_sha256"]=window_context["global_sha256"]
+        if batched:
+            state["observations"]=finalize_extended_items(state["text_items"],state["sources"])
         pages = data["prepared.text_layer"].get("pages",[])
         by_page = {p["page_number"]:str(p.get("text","")) for p in pages}
         recognised_by_page={}
@@ -633,6 +679,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     phase="blocks",section=section,payload=payload,**extra),crops)
                 response=call(request,"blocks:"+str(start//8))
                 block_items.extend(parse_extended_reply(response.output_text,allowed_sources={s["source_id"] for s in batch}))
+                if batched:
+                    _coverage_complete(state,kind="block_analysis",index=start//8)
                 state["coverage"]["blocks_processed"]+=len(batch)
                 state["coverage"]["blocks_remaining"]=state["coverage"]["blocks_total"]-state["coverage"]["blocks_processed"]
                 state["observations"]=finalize_extended_items([*state["text_items"],*block_items],state["sources"])
@@ -686,37 +734,45 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     contexts.append({"source_id":recognised_id,"page_number":number,"text":"",
                         "recognised_context":recognised,"source_type":"recognised_text","quote_source":"recognised"})
             phase("comprehensive_analysis","running")
-            builder=build_comprehensive_request
-            extra={}
-            if v3:
-                from auditmanager.analysis.public import build_comprehensive_request_v3
-                builder=build_comprehensive_request_v3;extra={"window_id":window_context["window_id"]}
-            request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
-                **extra,payload={"native_context":contexts,"visual_observations":block_items,
-                    "text_observations":([{k:item[k] for k in ("title","description","source_ids","norm_queries")}
-                        for item in state["text_items"]] if v3 else state["text_items"]),
-                    "sources":[{k:v for k,v in s.items() if k!="context"} for s in state["sources"]],
-                    "source_sha256":state["source_sha256"],"coverage":state["coverage"]})
-            context_payload=json.loads(request.body["messages"][0]["content"])
-            context_cut = context_payload["context_coverage"]["truncated"]
-            if v3:
+            if batched:
                 state["context_page_numbers"]=[page["page_number"] for page in context_pages]
-                state["comprehensive_context_coverage"]=context_payload["context_coverage"]
-            if context_cut: state["warnings"].append("page_context_truncated")
-            if v3 and not images and not any(row.get("text","").strip() or row.get("recognised_context","").strip() for row in contexts):
-                comprehensive=[]
-                phase("comprehensive_analysis","unavailable","no_reliable_window_sources")
+                comprehensive=_comprehensive_batched_v3(run=run,binding=binding,state=state,contexts=contexts,
+                    block_items=block_items,phase=phase,call=call,window_context=window_context)
             else:
-                comprehensive=parse_extended_reply(call(request,"comprehensive").output_text,
-                    allowed_sources={s["source_id"] for s in state["sources"]})
-                phase("comprehensive_analysis","partial" if (not v3 and len(pages)>16) or context_cut else "completed")
+                builder=build_comprehensive_request
+                extra={}
+                if v3:
+                    from auditmanager.analysis.public import build_comprehensive_request_v3
+                    builder=build_comprehensive_request_v3;extra={"window_id":window_context["window_id"]}
+                request=builder(model_id=binding.config.model_id,run_id=run.run_id,section=section,
+                    **extra,payload={"native_context":contexts,"visual_observations":block_items,
+                        "text_observations":([{k:item[k] for k in ("title","description","source_ids","norm_queries")}
+                            for item in state["text_items"]] if v3 else state["text_items"]),
+                        "sources":[{k:v for k,v in s.items() if k!="context"} for s in state["sources"]],
+                        "source_sha256":state["source_sha256"],"coverage":state["coverage"]})
+                context_payload=json.loads(request.body["messages"][0]["content"])
+                context_cut = context_payload["context_coverage"]["truncated"]
+                if v3:
+                    state["context_page_numbers"]=[page["page_number"] for page in context_pages]
+                    state["comprehensive_context_coverage"]=context_payload["context_coverage"]
+                if context_cut: state["warnings"].append("page_context_truncated")
+                if v3 and not images and not any(row.get("text","").strip() or row.get("recognised_context","").strip() for row in contexts):
+                    comprehensive=[]
+                    phase("comprehensive_analysis","unavailable","no_reliable_window_sources")
+                else:
+                    comprehensive=parse_extended_reply(call(request,"comprehensive").output_text,
+                        allowed_sources={s["source_id"] for s in state["sources"]})
+                    phase("comprehensive_analysis","partial" if (not v3 and len(pages)>16) or context_cut else "completed")
         phase("finding_merge","running")
         items=deterministic_extended_merge([*state["text_items"],*block_items,*comprehensive],
-            full_document=full_document)
+            full_document=full_document or batched)
         state["observations"]=finalize_extended_items(items,state["sources"])
         phase("finding_merge","completed")
         phase("norm_verification","running")
-        if full_document:
+        if batched:
+            _norm_batched_v3(session=session,run=run,binding=binding,state=state,snapshot_id=snapshot_id,
+                phase=phase,call=call,checkpoint=checkpoint,window_context=window_context)
+        elif full_document:
             _full_norm_verification(session=session, run=run, model_id=binding.config.model_id,
                 section=section, state=state, snapshot_id=snapshot_id, call=call,
                 phase=phase, checkpoint=checkpoint)
@@ -764,7 +820,10 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                     target=indexed[reviewed_item["input_ids"][0]]
                     target["norm_assessment"]=reviewed_item["norm_assessment"]
                 phase("norm_verification","partial" if len(window)<len(state["observations"]) or any(not item.get("norm_candidates") for item in window) else "completed")
-        if v3:
+        if batched:
+            _review_batched_v3(run=run,binding=binding,state=state,phase=phase,call=call,
+                window_context=window_context,contexts=contexts)
+        elif v3:
             _review_window_v3(session=session,run=run,binding=binding,state=state,phase=phase,call=call,
                 window_id=window_context["window_id"],section=section,contexts=contexts)
         degraded=any(p["status"] in {"failed","partial","unavailable","skipped"}
@@ -778,6 +837,10 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             if procedure["status"]=="running": procedure.update(status="failed",reason=reason)
             elif procedure["status"]=="queued": procedure.update(status="skipped",reason="dependency_failed")
         state["warnings"].append(reason)
+        for batch in state.get("batches",[]):
+            if batch["status"]=="running":batch.update(status="failed",reason=reason)
+            elif batch["status"]=="queued" and not batch.get("reason"):
+                batch.update(status="unavailable",reason="dependency_failed")
         save("failed")
         return state
 
@@ -853,6 +916,14 @@ def _section_report_v3(state, *, window_id=None):
         f"не исследовано {coverage.get('blocks_remaining',0)}.",
         "OCR не выполнялся. Отсутствие native текста не считается его распознаванием.",
         "Распознанный текст портала, если предоставлен, помечен отдельно от native цитат."]
+    if state.get("coverage_version")=="batched-v1":
+        text=state.get("text_coverage",state.get("comprehensive_context_coverage",{}))
+        lines.append("Известный текстовый план: символов обработано "+str(text.get("characters_processed",
+            text.get("characters_provided",0)))+" из "+str(text.get("characters_total",0))+".")
+        for kind,counts in state.get("phase_coverage",{}).items():
+            lines.append(f"{kind}: пакетов {counts['completed']} из {counts['planned']}; "
+                f"остаток {counts['remaining']}; принятый лимит вызовов {counts['limit']}.")
+        lines.append("Остаток сверх принятого лимита не проверен; первоначальные наблюдения сохранены.")
     for number,item in enumerate(state.get("observations",[]),start=1):
         lines.extend([f"\n## {number}. {item['title']}",item['description'],
             "Источники: "+", ".join(item["source_ids"]),
@@ -866,6 +937,9 @@ def _section_report_v3(state, *, window_id=None):
             lines.extend(["Предложенная редакция (оригинал сохранён): "+candidate["title"],candidate["description"]])
     return {"format":"section-review-report-v3","section":state.get("section"),"window_id":window_id,
         "coverage":coverage,"observation_count":len(state.get("observations",[])),
+        **({"coverage_version":"batched-v1","phase_coverage":state.get("phase_coverage",{}),
+            "phase_call_counts":state.get("phase_call_counts",{}),"text_coverage":state.get("text_coverage",{})}
+            if state.get("coverage_version")=="batched-v1" else {}),
         "expert_review_required":True,"markdown":"\n\n".join(lines)}
 
 
@@ -912,6 +986,21 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 observations.append({**observation,"window_id":record["window_id"]})
         state["sources"]=list(source_index.values())
         state["observations"]=observations
+        if policy.get("coverage_version")=="batched-v1":
+            state["batches"]=[dict(batch,window_id=record["window_id"])
+                for record in records for batch in record.get("batches",[])]
+            totals={}
+            call_counts={}
+            for record in records:
+                for kind,coverage in record.get("phase_coverage",{}).items():
+                    total=totals.setdefault(kind,{key:0 for key in ("planned","completed","remaining",
+                        "limit","processed_items","total_items","characters_processed","characters_total")})
+                    for key in total:total[key]+=coverage.get(key,0)
+                for kind,counts in record.get("phase_call_counts",{}).items():
+                    total=call_counts.setdefault(kind,{"completed_calls":0,"replayed":0})
+                    for key in total:total[key]+=counts.get(key,0)
+            state["phase_coverage"]=totals
+            state["phase_call_counts"]=call_counts
         processed=sum(record.get("coverage",{}).get("blocks_processed",0) for record in records)
         state["coverage"]["blocks_processed"]=processed
         state["coverage"]["blocks_remaining"]=max(0,state["coverage"]["blocks_total"]-processed)
@@ -920,10 +1009,15 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         state["window_progress"]={"completed":complete,"total":len(records),"current":current,"window_size":16}
         if state.get("text_coverage") is not None:
             covered=set()
-            for record in records:
-                comp=next((p for p in record.get("procedures",[]) if p["id"]=="comprehensive_analysis"),None)
-                if comp and comp["status"]=="completed":
-                    covered.update(page for page in record.get("context_page_numbers",[]) if 0<page<=policy["text_page_limit"])
+            if policy.get("coverage_version")=="batched-v1":
+                facts=_coverage_text_stats(records)
+                covered={page for page in facts.pop("complete_pages") if 0<page<=policy["text_page_limit"]}
+                state["text_coverage"].update(facts)
+            else:
+                for record in records:
+                    comp=next((p for p in record.get("procedures",[]) if p["id"]=="comprehensive_analysis"),None)
+                    if comp and comp["status"]=="completed":
+                        covered.update(page for page in record.get("context_page_numbers",[]) if 0<page<=policy["text_page_limit"])
             state["text_coverage"]["pages_processed"]=len(covered)
             state["text_coverage"]["pages_remaining"]=max(0,state["text_coverage"]["pages_total"]-len(covered))
         for procedure in state["procedures"]:
@@ -954,7 +1048,7 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         global_sha=extended_digest({"workflow_version":"extended-review-v3","version_uid":run.version_uid,
             "refs":refs,"policy":policy,"profile_sha256":profile_sha256,"norms_snapshot_id":snapshot_id,
             "run_input_digest":getattr(run,"frozen_input_digest",None)})
-        state.update(section=section,rules_sha256=actual_rules,source_sha256=global_sha,review_scope="full_document",
+        state.update(section=section,version_uid=run.version_uid,rules_sha256=actual_rules,source_sha256=global_sha,review_scope="full_document",
             source_provenance={"workflow":"extended-review-v3","rules_bundle_sha256":actual_rules,
                 "source_sha256":global_sha,"original_repository":"SU10KAZ/PDF-proverka",
                 "original_commit":"3c99481719218b9cfa7560886529916646c61939"})
@@ -1102,3 +1196,265 @@ def _retain_primary_observations_v3(state, *, observations_document):
         state["warnings"].append("primary_text_observations_outside_review_window")
         next(p for p in state["procedures"] if p["id"]=="finding_review").update(
             status="partial",reason="primary_text_observations_outside_review_window")
+
+
+def _coverage_plan_receipts(state, *, kind, plan, window_id):
+    """Persist the complete known plan before any next paid request."""
+    receipts = state.setdefault('batches', [])
+    for batch in [*plan['batches'], *plan['pending_batches']]:
+        key = f'{window_id}:{kind}:b{batch["index"]:03d}'
+        receipt = {'batch_key': key, 'window_id': window_id, 'procedure': kind,
+            'index': batch['index'], 'status': 'queued', 'input_ids': batch['input_ids'],
+            'source_ids': batch['source_ids'], 'page_numbers': batch['page_numbers'],
+            'input_characters': batch['input_characters'], 'input_count': len(batch['items']),
+            'plan_sha256': batch['batch_sha256'], 'context_ranges': [
+                {field: row[field] for field in ('source_id', 'page_number', 'character_start',
+                    'character_end', 'character_field') if field in row}
+                for row in batch['native_context']]}
+        if batch['index'] >= plan['limit']:
+            receipt['reason'] = 'approved_phase_call_limit'
+        receipts.append(receipt)
+    for row in plan['oversized']:
+        receipts.append({'batch_key': f'{window_id}:{kind}:oversized:{row["ordinal"]}',
+            'window_id': window_id, 'procedure': kind, 'index': None, 'status': 'unavailable',
+            'input_ids': [row['input_id']], 'source_ids': [], 'page_numbers': [],
+            'input_characters': row['input_characters'], 'input_count': 1, 'reason': row['reason']})
+    state.setdefault('phase_coverage', {})[kind] = {'planned': plan['planned'] + len(plan['oversized']),
+        'completed': 0, 'remaining': plan['planned'] + len(plan['oversized']), 'limit': plan['limit'],
+        'processed_items': 0, 'total_items': plan['total_items'], 'characters_processed': 0,
+        'characters_total': plan['total_characters']}
+
+
+def _coverage_complete(state, *, kind, index, partial=False, reason=None):
+    row = next(row for row in state['batches'] if row['procedure'] == kind and row['index'] == index)
+    row['status'] = 'partial' if partial else 'completed'
+    if reason:
+        row['reason'] = reason
+    coverage = state['phase_coverage'][kind]
+    completed = [batch for batch in state['batches'] if batch['procedure'] == kind
+        and batch['status'] in {'completed', 'partial'}]
+    coverage.update(completed=len(completed), remaining=coverage['planned'] - len(completed),
+        processed_items=sum(batch.get('input_count', 0) for batch in completed),
+        characters_processed=sum(batch.get('input_characters', 0) for batch in completed))
+
+
+def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, phase, call, window_context):
+    from auditmanager.analysis.public import plan_extended_coverage, build_comprehensive_request_batched_v3
+    kind = 'comprehensive_analysis'
+    state['text_piece_sources']=[{'source_id':row['source_id'],'page_number':row['page_number'],
+        'character_field':field,'characters_total':len(row.get(field,''))}
+        for row in contexts for field in ('text','recognised_context') if row.get(field,'')]
+    plan = plan_extended_coverage(kind=kind,
+        items=[{'kind': 'visual', 'item': item} for item in block_items] +
+            [{'kind': 'text', 'item': item} for item in state['text_items']],
+        contexts=contexts, sources=state['sources'], limit=window_context['policy']['phase_call_limits'][kind])
+    _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_context['window_id'])
+    phase(kind, 'running')
+    output = []
+    for batch in plan['batches']:
+        selected = [source for source in state['sources'] if source['source_id'] in batch['source_ids']]
+        payload = {'coverage_version': 'batched-v1', 'native_context': batch['native_context'],
+            'visual_observations': [row['item'] for row in batch['items'] if row['kind'] == 'visual'],
+            'text_observations': [{key: row['item'][key] for key in ('title', 'description', 'source_ids', 'norm_queries')}
+                for row in batch['items'] if row['kind'] == 'text'],
+            'sources': [{key: value for key, value in source.items() if key != 'context'} for source in selected],
+            'source_sha256': state['source_sha256'], 'coverage': state['coverage'],
+            'batch_index': batch['index'], 'batch_sha256': batch['batch_sha256']}
+        request = build_comprehensive_request_batched_v3(model_id=binding.config.model_id,
+            run_id=run.run_id, section=state['section'], payload=payload,
+            window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}')
+        parsed = parse_extended_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
+            allowed_sources=set(batch['source_ids']))
+        output.extend(parsed)
+        state['observations'] = finalize_extended_items([*state['text_items'], *block_items, *output], state['sources'])
+        _coverage_complete(state, kind=kind, index=batch['index'])
+        phase(kind, 'running')
+    deferred = bool(plan['pending_batches'] or plan['oversized'])
+    if not plan['batches']:
+        phase(kind, 'unavailable', 'no_reliable_window_sources')
+    else:
+        phase(kind, 'partial' if deferred else 'completed', 'approved_phase_call_limit' if deferred else None)
+    state['comprehensive_context_coverage'] = {'characters_total': plan['total_characters'],
+        'characters_provided': state['phase_coverage'][kind]['characters_processed'],
+        'truncated': deferred, 'complete_document_claim': False}
+    return output
+
+
+def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, checkpoint, window_context):
+    from auditmanager.analysis.public import (plan_extended_coverage,
+        build_norm_review_request_batched_v3, parse_norm_review_batched_v3)
+    kind = 'norm_verification'
+    # Retrieval is local corpus work. Every observation remains present even if
+    # its quote assessment is outside the separately accepted model-call limit.
+    state['warnings'].extend(_norms(session, state['observations'], snapshot_id,
+        full_document=True, checkpoint=checkpoint))
+    registry={}
+    quote_variants=False
+    for item in state['observations']:
+        canonical_candidates=[]
+        for candidate in item.get('norm_candidates',[]):
+            canonical=registry.setdefault(candidate['paragraph_id'],candidate)
+            if canonical['quote']!=candidate['quote']:
+                item.setdefault('norm_candidate_variants',[]).append(candidate)
+                quote_variants=True
+            canonical_candidates.append(canonical)
+        item['norm_candidates']=canonical_candidates
+    candidates = [item for item in state['observations'] if item.get('norm_candidates')]
+    plan = plan_extended_coverage(kind=kind, items=candidates,
+        limit=window_context['policy']['phase_call_limits'][kind])
+    _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_context['window_id'])
+    for item in candidates:
+        item.update(norm_review_status='not_reviewed', norm_review_reason='approved_phase_call_limit')
+    if not candidates:
+        if not state['observations']:
+            phase(kind,'completed','no_observations')
+        else:
+            phase(kind, 'unavailable', 'corpus_unavailable' if snapshot_id is None else 'candidate_context_unavailable')
+        return
+    phase(kind, 'running')
+    for batch in plan['batches']:
+        indexed = {row['input_id']: row['item'] for row in batch['items']}
+        registry = {candidate['paragraph_id']: candidate for item in indexed.values()
+            for candidate in item['norm_candidates']}
+        request = build_norm_review_request_batched_v3(model_id=binding.config.model_id,
+            run_id=run.run_id, section=state['section'], window_id=window_context['window_id'] +
+                f':norm:b{batch["index"]:03d}', payload={'coverage_version': 'batched-v1',
+                    'observations': [{'input_id': key, 'title': item['title'], 'description': item['description'],
+                        'source_ids': item['source_ids'], 'norm_candidate_ids':
+                            [candidate['paragraph_id'] for candidate in item['norm_candidates']]}
+                        for key, item in indexed.items()], 'norm_context': list(registry.values()),
+                    'source_sha256': state['source_sha256'], 'batch_sha256': batch['batch_sha256']})
+        parsed = parse_norm_review_batched_v3(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
+            observations=indexed, allowed_sources={source['source_id'] for source in state['sources']})
+        for row in parsed:
+            indexed[row['input_id']].update(norm_assessment=row['norm_assessment'],
+                norm_review_status='reviewed', norm_review_reason=None)
+        _coverage_complete(state, kind=kind, index=batch['index'])
+        phase(kind, 'running')
+    deferred = bool(plan['pending_batches'] or plan['oversized'])
+    incomplete = deferred or quote_variants or len(candidates) < len(state['observations'])
+    phase(kind, 'partial' if incomplete else 'completed', 'approved_phase_call_limit' if deferred
+        else 'norm_quote_variants_retained' if quote_variants else None)
+
+
+def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts):
+    from auditmanager.analysis.public import (plan_extended_coverage, build_critic_request,
+        parse_critic_reply, build_corrector_request, parse_corrector_reply)
+    window_id = window_context['window_id']
+    limits = window_context['policy']['phase_call_limits']
+    state['reviews'] = []; state['critiques'] = []; state['corrections'] = []
+    for item in state['observations']:
+        item.update(review_status='not_reviewed', review_reason='approved_phase_call_limit')
+    kind = 'finding_review'
+    plan = plan_extended_coverage(kind=kind, items=state['observations'], limit=limits[kind])
+    _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_id)
+    critic_cut = False
+    correction_targets = []
+    if not state['observations']:
+        phase(kind, 'completed', 'no_observations')
+    else:
+        phase(kind, 'running')
+    for batch in plan['batches']:
+        indexed = {row['input_id']: row['item'] for row in batch['items']}
+        references = set(batch['source_ids'])
+        sources = [source for source in state['sources'] if source['source_id'] in references]
+        context = {'coverage': state['coverage'], 'window_id': window_id,
+            'source_sha256': state['source_sha256'], 'ocr_status': 'not_performed',
+            'native_context': [row for row in contexts if row['source_id'] in references]}
+        request = build_critic_request(model_id=binding.config.model_id, run_id=run.run_id,
+            section=state['section'], observations=indexed, sources=sources,
+            window_id=window_id + f':critic:b{batch["index"]:03d}', context=context)
+        payload = json.loads(request.body['messages'][0]['content'])
+        cut = any(payload.get(key, {}).get('truncated', False) for key in
+            ('context_coverage', 'norm_context_coverage'))
+        critic_cut |= cut
+        reviews = parse_critic_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
+            observations=indexed, sources=sources, allowed_sources=references, context=context)
+        state['reviews'].extend(reviews); state['critiques'].extend(reviews)
+        for review in reviews:
+            item = indexed[review['input_id']]
+            item.update(critic=review, review_status='reviewed', review_reason=None)
+            if review['needs_correction']:
+                correction_targets.append(item)
+        _coverage_complete(state, kind=kind, index=batch['index'], partial=cut,
+            reason='context_window_truncated' if cut else None)
+        phase(kind, 'running')
+    deferred = bool(plan['pending_batches'] or plan['oversized'])
+    if state['observations']:
+        phase(kind, 'partial' if deferred or critic_cut else 'completed',
+            'approved_phase_call_limit' if deferred else 'context_window_truncated' if critic_cut else None)
+    kind = 'finding_correction'
+    plan = plan_extended_coverage(kind=kind, items=correction_targets, limit=limits[kind])
+    _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_id)
+    if not correction_targets:
+        phase(kind, 'completed', 'no_corrections_requested')
+    else:
+        phase(kind, 'running')
+    any_partial = False
+    for batch in plan['batches']:
+        indexed = {row['input_id']: row['item'] for row in batch['items']}
+        # Re-key only the immutable critic input identity for this disjoint
+        # correction batch; no original observation or critic content is changed.
+        critiques = [{**item['critic'], 'input_id': key} for key, item in indexed.items()]
+        references = set(batch['source_ids'])
+        sources = [source for source in state['sources'] if source['source_id'] in references]
+        context = {'coverage': state['coverage'], 'window_id': window_id,
+            'source_sha256': state['source_sha256'], 'ocr_status': 'not_performed',
+            'native_context': [row for row in contexts if row['source_id'] in references]}
+        request = build_corrector_request(model_id=binding.config.model_id, run_id=run.run_id,
+            section=state['section'], observations=indexed, critiques=critiques, sources=sources,
+            window_id=window_id + f':corrector:b{batch["index"]:03d}', context=context)
+        if request is None:
+            _coverage_complete(state, kind=kind, index=batch['index'])
+            continue
+        payload = json.loads(request.body['messages'][0]['content'])
+        cut = any(payload.get(key, {}).get('truncated', False) for key in
+            ('context_coverage', 'norm_context_coverage'))
+        corrections = parse_corrector_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
+            observations=indexed, critiques=critiques, sources=sources, allowed_sources=references, context=context)
+        state['corrections'].extend(corrections)
+        for row in corrections:
+            indexed[row['input_id']]['correction'] = row
+        partial = cut or any(row['action'] == 'needs_context' for row in corrections)
+        any_partial |= partial
+        _coverage_complete(state, kind=kind, index=batch['index'], partial=partial,
+            reason='context_window_truncated' if cut else None)
+        phase(kind, 'running')
+    deferred = bool(plan['pending_batches'] or plan['oversized'])
+    if correction_targets:
+        phase(kind, 'partial' if deferred or any_partial else 'completed',
+            'approved_phase_call_limit' if deferred else 'context_window_truncated' if any_partial else None)
+    phase('report_generation', 'running')
+    state['report'] = _section_report_v3(state, window_id=window_id)
+    phase('report_generation', 'completed')
+
+
+def _coverage_text_stats(records):
+    expected, completed = {}, {}
+    for record in records:
+        for row in record.get('text_piece_sources', []):
+            expected[(row['source_id'], row['character_field'])] = row
+        for batch in record.get('batches', []):
+            if batch['procedure'] != 'comprehensive_analysis' or batch['status'] != 'completed':
+                continue
+            for row in batch.get('context_ranges', []):
+                completed.setdefault((row['source_id'], row['character_field']), []).append(
+                    (row['character_start'], row['character_end']))
+    total, processed, pages, complete_pages = 0, 0, {}, set()
+    for key, source in expected.items():
+        length = source['characters_total']
+        total += length
+        last, covered = 0, 0
+        for start, end in sorted(completed.get(key, [])):
+            start, end = max(0, start), min(length, end)
+            if end > max(last, start):
+                covered += end - max(last, start)
+            last = max(last, end)
+        processed += covered
+        pages.setdefault(source['page_number'], []).append(covered >= length)
+    for page, statuses in pages.items():
+        if statuses and all(statuses):
+            complete_pages.add(page)
+    return {'complete_pages': complete_pages, 'characters_total': total,
+        'characters_processed': processed, 'characters_remaining': max(0, total - processed),
+        'known_page_contexts': len(pages)}
