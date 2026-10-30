@@ -138,3 +138,26 @@ Keep workers capable of reading accepted approvals until those Runs are terminal
 - commands/results:71 focused unit/DTO/contract cases PASS;4 SQL acceptance/replay cases PASS; served/authored semantic conformance PASS; generated-client verification PASS; compile/whitespace PASS. Inherited wider prose/C4-stub drift reported to root for its final metadata pass.
 - known limits: estimates use pinned rates and conservative token/output bounds, not a promise of measured spend
 - integration notes: root sole integrator, serial API slot released only on handoff
+
+
+## Parent-assigned bounded metadata followup
+
+After final provider20585849, root assigned only current API count prose repair against measured1.13.0 surface230paths/256operations/619schemas. No schema, contract, generated client, lock, bootstrap or functional code may change. Current-state/release/debt/root reports and both C4 wiring/seal tests remain owned by root. Historical paragraphs are preserved.
+
+Exact additional allowed paths (prose only):
+
+- `src/auditmanager/api/README.md`
+- `src/auditmanager/api/app.py`
+- `src/auditmanager/api/health.py`
+- `src/auditmanager/api/routers/declarations.py`
+- `src/auditmanager/api/routers/__init__.py`
+- `src/auditmanager/api/routers/errors.py`
+- `infra/deploy/serve.py`
+- `infra/deploy/README.md`
+- `infra/deploy/proxy/nginx.conf`
+- `web/src/app/bff/v1/[...path]/route.ts`
+- `docs/program/P02_SEAMS.md`
+
+The BFF exact path above extends the initial `web/src/app/api/**` grant solely for its current count comment. Run `tests/contract/api_v1/test_surface_counts_in_prose.py` and `git diff --check`; no gate or broad audit. Parent alone integrates.
+
+Followup result: frozen surface remeasured as230paths/256operations/619schemas. `tests/contract/api_v1/test_surface_counts_in_prose.py`:33passed; `git diff --check`:PASS. Only the eleven enumerated live prose/comment files and this task record changed. Root retained complete ownership of `test_cmp_seal_c4.py` and the composition wiring test; neither test was edited here. Contracts, generated files, lock, bootstrap, migration files and root state/release/debt reports were untouched by this followup.
