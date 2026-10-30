@@ -10,7 +10,7 @@ from typing import Mapping, Sequence
 from .exact import ExactExclusion, SheetLink, prove_exact_exclusions
 from .fragments import TextFragment
 
-__all__ = ["RawDifference", "RawTextPass", "build_raw_differences"]
+__all__ = ["RawDifference", "RawTextPass", "build_raw_differences", "build_grouped_raw_differences"]
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _ROOM = re.compile(r"(?:^|\b)(?:помещение|комната|room)\s*(?:№\s*)?(\d+[а-яa-z]?)\b")
@@ -118,3 +118,45 @@ def build_raw_differences(
                       if f.side == "right" and f.content_key not in excluded_right | used_right):
         differences.append(RawDifference("added", None, key))
     return RawTextPass(exact, tuple(differences))
+
+
+def build_grouped_raw_differences(
+    links: Sequence[SheetLink], fragments: Sequence[TextFragment],
+    dimensions: dict[str, tuple[float, float]],
+    expected_keys: Mapping[str, frozenset[str]],
+) -> RawTextPass:
+    """Compare independent connected sheet groups within each group's work budget.
+
+    A shared page remains in one group, so a many-to-many relation never consumes
+    the same fragment twice. Independent pages do not multiply candidate work.
+    """
+    if len(links) > 1_000 or len(fragments) > 20_000:
+        raise ValueError("stage_text_difference_budget_exceeded")
+    parent: dict[str, str] = {}
+
+    def root(key: str) -> str:
+        parent.setdefault(key, key)
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    for link in links:
+        left, right = root(link.left_profile_id), root(link.right_profile_id)
+        parent[right] = left
+    groups: dict[str, list[SheetLink]] = {}
+    for link in links:
+        groups.setdefault(root(link.left_profile_id), []).append(link)
+    exact: list[ExactExclusion] = []
+    differences: list[RawDifference] = []
+    for group in groups.values():
+        profiles = {profile for link in group for profile in
+                    (link.left_profile_id, link.right_profile_id)}
+        result = build_raw_differences(
+            group, tuple(f for f in fragments if f.profile_id in profiles),
+            {profile: dimensions[profile] for profile in profiles},
+            {profile: expected_keys[profile] for profile in profiles},
+        )
+        exact.extend(result.exact_exclusions)
+        differences.extend(result.differences)
+    return RawTextPass(tuple(exact), tuple(differences))

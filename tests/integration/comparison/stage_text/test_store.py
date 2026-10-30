@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import replace
 
 import pytest
@@ -111,6 +112,27 @@ def _batch(left: str, right: str):
     raw = build_raw_differences([SheetLink(left, right)], fragments,
                                 {left: (100, 100), right: (100, 100)}, manifest)
     return fragments, manifest, raw
+
+
+def _completed_run(
+    session: Session, pair: str, revision: str, actor: str, left: str, right: str,
+) -> None:
+    """A completed deterministic run seal for read-only storage fixtures."""
+    pins = session.execute(text(
+        "SELECT version_uid FROM comparison_page_profile "
+        "WHERE comparison_page_profile_id = ANY(CAST(:ids AS text[])) "
+        "ORDER BY array_position(CAST(:ids AS text[]), comparison_page_profile_id)"
+    ), {"ids": [left, right]}).scalars().all()
+    assert len(pins) == 2
+    session.execute(text(
+        "INSERT INTO stage_chain_run "
+        "(stage_chain_run_id, stage_pair_id, stage_link_revision_id, input_sha256, "
+        "pinned_version_uids, state, actor_user_uid, command_id) "
+        "VALUES (:run, :pair, :revision, :sha, CAST(:pins AS jsonb), "
+        "'completed', :actor, :command)"
+    ), {"run": _id("crn"), "pair": pair, "revision": revision,
+        "sha": "a" * 64, "pins": json.dumps(pins),
+        "actor": actor, "command": _command(session, "recompute_stage_text_evidence")})
 
 
 def test_atomic_write_and_exact_replay(comparison_session: Session) -> None:

@@ -7091,9 +7091,11 @@ class ComparisonStageTextAdapter(_StagesModuleGate):
         self, sessions: sessionmaker[Session], *, comparison_modules: str = "none",
     ) -> None:
         super().__init__(comparison_modules=comparison_modules)
-        from auditmanager.comparison.public import StageTextReadService
+        from auditmanager.comparison.public import StageTextReadService, StageTextRecomputeService
 
         self._reads = StageTextReadService(sessions)
+        self._runs = StageTextRecomputeService(sessions)
+        self._sessions = sessions
 
     @staticmethod
     def _cursor(raw: str | None) -> str | None:
@@ -7169,7 +7171,23 @@ class ComparisonStageTextAdapter(_StagesModuleGate):
         self, *, revision_id: str, user_uid: str, idempotency_key: str,
     ) -> models.StageChainRun:
         self._require_stages_module()
-        return _comparison_unavailable(self._DEPENDENCY)
+        with self._sessions() as session:
+            _label, roles = _comparison_actor(session, user_uid)
+        row = self._runs.start(
+            revision_id=revision_id, user_uid=user_uid,
+            actor_roles=roles, idempotency_key=idempotency_key,
+        )
+        return models.StageChainRun(
+            run_id=row.run_id, pair_id=row.pair_id,
+            link_revision_id=row.revision_id, input_sha256=row.input_sha256,
+            pinned_version_uids=list(row.pinned_version_uids), state=row.state,
+            steps=[models.StageChainStep(
+                step_id=step.step_id, step_no=step.step_no,
+                state=step.state, counts=step.counts,
+                **_unset_none(started_at=step.started_at, finished_at=step.finished_at),
+            ) for step in row.steps],
+            created_at=row.created_at, updated_at=row.updated_at, stale=row.stale,
+        )
 
 
 class ComparisonStageRunAdapter(_StagesModuleGate):

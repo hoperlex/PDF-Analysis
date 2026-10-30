@@ -101,6 +101,7 @@ SERVED_TEXT_READ_OPERATIONS = frozenset({
     "listStageTextFragments", "listStageTextExclusions",
     "listStageRawDifferences", "listStageTextHints",
 })
+SERVED_TEXT_WRITE_OPERATIONS = frozenset({"recomputeStageTextEvidence"})
 
 
 def _client(modules: str) -> TestClient:
@@ -147,6 +148,7 @@ def test_every_stage_route_answers_a_typed_module_or_lane_refusal(
     if modules == "versions,stages" and name in (
         SERVED_PAIR_OPERATIONS | SERVED_UPLOAD_OPERATIONS
         | SERVED_LINK_OPERATIONS | SERVED_TEXT_READ_OPERATIONS
+        | SERVED_TEXT_WRITE_OPERATIONS
     ):
         assert response.status_code == 404, (name, response.status_code, body)
         assert body["error_code"] == "not_found"

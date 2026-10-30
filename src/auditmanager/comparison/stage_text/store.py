@@ -9,7 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
+
+if TYPE_CHECKING:
+    from auditmanager.comparison.work.model import WorkItem
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
@@ -129,6 +132,14 @@ class StageTextEvidenceStore:
     ) -> None:
         from auditmanager.comparison.public import PAGE_PROFILE_ALGO_VERSION
 
+        # The document FK locks taken by a concurrent version insert wait for
+        # this publication transaction; validate latest only after locking.
+        session.execute(text(
+            "SELECT d.document_uid FROM document d WHERE d.document_uid IN "
+            "(SELECT v.document_uid FROM document_version v JOIN comparison_page_profile pp "
+            "ON pp.version_uid = v.version_uid WHERE pp.comparison_page_profile_id "
+            "= ANY(CAST(:profiles AS text[]))) ORDER BY d.document_uid FOR UPDATE"
+        ), {"profiles": list(expected_keys)}).all()
         sides: dict[str, str] = {}
         for fragment in fragments:
             previous = sides.setdefault(fragment.profile_id, fragment.side)
@@ -190,6 +201,7 @@ class StageTextEvidenceStore:
         self, *, pair_id: str, revision_id: str,
         fragments: Sequence[TextFragment], expected_keys: Mapping[str, frozenset[str]],
         raw: RawTextPass, hints: Sequence[CrossSheetHint],
+        work_item: WorkItem | None = None,
     ) -> EvidenceWrite:
         self._validate_batch(fragments, raw, hints, expected_keys)
         exclusion_rows = [
@@ -214,6 +226,8 @@ class StageTextEvidenceStore:
             "stage_text_hint": {key for key, _ in hint_rows},
         }
         with session_scope(self._sessions) as session:
+            if work_item is not None:
+                work_item.require_current(session)
             self._require_revision(session, pair_id, revision_id)
             self._require_profiles(session, pair_id, fragments, expected_keys)
             mapped = session.execute(text(

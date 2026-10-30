@@ -55,9 +55,9 @@ class StageTextReadService:
     @staticmethod
     def _has_revision_evidence(session: Session, revision_id: str) -> bool:
         return bool(session.execute(text(
-            "SELECT EXISTS (SELECT 1 FROM stage_text_exclusion WHERE stage_link_revision_id = :revision) "
-            "OR EXISTS (SELECT 1 FROM stage_text_difference WHERE stage_link_revision_id = :revision) "
-            "OR EXISTS (SELECT 1 FROM stage_text_hint WHERE stage_link_revision_id = :revision)"
+            "SELECT EXISTS (SELECT 1 FROM stage_chain_run r JOIN command_record c "
+            "ON c.command_id = r.command_id WHERE r.stage_link_revision_id = :revision "
+            "AND r.state = 'completed' AND c.command_type = 'recompute_stage_text_evidence')"
         ), {"revision": revision_id}).scalar_one())
 
     @staticmethod
@@ -82,46 +82,25 @@ class StageTextReadService:
     def fragments(
         self, *, pair_id: str, after: str | None, limit: int,
     ) -> tuple[tuple[dict[str, Any], ...], str | None]:
-        from auditmanager.comparison.public import PAGE_PROFILE_ALGO_VERSION
-
         with session_scope(self._sessions) as session:
             self._pair(session, pair_id)
-            # A sealed empty run is not available yet. An empty successful page
-            # would otherwise falsely mean that the drawing has no text.
-            if not session.execute(text(
-                "SELECT 1 FROM stage_text_fragment WHERE stage_pair_id = :pair LIMIT 1"
-            ), {"pair": pair_id}).first():
+            sealed = session.execute(text(
+                "SELECT 1 FROM stage_chain_run r "
+                "JOIN command_record c ON c.command_id = r.command_id "
+                "WHERE r.stage_pair_id = :pair AND r.state = 'completed' "
+                "AND c.command_type = 'recompute_stage_text_evidence' "
+                "ORDER BY r.created_at DESC LIMIT 1"
+            ), {"pair": pair_id}).scalar_one_or_none()
+            if sealed is None:
                 raise _unmaterialized()
-            if after is not None and not session.execute(text(
-                "SELECT 1 FROM stage_text_fragment f "
-                "JOIN comparison_page_profile pp ON pp.comparison_page_profile_id = f.page_profile_id "
-                "JOIN document_version v ON v.version_uid = pp.version_uid "
-                "WHERE f.stage_pair_id = :pair AND f.content_key = :after "
-                "AND pp.status = 'ready' AND pp.algo_version = :algo "
-                "AND v.version_ordinal = (SELECT max(latest.version_ordinal) "
-                "FROM document_version latest WHERE latest.document_uid = v.document_uid) "
-                "AND am_stage_profile_in_pair(:pair, f.page_profile_id, f.side)"
-            ), {"pair": pair_id, "after": after, "algo": PAGE_PROFILE_ALGO_VERSION}).first():
-                raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
-            rows = [dict(row) for row in session.execute(text(
-                "SELECT f.stage_text_fragment_id, f.page_profile_id, f.side, "
-                "f.normalised_text, f.box_anchor, f.content_key "
-                "FROM stage_text_fragment f "
-                "JOIN comparison_page_profile pp ON pp.comparison_page_profile_id = f.page_profile_id "
-                "JOIN document_version v ON v.version_uid = pp.version_uid "
-                "WHERE f.stage_pair_id = :pair AND pp.status = 'ready' AND pp.algo_version = :algo "
-                "AND v.version_ordinal = (SELECT max(latest.version_ordinal) "
-                "FROM document_version latest WHERE latest.document_uid = v.document_uid) "
-                "AND am_stage_profile_in_pair(:pair, f.page_profile_id, f.side) "
-                "AND (CAST(:after AS text) IS NULL OR f.content_key > :after) "
-                "ORDER BY f.content_key LIMIT :limit"
-            ), {"pair": pair_id, "algo": PAGE_PROFILE_ALGO_VERSION,
-                "after": after, "limit": limit + 1}).mappings()]
-            if not rows and after is None:
-                raise _unmaterialized()
-            visible = rows[:limit]
-            next_key = visible[-1]["content_key"] if len(rows) > limit else None
-            return tuple(visible), next_key
+            # The pair endpoint is an immutable fragment catalogue. Historical
+            # revision references must remain resolvable after a new version.
+            return self._page(
+                session, table="stage_text_fragment", identity="stage_text_fragment_id",
+                columns="page_profile_id, side, normalised_text, box_anchor",
+                scope_column="stage_pair_id", scope_id=pair_id,
+                after=after, limit=limit,
+            )
 
     def revision_rows(
         self, *, kind: str, revision_id: str, after: str | None, limit: int,

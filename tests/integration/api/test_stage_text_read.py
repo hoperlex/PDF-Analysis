@@ -12,7 +12,8 @@ from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE
 from auditmanager.comparison.public import COMPARISON_MODULES_ENV
 from auditmanager.comparison.stage_text.store import StageTextEvidenceStore
-from tests.integration.comparison.stage_text.test_store import _batch, _seed
+from auditmanager.shared.identity import new_ulid
+from tests.integration.comparison.stage_text.test_store import _batch, _completed_run, _seed
 from tests.support.accounts import provisioned_credential, provisioned_record
 
 SECRET = "stage-text-read-http-token"
@@ -36,7 +37,7 @@ def test_stage_text_gets_over_real_http() -> None:
     try:
         with engine.begin() as connection:
             session = Session(bind=connection)
-            _store, pair, revision, _actor, left, right = _seed(session)
+            _store, pair, revision, actor, left, right = _seed(session)
         off = _client("versions")
         off_result = off.get(f"/stage-pairs/{pair}/text-fragments", headers=headers)
         assert off_result.status_code == 503
@@ -52,6 +53,8 @@ def test_stage_text_gets_over_real_http() -> None:
             pair_id=pair, revision_id=revision, fragments=fragments,
             expected_keys=manifest, raw=raw, hints=(),
         )
+        with engine.begin() as connection:
+            _completed_run(Session(bind=connection), pair, revision, actor, left, right)
         first = app.get(f"/stage-pairs/{pair}/text-fragments?limit=2", headers=headers)
         assert first.status_code == 200, first.text
         assert len(first.json()["items"]) == 2
@@ -76,11 +79,18 @@ def test_stage_text_gets_over_real_http() -> None:
         bad = app.get(f"/stage-pairs/{pair}/text-fragments",
                       params={"cursor": "not-a-cursor"}, headers=headers)
         assert bad.status_code == 422
+        recompute_key = f"stage-text-read-{new_ulid()}"
         recompute = app.post(
             f"/stage-link-revisions/{revision}/text-evidence/recomputation",
-            headers=headers | {"Idempotency-Key": "stage-text-read-stub"},
+            headers=headers | {"Idempotency-Key": recompute_key},
         )
-        assert recompute.status_code == 503
-        assert recompute.json()["details"] == {"dependency": "comparison_stage_text"}
+        assert recompute.status_code == 202, recompute.text
+        assert recompute.json()["state"] == "queued"
+        assert [step["step_no"] for step in recompute.json()["steps"]] == [2, 3]
+        replay = app.post(
+            f"/stage-link-revisions/{revision}/text-evidence/recomputation",
+            headers=headers | {"Idempotency-Key": recompute_key},
+        )
+        assert replay.status_code == 202 and replay.json() == recompute.json()
     finally:
         engine.dispose()

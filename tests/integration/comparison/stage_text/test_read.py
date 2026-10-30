@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from auditmanager.comparison.stage_text.read import StageTextReadService
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import new_ulid
-from tests.integration.comparison.stage_text.test_store import _batch, _command, _seed
+from tests.integration.comparison.stage_text.test_store import _batch, _command, _completed_run, _seed
 
 
 def test_read_pages_and_unmaterialized_refusal(comparison_session: Session) -> None:
@@ -25,6 +25,7 @@ def test_read_pages_and_unmaterialized_refusal(comparison_session: Session) -> N
     fragments, manifest, raw = _batch(left, right)
     store.write(pair_id=pair, revision_id=revision,
                 fragments=fragments, expected_keys=manifest, raw=raw, hints=())
+    _completed_run(comparison_session, pair, revision, actor, left, right)
     first, cursor = reader.fragments(pair_id=pair, after=None, limit=2)
     second, end = reader.fragments(pair_id=pair, after=cursor, limit=2)
     assert len(first) == len(second) == 2 and end is None

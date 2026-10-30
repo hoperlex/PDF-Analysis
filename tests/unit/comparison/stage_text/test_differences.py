@@ -10,6 +10,7 @@ from auditmanager.comparison.stage_text import (
     SheetLink, TextFragment, build_raw_differences, find_cross_sheet_hints,
 )
 from auditmanager.comparison.stage_text.fragments import canonical_text
+from auditmanager.comparison.stage_text.differences import build_grouped_raw_differences
 
 
 def _fragment(side: str, profile: str, value: str, ordinal: int = 1) -> TextFragment:
@@ -103,3 +104,18 @@ def test_hint_manifest_mismatch_refuses() -> None:
     with pytest.raises(ValueError, match="fragment_manifest_mismatch"):
         find_cross_sheet_hints([], (), {"cpr_left": frozenset({source.content_key})},
                                frozenset())
+
+
+def test_independent_sheet_groups_do_not_share_the_single_group_link_budget() -> None:
+    links = [SheetLink(f"left_{n}", f"right_{n}") for n in range(40)]
+    fragments = tuple(fragment for n in range(40) for fragment in (
+        _fragment("left", f"left_{n}", "Нагрузка 10 кВт"),
+        _fragment("right", f"right_{n}", "Нагрузка 20 кВт"),
+    ))
+    profiles = tuple(f.profile_id for f in fragments)
+    result = build_grouped_raw_differences(
+        links, fragments, {profile: (100, 100) for profile in profiles},
+        _manifest(fragments, profiles),
+    )
+    assert len(result.differences) == 40
+    assert all(row.status == "changed" for row in result.differences)
