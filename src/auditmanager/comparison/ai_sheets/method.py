@@ -160,7 +160,8 @@ class SheetChangesMethod:
         if pair.one_sided:
             overview = self._single_image_size(pair)
             return AiCallGroup(
-                calls=1, prompt_chars=len(sc.SINGLE_PROMPT) + SINGLE_TEXT_LIMIT + _SINGLE_OVERHEAD_CHARS, output_tokens=MAX_OUTPUT_TOKENS,
+                calls=1, prompt_chars=len(sc.SYSTEM_PROMPT) + len(sc.SINGLE_PROMPT) + SINGLE_TEXT_LIMIT + _SINGLE_OVERHEAD_CHARS,
+                output_tokens=MAX_OUTPUT_TOKENS,
                 images=1 if overview else 0, image_bytes=overview,
             )
         result = self._repo.result_document(session, pair.result_id) if pair.result_id else None
@@ -170,12 +171,14 @@ class SheetChangesMethod:
             planned = pk.assemble(facts_of(pair), result, self.material(), render=False, xrefs=False)
         except DomainError:
             # the page profiles cannot be read now: a request of the usual size is priced, and the run reports what it finds
-            return AiCallGroup(calls=1, prompt_chars=12000, output_tokens=MAX_OUTPUT_TOKENS, images=2, image_bytes=pix.estimate_bytes(1400, 1000) * 2)
+            return AiCallGroup(calls=1, prompt_chars=12000 + len(sc.SYSTEM_PROMPT), output_tokens=MAX_OUTPUT_TOKENS,
+                               images=2, image_bytes=pix.estimate_bytes(1400, 1000) * 2)
         if not planned.candidates:
             return None
         budget = planned.document["budget"]
         return AiCallGroup(
-            calls=1, prompt_chars=int(budget["prompt_chars"]), output_tokens=MAX_OUTPUT_TOKENS, images=int(budget["images"]),
+            calls=1, prompt_chars=int(budget["prompt_chars"]) + len(sc.SYSTEM_PROMPT), output_tokens=MAX_OUTPUT_TOKENS,
+            images=int(budget["images"]),
             image_bytes=int(budget["image_bytes"]),
         )
 

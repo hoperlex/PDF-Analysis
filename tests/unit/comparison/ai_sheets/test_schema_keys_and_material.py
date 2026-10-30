@@ -31,13 +31,13 @@ fx = _fx()
 
 #: Pinned so that an edit of the prompt or of the schema cannot go unnoticed: a new prompt is a new content key (nothing stored under
 #: the old one is reused for it) and a new estimate. Change the text -> raise ``PROMPT_VERSION`` -> change these three lines.
-PINNED_PROMPT_DIGEST = "97d3440b4c7008b2bc8b4fbf4e44dbfc8df2459aa8b2dc2146291f66277f7f44"
-PINNED_SINGLE_DIGEST = "9aab03138a5675e4d2b44d406eeb68f4d52f0e2dda5f2499b5bf4e3e555fb89e"
+PINNED_PROMPT_DIGEST = "77ea907c07c8fb32893a935fa2126ed1335d076e20d933489e08e7253a5d0940"
+PINNED_SINGLE_DIGEST = "69f3966a6ee3c80e056c3b4c9469a0580c3dcce20f8caba3a20261974976d946"
 
 
 def test_the_prompt_and_the_schema_are_pinned_to_their_version_name() -> None:
-    assert (sc.PROMPT_VERSION, sc.PROMPT_DIGEST) == ("sheet-changes/1", PINNED_PROMPT_DIGEST)
-    assert (sc.SINGLE_PROMPT_VERSION, sc.SINGLE_PROMPT_DIGEST) == ("sheet-single/1", PINNED_SINGLE_DIGEST)
+    assert (sc.PROMPT_VERSION, sc.PROMPT_DIGEST) == ("sheet-changes/2", PINNED_PROMPT_DIGEST)
+    assert (sc.SINGLE_PROMPT_VERSION, sc.SINGLE_PROMPT_DIGEST) == ("sheet-single/2", PINNED_SINGLE_DIGEST)
     assert len(prompt_version_of(sc.PROMPT_VERSION, sc.PROMPT_DIGEST)) <= 64
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,8 +12,11 @@ import pytest
 
 from auditmanager.comparison.ai_sheets import images as pix
 from auditmanager.comparison.ai_sheets import packet as pk
+from auditmanager.comparison.ai_sheets import schema as sc
 from auditmanager.comparison.ai_sheets.describe import build_request
 from auditmanager.comparison.ai_sheets.packet import MAX_PACKET_IMAGES
+from auditmanager.executors.pull import _task_payload
+from auditmanager.executors.ssh_adapter import _task
 
 
 def _fx() -> Any:
@@ -63,6 +67,16 @@ def test_the_packet_is_the_same_twice_so_a_recorded_answer_finds_its_question() 
     one = build_request("m", first.prompt, {"type": "object"}, [(i["id"], first.image_bytes[i["id"]]) for i in first.images])
     two = build_request("m", second.prompt, {"type": "object"}, [(i["id"], second.image_bytes[i["id"]]) for i in second.images])
     assert one.request_sha256 == two.request_sha256
+
+
+@pytest.mark.parametrize("schema", [sc.SHEET_CHANGES_SCHEMA, sc.SINGLE_SCHEMA])
+def test_sheet_request_is_accepted_by_live_ssh_and_pull_routes(schema: dict[str, Any]) -> None:
+    request = build_request("model", "Описать лист", schema)
+    ssh_task = json.loads(_task(request, "model"))
+    pull_task = _task_payload(request)
+    assert ssh_task["system"] == pull_task["system"] == sc.SYSTEM_PROMPT
+    assert ssh_task["user_text"] == pull_task["user_text"] == "Описать лист"
+    assert ssh_task["output_schema"]["type"] == pull_task["output_schema"]["type"] == "object"
 
 
 def test_a_request_carries_at_most_eight_pictures_whatever_the_sheet_has() -> None:

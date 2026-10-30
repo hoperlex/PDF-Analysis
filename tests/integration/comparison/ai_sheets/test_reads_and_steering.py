@@ -82,7 +82,7 @@ def test_the_history_lists_the_descriptions_of_a_sheet_newest_first_and_pages(la
     lab.drain()
     page = lab.service.list_history(sheet_pair_id=pair.pair, after=None, limit=2)
     models.ComparisonSheetDescriptionHistory.model_validate({"items": page.items, "page": {"next_cursor": None}})
-    assert [i["prompt_version"].split("+")[0] for i in page.items] == ["sheet-changes/1", "sheet-changes/0"]
+    assert [i["prompt_version"].split("+")[0] for i in page.items] == ["sheet-changes/2", "sheet-changes/0"]
     assert page.next_after is not None
     rest = lab.service.list_history(sheet_pair_id=pair.pair, after=page.next_after, limit=2)
     assert len(rest.items) == 1 and rest.next_after is None
