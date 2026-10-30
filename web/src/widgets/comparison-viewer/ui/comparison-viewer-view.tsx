@@ -39,8 +39,11 @@ export interface TileStatus {
   readonly retry: () => void;
 }
 
+export type ComparisonViewerData = Omit<ComparisonSheetPair, 'sheet_pair_id' | 'transition_id'>;
+
 export interface ComparisonViewerViewProps {
-  readonly pair: ComparisonSheetPair;
+  readonly pair: ComparisonViewerData;
+  readonly showEvidencePanels?: boolean;
   /** `null`: the pair has no sheet the viewer can draw (no canvas, no resolution, no size passed). */
   readonly geometry: ViewerGeometry | null;
   readonly context: ViewerContext;
@@ -91,6 +94,7 @@ function Choice({ checked, disabled, title, layer, onChange, children }: { check
 
 export function ComparisonViewerView({
   pair, geometry, context, state, tiles, dispatch, navigation, stageRef, paneHandlers, dragging, sidePanel, evidence, onEvidence,
+  showEvidencePanels = true,
 }: ComparisonViewerViewProps) {
   const differences = pair.differences ?? [];
   const alignedBlocks = pair.how_compared?.aligned_blocks ?? 0;
@@ -251,7 +255,7 @@ export function ComparisonViewerView({
       <div className={sidePanel === undefined ? undefined : `${styles.layout} ${styles.layoutWide}`} {...(sidePanel === undefined ? {} : { 'data-viewer-layout': 'with-panel' })}>
       <div className={sidePanel === undefined ? undefined : styles.main}>
       {stage}
-      <div className={styles.panels}>
+      {showEvidencePanels ? <div className={styles.panels}>
         <ChannelStrip channels={pair.channels} reasons={pair.reasons ?? []} />
         <DifferenceList
           differences={differences}
@@ -268,7 +272,7 @@ export function ComparisonViewerView({
         />
         <ServiceNotes notes={pair.service_notes ?? []} />
         <HowCompared how={pair.how_compared} />
-      </div>
+      </div> : null}
       </div>
       {sidePanel}
       </div>

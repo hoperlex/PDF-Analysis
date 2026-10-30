@@ -54,6 +54,10 @@ The remaining C3/C4 functional roadmap is implemented, integrated by one owner a
 - `src/auditmanager/bootstrap/**`
 - `src/auditmanager/comparison/public.py`
 - `web/src/_pages/stage-compare/**`
+- `web/src/widgets/comparison-viewer/**`
+- `web/src/widgets/stage-sheet-map/**`
+- `web/src/widgets/stage-text-evidence/**`
+- `web/tests/unit/run/polling.test.ts`
 - `tests/integration/composition/**`
 
 ## Forbidden hotspots
