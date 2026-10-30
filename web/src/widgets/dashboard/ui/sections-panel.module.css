@@ -33,6 +33,17 @@
   background: var(--am-paper);
 }
 
+.row:focus-within {
+  border-color: var(--am-accent);
+  box-shadow: var(--am-shadow-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .row {
+    transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
+  }
+}
+
 .rowButton,
 .unclassified {
   display: grid;

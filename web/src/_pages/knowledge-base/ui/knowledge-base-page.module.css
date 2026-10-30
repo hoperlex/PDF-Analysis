@@ -1,18 +1,46 @@
 .filters,
 .results {
   min-width: 0;
-  padding: var(--am-gap-lg);
+  padding: 16px;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
-  background: var(--am-surface);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
 }
 
 .filters {
-  margin-bottom: var(--am-gap-lg);
+  margin-bottom: 16px;
+  gap: 12px;
 }
 
 .results {
   overflow-x: auto;
+}
+
+.results :global(.am-kb__records) {
+  gap: 8px;
+}
+
+.results :global(.am-kb__record) {
+  padding-bottom: 4px;
+}
+
+.results :global(.am-kb__text),
+.results :global(.am-kb__meta) {
+  margin-top: 4px;
+}
+
+.filters:focus-within,
+.results:focus-within {
+  border-color: var(--am-line-strong);
+  box-shadow: var(--am-shadow-2);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .filters,
+  .results {
+    transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
+  }
 }
 
 @media (max-width: 780px) {

@@ -499,6 +499,7 @@
 /* The completed shell and future screen slices inherit one two-theme presentation palette. */
 [data-dashboard-showcase],
 .am-app__bar,
+.am-app__utility,
 .am-app__main {
   --am-paper: var(--am-showcase-card);
   --am-surface: var(--am-showcase-bg);
@@ -979,6 +980,20 @@ input[type='file']::file-selector-button:hover {
   padding: clamp(18px, 2vw, 32px);
 }
 
+.am-app__utility {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 58px;
+  min-width: 0;
+  padding: 8px clamp(18px, 2vw, 32px);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-paper);
+}
+
 /*
  * The theme control. Every colour it uses is a token, so it is the one control in this
  * file that is guaranteed to look deliberate in the palette it switches TO.
@@ -1145,6 +1160,17 @@ input[type='file']::file-selector-button:hover {
   display: none;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .am-disclosure__panel:not([hidden]) {
+    animation: am-disclosure-enter var(--am-motion-base) var(--am-ease) both;
+  }
+
+  @keyframes am-disclosure-enter {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
 .am-disclosure__list {
   margin: 0;
   padding: 0;
@@ -1164,6 +1190,14 @@ input[type='file']::file-selector-button:hover {
   font-size: 13px;
   text-decoration: none;
   overflow-wrap: anywhere;
+}
+
+.am-disclosure__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .am-disclosure__link:hover {
@@ -1412,8 +1446,21 @@ input[type='file']::file-selector-button:hover {
     padding: 20px 16px;
   }
 
+  .am-app__utility {
+    position: relative;
+    min-height: 48px;
+    padding: 8px 16px;
+  }
+
   .am-app__footer {
     padding: 12px 16px;
+  }
+}
+
+@media (max-width: 590px) {
+  .am-app__utility {
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
 }
 
@@ -1467,6 +1514,13 @@ input[type='file']::file-selector-button:hover {
   box-shadow: var(--am-shadow-2);
 }
 
+.am-page__body--canvas {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 /* ---- the five mandatory states --------------------------------------------------- */
 
 .am-state {
@@ -1513,6 +1567,45 @@ input[type='file']::file-selector-button:hover {
 .am-state__title {
   margin: 0;
   font-weight: 600;
+}
+
+.am-state__loading-lines {
+  display: grid;
+  gap: var(--am-gap-sm);
+  width: min(100%, 28rem);
+  margin-top: var(--am-gap);
+}
+
+.am-state__loading-lines > span {
+  position: relative;
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface-sunken);
+}
+
+.am-state__loading-lines > span:last-child {
+  width: 68%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .am-state__loading-lines > span::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    background: linear-gradient(90deg, transparent, var(--am-accent-light), transparent);
+    transform: translateX(-100%);
+    animation: am-loading-sweep calc(var(--am-motion-slow) * 6) var(--am-ease) infinite;
+  }
+
+  .am-state__loading-lines > span:last-child::after {
+    animation-delay: var(--am-motion-base);
+  }
+
+  @keyframes am-loading-sweep {
+    to { transform: translateX(100%); }
+  }
 }
 
 .am-state__detail {

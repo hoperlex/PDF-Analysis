@@ -402,63 +402,50 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
 
   return (
     <div className={styles.progress} data-run-id={status.run_id}>
-      <p className={styles.mode}>
-        <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
-        <span data-provider-mode={mode}>
-          режим провайдера: <strong data-provider-mode={mode}>{modeText}</strong>
-        </span>
-      </p>
-      <p>{providerModeCaption(mode)}</p>
+      <div className={styles.overviewGrid}>
+        <section className={styles.factsPanel} aria-label="Сведения о прогоне">
+          <p className={styles.mode}>
+            <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
+            <span data-provider-mode={mode}>
+              режим провайдера: <strong data-provider-mode={mode}>{modeText}</strong>
+            </span>
+          </p>
+          <p>{providerModeCaption(mode)}</p>
 
-      <dl>
-        <dt>Прогон</dt>
-        <dd>
-          <code>{status.run_id}</code>
-        </dd>
-        <dt>Версия</dt>
-        <dd>
-          <code>{status.version_uid}</code>
-        </dd>
-        {executor === null ? null : (
-          <>
-            <dt>Исполнитель</dt>
-            <dd data-run-executor>{runExecutorValue(executor)}</dd>
-          </>
-        )}
-        {preset === null ? null : (
-          <>
-            <dt>Пресет</dt>
-            <dd data-run-preset>{runPresetValue(preset)}</dd>
-          </>
-        )}
-        <dt>Создан</dt>
-        <dd>{formatInstant(status.created_at)}</dd>
-        <dt>Завершён</dt>
-        <dd>{formatInstant(status.terminal_at)}</dd>
-        <dt>Длительность</dt>
-        <dd data-run-elapsed={elapsedMs(status.created_at, status.terminal_at) ?? 'unknown'}>
-          {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
-        </dd>
-      </dl>
+          <dl>
+            <dt>Прогон</dt>
+            <dd><code>{status.run_id}</code></dd>
+            <dt>Версия</dt>
+            <dd><code>{status.version_uid}</code></dd>
+            {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
+            {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
+            <dt>Создан</dt>
+            <dd>{formatInstant(status.created_at)}</dd>
+            <dt>Завершён</dt>
+            <dd>{formatInstant(status.terminal_at)}</dd>
+            <dt>Длительность</dt>
+            <dd data-run-elapsed={elapsedMs(status.created_at, status.terminal_at) ?? 'unknown'}>
+              {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
+            </dd>
+          </dl>
 
-      {waiting === null ? null : <p data-run-executor-waiting>{waiting}</p>}
+          {waiting === null ? null : <p data-run-executor-waiting>{waiting}</p>}
+          {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
+          <p>
+            <Link href={routes.version(status.project_uid, status.version_uid)}>Версия, которую читал прогон</Link>{' '}
+            — <code>{status.version_uid}</code>. Прогон никогда не меняет прочитанную версию,
+            и остальные её прогоны перечислены там же.
+          </p>
+        </section>
 
-      {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
+        <section className={styles.resultPanel} aria-label="Этапы и результат">
+          <h2>Базовые этапы анализа</h2>
+          <PipelineRail rows={stageRows(status)} />
+          <Outcome status={status} />
+        </section>
+      </div>
 
-      <p>
-        <Link href={routes.version(status.project_uid, status.version_uid)}>
-          Версия, которую читал прогон
-        </Link>{' '}
-        — <code>{status.version_uid}</code>. Прогон никогда не меняет прочитанную версию,
-        и остальные её прогоны перечислены там же.
-      </p>
-
-      <h2>Этапы анализа</h2>
-      <PipelineRail rows={stageRows(status)} />
-
-      <Outcome status={status} />
-
-      <ExtendedReview runId={runId} active={animating} />
+      <ExtendedReview key={runId} runId={runId} active={animating} projectUid={projectUid} />
 
       {interrupted !== null && status.state !== 'failed' ? (
         <p data-interrupted-reason={interrupted}>

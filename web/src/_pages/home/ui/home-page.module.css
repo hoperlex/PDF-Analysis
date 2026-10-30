@@ -1,5 +1,5 @@
 .hero {
-  padding: clamp(20px, 3vw, 36px);
+  padding: clamp(18px, 2vw, 28px);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: radial-gradient(circle at 95% 5%, var(--am-accent-light), transparent 44%),
@@ -15,24 +15,57 @@
 .greeting {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(28px, 3vw, 40px);
+  font-size: clamp(26px, 2.6vw, 36px);
   line-height: 1.12;
 }
 
-.tiles {
+.overviewGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--am-gap-lg);
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
   align-items: start;
+  gap: 16px;
+  min-width: 0;
+  margin-bottom: 16px;
 }
 
+.overviewGrid > :only-child {
+  grid-column: 1 / -1;
+}
+
+.tasks,
 .sections {
-  margin-bottom: var(--am-gap-lg);
-  padding: var(--am-gap-lg);
+  min-width: 0;
+  padding: 18px;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.sections {
+  height: 100%;
+}
+
+.tasks :global(.am-section) > h2:first-child,
+.sections :global([data-home-sections]) > h2:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 1279px) {
+  .overviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 780px) {
@@ -41,6 +74,7 @@
   }
 
   .hero,
+  .tasks,
   .sections {
     padding: var(--am-gap);
   }

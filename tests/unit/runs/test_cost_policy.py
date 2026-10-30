@@ -57,3 +57,17 @@ def test_invalid_accepted_cost_authority_fails_closed(monkeypatch, change):
 def test_changed_frozen_connection_refuses_before_provider_binding(monkeypatch):
     with pytest.raises(DomainError):
         read(monkeypatch, {"cost_consent": consent() | {"connection_revision_id": "old"}}, revision="new")
+
+
+@pytest.mark.parametrize("version", ["extended-review-v1", "extended-review-v2"])
+def test_accepted_workflow_version_survives_worker_upgrade(monkeypatch, version):
+    frozen = {"enabled": True, "max_blocks": 16, "plan_version": version}
+    policy = read(monkeypatch, {"cost_consent": consent() | {"extended_review": frozen}})
+    assert policy.extended_review == frozen
+
+
+@pytest.mark.parametrize("maximum", [1, 15, 17])
+def test_unsupported_frozen_visual_window_refuses_instead_of_silently_disabling(monkeypatch, maximum):
+    frozen = {"enabled": True, "max_blocks": maximum, "plan_version": "extended-review-v2"}
+    with pytest.raises(DomainError):
+        read(monkeypatch, {"cost_consent": consent() | {"extended_review": frozen}})

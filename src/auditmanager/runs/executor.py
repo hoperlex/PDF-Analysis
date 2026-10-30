@@ -1217,6 +1217,7 @@ def _execute_run_body(
             stage_id="text_analysis",
             checkpoint=effect_checkpoint,
         )
+        binding = None
         try:
             binding = _bind_provider(
                 session, run, attempt_context, providers, adapter, config
@@ -1282,10 +1283,12 @@ def _execute_run_body(
         # this additive preliminary review. Old accepted commands never buy
         # additional calls merely because a worker was upgraded.
         from auditmanager.analysis.public import extended_review_enabled
-        if (extended_review_enabled(getattr(cost_policy, "extended_review", None))
-                and text_result.status in {StageStatus.SUCCEEDED, StageStatus.PARTIAL}):
+        extended_policy = getattr(cost_policy, "extended_review", None)
+        v2_workflow = isinstance(extended_policy, dict) and extended_policy.get("plan_version") == "extended-review-v2"
+        if (extended_review_enabled(extended_policy)
+                and (v2_workflow or text_result.status in {StageStatus.SUCCEEDED, StageStatus.PARTIAL})):
             from auditmanager.analysis.public import extended_artifact_envelope
-            from auditmanager.runs.extended_review import run_extended_review
+            from auditmanager.runs.extended_review import run_extended_review, planned_workflow_result
 
             def extended_checkpoint(boundary: str) -> None:
                 job_repo.require_current(session, authority)
@@ -1310,22 +1313,51 @@ def _execute_run_body(
                 ref = publish_extended("analysis.extended_review",
                     {"run_id": run_id, "status": status, "result": result})
                 artifacts = tuple(a for a in text_result.artifacts if a.role != "analysis.extended_review")
-                text_result = replace(text_result, artifacts=(*artifacts, ref), metrics={
-                    **text_result.metrics, "extended_review_status": status,
+                metrics = {**text_result.metrics, "extended_review_status": status,
                     "extended_blocks_processed": result["coverage"]["blocks_processed"],
-                    "extended_blocks_total": result["coverage"]["blocks_total"],
-                })
+                    "extended_blocks_total": result["coverage"]["blocks_total"]}
+                for procedure in result.get("procedures", []):
+                    metrics["extended_"+procedure["id"]] = procedure["status"]
+                degraded = status in {"failed","partial","unavailable"} and text_result.status is StageStatus.SUCCEEDED
+                text_result = replace(text_result, artifacts=(*artifacts, ref), metrics=metrics,
+                    status=StageStatus.PARTIAL if degraded else text_result.status,
+                    error=StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_FAILED,
+                        message="the accepted extended analysis workflow did not fully complete")) if degraded else text_result.error)
+
                 _persist(session, run_repo, run_id, text_result)
                 outputs.absorb(text_result)
                 session.commit()
 
-            run_extended_review(session, run=run, authority=authority, jobs=job_repo,
-                journal=_DurableCallJournal(session, job_repo, authority, effect_checkpoint,
-                    call=binding.call, context=attempt_context),
-                binding=binding, outputs=outputs, store=text_store, meter=meter,
-                publish=publish_extended, progress=extended_progress,
-                checkpoint=extended_checkpoint, observations_document=observations_document,
-                snapshot_id=run.norms_snapshot_id, profile_sha256=text_profile.content_sha256)
+            def bind_native(artifacts):
+                for blob_id in job_repo.bind_artifacts(session,authority,stage_id="text_analysis",artifacts=artifacts):
+                    blob_repo.mark_available(session,blob_id)
+                session.commit()
+
+            skip_reason = None
+            if text_result.status is StageStatus.FAILED:
+                # Source-safe visual work is independent of text parser/admission success.
+                # Unknown paid text effects and unavailable routes forbid further dispatch.
+                unknown = any(effect.run_id == run_id for effect in job_repo.unresolved_provider_effects(session))
+                session.commit()
+                if unknown:
+                    skip_reason = "provider_outcome_unknown"
+                elif binding is None:
+                    skip_reason = "provider_binding_unavailable"
+                elif text_result.error is not None and text_result.error.code in {
+                        ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED, ErrorCode.MODEL_IDENTITY_MISMATCH}:
+                    skip_reason = "provider_binding_unavailable"
+            if skip_reason:
+                skipped = planned_workflow_result(reason=skip_reason,terminal=True)
+                extended_progress("unavailable",skipped)
+            else:
+                run_extended_review(session, run=run, authority=authority, jobs=job_repo,
+                    journal=_DurableCallJournal(session, job_repo, authority, effect_checkpoint,
+                        call=binding.call, context=attempt_context),
+                    binding=binding, outputs=outputs, store=text_store, meter=meter,
+                    publish=publish_extended, progress=extended_progress,
+                    checkpoint=extended_checkpoint, observations_document=observations_document,
+                    snapshot_id=run.norms_snapshot_id, profile_sha256=text_profile.content_sha256,
+                    policy=extended_policy,bind_native=bind_native)
 
     # `W54-JUDGE-Y` F5: the gate's artifacts are read from the store here, before the
     # advance below locks the run row, so no S3 read happens under that lock.

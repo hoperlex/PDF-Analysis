@@ -30,12 +30,18 @@ interface StateBlockProps {
   readonly action?: ReactNode | undefined;
   readonly tone: 'neutral' | 'error' | 'warning';
   readonly role?: 'status' | 'alert' | undefined;
+  readonly loading?: boolean | undefined;
 }
 
-function StateBlock({ title, detail, correlationId, action, tone, role }: StateBlockProps) {
+function StateBlock({ title, detail, correlationId, action, tone, role, loading }: StateBlockProps) {
   return (
     <div className={`am-state am-state--${tone}`} role={role ?? 'status'}>
       <p className="am-state__title">{title}</p>
+      {loading === true ? (
+        <div className="am-state__loading-lines" aria-hidden="true">
+          <span /><span />
+        </div>
+      ) : null}
       {detail !== undefined ? <div className="am-state__detail">{detail}</div> : null}
       {correlationId !== undefined && correlationId !== null ? (
         <p className="am-state__correlation">
@@ -53,7 +59,7 @@ export interface LoadingStateProps {
 }
 
 export function LoadingState({ what }: LoadingStateProps) {
-  return <StateBlock tone="neutral" title={what === undefined ? 'Загрузка…' : `Загрузка: ${what}…`} />;
+  return <StateBlock tone="neutral" loading title={what === undefined ? 'Загрузка…' : `Загрузка: ${what}…`} />;
 }
 
 export interface EmptyStateProps {

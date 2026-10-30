@@ -31,6 +31,7 @@ import { HOME_SCREEN, SIGN_IN_SCREEN, getInstanceLabel } from '@/shared/config';
 import { AccountMenu } from './account-menu';
 import { FrameNavigation } from './frame-navigation';
 import { ReleaseNoticesGate } from './release-notices';
+import { ScreenContext } from './screen-context';
 import { SidebarToggle } from './sidebar-toggle';
 import { buildNavigation } from './navigation';
 import { ThemeToggle } from './theme-toggle';
@@ -93,29 +94,24 @@ export function AppFrame({ children, session }: AppFrameProps) {
          * profile see no group, and the account menu is how the latter two move on.
          */}
         <FrameNavigation navigation={buildNavigation(session)} />
-        <div className={styles.end}>
-          {/*
-           * `PC-01` stood here once and is gone: it was the programme's own checkpoint code
-           * and told a reviewer nothing (`R-18`). The instance label stays — it tells one
-           * stand from another, and an operator needs that.
-           */}
-          {instance !== null ? <span className="am-app__instance">{instance}</span> : null}
-          <ThemeToggle />
-          {/*
-           * `D-113`: the bar must reflect the session. A guest gets the way in and nothing
-           * else; a session gets the account menu, which also holds the way out — a POST to
-           * the session's own door, never a link.
-           */}
-          {session === null ? (
-            <Link className="am-app__signin" href={SIGN_IN_SCREEN}>
-              Вход
-            </Link>
-          ) : (
-            <AccountMenu session={session} />
-          )}
-        </div>
       </header>
       <div className={styles.content}>
+        <div className="am-app__utility">
+          <ScreenContext />
+          <div className={styles.end}>
+            {/* The stand label distinguishes otherwise identical deployments. */}
+            {instance !== null ? <span className="am-app__instance">{instance}</span> : null}
+            <ThemeToggle />
+            {/* The existing account menu keeps its POST sign-out and role-aware actions. */}
+            {session === null ? (
+              <Link className="am-app__signin" href={SIGN_IN_SCREEN}>
+                Вход
+              </Link>
+            ) : (
+              <AccountMenu session={session} />
+            )}
+          </div>
+        </div>
         <main className="am-app__main">{children}</main>
         {session !== null && session.profileComplete && !session.isDefaultCredential ? <ReleaseNoticesGate /> : null}
         <footer className="am-app__footer">{FRAME_FOOTER}</footer>

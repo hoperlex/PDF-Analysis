@@ -190,6 +190,18 @@ describe('the footer', () => {
   });
 });
 
+describe('the content utility row', () => {
+  it('keeps the existing theme and account controls once, after navigation and before content', () => {
+    const markup = frame(EXPERT);
+    expect(markup).toContain('class="am-app__utility"');
+    expect(markup.indexOf('am-app__utility')).toBeGreaterThan(markup.indexOf('data-nav-state="stacked"'));
+    expect(markup.indexOf('am-app__utility')).toBeLessThan(markup.indexOf('<main'));
+    expect(markup.match(/aria-label="Оформление"/g)).toHaveLength(1);
+    expect(markup.match(/aria-haspopup="menu"/g)).toHaveLength(1);
+    expect(frame(null).match(/class="am-app__signin"/g)).toHaveLength(1);
+  });
+});
+
 describe('the three layout states, and the width at the 780 px floor', () => {
   it('puts all states in the markup, each in its own container', () => {
     const markup = frame(EXPERT);

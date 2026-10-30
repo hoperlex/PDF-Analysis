@@ -114,15 +114,19 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
           )}
         </div>
       </header>
-      <div className="am-page__body">
+      <div className="am-page__body am-page__body--canvas">
         {labels === null ? (
           <div data-home-fault="closed-vocabulary">
             <ErrorState title={UNKNOWN_ROLE_TITLE} detail={UNKNOWN_ROLE_DETAIL} />
           </div>
         ) : projects || summary || registrations || tasks ? (
           <>
-            {tasks ? <MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /> : null}
-            {summary ? <div className={styles.sections}><HomeSectionsOverview /></div> : null}
+            {tasks || summary ? (
+              <div className={styles.overviewGrid}>
+                {tasks ? <div className={styles.tasks}><MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /></div> : null}
+                {summary ? <div className={styles.sections}><HomeSectionsOverview /></div> : null}
+              </div>
+            ) : null}
             {projects || summary || registrations ? (
               <div className={styles.tiles}>
                 {projects ? <RecentProjectsTile /> : null}

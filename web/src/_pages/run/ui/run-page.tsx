@@ -25,6 +25,7 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
   return (
     <PageShell
       title="Прогон"
+      surface="canvas"
       subtitle={
         <>
           <code>{runId}</code>
