@@ -1,4 +1,59 @@
-.workspace { display: grid; gap: 1rem; }
-.selection, .tabs { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
-.selection label { display: grid; gap: .35rem; min-width: 0; flex: 1 1 20rem; }
-.selection select { max-width: 100%; }
+.workspace {
+  display: grid;
+  gap: var(--am-gap-lg);
+  min-width: 0;
+}
+
+.selection,
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--am-gap-sm);
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.selection label {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+
+.selection select {
+  max-width: 100%;
+}
+
+.tabs [role='tab'] {
+  background: var(--am-paper);
+  color: var(--am-ink-muted);
+}
+
+.tabs [role='tab'][aria-selected='true'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+}
+
+.panel {
+  min-width: 0;
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .panel,
+  .selection,
+  .tabs {
+    padding: var(--am-gap);
+  }
+}

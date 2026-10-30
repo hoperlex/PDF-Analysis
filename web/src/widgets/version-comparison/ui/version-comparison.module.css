@@ -18,6 +18,10 @@
   align-items: flex-end;
   gap: var(--am-gap);
   margin-bottom: var(--am-gap);
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .choice {
@@ -46,6 +50,10 @@
 
 .scroller {
   overflow-x: auto;
+  max-width: 100%;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .diff {
@@ -57,6 +65,11 @@
   font-family: var(--am-font-mono);
   font-size: var(--am-text-sm);
   overflow-x: auto;
+  max-width: 100%;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .line {

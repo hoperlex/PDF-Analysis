@@ -1,5 +1,14 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M05-COMPARISON` (development candidate only).**
+The global version and stage comparison routes and version-specific comparison
+now have consistent project selectors, tabs, panels and scrollable evidence
+surfaces in both themes. Selected tabs remain semantically marked; existing
+pair selection, AI review, evidence, export and lazy reads are untouched. The
+frontend typecheck, lint and 122 focused tests pass. No API, contract,
+migration or `origin/main` change is included. Publication is to `origin/dev`
+only; M06–M10 remain.
+
 **Updated 2026-10-30 by `DESIGN-M04-RUN` (development candidate only).**
 Dispatcher assignments, Run facts and Review list/detail/export now use
 responsive panels in the shared two-theme palette. Run stage rail and outcome
