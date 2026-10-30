@@ -52,11 +52,13 @@ BASIS_UNMETERED: str = "unmetered"
 
 @dataclass(slots=True)
 class CostMeter:
-    """Accumulated measured spend for one run, against one ceiling."""
+    """Accumulated measured spend for one run, with an optional application halt."""
 
     ceiling_usd: float
     spent_usd: float = field(default=0.0)
     call_count: int = field(default=0)
+    #: Raised-limit Runs still charge every call; only the application halt is disabled.
+    enforce_ceiling: bool = True
     #: Contributions to :attr:`spent_usd` the transport did not price. Not a constructor
     #: argument: a caller cannot declare the provenance of spend it is handing over, and
     #: :meth:`__post_init__` decides what an opening balance means.
@@ -115,7 +117,7 @@ class CostMeter:
 
     def check_before_call(self) -> None:
         """Halt before spending anything more once the ceiling is reached."""
-        if self.spent_usd >= self.ceiling_usd:
+        if self.enforce_ceiling and self.spent_usd >= self.ceiling_usd:
             raise cost_budget_exceeded()
 
     def charge(
@@ -151,6 +153,6 @@ class CostMeter:
         # is that same absence, one layer earlier and before it can be summed away.
         if reported_cost_usd is None:
             self.unpriced_contributions += 1
-        if self.spent_usd > self.ceiling_usd:
+        if self.enforce_ceiling and self.spent_usd > self.ceiling_usd:
             raise cost_budget_exceeded()
         return cost

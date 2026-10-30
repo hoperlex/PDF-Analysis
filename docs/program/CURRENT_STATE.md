@@ -1,5 +1,19 @@
 # Current state
 
+**Updated 2026-10-30 by `HOTFIX-SECTION-LIMITS-INT-20261030` (development
+candidate only; no deployment claim).** The default-off «Повышенные лимиты
+ИИ-анализа» switch now covers ordinary `startRun` for all 14 text-profile
+sections as well as the separately served six-check AR v3 start. In the raised
+mode an ordinary Run pins a distinct immutable 64,000-token profile/bundle pair,
+persists the choice with its accepted command, records spend without the
+application's USD cost halt, and keeps a stable 12-window operational input
+bound. A provider may still refuse its output or context size. The shared
+contract is `1.12.0` (131 paths / 148 operations / 432 schemas), adding only
+the optional strict `StartRunRequest.relaxed_limits` field; migration head is
+still `0039_comparison_core`. The owner requested focused checks and publication
+to `origin/dev` only, without a complete gate or a live provider call.
+`origin/main` and the deployed host are not addressed by this hotfix.
+
 **Updated 2026-10-30 by `HOTFIX-UI-INT-20261030` (development candidate only; no
 deployment claim).** The temporary «Повышенные лимиты ИИ-анализа» switch on the six-check
 AR v3 start defaults off. When selected, the accepted group command persists that choice

@@ -1005,6 +1005,7 @@ class RunAdapter(_SessionHolder):
         provider_mode: str | None = None,
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
+        relaxed_limits: bool = False,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1061,6 +1062,9 @@ class RunAdapter(_SessionHolder):
                 executor_connection_id=executor_connection_id,
                 preset_id=preset_id,
                 preset_resolver=self._preset_resolver,
+                relaxed_limits=relaxed_limits,
+                text_profiles=self._text_profiles,
+                operational_model_id=self._provider_config.model_id,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that

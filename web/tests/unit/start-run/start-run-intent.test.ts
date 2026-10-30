@@ -80,6 +80,24 @@ describe('the choice is sent, and only when a connection is chosen', () => {
     });
   });
 
+  it('sends the raised-limit flag only after an explicit choice, with either a preset or an executor', async () => {
+    vi.mocked(startRun).mockResolvedValue({ data: RUN } as never);
+    const command = useStartRun() as unknown as Captured;
+    await command.mutationFn(startRunIntent(VERSION, null, null, true).command(KEY));
+    expect(startRun).toHaveBeenCalledWith({
+      body: { version_uid: VERSION, relaxed_limits: true }, idempotencyKey: KEY,
+    });
+    expect(startRunBody(startRunIntent(VERSION, GATEWAY, null, true).command(KEY))).toEqual({
+      version_uid: VERSION, executor_connection_id: GATEWAY, relaxed_limits: true,
+    });
+    expect(startRunBody(startRunIntent(VERSION, GATEWAY, 'preset-1', true).command(KEY))).toEqual({
+      version_uid: VERSION, preset_id: 'preset-1', relaxed_limits: true,
+    });
+    expect(startRunBody(startRunIntent(VERSION, null, null, false).command(KEY))).toEqual({
+      version_uid: VERSION,
+    });
+  });
+
   it('puts the choice in the command only when there is one', () => {
     const none = startRunIntent(VERSION, null).command(KEY);
     expect('executorConnectionId' in none).toBe(false);
@@ -125,15 +143,29 @@ describe('the choice is part of the intent, so it changes the idempotency key', 
     const first = keyFor(null, VERSION, GATEWAY);
     expect(keyFor(first, VERSION, GATEWAY)).toBe(first);
   });
+
+  it('mints another key when the raised-limit choice changes, while standard signatures stay stable', () => {
+    for (const [executor, preset] of [[null, null], [GATEWAY, null], [null, 'preset-1']] as const) {
+      const standard = startRunIntent(VERSION, executor, preset, false);
+      const raised = startRunIntent(VERSION, executor, preset, true);
+      expect(raised.signature).not.toBe(standard.signature);
+      const first = resolveIntentKey(null, standard.signature, mint);
+      const second = resolveIntentKey(first, raised.signature, mint);
+      expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+      expect(resolveIntentKey(second, raised.signature, mint)).toBe(second);
+      expect('relaxedLimits' in standard.command(KEY)).toBe(false);
+      expect(raised.command(KEY).relaxedLimits).toBe(true);
+    }
+    expect(startRunIntent(VERSION, null, null, false).signature).toBe(`start-run:${VERSION}`);
+  });
 });
 
 describe('the control takes its key and its request from the same choice', () => {
   const source = readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'ui', 'start-run-control.tsx'));
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-  it('derives one intent from the version, the chosen executor and the chosen preset', () => {
-    // `ANALYSIS-PRESETS-01` added the preset as a third argument of the same single derivation.
-    expect(code).toContain('startRunIntent(versionUid, chosen, chosenPreset)');
+  it('derives one intent from the version, executor, preset and limit choice', () => {
+    expect(code).toContain('startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits)');
   });
 
   it('mints the key for that intent and sends that intent’s command', () => {
@@ -143,6 +175,8 @@ describe('the control takes its key and its request from the same choice', () =>
 
   it('clears a refusal when the choice changes, because it was about the old choice', () => {
     expect(code).toMatch(/setChosen\(next\);\s*mutation\.reset\(\);/);
+    expect(code).toMatch(/setRelaxedLimits\(event\.currentTarget\.checked\);\s*mutation\.reset\(\);/);
+    expect(code).toContain('disabled={mutation.isPending}');
   });
 
   it('never changes the choice itself: only the person’s change does, and a refusal changes nothing', () => {

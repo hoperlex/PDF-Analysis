@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.11.0 (OpenAPI 3.1.0)
- *   sha256 0bf208947911dbf639345bf6090716ecd88e19d4c2b87199eb084d77110829a4
+ *   AuditManager PC-01 API 1.12.0 (OpenAPI 3.1.0)
+ *   sha256 c643581bd1e1c061d81e296cf577e2ab174fdb789e90a877286f0bb43d3229cc
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.11.0';
+export const CONTRACT_VERSION = '1.12.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0bf208947911dbf639345bf6090716ecd88e19d4c2b87199eb084d77110829a4';
+export const CONTRACT_DIGEST = 'c643581bd1e1c061d81e296cf577e2ab174fdb789e90a877286f0bb43d3229cc';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -2415,7 +2415,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.11.0";
+  contract_version: "1.12.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
@@ -4721,8 +4721,10 @@ export type StartRunRequest = {
   executor_connection_id?: ExecutorConnectionId;
   /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */
   preset_id?: PresetId;
-  /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money against the OD-03 ceiling. */
+  /** Defaults to the server's configured mode. A client asking for `live` is asking to spend money; the OD-03 ceiling applies unless relaxed_limits is true. */
   provider_mode?: ProviderMode;
+  /** Temporary section-analysis option. Absent or false keeps the deployment cost ceiling and a 16,000-token output request. True omits the per-Run cost halt and requests up to 64,000 output tokens under a distinct immutable profile and bundle identity. The 12-window operational document-size limit remains. The provider may enforce a lower output maximum. The choice is part of the idempotency payload and persists for the Run. */
+  relaxed_limits?: boolean;
   version_uid: VersionUid;
 };
 

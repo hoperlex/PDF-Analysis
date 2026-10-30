@@ -424,7 +424,7 @@ def run_text_analysis_windows(
                         budget_scope=BUDGET_SCOPE_RUN,
                     ),
                     {**progress, "cost_usd": round(cost_meter.spent_usd, 8),
-                     "cost_ceiling_usd": cost_meter.ceiling_usd},
+                     "cost_ceiling_usd": (cost_meter.ceiling_usd if cost_meter.enforce_ceiling else None)},
                     model_calls=records,
                 )
             model_call_id = (
@@ -496,7 +496,7 @@ def run_text_analysis_windows(
                     {**progress, "windows_completed": len(replies) + 1,
                      "provider_mode": mode.value, "cost_usd": round(cost_meter.spent_usd, 8),
                      "cost_basis": cost_meter.cost_basis,
-                     "cost_ceiling_usd": cost_meter.ceiling_usd,
+                     "cost_ceiling_usd": (cost_meter.ceiling_usd if cost_meter.enforce_ceiling else None),
                      "input_tokens": response.input_tokens,
                      "output_tokens": response.output_tokens,
                      "output_tokens_source": "provider", "call_status": call_status},
@@ -608,7 +608,7 @@ def run_text_analysis_windows(
         "proposals_malformed": sum(r.parsed.malformed_count for r in replies),
         "cost_usd": round(cost_meter.spent_usd, 8),
         "cost_basis": cost_meter.cost_basis,
-        "cost_ceiling_usd": cost_meter.ceiling_usd,
+        "cost_ceiling_usd": (cost_meter.ceiling_usd if cost_meter.enforce_ceiling else None),
         "latency_ms": sum(r.response.latency_ms for r in replies),
         "windows_analysed": count,
         "windows_recovered": sum(1 for r in replies if r.recovered),

@@ -40,6 +40,8 @@ class FrozenRoute:
 
     revision_id: str
     input_budget_characters: int
+    #: Pinned model of this revision, used for stable raised-limit window sizing.
+    model_id: str | None = None
     #: Set when the standby served instead of the primary: the two connections and why.
     primary_connection_id: str | None = None
     standby_connection_id: str | None = None

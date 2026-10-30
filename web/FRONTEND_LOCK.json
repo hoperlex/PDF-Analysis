@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "HOTFIX-AI-LIMITS-20261030 contract reseal",
+  "owner": "HOTFIX-SECTION-LIMITS-BACKEND-20261030 contract reseal",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "0bf208947911dbf639345bf6090716ecd88e19d4c2b87199eb084d77110829a4",
-    "content_commit": "e49c4b00",
-    "content_commit_subject": "CMP-SEAL-C1 (ADR-0025): contract 1.10.0, the version comparison core sealed as stubs (eighteen operations), compare_after_preparation, seven identity prefixes; additive minor, 1.9.0 to 1.10.0",
-    "dispatch_named_commit": "a3e83f39cfcb02f4ea5565e6f45f3f2b2f720e97",
-    "commit_note": "HOTFIX-AI-LIMITS-20261030: optional StartArV3BetaGroupRequest.relaxed_limits; additive minor 1.10.0 to 1.11.0, no new path, operation or schema. content_commit names the preceding 1.10.0 seal; the sha256 checksum identifies the 1.11.0 OpenAPI bytes included in the combined commit.",
+    "sha256": "c643581bd1e1c061d81e296cf577e2ab174fdb789e90a877286f0bb43d3229cc",
+    "content_commit": "06b94745",
+    "content_commit_subject": "feat(hotfix): add AR v3 limit switch and UI cleanup",
+    "dispatch_named_commit": "06b947459fa7535f340af75b625f40af88d2f18f",
+    "commit_note": "HOTFIX-SECTION-LIMITS-BACKEND-20261030: optional StartRunRequest.relaxed_limits for 14 non-AR sections; additive minor 1.11.0 to 1.12.0, no new path, operation or schema. content_commit names the preceding 1.11.0 seal; the sha256 checksum identifies the 1.12.0 OpenAPI bytes included in the combined commit.",
     "openapi_version": "3.1.0",
-    "info_version": "1.11.0",
+    "info_version": "1.12.0",
     "paths": 131,
     "operations": 148,
     "component_schemas": 432,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "0bf208947911dbf639345bf6090716ecd88e19d4c2b87199eb084d77110829a4",
+    "snapshot_sha256": "c643581bd1e1c061d81e296cf577e2ab174fdb789e90a877286f0bb43d3229cc",
     "read_only": "A5 generates from contracts/api/v1/** and never edits it: a client and a contract reconciled by the same hand prove nothing. The seam is repaired only by the session that owns it - the FindingDetail repair was made by A7-FIX in contracts/api/v1/**, and this client regenerated from the result."
   },
   "generator": {

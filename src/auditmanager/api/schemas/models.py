@@ -874,7 +874,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.11.0"]
+    contract_version: Literal["1.12.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1200,6 +1200,7 @@ class PortalBlockPage(_Object):
 
 class StartRunRequest(_Object):
     version_uid: VersionUid
+    relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
     provider_mode: ProviderMode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     #: `EXEC-PAR-START-01`. Optional and **not nullable**, like ``provider_mode``: absent means
     #: the global route, exactly as before; present means that connection or a refusal.

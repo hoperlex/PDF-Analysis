@@ -112,6 +112,7 @@ from auditmanager.analysis.text.budget import (
     input_budget_characters,
     windowed_budget_characters,
 )
+from auditmanager.analysis.text.profile_registry import relaxed_profile_pair
 from auditmanager.analysis.text.recognised_input import (  # SECTION-CATEGORY-OCR-01
     RecognisedPage,
     total_characters as recognised_total_characters,
@@ -130,6 +131,7 @@ from auditmanager.analysis.text.windows import (  # SECTION-CHUNKED-ANALYSIS-01
     WindowCustody,
     WindowIdentity,
     WindowPolicy,
+    relaxed_window_characters,
     text_window_policy,
 )
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
@@ -202,6 +204,8 @@ __all__ = [
     "QUOTE_SOURCE_RECOGNISED",
     "MAX_ANALYSIS_WINDOWS",
     "REFERENCE_DOCUMENT_CHARACTERS",
+    "relaxed_profile_pair",
+    "relaxed_window_characters",
     "ROLE_BLOCK_INDEX",
     "ROLE_CROP_IMAGE",
     "ROLE_DOCUMENT_GRAPH",

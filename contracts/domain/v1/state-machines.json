@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.11.0",
-  "supersedes": "1.10.0",
-  "candidate_revision": 29,
-  "revision_note": "Candidate revision 28 by CMP-SEAL-C1: the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview of a project and the comparison queue read (eighteen operations), and the optional CreateComparisonUploadRequest.compare_after_preparation are an additive minor change of the API document, and family 1.10.0 seal. identifiers.json gains seven identity prefixes (cmx, cme, cak, cser, ctn, ctp, csp) for migration 0039; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine. Candidate revision 29 by HOTFIX-AI-LIMITS-20261030: the shared 1.11.0 seal adds optional relaxed_limits to the AR v3 six-check start; no domain identity, error code or state machine changes.",
+  "contract_version": "1.12.0",
+  "supersedes": "1.11.0",
+  "candidate_revision": 30,
+  "revision_note": "Candidate revision 28 by CMP-SEAL-C1: the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview of a project and the comparison queue read (eighteen operations), and the optional CreateComparisonUploadRequest.compare_after_preparation are an additive minor change of the API document, and family 1.10.0 seal. identifiers.json gains seven identity prefixes (cmx, cme, cak, cser, ctn, ctp, csp) for migration 0039; error-codes.json gains no code, only registered reasons under existing codes; state-machines.json gains no machine. Candidate revision 29 by HOTFIX-AI-LIMITS-20261030: the shared 1.11.0 seal adds optional relaxed_limits to the AR v3 six-check start; no domain identity, error code or state machine changes. Candidate revision 30 by HOTFIX-SECTION-LIMITS-BACKEND-20261030: the shared 1.12.0 seal adds optional relaxed_limits to startRun for 14 non-AR sections; no domain identity, error code or state machine changes.",
   "status": "frozen",
   "frozen": true,
   "rules": [

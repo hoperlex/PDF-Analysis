@@ -11,6 +11,15 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
+## Version `1.12.0`
+
+`HOTFIX-SECTION-LIMITS-BACKEND-20261030` adds optional `relaxed_limits` to
+`startRun` for all 14 non-AR sections. True selects a separate immutable
+profile/bundle pair with a 64,000-token output request and disables the
+application's per-Run cost halt. The 12-window operational size bound remains.
+Absent or false keeps the old behavior. This is an additive minor change:
+131 paths, 148 operations and 432 schemas remain.
+
 ## Version `1.11.0`
 
 `HOTFIX-AI-LIMITS-20261030` adds the optional `relaxed_limits` boolean to

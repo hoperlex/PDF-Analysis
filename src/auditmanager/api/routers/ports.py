@@ -543,6 +543,7 @@ class RunPort(Protocol):
         idempotency_key: str,
         executor_connection_id: str | None = None,
         preset_id: str | None = None,
+        relaxed_limits: bool = False,
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 

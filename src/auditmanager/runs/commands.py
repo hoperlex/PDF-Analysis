@@ -115,7 +115,10 @@ from typing import Any, Callable, Final, Mapping
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from auditmanager.analysis.public import MAX_ANALYSIS_WINDOWS, windowed_budget_characters
+from auditmanager.analysis.public import (
+    MAX_ANALYSIS_WINDOWS, relaxed_profile_pair, relaxed_window_characters,
+    windowed_budget_characters,
+)
 from auditmanager.documents.public import UPLOAD_KIND_COMPARISON_PDF, DocumentRepository
 from auditmanager.norms.public import current_snapshot
 from auditmanager.jobs.public import JobRepository, append_execution_event
@@ -294,6 +297,7 @@ def start_run_fingerprint(
     input_basis_digest_value: str,
     executor_connection_id: str | None = None,
     preset_id: str | None = None,
+    relaxed_limits: bool = False,
 ) -> PayloadFingerprint:
     """The comparison value that distinguishes a repeat from a same-key conflict.
 
@@ -334,6 +338,8 @@ def start_run_fingerprint(
         document["executor_connection_id"] = executor_connection_id
     if preset_id is not None:
         document["preset_id"] = preset_id
+    if relaxed_limits:
+        document["relaxed_limits"] = True
     return payload_fingerprint(document)
 
 
@@ -543,6 +549,9 @@ def start_audit_run(
     executor_connection_id: str | None = None,
     preset_id: str | None = None,
     preset_resolver: PresetResolver | None = None,
+    relaxed_limits: bool = False,
+    text_profiles: Any = None,
+    operational_model_id: str | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -595,6 +604,10 @@ def start_audit_run(
     either takes a preset or names an executor. A known key is answered before the preset is read
     (the replay of a run that exists), as for the executor. See :func:`start_run_fingerprint`.
     """
+    if type(relaxed_limits) is not bool:
+        raise ValueError("relaxed_limits must be a boolean")
+    if relaxed_limits and section_profiles is None:
+        raise ValueError("relaxed_limits requires the section profile registry")
     if preset_id is not None and executor_connection_id is not None:
         raise DomainError(
             ErrorCode.VALIDATION_FAILED,
@@ -638,6 +651,11 @@ def start_audit_run(
             routed = route_classified_version(version_record, section_profiles)
             pinned = (routed.analysis_profile_id, routed.prompt_bundle_id)
         analysis_profile_id, prompt_bundle_id = pinned
+        standard_pair = pinned
+        if known is None and relaxed_limits:
+            analysis_profile_id, prompt_bundle_id = relaxed_profile_pair(
+                analysis_profile_id, prompt_bundle_id
+            )
     assert analysis_profile_id is not None and prompt_bundle_id is not None
 
     _version, blob_ids = _resolve_references(
@@ -669,6 +687,14 @@ def start_audit_run(
     if connection_route is not None and known is None:
         frozen = _freeze_for(session, connection_route, executor_connection_id)
         budget = frozen.input_budget_characters
+    if relaxed_limits and known is None:
+        model_id = frozen.model_id if frozen is not None else operational_model_id
+        if model_id is None or text_profiles is None:
+            raise ValueError("relaxed section start needs a pinned model and profile resolver")
+        normal_profile = text_profiles.resolve(*standard_pair)
+        budget = relaxed_window_characters(model_id, normal_profile.prompt_bundle)
+    # Even with monetary halts disabled, 12 whole-page windows remain the worker's
+    # watchdog-bound execution envelope. Refuse before claiming the key.
     if budget is not None and known is None:
         _refuse_over_window_budget(_version.text_character_count, budget)
 
@@ -692,6 +718,7 @@ def start_audit_run(
         # A start through a preset carries the preset and not the connection it resolved to.
         executor_connection_id=None if preset_id is not None else executor_connection_id,
         preset_id=preset_id,
+        relaxed_limits=relaxed_limits,
     )
 
     claimed = command_repo.begin(
@@ -739,7 +766,9 @@ def start_audit_run(
     )
     _journal_standby(session, run_id, frozen)
     _journal_executor_choice(session, run_id, frozen)
-    command_repo.succeed(session, claimed.command_id, {"run_id": run_id})
+    command_repo.succeed(session, claimed.command_id, {
+        "run_id": run_id, **({"relaxed_limits": True} if relaxed_limits else {})
+    })
     return StartedRun(
         run_id=run_id, command_id=str(claimed.command_id), replayed=False
     )
