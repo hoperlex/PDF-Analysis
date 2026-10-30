@@ -62,6 +62,13 @@ function latinIn(markup: string): string[] {
 describe('the screen offers a credentials form and nothing that holds a credential', () => {
   const markup = render(createElement(SignInPage, {}));
 
+  it('shows the selected orbit concept without turning its stages into live results', () => {
+    expect(markup).toContain('Точность начинается');
+    expect(markup).toContain('Проверка как система связей');
+    expect(markup).toContain('Иллюстрация');
+    expect(markup).toContain('aria-hidden="true"');
+  });
+
   it('posts to the exchange, with both fields and a submit', () => {
     expect(markup).toContain(`action="${SESSION_OPEN_PATH}"`);
     expect(markup).toContain('method="post"');

@@ -61,6 +61,8 @@ describe('a guest', () => {
   it('sees the brand and one «Вход» link, and no navigation, menu or form', () => {
     const markup = frame(null);
     expect(hrefs(markup)).toEqual(['/', '/login']);
+    expect(markup).toContain('data-guest-preview=""');
+    expect(markup).toContain('Только превью');
     expect(markup).toMatch(/<a class="am-app__signin" href="\/login">Вход<\/a>/);
     expect(markup).not.toContain('<nav');
     expect(markup).not.toContain('aria-haspopup');

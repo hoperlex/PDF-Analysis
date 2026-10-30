@@ -35,7 +35,7 @@ import { useId, useState } from 'react';
 import type { ExecutorConnectionId, PresetId, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { ApiError } from '@/shared/api';
 import { CostApproval, ErrorState, LoadingState } from '@/shared/ui';
-import { useIntentKey } from '@/shared/lib';
+import { routes, useIntentKey } from '@/shared/lib';
 import type { RunFailure } from '@/entities/audit-run';
 import { classifyRunFailure } from '@/entities/audit-run';
 import { executionFailure } from '@/entities/execution';
@@ -146,7 +146,9 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
     });
   };
   const costFailure = cost.error === null || cost.error === undefined ? null : executionFailure(cost.error, false);
-  const locked = mutation.isPending || cost.pending;
+  const comparisonOnlyCost = cost.error instanceof ApiError && cost.error.errorCode === 'analysis_input_invalid'
+    && cost.error.details?.reason === 'comparison_only_version';
+  const locked = mutation.isPending || cost.pending || comparisonOnlyCost;
   const staleEstimate = mutation.error instanceof ApiError && mutation.error.details?.conflict_reason === 'run_cost_estimate_stale';
 
   const failure: RunFailure | null =
@@ -207,7 +209,16 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
         Оценить стоимость
       </button>
       {cost.pending ? <LoadingState what="оценка стоимости" /> : null}
-      {costFailure === null ? null : <ErrorState title="Стоимость не оценена" detail={costFailure.detail} correlationId={costFailure.correlationId} />}
+      {costFailure === null ? null : <ErrorState
+        title={comparisonOnlyCost ? 'Этот PDF загружен только для сравнения' : 'Стоимость не оценена'}
+        detail={comparisonOnlyCost
+          ? 'Обычный прогон требует пакет портала. Для этого PDF запустите сравнение в соответствующем модуле.'
+          : costFailure.detail}
+        correlationId={costFailure.correlationId} />}
+      {comparisonOnlyCost ? <p className="am-note">
+        <a href={routes.stageComparison()}>Сравнение стадий</a>{' · '}
+        <a href={routes.versionComparison()}>Сравнение версий</a>
+      </p> : null}
       {staleEstimate ? <p role="alert">Оценка стоимости устарела. Получите новую оценку и подтвердите лимит снова.</p> : null}
       {cost.estimate === null ? null : <CostApproval estimate={cost.estimate} ceiling={cost.ceiling} approved={cost.approved}
         disabled={locked} onCeilingChange={cost.setCeiling} onApprovedChange={cost.setApproved} />}

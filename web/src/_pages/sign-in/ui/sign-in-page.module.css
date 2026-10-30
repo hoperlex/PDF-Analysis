@@ -1,58 +1,97 @@
-/* A guest's screen: one card in the middle of the work area, and the way to register under it. */
 .screen {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(380px, 1.05fr);
   align-items: center;
-  justify-content: center;
-  gap: var(--am-gap-lg);
-  min-height: min(40rem, 75dvh);
-  padding: var(--am-gap-xl) 0;
-  background: radial-gradient(circle at 50% 25%, var(--am-accent-light), transparent 45%);
+  gap: clamp(32px, 4vw, 72px);
+  width: min(100%, 1200px);
+  min-height: calc(100dvh - 188px);
+  margin: 0 auto;
+  padding: clamp(20px, 3vw, 48px) 0;
+  color: var(--am-showcase-ink);
+  background: radial-gradient(circle at 72% 54%, color-mix(in srgb, var(--am-showcase-accent) 10%, transparent), transparent 38%);
 }
-
-.card {
-  box-sizing: border-box;
-  width: min(100%, 30rem);
-  padding: var(--am-gap-xl);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
-  color: var(--am-ink);
-  background: var(--am-paper);
-  box-shadow: var(--am-shadow-2);
-}
-
-.header {
-  margin-bottom: var(--am-gap-lg);
-}
-
-.title {
+.copy { min-width: 0; }
+.eyebrow, .cardEyebrow, .sceneEyebrow {
   margin: 0;
-  font-size: clamp(28px, 3vw, 36px);
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  color: var(--am-showcase-accent-strong);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
-
-.lead {
-  margin: 6px 0 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-  line-height: var(--am-leading-base);
+.eyebrow { margin-bottom: 14px; }
+.title { margin: 0; font-size: clamp(36px, 3.2vw, 52px); font-weight: 720; line-height: 1.08; letter-spacing: -0.05em; }
+.lead { max-width: 49ch; margin: 18px 0 22px; color: var(--am-showcase-muted); font-size: 14px; line-height: 1.55; }
+.card, .scene {
+  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 35%, transparent);
+  border-radius: 26px;
+  background: var(--am-showcase-card);
+  box-shadow: 0 18px 42px color-mix(in srgb, var(--am-showcase-ink) 12%, transparent), var(--am-shadow-2);
 }
-
-.register {
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
-  text-align: center;
+.card { box-sizing: border-box; width: min(100%, 470px); padding: clamp(20px, 2.3vw, 30px); }
+.header { display: flex; align-items: center; gap: 12px; }
+.signInMark { display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border-radius: 12px; color: var(--am-showcase-accent-strong); background: var(--am-showcase-accent-soft); }
+.signInMark svg { width: 23px; height: 23px; }
+.cardEyebrow { font-size: 9px; }
+.cardTitle { margin: 1px 0 0; font-size: 18px; font-weight: 700; letter-spacing: -0.025em; }
+.formLead { margin: 12px 0 20px; color: var(--am-showcase-muted); font-size: 12px; line-height: 1.5; }
+.register { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 14px 0 0; color: var(--am-showcase-muted); font-size: 12px; }
+.register a { color: var(--am-showcase-accent-strong); font-weight: 700; }
+.register a:focus-visible { outline: 2px solid var(--am-showcase-accent); outline-offset: 3px; border-radius: 2px; }
+.accessNote { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 36%, transparent); color: var(--am-showcase-soft); font-size: 11px; }
+.scene { position: relative; display: flex; flex-direction: column; min-width: 0; height: clamp(500px, 45vw, 625px); padding: 24px; overflow: hidden; }
+.sceneHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sceneEyebrow { color: var(--am-showcase-soft); font-size: 9px; }
+.sceneBadge { padding: 6px 13px; border-radius: 99px; background: var(--am-showcase-accent-soft); color: var(--am-showcase-accent-strong); font-size: 9px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+.sceneTitle { margin: 13px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -0.025em; }
+.orbit { position: relative; flex: 1; min-height: 0; isolation: isolate; }
+.orbitGlow { position: absolute; top: 50%; left: 50%; width: min(96%, 400px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--am-showcase-accent) 16%, transparent), transparent 67%); transform: translate(-50%, -50%); }
+.ring, .orbitArc, .orbitArcSecondary { position: absolute; top: 50%; left: 50%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
+.ringOuter { width: min(76%, 350px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 30%, transparent); }
+.ringDashed { width: min(61%, 282px); border: 1px dashed color-mix(in srgb, var(--am-showcase-line) 52%, transparent); }
+.ringMiddle { width: min(47%, 215px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 22%, transparent); }
+.ringInner { width: min(33%, 155px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 14%, transparent); }
+.orbitArc { width: min(76%, 350px); border: 4px solid transparent; border-top-color: var(--am-showcase-accent); border-left-color: var(--am-showcase-accent); transform: translate(-50%, -50%) rotate(-22deg); }
+.orbitArcSecondary { width: min(61%, 282px); border: 3px solid transparent; border-bottom-color: var(--am-showcase-accent); transform: translate(-50%, -50%) rotate(28deg); opacity: 0.76; }
+.orbitCore { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 88px; height: 88px; border: 2px solid var(--am-showcase-accent); border-radius: 50%; background: var(--am-showcase-card); box-shadow: 0 9px 24px color-mix(in srgb, var(--am-showcase-ink) 15%, transparent); color: var(--am-showcase-accent-strong); transform: translate(-50%, -50%); }
+.orbitCore svg { width: 47px; height: 47px; }
+.orbitNode { position: absolute; display: grid; justify-items: center; gap: 5px; width: 80px; color: var(--am-showcase-muted); font-size: 11px; }
+.orbitNode b { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid color-mix(in srgb, var(--am-showcase-line) 45%, transparent); border-radius: 50%; background: var(--am-showcase-card); color: var(--am-showcase-accent-strong); box-shadow: var(--am-shadow-2); font-size: 11px; }
+.orbitNode small { font-size: 10px; }
+.nodeDocument { top: calc(50% - min(38%, 175px) - 37px); left: 50%; transform: translateX(-50%); }
+.nodeAnalysis { top: calc(50% + min(31%, 140px) - 19px); left: calc(50% + min(31%, 140px) - 40px); }
+.nodeExpert { top: calc(50% + min(31%, 140px) - 19px); left: calc(50% - min(31%, 140px) - 40px); }
+.nodeAnalysis b { background: var(--am-showcase-accent-soft); }
+.sceneFoot { display: flex; align-items: center; gap: 9px; margin: 0; padding: 13px 15px; border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent); border-radius: 12px; background: var(--am-showcase-card-alt); color: var(--am-showcase-muted); font-size: 11px; }
+.sceneFoot span { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--am-showcase-accent); }
+.screen:has(input:focus) .orbitGlow { opacity: 0.28; }
+@media (prefers-reduced-motion: no-preference) {
+  .orbitArc { animation: orbitTurn 24s linear infinite; }
+  .orbitArcSecondary { animation: orbitTurnReverse 30s linear infinite; }
+  .orbitGlow { animation: orbitBreathe 8s ease-in-out infinite; }
+  @keyframes orbitTurn { to { transform: translate(-50%, -50%) rotate(338deg); } }
+  @keyframes orbitTurnReverse { to { transform: translate(-50%, -50%) rotate(-332deg); } }
+  @keyframes orbitBreathe { 50% { opacity: 0.55; } }
 }
-
-@media (max-width: 520px) {
-  .screen {
-    min-height: 0;
-    padding: var(--am-gap) 0;
-  }
-
-  .card {
-    padding: var(--am-gap-lg);
-  }
+@media (max-width: 1250px) {
+  .screen { grid-template-columns: minmax(0, 1fr) minmax(330px, 0.95fr); gap: 24px; }
+  .scene { height: 530px; padding: 20px; }
+}
+@media (max-width: 1120px) {
+  .screen { grid-template-columns: 1fr; max-width: 660px; gap: 28px; }
+  .copy { display: grid; justify-items: start; }
+  .lead { max-width: 62ch; }
+  .card { width: 100%; }
+  .scene { height: 480px; }
+}
+@media (max-width: 640px) {
+  .screen { min-height: 0; padding: 14px 0 24px; }
+  .title { font-size: clamp(32px, 8vw, 42px); }
+  .lead { font-size: 13px; }
+  .card { padding: 20px; border-radius: 20px; }
+  .scene { height: 400px; padding: 18px; border-radius: 20px; }
+  .sceneTitle { font-size: 17px; }
+  .orbitCore { width: 68px; height: 68px; }
+  .orbitCore svg { width: 36px; height: 36px; }
 }

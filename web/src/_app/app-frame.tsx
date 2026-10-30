@@ -30,6 +30,7 @@ import { HOME_SCREEN, SIGN_IN_SCREEN, getInstanceLabel } from '@/shared/config';
 
 import { AccountMenu } from './account-menu';
 import { FrameNavigation } from './frame-navigation';
+import { GuestNavigationPreview } from './guest-navigation-preview';
 import { ReleaseNoticesGate } from './release-notices';
 import { ScreenContext } from './screen-context';
 import { SidebarToggle } from './sidebar-toggle';
@@ -99,6 +100,7 @@ export function AppFrame({ children, session }: AppFrameProps) {
          * profile see no group, and the account menu is how the latter two move on.
          */}
         <FrameNavigation navigation={buildNavigation(session)} />
+        {session === null ? <GuestNavigationPreview /> : null}
       </header>
       <div className={styles.content}>
         <div className="am-app__utility">
