@@ -959,7 +959,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.12.0"]
+    contract_version: Literal["1.13.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -3869,6 +3869,7 @@ class ExecutorWorkKind(str, enum.Enum):
     COMPARISON_SHEET_CHANGES = "comparison_sheet_changes"
     COMPARISON_SPEC = "comparison_spec"
     COMPARISON_REPORT = "comparison_report"
+    COMPARISON_STAGE_REVIEW = "comparison_stage_review"
 
 
 class ExecutorApiFlavour(str, enum.Enum):
@@ -5633,6 +5634,7 @@ class ComparisonAiMethod(str, enum.Enum):
     SHEET_CHANGES = "sheet_changes"
     SPEC = "spec"
     REPORT = "report"
+    STAGE_REVIEW = "stage_review"
 
 
 class ComparisonAiJobState(str, enum.Enum):
@@ -6815,6 +6817,7 @@ class StageTextDifferencePage(_Object):
 
 
 class StageTextHint(_Object):
+    source_side: Literal["left", "right"] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     hint_id: StageTextHintId
     revision_id: StageLinkRevisionId
     source_fragment_id: StageTextFragmentId
@@ -6846,6 +6849,13 @@ class StageChainRun(_Object):
     created_at: datetime
     updated_at: datetime
     stale: bool
+    effective_link_revision_id: StageLinkRevisionId = Field(**_NOT_GIVEN)
+    kind: Literal["deterministic", "full"] = Field(**_NOT_GIVEN)
+    with_ai: bool = Field(**_NOT_GIVEN)
+    ai_job_id: ComparisonAiJobId = Field(**_NOT_GIVEN)
+    batch_id: Annotated[str, Field(pattern=rf"^scb_{_ULID}$")] = Field(**_NOT_GIVEN)
+    pause_reason: str = Field(**_NOT_GIVEN)
+    failure_reason: str = Field(**_NOT_GIVEN)
 
 
 class StageChainRunPage(_Object):
@@ -6856,3 +6866,301 @@ class StageChainRunPage(_Object):
 class StartStageChainRunRequest(_Object):
     link_revision_id: StageLinkRevisionId
     restart: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    consent: ComparisonAiConsent = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    with_ai: bool = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+
+
+# CMP-SEAL-C4: versioned stage AI, repairs, expert cards and journal contracts.
+StageAiUnitId = TypeAliasType("StageAiUnitId", Annotated[str, Field(pattern=rf"^saunit_{_ULID}$")])
+StageAiReviewId = TypeAliasType("StageAiReviewId", Annotated[str, Field(pattern=rf"^sarev_{_ULID}$")])
+StageAiClassificationId = TypeAliasType("StageAiClassificationId", Annotated[str, Field(pattern=rf"^sacls_{_ULID}$")])
+StageAiSynthesisId = TypeAliasType("StageAiSynthesisId", Annotated[str, Field(pattern=rf"^sasyn_{_ULID}$")])
+StageGraphicEvidenceId = TypeAliasType("StageGraphicEvidenceId", Annotated[str, Field(pattern=rf"^sge_{_ULID}$")])
+StageLinkRepairId = TypeAliasType("StageLinkRepairId", Annotated[str, Field(pattern=rf"^crp_{_ULID}$")])
+StageLinkRepairEventId = TypeAliasType("StageLinkRepairEventId", Annotated[str, Field(pattern=rf"^crpe_{_ULID}$")])
+StageChangeCardId = TypeAliasType("StageChangeCardId", Annotated[str, Field(pattern=rf"^ccd_{_ULID}$")])
+StageCardEvidenceId = TypeAliasType("StageCardEvidenceId", Annotated[str, Field(pattern=rf"^sce_{_ULID}$")])
+StageCardVerdictId = TypeAliasType("StageCardVerdictId", Annotated[str, Field(pattern=rf"^cdv_{_ULID}$")])
+StageChainBatchId = TypeAliasType("StageChainBatchId", Annotated[str, Field(pattern=rf"^scb_{_ULID}$")])
+StageChainBatchItemId = TypeAliasType("StageChainBatchItemId", Annotated[str, Field(pattern=rf"^scbi_{_ULID}$")])
+StageAtomicEvidenceId = TypeAliasType("StageAtomicEvidenceId", Annotated[str, Field(pattern=rf"^(stf|std|sge)_{_ULID}$")])
+
+
+class StageSystem(str, enum.Enum):
+    UNKNOWN = "unknown"
+    ARCHITECTURE = "architecture"
+    STRUCTURAL = "structural"
+    ELECTRICAL = "electrical"
+    HEATING_VENTILATION = "heating_ventilation"
+    WATER_SEWAGE = "water_sewage"
+    FIRE_PROTECTION = "fire_protection"
+    LOW_CURRENT = "low_current"
+    TECHNOLOGY = "technology"
+    SITE = "site"
+    OTHER = "other"
+
+
+class StageChangeCategory(str, enum.Enum):
+    AREAS = "areas"
+    FLOORS = "floors"
+    ELECTRICAL_LOAD = "electrical_load"
+    CALCULATION_METHOD = "calculation_method"
+    CONSUMER_COMPOSITION = "consumer_composition"
+    ROOM_COMPOSITION = "room_composition"
+    DIMENSIONS = "dimensions"
+    MATERIALS = "materials"
+    EQUIPMENT_PARAMETERS = "equipment_parameters"
+    SYSTEM_CONFIGURATION = "system_configuration"
+    FIRE_SAFETY = "fire_safety"
+    DESIGNATION_RENAME = "designation_rename"
+    ADMINISTRATIVE = "administrative"
+    DOCUMENTATION_STRUCTURE = "documentation_structure"
+    FORMATTING = "formatting"
+    OTHER_PROJECT = "other_project"
+    OTHER_SERVICE = "other_service"
+    UNCERTAIN = "uncertain"
+
+
+class StageReviewDecision(_Object):
+    left_fragment_ids: list[StageTextFragmentId]
+    right_fragment_ids: list[StageTextFragmentId]
+    status: Literal["SAME", "MOVED", "CHANGED", "REMOVED", "ADDED", "UNCERTAIN"]
+    confidence: Literal["high", "medium", "low"]
+    summary: Annotated[str, Field(max_length=2000)]
+    reason: Annotated[str, Field(max_length=2000)]
+    actual_right_profile_ids: list[ComparisonPageProfileId] = Field(default_factory=list)
+    model_status: str = Field(**_NOT_GIVEN)
+    policy_reasons: list[str] = Field(default_factory=list)
+
+
+class StageAiReview(_Object):
+    review_id: StageAiReviewId
+    run_id: StageChainRunId
+    unit_id: StageAiUnitId
+    group_id: Annotated[str, Field(min_length=1, max_length=128)]
+    source_sha256: Sha256
+    content_key: Sha256
+    decisions: Annotated[list[StageReviewDecision], Field(max_length=800)]
+    model_identity: dict[str, Any]
+    created_at: datetime
+
+
+class StageAiReviewPage(_Object):
+    items: list[StageAiReview]
+    page: PageInfo
+
+
+class StageClassificationCard(_Object):
+    card_key: Sha256
+    evidence_digest: Sha256
+    class_name: Literal["PROJECT_CHANGE", "SERVICE_STRUCTURE", "REVIEW"]
+    category: StageChangeCategory
+    title: Annotated[str, Field(min_length=1, max_length=260)]
+    system: StageSystem
+    evidence_ids: Annotated[list[StageAtomicEvidenceId], Field(min_length=1)]
+    model_class: str = Field(**_NOT_GIVEN)
+    policy_reasons: list[str] = Field(default_factory=list)
+
+
+class StageAiClassification(_Object):
+    classification_id: StageAiClassificationId
+    run_id: StageChainRunId
+    unit_id: StageAiUnitId
+    group_id: Annotated[str, Field(min_length=1, max_length=128)]
+    source_sha256: Sha256
+    content_key: Sha256
+    cards: list[StageClassificationCard]
+    model_identity: dict[str, Any]
+    created_at: datetime
+
+
+class StageAiClassificationPage(_Object):
+    items: list[StageAiClassification]
+    page: PageInfo
+
+
+class StageSynthesisResult(_Object):
+    group_id: str
+    source_sha256: Sha256
+    evidence_ids: list[StageAtomicEvidenceId]
+    decision: str
+    change_type: str
+    title: Annotated[str, Field(max_length=260)]
+    reason: Annotated[str, Field(max_length=2000)]
+
+
+class StageAiSynthesis(_Object):
+    synthesis_id: StageAiSynthesisId
+    run_id: StageChainRunId
+    unit_id: StageAiUnitId
+    content_key: Sha256
+    result: StageSynthesisResult
+    model_identity: dict[str, Any]
+    created_at: datetime
+
+
+class StageGraphicEvidence(_Object):
+    graphic_id: StageGraphicEvidenceId
+    run_id: StageChainRunId
+    link_item_id: StageLinkItemId
+    status: Literal["not_checked", "unreliable", "reliable"]
+    reason: str
+    left_profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)
+    right_profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)
+    result_id: ComparisonSheetPairResultId = Field(**_NOT_GIVEN)
+    regions: list[dict[str, Any]] = Field(default_factory=list)
+    content_key: Sha256
+
+
+class StageGraphicEvidencePage(_Object):
+    items: list[StageGraphicEvidence]
+    page: PageInfo
+
+
+class StageLinkRepair(_Object):
+    repair_id: StageLinkRepairId
+    run_id: StageChainRunId
+    before_revision_id: StageLinkRevisionId
+    after_revision_id: StageLinkRevisionId
+    proof: dict[str, Any]
+    state: Literal["applied", "undone", "superseded"]
+    created_at: datetime
+
+
+class StageLinkRepairPage(_Object):
+    items: list[StageLinkRepair]
+    page: PageInfo
+
+
+class UndoStageLinkRepairRequest(_Object):
+    base_revision_id: StageLinkRevisionId
+
+
+class StageCardEvidence(_Object):
+    evidence_id: StageCardEvidenceId
+    kind: Literal["TEXT", "TABLE", "GRAPHIC"]
+    source_id: StageAtomicEvidenceId
+    side: Literal["left", "right", "both"]
+    profile_id: ComparisonPageProfileId = Field(**_NOT_GIVEN)
+    box_anchor: dict[str, float] = Field(default_factory=dict)
+    absence_proven: bool = False
+
+
+class StageCardVerdict(_Object):
+    verdict_id: StageCardVerdictId
+    card_id: StageChangeCardId
+    revision_no: Annotated[int, Field(ge=1)]
+    decision: Literal["accepted", "rejected"]
+    reason: Annotated[str, Field(max_length=2000)]
+    evidence_digest: Sha256
+    created_at: datetime
+
+
+class StageCardVerdictPage(_Object):
+    items: list[StageCardVerdict]
+    page: PageInfo
+
+
+class StageChangeCard(_Object):
+    card_id: StageChangeCardId
+    run_id: StageChainRunId
+    card_key: Sha256
+    evidence_digest: Sha256
+    class_name: Literal["PROJECT_CHANGE", "SERVICE_STRUCTURE", "REVIEW"]
+    category: StageChangeCategory
+    title: Annotated[str, Field(min_length=1, max_length=260)]
+    system: StageSystem
+    evidence_ids: list[StageAtomicEvidenceId]
+    before: Annotated[str, Field(max_length=20000)]
+    after: Annotated[str, Field(max_length=20000)]
+    evidence: list[StageCardEvidence] = Field(default_factory=list)
+    verdict: StageCardVerdict = Field(**_NOT_GIVEN)
+    carryover: Literal["none", "full", "partial", "stale"] = "none"
+    carried_verdict_ids: list[StageCardVerdictId] = Field(default_factory=list)
+    stale: bool
+
+
+class StageChangeCardPage(_Object):
+    items: list[StageChangeCard]
+    page: PageInfo
+    counts: dict[str, int]
+
+
+class StageCardVerdictInput(_Object):
+    card_id: StageChangeCardId
+    expected_revision: Annotated[int, Field(ge=0)]
+    decision: Literal["accepted", "rejected"]
+    reason: Annotated[str, Field(max_length=2000)]
+
+
+class ApplyStageCardVerdictsRequest(_Object):
+    updates: Annotated[list[StageCardVerdictInput], Field(min_length=1, max_length=500)]
+
+
+class StageChangeJournal(_Object):
+    run_id: StageChainRunId
+    grouping: Literal["designation", "section", "system"]
+    groups: list[dict[str, Any]]
+    accepted_count: Annotated[int, Field(ge=0)]
+    ai_hidden_same_count: Annotated[int, Field(ge=0)]
+    ai_service_count: Annotated[int, Field(ge=0)]
+    stale: bool
+
+
+class StageChainBatchSelection(_Object):
+    pair_id: StagePairId
+    link_revision_id: StageLinkRevisionId
+    consent: ComparisonAiConsent = Field(**_NOT_GIVEN)
+
+
+class StartStageChainBatchRequest(_Object):
+    selections: Annotated[list[StageChainBatchSelection], Field(min_length=1, max_length=100)]
+    with_ai: bool = True
+
+
+class StageChainBatchItem(_Object):
+    item_id: StageChainBatchItemId
+    pair_id: StagePairId
+    link_revision_id: StageLinkRevisionId
+    position: Annotated[int, Field(ge=1)]
+    state: Literal["queued", "running", "completed", "failed", "cancelled"]
+    run_id: StageChainRunId = Field(**_NOT_GIVEN)
+
+
+class StageChainBatch(_Object):
+    batch_id: StageChainBatchId
+    project_uid: ProjectUid
+    state: Literal["queued", "running", "paused", "completed", "failed", "cancelled"]
+    items: list[StageChainBatchItem]
+    counts: dict[str, int]
+    created_at: datetime
+    updated_at: datetime
+
+
+class StageProfileWord(_Object):
+    text: Annotated[str, Field(max_length=20000)]
+    x0: float
+    top: float
+    x1: float
+    bottom: float
+
+
+class StageProfileText(_Object):
+    profile_id: ComparisonPageProfileId
+    version_uid: VersionUid
+    page_number: Annotated[int, Field(ge=1)]
+    scan: bool
+    has_text_layer: bool
+    width_pt: float
+    height_pt: float
+    words: list[StageProfileWord]
+
+
+class StageAiSynthesisPage(_Object):
+    items: list[StageAiSynthesis]
+    page: PageInfo
+
+
+class ResumeStageChainRunRequest(_Object):
+    consent: ComparisonAiConsent = Field(**_NOT_GIVEN)
+    retry_failed: bool = False

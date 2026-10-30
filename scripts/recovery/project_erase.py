@@ -140,6 +140,9 @@ NON_TERMINAL_STATES = {
     "stage_upload_candidate": ("confirmed", "admitting"),
     "stage_chain_run": ("queued", "running", "paused"),
     "stage_chain_step": ("queued", "running", "paused"),
+    "stage_ai_unit": ("queued", "running"),
+    "stage_chain_batch": ("queued", "running", "paused"),
+    "stage_chain_batch_item": ("queued", "running"),
 }
 #: The lock name of "another erase is running".
 ADVISORY_LOCK_NAME = "auditmanager.project_erase"

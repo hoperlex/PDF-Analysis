@@ -74,6 +74,7 @@ WORK_KINDS: Final[tuple[str, ...]] = (
     "comparison_sheet_changes",
     "comparison_spec",
     "comparison_report",
+    "comparison_stage_review",
 )
 #: Which connection kinds can serve which kind of model work.
 SERVES: Final[Mapping[str, frozenset[str]]] = {kind: frozenset(KINDS) for kind in WORK_KINDS}

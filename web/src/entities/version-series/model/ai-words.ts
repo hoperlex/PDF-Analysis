@@ -63,6 +63,7 @@ export const AI_METHOD_LABELS: Readonly<Record<ComparisonAiMethod, string>> = {
   sheet_changes: 'ИИ-описание изменений',
   spec: 'Сравнение полных спецификаций',
   report: 'PDF-отчёт',
+  stage_review: 'ИИ-ревизия сравнения стадий',
 };
 
 export const AI_JOB_STATE_LABELS: Readonly<Record<ComparisonAiJobState, string>> = {

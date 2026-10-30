@@ -62,7 +62,7 @@ from auditmanager.comparison.ai_jobs.model import (
     work_kind_of,
 )
 from auditmanager.comparison.ai_jobs.repository import LIVE_SCOPE_INDEXES, AiJobRepository
-from auditmanager.comparison.modules import MODULE_VERSIONS, enabled_modules, parse_modules
+from auditmanager.comparison.modules import MODULE_STAGES, MODULE_VERSIONS, enabled_modules, parse_modules
 from auditmanager.comparison.spend.errors import (
     REASON_CONSENT_REQUIRED,
     REASON_CONSENT_STALE,
@@ -178,7 +178,8 @@ class ComparisonAiJobService:
             work_kind_of(name)
         self._methods = by_method
         self._work = work or ComparisonWorkRepository()
-        self._versions_module_on = MODULE_VERSIONS in enabled_modules(parse_modules(comparison_modules))
+        self._enabled_modules = enabled_modules(parse_modules(comparison_modules))
+        self._versions_module_on = MODULE_VERSIONS in self._enabled_modules
         self._provider_mode = provider_mode
         self._repo = repository or AiJobRepository()
         self._spend = spend or ComparisonSpendRepository()
@@ -186,10 +187,11 @@ class ComparisonAiJobService:
         self._route_reader = route_reader
 
     # -- the module flag ----------------------------------------------------------------------------
-    def _require_versions_module(self) -> None:
+    def _require_versions_module(self, method: str | None = None) -> None:
         """``503 dependency_unavailable`` (``comparison_modules``) unless «Сравнение версий» is on (ADR-0025 decision 23,
         ``A-12``: drawings reach a model only when the owner enabled the module). The first statement of every command."""
-        if not self._versions_module_on:
+        required = MODULE_STAGES if method == "stage_review" else MODULE_VERSIONS
+        if required not in self._enabled_modules:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_modules")
 
     def _method_of(self, name: str) -> AiMethod:
@@ -201,7 +203,7 @@ class ComparisonAiJobService:
     # -- the estimate -------------------------------------------------------------------------------
     def estimate(self, scope: AiScope, mode: AiMode = AiMode.START) -> AiEstimate:
         """The estimate of a start (or of what a job has left) in a unit of work of its own: no model call, no write."""
-        self._require_versions_module()
+        self._require_versions_module(scope.method)
         with session_scope(self._factory) as session:
             if mode is AiMode.START:
                 live = self._repo.live_on_scope(session, scope)
@@ -238,15 +240,21 @@ class ComparisonAiJobService:
 
     # -- start --------------------------------------------------------------------------------------
     def start(self, *, scope: AiScope, consent: AiConsentInput, command: AiJobCommand) -> AiJobView:
-        """Start a job with the user's consent, in one transaction.
+        """Start a consented job in the service-owned transaction."""
+        with session_scope(self._factory) as session:
+            return self.start_in_session(session, scope=scope, consent=consent, command=command)
 
-        Refused, in this order, and nothing written: the versions module is off; the caller is not an expert; the consent is not
-        confirmed (``comparison_consent_required``); a live job holds the scope (``comparison_ai_job_active``); the consented
-        digest is not the estimate now computed (``comparison_estimate_stale``); there is nothing to send
-        (``comparison_ai_nothing_to_do``); the estimate passes the job or the day ceiling (``comparison_ceiling_job``,
-        ``comparison_ceiling_day``). Otherwise writes the job (``queued``, ``consent_no`` 1, the consented estimate) and the
-        method's first work items, each linked to the job (``comparison_work.comparison_ai_job_id``)."""
-        self._require_versions_module()
+    def start_in_session(
+        self, session: Session, *, scope: AiScope, consent: AiConsentInput, command: AiJobCommand,
+        queue_items: bool = True,
+    ) -> AiJobView:
+        """Prepare a consented job and its work in the caller's transaction; never commit.
+
+        C4 uses this after inserting the pinned stage run, so its run, AI job, consent
+        and queue items commit atomically. Stage estimates bind immutable source revision
+        rather than a not-yet-allocated run identity.
+        """
+        self._require_versions_module(scope.method)
         _require_expert(command.actor_roles)
         method = self._method_of(scope.method)
         if not consent.confirmed:
@@ -255,29 +263,31 @@ class ComparisonAiJobService:
             "command": f"{command.command_type}.v1", "scope": scope.as_document(),
             "estimate_digest": consent.estimate_digest,
         })
-        with session_scope(self._factory) as session:
-            claim = self._commands.begin(
-                session, command_type=command.command_type, idempotency_key=IdempotencyKey(command.idempotency_key),
-                fingerprint=fingerprint,
+        if scope.method == "stage_review" and scope.stage_chain_run_id is None:
+            raise ValueError("a persisted stage AI job requires its chain run")
+        claim = self._commands.begin(
+            session, command_type=command.command_type, idempotency_key=IdempotencyKey(command.idempotency_key),
+            fingerprint=fingerprint,
+        )
+        if isinstance(claim, CommandReplay):
+            return self.view_in(session, str(claim.outcome["ai_job_id"]))
+        if self._repo.live_on_scope(session, scope) is not None:
+            raise _conflict(CONFLICT_AI_JOB_ACTIVE)
+        estimate = self.estimate_in(session, scope, AiMode.START)
+        self._require_consentable(estimate, consent)
+        try:
+            job_id = self._repo.insert(
+                session, estimate=estimate, user_uid=command.user_uid, command_id=str(claim.command_id),
             )
-            if isinstance(claim, CommandReplay):
-                return self.view_in(session, str(claim.outcome["ai_job_id"]))
-            if self._repo.live_on_scope(session, scope) is not None:
-                raise _conflict(CONFLICT_AI_JOB_ACTIVE)
-            estimate = self.estimate_in(session, scope, AiMode.START)
-            self._require_consentable(estimate, consent)
-            try:
-                job_id = self._repo.insert(
-                    session, estimate=estimate, user_uid=command.user_uid, command_id=str(claim.command_id),
-                )
-            except IntegrityError as error:
-                if _is_live_scope_violation(error):  # the race the look-before-insert lost
-                    raise _conflict(CONFLICT_AI_JOB_ACTIVE) from None
-                raise
-            job = self._job(session, job_id)
+        except IntegrityError as error:
+            if _is_live_scope_violation(error):  # the race the look-before-insert lost
+                raise _conflict(CONFLICT_AI_JOB_ACTIVE) from None
+            raise
+        job = self._job(session, job_id)
+        if queue_items:
             self._queue_items(session, job, method.work_items(session, job, AiMode.START), user_uid=command.user_uid)
-            self._commands.succeed(session, claim.command_id, {"ai_job_id": job_id})
-            return self.view_in(session, job_id)
+        self._commands.succeed(session, claim.command_id, {"ai_job_id": job_id})
+        return self.view_in(session, job_id)
 
     # -- the state edges ----------------------------------------------------------------------------
     def pause(self, *, job_id: str, method: str, command: AiJobCommand) -> AiJobView:
@@ -303,6 +313,23 @@ class ComparisonAiJobService:
 
         extra = {"estimate_digest": None if consent is None else consent.estimate_digest}
         return self._steer(job_id=job_id, method=method, command=command, extra=extra, apply=apply)
+
+    def resume_in_session(
+        self, session: Session, *, job_id: str, method: str, command: AiJobCommand,
+        consent: AiConsentInput | None = None, queue_items: bool = True,
+    ) -> AiJobView:
+        """Resume inside a caller transaction; a chain-owned job need not queue independent AI items."""
+        def apply(current: Session, job: AiJobRecord) -> None:
+            self._require_edge(job, "resume")
+            if job.pause_reason in CONSENT_PAUSES:
+                self._renew_consent(current, job, consent, AiMode.LEFT, command.user_uid)
+            if queue_items:
+                self._resume_items(current, job.job_id)
+            self._move(current, job, "resume", to_state="queued")
+        return self._steer_in_session(
+            session, job_id=job_id, method=method, command=command,
+            extra={"estimate_digest": None if consent is None else consent.estimate_digest}, apply=apply,
+        )
 
     def cancel(self, *, job_id: str, method: str, command: AiJobCommand) -> AiJobView:
         """«Отменить»: a live job is cancelled. Items at rest end, the item in flight is asked to stop; what is done stays done
@@ -373,22 +400,28 @@ class ComparisonAiJobService:
         self, *, job_id: str, method: str, command: AiJobCommand, extra: Mapping[str, object],
         apply: Callable[[Session, AiJobRecord], None],
     ) -> AiJobView:
-        self._require_versions_module()
+        with session_scope(self._factory) as session:
+            return self._steer_in_session(session, job_id=job_id, method=method, command=command, extra=extra, apply=apply)
+
+    def _steer_in_session(
+        self, session: Session, *, job_id: str, method: str, command: AiJobCommand,
+        extra: Mapping[str, object], apply: Callable[[Session, AiJobRecord], None],
+    ) -> AiJobView:
+        self._require_versions_module(method)
         _require_expert(command.actor_roles)
         fingerprint = payload_fingerprint({"command": f"{command.command_type}.v1", "job_id": job_id, **extra})
-        with session_scope(self._factory) as session:
-            job = self._repo.get(session, job_id)
-            if job is None or job.method != method:
-                raise _not_found()
-            claim = self._commands.begin(
-                session, command_type=command.command_type, idempotency_key=IdempotencyKey(command.idempotency_key),
-                fingerprint=fingerprint,
-            )
-            if isinstance(claim, CommandReplay):
-                return self.view_in(session, job_id)
-            apply(session, job)
-            self._commands.succeed(session, claim.command_id, {"ai_job_id": job_id})
+        job = self._repo.get(session, job_id)
+        if job is None or job.method != method:
+            raise _not_found()
+        claim = self._commands.begin(
+            session, command_type=command.command_type, idempotency_key=IdempotencyKey(command.idempotency_key),
+            fingerprint=fingerprint,
+        )
+        if isinstance(claim, CommandReplay):
             return self.view_in(session, job_id)
+        apply(session, job)
+        self._commands.succeed(session, claim.command_id, {"ai_job_id": job_id})
+        return self.view_in(session, job_id)
 
     @staticmethod
     def _require_edge(job: AiJobRecord, command: str) -> None:
@@ -503,10 +536,15 @@ class ComparisonAiJobService:
         self._repo.move(session, job_id, from_states=("queued",), to_state="running")
         return self._job(session, job_id).state
 
-    def complete_if_drained(self, session: Session, job_id: str) -> bool:
+    def complete_if_drained(self, session: Session, job_id: str, *, excluding_work_id: str | None = None) -> bool:
         """``running -> completed`` once no item of the job is live. A job with failed units still completes (the original's
         «частично»; ``counts.failed`` says so). ``False`` while an item is live or when the job is not running."""
-        if self._repo.live_item_count(session, job_id) > 0:
+        if excluding_work_id is not None and not any(
+            item.work_id == excluding_work_id and item.state == "running"
+            for item in self._repo.items(session, job_id)
+        ):
+            raise ValueError("only the current running item of this job may be excluded")
+        if self._repo.live_item_count(session, job_id, excluding_work_id=excluding_work_id) > 0:
             return False
         return self._repo.move(session, job_id, from_states=("running",), to_state="completed")
 
