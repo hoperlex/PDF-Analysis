@@ -1,0 +1,8 @@
+.journal { display: grid; gap: 1rem; }
+.journal > label { display: flex; gap: .6rem; align-items: center; }
+.actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.scroller { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: .6rem; border-bottom: 1px solid var(--am-border, #d5dce3); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.table td { white-space: pre-wrap; }
+.table button { display: block; margin-top: .4rem; }
