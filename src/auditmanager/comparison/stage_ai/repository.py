@@ -21,10 +21,33 @@ ANSWER_TABLES = {
 
 
 class StageAiRepository:
+    def source_consent(self, session: Session, *, run_id: str, job_id: str, revision_id: str,
+                       profiles, consent_no: int, approved: bool = False) -> bool:
+        source = {"revision_id": revision_id, "profiles": [
+            {key: row[key] for key in ("profile_id", "version_uid", "content_key")} for row in profiles]}
+        key = digest(source)
+        unit = self.unit(session, run_id=run_id, kind="review", group_id="source-consent",
+            source_sha256=key, job_id=job_id, payload={"content_key": key,
+                "accepted_consent_no": consent_no if approved else None, "required_after": consent_no,
+                "immutable_source": source})
+        progress = dict(unit["payload"])
+        if progress.get("accepted_consent_no") is None and consent_no > progress["required_after"]:
+            progress["accepted_consent_no"] = consent_no
+        accepted = progress.get("accepted_consent_no") is not None
+        self.update_unit(session, unit["stage_ai_unit_id"], payload=progress,
+                         state="completed" if accepted else "queued")
+        return accepted
+
+    def graphic_progress(self, session: Session, run_id: str) -> dict[str, dict[str, Any]]:
+        return {row["group_id"]: dict(row) for row in session.execute(text(
+            "SELECT group_id,state,progress FROM stage_ai_unit WHERE stage_chain_run_id=:run "
+            "AND kind='classify' AND group_id LIKE 'graphic:%'"
+        ), {"run": run_id}).mappings()}
+
     def page(self, session: Session, *, run_id: str, kind: str, after: str | None,
              limit: int) -> tuple[tuple[dict[str, Any], ...], str | None]:
         self.run(session, run_id)
-        if kind not in ANSWER_TABLES or type(limit) is not int or not 1 <= limit <= 100:
+        if kind not in ANSWER_TABLES or type(limit) is not int or not 1 <= limit <= 500:
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="limit", constraint="range")
         table, _prefix, field = ANSWER_TABLES[kind]
         identity = table + "_id"

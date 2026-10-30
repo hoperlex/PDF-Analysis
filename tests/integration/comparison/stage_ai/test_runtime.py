@@ -138,7 +138,7 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session, sce
             for _group, plans, _sha, _key in bundles:
                 with session_scope(store._sessions) as session:
                     saved = session.execute(text(
-                        "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind=:kind"
+                        "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind=:kind AND group_id<>'source-consent'"
                     ), {"run": run_id, "kind": phase}).scalar_one_or_none() or {}
                 for plan in plans:
                     step = next_step(plan, saved.get("responses", {}).get(plan.content_key), source)
@@ -206,7 +206,7 @@ def test_recorded_runtime_uses_shared_job_and_spend_once(comparison_session, sce
     ), {"job": job_id}).scalar_one() == (1 if scenario == "auth" else 0)
     if with_context:
         progress = comparison_session.execute(text(
-            "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind='review'"
+            "SELECT progress FROM stage_ai_unit WHERE stage_chain_run_id=:run AND kind='review' AND group_id<>'source-consent'"
         ), {"run": run_id}).scalar_one()
         final = next(iter(progress["responses"].values()))
         assert len(final["history"]) == 2 and final["step"] == "coverage"

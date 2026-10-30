@@ -58,6 +58,10 @@ class Repo:
     def run(self, session, run_id):
         return {"project_uid": self.source["project_uid"], "comparison_ai_job_id": uid("cai", 1)}
 
+    def graphic_progress(self, session, run_id):
+        return {row["group_id"]: dict(row, progress=row["payload"]) for row in self.units.values()
+                if row["kind"] == "classify" and row["group_id"].startswith("graphic:")}
+
     def unit(self, session, *, run_id, kind, group_id, source_sha256, payload, job_id=None):
         key = (run_id, kind, group_id, source_sha256)
         if key not in self.units:

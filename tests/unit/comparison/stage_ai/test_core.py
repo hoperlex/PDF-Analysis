@@ -141,12 +141,29 @@ def test_ai_same_never_removes_raw_change_and_low_confidence_is_uncertain() -> N
     plan = build_review_requests(group, model="model")[0]
     decision = parse_review_chunk(plan, review_answer(plan, status="SAME"))[0]
     assert decision.status == "UNCERTAIN" and decision.model_status == "SAME"
-    assert "same_conflicts_with_deterministic_change" in decision.policy_reasons
+    assert "same_moved_conflicts_with_deterministic_change" in decision.policy_reasons
     low = parse_review_chunk(plan, review_answer(plan, status="SAME", confidence="medium"))[0]
     assert low.status == "UNCERTAIN" and "same_moved_requires_high_confidence" in low.policy_reasons
     result = accept_review_group(group, (plan,), {plan.unit_key: review_answer(plan, status="SAME")})
     assert result.raw_evidence_ids == (group.items[0].evidence_id,)
     assert asdict(group) == original
+
+
+@pytest.mark.parametrize("model_status", ["SAME", "MOVED"])
+@pytest.mark.parametrize("raw_status", ["CHANGED", "REMOVED", "ADDED"])
+def test_same_and_moved_cannot_hide_any_raw_change(model_status, raw_status):
+    group = review_group()
+    if raw_status != "CHANGED":
+        left, right = group.fragments
+        group = replace(group, items=(ReviewItem(uid("std", 1), (left.fragment_id,), (), "REMOVED"),
+                                      ReviewItem(uid("std", 2), (), (right.fragment_id,), "ADDED")))
+    if model_status == "MOVED":
+        group = replace(group, accepted_right_profiles=(uid("cpr", 7),))
+    original = asdict(group)
+    plan = build_review_requests(group, model="model")[0]
+    result = accept_review_group(group, (plan,), {plan.unit_key: review_answer(plan, status=model_status)})
+    assert all(decision.status == "UNCERTAIN" for decision in result.decisions)
+    assert len(result.raw_evidence_ids) == len(group.items) and asdict(group) == original
 
 
 def test_moved_membership_uses_profiles_not_display_page_numbers() -> None:
