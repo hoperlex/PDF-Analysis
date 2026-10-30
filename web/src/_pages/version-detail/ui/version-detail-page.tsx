@@ -41,6 +41,7 @@ import {
 } from '@/entities/document-version';
 import { RunList } from '@/widgets/run-list';
 import { VersionClassification } from '@/widgets/version-classification';
+import styles from './version-detail-page.module.css';
 
 export interface VersionDetailPageProps {
   readonly projectUid: string;
@@ -78,52 +79,58 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
         </>
       }
     >
-      <h2>Эта версия</h2>
-      {version.isPending ? <LoadingState what="эту версию" /> : null}
-      {version.isError ? (
-        <ErrorState
-          title="Эту версию не удалось прочитать."
-          detail="Адрес может указывать на несуществующую версию, либо API не ответил."
-          onRetry={() => void version.refetch()}
-        />
-      ) : null}
-      {version.data === undefined ? null : (
-        <>
-          <VersionPanel version={version.data} />
-          <p>
-            <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>
-              Все версии документа
-            </Link>
-          </p>
-          <VersionClassification
-            address={{
-              projectUid: version.data.project_uid,
-              documentUid: version.data.document_uid,
-              versionUid: version.data.version_uid,
-            }}
-            roles={roles}
-          />
-          <p className="am-note">
-            <Link href={routes.comparison(ownerProjectUid, versionUid)}>
-              Сравнить с другой версией комплекта
-            </Link>{' '}
-            — пары листов, построчные различия и соответствие замечаний.
-          </p>
-        </>
-      )}
+      <div className={styles.stack}>
+        <section className={styles.panel} aria-labelledby="version-detail-title">
+          <h2 id="version-detail-title">Эта версия</h2>
+          {version.isPending ? <LoadingState what="эту версию" /> : null}
+          {version.isError ? (
+            <ErrorState
+              title="Эту версию не удалось прочитать."
+              detail="Адрес может указывать на несуществующую версию, либо API не ответил."
+              onRetry={() => void version.refetch()}
+            />
+          ) : null}
+          {version.data === undefined ? null : (
+            <>
+              <VersionPanel version={version.data} />
+              <p>
+                <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>
+                  Все версии документа
+                </Link>
+              </p>
+              <VersionClassification
+                address={{
+                  projectUid: version.data.project_uid,
+                  documentUid: version.data.document_uid,
+                  versionUid: version.data.version_uid,
+                }}
+                roles={roles}
+              />
+              <p className="am-note">
+                <Link href={routes.comparison(ownerProjectUid, versionUid)}>
+                  Сравнить с другой версией комплекта
+                </Link>{' '}
+                — пары листов, построчные различия и соответствие замечаний.
+              </p>
+            </>
+          )}
+        </section>
 
-      <h2>Прогоны</h2>
-      <p className="am-note">
-        <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
-        что изменилось в анализе одной и той же версии.
-      </p>
-      <RunList
-        projectUid={ownerProjectUid}
-        versionUid={versionUid}
-        sectionCode={version.data?.classification?.section_code}
-        uploadKind={version.data?.upload_kind}
-        onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
-      />
+        <section className={styles.panel} aria-labelledby="version-runs-title">
+          <h2 id="version-runs-title">Прогоны</h2>
+          <p className="am-note">
+            <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
+            что изменилось в анализе одной и той же версии.
+          </p>
+          <RunList
+            projectUid={ownerProjectUid}
+            versionUid={versionUid}
+            sectionCode={version.data?.classification?.section_code}
+            uploadKind={version.data?.upload_kind}
+            onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
+          />
+        </section>
+      </div>
     </PageShell>
   );
 }

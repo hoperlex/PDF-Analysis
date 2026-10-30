@@ -19,7 +19,7 @@
 
 .row,
 .decision {
-  border: 1px solid var(--am-border, #d5dce3);
+  border: 1px solid var(--am-line);
   border-radius: 0.5rem;
   padding: 0.8rem 1rem;
   margin-block: 0.5rem;
@@ -32,7 +32,7 @@
 }
 
 .decision {
-  background: var(--am-surface, #fff);
+  background: var(--am-paper);
 }
 
 .form { display: grid; gap: .8rem; padding-block-start: .7rem; }

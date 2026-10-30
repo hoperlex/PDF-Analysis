@@ -15,15 +15,17 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--am-gap-xs);
-  border-bottom: 1px solid var(--am-line);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
 }
 
 .tab {
-  margin: 0 0 -1px;
+  margin: 0;
   padding: 8px 14px;
-  border: 1px solid transparent;
-  border-bottom-width: 3px;
-  border-radius: var(--am-radius-sm) var(--am-radius-sm) 0 0;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
   background: transparent;
   color: var(--am-ink-muted);
   font: inherit;
@@ -41,7 +43,8 @@
 }
 
 .tab[aria-selected='true'] {
-  border-bottom-color: var(--am-accent);
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
   color: var(--am-ink);
   font-weight: 600;
 }
@@ -64,4 +67,27 @@
 .panel:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 2px;
+}
+
+.sectionPanel {
+  min-width: 0;
+  margin-top: var(--am-gap-lg);
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.sectionPanel:first-child {
+  margin-top: 0;
+}
+
+.sectionPanel > h2:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 780px) {
+  .sectionPanel {
+    padding: var(--am-gap);
+  }
 }

@@ -44,6 +44,7 @@ import { OptimisationProposals } from '@/widgets/optimisation-proposals';
 import { ProjectOptimisation } from '@/widgets/project-optimisation';
 import { ProjectSections } from '@/widgets/project-sections';
 import { UploadPanel } from '@/widgets/upload-panel';
+import styles from './project-detail-page.module.css';
 
 export interface ProjectDetailPageProps {
   readonly projectUid: string;
@@ -83,7 +84,7 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
       subtitle={<code>{projectUid}</code>}
       actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
-      <nav aria-label="Разделы проекта" data-project-tabs={tab}>
+      <nav className={styles.tabs} aria-label="Разделы проекта" data-project-tabs={tab}>
         {TABS.map((entry) => (
           <button
             key={entry.tab}
@@ -98,16 +99,23 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
       </nav>
 
       {tab === 'documents' ? (
-        <>
-          <ProjectSections projectUid={projectUid} />
-
-          <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
-        </>
+        <div className={styles.stack}>
+          <section className={styles.panel} aria-label="Документы по разделам">
+            <ProjectSections projectUid={projectUid} />
+          </section>
+          <section className={styles.panel} aria-label="Добавить документ">
+            <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
+          </section>
+        </div>
       ) : (
-        <>
-          <ProjectOptimisation projectUid={projectUid} roles={roles} />
-          <OptimisationProposals projectUid={projectUid} roles={roles} />
-        </>
+        <div className={styles.stack}>
+          <section className={styles.panel} aria-label="Прайс-листы и вендор-листы">
+            <ProjectOptimisation projectUid={projectUid} roles={roles} />
+          </section>
+          <section className={styles.panel} aria-label="Предложения по оптимизации">
+            <OptimisationProposals projectUid={projectUid} roles={roles} />
+          </section>
+        </div>
       )}
     </PageShell>
   );

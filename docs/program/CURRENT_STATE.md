@@ -2,6 +2,93 @@
 
 **Updated 2026-10-30 by `HOTFIX-PRESENTATION-INT-1030` (emergency development candidate).** All fifteen ordinary section profiles now share a bounded preliminary block/image/context review, lossless observation merge and local-corpus citation assessment. Fresh cost consent includes at most three additional calls for sixteen blocks; existing accepted commands retain their old policy. Missing source/corpus coverage stays explicit. Version comparison exposes whole-specification runs with separate consent, PDF-only ZIP import and technical XLSX/HTML ZIP downloads. Stage comparison adds a separate native-text experimental V3 procedure, copied with provenance from PDF-proverka `3c994817`; classic stays default. V3 requires fresh consent before every next model call and retains independent parameter-verification status. API `1.14.0` has 233 paths / 259 operations / 620 schemas; migration remains `0043_stage_ai_generations`. Synthetic ZIP inputs and the operator sequence are in `fixtures/presentation-hotfix/README.md`. Production build and scoped recorded/unit checks passed; full gates, browser execution and deep acceptance remain deferred. See `HOTFIX-PRESENTATION-INT-1030.md` for limits, provider prerequisites and publication evidence. No main publication is authorised.
 
+**Updated 2026-10-30 by `DESIGN-M09-ACCOUNT` (development candidate only).**
+Profile, password change, user list, user detail and registration queue now
+use responsive two-theme cards and contained tables. Existing forms, role
+gates, account actions and registration decisions remain unchanged. Typecheck,
+lint and 61 focused tests pass. No API, contract, migration or `origin/main`
+change is included. Publication is to `origin/dev` only; M10 acceptance remains.
+
+**Updated 2026-10-30 by `DESIGN-M08-ACCESS` (development candidate only).**
+Login, registration, submitted and forbidden screens now use the shared
+light/dark palette and responsive form/notice cards. Existing server forms,
+exchange, guard, role requirement and refusal branches remain unchanged.
+Typecheck, lint and 41 focused tests pass. No API, contract, migration or
+`origin/main` change is included. Publication is to `origin/dev` only;
+M09–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M07-SYSTEM` (development candidate only).**
+Logs, worker tabs, analysis settings and execution queue now use responsive
+two-theme panels and contained lists. The `/optimisation` redirect to projects
+was verified unchanged. Typecheck, lint and 94 focused tests pass. Commands,
+permissions, consent, reads and failure handling remain as before. No API,
+contract, migration or `origin/main` change is included. Publication is to
+`origin/dev` only; M08–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M06-KNOWLEDGE` (development candidate only).**
+Knowledge base filters/results, block version selection/tabs, norms search and
+catalogue, and the norm document now use consistent responsive panels in both
+themes. Existing search, snapshot designation, PDF and paragraph reads remain
+unchanged. Typecheck, lint and 85 focused tests pass. No API, contract,
+migration or `origin/main` change is included. Publication is to `origin/dev`
+only; M07–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M05-COMPARISON` (development candidate only).**
+The global version and stage comparison routes and version-specific comparison
+now have consistent project selectors, tabs, panels and scrollable evidence
+surfaces in both themes. Selected tabs remain semantically marked; existing
+pair selection, AI review, evidence, export and lazy reads are untouched. The
+frontend typecheck, lint and 122 focused tests pass. No API, contract,
+migration or `origin/main` change is included. Publication is to `origin/dev`
+only; M06–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M04-RUN` (development candidate only).**
+Dispatcher assignments, Run facts and Review list/detail/export now use
+responsive panels in the shared two-theme palette. Run stage rail and outcome
+retain their existing semantic statuses and progress polling; Review retains
+finding admission, evidence, decision and export behavior. Typecheck, lint and
+128 focused tests pass. No API, contract, migration or `origin/main` change is
+included. Publication is to `origin/dev` only; M05–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M03-PROJECT` (development candidate only).**
+The project, document and version routes now group their existing tabs,
+sections, upload panels, version list, classification and run list in responsive
+cards. Project's section cards use the shared large radius. No read order,
+conditional mount, identity rule, API, contract, migration or `origin/main`
+changed. Publication is to `origin/dev` only; M04–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M02-ENTRY` (development candidate only).**
+The home route now presents its greeting, section overview and existing
+role-filtered tiles as a responsive hierarchy. The projects route groups the
+existing create form and list, and section optimisation groups its filters,
+project summaries and wide table in contained panels. Both themes use the
+semantic tokens established by M01. Data, controls, permissions, API, contracts,
+migrations and `origin/main` are unchanged. Publication is to `origin/dev` only;
+M03–M10 remain.
+
+**Updated 2026-10-30 by `DESIGN-M01-FOUNDATION` (development candidate only).**
+The common main area now consumes the same two-theme surfaces as the shell and
+dashboard. Page titles, cards, fields and primary controls have consistent
+geometry. The comparison CSS now reads defined semantic colour tokens instead
+of raw literals or undefined fallbacks; its mask/search/focus evidence overlays
+remain visually distinct. `styling-layer` and `tokens-defined` guards pass on
+this candidate. This is the first of the sequential 31-screen mini-tasks; local
+content screens still need M02–M09 and browser acceptance M10. No API,
+contract, migration, analysis or `origin/main` change is included. Publication
+is to `origin/dev` only.
+
+**Updated 2026-10-30 by `HOTFIX-SHELL-NAVIGATION-INT-20261030`
+(development candidate only).** The shared frame now has a persistent left
+sidebar above 1160 px and the existing compact disclosure menu below it. Each
+role-allowed desktop group starts expanded, remains collapsible, and marks the
+current page; the brand still provides the sole home link. The theme and account
+controls use the preceding showcase palette in both appearances. The frame
+keeps its registry-backed links and access decisions, and makes no new API call.
+The 31-screen design plan records the shell slice as complete; content screens
+other than the dashboard still await their own design stages. No contract,
+migration, analysis behavior or `origin/main` changes are included. Publication
+is to `origin/dev` only.
+
 **Updated 2026-10-30 by `HOTFIX-DASHBOARD-SHOWCASE-INT-20261030`
 (development candidate only).** `/dashboard` now uses an isolated presentation
 palette in both light and dark appearances; the existing system choice follows

@@ -16,13 +16,20 @@
 import { PageShell } from '@/shared/ui';
 import { CreateProjectForm } from '@/features/create-project';
 import { ProjectList } from '@/widgets/project-list';
+import styles from './projects-page.module.css';
 
 export function ProjectsPage() {
   return (
     <PageShell title="Проекты">
-      <CreateProjectForm />
-      <h2>Все проекты</h2>
-      <ProjectList />
+      <div className={styles.layout}>
+        <section className={styles.create} aria-label="Создать проект">
+          <CreateProjectForm />
+        </section>
+        <section className={styles.list} aria-labelledby="projects-list-title">
+          <h2 id="projects-list-title">Все проекты</h2>
+          <ProjectList />
+        </section>
+      </div>
     </PageShell>
   );
 }

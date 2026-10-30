@@ -62,6 +62,7 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import styles from './review-page.module.css';
 
 export interface ReviewPageProps {
   readonly projectUid: ProjectUid;
@@ -172,8 +173,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         </>
       }
     >
-      <div className="am-review">
-        <div className="am-review__list">
+      <div className={`am-review ${styles.layout}`}>
+        <div className={`am-review__list ${styles.list}`}>
           <FindingList
             groups={groups}
             selectedFindingUid={selectedUid}
@@ -194,7 +195,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           />
         </div>
 
-        <div className="am-review__detail">
+        <div className={`am-review__detail ${styles.detail}`}>
           {selectedUid === null ? null : detailQuery.isPending ? (
             <LoadingState what="выбранная находка" />
           ) : detailQuery.error !== null ? (
@@ -281,7 +282,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         bounded by its parent, not by its grid row. While the export sat in the same grid,
         the list slid down over it on scroll.
       */}
-      <div className="am-review__export">
+      <div className={`am-review__export ${styles.export}`}>
         {run === null ? (
           <LoadingState what="прогон" />
         ) : (

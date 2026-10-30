@@ -1,0 +1,24 @@
+.projectChooser {
+  display: grid;
+  gap: var(--am-gap-sm);
+  max-width: 100%;
+  margin-bottom: var(--am-gap-lg);
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.projectChooser select {
+  max-width: min(100%, 460px);
+}
+
+.workspace {
+  min-width: 0;
+}
+
+@media (max-width: 780px) {
+  .projectChooser {
+    padding: var(--am-gap);
+  }
+}

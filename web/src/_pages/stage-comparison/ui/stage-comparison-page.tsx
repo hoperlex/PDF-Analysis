@@ -42,6 +42,7 @@ import { VersionComparison } from '@/widgets/version-comparison';
 
 import { ComparisonOnlyNote } from './comparison-only-note';
 import { LazyStageComparison } from './lazy-stage-comparison';
+import styles from './stage-comparison-page.module.css';
 
 /**
  * The heading of this screen. It read «Сравнение версий» before `CMP-VC-UI-01`; that is now the name of a menu item and of
@@ -83,18 +84,24 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
         </>
       }
     >
-      <p>
-        Эта версия сравнивается с другой версией того же комплекта: одной стадии и одного
-        подтверждённого раздела, или стадии П с более поздней стадией Р.
-      </p>
-      <ComparisonOnlyNote versionUid={versionUid} />
-      <VersionComparison projectUid={projectUid} versionUid={versionUid} />
-      <h2>Сравнение прогонов</h2>
-      <p>
-        Версия документа неизменяема, поэтому два её прогона отличаются только тем, как
-        прошёл анализ. Ниже — то, что о каждом прогоне записала система.
-      </p>
-      <LazyStageComparison versionUid={versionUid} />
+      <div className={styles.stack}>
+        <section className={styles.panel} aria-label="Сравнение версий комплекта">
+          <p>
+            Эта версия сравнивается с другой версией того же комплекта: одной стадии и одного
+            подтверждённого раздела, или стадии П с более поздней стадией Р.
+          </p>
+          <ComparisonOnlyNote versionUid={versionUid} />
+          <VersionComparison projectUid={projectUid} versionUid={versionUid} />
+        </section>
+        <section className={styles.panel} aria-labelledby="run-comparison-title">
+          <h2 id="run-comparison-title">Сравнение прогонов</h2>
+          <p>
+            Версия документа неизменяема, поэтому два её прогона отличаются только тем, как
+            прошёл анализ. Ниже — то, что о каждом прогоне записала система.
+          </p>
+          <LazyStageComparison versionUid={versionUid} />
+        </section>
+      </div>
     </PageShell>
   );
 }

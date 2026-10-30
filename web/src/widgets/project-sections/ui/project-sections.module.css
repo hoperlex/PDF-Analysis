@@ -25,7 +25,7 @@
 .card {
   height: 100%;
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
+  border-radius: var(--am-radius-lg);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }

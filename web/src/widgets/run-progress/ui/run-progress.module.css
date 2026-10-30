@@ -15,6 +15,48 @@
  * defect this architecture exists to prevent.
  */
 
+.progress {
+  min-width: 0;
+}
+
+.progress > dl {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1fr);
+  gap: var(--am-gap-sm) var(--am-gap);
+  min-width: 0;
+  margin: var(--am-gap) 0 var(--am-gap-lg);
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.progress > dl dt,
+.progress > dl dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.progress > dl dt {
+  color: var(--am-ink-muted);
+}
+
+.progress > h2 {
+  margin-top: var(--am-gap-xl);
+}
+
+@media (max-width: 780px) {
+  .progress > dl {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--am-gap);
+  }
+
+  .progress > dl dt {
+    margin-top: var(--am-gap-sm);
+  }
+}
+
 .mode {
   display: flex;
   flex-wrap: wrap;

@@ -105,7 +105,7 @@
   --am-surface: #f5f6f8;
   --am-surface-sunken: #eef0f4;
 
-  /* Dashboard showcase. Only [data-dashboard-showcase] consumes this palette. */
+/* Presentation shell and dashboard share these light/dark surfaces. */
   --am-showcase-bg: #edf4f2;
   --am-showcase-card: #fdfefe;
   --am-showcase-card-alt: #e6f0ef;
@@ -243,9 +243,9 @@
   --am-ease: cubic-bezier(0.2, 0, 0.2, 1);
 
   /* ---- radius ------------------------------------------------------------------ */
-  --am-radius-sm: 6px;
-  --am-radius: 10px;
-  --am-radius-lg: 14px;
+  --am-radius-sm: 8px;
+  --am-radius: 12px;
+  --am-radius-lg: 20px;
   --am-radius-pill: 999px;
 
   /* ---- spacing ----------------------------------------------------------------- */
@@ -492,8 +492,10 @@
   --am-ring: 0 0 0 3px rgba(122, 169, 224, 0.35);
 }
 
-/* A bounded presentation surface: descendant primitives inherit this dashboard palette. */
-[data-dashboard-showcase] {
+/* The completed shell and future screen slices inherit one two-theme presentation palette. */
+[data-dashboard-showcase],
+.am-app__bar,
+.am-app__main {
   --am-paper: var(--am-showcase-card);
   --am-surface: var(--am-showcase-bg);
   --am-surface-sunken: var(--am-showcase-card-alt);
@@ -790,6 +792,7 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
+  min-height: 42px;
   padding: 8px 11px;
   color: var(--am-ink);
   background: var(--am-paper);
@@ -861,9 +864,10 @@ input[type='file']::file-selector-button:hover {
 /* ---- application frame ---------------------------------------------------------- */
 
 .am-app {
-  display: flex;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
   min-height: 100vh;
-  flex-direction: column;
+  background: var(--am-showcase-bg);
 }
 
 .am-app__bar {
@@ -871,39 +875,38 @@ input[type='file']::file-selector-button:hover {
   top: 0;
   z-index: 10;
   display: flex;
-  /*
-   * `flex-wrap` because wave 43 added four links and measured what that cost.
-   *
-   * `W43-JUDGE-B` drove the deployed stand and found the bar's own width had pushed the
-   * overflow threshold from **482 px to 839 px** -- so every screen in the product, not
-   * the five new ones, carried a horizontal scrollbar on a small laptop and on every
-   * tablet. `AppFrame` is global, which is what turned four links into a product-wide
-   * regression.
-   *
-   * NOTHING IN THE GATE CAN SEE THIS. The frontend battery renders through
-   * `renderToStaticMarkup`: no layout, no box, no viewport. `W43-PREP` predicted the
-   * risk in prose and `W43-JUDGE-A` counted the prediction as honesty -- and the number
-   * is what decides, so it took a browser on the stand to find it.
-   *
-   * Wrapping is the repair that stops the defect, not the answer to the design question.
-   * Whether six sections belong in a wrapping bar, a narrower cluster or a menu is the
-   * owner's, and is registered rather than decided here.
-   */
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 12px;
-  padding: 14px 32px;
-  border-bottom: 1px solid var(--am-line);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--am-gap-lg);
+  width: 260px;
+  height: 100vh;
+  min-height: 0;
+  padding: 28px 18px 18px;
+  border-right: 1px solid var(--am-line);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
 
 .am-app__brand {
-  font-weight: 650;
-  font-size: var(--am-text-lg);
-  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font-weight: 750;
+  font-size: var(--am-text-xl);
+  letter-spacing: -0.04em;
   color: var(--am-accent);
   text-decoration: none;
+}
+
+.am-app__brand::before {
+  content: '';
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  border: 3px solid currentColor;
+  border-radius: 8px;
+  transform: rotate(-14deg);
 }
 
 .am-app__signin {
@@ -952,12 +955,13 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-app__instance {
-  margin-left: auto;
+  overflow-wrap: anywhere;
 }
 
 .am-app__main {
   flex: 1;
-  padding: var(--am-gap-xl) var(--am-gap-lg);
+  min-width: 0;
+  padding: clamp(20px, 3vw, 44px);
 }
 
 /*
@@ -1350,10 +1354,38 @@ input[type='file']::file-selector-button:hover {
 
 .am-app__footer {
   padding: var(--am-gap) var(--am-gap-xl);
-  border-top: 1px solid var(--am-line);
-  color: var(--am-ink-soft);
-  background: var(--am-paper);
+  border-top: 1px solid var(--am-showcase-line);
+  color: var(--am-showcase-soft);
+  background: var(--am-showcase-bg);
   font-size: var(--am-text-xs);
+}
+
+@media (max-width: 1159.98px) {
+  .am-app {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .am-app__bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 12px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--am-line);
+  }
+
+  .am-app__main {
+    padding: 20px 16px;
+  }
+
+  .am-app__footer {
+    padding: 12px 16px;
+  }
 }
 
 /* ---- page shell ------------------------------------------------------------------ */
@@ -1373,9 +1405,9 @@ input[type='file']::file-selector-button:hover {
 
 .am-page__title {
   margin: 0;
-  font-size: var(--am-text-2xl);
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-size: clamp(26px, 2.3vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
 }
 
 .am-page__subtitle {
@@ -1387,11 +1419,12 @@ input[type='file']::file-selector-button:hover {
 }
 
 .am-page__body {
+  min-width: 0;
   background: var(--am-paper);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   padding: var(--am-gap-lg);
-  box-shadow: var(--am-shadow-1);
+  box-shadow: var(--am-shadow-2);
 }
 
 /* ---- the five mandatory states --------------------------------------------------- */
@@ -1577,8 +1610,9 @@ li.am-state .am-state__detail {
   font: inherit;
   font-size: var(--am-text-md);
   font-weight: 550;
-  padding: 8px 16px;
-  border-radius: var(--am-radius-sm);
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: var(--am-radius);
   border: 1px solid var(--am-accent);
   background: var(--am-accent);
   color: var(--am-ink-inverse);

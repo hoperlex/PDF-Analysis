@@ -17,6 +17,7 @@ import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
 import { ComparisonQueueBlock, ExecutionQueue } from '@/widgets/execution-queue';
 import { CostApproval, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import styles from './queue-page.module.css';
 
 interface RunIntent {
   readonly kind: 'cancel' | 'reaudit';
@@ -163,22 +164,26 @@ export function QueuePage() {
         * the widget draws no command; the server refuses a command by role anyway.
         */}
       {queue.data !== undefined && readFailure === null ? (
-        <ExecutionQueue
-          items={queue.data.items}
-          roles={roles}
-          asOf={asOf}
-          busy={busy}
-          workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
-          onCancel={(item) => select({ kind: 'cancel', item })}
-          onReaudit={(item) => select({ kind: 'reaudit', item })}
-          onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
-          onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
-          onNext={next === null ? null : () => setCursors((current) => [...current, next])}
-        />
+        <div className={styles.panel}>
+          <ExecutionQueue
+            items={queue.data.items}
+            roles={roles}
+            asOf={asOf}
+            busy={busy}
+            workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
+            onCancel={(item) => select({ kind: 'cancel', item })}
+            onReaudit={(item) => select({ kind: 'reaudit', item })}
+            onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
+            onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
+            onNext={next === null ? null : () => setCursors((current) => [...current, next])}
+          />
+        </div>
       ) : null}
-      <ComparisonQueueBlock />
+      <div className={styles.panel}>
+        <ComparisonQueueBlock />
+      </div>
       {intent !== null ? (
-        <section role="group" aria-label="Подтверждение команды выполнения" data-execution-intent={intent.kind}>
+        <section className={styles.intent} role="group" aria-label="Подтверждение команды выполнения" data-execution-intent={intent.kind}>
           <p>{intentLabel(intent)}</p>
           {intent.kind === 'reaudit' ? <>
             <p className="am-note">Повторный аудит требует новой оценки и согласия. Исполнителя и текущие параметры определяет сервер по исходному прогону.</p>

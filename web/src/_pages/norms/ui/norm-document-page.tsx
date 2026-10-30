@@ -23,6 +23,7 @@ import {
 } from '@/entities/norms';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import styles from './norms-page.module.css';
 
 export interface NormDocumentPageProps {
   /** The `ndoc_` identity from the address, already shape-checked by the route; `null` for none. */
@@ -106,15 +107,19 @@ function DocumentView({ normDocumentId, page }: { readonly normDocumentId: NormD
       ) : null}
       {document.data !== undefined ? (
         <>
-          <NormDocumentFacts document={document.data} />
-          <section aria-label="PDF документа" data-norm-pdf-page={page ?? undefined}>
+          <div className={styles.panel}>
+            <NormDocumentFacts document={document.data} />
+          </div>
+          <section className={styles.panel} aria-label="PDF документа" data-norm-pdf-page={page ?? undefined}>
             {wantsNormPdf(document.data, page)
               ? <OpenPdf document={document.data} page={page} />
               : <NormPdf document={document.data} page={page} documentUrl={null} isLoading={false} error={null} />}
           </section>
         </>
       ) : null}
-      <Paragraphs normDocumentId={normDocumentId} />
+      <div className={styles.panel}>
+        <Paragraphs normDocumentId={normDocumentId} />
+      </div>
     </PageShell>
   );
 }
