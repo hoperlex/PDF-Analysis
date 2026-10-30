@@ -26,6 +26,7 @@ function ChangeList({ transitionId }: { readonly transitionId: ComparisonTransit
     queryKey: [...COMPARISON_KEYS.all, 'specification-changes', transitionId, cursor],
     queryFn: async () => (await listComparisonSpecificationChanges({ path: { comparison_transition_id: transitionId }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } })).data,
   });
+  const nextCursor = query.data?.page.next_cursor;
   return <div aria-label="Изменения спецификации">
     {query.isPending ? <p role="status">Читаем позиции…</p> : null}
     {query.error === null ? null : <p role="alert">{comparisonFailure(query.error).detail}</p>}
@@ -37,7 +38,7 @@ function ChangeList({ transitionId }: { readonly transitionId: ComparisonTransit
     </li>)}</ul>
     {query.data?.items.length === 0 ? <p>В сохранённом результате нет изменений позиций.</p> : null}
     {cursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>К началу</button>}
-    {query.data?.page.next_cursor == null ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(query.data?.page.next_cursor ?? undefined)}>Следующие позиции</button>}
+    {nextCursor === null || nextCursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(nextCursor)}>Следующие позиции</button>}
   </div>;
 }
 
@@ -99,6 +100,7 @@ export function SpecificationPanel({ seriesId, mayAct }: { readonly seriesId: Co
     queryFn: async () => (await listComparisonSpecifications({ path: { comparison_series_id: seriesId }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } })).data,
     refetchInterval: open ? 3000 : false,
   });
+  const nextCursor = query.data?.page.next_cursor;
   return <div data-whole-specifications="" onClick={(event) => event.stopPropagation()}>
     <button type="button" className="am-button am-button--quiet am-button--small" aria-expanded={open} onClick={() => setOpen(!open)}>Полные спецификации (СО)</button>
     {open ? <section role="group" aria-label="Полные спецификации серии">
@@ -108,7 +110,7 @@ export function SpecificationPanel({ seriesId, mayAct }: { readonly seriesId: Co
       {query.data?.items.map((item) => <SpecificationRow key={item.transition_id} item={item} mayAct={mayAct} />)}
       {query.data?.items.length === 0 ? <p>В серии нет листов спецификации.</p> : null}
       {cursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>К началу переходов</button>}
-      {query.data?.page.next_cursor == null ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(query.data?.page.next_cursor ?? undefined)}>Следующие переходы</button>}
+      {nextCursor === null || nextCursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(nextCursor)}>Следующие переходы</button>}
       <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => { void client.invalidateQueries({ queryKey: COMPARISON_KEYS.all }); }}>Обновить результат и сводку</button>
     </section> : null}
   </div>;

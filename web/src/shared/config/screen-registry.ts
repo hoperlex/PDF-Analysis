@@ -136,7 +136,7 @@ export const SCREEN_REGISTRY = [
   /*
    * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
    * and the API refuses everything else. A module that is off is said so on the screen (`ProductVersion.comparison_modules`);
-   * the registry has no per-deployment column, so the entry is in the menu either way (reported to the FIX slot).
+   * the registry has no per-deployment column, so the entry is in the menu either way. The screen shows the off state.
    */
   {
     address: '/version-comparison',
@@ -152,7 +152,7 @@ export const SCREEN_REGISTRY = [
     group: 'work',
     access: 'session',
     roles: 'any-role',
-    inMenu: false,
+    inMenu: true,
   },
   {
     address: '/projects/[project_uid]',
