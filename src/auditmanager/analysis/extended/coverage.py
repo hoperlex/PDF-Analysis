@@ -11,6 +11,29 @@ ITEM_CHARACTERS = 24_000
 MAX_BATCH_ITEMS = 20
 
 
+def cross_window_policy():
+    """Separate run-global authority; these calls are never multiplied by windows."""
+    return {'version': 'cross-window-comprehensive-v1', 'piece_characters': 20_000,
+        'call_limits': {'comprehensive_analysis': 8, 'norm_verification': 8,
+            'finding_review': 8, 'finding_correction': 8}}
+
+
+def validate_cross_window_policy(value):
+    if value is None:
+        return False
+    expected = cross_window_policy()
+    if (not isinstance(value, dict) or set(value) != set(expected)
+            or value.get('version') != expected['version']
+            or type(value.get('piece_characters')) is not int
+            or value['piece_characters'] != expected['piece_characters']
+            or not isinstance(value.get('call_limits'), dict)
+            or set(value['call_limits']) != set(expected['call_limits'])
+            or any(type(count) is not int for count in value['call_limits'].values())
+            or value['call_limits'] != expected['call_limits']):
+        raise ValueError('extended_cross_window_authority_invalid')
+    return True
+
+
 def coverage_policy(*, text_characters=None):
     """Freeze enough comprehensive pieces for a long source, up to a finite cap.
 

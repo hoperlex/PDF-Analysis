@@ -22,6 +22,7 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
   const [advice, setAdvice] = useState('all');
   const [correction, setCorrection] = useState('all');
   const [norm, setNorm] = useState('all');
+  const [origin, setOrigin] = useState('all');
   const [pageSearch, setPageSearch] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(0);
@@ -34,7 +35,7 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
     const candidate = object(fixed?.candidate);
     const ids = strings(item.source_ids);
     const pages = [...new Set(ids.flatMap((id) => { const value = sourcePage(sourceIndex.get(id)); return value === null ? [] : [value]; }))];
-    const searchable = [item.title, item.description, item.observation_id, critic?.explanation, candidate?.title, candidate?.description, ...ids].map(text).join('\n').toLocaleLowerCase('ru');
+    const searchable = [item.title, item.description, item.observation_id, item.cross_window_batch_key, ...strings(item.window_ids), critic?.explanation, candidate?.title, candidate?.description, ...ids].map(text).join('\n').toLocaleLowerCase('ru');
     return { item, index, critic, fixed, candidate, ids, pages, searchable };
   }), [observations, sourceIndex]);
   const requiredPage = /^[1-9]\d*$/.test(pageSearch.trim()) && Number.isSafeInteger(Number(pageSearch)) ? Number(pageSearch) : null;
@@ -44,11 +45,12 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
     && (advice === 'all' || (advice === 'not_reviewed' ? row.item.review_status === 'not_reviewed' : text(row.critic?.llm_decision) === advice))
     && (correction === 'all' || (correction === 'candidate' ? row.candidate !== null : correction === 'needs_context' ? row.fixed?.action === 'needs_context' : row.fixed === null))
     && (norm === 'all' || (norm === 'assessment' ? object(row.item.norm_assessment) !== null : norm === 'candidates' ? objects(row.item.norm_candidates).length > 0 : object(row.item.norm_assessment) === null))
+    && (origin === 'all' || (origin === 'global' ? row.item.origin_scope === 'global_cross_window' : row.item.origin_scope !== 'global_cross_window'))
     && (requiredPage === null || row.pages.includes(requiredPage)));
   const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const shown = matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const reset = () => { setSearch(''); setAdvice('all'); setCorrection('all'); setNorm('all'); setPageSearch(''); setPage(0); };
+  const reset = () => { setSearch(''); setAdvice('all'); setCorrection('all'); setNorm('all'); setOrigin('all'); setPageSearch(''); setPage(0); };
   const inspect = (source: RecordValue) => { setSelectedSource(source); sourcePanel.current?.scrollIntoView({ block: 'nearest' }); };
   return <section id={anchorId} aria-label="Кандидаты расширенного анализа" className={styles.candidatePanel}>
     <h3>Наблюдения и источники</h3>
@@ -58,6 +60,7 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
       <label>Рекомендация критика<select value={advice} onChange={(event) => { setAdvice(event.target.value); setPage(0); }}><option value="all">Все рекомендации</option><option value="not_reviewed">Критика не выполнялась</option><option value="accept">Рекомендует сохранить</option><option value="reject">Рекомендует снять</option><option value="borderline">Пограничный случай</option><option value="needs_human">Нужна проверка человека</option><option value="rewrite">Рекомендует уточнить</option></select></label>
       <label>Уточнение<select value={correction} onChange={(event) => { setCorrection(event.target.value); setPage(0); }}><option value="all">Все варианты</option><option value="candidate">Есть исправленный кандидат</option><option value="needs_context">Запрошен контекст</option><option value="none">Нет записи корректора</option></select></label>
       <label>Нормативные данные<select value={norm} onChange={(event) => { setNorm(event.target.value); setPage(0); }}><option value="all">Все состояния</option><option value="assessment">Есть модельная сверка цитат</option><option value="candidates">Есть кандидаты ссылок</option><option value="not_assessed">Нет модельной сверки цитат</option></select></label>
+      <label>Происхождение наблюдения<select value={origin} onChange={(event) => { setOrigin(event.target.value); setPage(0); }}><option value="all">Все исходные записи</option><option value="global">Межоконная сверка</option><option value="other">Остальные исходные записи</option></select></label>
       <label>Физическая страница PDF<input type="number" min="1" step="1" value={pageSearch} aria-invalid={invalidPage} onChange={(event) => { setPageSearch(event.target.value); setPage(0); }} /></label>
       <label>На странице<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
     </div>
@@ -68,6 +71,8 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
       <article>
         <div className={styles.toolbar}><h4>{text(item.title) || 'Наблюдение без заголовка'}</h4><span>{pages.length === 0 ? 'Страница не указана' : `Физические страницы: ${pages.join(', ')}`}</span></div>
         <p className={styles.description}>{text(item.description)}</p>
+        {item.origin_scope === 'global_cross_window' ? <p data-cross-window-origin="">Межоконная сверка · пакет <code>{text(item.cross_window_batch_key) || 'Не передан'}</code> · исходные окна: {strings(item.window_ids).join(', ') || 'Не переданы'}.</p> : null}
+        {objects(item.source_evidence).length > 0 ? <details><summary>Цитаты исходного наблюдения</summary><ul>{objects(item.source_evidence).map((evidence, number) => <li key={`${text(evidence.source_id)}:${number}`}><code>{text(evidence.source_id)}</code><blockquote>{text(evidence.quote)}</blockquote></li>)}</ul><p>Цитаты проверяются по указанным источникам; это не решение эксперта.</p></details> : null}
         <details><summary>Идентификаторы и происхождение</summary><p>Наблюдение: <code>{text(item.observation_id) || 'Не передано'}</code>. {text(item.window_id) ? <>Окно: <code>{text(item.window_id)}</code>.</> : null}</p><p>Источники: {ids.join(', ') || 'Не переданы'}.</p></details>
         <section aria-label="Источники кандидата"><h5>Проверить исходные материалы</h5>{ids.length === 0 ? <p>Идентификаторы исходных материалов не переданы.</p> : <ul className={styles.sourceButtons}>{ids.map((id) => {
           const source = sourceIndex.get(id);

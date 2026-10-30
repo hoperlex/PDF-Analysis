@@ -238,6 +238,19 @@ class RunCostPreflight:
                     # remains authoritative and every actual call is metered.
                     input_tokens += visual["max_windows"] * per_window_calls * 100_000
                     output_tokens += visual["max_windows"] * per_window_output
+                    cross_window_mode = os.environ.get("AUDITMANAGER_EXTENDED_CROSS_WINDOW", "1").strip().lower()
+                    if visual["text_page_limit"] > 16 and cross_window_mode not in {"0", "false", "off"}:
+                        from auditmanager.analysis.public import extended_cross_window_policy
+                        global_policy = extended_cross_window_policy()
+                        extended["global_cross_window_policy"] = global_policy
+                        global_limits = global_policy["call_limits"]
+                        global_calls = sum(global_limits.values())
+                        # One run-global allowance after local windows, reserved
+                        # before consent; a reused reply does not spend it again.
+                        extra_calls += global_calls
+                        input_tokens += global_calls * 100_000
+                        output_tokens += sum(count * (6_000 if phase == "comprehensive_analysis" else 12_000)
+                            for phase, count in global_limits.items())
                 elif coverage_mode in {"legacy", "0", "off", "false"}:
                     extra_calls = visual["max_windows"] * 6
                     input_tokens += visual["max_windows"] * 600_000

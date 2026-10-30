@@ -74,7 +74,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     ['Полные данные', 'RawJSONchunks: соединить второй столбец по порядку, без разделителей. Все исходные поля API сохранены.'],
     ['Ограничения', result?.warnings], ['Причина состояния', result?.reason],
   ];
-  const candidates: Row[] = [['Область', 'ID наблюдения', 'Исходный заголовок', 'Исходное описание', 'ID источников', 'Физические страницы PDF (с 1)', 'Статус проверки норм', 'Статус машинной критики', 'Причина отсутствия критики', 'Окно исходной записи']];
+  const candidates: Row[] = [['Область', 'ID наблюдения', 'Исходный заголовок', 'Исходное описание', 'ID источников', 'Физические страницы PDF (с 1)', 'Статус проверки норм', 'Статус машинной критики', 'Причина отсутствия критики', 'Окно исходной записи', 'Явное происхождение', 'Ключ межоконного пакета', 'Исходные окна межоконного наблюдения']];
   const critics: Row[] = [['Область', 'ID наблюдения', 'ID входа критика', 'Рекомендация модели (код, не решение эксперта)', 'Основание (код)', 'Пояснение', 'Уверенность модели', 'Источники проверены моделью', 'Зависимость от контекста', 'Предложение', 'Доказательства из источников', 'Статус']];
   const corrections: Row[] = [['Область', 'ID наблюдения', 'Действие (предложение)', 'Исходный заголовок', 'Исходное описание', 'Предложенный заголовок', 'Предложенное описание', 'ID источников кандидата', 'Источники кандидата', 'Нормативные свидетельства кандидата (не подтверждены)', 'Причина', 'Требуемый контекст', 'Статус']];
   const norms: Row[] = [['Область', 'ID наблюдения', 'Физические страницы PDF (с 1)', 'Статус', 'Вид записи', 'Сохранённые нормативные данные', 'Ограничение']];
@@ -89,7 +89,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     corrections.push([scope, id ?? row.observation_id, row.action, original?.title, original?.description, candidate?.title, candidate?.description, candidate?.source_ids, candidate?.source_evidence, candidate?.norm_evidence, row.reason, row.required_context, row.status]);
   };
   for (const { scope, item } of entries) {
-    candidates.push([scope, item.observation_id, item.title, item.description, item.source_ids, pages(item), item.norm_status, item.review_status, item.review_reason, item.window_id]);
+    candidates.push([scope, item.observation_id, item.title, item.description, item.source_ids, pages(item), item.norm_status, item.review_status, item.review_reason, item.window_id, item.origin_scope, item.cross_window_batch_key, item.window_ids]);
     addCritic(scope, item.observation_id, item.review ?? item.critic);
     addCorrection(scope, item.observation_id, item.correction, item);
     norms.push([scope, item.observation_id, pages(item), item.norm_status, 'Состояние', item.norm_reason, 'Редакция, актуальность и применимость требуют экспертной проверки.']);
@@ -106,15 +106,31 @@ function tables(reading: ExtendedRunReview): Table[] {
   const addBatch = (scope: string, row: RecordValue, windowId?: unknown) => batchRows.push([scope, row.batch_key, row.window_id ?? windowId, row.procedure, typeof row.index === 'number' ? row.index + 1 : '', row.status, row.input_count, row.input_ids, row.source_ids, row.page_numbers, row.input_characters, row.context_ranges, row.reason]);
   for (const row of objects(result?.batches)) addBatch('Общий свод', row);
   for (const window of windows) for (const row of objects(window.batches)) addBatch('Квитанция окна', row, window.window_id);
-  const sources: Row[] = [['Область', 'ID источника', 'Тип источника', 'Вид данных', 'Физическая страница PDF (с 1)', 'Версия PDF', 'SHA256 изображения/слоя', 'SHA256 текста', 'Координаты как сохранены', 'Цитата', 'Происхождение цитаты']];
+  const sources: Row[] = [['Область', 'ID источника', 'Тип источника', 'Вид данных', 'Физическая страница PDF (с 1)', 'Версия PDF', 'SHA256 изображения/слоя', 'SHA256 текста', 'Координаты как сохранены', 'Цитата', 'Происхождение цитаты', 'Поле текстового диапазона', 'Начальный индекс в записи (с 0)', 'Конечный индекс в записи (с 0), как сохранён', 'Индекс распознанной записи (с 0)', 'SHA256 исходного текста страницы/записи', 'Исходные окна', 'Роль исходного артефакта', 'SHA256 замороженного источника']];
   for (const { scope, item } of sourceEntries) sources.push([scope, item.source_id, item.source_type ?? item.source_kind, item.kind,
     typeof item.page_number === 'number' && Number.isSafeInteger(item.page_number) && item.page_number > 0 ? item.page_number : '',
-    text(item.version_uid) || text(result?.version_uid), item.crop_sha256 ?? item.artifact_sha256, item.text_sha256, item.bbox_norm ?? item.box, item.quote, item.quote_source]);
+    text(item.version_uid) || text(result?.version_uid), item.crop_sha256 ?? item.artifact_sha256, item.text_sha256, item.bbox_norm ?? item.box, item.quote, item.quote_source,
+    item.character_field, item.character_start, item.character_end, item.entry_ordinal, item.page_text_sha256, item.window_ids, item.origin_artifact_role, item.source_sha256]);
   const windowRows: Row[] = [['Окно', 'Порядковый номер (с 1)', 'Состояние окна', 'Визуальный проход сохранён (не всё окно)', 'Покрытие', 'ID процедуры', 'Название процедуры', 'Состояние процедуры', 'Причина']];
   for (const window of windows) {
     const prefix = [window.window_id, typeof window.index === 'number' ? window.index + 1 : '', window.status, window.visual_phase_complete, window.coverage];
     windowRows.push([...prefix, '', '', '', window.reason]);
     for (const procedure of objects(window.procedures)) windowRows.push([...prefix, procedure.id, procedure.title, procedure.status, procedure.reason]);
+  }
+  const global = object(result?.global_cross_window);
+  const globalRows: Row[] = [['Вид записи межоконного прохода (лимиты на весь прогон)', 'Ключ', 'Часть', 'Всего частей', 'Полный JSON, последовательные части без разделителей']];
+  if (global !== null) {
+    const append = (kind: string, key: unknown, value: unknown) => {
+      const payload = json(value).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+      const chunks = rawChunks(payload);
+      chunks.forEach((chunk, index) => globalRows.push([kind, key, index + 1, chunks.length, chunk]));
+    };
+    append('Полная сохранённая запись global_cross_window', global.manifest_sha256 ?? global.source_sha256 ?? '', global);
+    for (const [key, label] of [['batches', 'Квитанция'], ['pending_batches', 'Необработанное сочетание'], ['pieces', 'Учтённый фрагмент'], ['omitted', 'Пропуск/ограничение']] as const) {
+      const records = global[key];
+      if (!Array.isArray(records)) continue;
+      for (const record of records) { const item = object(record); append(label, item?.batch_key ?? item?.pair_id ?? item?.source_id ?? '', record); }
+    }
   }
   // XML-illegal noncharacters are escaped as JSON escapes, preserving the JSON value.
   const raw = json(reading).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
@@ -122,7 +138,7 @@ function tables(reading: ExtendedRunReview): Table[] {
   rawChunks(raw).forEach((chunk, index) => rawRows.push([index + 1, chunk]));
   return [{ name: 'Summary', rows: summary }, { name: 'Candidates', rows: candidates }, { name: 'Critic', rows: critics },
     { name: 'Corrections', rows: corrections }, { name: 'Sources', rows: sources }, { name: 'Norms', rows: norms },
-    { name: 'Windows', rows: windowRows }, { name: 'Batches', rows: batchRows }, { name: 'RawJSONchunks', rows: rawRows }];
+    { name: 'Windows', rows: windowRows }, { name: 'Batches', rows: batchRows }, { name: 'GlobalCrossWindow', rows: globalRows }, { name: 'RawJSONchunks', rows: rawRows }];
 }
 
 const CRC_TABLE = new Uint32Array(256);

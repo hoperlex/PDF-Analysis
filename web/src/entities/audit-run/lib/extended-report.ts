@@ -32,6 +32,22 @@ function evidenceHtml(value: unknown): string { return `<ul>${objects(value).map
 function procedureMarkdown(value: unknown): string {
   return objects(value).map((item) => `- ${md(item.title || item.id)}: ${md(STATUS[plain(item.status)] ?? item.status)}${item.reason ? `; ограничение: ${md(item.reason)}` : ''}`).join('\n');
 }
+function crossWindowMarkdown(value: unknown): string {
+  const body = object(value);
+  if (body === null) return '';
+  return ['## Сверка источников между окнами', `Состояние: ${md(STATUS[plain(body.status)] ?? 'Не передано')}.`,
+    'Принятая политика относится ко всему прогону, а не к каждому локальному окну. Выполненный план не доказывает проверку всех возможных сочетаний или глобальную смысловую полноту.',
+    code({ version: body.version, policy: body.policy, source_sha256: body.source_sha256, manifest_sha256: body.manifest_sha256, coverage: body.coverage, phase_coverage: body.phase_coverage, reason: body.reason }),
+    '### Сохранённые квитанции межоконного прохода', code(body.batches),
+    '### Необработанные сочетания', code(body.pending_batches), '### Пропуски и ограничения', code(body.omitted),
+    '### Учтённые фрагменты источников', code(body.pieces),
+    'Все исходные локальные и межоконные наблюдения приведены вместе ниже; рекомендации критика, нормативные сверки и исправления не являются экспертными решениями.'].join('\n\n');
+}
+function crossWindowHtml(value: unknown): string {
+  const body = object(value);
+  if (body === null) return '';
+  return `<section><h2>Сверка источников между окнами</h2><p>Состояние: ${html(STATUS[plain(body.status)] ?? 'Не передано')}. Политика относится ко всему прогону, а не к каждому локальному окну. Проверка всех возможных сочетаний и глобальная смысловая полнота не подтверждены.</p><pre>${html(JSON.stringify({ version: body.version, policy: body.policy, source_sha256: body.source_sha256, manifest_sha256: body.manifest_sha256, coverage: body.coverage, phase_coverage: body.phase_coverage, reason: body.reason }, null, 2))}</pre>${[['batches', 'Сохранённые квитанции'], ['pending_batches', 'Необработанные сочетания'], ['omitted', 'Пропуски и ограничения'], ['pieces', 'Учтённые фрагменты источников']].map(([key, title]) => `<details><summary>${html(title)}</summary><pre>${html(JSON.stringify(body[key ?? ''], null, 2))}</pre></details>`).join('')}<p>Все исходные наблюдения, рекомендации и отдельные сверки сохранены в полном снимке API; решения эксперта не создаются.</p></section>`;
+}
 function observationMarkdown(item: RecordValue, index: number, sourceIndex: ReadonlyMap<string, RecordValue>): string {
   const lines = [`### ${index + 1}. ${md(item.title)}`, md(item.description), `Идентификатор: ${md(item.observation_id)}. Источники: ${md(item.source_ids)}.`,
     `Нормативный статус: ${md(EXTENDED_NORM_STATUS[plain(item.norm_status)] ?? 'Требует проверки')}. Актуальность и применимость цитат требуют проверки эксперта.`];
@@ -39,6 +55,8 @@ function observationMarkdown(item: RecordValue, index: number, sourceIndex: Read
   const correction = object(item.correction);
   const original = object(correction?.original);
   const candidate = object(correction?.candidate);
+  if (item.origin_scope === 'global_cross_window') lines.push(`Происхождение: межоконная сверка; пакет ${md(item.cross_window_batch_key)}; исходные окна ${md(item.window_ids)}.`);
+  if (item.source_evidence !== undefined) lines.push('Дословные цитаты исходного наблюдения:', evidenceMarkdown(item.source_evidence));
   if (critic !== null) lines.push('#### Рекомендация машинного критика — не решение эксперта', md(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка'),
     `Основание: ${md(extendedReasonText(critic.human_taxonomy_reason))}`, md(critic.explanation), `Предложение: ${md(critic.suggested_fix)}`, evidenceMarkdown(critic.source_evidence));
   else lines.push('Машинная критика этого наблюдения не подтверждена переданными данными.');
@@ -78,7 +96,8 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     ? 'Базовый текстовый анализ ещё выполняется. Сохранённый визуальный проход не является завершением всей проверки окна.' : '';
   if (format === 'md') {
     const blocks = ['# Предварительный анализ раздела', disclaimer, pendingPrimary, '## Состояние, покрытие и происхождение', code(metadata),
-      '## Фактические процедуры', procedureMarkdown(result?.procedures), `## Общий свод: ${observations.length} записей`,
+      '## Фактические процедуры', procedureMarkdown(result?.procedures), crossWindowMarkdown(result?.global_cross_window),
+      `## Общий свод: ${observations.length} записей`,
       ...observations.map((item, index) => observationMarkdown(item, index, sourceIndex))];
     for (const [index, window] of windows.entries()) blocks.push(`## Окно ${index + 1}: ${md(window.window_id)}`,
       `Состояние: ${md(STATUS[plain(window.status)] ?? window.status)}`, procedureMarkdown(window.procedures),
@@ -97,9 +116,10 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     const advice = critic === null ? '<p>Машинная критика не подтверждена переданными данными.</p>' : `<section><h4>Рекомендация критика — не решение эксперта</h4><strong>${html(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка')}</strong><p>${html(extendedReasonText(critic.human_taxonomy_reason))}</p><p>${html(critic.explanation)}</p><p>Предложение: ${html(critic.suggested_fix)}</p>${evidenceHtml(critic.source_evidence)}</section>`;
     const fixed = correction === null ? '' : `<section><h4>Уточнение, исходник сохранён</h4><p>${html(EXTENDED_CORRECTION_ACTION[plain(correction.action)] ?? 'Требуется проверка')}. ${html(extendedReasonText(correction.reason))}</p><h5>Исходный вариант</h5><strong>${html(original?.title ?? item.title)}</strong><p>${html(original?.description ?? item.description)}</p><h5>Предложенный кандидат</h5>${candidate === null ? '<p>Новый текст не предложен.</p>' : `<strong>${html(candidate.title)}</strong><p>${html(candidate.description)}</p>${evidenceHtml(candidate.source_evidence)}`}<p>Требуемый контекст: ${html(correction.required_context)}</p></section>`;
     const norms = `<section><h4>Нормативные данные — применимость не подтверждена</h4><p>Статус: ${html(EXTENDED_NORM_STATUS[plain(item.norm_status)] ?? 'Требует проверки')}</p>${objects(item.norm_candidates).map((norm) => `<p>${html(norm.designation)}, пункт ${html(norm.clause_number)}, страница ${html(norm.page_label)}</p><blockquote>${html(norm.quote)}</blockquote>`).join('')}${item.norm_assessment === undefined ? '' : `<details><summary>Сохранённая модельная сверка цитат</summary><pre>${html(JSON.stringify(item.norm_assessment, null, 2))}</pre></details>`}</section>`;
-    return `<article><h3>${index + 1}. ${html(item.title)}</h3><p>${html(item.description)}</p><p>Исходное наблюдение сохранено. Решение эксперта не принято этой моделью.</p>${advice}${fixed}<section><h4>Исходные материалы</h4><ul>${sources}</ul></section>${norms}</article>`;
+    const origin = item.origin_scope === 'global_cross_window' ? `<p>Происхождение: межоконная сверка; пакет ${html(item.cross_window_batch_key)}; исходные окна ${html(item.window_ids)}.</p>` : '';
+    return `<article><h3>${index + 1}. ${html(item.title)}</h3><p>${html(item.description)}</p>${origin}<p>Исходное наблюдение сохранено. Решение эксперта не принято этой моделью.</p>${item.source_evidence === undefined ? '' : `<section><h4>Цитаты исходного наблюдения</h4>${evidenceHtml(item.source_evidence)}</section>`}${advice}${fixed}<section><h4>Исходные материалы</h4><ul>${sources}</ul></section>${norms}</article>`;
   }).join('');
   const windowHtml = windows.map((window, index) => `<section><h2>Окно ${index + 1}: ${html(window.window_id)}</h2><p>${html(STATUS[plain(window.status)] ?? window.status)}</p>${window.visual_phase_complete === true && window.status === 'running' ? '<p>Визуальный проход сохранён; оставшиеся процедуры окна ещё не завершены.</p>' : ''}${procedureHtml(window.procedures)}<pre>${html(JSON.stringify(window, null, 2))}</pre></section>`).join('');
-  const content = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Предварительный анализ раздела</title><style>body{max-width:1100px;margin:32px auto;padding:0 20px;font:16px/1.5 system-ui,sans-serif;color:#15202b;background:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f7;padding:16px}article,section{border-top:1px solid #c9d1d9;padding:16px 0}h1,h2,h3{line-height:1.2}</style></head><body><h1>Предварительный анализ раздела</h1><p>${html(disclaimer)}</p>${pendingPrimary ? `<p>${html(pendingPrimary)}</p>` : ''}<h2>Состояние, покрытие и происхождение</h2><pre>${html(JSON.stringify(metadata, null, 2))}</pre><h2>Фактические процедуры</h2>${procedureHtml(result?.procedures)}<h2>Общий свод: ${observations.length} записей</h2>${rows}${windowHtml}<h2>Полная исходная запись API</h2><p>Все переданные записи, источники, цитаты и ограничения без фильтра по модельной рекомендации.</p><pre>${html(raw)}</pre></body></html>`;
+  const content = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Предварительный анализ раздела</title><style>body{max-width:1100px;margin:32px auto;padding:0 20px;font:16px/1.5 system-ui,sans-serif;color:#15202b;background:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f7;padding:16px}article,section{border-top:1px solid #c9d1d9;padding:16px 0}h1,h2,h3{line-height:1.2}</style></head><body><h1>Предварительный анализ раздела</h1><p>${html(disclaimer)}</p>${pendingPrimary ? `<p>${html(pendingPrimary)}</p>` : ''}<h2>Состояние, покрытие и происхождение</h2><pre>${html(JSON.stringify(metadata, null, 2))}</pre><h2>Фактические процедуры</h2>${procedureHtml(result?.procedures)}${crossWindowHtml(result?.global_cross_window)}<h2>Общий свод: ${observations.length} записей</h2>${rows}${windowHtml}<h2>Полная исходная запись API</h2><p>Все переданные записи, источники, цитаты и ограничения без фильтра по модельной рекомендации.</p><pre>${html(raw)}</pre></body></html>`;
   return { content, mediaType: 'text/html;charset=utf-8', fileName: `${base}.html` };
 }

@@ -201,7 +201,8 @@ def review_bundle_digest(section):
     for path in sorted((root / "original_review").rglob("*")):
         if path.is_file() and path.suffix in {".py", ".md", ".txt", ".json"}:
             assets[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
-    for name in ("core.py", "workflow.py", "review.py", "native_pages.py", "coverage.py"):
+    for name in ("core.py", "workflow.py", "review.py", "native_pages.py", "coverage.py",
+                 "cross_window.py", "cross_window_review.py"):
         assets[name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
     return digest({"version": REVIEW_BUNDLE_VERSION, "workflow_version": WORKFLOW_V3,
                    "section": section, "section_rules": rules_digest(section), "assets": assets})
