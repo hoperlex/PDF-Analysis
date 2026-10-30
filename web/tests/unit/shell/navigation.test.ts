@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { MENU_GROUPS, MENU_GROUP_LABELS, MenuAddressError, buildNavigation, currentScreen } from '@/_app/navigation';
 import type { Navigation } from '@/_app/navigation';
 import { FrameNavigationView } from '@/_app/frame-navigation';
+import { NAVIGATION_GLYPH_LABELS, NavigationGlyph } from '@/_app/navigation-glyph';
 import type { ScreenEntry } from '@/shared/config';
 import { SCREEN_REGISTRY } from '@/shared/config';
 import type { DisclosureProps } from '@/shared/ui';
@@ -108,6 +109,20 @@ describe('navigation disclosure behavior', () => {
     expect(desktop).toHaveLength(3);
     expect(desktop.every((group) => group.closeOnOutside === false)).toBe(true);
     expect(groups.filter((group) => group.defaultOpen !== true).every((group) => group.closeOnOutside !== false)).toBe(true);
+  });
+});
+
+describe('navigation glyph coverage', () => {
+  it('has a distinct drawn glyph for every currently offered menu label', () => {
+    const labels = buildNavigation(ADMIN_AND_EXPERT).groups.flatMap((group) => group.items.map((item) => item.label));
+    expect([...NAVIGATION_GLYPH_LABELS].sort()).toEqual([...labels].sort());
+    for (const label of labels) {
+      const markup = renderToStaticMarkup(createElement(NavigationGlyph, { label }));
+      expect(markup, label).toContain('<svg');
+      expect(markup, label).not.toContain('data-nav-glyph="fallback"');
+      expect(markup, label).toContain('aria-hidden="true"');
+    }
+    expect(renderToStaticMarkup(createElement(NavigationGlyph, { label: 'Новый раздел' }))).toContain('data-nav-glyph="fallback"');
   });
 });
 
@@ -216,7 +231,8 @@ describe('the current group and item', () => {
     const markup = draw('/blocks');
     expect(currentButtons(markup)).toEqual(['Знания', 'Меню', 'Знания']);
     expect(currentLinks(markup)).toEqual(['/blocks', '/blocks', '/blocks']);
-    expect(markup).toContain('aria-label="Блоки" title="Блоки" aria-current="page"');
+    expect(markup).toContain('aria-label="Блоки" aria-current="page"');
+    expect(markup).toContain('data-nav-glyph="blocks"');
   });
 
   it('marks the group but no item on a page the menu does not list', () => {

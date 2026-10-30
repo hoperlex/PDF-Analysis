@@ -27,15 +27,18 @@
  * any pathname without a router.
  */
 
-import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useId, useState } from 'react';
 import type { ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { DisclosureProps } from '@/shared/ui';
 import { Disclosure } from '@/shared/ui';
 
-import type { CurrentScreen, Navigation, NavigationGroup } from './navigation';
+import type { CurrentScreen, Navigation, NavigationGroup, NavigationItem } from './navigation';
 import { currentScreen } from './navigation';
+import { NavigationGlyph } from './navigation-glyph';
 import styles from './app-frame.module.css';
 
 export interface FrameNavigationProps {
@@ -57,15 +60,41 @@ function links(group: NavigationGroup, current: CurrentScreen | null) {
   return group.items.map((item) => ({
     href: item.address,
     label: item.label,
+    icon: <NavigationGlyph label={item.label} />,
     current: current?.address === item.address,
   }));
 }
 
-function railAbbreviation(label: string): string {
-  const words = label.trim().split(/\s+/u);
-  return words.length > 1
-    ? words.slice(0, 2).map((word) => Array.from(word)[0]).join('').toUpperCase()
-    : Array.from(label).slice(0, 2).join('').toUpperCase();
+function RailLink({ item, current }: { readonly item: NavigationItem; readonly current: boolean }) {
+  const id = useId();
+  const [tooltip, setTooltip] = useState<{ readonly left: number; readonly top: number } | null>(null);
+
+  const show = (target: HTMLAnchorElement) => {
+    const box = target.getBoundingClientRect();
+    setTooltip({ left: box.right + 12, top: Math.max(8, Math.min(box.top + box.height / 2 - 17, window.innerHeight - 42)) });
+  };
+
+  return (
+    <>
+      <Link
+        className={styles.railLink}
+        href={item.address}
+        aria-label={item.label}
+        aria-describedby={tooltip === null ? undefined : id}
+        aria-current={current ? 'page' : undefined}
+        onMouseEnter={(event) => show(event.currentTarget)}
+        onMouseLeave={() => setTooltip(null)}
+        onFocus={(event) => show(event.currentTarget)}
+        onBlur={() => setTooltip(null)}
+        onClick={() => setTooltip(null)}
+      >
+        <NavigationGlyph label={item.label} />
+      </Link>
+      {tooltip !== null && typeof document !== 'undefined'
+        ? createPortal(<span id={id} role="tooltip" className={styles.railTooltip} style={tooltip}>{item.label}</span>, document.body)
+        : null}
+    </>
+  );
 }
 
 export function FrameNavigationView({ navigation, pathname, disclosure = Disclosure }: FrameNavigationViewProps) {
@@ -84,18 +113,7 @@ export function FrameNavigationView({ navigation, pathname, disclosure = Disclos
       <div className={styles.rail} data-nav-state="rail">
         {groups.map((group) => (
           <div className={styles.railGroup} key={group.group} role="group" aria-label={group.label} data-current-group={inGroup(group) ? 'true' : undefined}>
-            {group.items.map((item) => (
-              <Link
-                className={styles.railLink}
-                key={item.address}
-                href={item.address}
-                aria-label={item.label}
-                title={item.label}
-                aria-current={current?.address === item.address ? 'page' : undefined}
-              >
-                <span aria-hidden="true">{railAbbreviation(item.label)}</span>
-              </Link>
-            ))}
+            {group.items.map((item) => <RailLink key={item.address} item={item} current={current?.address === item.address} />)}
           </div>
         ))}
       </div>
