@@ -73,10 +73,11 @@ class StageAiRuntime:
         self._now = now or time
         self._graphics = graphic_source
 
-    def _method(self, engine="classic"):
+    def _method(self, engine="classic", v3_policy=None):
         if engine == "v3_native_text_experimental":
             from auditmanager.comparison.stage_v3.bridge import V3Method
-            return V3Method(self._repo, sessions=self._sessions, blob_store=self._store, profile_reader=self._profile_reader)
+            return V3Method(self._repo, sessions=self._sessions, blob_store=self._store, profile_reader=self._profile_reader,
+                            v3_policy=v3_policy)
         return StageAiMethod(self._repo, sessions=self._sessions, blob_store=self._store,
                              profile_reader=self._profile_reader, graphic_source=self._graphics)
 
@@ -122,7 +123,8 @@ class StageAiRuntime:
         return roles
 
     def estimate(self, *, revision_id: str, user_uid: str, engine="classic"):
-        method = self._method(engine)
+        from auditmanager.comparison.stage_v3.policy import fresh_policy
+        method = self._method(engine, fresh_policy() if engine == "v3_native_text_experimental" else None)
         with session_scope(self._sessions) as session:
             self._roles(session, user_uid)
             snapshot = self._repo.revision(session, revision_id)
@@ -136,11 +138,11 @@ class StageAiRuntime:
         with session_scope(self._sessions) as session:
             self._roles(session, user_uid)
             run = self._repo.run(session, run_id)
-            jobs = self._jobs(self._method(run.get("engine", "classic")))
+            jobs = self._jobs(self._method(run.get("engine", "classic"), run.get("stage_v3_policy")))
             if not run.get("comparison_ai_job_id"):
                 return jobs.estimate_in(session, self._scope(run, run_id=run_id))
             job = jobs.job(session, str(run["comparison_ai_job_id"]))
-            jobs = self._jobs(self._method(run.get("engine", "classic")), provider_mode=job.provider_mode)
+            jobs = self._jobs(self._method(run.get("engine", "classic"), run.get("stage_v3_policy")), provider_mode=job.provider_mode)
             return jobs.estimate_in(session, self._scope(run, run_id=run_id), AiMode.LEFT, job=job)
 
     def cancel(self, session, *, run_id: str, user_uid: str) -> str | None:
@@ -161,12 +163,12 @@ class StageAiRuntime:
                command=AiJobCommand("cancel_stage_review_ai", f"stage-ai-cancel-{run_id}-{job_id}", user_uid, roles))
         return str(job_id)
 
-    def prepare(self, session, *, run_id: str, user_uid: str, consent, engine=None) -> str | None:
+    def prepare(self, session, *, run_id: str, user_uid: str, consent, engine=None, v3_policy=None) -> str | None:
         roles = self._roles(session, user_uid)
         run = self._repo.run(session, run_id)
         if run.get("comparison_ai_job_id"):
             return str(run["comparison_ai_job_id"])
-        method = self._method(engine or run.get("engine", "classic"))
+        method = self._method(engine or run.get("engine", "classic"), v3_policy if v3_policy is not None else run.get("stage_v3_policy"))
         jobs = self._jobs(method)
         scope = self._scope(run, run_id=run_id)
         estimate = jobs.estimate_in(session, scope)
@@ -198,7 +200,7 @@ class StageAiRuntime:
         job_id = run.get("comparison_ai_job_id")
         if not job_id:
             return self.prepare(session, run_id=run_id, user_uid=user_uid, consent=consent)
-        jobs = self._jobs(self._method(run.get("engine", "classic")))
+        jobs = self._jobs(self._method(run.get("engine", "classic"), run.get("stage_v3_policy")))
         resume = getattr(jobs, "resume_in_session", None)
         if resume is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="comparison_stage_ai_resume")
@@ -206,10 +208,10 @@ class StageAiRuntime:
         if record.state in {"queued", "running"}:
             return str(job_id)
         chosen = _consent(consent)
-        jobs = self._jobs(self._method(run.get("engine", "classic")), provider_mode=record.provider_mode)
+        jobs = self._jobs(self._method(run.get("engine", "classic"), run.get("stage_v3_policy")), provider_mode=record.provider_mode)
         resume = jobs.resume_in_session
         if record.state in {"completed", "cancelled", "failed"}:
-            method = self._method(run.get("engine", "classic"))
+            method = self._method(run.get("engine", "classic"), run.get("stage_v3_policy"))
             jobs = self._jobs(method, provider_mode=record.provider_mode)
             scope = self._scope(run, run_id=run_id)
             estimate = jobs.estimate_in(session, scope, AiMode.LEFT, job=record)
@@ -381,7 +383,7 @@ class StageAiRuntime:
             with session_scope(self._sessions) as session:
                 run, snapshot = self._checked(session, item, run_id)
                 engine = run.get("engine", "classic")
-                method = self._method(engine)
+                method = self._method(engine, run.get("stage_v3_policy"))
                 jobs = self._jobs(method)
                 job_id = run.get("comparison_ai_job_id")
                 if phase == "review" and self._graphics is None:
@@ -462,7 +464,7 @@ class StageAiRuntime:
                         # One request per explicit consent revision, across ALL
                         # procedure units. A technical retry of the same request
                         # still passes the caller's existing spend/unknown fences.
-                        from auditmanager.comparison.stage_v3.procedures import BUNDLE
+                        BUNDLE = method.bundle_version
                         window = self._repo.unit(session, run_id=run_id, kind="review",
                             group_id="v3:window:consent", source_sha256=BUNDLE, job_id=job_id,
                             payload={"content_key": BUNDLE, "engine": engine,

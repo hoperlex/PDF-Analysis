@@ -74,6 +74,7 @@ _VALUE: Final = re.compile(r"^[0-9A-Za-zА-Яа-яЁё*/().,\- ]{1,40}$")  # run
 def estimate_for(prompt_chars: int, images: int) -> CallEstimate:
     """What one call is estimated at: the characters at the conversion of the AI-job core, the pictures at their price, and the output at
     the ceiling of the request."""
+    prompt_chars += len(sc.SYSTEM_PROMPT)
     tokens = -(-prompt_chars * CHARS_PER_TOKEN_NUMERATOR // CHARS_PER_TOKEN_DENOMINATOR) + images * TOKENS_PER_IMAGE
     return CallEstimate(input_tokens=tokens, output_tokens=MAX_OUTPUT_TOKENS)
 
@@ -87,6 +88,7 @@ def build_request(
         raise ValueError(f"a request carries at most {MAX_IMAGES} images")
     body = {
         "model": model_id, "max_tokens": MAX_OUTPUT_TOKENS,
+        "system": sc.SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": prompt}],
         "output_config": {"effort": "high", "format": {"type": "json_schema", "schema": schema}},
     }

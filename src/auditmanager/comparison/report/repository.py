@@ -177,6 +177,18 @@ def _part(row: Any) -> PartRow:
 class ReportRepository:
     """Stateless; every method takes the caller's session and never commits."""
 
+    def paid_dispatch_fence(self, session: Session, *, job_id: str, request_sha256: str) -> str | None:
+        """Bounded journal fence: no unknown work and no paid resend without reply custody."""
+        row=session.execute(text(
+            "SELECT c.state FROM comparison_model_call c JOIN comparison_work w "
+            "ON w.comparison_work_id=c.comparison_work_id "
+            "WHERE w.payload ->> 'ai_job_id'=:job AND (c.state IN ('prepared','sent','unknown') "
+            "OR (c.request_sha256=:sha AND (c.state='completed' OR "
+            "(c.state='failed' AND (c.response_sha256 IS NOT NULL OR c.cost_micros>0))))) "
+            "ORDER BY CASE c.state WHEN 'unknown' THEN 0 WHEN 'prepared' THEN 1 WHEN 'sent' THEN 1 ELSE 2 END LIMIT 1"
+        ),{"job":job_id,"sha":request_sha256}).scalar_one_or_none()
+        return None if row is None else str(row)
+
     __slots__ = ()
 
     # -- the report ---------------------------------------------------------------------------------

@@ -6,10 +6,32 @@ The source catalogue is built from pinned fragments, not model-provided boxes.
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 
 from auditmanager.comparison.stage_ai.validation import StageAiValidationError, digest
 
 REPORT_VERSION = "stage-v3-source-report/1"
+
+
+def bounded_display_text(value, *, limit=20_000):
+    marker = "\n\n[Показан фрагмент для отображения. Полный исходный текст сохранён в источниках V3.]"
+    excerpt = len(value) > limit
+    prefix = value[:limit - len(marker)] if excerpt else value
+    displayed = prefix + marker if excerpt else value
+    return displayed, {"excerpt": excerpt, "full_characters": len(value),
+        "displayed_characters": len(prefix), "display_characters": len(displayed),
+        "full_sha256": hashlib.sha256(value.encode("utf-8")).hexdigest()}
+
+
+def card_display_metadata(card):
+    sources = {source["source_id"]: source for source in card["experimental"]["sources"]}
+    values = {}
+    for name, side in (("before", "left"), ("after", "right")):
+        text = "\n\n".join(dict.fromkeys(sources[key]["quote"] for key in sorted(card["evidence_ids"])
+            if sources[key]["side"] == side and sources[key]["quote"]))
+        _display, values[name] = bounded_display_text(text)
+    return {"limit_characters": 20_000, **values,
+        "full_text_location": "experimental.sources[].quote; experimental_progress.source_report.source_catalogue"}
 
 
 def source_catalogue(snapshot, records):

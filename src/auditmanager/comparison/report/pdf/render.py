@@ -283,6 +283,9 @@ def _build_analytic(document: dict[str, Any], tmp: Path, pages: int) -> int:
                     ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ]))
                 s.append(KeepTogether([card, Spacer(1, 5)]))
+        elif report.get("composition_mode")=="deterministic_chunk_sections":
+            s.append(Paragraph(_t("Единый ранжированный отбор не выполнялся. Все проверенные рекомендации модели, "
+                "включая кандидатов в значимые изменения, приведены по частям в приложении."),st["body"]))
         else:
             s.append(Paragraph(_t("Серьёзных изменений, требующих отдельного внимания, по проверенным результатам сводки не выявлено."), st["body"]))
         s.append(Paragraph("Основание и границы вывода", st["h2"]))
@@ -301,6 +304,33 @@ def _build_analytic(document: dict[str, Any], tmp: Path, pages: int) -> int:
         s.append(Paragraph(_t(
             f"Источник: {report['input_filename']}" + (f" (SHA-256 {sha256[:16]}…)" if sha256 else "") + f". {checked} Анализ выполнен {analysed_at}."),
             st["small"]))
+        if report.get("verified_chunk_sections"):
+            s.append(PageBreak())
+            s.append(Paragraph("Приложение. Проверенные части сводки",st["h2"]))
+            s.append(Paragraph(_t("Все сохранённые результаты проверяющего по каждой переданной части. "
+                "Модельные оценки предварительные; решение принимает инженер. Границы относятся к строкам MD-сводки."),st["small"]))
+            verdicts={"supported":"поддержано источником","qualified":"с оговорками", "contradictory":"противоречие",
+                "insufficient":"недостаточно данных","rejected":"не подтверждено проверяющим"}
+            for section in report["verified_chunk_sections"]:
+                s.append(CondPageBreak(35*mm))
+                s.append(Paragraph(_t(f"{section['label']} · часть {section['index']+1} из {section['chunks_total']}"),st["h2"]))
+                s.append(Paragraph(_t(f"Строки MD {section['line_start']}–{section['line_end']}; "
+                    f"SHA-256 части {section['source_sha256']}"),st["small"]))
+                for text in section.get("assessment_notes",[]):
+                    s.append(Paragraph(_t(text),st["body"]))
+                for claim in section["claims"]:
+                    s.append(Paragraph(_t(verdicts.get(claim["verdict"],claim["verdict"])+": "+claim["text"]),st["body"]))
+                    if claim.get("reason"):
+                        s.append(Paragraph(_t("Основание проверяющего: "+claim["reason"]),st["small"]))
+                    if claim.get("evidence"):
+                        s.append(Paragraph(_t("Строки сводки: "+", ".join(
+                            f"{ref['md_from']}–{ref['md_to']}" for ref in claim["evidence"])),st["small"]))
+                    for missing in claim.get("missing_information",[]):
+                        s.append(Paragraph(_t("Недостающие данные: "+missing),st["small"]))
+                for key,title in (("candidate_notes","Кандидат модели"),("questions","Неустановленный вопрос"),
+                        ("input_problems","Проблема входа")):
+                    for text in section.get(key,[]):
+                        s.append(Paragraph(_t(title+": "+text),st["small"]))
         s += _coverage_table(report, st, width)
         s += _registry_table(report, st, width)
         return s

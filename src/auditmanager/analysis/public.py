@@ -512,3 +512,11 @@ def parse_norm_review_batched_v3(*args, **kwargs):
 
 
 __all__.extend(["build_norm_review_request_batched_v3", "parse_norm_review_batched_v3"])
+
+
+def consolidate_extended_observations(observations, *, sources, version_uid):
+    from auditmanager.analysis.extended.consolidation import consolidate_observations
+    return consolidate_observations(observations, sources=sources, version_uid=version_uid)
+
+
+__all__.append("consolidate_extended_observations")

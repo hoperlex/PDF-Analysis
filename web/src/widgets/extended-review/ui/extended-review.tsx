@@ -11,6 +11,7 @@ import { BatchProgress } from './batch-progress';
 import { ObservationList } from './observation-list';
 import { ReadableReport } from './readable-report';
 import { ReportPackage } from './report-package';
+import { ConsolidatedObservations } from './consolidated-observations';
 import { extendedCandidateCounts } from './extended-review-summary';
 import styles from './extended-review.module.css';
 
@@ -144,6 +145,8 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
   const fullWindow = result?.review_scope === 'full_document';
   const sources = objects(result?.sources);
   const observations = objects(result?.observations);
+  const consolidation = object(result?.consolidation);
+  const showGroups = consolidation?.version === 'strict-cross-window-v1' && consolidation.complete === true && Array.isArray(result?.consolidated_observations);
   const counts = extendedCandidateCounts(result);
   return <section id="extended-analysis" className={styles.panel} aria-label={full ? 'Полная цепочка анализа' : 'Предварительный обзор блоков'} data-extended-review={reading.status} data-workflow-version={text(result?.workflow_version)}>
     <h2>{v3 ? 'Анализ раздела · полный расширенный план' : v2 && fullWindow ? 'Полная цепочка анализа · расширенные процедуры' : v2 ? 'Расширенный анализ · предыдущий план' : 'Предварительный обзор блоков'}</h2>
@@ -171,7 +174,9 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}
     {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
-    <ObservationList key={reading.run_id} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+    {consolidation !== null && !showGroups ? <p role="status">Группировка повторов в этой записи не подтверждена или не завершена. Ниже показаны исходные наблюдения; все данные сохранены в полных выгрузках.</p> : null}
+    {showGroups ? <ConsolidatedObservations key={reading.run_id} groups={result?.consolidated_observations} consolidation={consolidation} observations={observations} rawRecords={result?.observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+      : <ObservationList key={reading.run_id} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />}
     {coverage && objects(coverage.skipped).length > 0 && <details><summary>Непроверенные блоки ({objects(coverage.skipped).length})</summary><ul>{objects(coverage.skipped).map((item, i) => <li key={text(item.block_id) || i}>Стр. {count(item.page_number)}, <code>{text(item.block_id)}</code> — {item.reason === 'outside_approved_window' ? 'за пределами одобренного окна' : 'изображение или геометрия недоступны'}</li>)}</ul></details>}
     {report === null ? null : <section id="extended-saved-report" aria-label="Состояние отчёта раздела"><h3>Сохранённый отчёт раздела</h3><p>{procedureLabels[reportStatus] ?? 'Состояние не передано'} · записей: {count(report.observation_count)}.</p>
       {text(report.markdown) ? <ReadableReport markdown={text(report.markdown)} /> : null}

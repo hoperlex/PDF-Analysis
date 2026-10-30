@@ -226,12 +226,12 @@ class ComparisonAiJobService:
         )
 
     @staticmethod
-    def _require_consentable(estimate: AiEstimate, consent: AiConsentInput) -> None:
+    def _require_consentable(estimate: AiEstimate, consent: AiConsentInput, *, allow_zero_calls: bool = False) -> None:
         """The checks a consent must pass, in this order: the digest the user saw is the estimate now computed; there is
-        something to send; neither ceiling is passed."""
+        paid work or opted-in local report assembly exists; neither ceiling is passed."""
         if consent.estimate_digest != estimate.estimate_digest:
             raise _conflict(CONFLICT_ESTIMATE_STALE)
-        if estimate.totals.calls == 0:
+        if estimate.totals.calls == 0 and not allow_zero_calls:
             raise _conflict(CONFLICT_NOTHING_TO_DO)
         if estimate.blocked_by == "job":
             raise _conflict(CONFLICT_CEILING_JOB)
@@ -287,7 +287,8 @@ class ComparisonAiJobService:
         if self._repo.live_on_scope(session, scope) is not None:
             raise _conflict(CONFLICT_AI_JOB_ACTIVE)
         estimate = self.estimate_in(session, scope, estimate_mode, job=estimate_job)
-        self._require_consentable(estimate, consent)
+        self._require_consentable(estimate, consent,
+            allow_zero_calls=scope.method == "report" and getattr(method, "can_run_without_model", False) is True)
         try:
             job_id = self._repo.insert(
                 session, estimate=estimate, user_uid=command.user_uid, command_id=str(claim.command_id),
@@ -482,7 +483,9 @@ class ComparisonAiJobService:
         if consent is None or not consent.confirmed:
             raise _consent_required()
         estimate = self.estimate_in(session, job.scope, mode, job=job)
-        self._require_consentable(estimate, consent)
+        method = self._method_of(job.scope.method)
+        self._require_consentable(estimate, consent,
+            allow_zero_calls=job.scope.method == "report" and getattr(method, "can_run_without_model", False) is True)
         if not self._repo.renew_consent(
             session, job.job_id, estimate=estimate, user_uid=user_uid, consent_no=job.consent_no,
             from_states=(job.state,),

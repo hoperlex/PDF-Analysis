@@ -40,7 +40,8 @@ def anchor_key(part: Mapping[str, Any]) -> str:
 
 
 def prepare_cards(sources: Mapping[str, dict[str, Any]],
-                  classifications: Sequence[dict[str, Any]], *, include_uncovered: bool = True) -> tuple[dict[str, Any], ...]:
+                  classifications: Sequence[dict[str, Any]], *, include_uncovered: bool = True,
+                  display_excerpts: bool = False) -> tuple[dict[str, Any], ...]:
     """Validated AI labels decorate evidence; every uncovered raw row remains REVIEW.
 
     SAME/MOVED judgments never remove the underlying deterministic difference.
@@ -73,6 +74,13 @@ def prepare_cards(sources: Mapping[str, dict[str, Any]],
         selected = [sources[i] for i in ids]
         before = "\n\n".join(dict.fromkeys(s["before"] for s in selected if s["before"]))
         after = "\n\n".join(dict.fromkeys(s["after"] for s in selected if s["after"]))
+        if display_excerpts:
+            from auditmanager.comparison.stage_v3.report import bounded_display_text
+            before, before_metadata = bounded_display_text(before)
+            after, after_metadata = bounded_display_text(after)
+            metadata = card.get("experimental", {}).get("display_text", {})
+            if metadata.get("before") != before_metadata or metadata.get("after") != after_metadata:
+                raise invalid("stage_card_display_source_pin_invalid")
         if max(len(before), len(after)) > 20_000:
             raise DomainError(ErrorCode.VALIDATION_FAILED, field="stage_chain_run_id",
                               constraint="stage_card_text_budget")

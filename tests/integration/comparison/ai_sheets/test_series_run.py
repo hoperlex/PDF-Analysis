@@ -83,7 +83,7 @@ def test_the_reads_after_the_run_show_the_eleven_states_the_progress_and_the_des
         "Люк Лк-1", "2", "3", "from_text", "from_text", "confirmed")
     assert description["declared"] == [{"text": "Изм. 3: замена люка Лк-1", "reference": "declared_and_found"}]
     assert description["coverage"] == {"candidates": 3, "in_changes": 1, "not_reviewed": 0}
-    assert description["model"] == "recorded" and description["prompt_version"].startswith("sheet-changes/1+")
+    assert description["model"] == "recorded" and description["prompt_version"].startswith("sheet-changes/2+")
     quiet = lab.service.get_description(sheet_pair_id=lab.world["p2"].pair)
     assert quiet["state"] == "partial" or quiet["state"] == "no_construction_changes"
     assert quiet["changes"] == [] and quiet["coverage"]["candidates"] == 0

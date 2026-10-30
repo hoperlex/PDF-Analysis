@@ -325,6 +325,31 @@ def run_extended_review(session, *, run, authority, jobs, journal, binding, outp
         return state
 
 
+def _attach_consolidation(result, *, version_uid):
+    """Add a derived view; raw candidates, windows and expert state are unchanged."""
+    from auditmanager.analysis.public import consolidate_extended_observations
+    try:
+        source_rows = result.get("sources", [])
+        windows = result.get("windows", [])
+        if not isinstance(source_rows, list) or not isinstance(windows, list):
+            raise ValueError("consolidation_saved_source_invalid")
+        sources = list(source_rows)
+        for window in windows:
+            if not isinstance(window, dict) or not isinstance(window.get("sources", []), list):
+                raise ValueError("consolidation_window_source_invalid")
+            sources.extend(window.get("sources", []))
+        derived = consolidate_extended_observations(result.get("observations", []),
+            sources=sources, version_uid=version_uid)
+    except ValueError:
+        derived = {"consolidation": {"version": "strict-cross-window-v1",
+            "method": "identical_text_shared_source", "complete": False,
+            "reason": "saved_observation_or_source_binding_invalid",
+            "raw_count": len(result.get("observations", [])) if isinstance(result.get("observations"), list) else 0,
+            "group_count": 0, "canonical_findings_unchanged": True,
+            "expert_decisions_written": False}, "consolidated_observations": []}
+    return dict(result, **derived)
+
+
 def read_extended_review(sessions, blob_store, run_id: str) -> dict:
     with sessions() as session:
         run = RunRepository().get(session, run_id)
@@ -363,8 +388,14 @@ def read_extended_review(sessions, blob_store, run_id: str) -> dict:
         # Read projection from the already checked envelope/Run binding. Older
         # workflow snapshots did not repeat the source identity inside result.
         # This adds no observation, anchor, paid request or guessed source.
-        return {"run_id": run_id, "status": status,
-            "result": dict(result, version_uid=version_uid)}
+        projected = dict(result, version_uid=version_uid)
+        consolidation = result.get("consolidation")
+        if (status in {"completed", "partial", "failed", "unavailable"}
+                and result.get("workflow_version") == "extended-review-v3"
+                and (not isinstance(consolidation, dict)
+                    or consolidation.get("version") != "strict-cross-window-v1")):
+            projected = _attach_consolidation(projected, version_uid=version_uid)
+        return {"run_id": run_id, "status": status, "result": projected}
     except (ValueError, KeyError, TypeError):
         raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, role=EXTENDED_REVIEW_ROLE) from None
 
@@ -924,6 +955,15 @@ def _section_report_v3(state, *, window_id=None):
             lines.append(f"{kind}: пакетов {counts['completed']} из {counts['planned']}; "
                 f"остаток {counts['remaining']}; принятый лимит вызовов {counts['limit']}.")
         lines.append("Остаток сверх принятого лимита не проверен; первоначальные наблюдения сохранены.")
+    consolidation = state.get("consolidation")
+    if isinstance(consolidation, dict):
+        if consolidation.get("complete"):
+            lines.append("Строгий свод сохранённых записей: исходных наблюдений "
+                + str(consolidation["raw_count"]) + ", групп " + str(consolidation["group_count"])
+                + ". Объединяется только совпадающий текст с общим подтверждённым источником; "
+                "все исходники и отдельные рекомендации сохранены. Это не экспертное решение.")
+        else:
+            lines.append("Строгий свод недоступен: сохранены все исходные наблюдения без группировки.")
     for number,item in enumerate(state.get("observations",[]),start=1):
         lines.extend([f"\n## {number}. {item['title']}",item['description'],
             "Источники: "+", ".join(item["source_ids"]),
@@ -1146,6 +1186,7 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             save("failed" if "extended_provider_outcome_unknown" in state["warnings"] else "running")
             return state
         _retain_primary_observations_v3(state,observations_document=observations_document)
+        state.update(_attach_consolidation(state, version_uid=run.version_uid))
         for procedure in state["procedures"]:
             if procedure["status"] in {"queued","running"}:
                 procedure.update(status="partial",reason="incomplete_window_procedures")

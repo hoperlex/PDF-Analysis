@@ -1,0 +1,27 @@
+# SPRINT3-EXPERIENCE-1030 — actual plans and strict source groups
+
+Stage V3 now distinguishes actual `windowed-v1` progress from historical `native-text-v3/1`. New-run selection describes frozen text packs rather than the old universal 16-page promise. Run progress reads the server's accepted limits and actual known durable-unit counters, including per-procedure planned/completed/pending values. Future units absent from the durable plan are explicitly excluded. Paused Runs show continuation rather than suggesting an active paid call. Catalogue completion, restricted unmatched search and unconfirmed semantic completeness remain separate from page/procedure completion. Original provenance, text-only scope and provisional machine verification remain visible.
+
+Single/batch V3 consent now describes one next model call and fresh estimate/resume for later calls. Classic graphic-window wording remains only on classic estimates. No start body, idempotency key, consent authority or backend planning was changed by this lane. Actual fresh 64-page/240k-character/1600-fragment limits come from server progress; historical 16/80k/400 receipts remain labelled historical.
+
+Large saved Stage views now render 25/50/100 cards, 25 parameter rows and 50 coverage rows per view page. Search and pagination do not alter full exports or the set of retained expert drafts. A requested/promoted card selects its actual page before source focus. Existing category/materiality sections remain, with visible and matching counts. Parameter/source exports retain all saved V3 cards, original/verified values and raw progress; JSON/HTML/XLSX now expose the accepted plan, limits and known-unit metadata explicitly, with producer limitations retained. Export/package calls are unchanged.
+
+Fresh windowed card transport can explicitly mark `experimental.display_text.before/after.excerpt`. The UI reads only these actual flags and shows the displayed source-prefix length, full length and full SHA256 alongside the side text. The full native quotes remain in the existing source catalogue/experimental metadata. Stage report UI, CSV, HTML and XLSX explicitly mark display excerpts; raw snapshots, source quotes and long-quote XLSX chunks remain complete. No legacy/classic text is shortened by this UI. The `stageV3DisplayText` reader is exposed only through the Stage V3 widget's public entry point.
+
+Ordinary terminal analysis consumes only `strict-cross-window-v1` plus `consolidation.complete=true`. It offers grouped and all-raw views, with 25/50/100 group pages and paged origin receipts. Each origin resolves its zero-based `raw_index` against the original unfiltered array from the same reading and checks actual observation ID, window ID, title and description before displaying it. A failed binding is shown as unresolved; raw records and full exports remain accessible. Actual critic/norm/correction fields remain on each origin; no group-wide model recommendation or expert verdict is invented. Missing/conflicting sources remain explicitly unmerged singleton groups. Active/incomplete/unknown consolidation uses the original raw view. Ordinary MD/HTML/XLSX retain full raw observations/windows and only add actual consolidation metadata. The named Markdown escape implementation was rewritten without unnecessary regex character escapes; no lint was run.
+
+Version-report choice now accurately distinguishes the client path (one selection call per transition, historical 400000-character bound) from fresh analytic line/chunk analysis plus verification. Large-input users can explicitly choose analytic and obtain a separate estimate; the UI never silently switches a paid choice. Existing closed API aggregate part marks/counts remain the source of displayed progress. Chunk N/M is not fabricated: detailed chunk coverage is in the producer's PDF/internal receipts, and the source MD remains complete. No new API fields, generated types or endpoint are required.
+
+Changed paths:
+
+- `web/src/widgets/stage-v3-experimental/{index.ts,ui/experimental.tsx,ui/report.tsx,model/report.ts,model/xlsx.ts}`.
+- `web/src/widgets/stage-run-controls/ui/{estimate-consent.tsx,stage-run-controls.tsx,stage-batch-controls.tsx}`.
+- `web/src/widgets/stage-changes/ui/{stage-changes.tsx,stage-changes.module.css}`.
+- `web/src/widgets/comparison-report/ui/report-window.tsx`.
+- `web/src/widgets/extended-review/ui/{consolidated-observations.tsx,extended-review.tsx}`.
+- `web/src/entities/audit-run/lib/{extended-report.ts,extended-xlsx.ts}`.
+- This report.
+
+**UNVERIFIED:** per the owner's instruction, no tests, compilation/import execution, typecheck, lint, build, browser, provider/model, database, fixture generation or Git commands were executed. Only static source reading and owned source/document writes. No API/contract, migration, dependency/lock, composition root, global style, test, fixture or other lane source was changed. Root owns integration and dev-only publication.
+
+Integration consumes the producer's exact additive experimental-progress and strict consolidation envelopes. The analytic report still has an API visibility limitation for per-chunk counts; the UI states it instead of claiming inaccessible data. Browser focus/downloads, batch cost/replay behavior, source-binding edge cases and output quality require later execution. This package is not beta acceptance, proof of original parity, a globally unique issue count or a confirmed expert/normative conclusion.

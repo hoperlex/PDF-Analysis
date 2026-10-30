@@ -114,7 +114,7 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
       {prepared.isFetching ? <p role="status">Читаем карты и оцениваем объём…</p> : null}
       {prepared.data?.map((item) => <div key={item.pair.pair_id} className={styles.selection}>
         <p>Пара <code>{item.pair.pair_id}</code></p>
-        {item.estimate === undefined ? <p>Без обращений к ИИ.</p> : <StageEstimateConsent estimate={item.estimate}
+        {item.estimate === undefined ? <p>Без обращений к ИИ.</p> : <StageEstimateConsent estimate={item.estimate} engine={engine}
           agreedDigest={agreed[item.pair.pair_id] ?? null} disabled={busy || !mayAct}
           onAgree={(digest) => setAgreed((prior) => ({ ...prior, [item.pair.pair_id]: digest }))} />}
       </div>)}

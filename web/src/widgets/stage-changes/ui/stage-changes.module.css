@@ -12,4 +12,7 @@
 .verdict label:has(textarea) { display: grid; }
 .verdict textarea { min-height: 5rem; max-width: 100%; }
 .warning, .note { border-left: .2rem solid var(--am-degraded); padding-left: .6rem; }
+.viewControls { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
+.viewControls label { display: grid; gap: .4rem; min-width: 0; }
+.viewControls input, .viewControls select { max-width: 100%; padding: .5rem; color: inherit; background: var(--am-paper); border: 1px solid var(--am-line); border-radius: .5rem; font: inherit; }
 @media (max-width: 800px) { .sides, .counts { grid-template-columns: 1fr; } }

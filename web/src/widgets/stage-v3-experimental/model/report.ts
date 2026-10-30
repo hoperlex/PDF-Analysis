@@ -8,6 +8,19 @@ export function object(value: unknown): JsonObject | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as JsonObject : null;
 }
 export function string(value: unknown): string { return typeof value === 'string' ? value : ''; }
+export function stageV3DisplayText(card: StageChangeCard) {
+  const body = object(card.experimental);
+  if (body?.engine !== V3_ENGINE) return null;
+  const display = object(body.display_text);
+  if (display === null) return null;
+  const side = (value: unknown) => {
+    const row = object(value);
+    const count = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+    return { excerpt: row?.excerpt === true, fullCharacters: count(row?.full_characters), displayedCharacters: count(row?.displayed_characters),
+      displayCharacters: count(row?.display_characters), fullSha256: string(row?.full_sha256) };
+  };
+  return { before: side(display.before), after: side(display.after), fullTextLocation: string(display.full_text_location) };
+}
 function objects(value: unknown): JsonObject[] {
   return Array.isArray(value) ? value.flatMap((item) => { const row = object(item); return row === null ? [] : [row]; }) : [];
 }
@@ -119,8 +132,12 @@ export function reportCoverage(run: StageChainRun | undefined): JsonObject[] {
 
 export function reportSnapshot(runId: string, cards: readonly StageChangeCard[], run: StageChainRun | undefined) {
   const selected = v3Cards(cards);
+  const progress = object(run?.experimental_progress);
   return { report_version: V3_REPORT_VERSION, run_id: runId,
     engine: V3_ENGINE, scope: 'all_saved_v3_cards',
+    plan_version: progress?.plan_version ?? null, limits: progress?.limits ?? null,
+    known_units: { planned: progress?.planned_units ?? null, completed: progress?.completed_units ?? null, pending: progress?.pending_units ?? null },
+    display_excerpt_cards: selected.filter((card) => { const display = stageV3DisplayText(card); return display?.before.excerpt || display?.after.excerpt; }).length,
     status: run?.state ?? null, stale: run?.stale ?? selected.some((card) => card.stale),
     experimental_progress: run?.experimental_progress ?? null,
     source_catalogue: reportSources(cards, run), coverage_pages: reportCoverage(run),
@@ -128,7 +145,8 @@ export function reportSnapshot(runId: string, cards: readonly StageChangeCard[],
     limitations: ['Только собственный текст PDF; графика и сканы не проверялись.',
       'Машинная сверка не является решением эксперта; нормы не проверены.',
       'Включены сохранённые карточки и решения; несохранённые оценки не включены.',
-      'Для старых карточек каталог цитат или идентификаторы параметров могут отсутствовать.'],
+      'Для старых карточек каталог цитат или идентификаторы параметров могут отсутствовать.',
+      ...strings(progress?.limitations)],
     cards: selected };
 }
 
@@ -148,19 +166,21 @@ export function parameterCsv(runId: string, cards: readonly StageChangeCard[]): 
   const lines = [['Запуск', 'Карточка', 'Тип записи', 'Событие', 'Параметр ID', 'Объект', 'Параметр',
     'Было (Miner)', 'Стало (Miner)', 'Единица (Miner)', 'Место', 'Машинная сверка',
     'Было после сверки', 'Стало после сверки', 'Единица после сверки', 'Объяснение сверки',
-    'Источники события', 'Источники сверки', 'Сохранённое решение эксперта', 'Причина решения', 'Устарело']];
+    'Источники события', 'Источники сверки', 'Сохранённое решение эксперта', 'Причина решения', 'Устарело', 'Отображение текста сторон карточки']];
   for (const card of v3Cards(cards)) {
+    const display = stageV3DisplayText(card);
+    const displayNote = display?.before.excerpt || display?.after.excerpt ? 'Текст сторон карточки содержит экранные фрагменты; полные тексты находятся в сохранённых источниках и JSON.' : 'Текст сторон карточки не помечен как экранный фрагмент.';
     const rows = parameterRows(card);
     if (rows.length === 0) {
       lines.push([runId, card.card_id, 'Наблюдение без параметров', string(object(card.experimental)?.event_id),
         '', '', card.title, '', '', '', '', 'Не проверено', '', '', '', '',
-        card.evidence_ids.join('\n'), '', card.verdict?.decision ?? '', card.verdict?.reason ?? '', String(card.stale)]);
+        card.evidence_ids.join('\n'), '', card.verdict?.decision ?? '', card.verdict?.reason ?? '', String(card.stale), displayNote]);
     }
     for (const row of rows) lines.push([runId, card.card_id, 'Параметр', row.eventId, row.parameterId,
       row.subject, row.name, row.oldValue, row.newValue, row.unit, row.location,
       VERIFICATION_WORDS[row.verdict] ?? 'Не проверено', row.verifiedOldValue, row.verifiedNewValue,
       row.verifiedUnit, row.explanation, sourceText(row.eventSources), sourceText(row.verificationSources),
-      card.verdict?.decision ?? '', card.verdict?.reason ?? '', String(card.stale)]);
+      card.verdict?.decision ?? '', card.verdict?.reason ?? '', String(card.stale), displayNote]);
   }
   return '\uFEFF' + lines.map((row) => row.map(csvCell).join(';')).join('\r\n');
 }
@@ -176,6 +196,9 @@ function sourceHtml(source: V3Source): string {
 export function reportHtml(runId: string, cards: readonly StageChangeCard[], run: StageChainRun | undefined): string {
   const snapshot = reportSnapshot(runId, cards, run);
   const sections = snapshot.cards.map((card) => {
+    const display = stageV3DisplayText(card);
+    const displayNote = display?.before.excerpt || display?.after.excerpt
+      ? `<p>Текст сторон карточки сокращён для отображения: исходный префикс «было» ${html(String(display.before.displayedCharacters ?? 'Не передано'))} из ${html(String(display.before.fullCharacters ?? 'Не передано'))} символов; «стало» ${html(String(display.after.displayedCharacters ?? 'Не передано'))} из ${html(String(display.after.fullCharacters ?? 'Не передано'))}. Полные цитаты сохранены в источниках и полном JSON; значения параметров показаны отдельно. SHA256 полного текста «было»: <code>${html(display.before.fullSha256)}</code>; «стало»: <code>${html(display.after.fullSha256)}</code>.</p>` : '';
     const parameters = parameterRows(card).map((row) => `<section><h3>${html(row.name || 'Параметр без названия')}</h3>
       <p>${html(row.subject)} · ${html(row.location)}</p><p>Событие: <code>${html(row.eventId)}</code>; параметр: <code>${html(row.parameterId || 'Идентификатор не сохранён')}</code></p>
       <table><thead><tr><th>Версия значений</th><th>Было</th><th>Стало</th><th>Единица</th></tr></thead><tbody>
@@ -184,7 +207,7 @@ export function reportHtml(runId: string, cards: readonly StageChangeCard[], run
       <p><strong>${html(VERIFICATION_WORDS[row.verdict] ?? 'Не проверено')}</strong> ${html(row.explanation)}</p>
       <details><summary>Источники события</summary><ul>${row.eventSources.map(sourceHtml).join('')}</ul></details>
       <details open><summary>Источники машинной сверки</summary>${row.verificationSources.length === 0 ? '<p>Привязка сверки к источникам не сохранена.</p>' : `<ul>${row.verificationSources.map(sourceHtml).join('')}</ul>`}</details></section>`).join('');
-    return `<article><h2>${html(card.title)}</h2><p>Карточка <code>${html(card.card_id)}</code> · ${card.stale ? 'Устарела' : 'Не отмечена устаревшей'}</p>
+    return `<article><h2>${html(card.title)}</h2><p>Карточка <code>${html(card.card_id)}</code> · ${card.stale ? 'Устарела' : 'Не отмечена устаревшей'}</p>${displayNote}
       <p>Сохранённое решение эксперта: ${html(card.verdict?.decision === 'accepted' ? 'Принято' : card.verdict?.decision === 'rejected' ? 'Не принято' : 'Не сохранено')}. ${html(card.verdict?.reason ?? '')}</p>
       ${parameters || '<p>Структурированные параметры не переданы; исходное наблюдение сохранено в JSON.</p>'}</article>`;
   }).join('');
@@ -194,6 +217,8 @@ export function reportHtml(runId: string, cards: readonly StageChangeCard[], run
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; base-uri 'none'; form-action 'none'"><title>V3 — параметры и источники</title>
     <style>body{font:15px system-ui,sans-serif;margin:2rem;max-width:1200px;line-height:1.5}table{border-collapse:collapse;width:100%}td,th{border:1px solid #aaa;padding:.5rem;text-align:left;white-space:pre-wrap}article{border-top:2px solid #777;margin-top:2rem}blockquote,pre{white-space:pre-wrap;overflow-wrap:anywhere}code{overflow-wrap:anywhere}@media print{details>summary{display:none}details>*{display:block}article{break-before:page}}</style></head><body><h1>V3 — параметры и источники</h1>
     <p>Запуск: <code>${html(runId)}</code> · состояние: ${html(snapshot.status ?? 'Не передано')} · сохранённых карточек: ${snapshot.saved_cards} · параметров: ${snapshot.parameters}</p>
+    <p>Закреплённый план: <code>${html(string(snapshot.plan_version) || 'Не передан')}</code>. Известных единиц работы: ${html(String(snapshot.known_units.planned ?? 'Не передано'))}; завершено: ${html(String(snapshot.known_units.completed ?? 'Не передано'))}; не завершено: ${html(String(snapshot.known_units.pending ?? 'Не передано'))}. Это сохранённый известный план, без утверждения глобальной семантической полноты.</p>
+    <details><summary>Закреплённые границы плана</summary><pre>${html(JSON.stringify(snapshot.limits, null, 2) ?? 'null')}</pre></details>
     <ul>${snapshot.limitations.map((item) => `<li>${html(item)}</li>`).join('')}</ul><p>Для PDF используйте печать браузера и «Сохранить как PDF».</p>
     <h2>Покрытие исходных страниц</h2>${coverage === '' ? '<p>Постраничное покрытие не сохранено.</p>' : `<table><thead><tr><th>Сторона</th><th>Физическая страница PDF</th><th>Версия</th><th>Сопоставление</th><th>Обработка</th><th>Причина исключения</th></tr></thead><tbody>${coverage}</tbody></table>`}
     ${sections}<details><summary>Полный каталог сохранённых источников · ${snapshot.source_catalogue.length}</summary><ul>${catalogue}</ul></details>
