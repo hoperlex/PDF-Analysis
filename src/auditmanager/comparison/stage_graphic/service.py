@@ -197,9 +197,11 @@ class StageGraphicService:
         with session_scope(self._sessions) as session:
             self._run(session, run_id)
             rows = session.execute(text(
-                "SELECT stage_graphic_evidence_id AS evidence_id,content_key,left_profile_id,right_profile_id,"
-                "status,regions FROM stage_graphic_evidence WHERE stage_chain_run_id=:run "
-                "AND status='reliable' AND jsonb_array_length(regions)>0 ORDER BY content_key"
+                "SELECT g.stage_graphic_evidence_id AS evidence_id,g.content_key,g.left_profile_id,g.right_profile_id,"
+                "g.status,g.regions FROM stage_graphic_evidence g JOIN stage_link_item i "
+                "ON i.stage_link_item_id=g.stage_link_item_id JOIN stage_chain_run r ON r.stage_chain_run_id=g.stage_chain_run_id "
+                "WHERE g.stage_chain_run_id=:run AND i.stage_link_revision_id=coalesce(r.effective_link_revision_id,r.stage_link_revision_id) "
+                "AND g.status='reliable' AND jsonb_array_length(g.regions)>0 ORDER BY g.content_key"
             ), {"run": run_id}).mappings().all()
             return tuple(dict(row) for row in rows)
 
