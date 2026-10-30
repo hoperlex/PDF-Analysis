@@ -7,6 +7,19 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
+`BETA-COST-JOURNEY-1030` keeps the existing ordinary starts compatible with required cost approval.
+Each declared start first presses its cost-estimate control, reads the actual successful source-bound response,
+checks that the prefilled finite USD cap equals the server's recommendation and covers its estimate, then presses
+the unchecked approval checkbox. The later start must carry identical version/executor-or-preset/raised-limit
+options, the exact estimate digest/cap and a real command key. Failed/missing/stale endpoints or changed payloads
+fail the step. Recorded mode is required unless `--allow-spend` explicitly permits live approval, including the
+first core Run. No provider mode is selected or replaced by the harness.
+
+The closed `approve_run_cost` action supports `run` and `ar_v3_group`; the latter uses «Оценить стоимость шести
+проверок». The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
+pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
+activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
+
 `CMP-JOURNEY-CODE-01` adds six concrete version-module steps over `fixtures/comparison/vs1`: upload five PDFs,
 confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
 consent to the recorded AI route, and download the resulting Markdown. The steps are part of the existing write half,

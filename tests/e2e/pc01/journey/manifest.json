@@ -1303,12 +1303,25 @@
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -1371,6 +1384,23 @@
         ],
         "forbids_rendered": [
           "[data-run-failure]"
+        ],
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
         ]
       },
       {
@@ -1695,12 +1725,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -1757,7 +1800,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "compare-versions-read-only",
@@ -2058,12 +2118,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -2105,7 +2178,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "compare-stages-refused-without-the-switch",
@@ -4341,12 +4431,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -4381,7 +4484,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "upload-specification-set",
@@ -4530,12 +4650,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -4570,7 +4703,24 @@
           "[data-run-failure]"
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "price-list-is-an-experts-act",
@@ -7682,12 +7832,25 @@
         ],
         "actions": [
           {
+            "do": "approve_run_cost",
+            "scope": "run",
+            "value": "{version_uid}",
+            "bound_ms": 30000
+          },
+          {
             "do": "click",
             "selector": "button",
             "text": "Запустить прогон"
           }
         ],
         "expects_api": [
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
           {
             "method": "POST",
             "path": "/runs",
@@ -7717,7 +7880,24 @@
           }
         ],
         "screen": "version-run",
-        "case": "action"
+        "case": "action",
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\""
+            ]
+          },
+          {
+            "of": "startRun",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ]
       },
       {
         "name": "queue-lists-the-waiting-run",

@@ -2442,7 +2442,7 @@ def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
 # stack shows that, and the report of this task quotes the run.
 # --------------------------------------------------------------------------------------
 
-ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for", "stage_c4"})
+ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for", "stage_c4", "approve_run_cost"})
 STAGE_C4_PRODUCES = {
     "upload": {"cmp_stage_documents", "cmp_stage_last_upload_id", "cmp_stage_last_candidate_id"},
     "assembly": {"cmp_stage_pair_id", "cmp_stage_assembly_id"},
@@ -2645,6 +2645,11 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                     findings.append(f"{label}: unknown stage_c4 phase {action.get('phase')!r}")
                 if not (REPOSITORY_ROOT / "tests/e2e/pc01/journey/stage-c4.mjs").is_file():
                     findings.append(f"{label}: stage_c4 has no maintained driver")
+            if kind == "approve_run_cost":
+                if set(action) != {"do", "scope", "value", "bound_ms"} or action.get("scope") not in {"run", "ar_v3_group"}:
+                    findings.append(f"{label}: unknown cost approval action shape/scope")
+                if action.get("value") != "{version_uid}" or not isinstance(action.get("bound_ms"), int) or not 0 < action["bound_ms"] <= 60_000:
+                    findings.append(f"{label}: cost approval requires the selected version and a positive bounded wait")
             if kind == "fill" and ("value" in action) == ("secret" in action):
                 findings.append(f"{label}: a fill names exactly one of value and secret")
             if kind == "fill" and "secret" in action and action["secret"] not in secrets_provided:
@@ -3941,3 +3946,82 @@ def test_control_a_seed_that_states_no_paragraph_count_is_detected() -> None:
     source = _require(SEED_NORMS).read_text(encoding="utf-8")
     assert seed_paragraph_count_findings(source.replace(":paragraphs)", "0)", 1))
     assert seed_paragraph_count_findings(source.replace("paragraphs=len(entries)", "paragraphs=0", 1))
+
+
+# BETA-COST-JOURNEY-1030: preflight is a real UI action, never an implicit bypass.
+def cost_preflight_findings(manifest: dict) -> list[str]:
+    findings = []
+    scopes = {
+        'startRun': ('run', 'Запустить прогон', 'estimateRunCost', '/runs/cost-estimate'),
+        'startArV3BetaGroup': ('ar_v3_group', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
+    }
+    for step in write_steps(manifest):
+        actions = step.get('actions', [])
+        for start, (scope, label, estimate, path) in scopes.items():
+            if not any(call.get('operationId') == start for call in step.get('expects_api', [])):
+                continue
+            approval = [i for i, action in enumerate(actions) if action.get('do') == 'approve_run_cost' and action.get('scope') == scope]
+            clicks = [i for i, action in enumerate(actions) if action.get('do') == 'click' and action.get('text') == label]
+            if len(approval) != 1 or len(clicks) != 1 or approval[0] >= clicks[0]:
+                findings.append(f"{step['name']}: {start} lacks explicit preflight before its start click")
+            if not any(call.get('operationId') == estimate and call.get('method') == 'POST'
+                       and call.get('path') == path and call.get('expect_status') == 200 for call in step.get('expects_api', [])):
+                findings.append(f"{step['name']}: {start} has no declared successful cost estimate")
+    return findings
+
+
+def test_every_run_start_has_explicit_preflight_before_its_start_click(manifest: dict) -> None:
+    assert not cost_preflight_findings(manifest)
+
+
+@pytest.mark.parametrize('scope,start,label,estimate,path', [
+    ('run', 'startRun', 'Запустить прогон', 'estimateRunCost', '/runs/cost-estimate'),
+    ('ar_v3_group', 'startArV3BetaGroup', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
+])
+def test_control_missing_or_late_cost_approval_is_detected(scope, start, label, estimate, path) -> None:
+    step = {'name': 'synthetic-cost', 'actions': [
+        {'do': 'approve_run_cost', 'scope': scope, 'value': '{version_uid}', 'bound_ms': 30000},
+        {'do': 'click', 'selector': 'button', 'text': label},
+    ], 'expects_api': [
+        {'operationId': start}, {'operationId': estimate, 'method': 'POST', 'path': path, 'expect_status': 200},
+    ]}
+    document = {'write': {'steps': [step]}}
+    assert not cost_preflight_findings(document)
+    step['actions'].reverse()
+    assert cost_preflight_findings(document)
+    step['actions'].pop()
+    assert cost_preflight_findings(document)
+
+
+def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> None:
+    node = shutil.which('node')
+    assert node is not None
+    module = json.dumps(_require(JOURNEY_DIR / 'write.mjs').as_uri())
+    program = f"""
+      import assert from 'node:assert/strict';
+      import {{ costApprovalFromEstimate, assertCostApprovedStart }} from {module};
+      for (const scope of ['run', 'ar_v3_group']) {{
+        const options = {{version_uid:'ver_fixture',relaxed_limits:true}};
+        const estimate = {{scope,version_uid:options.version_uid,relaxed_limits:true,currency:'USD',
+          provider_mode:'recorded',billing:'metered',estimate_digest:'a'.repeat(64),
+          estimated_cost_micros:1200000,recommended_ceiling_micros:1500000}};
+        const approval = costApprovalFromEstimate(estimate,options,scope,'1.5');
+        const body = {{...options,cost_consent:{{estimate_digest:estimate.estimate_digest,ceiling_micros:1500000,confirmed:true}}}};
+        const exchange = (value) => ({{requestBody:JSON.stringify(value),requestHeaders:{{'idempotency-key':'fixed-key'}}}});
+        assertCostApprovedStart(approval,exchange(body));
+        assert.throws(()=>assertCostApprovedStart(approval,exchange({{...body,version_uid:'ver_other'}})));
+        assert.throws(()=>assertCostApprovedStart(approval,exchange({{...body,relaxed_limits:false}})));
+        assert.throws(()=>assertCostApprovedStart(approval,exchange({{...body,preset_id:'preset_other'}})));
+        for (const patch of [{{confirmed:false}},{{ceiling_micros:1}},{{estimate_digest:'b'.repeat(64)}}]) {{
+          assert.throws(()=>assertCostApprovedStart(approval,exchange({{...body,cost_consent:{{...body.cost_consent,...patch}}}})));
+        }}
+        assert.throws(()=>costApprovalFromEstimate(estimate,options,scope,'Infinity'));
+        assert.throws(()=>costApprovalFromEstimate(estimate,options,scope,'1.1'));
+        assert.throws(()=>costApprovalFromEstimate({{...estimate,recommended_ceiling_micros:Infinity}},options,scope,'1.5'));
+        costApprovalFromEstimate({{...estimate,billing:'unmetered',estimated_cost_micros:0,recommended_ceiling_micros:0}},options,scope,'0');
+      }}
+      console.log('cost approval source checks passed; browser not executed');
+    """
+    result = subprocess.run([node, '--input-type=module', '-e', program], cwd=REPOSITORY_ROOT,
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
