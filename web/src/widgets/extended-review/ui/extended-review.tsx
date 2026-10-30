@@ -54,6 +54,8 @@ const normLabels: Record<string, string> = {
 };
 const assessmentLabels: Record<string, string> = { supports: 'Цитата предварительно поддерживает замечание', contradicts: 'Цитата предварительно противоречит замечанию', insufficient: 'Цитаты недостаточно для вывода' };
 const warningLabels: Record<string, string> = {
+  native_pdf_page_render_no_ocr: 'Для визуального анализа созданы изображения страниц исходного PDF. Отдельное распознавание текста сканов не выполнялось.',
+  portal_text_only_native_page_visuals: 'Portal-набор содержит только текстовые блоки. Для визуального анализа использованы настоящие изображения страниц PDF; это не сегментация портала.',
   remaining_blocks_not_reviewed: 'Часть блоков находится за пределами одобренного окна и не исследована.',
   geometry_blocks_not_available: 'Для части блоков нет подтверждённого изображения.',
   no_image_blocks_available: 'Нет доступных изображений блоков для визуального обзора.',

@@ -54,7 +54,7 @@ class WorkflowAdapter:
         return ModelResponse(json.dumps({'observations':values}), 'end_turn',100,100,1)
 
 
-@pytest.mark.parametrize('corpus,bad_norm,native_mode',[(False,False,False),(True,False,False),(True,True,False),(True,False,True)])
+@pytest.mark.parametrize('corpus,bad_norm,native_mode',[(False,False,False),(True,False,False),(True,True,False),(True,False,True),(True,False,'text_only'),(True,False,'mismatch')])
 def test_v2_runtime_true_phases_four_call_cap_and_originals_survive_bad_norm(monkeypatch,corpus,bad_norm,native_mode):
     portal,manifest,blobs=documents(10)
     docs={'geometry.portal_blocks':portal,'geometry.page_crops':manifest,
@@ -71,10 +71,21 @@ def test_v2_runtime_true_phases_four_call_cap_and_originals_survive_bad_norm(mon
                 'kind':'image','source_type':'native_page','version_uid':VERSION,'page_number':crop['page_number'],
                 'bbox_norm':[0.,0.,1.,1.],'crop_sha256':crop['sha256'],'blob_id':crop['blob_id'],
                 'size_bytes':crop['size_bytes'],'context':[]})
-        docs.pop('geometry.portal_blocks');docs.pop('geometry.page_crops')
-        monkeypatch.setattr(public,'prepare_native_page_sources',lambda **kwargs:{'sources':native_sources,'artifacts':(),
-            'coverage':{'blocks_total':10,'blocks_selected':10,'blocks_processed':0,'blocks_remaining':10,'skipped':[]},
-            'warnings':['native_pdf_page_render_no_ocr'],'source_sha256':'f'*64})
+        if native_mode in {'text_only','mismatch'}:
+            for block in portal['blocks']:
+                block['block_type']='text'
+                if native_mode=='mismatch':block['geometry']='geometry_mismatch'
+            if native_mode=='mismatch':
+                for page in portal['pages']:page['geometry']='geometry_mismatch'
+            manifest['crops']=[]
+        else:
+            docs.pop('geometry.portal_blocks');docs.pop('geometry.page_crops')
+        def prepare_native(**kwargs):
+            assert native_mode!='mismatch','known portal geometry refusal bypassed by native rendering'
+            return {'sources':native_sources,'artifacts':(),
+                'coverage':{'blocks_total':10,'blocks_selected':10,'blocks_processed':0,'blocks_remaining':10,'skipped':[]},
+                'warnings':['native_pdf_page_render_no_ocr'],'source_sha256':'f'*64}
+        monkeypatch.setattr(public,'prepare_native_page_sources',prepare_native)
 
     monkeypatch.setattr(runtime,'parse_blob_id',lambda x:x)
     monkeypatch.setattr(runtime,'extended_unit',lambda *_args,**_kw:None)
@@ -90,15 +101,16 @@ def test_v2_runtime_true_phases_four_call_cap_and_originals_survive_bad_norm(mon
         progress=lambda status,value:saved.append((status,json.loads(json.dumps(value)))),checkpoint=lambda _:None,
         observations_document=None,snapshot_id='snapshot' if corpus else None,
         policy={'enabled':True,'max_blocks':16,'plan_version':'extended-review-v2'})
-    assert len(adapter.requests)==(4 if corpus else 3)
-    assert [len(r.images_bytes) for r in adapter.requests[:3]]==[8,2,0]
+    assert len(adapter.requests)==(2 if native_mode=='mismatch' else 4 if corpus else 3)
+    assert [len(r.images_bytes) for r in adapter.requests[:3]]==([0,0] if native_mode=='mismatch' else [8,2,0])
     assert result['workflow_version']=='extended-review-v2'
     procedures={p['id']:p['status'] for p in result['procedures']}
-    assert procedures['block_analysis']=='completed' and procedures['comprehensive_analysis']=='completed' and procedures['finding_merge']=='completed'
+    assert procedures['block_analysis']==('unavailable' if native_mode=='mismatch' else 'completed')
+    assert procedures['comprehensive_analysis']=='completed' and procedures['finding_merge']=='completed'
     assert procedures['norm_verification']==('unavailable' if not corpus else 'failed' if bad_norm else 'completed')
-    assert len(result['observations'])==2
-    assert sum(len(o.get('merged_observations',[o])) for o in result['observations'])==3
-    assert saved[-1][0]==('partial' if not corpus else 'failed' if bad_norm else 'completed')
+    assert len(result['observations'])==(1 if native_mode=='mismatch' else 2)
+    assert sum(len(o.get('merged_observations',[o])) for o in result['observations'])==(1 if native_mode=='mismatch' else 3)
+    assert saved[-1][0]==('partial' if not corpus or native_mode=='mismatch' else 'failed' if bad_norm else 'completed')
     assert all(p['status']=='queued' for p in saved[0][1]['procedures'])
 
 

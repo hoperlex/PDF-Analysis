@@ -394,11 +394,27 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         if "prepared.text_layer" not in data or "context.document_graph" not in data:
             raise _refuse("extended_prepared_inputs_unavailable")
         native = None
-        if "geometry.portal_blocks" not in data:
+        portal = data.get("geometry.portal_blocks")
+        manifest = data.get("geometry.page_crops")
+        text_only_portal = False
+        if portal is not None and manifest is not None:
+            # Validate the saved portal cohort before considering native rendering.
+            # Native pages supplement genuine TEXT-only input; they never conceal an
+            # IMAGE refusal or a known page/region geometry mismatch.
+            plan_extended_inputs(version_uid=run.version_uid,section=section,portal=portal,manifest=manifest,
+                text_layer=data["prepared.text_layer"],graph=data["context.document_graph"],
+                observations=None,plan_version="extended-review-v2")
+            text_only_portal = (not manifest.get("crops") and bool(portal.get("blocks"))
+                and all(block.get("block_type") == "text" and block.get("geometry") == "ok"
+                    for block in portal["blocks"])
+                and all(page.get("geometry") == "ok" for page in portal.get("pages", [])))
+        if portal is None or text_only_portal:
             source = outputs.refs.get("source.document")
             if source is None: raise _refuse("extended_native_source_unavailable")
             native = prepare_native_page_sources(version_uid=run.version_uid,source_ref=source,
                 blob_store=store,max_pages=16,checkpoint=checkpoint)
+            if text_only_portal:
+                native["warnings"].append("portal_text_only_native_page_visuals")
             if bind_native is not None: bind_native(native["artifacts"])
         planned = plan_extended_inputs(version_uid=run.version_uid,section=section,
             portal=data.get("geometry.portal_blocks",{}),manifest=data.get("geometry.page_crops",{}),

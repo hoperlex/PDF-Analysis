@@ -33,3 +33,7 @@ fixtures/presentation-hotfix/README.md
 v2policy={enabled:true,max_blocks:16,plan_version:extended-review-v2}. Fouradditionalcallsmaximum:2blocks+1comprehensive+1normreview. IDsblock_analysis/comprehensive_analysis/finding_merge/norm_verificationareproceduresinsavedextendedartifact,notfabricatedcanonicalStageResults. result.procedureslistof{id,title,status(queued/running/completed/partial/failed/unavailable/skipped),reason?}. readhelperreturnsplannedresultbeforeartifactifacceptedv2; otherwiseexplicitreasonandnoinventedstages. v1execution/policykeptcompatible. NoAPI/DDLchange.
 
 Rootadditionalallowedpath: tests/unit/runs/test_cost_policy.py for v1/v2 authority compatibility and invalid-window refusal.
+
+Userfollowup deliverable: docs/program/BETA-FUNCTIONAL-STATUS-2026-10-30.md compares actual published code29ccf9eb with initial PC01 and firstbeta expectations, explicitly separates code/runtime/quality/liveacceptance. Documentation-only, no new implementation or gates.
+
+AfterUIhandback rootowns two informational warning labels in web/src/widgets/extended-review/ui/extended-review.tsx for native-page/noOCR and TEXT-only portal page visuals. No concurrent UIwriter.

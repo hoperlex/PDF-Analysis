@@ -36,3 +36,7 @@ This remains bounded preliminary analysis, not the original application's comple
 ## Integration
 
 Commit with root's v2 preflight authority and public wrappers, the core owner's comprehensive/norm/merge methods, and the UI owner's planned procedures/final refetch/native-source presentation. Root alone performs final build and authorised dev publication. No authority to publish main is granted.
+
+## TEXT-only portal forward fix
+
+A validated portal bundle containing only TEXT blocks, no crops and no page/block geometry mismatch now supplements its PDF with genuine native page visuals. It retains source_type=native_page and the explicit portal_text_only_native_page_visuals reason/warning; no portal IMAGE identity is fabricated. Any IMAGE block/refusal or known geometry mismatch prevents this fallback. Focused runtime tests include TEXT-only portal→native visual workflow and a mismatched portal whose native helper must never execute; the latter retains unavailable block analysis and a partial overall result. Targeted runtime/native/read suite: 11 passed. Scoped compile and whitespace checks PASS. No Git/provider/DB/contract changes.
