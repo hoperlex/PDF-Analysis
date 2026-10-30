@@ -1,5 +1,12 @@
 # Current state
 
+**Updated 2026-10-30 by `DESIGN-M09-ACCOUNT` (development candidate only).**
+Profile, password change, user list, user detail and registration queue now
+use responsive two-theme cards and contained tables. Existing forms, role
+gates, account actions and registration decisions remain unchanged. Typecheck,
+lint and 61 focused tests pass. No API, contract, migration or `origin/main`
+change is included. Publication is to `origin/dev` only; M10 acceptance remains.
+
 **Updated 2026-10-30 by `DESIGN-M08-ACCESS` (development candidate only).**
 Login, registration, submitted and forbidden screens now use the shared
 light/dark palette and responsive form/notice cards. Existing server forms,

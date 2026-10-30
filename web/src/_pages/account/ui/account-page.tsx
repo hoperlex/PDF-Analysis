@@ -7,6 +7,7 @@ import { EditProfileForm } from '@/features/edit-profile';
 import { failureMessage } from '@/shared/api/failure-message';
 import { CHANGE_PASSWORD_SCREEN } from '@/shared/config';
 import { Avatar, ErrorState, LoadingState, PageShell } from '@/shared/ui';
+import styles from './account-page.module.css';
 
 export interface AccountPageProps {
   readonly profileComplete: boolean;
@@ -40,7 +41,7 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
 
   return (
     <PageShell title="Профиль" subtitle={profileComplete || account.profile_complete ? 'Данные вашей учётной записи.' : 'Завершите профиль, чтобы открыть остальные разделы.'}>
-      <div data-account-profile-complete={account.profile_complete}>
+      <div className={styles.profile} data-account-profile-complete={account.profile_complete}>
         <Avatar initials={initialsOf(label)} colourKey={account.login} label={`Аватар: ${label}`} />
         <p className="am-note"><strong>{label}</strong></p>
         <p className="am-note">Роли: {roles.length ? roles.join(', ') : 'не назначены'}.</p>

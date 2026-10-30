@@ -1,5 +1,6 @@
 import { PageShell } from '@/shared/ui';
 import { UserCard } from '@/widgets/user-card';
+import styles from './admin-user-page.module.css';
 
 export interface AdminUserPageProps {
   readonly userUid: string;
@@ -10,7 +11,9 @@ export interface AdminUserPageProps {
 export function AdminUserPage({ userUid, signedInLogin = null }: AdminUserPageProps) {
   return (
     <PageShell title="Пользователь" subtitle="Просмотр и управление учётной записью.">
-      <UserCard userUid={userUid} signedInLogin={signedInLogin} />
+      <div className={styles.panel}>
+        <UserCard userUid={userUid} signedInLogin={signedInLogin} />
+      </div>
     </PageShell>
   );
 }
