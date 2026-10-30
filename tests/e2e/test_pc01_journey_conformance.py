@@ -2442,7 +2442,14 @@ def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
 # stack shows that, and the report of this task quotes the run.
 # --------------------------------------------------------------------------------------
 
-ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for"})
+ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for", "stage_c4"})
+STAGE_C4_PRODUCES = {
+    "upload": {"cmp_stage_documents", "cmp_stage_last_upload_id", "cmp_stage_last_candidate_id"},
+    "assembly": {"cmp_stage_pair_id", "cmp_stage_assembly_id"},
+    "swapped_map": {"cmp_stage_swapped_revision_id"}, "full_run": {"cmp_stage_initial_run_id", "cmp_stage_run_id"},
+    "repair_undo": {"cmp_stage_run_id", "cmp_stage_repair_id", "cmp_stage_recompute_run_id", "cmp_stage_recompute_revision_id"},
+    "verdict": {"cmp_stage_card_id"}, "journal": set(), "promote": {"cmp_stage_promoted_card_id"},
+}
 CAPTURE_KINDS = frozenset({"attribute", "location", "response", "text"})
 FIRST_FOUR = ("create-project", "upload-document", "classify-version", "start-run")
 #: What the first four steps capture, which every later step may use.
@@ -2632,6 +2639,12 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
             if kind not in ACTION_KINDS:
                 findings.append(f"{label}: unknown action '{kind}'")
                 continue
+            if kind == "stage_c4":
+                phases = {"upload", "assembly", "swapped_map", "full_run", "repair_undo", "verdict", "journal", "promote"}
+                if action.get("phase") not in phases:
+                    findings.append(f"{label}: unknown stage_c4 phase {action.get('phase')!r}")
+                if not (REPOSITORY_ROOT / "tests/e2e/pc01/journey/stage-c4.mjs").is_file():
+                    findings.append(f"{label}: stage_c4 has no maintained driver")
             if kind == "fill" and ("value" in action) == ("secret" in action):
                 findings.append(f"{label}: a fill names exactly one of value and secret")
             if kind == "fill" and "secret" in action and action["secret"] not in secrets_provided:
@@ -2753,6 +2766,8 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
         bind = step.get("bind") or {}
         used = {name for name, _local in _step_templates(step)}
         produced_here = {n for c in captures for n in c.get("as") or ()}
+        c4_produced = set().union(*(STAGE_C4_PRODUCES.get(a.get("phase"), set()) for a in step.get("actions", []) if a.get("do") == "stage_c4"))
+        produced_here.update(c4_produced)
         for name, target in bind.items():
             # A bind for a variable the step never mentions is shared, not wrong.
             if name in used and target not in produced and target not in produced_here:
@@ -2761,7 +2776,7 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
             wanted = (local or {}).get(name, bind.get(name, name))
             if wanted in constants or wanted in produced:
                 continue
-            if any(wanted == capture_name for capture in captures for capture_name in capture.get("as") or ()):
+            if wanted in c4_produced or any(wanted == capture_name for capture in captures for capture_name in capture.get("as") or ()):
                 continue
             findings.append(
                 f"{label}: needs {{{name}}}"
@@ -2770,6 +2785,7 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
             )
         for capture in captures:
             produced.update(capture.get("as") or ())
+        produced.update(c4_produced)
 
         # ---- a refused case must refuse something ----------------------------------
         if late and step.get("case") == "refused":

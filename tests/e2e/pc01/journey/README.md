@@ -11,9 +11,16 @@ A sign-in, two phases, one instrument, one envelope, one exit code.
 confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
 consent to the recorded AI route, and download the resulting Markdown. The steps are part of the existing write half,
 retain every older route/step, and require recorded mode even when `--allow-spend` is present. Missing recordings,
-module wiring, browser controls or terminal results fail the step; they are not skipped. The stage-module extension
-(assembly/map/batch/repair undo/verdict/journal) is still pending the root's C4 page mounts and remains an explicit
-outstanding part of that task. No browser execution of these new steps has been claimed.
+module wiring, browser controls or terminal results fail the step; they are not skipped.
+
+`CMP-JOURNEY-C4-01` adds eight `cmp-stage-*` steps: four SP-1 PDF documents, assembly and pair confirmation,
+an intentionally swapped map, a full recorded-AI/image chain, HIGH repair undo plus text recomputation and a fresh
+full run, expert verdict, all three real journal groupings/exports, and a REVIEW card over a masked fragment.
+The old SP-1 corpus is unchanged. R2 uses an explicitly declared synthetic derivative with one added circle so an
+actual graphic crop is required, rather than assuming a text edit creates one. Manifest SHA/size fields pin both
+the derivative and original source. The derivative generator is `fixtures/make-sp1-graphic.py`.
+
+**Browser/worker execution is UNVERIFIED.** Syntax/census/conformance checks are code evidence only.
 
 ```sh
 node tests/e2e/pc01/journey/comparison-conformance.mjs
@@ -23,6 +30,41 @@ This short command checks declarations and exact synthetic corpus bytes only. It
 journey acceptance. Run the full recorded journey tomorrow against the exact integrated candidate, keeping its
 normal response/download envelope. The new `last_response` expectation checks the last recorded poll after the
 bounded UI wait; `requires_idempotency_key` checks the browser's actual command header.
+
+For the C4 recorded window, use an isolated local stand with the exact candidate's migration head and
+`versions,stages` enabled on the API. The normal worker may continue ordinary Run work with comparison modules
+disabled; it must not compete for these recorded comparison items, because production composition deliberately
+refuses recorded C4 routes. In the same local database/S3 environment, explicitly launch the test-owned worker:
+
+```sh
+AUDITMANAGER_PROVIDER_MODE=recorded PYTHONPATH=src .venv/bin/python \
+  tests/e2e/pc01/journey/c4_recorded_worker.py --local-synthetic-only --seed-route \
+  --receipts /tmp/c4-synthetic-receipts.jsonl
+```
+
+This helper requires loopback DB/S3 endpoints, uses real profile/engine/queue/spend code and an explicit
+source-bound **synthetic** reply fixture. It does not replay a real model's answer and does not claim an engineering
+conclusion. It never imports a live model adapter. Unknown request schemas fail. Actual PNG byte digests and the
+request/source/run identity are written to the receipt file; GRAPHIC replies without source images fail.
+It claims stage AI and shared deterministic intake/profile work only. The six preceding version-module steps
+retain their existing recorded-provider prerequisite; this helper does not supply version-AI recordings.
+
+Set `E2E_C4_RECORDED_RECEIPTS=/tmp/c4-synthetic-receipts.jsonl` in the journey process. The eight C4 phases use
+the existing signed-in browser and project captured by the core steps. A focused `--steps` run must include the
+project/core Run prerequisites (or their explicit seed) and remains PARTIAL, exactly as the maintained harness
+already reports. `--allow-spend` never bypasses recorded-only C4 mode. Missing mount, SP-1 proof, HIGH repair,
+route/recording, consent, PNG receipt, terminal result or download is a failed step, never a skip or synthetic PASS.
+
+Static exposure can be regenerated without launching the application:
+
+```sh
+node tests/e2e/pc01/journey/comparison-exposure.mjs
+# For a new dated source snapshot, add --write --source-sha=<exact-reviewed-40-hex-SHA>.
+```
+
+The current table is 32 C3 +24 C4 operations; its prior 55-row snapshot is retained verbatim in
+`fixtures/exposure-cmp-prior.md`. Auth/role/scope/cost/stream declarations remain execution UNVERIFIED until the
+deferred request matrix and browser/download window run.
 
 **The write half** creates a project, uploads the synthetic portal bundle (a ZIP), confirms the uploaded
 version's stage and section (П, ПБ) and starts a run — through the app's own controls, on the public

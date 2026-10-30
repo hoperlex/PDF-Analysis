@@ -74,6 +74,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { withColdBrowser } from './cdp.mjs';
+import { C4_PRODUCES, stageC4Action } from './stage-c4.mjs';
 
 /** The `{name}` placeholders a template mentions, in order of appearance. */
 export function templateNames(template) {
@@ -137,6 +138,9 @@ export function namesNeededBy(step) {
   // What the step captures itself is not something it needs from an earlier step.
   for (const capture of [step.capture, ...(step.captures ?? [])]) {
     for (const produced of capture?.as ?? []) names.delete(produced);
+  }
+  for (const action of step.actions ?? []) if (action.do === 'stage_c4') {
+    for (const name of C4_PRODUCES[action.phase] ?? []) names.delete(name);
   }
   return [...names];
 }
@@ -581,7 +585,10 @@ export async function runWritePhase({
           record.actions.push(entry);
           const text = action.text === undefined ? null : fill(action.text, scope());
           const selector = action.selector === undefined ? undefined : fill(action.selector, scope());
-          if (action.do === 'fill') {
+          if (action.do === 'stage_c4') {
+            entry.result = await stageC4Action({ page, action, captured: scope(), repositoryRoot });
+            Object.assign(captured, entry.result.captured);
+          } else if (action.do === 'fill') {
             // `secret` names a password the journey holds in memory; the value typed is never
             // recorded, and neither is what the control read back.
             const typed =
