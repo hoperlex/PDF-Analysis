@@ -186,6 +186,10 @@ def _ground_cohort(
     def claim_items(reply: _Reply, proposal: Any) -> list[Any]:
         """The quotes of a proposal that go to the cohort, in order."""
         if proposal.category == OMISSION_CATEGORY:
+            if plan.page_pieces:
+                from .page_pieces import partial_window
+                if partial_window(plan.layer, reply.window):
+                    return []
             items = list(quotes_of(proposal))
             return items if all(inside(reply, item.page_number) for item in items) else []
         return [item for item in proposal.evidence if inside(reply, item.page_number)]
@@ -199,7 +203,11 @@ def _ground_cohort(
                 for item in claim_items(reply, proposal)
             )
         )
-    bound = bind_window_claim_cohort(
+    binder = bind_window_claim_cohort
+    if plan.page_pieces:
+        from .page_pieces import bind_claims
+        binder = bind_claims
+    bound = binder(
         plan.layer,
         plan.windows,
         tuple(WindowReplyClaims(index, claims) for index, claims in enumerate(claims_per_window)),
@@ -585,6 +593,12 @@ def run_text_analysis_windows(
         else:
             analysed.extend(page.page_number for page in pages)
     observations = [observation for window_observations in grounded for observation in window_observations]
+    if plan.page_pieces:
+        piece_answers: dict[int, list[bool]] = {}
+        for reply in replies:
+            for page in plan.pages_of(reply.window):
+                piece_answers.setdefault(page.page_number, []).append(not reply.response.truncated)
+        analysed = sorted(page for page, answers in piece_answers.items() if all(answers))
 
     call_status = CALL_TRUNCATED if truncated_any else CALL_SUCCEEDED
     metrics: dict[str, Any] = {
@@ -620,6 +634,14 @@ def run_text_analysis_windows(
         **omissions.metrics(),
         **_recognised_metrics(recognised_pages),
     }
+    if plan.page_pieces:
+        from .page_pieces import partial_window
+        metrics.update(native_page_pieces=True,
+            partial_page_windows=sum(partial_window(plan.layer, reply.window) for reply in replies),
+            pages_with_incomplete_pieces=len(plan.layer.pages) - len(analysed),
+            windows_note="Текст плотных страниц разбит на части с исходными номерами и диапазонами Unicode. "
+                "Цитаты привязаны только к переданным частям; отсутствие данных в частичном окне не подтверждается. "
+                "Межоконные расхождения этим текстовым этапом не проверяются.")
     try:
         assert_consistent_mode(mode, tuple(records))
         artifact = build_text_observations(

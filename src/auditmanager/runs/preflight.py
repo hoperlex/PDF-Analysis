@@ -82,6 +82,8 @@ class RunCostEstimateValue:
             result["approved_by_user_uid"] = actor_user_uid
         if "extended_review" in authority:
             result["extended_review"] = authority["extended_review"]
+        if "native_page_piece_policy" in authority:
+            result["native_page_piece_policy"] = authority["native_page_piece_policy"]
         if "scope_costs_micros" in authority:
             result["scope_costs_micros"] = authority["scope_costs_micros"]
         return result
@@ -168,19 +170,21 @@ class RunCostPreflight:
 
     def _value(self, *, version, chars, source, pricing, pin, frozen, chosen, relaxed, scope,
                windows, calls, input_tokens, output_tokens, window_characters=None, scope_costs=None,
-               extended_review=None):
+               extended_review=None, native_page_piece_policy=None):
         cost = (sum(scope_costs.values()) if scope_costs is not None else
                 0 if pricing["billing"] == "unmetered" else estimated_micros(pin, input_tokens, output_tokens))
         source_sha = _digest(source)
         authority = dict(pricing, format=FORMAT, source_sha256=source_sha,
             window_characters=window_characters,
-            max_windows=(max(12, version.page_count) if relaxed else max(12, windows)) if scope == "run" else None,
+            max_windows=(max(12, version.page_count) if relaxed and native_page_piece_policy is None else max(12, windows)) if scope == "run" else None,
             relaxed_limits=relaxed, scope=scope, windows=windows, calls=calls,
             input_tokens=input_tokens, output_tokens=output_tokens)
         if scope_costs is not None:
             authority["scope_costs_micros"] = scope_costs
         if extended_review is not None:
             authority["extended_review"] = extended_review
+        if native_page_piece_policy is not None:
+            authority["native_page_piece_policy"] = native_page_piece_policy
         digest = _digest(authority)
         public = {"estimate_digest": digest, "scope": scope, "version_uid": str(version.version_uid),
             "provider_mode": self.mode, "billing": pricing["billing"], "model_id": pin.model_id,
@@ -193,7 +197,8 @@ class RunCostPreflight:
                 public[key] = pricing[key]
         return RunCostEstimateValue(_json(public), _json(authority), frozen, chosen)
 
-    def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None):
+    def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
+                     allow_native_page_pieces=True):
         if type(relaxed_limits) is not bool:
             raise _invalid("relaxed_limits", "boolean")
         version, chars, source = self._source(session, version_uid, version_record)
@@ -210,8 +215,26 @@ class RunCostPreflight:
         # never estimate fewer than that conservative bound without parsing pages.
         windows = 1 if chars + version.page_count * 32 <= window else min(version.page_count,
             max(2, 2 * math.ceil((chars + version.page_count * 32) / window)))
+        page_pieces = None
+        if allow_native_page_pieces and os.environ.get("AUDITMANAGER_NATIVE_PAGE_PIECES", "1").strip().lower() not in {"0", "false", "off"}:
+            from auditmanager.analysis.public import native_page_piece_policy
+            page_pieces = native_page_piece_policy()
+            rendered_upper = 2 * chars + version.page_count * page_pieces["page_frame_characters"]
+            if rendered_upper > window:
+                available = window - page_pieces["frame_characters"] - 1024
+                if available <= 0:
+                    raise _invalid("analysis_window_policy", "page_piece_frame_exceeds_window")
+                # Native text is splittable; recognised blocks remain indivisible.
+                # Next-fit packing needs at most twice the total rendered weight
+                # quotient plus one. Escaped recognised text and page labels are
+                # included conservatively, without a page_count call cap.
+                windows = max(windows, 2 * math.ceil(rendered_upper / available) + 1)
         fixed = len(bundle.system_prompt) + len(_json(bundle.response_schema)) + 12_000
-        input_tokens = math.ceil(Fraction((2 * chars + fixed * windows) * 5, 7))
+        input_characters = 2 * chars + fixed * windows
+        if page_pieces is not None:
+            input_characters += (version.page_count * page_pieces["page_frame_characters"]
+                + windows * page_pieces["frame_characters"])
+        input_tokens = math.ceil(Fraction(input_characters * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
         # A new plan is accepted explicitly. Previous accepted v1/v2 commands keep
         # their historical semantics and never acquire this larger call allowance.
@@ -305,19 +328,21 @@ class RunCostPreflight:
                 raise _invalid("analysis_workflow", "unsupported_plan")
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
-            extended_review=extended)
+            extended_review=extended, **({"native_page_piece_policy": page_pieces} if page_pieces is not None else {}))
         return self._value(version=version, chars=chars, source=source, pricing=pricing, pin=pin,
             frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="run", windows=windows, calls=windows+extra_calls,
             input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window,
-            extended_review=extended)
+            extended_review=extended, native_page_piece_policy=page_pieces)
 
     def estimate_reaudit(self, session, *, run_id, version_record=None):
         from .repository import RunRepository
         runs = RunRepository()
         source_run = runs.get(session, run_id)
         executor = runs.chosen_executor_connection(session, run_id)
+        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         value = self.estimate_run(session, version_uid=source_run.version_uid,
-            executor_connection_id=executor, version_record=version_record)
+            executor_connection_id=executor, version_record=version_record,
+            allow_native_page_pieces=str(source_run.analysis_profile_id) != str(AR_V3_BETA_PROFILE_ID))
         authority = json.loads(value.authority_json)
         # A fresh approval is for this new re-audit, never the parent's paid work.
         authority["reaudit_of_run_id"] = run_id

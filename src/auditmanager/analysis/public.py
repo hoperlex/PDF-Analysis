@@ -480,6 +480,19 @@ def extended_coverage_policy(**kwargs):
     return coverage_policy(**kwargs)
 
 
+def native_page_piece_policy():
+    from .text.page_pieces import policy
+    return policy()
+
+
+def validate_native_page_piece_policy(value, **kwargs):
+    from .text.page_pieces import validate_policy
+    return validate_policy(value, **kwargs)
+
+
+__all__ += ["native_page_piece_policy", "validate_native_page_piece_policy"]
+
+
 def validate_extended_coverage_policy(policy):
     from auditmanager.analysis.extended.coverage import validate_coverage_policy
     return validate_coverage_policy(policy)

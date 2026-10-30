@@ -89,6 +89,7 @@ class ProviderConfig:
     approved_model_id: str | None = None
     approved_rate_sha256: str | None = None
     approved_connection_revision_id: str | None = None
+    approved_native_page_pieces: dict | None = None
 
 
 def _read_ceiling(environ: Mapping[str, str]) -> tuple[float, bool]:

@@ -88,12 +88,15 @@ class WindowPolicy:
 
     window_characters: int
     max_windows: int
+    native_page_pieces: bool = False
 
     def __post_init__(self) -> None:
         if type(self.window_characters) is not int or self.window_characters < 0:
             raise ValueError("window_characters must be a non-negative whole number")
         if type(self.max_windows) is not int or self.max_windows < 2:
             raise ValueError("a windowed policy takes at least two windows")
+        if type(self.native_page_pieces) is not bool:
+            raise ValueError("native page pieces must be an explicit boolean")
 
 
 RELAXED_WINDOW_SIZING_USD_V1 = 1.0
@@ -126,6 +129,7 @@ def text_window_policy(
     bundle: PromptBundle | None = None,
     relaxed_limits: bool = False,
     approved_window_characters: int | None = None,
+    native_page_pieces: bool = False,
 ) -> WindowPolicy | None:
     """The policy for a run, or ``None`` when the run is analysed in one call exactly as before.
 
@@ -167,7 +171,7 @@ def text_window_policy(
         call_budget = input_budget_characters(model_id, ceiling_usd, lock=lock, bundle=bundle)
     if text_character_count + recognised_characters <= call_budget or max_windows == 1:
         return None
-    return WindowPolicy(window_characters=call_budget, max_windows=max_windows)
+    return WindowPolicy(window_characters=call_budget, max_windows=max_windows, native_page_pieces=native_page_pieces)
 
 
 def _refuse(reason: str, message: str) -> DomainError:
@@ -189,8 +193,13 @@ class WindowPlan:
     window_characters: int
     text_sha256: str
     recognised: tuple[RecognisedPage, ...] = ()
+    page_pieces: bool = False
 
     def pages_of(self, window: TextChunk) -> tuple[Page, ...]:
+        if self.page_pieces:
+            return tuple(Page(page.page_number, max(page.char_start, window.char_start), min(page.char_end, window.char_end),
+                self.layer.slice(max(page.char_start, window.char_start), min(page.char_end, window.char_end)))
+                for page in self.layer.pages[window.first_page - 1:window.last_page])
         return self.layer.pages[window.first_page - 1 : window.last_page]
 
 
@@ -211,10 +220,15 @@ def plan_text_windows(
     """
     validate(layer, recognised)  # a handed page the layer lacks is refused here, before any call
     ceiling = policy.window_characters - ((len(NOTICE) + 1) if recognised else 0)
+    extras = extra_by_page(recognised)
+    piece_mode = policy.native_page_pieces and any(len(page.text) > ceiling for page in layer.pages)
     try:
-        windows = partition_text_layer(
-            layer, max_chunk_characters=ceiling, page_extra=extra_by_page(recognised)
-        )
+        if piece_mode:
+            from .page_pieces import FRAME_RESERVE, partition, validate_plan
+            windows = partition(layer, max_chunk_characters=ceiling - FRAME_RESERVE, page_extra=extras)
+            validate_plan(layer, windows)
+        else:
+            windows = partition_text_layer(layer, max_chunk_characters=ceiling, page_extra=extras)
     except ChunkPreflightError as exc:
         if exc.reason == "page_exceeds_limit":
             raise _refuse(
@@ -242,6 +256,7 @@ def plan_text_windows(
         window_characters=policy.window_characters,
         text_sha256=hashlib.sha256(layer.document_text.encode("utf-8")).hexdigest(),
         recognised=tuple(recognised),
+        page_pieces=piece_mode,
     )
 
 
@@ -270,6 +285,11 @@ def render_window(plan: WindowPlan, window: TextChunk) -> str:
         + notice_for(tuple(blocks.values())),
         "",
     ]
+    if plan.page_pieces:
+        parts.append(f"Страницы могут быть переданы частично. Исходный диапазон Unicode документа: "
+            f"{window.char_start}–{window.char_end}. Цитируй только реально переданный текст; "
+            "часть страницы не доказывает отсутствие данных на всей странице. Предложения об отсутствии "
+            "из частичного окна не становятся каноническими находками.")
     for page in pages:
         parts.append(PAGE_BANNER.format(page_number=page.page_number))
         parts.append(page.text)

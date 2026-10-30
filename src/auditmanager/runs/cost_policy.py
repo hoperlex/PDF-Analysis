@@ -24,6 +24,7 @@ class RunCostPolicy:
     rate_sha256: str | None = None
     connection_revision_id: str | None = None
     extended_review: dict | None = None
+    native_page_piece_policy: dict | None = None
 
 
 def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
@@ -48,6 +49,11 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         model, rates = consent["model_id"], consent["rate_sha256"]
         revision = consent.get("connection_revision_id")
         extended = consent.get("extended_review")
+        page_pieces = consent.get("native_page_piece_policy")
+        if page_pieces is not None:
+            from auditmanager.analysis.public import validate_native_page_piece_policy
+            if not validate_native_page_piece_policy(page_pieces, compare_bundle=False):
+                raise ValueError()
         if extended is not None:
             if not isinstance(extended, dict) or extended.get("enabled") is not True:
                 raise ValueError()
@@ -113,4 +119,4 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
     return RunCostPolicy(True, ceiling / 1_000_000 if ceiling else float(default_ceiling_usd),
                          billing == "metered" and not uncapped_stats, window, maximum,
-                         digest, model, rates, revision, extended)
+                         digest, model, rates, revision, extended, page_pieces)
