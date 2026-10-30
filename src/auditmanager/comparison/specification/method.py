@@ -28,15 +28,16 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import asdict
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Final
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.analysis.public import ModelRequest
+from auditmanager.analysis.public import ModelRequest, ModelResponse
 from auditmanager.comparison.ai_jobs.model import AiCallGroup, AiCounts, AiEstimateRequest, AiJobRecord, AiMode, AiWorkItemSpec
 from auditmanager.comparison.ai_jobs.service import ComparisonAiJobService
-from auditmanager.comparison.specification import prompt
+from auditmanager.comparison.specification import prompt, batches
 from auditmanager.comparison.specification.reader import SpecificationReader
 from auditmanager.comparison.specification.repository import SpecificationRepository, TransitionScope
 from auditmanager.comparison.specification.transition import Answer, PreparedSide, TransitionRun, prepare_side
@@ -104,13 +105,18 @@ class SpecMethod:
     """The `spec` method as the core asks for it (:class:`~auditmanager.comparison.ai_jobs.model.AiMethod`)."""
 
     method: str = "spec"
-    prompt_version: str = prompt.PROMPT_VERSION
+    prompt_version: str = batches.PROMPT_VERSION
 
     def __init__(self, session_factory: sessionmaker[Session], blob_store: Any, *, reader: SpecificationReader | None = None,
                  repository: SpecificationRepository | None = None) -> None:
         self._factory = session_factory
         self._reader = reader or SpecificationReader(session_factory, blob_store)
         self._repository = repository or SpecificationRepository()
+        self._zero_ready=False
+
+    @property
+    def can_run_without_model(self)->bool:
+        return self._zero_ready
 
     def _scope(self, session: Session, transition_id: str | None, project_uid: str) -> TransitionScope:
         scope = None if transition_id is None else self._repository.transition(session, transition_id)
@@ -129,25 +135,44 @@ class SpecMethod:
         groups: list[AiCallGroup] = []
         reused = 0
         sides = self.prepared(scope)
+        pending_assembly=0
         for side in sides:
             if side.stored is not None:
                 reused += 1
             elif side.sendable:
                 assert side.source is not None
-                groups.append(AiCallGroup(
-                    calls=1, prompt_chars=len(prompt.prompt_for(side.source)), output_tokens=_output_tokens(side.source)))
-        return AiCounts(groups=tuple(groups), units=len(sides), reused=reused, versions=len(sides))
+                for batch in side.batches:
+                    if batch['stored'] is None and batch['raw'] is None:
+                        groups.append(AiCallGroup(calls=1,prompt_chars=len(prompt.prompt_for(batch['source'])),
+                            output_tokens=MAX_OUTPUT_TOKENS))
+                if side.batches and all(batch['stored'] is not None or batch['raw'] is not None for batch in side.batches):
+                    pending_assembly+=1
+        row=self._repository.whole(session,scope.transition_id)
+        pending_compare=bool((row is None or row.state in {'queued','running','failed','cancelled'})
+            and all(side.source is not None and side.source['complete'] for side in sides))
+        self._zero_ready=not groups and bool(pending_assembly or pending_compare)
+        units=len(sides) if groups else pending_assembly or (1 if pending_compare else 0)
+        return AiCounts(groups=tuple(groups), units=units, reused=reused, versions=len(sides))
 
     def work_items(self, session: Session, job: AiJobRecord, mode: AiMode) -> Sequence[AiWorkItemSpec]:
         scope = self._scope(session, job.transition_id, job.project_uid)
         sides = self.prepared(scope)
-        if not any(side.sendable for side in sides):
+        previous=self._repository.whole(session,scope.transition_id)
+        keys=[side.key for side in sides]
+        if mode is not AiMode.START and (previous is None or any(
+                (coverage or {}).get('planning_revision')!=batches.REVISION or
+                (coverage or {}).get('source_key')!=key
+                for coverage,key in zip((previous.coverage_a,previous.coverage_b),keys))):
+            raise DomainError(ErrorCode.CONFLICT,conflict_reason='comparison_ai_estimate_stale')
+        if not any(side.sendable for side in sides) and not self._zero_ready:
             return []
-        if mode is AiMode.START:
+        if mode is AiMode.START or previous is not None and previous.state in {'failed','cancelled','incomplete'}:
             # The row of the transition's comparison starts with the job (a terminal one goes back to ``queued``).
             self._repository.open_whole(
                 session, scope, job_id=job.job_id, sheets_a=sides[0].side.sheets, sheets_b=sides[1].side.sheets)
-        return [AiWorkItemSpec(unit_key=f"transition:{scope.transition_id}", payload={"transition_id": scope.transition_id})]
+        self._repository.pin_plan(session,scope.transition_id,keys)
+        return [AiWorkItemSpec(unit_key=f"transition:{scope.transition_id}", payload={"transition_id": scope.transition_id,
+            'planning_revision':batches.REVISION,'source_keys':keys})]
 
 
 def _payload(payload: Mapping[str, Any]) -> tuple[str, str]:
@@ -169,6 +194,11 @@ def unbound_binder(session: Session, job: AiJobRecord) -> CallRoute:
 
 class _Stop(Exception):
     """The item stops without writing: the lease is gone, a cancel was requested, or the job is not running."""
+
+
+class _SpecFailure(Exception):
+    def __init__(self,reason:str)->None:
+        self.reason=reason
 
 
 class SpecHandler:
@@ -235,8 +265,30 @@ class SpecHandler:
                 return Yielded()
             raise
         paused = {"now": False}
+        expected_keys=dict(zip((scope.source_version_uid,scope.target_version_uid),item.payload.get('source_keys') or []))
 
-        def ask(prompt_text: str) -> Answer:
+        prepared=runner.prepared(scope)
+        if item.payload.get('planning_revision')!=batches.REVISION or item.payload.get('source_keys')!=[side.key for side in prepared]:
+            with session_scope(sessions) as session:
+                self._checkpoint(item,session)
+                jobs.fail(session,job_id,'spec_source_changed')
+                self._repository.set_state(session,transition_id,to_state='failed',from_states=('queued','running'),
+                    phase='done',reason='SPEC_INPUT_PLAN_CHANGED')
+            return Failed('spec_source_changed')
+
+        def ask(prompt_text: str, metadata:dict) -> Answer:
+            if metadata.get('source_key')!=expected_keys.get(metadata.get('version_uid')):
+                raise _SpecFailure('spec_source_changed')
+            with sessions() as session:
+                raw=self._repository.find_extraction(session,scope.project_uid,metadata['raw_key'])
+            if raw is not None:
+                if raw.coverage.get('prompt_sha256')!=metadata['prompt_sha256']:
+                    raise _SpecFailure('spec_source_changed')
+                response=ModelResponse(**raw.coverage['response'])
+                if response.response_sha256!=raw.coverage.get('response_sha256'):
+                    raise _SpecFailure('spec_saved_reply_invalid')
+                return Answer(None if response.truncated else batches.parse_reply(response.output_text),
+                    raw.model_identity,raw.recorded,raw.model_call_id)
             if paused["now"]:
                 raise _Stop("the job paused at a ceiling")
             with sessions() as session:
@@ -244,22 +296,41 @@ class SpecHandler:
                 if jobs.state_of(session, job_id) != "running":
                     raise _Stop("the job is not running")
             request = build_request(job.pinned_model, prompt_text, idempotency_scope=f"{job_id}:{item.work_id}")
+            with sessions() as session:
+                status=self._repository.paid_dispatch_fence(session,project_uid=scope.project_uid,
+                    job_id=job_id,request_sha256=request.request_sha256)
+            if status in {'prepared','sent'}:raise _Stop('a paid request is in flight')
+            if status is not None:raise _SpecFailure('spend_unknown')
             input_tokens = AiCallGroup(calls=1, prompt_chars=len(prompt_text), output_tokens=MAX_OUTPUT_TOKENS).input_tokens_per_call
             result = caller.call(
                 item, route, request, estimate=CallEstimate(input_tokens=input_tokens, output_tokens=MAX_OUTPUT_TOKENS), consent=consent)
+            # Immutable raw custody precedes parsing and an overrun pause. If the
+            # process ends before this write, the paid journal row forbids resend.
+            with session_scope(sessions) as session:
+                self._checkpoint(item,session)
+                self._repository.insert_extraction(session,project_uid=scope.project_uid,
+                    version_uid=metadata['version_uid'],content_key=metadata['raw_key'],state='partial',
+                    prompt_version=batches.RAW_VERSION,model_identity=route.model_identity,recorded=_recorded(route),
+                    source_sha256=metadata['source_sha256'],positions=[],model_call_id=result.call_id,
+                    coverage={'record_kind':'raw_reply','planning_revision':batches.REVISION,
+                        'batch_id':metadata['batch_id'],'prompt_sha256':metadata['prompt_sha256'],
+                        'request_sha256':request.request_sha256,'response_sha256':result.response.response_sha256,
+                        'response':asdict(result.response),'truncated':result.response.truncated})
             if result.pause is not None:
                 with session_scope(sessions) as session:
                     jobs.pause_for_spend(session, job_id, result.pause.reason)
                 paused["now"] = True  # the reply is paid for and kept; no further request is made
-            try:
-                payload = json.loads(result.response.output_text)
-            except ValueError:
-                payload = None  # the check refuses it and the side is stored incomplete
+            payload=None if result.response.truncated else batches.parse_reply(result.response.output_text)
             return Answer(
                 payload=payload, model_identity=route.model_identity, recorded=_recorded(route), model_call_id=result.call_id)
 
         try:
-            old, new = runner.read(scope, ask=ask)
+            def progress(version_uid,coverage):
+                with session_scope(sessions) as session:
+                    self._checkpoint(item,session)
+                    self._repository.progress(session,transition_id,
+                        'a' if version_uid==scope.source_version_uid else 'b',coverage)
+            old, new = runner.read(scope, ask=None,ask_batch=ask,progress=progress)
             with session_scope(sessions) as session:
                 self._repository.set_state(session, transition_id, to_state="running", from_states=("running",), phase="comparing")
             outcome = runner.compare(scope, old, new)
@@ -276,6 +347,13 @@ class SpecHandler:
         except _Stop as stop:
             _LOG.info("comparison work %s (comparison_spec): stopped: %s", item.work_id, stop)
             return Yielded(_PAUSED_RETRY_SECONDS) if paused["now"] else Yielded()
+        except _SpecFailure as failure:
+            with session_scope(sessions) as session:
+                self._checkpoint(item,session)
+                jobs.fail(session,job_id,failure.reason)
+                self._repository.set_state(session,transition_id,to_state='failed',from_states=('queued','running'),
+                    phase='done',reason='SPEC_PAID_INPUT_UNCONFIRMED')
+            return Failed(failure.reason)
         except CallRefused as refused:
             if refused.pauses_job:
                 with session_scope(sessions) as session:

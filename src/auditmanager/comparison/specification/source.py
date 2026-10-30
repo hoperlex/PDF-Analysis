@@ -72,7 +72,7 @@ def page_lines(columns: Sequence[str | None], rows: Sequence[dict[str, Any]]) ->
     return lines
 
 
-def build_source(pages: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def build_source(pages: Sequence[dict[str, Any]], *, batched: bool = False) -> dict[str, Any]:
     """The packet of one version's specification.
 
     ``pages`` is, in the order of the version, ``{"page": number, "sheet": str, "name": str, "columns": [...], "rows": [...]}``
@@ -102,7 +102,7 @@ def build_source(pages: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "blocks": blocks, "issues": issues,
     }
     source["source_sha256"] = source_sha256(source)
-    if packet_chars(source) > MAX_SOURCE_CHARS:
+    if not batched and packet_chars(source) > MAX_SOURCE_CHARS:
         issues.append("The specification is larger than one request holds")
     source["complete"] = not issues
     return source

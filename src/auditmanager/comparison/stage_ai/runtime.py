@@ -626,8 +626,10 @@ class StageAiRuntime:
                                        "call_identities": self._repo.call_identities(session, call_ids), "calls": call_ids})
                 self._repo.update_unit(session, unit["stage_ai_unit_id"], payload=unit["payload"], state="completed", job_id=job_id)
             return Yielded()
-        except (StageAiValidationError, ValueError):
-            reason = "stage_ai_answer_invalid" if "unit" in locals() else "stage_ai_source_invalid"
+        except (StageAiValidationError, ValueError) as error:
+            reason = ("v3_windowed_policy_changed_requires_fresh_run"
+                      if str(error) == "v3_windowed_policy_changed_requires_fresh_run" else
+                      "stage_ai_answer_invalid" if "unit" in locals() else "stage_ai_source_invalid")
             return self._failed(item, run_id, locals().get("unit"), jobs, locals().get("job_id"), reason, phase=phase)
         except DomainError as error:
             if error.code in {ErrorCode.STALE_ATTEMPT, ErrorCode.EXECUTION_TOKEN_INVALID}:

@@ -221,9 +221,10 @@ class RunCostPreflight:
                     "max_windows": visual["max_windows"], "text_page_limit": visual["text_page_limit"], "review": True,
                     "review_scope": "full_document", "rules_sha256": extended_review_bundle_digest(section), "section_code": section}
                 coverage_mode = os.environ.get("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1").strip().lower()
-                if coverage_mode == "batched-v1":
+                if coverage_mode in {"batched-v1", "batched-fixed-v1"}:
                     from auditmanager.analysis.public import extended_coverage_policy
-                    extended.update(extended_coverage_policy())
+                    extended.update(extended_coverage_policy(**({"text_characters": chars}
+                        if coverage_mode == "batched-v1" else {})))
                     limits = extended["phase_call_limits"]
                     per_window_calls = sum(limits.values())
                     per_window_output = sum(limits[phase] * tokens for phase, tokens in (

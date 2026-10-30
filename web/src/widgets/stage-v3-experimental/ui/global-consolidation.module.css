@@ -1,0 +1,8 @@
+.panel { min-width: 0; margin-block: 1rem; padding: 1rem; border: 1px solid var(--am-line); border-radius: .5rem; overflow-wrap: anywhere; }
+.panel pre, .panel blockquote { white-space: pre-wrap; overflow-wrap: anywhere; }
+.panel pre { max-height: 32rem; overflow: auto; padding: 1rem; background: var(--am-paper); }
+.panel li { margin-block: .8rem; }
+.panel code { overflow-wrap: anywhere; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin-block: 1rem; }
+.coverage { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; }
+.coverage dd { margin: .4rem 0; font-size: 1.4rem; }

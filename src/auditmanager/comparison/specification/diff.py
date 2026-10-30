@@ -61,6 +61,9 @@ def _effective(item: dict[str, Any], field: str) -> str:
 
 
 def _same_value(field: str, a: str, b: str) -> bool:
+    if field=="unit":
+        from .units import unit_identity
+        return table.norm(unit_identity(a))==table.norm(unit_identity(b))
     if field == "quantity":
         qa, qb = table.quantity(a), table.quantity(b)
         if qa is not None and qb is not None:

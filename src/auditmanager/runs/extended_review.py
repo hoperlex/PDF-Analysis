@@ -417,7 +417,9 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
             "rules_sha256":policy["rules_sha256"],"section":policy.get("section_code"),"primary_text_status":"pending",
             "review_scope":"full_document",
             **({"coverage_version":"batched-v1","phase_call_limits":dict(policy["phase_call_limits"]),
-                "phase_coverage":{},"batches":[],"phase_call_counts":{}}
+                "phase_coverage":{},"batches":[],"phase_call_counts":{},
+                **{key:policy[key] for key in ("coverage_budget_mode","estimated_text_characters",
+                    "comprehensive_piece_characters") if key in policy}}
                 if policy.get("coverage_version")=="batched-v1" else {})} if v3 else {}),
         "observations":[],"sources":[],"warnings":[],"procedures":procedures,"ocr_status":"not_performed",
         "reason":reason,"coverage":{"blocks_total":0,"blocks_selected":0,"blocks_processed":0,

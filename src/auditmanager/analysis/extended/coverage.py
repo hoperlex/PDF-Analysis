@@ -11,8 +11,22 @@ ITEM_CHARACTERS = 24_000
 MAX_BATCH_ITEMS = 20
 
 
-def coverage_policy():
-    return {'coverage_version': COVERAGE_VERSION, 'phase_call_limits': dict(_PHASE_LIMITS)}
+def coverage_policy(*, text_characters=None):
+    """Freeze enough comprehensive pieces for a long source, up to a finite cap.
+
+    This is a conservative per-window allowance, not a completeness promise.
+    Other phases retain their independent bounded observation budgets.
+    """
+    limits = dict(_PHASE_LIMITS)
+    policy = {'coverage_version': COVERAGE_VERSION, 'phase_call_limits': limits}
+    if text_characters is not None:
+        if type(text_characters) is not int or text_characters < 0:
+            raise ValueError('extended_coverage_source_size_invalid')
+        if text_characters > 4 * TEXT_CHARACTERS:
+            limits['comprehensive_analysis'] = min(128, (text_characters + TEXT_CHARACTERS - 1) // TEXT_CHARACTERS + 4)
+        policy.update(coverage_budget_mode='source-sized-v1', estimated_text_characters=text_characters,
+            comprehensive_piece_characters=TEXT_CHARACTERS)
+    return policy
 
 
 def validate_coverage_policy(policy):
@@ -24,6 +38,13 @@ def validate_coverage_policy(policy):
             or any(type(value) is not int or not 1 <= value <= 128 for value in limits.values())
             or limits['block_analysis'] != 2):
         raise ValueError('extended_coverage_authority_invalid')
+    if 'coverage_budget_mode' in policy or 'estimated_text_characters' in policy:
+        characters = policy.get('estimated_text_characters')
+        if (policy.get('coverage_budget_mode') != 'source-sized-v1'
+                or type(characters) is not int or characters < 0
+                or policy.get('comprehensive_piece_characters') != TEXT_CHARACTERS
+                or limits != coverage_policy(text_characters=characters)['phase_call_limits']):
+            raise ValueError('extended_coverage_source_budget_invalid')
     return True
 
 

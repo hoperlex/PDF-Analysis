@@ -45,7 +45,9 @@ def experimental_progress(session, run_id):
         "ORDER BY group_id,generation DESC,created_at DESC,stage_ai_unit_id DESC"
     ), {"run": run_id, "bundle": bundle}).mappings().all()
     names = {"mapper": "Mapper", "miner": "Miner", "unmatched": "Разбор непарных страниц",
-             "dedupe": "Dedupe", "verify": "Проверка параметров", "final": "Карточки V3"}
+             "dedupe": "Dedupe", "verify": "Проверка параметров"}
+    if policy is not None and policy["plan_version"] == "windowed-global-v1": names["consolidate"] = "Consolidator"
+    names["final"] = "Карточки V3"
     final = next((r for r in reversed(rows) if r["group_id"] == "v3:final:cards" and r["state"] == "completed"), None)
     mapping = next((r["progress"].get("v3_result") for r in rows
                     if r["group_id"] in {"v3:mapper:all", "v3:mapper:catalogue"} and r["state"] == "completed"), None)
@@ -68,7 +70,8 @@ def experimental_progress(session, run_id):
             "planned_units": sum(row["planned"] for row in procedures),
             "completed_units": sum(row["completed"] for row in procedures),
             "pending_units": sum(row["pending"] for row in procedures),
-            "status": ("partial" if final is not None and not final["progress"].get("coverage", {}).get("complete") else
+            "status": ("partial" if final is not None and (not final["progress"].get("coverage", {}).get("complete")
+                       or final["progress"].get("coverage", {}).get("global_consolidation", {}).get("not_compared_pairs", 0) > 0) else
                        "completed" if final is not None else "running"),
             "coverage": None if final is None else final["progress"].get("coverage"),
             "source_report": None if final is None else final["progress"].get("source_report"),
@@ -77,4 +80,6 @@ def experimental_progress(session, run_id):
                 "Результат предварительный, нормы не проверены; решение принимает эксперт.",
                 *(["Mapper получает каталог всех страниц с ограниченными выдержками; полный текст разбирается пакетами.",
                    "Для непарных страниц выбор встречных кандидатов ограничен; семантическая полнота не подтверждена.",
+                   "Глобальный свод сравнивает ограниченные межпакетные кандидаты; глобальная семантическая полнота не подтверждена."
+                   if policy.get("plan_version") == "windowed-global-v1" else
                    "Удаление повторов выполняется внутри пакетов, без утверждения глобальной семантической уникальности."] if policy is not None else [])]}

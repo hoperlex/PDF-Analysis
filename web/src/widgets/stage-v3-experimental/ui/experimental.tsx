@@ -1,6 +1,7 @@
 import type { StageCardEvidence, StageChainRun, StageChangeCard } from '@/shared/api';
 import { parameterRows } from '../model/report';
 import { StageV3ParameterSources } from './report';
+import { StageCardOriginalEvents } from './global-consolidation';
 
 export type StageEngine = NonNullable<StageChainRun['engine']>;
 const EXPERIMENT = 'v3_native_text_experimental';
@@ -28,6 +29,7 @@ export function StageEngineSelector({ value, disabled, onChange }: { readonly va
 const PROCEDURE_WORDS: Readonly<Record<string, string>> = {
   Mapper: 'Сопоставление фрагментов (Mapper)', Miner: 'Извлечение изменений (Miner)', Dedupe: 'Удаление повторов (Dedupe)',
   'Разбор непарных страниц': 'Разбор непарных страниц', 'Проверка параметров': 'Проверка параметров', 'Карточки V3': 'Карточки V3',
+  Consolidator: 'Межпакетная сверка событий (Consolidator)',
 };
 const STATE_WORDS: Readonly<Record<string, string>> = {
   queued: 'Ожидает', running: 'Выполняется', completed: 'Завершено', failed: 'Ошибка', partial: 'Неполный результат', paused: 'Приостановлено',
@@ -45,6 +47,7 @@ const LIMIT_WORDS: Readonly<Record<string, string>> = {
   pages: 'Страниц суммарно по обеим сторонам', characters: 'Знаков исходного текста', fragments: 'Фрагментов исходного текста',
   pack_characters: 'Знаков на текстовый пакет', pack_blocks: 'Блоков на пакет', catalogue_blocks_per_page: 'Фрагментов каталога на страницу',
   catalogue_snippet_characters: 'Знаков в отрывке каталога', classification_units: 'Единиц классификации', events: 'Событий', parameters: 'Параметров', request_characters: 'Знаков в закодированном запросе',
+  global_candidate_pairs: 'Кандидатных пар межпакетной сверки', global_pairs_per_call: 'Кандидатных пар на обращение',
 };
 function knownCount(value: unknown): string { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : '—'; }
 
@@ -61,7 +64,7 @@ export function StageExperimentalProgress({ progress, state }: { readonly progre
     <h3>V3 · эксперимент, только текст PDF</h3><p className="am-note">{PROVENANCE}</p>
     {state === 'paused' ? <p role="status">Приостановлено. Для следующего обращения откройте «Продолжить», ознакомьтесь с оценкой и подтвердите передачу.</p> : null}
     {body === null ? <p>Состояние процедур ещё не передано. Завершение не подтверждено.</p> : <>
-      <p>Принятый план: {plan === 'windowed-v1' ? 'Обработка текста по частям · windowed-v1' : plan === 'native-text-v3/1' || !plan ? 'Исторический ограниченный план V3' : plan}.</p>
+      <p>Принятый план: {plan === 'windowed-global-v1' ? 'Текст по пакетам и межпакетная сверка · windowed-global-v1' : plan === 'windowed-v1' ? 'Обработка текста по частям · windowed-v1' : plan === 'native-text-v3/1' || !plan ? 'Исторический ограниченный план V3' : plan}.</p>
       {plan === 'native-text-v3/1' || !plan ? <p>У этого сохранённого плана исторические границы: до 16 страниц, 80 000 знаков и 400 фрагментов. Новые окна ему автоматически не добавляются.</p> : null}
       {limits === null ? null : <details><summary>Закреплённые границы плана</summary><dl>{Object.entries(limits).filter(([name, value]) => LIMIT_WORDS[name] !== undefined && typeof value === 'number').map(([name, value]) => <div key={name}><dt>{LIMIT_WORDS[name]}</dt><dd>{knownCount(value)}</dd></div>)}</dl></details>}
       <p>Состояние: {state === 'paused' ? STATE_WORDS.paused : STATE_WORDS[text(body.status, '')] ?? 'Не передано'} · текущая процедура: {PROCEDURE_WORDS[text(body.procedure, '')] ?? text(body.procedure, 'Ещё не началась')}</p>
@@ -121,5 +124,6 @@ export function StageExperimentalParameters({ experimental, card, onOpenEvidence
       })}</tbody>
     </table></div>}
     {body.quality === undefined ? null : <p>Качество: {text(body.quality, 'Не определено')}</p>}
+    <StageCardOriginalEvents experimental={experimental} />
   </section>;
 }

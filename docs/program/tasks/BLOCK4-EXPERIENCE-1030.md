@@ -46,7 +46,8 @@ Exact changed paths; no-check status; contracts; limits; integrator instructions
 - `web/src/widgets/stage-v3-experimental/**`
 - `web/src/widgets/stage-changes/**`
 - `web/src/widgets/version-series/ui/specification-panel.tsx`
-- `web/src/widgets/version-series/ui/series-workflow.tsx`
+- `web/src/widgets/version-series/model/specification-report.ts`
+- `web/src/widgets/version-series/api/read-specification-report.ts`
 - `web/src/widgets/extended-review/**`
 - `web/src/entities/audit-run/lib/**`
 - `docs/program/BLOCK4-EXPERIENCE-1030.md`
@@ -54,3 +55,5 @@ Exact changed paths; no-check status; contracts; limits; integrator instructions
 ## Deliverables
 
 Read actual backend metadata, origin/source/verification preservation, view pagination and full exports. No new API/businessadmission. Coordinate exact producer fields first. Source-sized ordinary cap same batched-v1+coverage_budget_mode metadata and actual phase_call_limits; no hardcoded30 promise.
+
+Exact export grant: named specification-report.ts/read-specification-report.ts may collect all existing authorized cursor pages and generate JSON/CSV/HTML of the complete RECEIVED API projection, cancellation/64MiB bounds, explicit note for fields clipped by closed server DTO. Do not claim full unabridged extraction/source when not exposed. No invented endpoint or raw fetch. No nonexistent series-workflow file created.

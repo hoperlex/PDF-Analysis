@@ -12,7 +12,16 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from . import procedures as p
 from .mode import ENGINE, ORIGINAL_SHA
 from .report import source_report
-from .policy import validate_policy, policy_for_run
+from .policy import GLOBAL_VERSION, validate_policy, policy_for_run
+
+
+def _implementation(policy):
+    if policy is None: return p
+    if policy["plan_version"] == GLOBAL_VERSION:
+        from . import consolidation
+        return consolidation
+    from . import windowed
+    return windowed
 
 
 class V3Method(StageAiMethod):
@@ -53,9 +62,7 @@ class V3Method(StageAiMethod):
         run_id = request.scope.stage_chain_run_id
         remaining = request.mode is AiMode.LEFT and run_id and snapshot["fragments"]
         if remaining:
-            implementation = p
-            if self.v3_policy is not None:
-                from . import windowed as implementation
+            implementation = _implementation(self.v3_policy)
             saved = results(session, run_id, bundle=self.bundle_version)
             for phase in ("review", "classify", "synthesize"):
                 plans = implementation.plans_for(phase, snapshot, saved, request.route.pinned_model if hasattr(request, "route") else "estimate")
@@ -85,9 +92,7 @@ def results(session, run_id, *, bundle=None):
 def bundles(runtime, session, *, run_id, snapshot, phase, model):
     try:
         policy = validate_policy(policy_for_run(session, run_id))
-        implementation = p
-        if policy is not None:
-            from . import windowed as implementation
+        implementation = _implementation(policy)
         bundle = p.BUNDLE if policy is None else policy["bundle"]
         saved = results(session, run_id, bundle=bundle)
         plans = implementation.plans_for(phase, snapshot, saved, model)
@@ -96,6 +101,8 @@ def bundles(runtime, session, *, run_id, snapshot, phase, model):
             _changes, _hints, ledger, cov, records = implementation.reviewed(snapshot, saved)
             report = source_report(snapshot, records, cov, ledger)
             if policy is not None: report.update(plan_version=policy["plan_version"], limits=policy["limits"])
+            if policy is not None and policy["plan_version"] == GLOBAL_VERSION:
+                report.update(implementation.final_report_metadata(snapshot, saved))
             final_key = digest({"engine": ENGINE, "bundle": bundle, "cards": cards,
                                 "revision": snapshot["stage_link_revision_id"],
                                 "source_report_sha256": digest(report)})

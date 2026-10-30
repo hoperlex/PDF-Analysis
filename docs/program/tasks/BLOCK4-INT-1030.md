@@ -48,7 +48,18 @@ Exact changed paths; no-check status; contracts; limits; integrator instructions
 - `src/auditmanager/analysis/public.py`
 - `src/auditmanager/runs/preflight.py`
 - `src/auditmanager/runs/cost_policy.py`
+- `src/auditmanager/runs/extended_review.py`
+- `src/auditmanager/comparison/ai_jobs/service.py`
+- `web/src/entities/version-series/ui/estimate-panel.tsx`
 
 ## Deliverables
 
 Fresh source-sized comprehensive cap, existing finite per-window enforcement and before-start cost reservation; no new unlimited spending. Integration/docs/dev receipts; keep report0-model assembly untouched.
+
+## Source-sized ordinary budget
+
+Public extended_coverage_policy(text_characters=actualnative+recognisedcount) keeps small≤160k sources at4 comprehensive calls/window; larger sources freeze min(128,ceil(chars/40000)+4). Existing other caps2/8/8/8 remain; source metadata coverage_budget_mode=source-sized-v1, estimated_text_characters, comprehensive_piece_characters40000 are validated. Preflight prices actual accepted caps before start; worker existingperphaseenforcer unchanged. AUDITMANAGER_EXTENDED_COVERAGE=batched-fixed-v1 offers oldfixed30 plan fornewstarts. Oldacceptedcapsnotexpanded; sourcebundlechange safelyrequiresfreshconsent. Thiscanstillproducepartialcontext/review/outputcoverage andconservativehighmeteredestimates; no completequalityclaim.
+
+Root owns small ordinary metadata projection in planned_workflow_result: copy source-sized budget mode/count/piece facts from acceptedpolicy to result for UI (existinggenericJSON, no extra call). No other lane writes runs/extended_review.py in block4. Experience exactexport paths granted as recorded inits task.
+
+Root shared slot: extend explicit can_run_without_model opt-in to methods report/spec only for actual zero-call local assembly, retaining all digest/confirmed/route/ceilings/work checks. Shared EstimatePanel supports opted spec0 local assembly labels; SpecPanelconsumer ownedExperience, onlyspec/calls0/actualpendingunits>0. No invented modelcalls or bypass forothermethods.

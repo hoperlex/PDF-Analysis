@@ -2,14 +2,19 @@
 
 /** Whole specifications use the existing, source-bound spec API. No hidden paid queue step. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import type { ComparisonAiEstimate, ComparisonSeriesId, ComparisonSpecification, ComparisonTransitionId, Cursor } from '@/shared/api';
+import type { ComparisonAiEstimate, ComparisonPageRef, ComparisonSeriesId, ComparisonSpecification, ComparisonTransitionId, Cursor } from '@/shared/api';
 import {
   cancelComparisonSpecification, estimateComparisonSpecification, listComparisonSpecificationChanges,
   listComparisonSpecifications, newIdempotencyKey, startComparisonSpecification,
 } from '@/shared/api';
-import { COMPARISON_KEYS, EstimatePanel, comparisonFailure, consentOf } from '@/entities/version-series';
+import { COMPARISON_KEYS, EstimatePanel, SPEC_METHOD_LABELS, SPEC_PHASE_LABELS, comparisonFailure, consentOf, specFieldLabel } from '@/entities/version-series';
+import { browserDownloadSink, deliverDownload } from '@/features/export-run';
+import { pdfPageUrl, useEvidenceDocument } from '@/features/open-evidence';
+import { readSpecificationReport, SpecificationReportError } from '../api/read-specification-report';
+import { formatSpecificationReport } from '../model/specification-report';
+import type { SpecificationReportFormat } from '../model/specification-report';
 
 const STATE: Readonly<Record<string, string>> = {
   not_started: 'Не запускалось', not_applicable: 'Спецификаций нет', running: 'Выполняется',
@@ -20,21 +25,66 @@ const KINDS: Readonly<Record<string, string>> = {
   changed: 'Изменено', added: 'Добавлено', removed: 'Удалено', unclear: 'Неясно', renumbered: 'Перенумеровано', moved: 'Перемещено',
 };
 
+function SpecificationSource({ page, side, onClose }: { readonly page: ComparisonPageRef; readonly side: string; readonly onClose: () => void }) {
+  const valid = Number.isSafeInteger(page.page_number) && page.page_number > 0 && page.version_uid !== '';
+  const document = useEvidenceDocument(valid ? page.version_uid : null);
+  const url = document.objectUrl !== null && valid ? pdfPageUrl(document.objectUrl, page.page_number) : null;
+  return <section aria-label="Исходная страница спецификации"><p>Сторона {side} · физическая страница PDF {page.page_number}. Версия: <code>{page.version_uid}</code>.</p><button type="button" className="am-button am-button--quiet" onClick={onClose}>Закрыть исходную страницу</button>
+    {!valid ? <p>Точный переход недоступен: исходная страница или версия не подтверждены.</p> : null}
+    {document.isLoading ? <p role="status">Загружается исходный PDF…</p> : null}
+    {document.error ? <p role="status">Исходный PDF не открылся. <button type="button" onClick={document.refetch}>Повторить</button></p> : null}
+    {url === null ? null : <><p><a href={url} target="_blank" rel="noopener noreferrer">Открыть PDF отдельно на странице {page.page_number}</a></p><object key={`${page.version_uid}:${page.page_number}`} data={url} type="application/pdf" aria-label={`Спецификация ${side}, физическая страница ${page.page_number}`} style={{ width: '100%', minHeight: 520 }}><p>Встроенный просмотр недоступен; откройте PDF по ссылке.</p></object><p>Переход по физической странице, без подсветки координат. Сверяйте номер страницы в PDF-просмотрщике.</p></>}
+  </section>;
+}
+
+function SpecificationExports({ item }: { readonly item: ComparisonSpecification }) {
+  const active = useRef<AbortController | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  useEffect(() => () => { active.current?.abort(); active.current = null; }, []);
+  const download = async (format: SpecificationReportFormat) => {
+    if (active.current !== null) return;
+    const controller = new AbortController(); active.current = controller;
+    setBusy(true); setFailure(null); setStatus('Читаем все страницы сохранённых изменений…');
+    try {
+      const report = await readSpecificationReport(item.transition_id, { signal: controller.signal,
+        onProgress: (progress) => { if (active.current === controller) setStatus(`Получено позиций API: ${progress.received}; страниц API: ${progress.pages}. Это чтение выгрузки, не пакеты модели.`); } });
+      const file = formatSpecificationReport(report, format);
+      if (active.current !== controller || controller.signal.aborted) return;
+      deliverDownload(browserDownloadSink(), new Blob([file.content], { type: file.mediaType }), file.fileName);
+      setStatus(`Выгрузка полученной API-проекции подготовлена: ${report.changes.length} изменений позиций.`);
+    } catch (error) {
+      if (active.current !== controller) return;
+      if (controller.signal.aborted || error instanceof Error && error.name === 'AbortError') setStatus('Чтение выгрузки отменено. Файл не скачан.');
+      else { setStatus(null); setFailure(error instanceof SpecificationReportError || error instanceof Error && error.message.startsWith('Выгрузка API-проекции') ? error.message : comparisonFailure(error).detail); }
+    } finally { if (active.current === controller) { active.current = null; setBusy(false); } }
+  };
+  return <section aria-label="Выгрузки полученной спецификации"><h5>Сохранённые изменения позиций</h5><p>Выгрузка читает все страницы сохранённых изменений текущей API-проекции. Поля, сокращённые контрактом и отмеченные многоточием, не восстанавливаются; полный исходный PDF проверяется отдельно. Это не полный raw-источник и не заключение инженера.</p>
+    {(['json', 'csv', 'html'] as const).map((format) => <button type="button" className="am-button am-button--quiet am-button--small" key={format} disabled={busy} onClick={() => void download(format)}>{format.toUpperCase()} · все полученные изменения</button>)}
+    {busy ? <button type="button" className="am-button am-button--quiet" onClick={() => active.current?.abort()}>Отменить выгрузку</button> : null}
+    {status === null ? null : <p role="status">{status}</p>}{failure === null ? null : <p role="alert">{failure}</p>}
+  </section>;
+}
+
 function ChangeList({ transitionId }: { readonly transitionId: ComparisonTransitionId }) {
   const [cursor, setCursor] = useState<Cursor | undefined>();
+  const [source, setSource] = useState<{ readonly page: ComparisonPageRef; readonly side: string } | null>(null);
   const query = useQuery({
     queryKey: [...COMPARISON_KEYS.all, 'specification-changes', transitionId, cursor],
     queryFn: async () => (await listComparisonSpecificationChanges({ path: { comparison_transition_id: transitionId }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } })).data,
   });
   const nextCursor = query.data?.page.next_cursor;
   return <div aria-label="Изменения спецификации">
+    {source === null ? null : <SpecificationSource key={`${source.page.version_uid}:${source.page.page_number}`} page={source.page} side={source.side} onClose={() => setSource(null)} />}
     {query.isPending ? <p role="status">Читаем позиции…</p> : null}
     {query.error === null ? null : <p role="alert">{comparisonFailure(query.error).detail}</p>}
     <ul>{query.data?.items.map((change) => <li key={change.change_id} data-spec-change={change.change_id}>
       <strong>{KINDS[change.kind] ?? change.kind}</strong>{change.text === undefined ? '' : ` · ${change.text}`}
       {change.fields.length === 0 ? null : <ul>{change.fields.map((field, index) => <li key={`${field.field}-${index}`}>
-        {field.field}: {field.was ?? '—'} → {field.now ?? '—'}
+        {specFieldLabel(field.field)}: {field.was ?? '—'} → {field.now ?? '—'}
       </li>)}</ul>}
+      <details><summary>Сохранённые позиции и исходные страницы</summary>{([['A · было', change.old], ['B · стало', change.new]] as const).map(([side, position]) => <section key={side}><h6>{side}</h6>{position === undefined ? <p>Позиция этой стороны не передана.</p> : <><p>{position.pos ? `Поз. ${position.pos} · ` : ''}{position.name}</p><p>Марка: {position.mark ?? '—'} · количество: {position.quantity ?? '—'} {position.unit ?? ''}.</p>{position.ambiguous ? <p>Тип строки неоднозначен; требуется проверка исходного документа.</p> : null}{position.page === undefined ? <p>Привязка к исходной странице отсутствует.</p> : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setSource({ page: position.page!, side })}>Открыть PDF {side}, стр. {position.page.page_number}</button>}</>}</section>)}</details>
     </li>)}</ul>
     {query.data?.items.length === 0 ? <p>В сохранённом результате нет изменений позиций.</p> : null}
     {cursor === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>К началу</button>}
@@ -71,11 +121,13 @@ function SpecificationRow({ item, mayAct }: { readonly item: ComparisonSpecifica
   const failure = start.error ?? estimateCall.error;
   return <section aria-label="Переход спецификаций" data-spec-transition={item.transition_id}>
     <p><strong>{STATE[item.state] ?? item.state}</strong> · листов A: {item.sheets_a}, B: {item.sheets_b}
-      {item.phase === undefined ? '' : ` · этап: ${item.phase}`}</p>
+      {item.phase === undefined ? '' : ` · этап: ${SPEC_PHASE_LABELS[item.phase]}`}</p>
+    <p>Метод сохранённого результата: {SPEC_METHOD_LABELS[item.method]}.</p>
     {[['A', item.coverage_a], ['B', item.coverage_b]].map(([side, value]) => {
       if (typeof value !== 'object' || value === null) return null;
       return <p key={String(side)} className="am-note">Охват {String(side)}: блоков {value.blocks_covered}/{value.blocks_total}, строк {value.rows_total}, не разобрано {value.rows_unresolved}.</p>;
     })}
+    <p className="am-note">Охват показывает сохранённые блоки и строки. Большой источник свежего плана разбирается по частям; отдельные счётчики пакетов этим API не передаются. Незавершённые блоки и строки не объявляются отсутствующими.</p>
     {item.reason === undefined ? null : <p className="am-note">Ограничение: <code>{item.reason}</code>. Полнота результата не подтверждена.</p>}
     {item.totals === undefined ? null : <p>{Object.entries(item.totals).map(([kind, count]) => `${KINDS[kind] ?? kind}: ${count}`).join(' · ')}</p>}
     <p className="am-note">ИИ-результат не подтверждён инженером. В сравнение входят распознанные позиции; неполные стороны не объявляются отсутствующими.</p>
@@ -85,10 +137,12 @@ function SpecificationRow({ item, mayAct }: { readonly item: ComparisonSpecifica
     {cancel.error === null ? null : <p role="alert">{comparisonFailure(cancel.error).detail}</p>}
     {dialog ? <EstimatePanel title="Полные спецификации (СО)" consentKind="spec" confirmLabel="Запустить сравнение СО"
       estimate={estimate} loading={estimateCall.isPending} failure={failure === null ? null : comparisonFailure(failure)}
+      allowLocalAssembly={estimate?.method === 'spec' && estimate.calls === 0 && estimate.units > 0}
       agreedDigest={agreed} busy={start.isPending} onAgree={(on) => setAgreed(on ? estimate?.estimate_digest ?? null : null)}
       onConfirm={() => start.mutate()} onCancel={() => { setDialog(false); setAgreed(null); }}
       intro={<p>Отдельное задание сравнит целые спецификации этого перехода. Сохранённые совместимые ответы используются повторно.</p>} /> : null}
-    {changes ? <ChangeList transitionId={item.transition_id} /> : null}
+    {item.state === 'completed' || item.state === 'incomplete' ? <SpecificationExports item={item} /> : null}
+    {changes ? <ChangeList key={item.comparison_id ?? item.transition_id} transitionId={item.transition_id} /> : null}
   </section>;
 }
 

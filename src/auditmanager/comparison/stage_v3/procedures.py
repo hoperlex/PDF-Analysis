@@ -118,6 +118,9 @@ def plan(procedure, *, phase, group_id, pair_id, payload, model, metadata=None):
 
 def parse(plan, row, snapshot):
     if plan.prompt_version != BUNDLE:
+        if plan.payload["_experimental_procedure"] == "consolidate":
+            from .consolidation import parse as parse_global
+            return parse_global(plan, row, snapshot)
         from .windowed import parse as parse_windowed
         return parse_windowed(plan, row, snapshot)
     if row["stop_reason"] != "end_turn":

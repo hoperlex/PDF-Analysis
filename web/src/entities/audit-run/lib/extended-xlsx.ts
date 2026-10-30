@@ -65,6 +65,7 @@ function tables(reading: ExtendedRunReview): Table[] {
     ['Раздел', result?.section], ['Отпечаток рубрик SHA256', result?.rules_sha256], ['Происхождение', result?.source_provenance],
     ['Покрытие', result?.coverage], ['Покрытие комплексной сверки текста (страницы)', result?.text_coverage], ['Версия покрытия', result?.coverage_version], ['Покрытие процедур', result?.phase_coverage], ['Принятые лимиты пакетов процедур в окне', result?.phase_call_limits], ['Прогресс окон', result?.window_progress], ['Базовый текстовый анализ', result?.primary_text_status],
     ['Визуальный проход сохранён', result?.visual_phase_complete], ['Процедуры', result?.procedures],
+    ['Режим бюджета покрытия', result?.coverage_budget_mode], ['Символов исходного текста в оценке', result?.estimated_text_characters], ['Целевой текстовый фрагмент, символов', result?.comprehensive_piece_characters],
     ['Глобальных кандидатов', objects(result?.observations).length], ['Записей с учётом окон', entries.length], ['Группировка повторов, исходники сохранены', result?.consolidation],
     ['Критика и уточнение', 'Только рекомендации модели. Исходные наблюдения сохранены, решение эксперта не подменяется.'],
     ['Нормы', 'Ни исторические пороги, ни актуальность и применимость нормативных ссылок этим отчётом не подтверждены.'],
