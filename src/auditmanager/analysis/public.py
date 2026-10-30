@@ -89,7 +89,10 @@ from auditmanager.analysis.stages.extraction import (
     NORMALIZATION_DESCRIPTION,
     NORMALIZATION_ID,
 )
-from auditmanager.analysis.stages.source_preparation import document_text
+from auditmanager.analysis.stages.source_preparation import (
+    document_text, run_source_preparation_with_progress,
+)
+from auditmanager.analysis.stages.pdf_precheck import PdfPrecheckProgress
 from auditmanager.analysis.text import (
     ARTIFACT_ROLE,
     CostMeter,
@@ -298,6 +301,8 @@ __all__ = [
     "canonical_bytes",
     "read_artifact",
     "run_stage",
+    "run_source_preparation_with_progress",
+    "PdfPrecheckProgress",
     "recognised_total_characters",
     "run_text_analysis",
     "run_text_analysis_windows",
