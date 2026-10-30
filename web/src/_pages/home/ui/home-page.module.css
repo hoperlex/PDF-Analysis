@@ -27,6 +27,10 @@
   align-items: start;
 }
 
+.sections {
+  margin-bottom: var(--am-gap-lg);
+}
+
 @media (max-width: 780px) {
   .tiles {
     grid-template-columns: minmax(0, 1fr);

@@ -32,6 +32,7 @@ import { HomePage } from '@/_pages/home';
 import type { HomePageProps } from '@/_pages/home';
 import pageStyles from '@/_pages/home/ui/home-page.module.css';
 import { ROLE_LABELS } from '@/entities/account';
+import { PROJECT_SECTIONS } from '@/entities/project';
 import type {
   Assignment,
   AssignmentPage,
@@ -95,7 +96,10 @@ function summary(over: Partial<DashboardSummary> = {}): DashboardSummary {
     run_activity: {
       by_state: RUN_STATE_VALUES.map((state, index) => ({ state, count: index })),
     },
-    section_breakdown: [{ document_count: 5 }],
+    section_breakdown: [
+      ...PROJECT_SECTIONS.map((section, index) => ({ section: section.code, document_count: index })),
+      { document_count: 5 },
+    ],
     ...over,
   };
 }
@@ -455,6 +459,16 @@ describe('the five most recent projects', () => {
 // ======================================================================= the summary
 
 describe('the summary tile', () => {
+  it('shows the original-style overview of all fifteen sections on the front door', () => {
+    const markup = draw(home(EXPERT), loaded());
+    expect(markup).toContain('data-home-sections=""');
+    expect(markup).toContain('Разделы проекта');
+    for (const section of PROJECT_SECTIONS) {
+      expect(markup).toContain(`data-section="${section.code}"`);
+    }
+    expect(markup).toContain('data-section="unclassified"');
+  });
+
   it('shows four figures from the one dashboard read', () => {
     const markup = draw(home(EXPERT), loaded());
     const data = summary();
@@ -586,10 +600,11 @@ describe('every branch is rendered by some state here, and none carries English'
     expect(unreached).toEqual([]);
   });
 
-  it('shows no Latin word but the two the product already prints', () => {
+  it('shows no Latin word beyond the existing marks and the original-style section badges', () => {
     // `UTC` closes every instant `formatInstant` prints; `API` is the subject of the shared
-    // authentication sentence. Correlation ids sit in `<code>` and are removed above.
-    const ALLOWED = new Set(['UTC', 'API']);
+    // authentication sentence. The section overview uses the original's Latin code badges.
+    // Correlation ids sit in `<code>` and are removed above.
+    const ALLOWED = new Set(['UTC', 'API', ...PROJECT_SECTIONS.map((section) => section.code)]);
     for (const { name, markup } of rendered) {
       const latin = visibleText(markup)
         .flatMap((text) => text.match(/[A-Za-z]+/g) ?? [])

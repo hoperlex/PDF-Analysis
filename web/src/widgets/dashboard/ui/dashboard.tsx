@@ -54,6 +54,10 @@ export function Dashboard() {
 
   return (
     <div className={styles.grid} data-widget="dashboard">
+      <section className={`${styles.panel} ${styles.sections}`} aria-labelledby="dashboard-sections-heading">
+        <h2 id="dashboard-sections-heading">Разделы проекта</h2>
+        <SectionsPanel rows={data.section_breakdown} />
+      </section>
       <section className={styles.panel} aria-labelledby="dashboard-documents-heading">
         <h2 id="dashboard-documents-heading">Документы по проектам</h2>
         <DocumentsPanel rows={data.documents_by_project} />
@@ -68,10 +72,6 @@ export function Dashboard() {
           activity={data.run_activity}
           hasProjects={data.documents_by_project.length > 0}
         />
-      </section>
-      <section className={styles.panel} aria-labelledby="dashboard-sections-heading">
-        <h2 id="dashboard-sections-heading">Разбивка по разделам</h2>
-        <SectionsPanel rows={data.section_breakdown} />
       </section>
     </div>
   );

@@ -22,8 +22,8 @@ import { LazyDashboard } from './lazy-dashboard';
 export function DashboardPage() {
   return (
     <PageShell
-      title="Дашборд"
-      subtitle="Четыре панели одного общего чтения по всей системе: документы по проектам, находки по вердикту, прогоны и расход, и документы по разделам."
+      title="Анализ по разделам"
+      subtitle="Разделы, документы, находки и прогоны по текущим данным системы."
     >
       <LazyDashboard />
     </PageShell>

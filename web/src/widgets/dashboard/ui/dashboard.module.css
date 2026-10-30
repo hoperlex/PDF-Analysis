@@ -29,6 +29,10 @@
   min-width: 0;
 }
 
+.sections {
+  grid-column: 1 / -1;
+}
+
 .panel > h2 {
   margin-top: 0;
 }

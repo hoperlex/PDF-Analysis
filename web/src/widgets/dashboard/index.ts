@@ -1,6 +1,7 @@
 /** Public API of the `dashboard` widget. */
 
 export { Dashboard } from './ui/dashboard';
+export { HomeSectionsOverview } from './ui/home-sections-overview';
 
 // The pure aggregation logic, exported so it can be unit-tested without reaching past
 // this slice's public API — `web/tests/unit/widgets/dashboard.test.ts` imports it from
