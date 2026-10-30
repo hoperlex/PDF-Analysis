@@ -1,32 +1,38 @@
-.form {
-  display: grid;
-  gap: var(--am-gap);
-}
-
-.field {
-  display: grid;
-  gap: 6px;
-}
-
+.form { display: grid; gap: 13px; }
+.field { display: grid; gap: 6px; }
+.field label { color: var(--am-showcase-ink); font-size: 11px; font-weight: 700; }
 .field input {
   box-sizing: border-box;
   width: 100%;
-  height: 40px;
-  padding: 8px 12px;
-  font-size: var(--am-text-base);
+  min-height: 46px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 40%, transparent);
+  border-radius: 10px;
+  background: var(--am-showcase-card-alt);
+  color: var(--am-showcase-ink);
+  font-size: 13px;
+  transition: border-color var(--am-motion-base) var(--am-ease), box-shadow var(--am-motion-base) var(--am-ease);
 }
-
-.submit {
+.field input::placeholder { color: var(--am-showcase-soft); }
+.field input:focus { border-color: var(--am-showcase-accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--am-showcase-accent) 20%, transparent); }
+.form .submit {
+  position: relative;
+  justify-content: flex-start;
   width: 100%;
-  height: 40px;
-  margin-top: var(--am-gap-xs);
-  font-size: var(--am-text-base);
+  min-height: 46px;
+  margin-top: 7px;
+  padding: 10px 42px 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(105deg, var(--am-showcase-accent-strong), var(--am-showcase-accent));
+  color: var(--am-showcase-bg);
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  transition: filter var(--am-motion-base) var(--am-ease), transform var(--am-motion-base) var(--am-ease);
 }
-
-.hint {
-  margin: 0;
-  color: var(--am-ink-soft);
-  font-size: var(--am-text-sm);
-  line-height: var(--am-leading-base);
-  text-align: center;
-}
+.form .submit::after { position: absolute; right: 17px; top: 50%; content: '→'; font-size: 19px; font-weight: 400; transform: translateY(-50%); }
+.form .submit:hover { background: linear-gradient(105deg, var(--am-showcase-accent-strong), var(--am-showcase-accent)); filter: brightness(1.06); transform: translateY(-1px); }
+.form .submit:focus-visible { outline: 2px solid var(--am-showcase-accent-strong); outline-offset: 3px; }
+.form .submit:disabled { transform: none; opacity: 0.7; }
+.hint { margin: 0; color: var(--am-showcase-soft); font-size: 10px; line-height: 1.45; }
