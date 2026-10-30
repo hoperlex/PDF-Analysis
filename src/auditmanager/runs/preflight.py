@@ -86,11 +86,12 @@ class RunCostPreflight:
     """No I/O in construction; every estimate is recomputed in the start transaction."""
 
     def __init__(self, *, section_profiles, text_profiles, provider_config, provider_mode,
-                 connection_route=None, preset_resolver=None, pack_registry=None, prices=None):
+                 connection_route=None, preset_resolver=None, pack_registry=None, prices=None, blob_store=None):
         self.sections, self.profiles = section_profiles, text_profiles
         self.config, self.mode = provider_config, provider_mode
         self.route, self.presets, self.packs = connection_route, preset_resolver, pack_registry
         self.prices = prices or pinned_models
+        self.blob_store = blob_store
 
     def _source(self, session, version_uid, version=None):
         version = version or DocumentRepository().get_version(session, VersionUid.parse(version_uid))
@@ -175,16 +176,31 @@ class RunCostPreflight:
         fixed = len(bundle.system_prompt) + len(_json(bundle.response_schema)) + 12_000
         input_tokens = math.ceil(Fraction((2 * chars + fixed * windows) * 5, 7))
         output_tokens = windows * (64_000 if relaxed_limits else bundle.max_output_tokens)
-        # HOTFIX-PRESENTATION: fresh consent covers two bounded image batches, a comprehensive cross-check and
-        # one independent normative quote review. Historical accepted commands lack this authority and
-        # cannot acquire extra paid calls merely because the worker was upgraded.
+        # A new plan is accepted explicitly. Previous accepted v1/v2 commands keep
+        # their historical semantics and never acquire this larger call allowance.
         extended = None
         extra_calls = 0
         if os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS", "1").strip().lower() not in {"0", "false", "off"}:
-            extended = {"enabled": True, "max_blocks": 16, "plan_version": "extended-review-v2"}
-            extra_calls = 4
-            input_tokens += 400_000
-            output_tokens += 48_000
+            requested = os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3").strip().lower()
+            if requested in {"v3", "extended-review-v3"}:
+                from auditmanager.analysis.public import estimate_extended_visual_scope, extended_review_bundle_digest
+                visual = estimate_extended_visual_scope(version=version, blob_store=self.blob_store)
+                section = version.classification.section_code
+                extended = {"enabled": True, "plan_version": "extended-review-v3",
+                    "max_blocks": visual["max_blocks"], "window_size": visual["window_size"],
+                    "max_windows": visual["max_windows"], "text_page_limit": visual["text_page_limit"], "review": True,
+                    "rules_sha256": extended_review_bundle_digest(section), "section_code": section}
+                extra_calls = visual["max_windows"] * 6
+                input_tokens += visual["max_windows"] * 600_000
+                output_tokens += visual["max_windows"] * 72_000
+                source["visual_scope"] = visual
+            elif requested in {"v2", "extended-review-v2"}:
+                extended = {"enabled": True, "max_blocks": 16, "plan_version": "extended-review-v2"}
+                extra_calls = 4
+                input_tokens += 400_000
+                output_tokens += 48_000
+            else:
+                raise _invalid("analysis_workflow", "unsupported_plan")
         source.update(profile_sha256=profile.content_sha256, preset_id=preset_id,
             executor_connection_id=executor_connection_id, relaxed_limits=relaxed_limits,
             extended_review=extended)

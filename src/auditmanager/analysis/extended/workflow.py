@@ -4,6 +4,9 @@ Engineering task adaptation from PDF-proverka3c994817, not its filesystem runner
 """
 from __future__ import annotations
 from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
 
 from .core import (PLAN_VERSION_V2, MAX_ITEMS, ModelRequest, canonical, digest,
                    response_schema, parse_reply)
@@ -162,3 +165,126 @@ def parse_norm_review(text, *, observations, allowed_sources=None):
     if seen != set(observations):
         raise ValueError("norm_review_input_partition_invalid")
     return parsed
+
+
+# V3 has separate builders. Historical v1/v2 requests above retain their
+# instructions, bounds, schemas and idempotency behavior.
+WORKFLOW_V3 = "extended-review-v3"
+REVIEW_BUNDLE_VERSION = "section-review-source-bound/1"
+MAX_WORKFLOW_WINDOWS = 8
+MAX_GLOBAL_OBSERVATIONS = MAX_WORKFLOW_WINDOWS * MAX_MERGED_INPUTS
+MAX_V3_REQUEST_BYTES = 900_000
+
+
+def workflow_procedures_v3():
+    return workflow_procedures() + [
+        {"id": "finding_review", "title": "Критик наблюдений", "status": "queued"},
+        {"id": "finding_correction", "title": "Предложения по уточнению", "status": "queued"},
+        {"id": "report_generation", "title": "Формирование отчёта", "status": "queued"},
+    ]
+
+
+def review_bundle_digest(section):
+    """Actual source/assets/rules identity frozen by fresh v3 cost consent."""
+    from .section_rules import rules_digest
+    root = Path(__file__).parent
+    assets = {}
+    for path in sorted((root / "original_review").rglob("*")):
+        if path.is_file() and path.suffix in {".py", ".md", ".txt", ".json"}:
+            assets[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
+    for name in ("core.py", "workflow.py", "review.py", "native_pages.py"):
+        assets[name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
+    return digest({"version": REVIEW_BUNDLE_VERSION, "workflow_version": WORKFLOW_V3,
+                   "section": section, "section_rules": rules_digest(section), "assets": assets})
+
+
+def _v3_request(request, *, run_id, section, phase, window_id=None):
+    from .section_rules import section_instructions
+    body = deepcopy(request.body)
+    payload = json.loads(body["messages"][0]["content"])
+    window = window_id or payload.get("window_id") or "window-1"
+    if not isinstance(window, str) or not window or len(window) > 128:
+        raise ValueError("extended_window_identity_invalid")
+    payload.update(workflow_version=WORKFLOW_V3, window_id=window,
+                   rules_sha256=review_bundle_digest(section))
+    if payload.get("v3_input_coverage", {}).get("truncated"):
+        payload.setdefault("context_coverage", {})["truncated"] = True
+    body["messages"][0]["content"] = canonical(payload)
+    body["system"] += "\n\n" + section_instructions(section, phase)
+    if len(canonical(body).encode("utf-8")) > MAX_V3_REQUEST_BYTES:
+        raise ValueError("extended_v3_request_window_too_large")
+    return ModelRequest(request.model_id, body,
+        idempotency_scope=f"{run_id}:v3:{window}:{phase}:{digest(body)}")
+
+
+def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window_id=None):
+    summarized = deepcopy(payload)
+    truncated_items, truncated_sources = [], []
+    for field in ("visual_observations", "text_observations"):
+        for ordinal, item in enumerate(summarized.get(field, [])):
+            if not isinstance(item, dict):
+                raise ValueError("comprehensive_observation_invalid")
+            cuts = []
+            for key, maximum in (("title", 200), ("description", 800)):
+                value = item.get(key)
+                if not isinstance(value, str):
+                    raise ValueError("comprehensive_observation_invalid")
+                if len(value) > maximum:
+                    item[key] = value[:maximum]
+                    cuts.append({"field": key, "original_characters": len(value), "provided_characters": maximum})
+            if cuts:
+                item["input_summary_truncated"] = True
+                truncated_items.append({"field": field, "ordinal": ordinal, "cuts": cuts})
+    for ordinal, source in enumerate(summarized.get("sources", [])):
+        quote = source.get("quote") if isinstance(source, dict) else None
+        if isinstance(quote, str) and len(quote) > 800:
+            source["quote"] = quote[:800]
+            source["quote_truncated"] = True
+            truncated_sources.append({"source_id": source["source_id"], "original_characters": len(quote),
+                                      "provided_characters": 800, "ordinal": ordinal})
+    summarized["v3_input_coverage"] = {"truncated": bool(truncated_items or truncated_sources),
+        "full_input_sha256": digest(payload), "truncated_observations": truncated_items,
+        "truncated_source_quotes": truncated_sources, "originals_retained_by_runtime": True}
+    return _v3_request(build_comprehensive_request(model_id=model_id, run_id=run_id,
+        section=section, payload=summarized), run_id=run_id, section=section,
+        phase="comprehensive_analysis", window_id=window_id)
+
+
+def build_norm_review_request_v3(*, model_id, run_id, section, payload, window_id=None):
+    return _v3_request(build_norm_review_request(model_id=model_id, run_id=run_id,
+        section=section, payload=payload), run_id=run_id, section=section,
+        phase="norm_verification", window_id=window_id)
+
+
+def deterministic_lossless_merge_v3(items, *, max_windows=MAX_WORKFLOW_WINDOWS):
+    """Bounded global collection; no v2 overflow cap or hidden item dropping."""
+    if type(max_windows) is not int or not 1 <= max_windows <= MAX_WORKFLOW_WINDOWS:
+        raise ValueError("extended_global_window_limit_invalid")
+    if not isinstance(items, list) or len(items) > max_windows * MAX_MERGED_INPUTS:
+        raise ValueError("extended_global_observation_limit_exceeded")
+    ignored = {"source_ids", "norm_queries", "norm_candidates", "observation_id", "source_kind",
+               "input_ids", "provenance", "merged_observations"}
+    output, by_key = [], {}
+    for original in items:
+        if not isinstance(original, dict) or not isinstance(original.get("title"), str) or not isinstance(original.get("description"), str):
+            raise ValueError("extended_merge_observation_invalid")
+        key = canonical({k: v for k, v in original.items() if k not in ignored})
+        if key not in by_key:
+            item = deepcopy(original)
+            output.append(item)
+            by_key[key] = item
+            continue
+        target = by_key[key]
+        if "merged_observations" not in target:
+            target["merged_observations"] = [deepcopy(target)]
+        target["merged_observations"].append(deepcopy(original))
+        for field in ("source_ids", "norm_queries", "norm_candidates", "input_ids"):
+            if field not in original and field not in target:
+                continue
+            values = target.setdefault(field, [])
+            for value in original.get(field, []):
+                if value not in values:
+                    values.append(deepcopy(value))
+        if target.get("source_kind") != original.get("source_kind"):
+            target["source_kind"] = "mixed"
+    return output

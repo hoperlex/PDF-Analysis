@@ -33,3 +33,5 @@ docs/program/SPRINT-SECTION-RUNTIME-1030.md
 
 ## Integration contract
 RootsoleGitwriter/publisherorigin/devonly. v3authority: enabledtrue,plan_versionextended-review-v3,max_blocks1..128,window_size16,max_windows1..8,reviewtrue,rules_sha256frozen. Per16-sourcewindowMAX6modelcalls=2blocks+1comprehensive+1norm+1critic+1corrector;unusedcallsnotspent. V3proceduresblock_analysis/comprehensive_analysis/finding_merge/norm_verification/finding_review/finding_correction/report_generation; savedwindowreceipts/coverage, unrevieweditemsretained. v1/v2unchanged. NoAPI/migrationchange; existingextendedreadresultcarriesnewfields. Coordinateexacthelperseamsdirectlybeforecoding.
+
+Additionalexclusivegrant: src/auditmanager/analysis/text/windowed.py, onlyfreshv3forcedsingle-windowdurablereplycustody; oldv1/v2requestpathsunchanged. Hybridtext_page_limit/max_windowsfromrootINTaddendumauthoritative.

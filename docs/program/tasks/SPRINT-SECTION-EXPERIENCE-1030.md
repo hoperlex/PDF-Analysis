@@ -33,3 +33,9 @@ docs/program/SPRINT-SECTION-EXPERIENCE-1030.md
 
 ## Integration contract
 RootsoleGitwriter/publisherorigin/devonly. v3authority: enabledtrue,plan_versionextended-review-v3,max_blocks1..128,window_size16,max_windows1..8,reviewtrue,rules_sha256frozen. Per16-sourcewindowMAX6modelcalls=2blocks+1comprehensive+1norm+1critic+1corrector;unusedcallsnotspent. V3proceduresblock_analysis/comprehensive_analysis/finding_merge/norm_verification/finding_review/finding_correction/report_generation; savedwindowreceipts/coverage, unrevieweditemsretained. v1/v2unchanged. NoAPI/migrationchange; existingextendedreadresultcarriesnewfields. Coordinateexacthelperseamsdirectlybeforecoding.
+
+## Secondary presentation integration grant
+After initial handback the same owner also owns `web/src/_pages/review/ui/review-page.tsx` and `web/src/widgets/extended-review/ui/extended-review-summary.tsx`: a read-only actual-count banner links preliminary analysis back to the Run without mixing canonical counts or expert decisions. Existing getExtendedRunReview only; no API or data mutation. Main review has a stable anchor and actual candidate/advice/proposal counts. Same no-checks rule, handback11:28UTC.
+
+## Technical Excel followup grant
+Same owner additionally owns `web/src/entities/audit-run/lib/extended-xlsx.ts` and its existing formatter/buttons: true stored-ZIP OOXML technical preliminary workbook from already fetched review data. No new API/dependency, no alteration of certified exportRunXlsx, no label claiming normative/expert certification. All original/corrected/advice/source/norm/window/raw-data records retained; literal cells and explicit overlong-cell handling. No checks. Deadline11:30UTC.

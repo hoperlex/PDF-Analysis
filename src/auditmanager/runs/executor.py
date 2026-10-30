@@ -318,6 +318,10 @@ class _DurableCallJournal(ModelCallJournal):
         self._committed("provider_intent_committed")
         return model_call_id
 
+    def bind_current_call(self, model_call_id) -> None:
+        if self._context is not None:
+            self._context.bind_call(str(model_call_id))
+
     def response_received(
         self, model_call_id: ModelCallId, response: _ResponseEvidence
     ) -> None:
@@ -487,7 +491,7 @@ def _run_text_analysis_stage(
     text_character_count: int | None = None,
     window_custody: Any = None,
     textless_pages: tuple[int, ...] | None = None,
-    relaxed_limits: bool = False,
+    relaxed_limits: bool = False, force_durable_windows: bool = False,
 ) -> tuple[StageResult, Mapping[str, Any] | None, AttemptSummary]:
     """Run ``text_analysis``, retrying transport failures, and publish its artifact.
 
@@ -594,6 +598,12 @@ def _run_text_analysis_stage(
         max_windows=provider_config.approved_max_windows or MAX_ANALYSIS_WINDOWS,
     )
 
+    if force_durable_windows and window_policy is None and window_custody is not None:
+        from auditmanager.analysis.public import WindowPolicy
+        # Even a one-window fresh-v3 primary call uses existing saved-reply custody.
+        window_policy=WindowPolicy(window_characters=provider_config.approved_window_characters,
+            max_windows=max(2,provider_config.approved_max_windows or MAX_ANALYSIS_WINDOWS))
+
     while True:
         attempt = ledger.attempts + 1
         # The wait belongs to the attempt that is about to run, and is taken before it
@@ -639,6 +649,7 @@ def _run_text_analysis_stage(
                 custody=window_custody,
                 recognised_pages=recognised_pages,
                 textless_pages=textless_pages,
+                **({"force_single_window_custody":True} if force_durable_windows else {}),
             )
 
         # Complete responses were committed by ``call_journal`` before parsing reached
@@ -928,6 +939,11 @@ def _execute_run_body(
         runs=run_repo,
     )
     meter.enforce_ceiling = cost_policy.enforce_ceiling
+    extended_policy = getattr(cost_policy,"extended_review",None)
+    v3_workflow = isinstance(extended_policy,dict) and extended_policy.get("plan_version")=="extended-review-v3"
+    image_only_v3 = False
+    v3_pretext_invoked = False
+    v3_pretext_ambiguous = False
     if cost_policy.approved:
         meter.ceiling_usd = cost_policy.ceiling_usd
         config = replace(
@@ -1104,6 +1120,8 @@ def _execute_run_body(
         last_pdf_event = last_pdf_check = now
 
     # -- the three deterministic stages, in registry dependency order ---------
+    if v3_workflow:
+        from auditmanager.analysis.public import run_document_context_with_visual_pages
     deterministic = (
         (
             "source_preparation",
@@ -1141,8 +1159,11 @@ def _execute_run_body(
             blob_store=stage_store,
             handler=(
                 partial(run_source_preparation_with_progress, progress=pdf_progress,
-                        checkpoint=pdf_checkpoint, expected_page_count=version.page_count)
-                if stage_id == "source_preparation" else None
+                        checkpoint=pdf_checkpoint, expected_page_count=version.page_count,
+                        **({"allow_visual_only_pages":True} if v3_workflow else {}))
+                if stage_id == "source_preparation" else
+                partial(run_document_context_with_visual_pages,allow_visual_only_pages=True)
+                if v3_workflow and stage_id == "document_context_build" else None
             ),
             clock=clock,
         )
@@ -1235,7 +1256,88 @@ def _execute_run_body(
                 artifact_ref=None, attempts=attempts, started=started_at, finished=clock(),
             )
         else:
-            text_result, observations_document, attempts = _run_text_analysis_stage(
+            v3_state = None
+            v3_stage_result = None
+            if v3_workflow:
+                from auditmanager.analysis.public import extended_artifact_envelope
+                from auditmanager.jobs.public import has_ambiguous_provider_effect
+                from auditmanager.runs.extended_review import run_extended_review, load_saved_workflow
+                resumed = load_saved_workflow(session,store=text_store,run=run)
+                v3_stage_result=StageResult(stage_id="text_analysis",stage_version=TEXT_STAGE_VERSION,
+                    status=StageStatus.PARTIAL,metrics={"primary_text_pending":True},
+                    error=StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_INPUT_INVALID,
+                        stage_id="text_analysis",reason="primary_text_pending")),started_at=clock())
+                _persist(session,run_repo,run_id,v3_stage_result);session.commit()
+
+                def v3_checkpoint(boundary):
+                    job_repo.require_current(session,authority)
+                    if run_repo.get(session,run_id).state != "running":
+                        raise DomainError(ErrorCode.STALE_ATTEMPT,aggregate_type="Attempt")
+                    session.commit()
+                    if effect_checkpoint is not None:effect_checkpoint(boundary)
+
+                def v3_publish(role,body):
+                    ref,_=publish_artifact(text_store,role,extended_artifact_envelope(role,run.version_uid,**body))
+                    for blob_id in job_repo.bind_artifacts(session,authority,stage_id="text_analysis",artifacts=(ref,)):
+                        blob_repo.mark_available(session,blob_id)
+                    session.commit()
+                    return ref
+
+                v3_last_progress=(meter.call_count,0,0)
+                def v3_progress(status,result):
+                    nonlocal v3_stage_result,v3_last_progress
+                    ref=v3_publish("analysis.extended_review",{"run_id":run_id,"status":status,"result":result})
+                    artifacts=tuple(a for a in v3_stage_result.artifacts if a.role != "analysis.extended_review")
+                    pending=result.get("primary_text_status")=="pending"
+                    metrics={**v3_stage_result.metrics,"primary_text_pending":pending,
+                        "extended_review_status":status,"extended_blocks_processed":result["coverage"]["blocks_processed"],
+                        "extended_blocks_total":result["coverage"]["blocks_total"]}
+                    for procedure in result.get("procedures",[]):metrics["extended_"+procedure["id"]]=procedure["status"]
+                    degraded=not pending and status in {"partial","failed","unavailable"} and v3_stage_result.status is StageStatus.SUCCEEDED
+                    v3_stage_result=replace(v3_stage_result,artifacts=(*artifacts,ref),metrics=metrics,
+                        status=StageStatus.PARTIAL if degraded else v3_stage_result.status,
+                        error=StageError.from_domain_error(DomainError(ErrorCode.ANALYSIS_FAILED,
+                            message="the accepted section workflow did not fully complete")) if degraded else v3_stage_result.error)
+                    _persist(session,run_repo,run_id,v3_stage_result);outputs.absorb(v3_stage_result);session.commit()
+                    actual_progress=(meter.call_count,result["coverage"]["blocks_processed"],
+                        sum(p["status"] in {"completed","partial","failed","unavailable"} for w in result.get("windows",[]) for p in w.get("procedures",[])))
+                    if actual_progress != v3_last_progress:
+                        attempt_context.progress();v3_last_progress=actual_progress
+
+                def v3_bind_native(artifacts):
+                    for blob_id in job_repo.bind_artifacts(session,authority,stage_id="text_analysis",artifacts=artifacts):
+                        blob_repo.mark_available(session,blob_id)
+                    session.commit()
+
+                v3_pretext_invoked=True
+                v3_state=run_extended_review(session,run=run,authority=authority,jobs=job_repo,
+                    journal=_DurableCallJournal(session,job_repo,authority,effect_checkpoint,call=binding.call,context=attempt_context),
+                    binding=binding,outputs=outputs,store=text_store,meter=meter,publish=v3_publish,progress=v3_progress,
+                    checkpoint=v3_checkpoint,observations_document=None,snapshot_id=run.norms_snapshot_id,
+                    profile_sha256=text_profile.content_sha256,policy=extended_policy,bind_native=v3_bind_native,resume_state=resumed,
+                    visual_only=True)
+                v3_pretext_ambiguous=has_ambiguous_provider_effect(session,run_id=run_id);session.commit()
+                native_document,_=read_artifact(text_store,parse_blob_id(outputs.refs[ROLE_TEXT_LAYER].blob_id),expected_role=ROLE_TEXT_LAYER)
+                image_only_v3=native_document.get("total_char_count",0)==0
+            if v3_workflow and (image_only_v3 or v3_pretext_ambiguous
+                    or "extended_rules_changed_requires_consent" in (v3_state or {}).get("warnings",[])
+                    or "cost_budget_exceeded" in (v3_state or {}).get("warnings",[])):
+                reason=("provider_outcome_unknown" if v3_pretext_ambiguous else "cost_budget_exceeded"
+                    if "cost_budget_exceeded" in (v3_state or {}).get("warnings",[]) else
+                    "native_text_unavailable_visual_only" if image_only_v3 else "extended_rules_changed_requires_consent")
+                error=DomainError(ErrorCode.ANALYSIS_INPUT_INVALID,stage_id="text_analysis",reason=reason)
+                text_result=_text_stage_result(TextAnalysisOutcome(status="failed" if v3_pretext_ambiguous else "partial",
+                    artifact=None,model_calls=(),error=error),artifact_ref=None,attempts=not_attempted(policy),started=clock(),finished=clock())
+                observations_document=None
+                if image_only_v3 and not v3_pretext_ambiguous:
+                    from auditmanager.analysis.public import empty_native_text_observations
+                    observations_document=empty_native_text_observations(run_id=run_id,version_uid=run.version_uid,
+                        profile=text_profile,provider_mode=binding.adapter.provider_mode)
+                    empty_ref,_=publish_artifact(text_store,"analysis.text_observations",observations_document)
+                    text_result=replace(text_result,artifacts=(empty_ref,),metrics={**text_result.metrics,
+                        "native_text_unavailable":True,"model_call_count":0,"pages_analysed":0})
+            else:
+                text_result, observations_document, attempts = _run_text_analysis_stage(
                 run_id=run_id,
                 version_uid=run.version_uid,
                 outputs=outputs,
@@ -1255,6 +1357,7 @@ def _execute_run_body(
                 text_character_count=version.text_character_count,
                 textless_pages=version.textless_pages,
                 relaxed_limits=relaxed_limits,
+                force_durable_windows=v3_workflow,
                 window_custody=None if version.text_character_count is None else WindowReplyCustody(
                     session=session, jobs=job_repo, authority=authority, store=text_store,
                     mode=binding.adapter.provider_mode,
@@ -1270,6 +1373,34 @@ def _execute_run_body(
             run_id=run_id,
             result=text_result,
         )
+        if v3_workflow and v3_pretext_invoked:
+            v3_stage_result=text_result
+            v3_pretext_ambiguous=has_ambiguous_provider_effect(session,run_id=run_id);session.commit()
+            if (not v3_pretext_ambiguous and "extended_rules_changed_requires_consent" not in v3_state.get("warnings",[])
+                    and "cost_budget_exceeded" not in v3_state.get("warnings",[])):
+                v3_state=run_extended_review(session,run=run,authority=authority,jobs=job_repo,
+                    journal=_DurableCallJournal(session,job_repo,authority,effect_checkpoint,call=binding.call,context=attempt_context),
+                    binding=binding,outputs=outputs,store=text_store,meter=meter,publish=v3_publish,progress=v3_progress,
+                    checkpoint=v3_checkpoint,observations_document=observations_document,snapshot_id=run.norms_snapshot_id,
+                    profile_sha256=text_profile.content_sha256,policy=extended_policy,bind_native=v3_bind_native,
+                    resume_state=v3_state,visual_only=False)
+            elif v3_pretext_ambiguous or "cost_budget_exceeded" in v3_state.get("warnings",[]):
+                stopped_reason="provider_outcome_unknown" if v3_pretext_ambiguous else "cost_budget_exceeded"
+                v3_state["status"]="failed" if v3_pretext_ambiguous else "partial"
+                for window in v3_state.get("windows",[]):
+                    for procedure in window.get("procedures",[]):
+                        if procedure["status"] in {"queued","running"}:
+                            procedure.update(status="skipped",reason=stopped_reason)
+                for procedure in v3_state.get("procedures",[]):
+                    if procedure["status"] in {"queued","running"}:
+                        procedure.update(status="skipped",reason=stopped_reason)
+                v3_state.setdefault("warnings",[]).append("extended_provider_outcome_unknown" if v3_pretext_ambiguous else "cost_budget_exceeded")
+            v3_state["primary_text_status"]=("unavailable" if image_only_v3 else
+                "completed" if text_result.status is StageStatus.SUCCEEDED else text_result.status.value)
+            if v3_state.get("report") is not None:
+                v3_state["report"]["primary_text_status"]=v3_state["primary_text_status"]
+            v3_progress(v3_state.get("status","partial"),v3_state)
+            text_result=v3_stage_result
         outputs.absorb(text_result)
         # D-141 (`W54-WORKER-01`). Binding the text artifacts checked the authority, which
         # locks the Lease row. Committing here releases it, so the lease heartbeat keeps
@@ -1284,8 +1415,8 @@ def _execute_run_body(
         # additional calls merely because a worker was upgraded.
         from auditmanager.analysis.public import extended_review_enabled
         extended_policy = getattr(cost_policy, "extended_review", None)
-        v2_workflow = isinstance(extended_policy, dict) and extended_policy.get("plan_version") == "extended-review-v2"
-        if (extended_review_enabled(extended_policy)
+        v2_workflow = isinstance(extended_policy, dict) and extended_policy.get("plan_version") in {"extended-review-v2","extended-review-v3"}
+        if (not v3_pretext_invoked and extended_review_enabled(extended_policy)
                 and (v2_workflow or text_result.status in {StageStatus.SUCCEEDED, StageStatus.PARTIAL})):
             from auditmanager.analysis.public import extended_artifact_envelope
             from auditmanager.runs.extended_review import run_extended_review, planned_workflow_result
@@ -1347,7 +1478,7 @@ def _execute_run_body(
                         ErrorCode.DEPENDENCY_CREDENTIAL_REFUSED, ErrorCode.MODEL_IDENTITY_MISMATCH}:
                     skip_reason = "provider_binding_unavailable"
             if skip_reason:
-                skipped = planned_workflow_result(reason=skip_reason,terminal=True)
+                skipped = planned_workflow_result(reason=skip_reason,terminal=True,policy=extended_policy)
                 extended_progress("unavailable",skipped)
             else:
                 run_extended_review(session, run=run, authority=authority, jobs=job_repo,

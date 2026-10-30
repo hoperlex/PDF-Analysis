@@ -5052,3 +5052,5 @@ how long it was wrong.
 | the quarantine excluding 212 live contract tests | wave 11, integrator; `OPERATING_CONSTRAINTS.md` §11 |
 | the mutation-copy recipe that manufactured reds | wave 10, integrator; `make mutation-copy` |
 | the gate carried as convention in three of its four parts | wave 7, integrator; `make gate` |
+
+2026-10-30 one-hour section sprint addendum: D-290 also covers **all verification of `SPRINT-SECTION-INT-1030` and its fresh extended-review-v3 code**. The owner explicitly prohibited checks for this sprint. Syntax/imports, build/typecheck/lint, API/worker/DB/recovery/cost behavior, browser/download compatibility, live model output and section presentation journeys remain unexecuted. Prior v2 focused PASS results do not establish v3 correctness. Synthetic inputs are another session's responsibility. Original-derived rubric presence does not close full original parity or normative/expert acceptance.

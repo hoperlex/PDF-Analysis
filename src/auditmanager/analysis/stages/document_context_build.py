@@ -78,7 +78,7 @@ class _Block:
     number: str
 
 
-def run(context: StageContext) -> StageProduction:
+def run(context: StageContext, *, allow_visual_only_pages: bool = False) -> StageProduction:
     """Build and publish the document graph."""
     block_index, block_index_sha256 = read_artifact(
         context.blob_store,
@@ -92,10 +92,15 @@ def run(context: StageContext) -> StageProduction:
     )
     _refuse_unbound_text_layer(block_index, text_layer_sha256)
 
-    blocks = _resolve_blocks(block_index, text_layer)
-    sections, section_of = _build_sections(blocks)
-    references = _build_references(blocks, sections, section_of)
-    neighbourhood = _build_neighbourhood(blocks)
+    blocks = _resolve_blocks(block_index, text_layer, allow_empty=allow_visual_only_pages)
+    if blocks:
+        sections, section_of = _build_sections(blocks)
+        references = _build_references(blocks, sections, section_of)
+        neighbourhood = _build_neighbourhood(blocks)
+    else:
+        # Fresh visual-only authority admits no native block identities. Empty
+        # context is truthful; no OCR text, section or anchor is fabricated.
+        sections, references, neighbourhood = [], [], []
 
     graph = envelope(
         ROLE_DOCUMENT_GRAPH,
@@ -115,6 +120,7 @@ def run(context: StageContext) -> StageProduction:
             "section_count": len(sections),
             "reference_count": len(references),
             "block_count": len(blocks),
+            **({"visual_only_context": True} if not blocks else {}),
         },
     )
 
@@ -145,7 +151,7 @@ def _refuse_unbound_text_layer(
 
 
 def _resolve_blocks(
-    block_index: dict[str, Any], text_layer: dict[str, Any]
+    block_index: dict[str, Any], text_layer: dict[str, Any], *, allow_empty: bool = False
 ) -> list[_Block]:
     """Read each block's text back out of the text layer by its own span.
 
@@ -173,6 +179,8 @@ def _resolve_blocks(
         block_index.get("blocks", ()),
         key=lambda block: (block["page_number"], block["block_ordinal"]),
     )
+    if not raw and allow_empty and total == 0 and not whole:
+        return []
     if not raw:
         raise DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,

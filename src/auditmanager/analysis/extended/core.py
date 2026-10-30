@@ -14,6 +14,7 @@ from auditmanager.analysis.text.adapter import ModelRequest
 
 PLAN_VERSION = "extended-review-v1"
 PLAN_VERSION_V2 = "extended-review-v2"
+PLAN_VERSION_V3 = "extended-review-v3"
 RESULT_ROLE = "analysis.extended_review"
 REPLY_ROLE = "analysis.extended_reply"
 MAX_BLOCKS = 16
@@ -30,24 +31,40 @@ def digest(value: object) -> str:
 
 
 def enabled(policy: object) -> bool:
-    return (isinstance(policy, dict) and policy.get("enabled") is True
-            and policy.get("plan_version") in (PLAN_VERSION, PLAN_VERSION_V2) and type(policy.get("max_blocks")) is int
-            and policy["max_blocks"] == MAX_BLOCKS)
+    if not isinstance(policy, dict) or policy.get("enabled") is not True:
+        return False
+    if policy.get("plan_version") == PLAN_VERSION_V3:
+        maximum=policy.get("max_blocks");windows=policy.get("max_windows");rules=policy.get("rules_sha256")
+        text_pages=policy.get("text_page_limit")
+        return (type(maximum) is int and 1 <= maximum <= 128 and policy.get("window_size") == 16
+            and type(policy.get("window_size")) is int and type(windows) is int
+            and type(text_pages) is int and 1 <= text_pages <= 128
+            and windows == max((maximum+15)//16,(text_pages+15)//16) and policy.get("review") is True
+            and isinstance(policy.get("section_code"),str) and bool(policy["section_code"].strip())
+            and isinstance(rules,str) and len(rules)==64 and all(c in "0123456789abcdef" for c in rules))
+    return (policy.get("plan_version") in (PLAN_VERSION, PLAN_VERSION_V2)
+            and type(policy.get("max_blocks")) is int and policy["max_blocks"] == MAX_BLOCKS)
 
 
 def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], manifest: Mapping[str, Any],
                 text_layer: Mapping[str, Any], graph: Mapping[str, Any], observations: Mapping[str, Any] | None,
                 recognised: Mapping[str, Any] | None = None,
-                native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION) -> dict:
-    if plan_version not in {PLAN_VERSION, PLAN_VERSION_V2}:
+                native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION,
+                source_offset: int = 0, source_limit: int = 16, max_sources: int = 16) -> dict:
+    if plan_version not in {PLAN_VERSION, PLAN_VERSION_V2, PLAN_VERSION_V3}:
         raise ValueError("extended_plan_version_invalid")
-    if native_sources is not None and plan_version != PLAN_VERSION_V2:
+    if plan_version == PLAN_VERSION_V3 and (type(source_offset) is not int or source_offset < 0
+            or type(source_limit) is not int or not 1 <= source_limit <= 16
+            or type(max_sources) is not int or not 1 <= max_sources <= 128 or source_offset >= 128):
+        raise ValueError("extended_source_window_invalid")
+    if native_sources is not None and plan_version not in {PLAN_VERSION_V2, PLAN_VERSION_V3}:
         raise ValueError("native_sources_require_v2")
     if native_sources is None:
         cohort = prepare_image_crop_cohort(version_uid=version_uid,
             portal_blocks_document=portal, crop_manifest_document=manifest)
         ordered = sorted(cohort.crops, key=lambda c: (c.page_number, c.portal_block_id))
-        selected = ordered[:MAX_BLOCKS]
+        selected = (ordered[source_offset:min(source_offset+source_limit,max_sources)]
+            if plan_version == PLAN_VERSION_V3 else ordered[:MAX_BLOCKS])
     else:
         selected = list(native_sources["sources"])
         if len(selected) > MAX_BLOCKS or any(source.get("kind") != "image" for source in selected):
@@ -76,15 +93,26 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
         evidence = item.get("evidence", [])
         if not evidence:
             continue
-        source_id = f"text:{i}"
+        primary_key=(digest({"index":item.get("_extended_primary_index",i),
+            "observation":{k:v for k,v in item.items() if k!="_extended_primary_index"}})[:24]
+            if plan_version==PLAN_VERSION_V3 else None)
+        source_id = "primary_text_"+primary_key if plan_version==PLAN_VERSION_V3 else f"text:{i}"
+        proposed_quote=str(evidence[0].get("quote", ""))[:2000]
+        page_number=evidence[0]["page_number"]
+        verified_quote=(proposed_quote if proposed_quote and proposed_quote in str(pages.get(page_number,"")) else "")
         sources.append({"source_id": source_id, "kind": "text",
-            "page_number": evidence[0]["page_number"], "quote": str(evidence[0].get("quote", ""))[:2000]})
+            "page_number":page_number,"quote":verified_quote if plan_version==PLAN_VERSION_V3 else proposed_quote,
+            **({"source_type":"primary_text_proposal","quote_source":"native" if verified_quote else "unverified_proposal"}
+                if plan_version==PLAN_VERSION_V3 else {})})
         text_items.append({"title": str(item.get("category", "Текстовое наблюдение"))[:200],
-            "description": str(item.get("finding_text", ""))[:3000], "source_ids": [source_id], "norm_queries": []})
+            "description": str(item.get("finding_text", ""))[:3000], "source_ids": [source_id], "norm_queries": [],
+            **({"primary_observation_key":primary_key,
+                "original_primary_observation":{k:v for k,v in item.items() if k!="_extended_primary_index"}}
+                if plan_version==PLAN_VERSION_V3 else {})})
     if native_sources is None:
         skipped = [{"block_id": c.portal_block_id, "page_number": c.page_number, "reason": c.reason} for c in cohort.skipped]
         skipped.extend({"block_id": c.portal_block_id, "page_number": c.page_number, "reason": "outside_approved_window"}
-                       for c in ordered[MAX_BLOCKS:])
+                       for c in ordered[max_sources if plan_version == PLAN_VERSION_V3 else MAX_BLOCKS:])
         total = len(ordered) + len(cohort.skipped)
     else:
         skipped = deepcopy(native_sources.get("coverage", {}).get("skipped", []))
@@ -107,8 +135,15 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             "native_sources_sha256": None if native_sources is None else native_sources["source_sha256"],
             "native_source_facts": None if native_sources is None else
                 {"sources": native_sources["sources"], "coverage": native_sources.get("coverage", {})}})
-    if (native_sources is None and len(ordered) > MAX_BLOCKS
-            or native_sources is not None and total > len(selected)):
+    if plan_version == PLAN_VERSION_V3:
+        result["workflow_version"] = PLAN_VERSION_V3
+        result["source_window"] = {"offset":source_offset,"limit":source_limit,"max_sources":max_sources,
+            "source_total":total,"source_selected_total":min(max_sources,len(ordered)) if native_sources is None else min(max_sources,total)}
+        result["source_sha256"] = digest({"base":result["source_sha256"],"workflow_version":plan_version,
+            "native_sources_sha256":None if native_sources is None else native_sources["source_sha256"],
+            "window":result["source_window"],"sources":sources})
+    if (native_sources is None and len(ordered) > (max_sources if plan_version==PLAN_VERSION_V3 else MAX_BLOCKS)
+            or native_sources is not None and total > (max_sources if plan_version==PLAN_VERSION_V3 else len(selected))):
         result["warnings"].append("remaining_blocks_not_reviewed")
     if native_sources is None and cohort.skipped:
         result["warnings"].append("geometry_blocks_not_available")
@@ -266,3 +301,15 @@ def block_payload(*, section: str, batch: list[dict], sections: list[dict], cove
             "recognised_context": recognised, "context_truncated": cut})
     return {"section": section, "sources": [{k:v for k,v in source.items() if k != "context"} for source in batch],
         "page_contexts": contexts, "context_sections": sections, "coverage": coverage}, truncated
+
+
+def build_request_v3(*, model_id, run_id, phase, section, payload, window_id):
+    """Fresh-consent visual request with the frozen section rubric; legacy requests stay byte-stable."""
+    from .section_rules import section_instructions
+    from .workflow import review_bundle_digest
+    rubric = section_instructions(section, "block_analysis" if phase == "blocks" else phase)
+    bound = {**payload,"workflow_version":PLAN_VERSION_V3,"window_id":window_id,
+        "rules_sha256":review_bundle_digest(section)}
+    request=build_request(model_id=model_id,run_id=run_id,phase=phase,section=section,payload=bound)
+    body={**request.body,"system":request.body["system"]+"\n\n"+rubric}
+    return ModelRequest(model_id,body,idempotency_scope=f"{run_id}:v3:{window_id}:{phase}:{digest(bound)}")

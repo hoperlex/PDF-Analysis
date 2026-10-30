@@ -1,0 +1,3 @@
+# Section source bundle
+
+Original PDF-proverka3c994817 resources copied byte for byte under disciplines/ and reference_catalog/. SOURCE.json records original/local paths and SHA256. adapted/ contains explicit new rubrics and the PB subset adaptation; PB is not misrepresented as an original profile. OV maps to HVAC; AI/POS/PT/ITP visual-catalog reuse is explicit, their own discipline checklist remains primary. Numeric normative statements are historical context, never verified current standards. Fresh-v3 instructions only; pinned text profiles/v1/v2 remain untouched. No execution/quality verification was run in this sprint.

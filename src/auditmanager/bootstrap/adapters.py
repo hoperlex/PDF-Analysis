@@ -927,7 +927,7 @@ class RunAdapter(_SessionHolder):
             from auditmanager.runs.preflight import RunCostPreflight
             self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
                 provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
-                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry)
+                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store)
         if require_cost_consent and self._cost_preflight is None:
             raise ValueError("served analysis starts require a cost preflight policy")
 

@@ -7,6 +7,8 @@
  */
 
 export type { ProviderModeLabel, RunCostReading, RunOutcome, StageRow } from './model/run-presentation';
+export type { ExtendedReportFile, ExtendedReportFormat } from './lib/extended-report';
+export { formatExtendedRunReport } from './lib/extended-report';
 export {
   AR_V3_BETA_PROFILE_ID,
   PC01_STAGE_IDS,

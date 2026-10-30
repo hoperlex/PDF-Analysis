@@ -299,6 +299,7 @@ def run_text_analysis_windows(
     custody: WindowCustody | None = None,
     recognised_pages: Sequence[RecognisedPage] = (),
     textless_pages: Collection[int] | None = None,
+    force_single_window_custody: bool = False,
 ) -> TextAnalysisOutcome:
     """Run the stage over one document version in whole-page windows. Same contract as ``run_text_analysis``.
 
@@ -326,7 +327,7 @@ def run_text_analysis_windows(
     except DomainError as error:
         return _failure(error, base)
 
-    if len(plan.windows) == 1:
+    if len(plan.windows) == 1 and not force_single_window_custody:
         # One window is the single call: the same request bytes, the same recording, the same artifact.
         return run_text_analysis(
             run_id=run_id,

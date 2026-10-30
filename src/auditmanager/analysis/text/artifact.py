@@ -143,3 +143,26 @@ def _validate_anchor(text_layer: TextLayer, anchor: ResolvedAnchor) -> None:
             "evidence_quotation_mismatch",
             "an evidence span does not resolve to its own quotation",
         )
+
+
+def empty_native_text_observations(*, run_id, version_uid, profile, provider_mode):
+    """Record zero native-text observations without inventing a model response.
+
+    Fresh image-only workflows can still run the ordinary grounding gate over an
+    explicitly empty set. No page is claimed text-analysed, no model-call identity
+    exists, and visual candidates remain in their separately typed review artifact.
+    """
+    return {
+        "artifact_role": ARTIFACT_ROLE,
+        "artifact_version": ARTIFACT_VERSION,
+        "run_id": str(run_id),
+        "version_uid": str(version_uid),
+        "stage_id": STAGE_ID,
+        "analysis_profile_id": str(profile.analysis_profile_id),
+        "prompt_bundle_id": str(profile.prompt_bundle.prompt_bundle_id),
+        "provider_mode": getattr(provider_mode, "value", provider_mode),
+        "pages_analysed": [],
+        "observations": [],
+        "input_disposition": "image_only_no_native_text",
+        "model_calls_performed": 0,
+    }

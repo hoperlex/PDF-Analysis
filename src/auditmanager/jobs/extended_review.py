@@ -49,3 +49,19 @@ def extended_unit(session: Session, *, run_id: str, unit_key: str, source_sha256
     if abandoned is not None:
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="extended_provider_outcome_unknown")
     return None
+
+
+def has_ambiguous_provider_effect(session: Session, *, run_id: str) -> bool:
+    """An unfinished/abandoned effect anywhere in this Run forbids new paid work.
+
+    A completed effect is cleared atomically by the existing call journal. An
+    abandoned row preserves uncertainty; it is never proof of no provider spend.
+    Callers may still read and reuse an already committed response before this
+    guard, since reuse dispatches nothing.
+    """
+    return session.execute(text("""
+        SELECT 1 FROM provider_call_effect
+        WHERE run_id=:run AND state IN
+          ('prepared','response_received','outcome_unknown','abandoned')
+        LIMIT 1
+    """), {"run": run_id}).scalar_one_or_none() is not None

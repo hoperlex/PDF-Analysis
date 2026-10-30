@@ -48,6 +48,7 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList } from '@/widgets/finding-list';
+import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument } from '@/features/open-evidence';
 import { useExportRun } from '@/features/export-run';
@@ -173,6 +174,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         </>
       }
     >
+      <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
       <div className={`am-review ${styles.layout}`}>
         <div className={`am-review__list ${styles.list}`}>
           <FindingList
