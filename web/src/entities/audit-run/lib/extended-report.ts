@@ -74,6 +74,25 @@ function observationMarkdown(item: RecordValue, index: number, sourceIndex: Read
   return lines.join('\n\n');
 }
 
+function parametersMarkdown(value: unknown): string {
+  const body = object(value);
+  if (body === null) return '';
+  return ['## Параметры проекта из источников',
+    'Предварительные значения с дословными источниками. Это не утверждённый паспорт, нормативная проверка или полный перечень параметров. Единицы не пересчитывались; разные кандидаты сохранены отдельно.',
+    code({ status: body.status, policy: body.policy, coverage: body.coverage, manifest_sha256: body.manifest_sha256, reason: body.reason }),
+    ...objects(body.facts).map((fact, index) => [`### Параметр ${index + 1}: ${md(fact.name)}`,
+      `Значение: ${md(fact.value)}; единица: ${md(fact.unit)}; предмет: ${md(fact.subject)}.`,
+      evidenceMarkdown(fact.source_evidence), code(fact)].join('\n\n')),
+    '### Квитанции извлечения параметров', code(body.batches),
+    '### Неотобранные фрагменты и ограничения', code({ pending: body.pending, omitted: body.omitted,
+      pending_manifest_truncated: body.pending_manifest_truncated, omitted_manifest_truncated: body.omitted_manifest_truncated })].join('\n\n');
+}
+function parametersHtml(value: unknown): string {
+  const body = object(value);
+  if (body === null) return '';
+  return `<section><h2>Параметры проекта из источников</h2><p>Предварительные значения, не утверждённый паспорт или нормативная проверка. Единицы не пересчитывались. Отсутствие кандидата не доказывает отсутствие параметра в проекте.</p><pre>${html(JSON.stringify({ status: body.status, policy: body.policy, coverage: body.coverage, manifest_sha256: body.manifest_sha256, reason: body.reason }, null, 2))}</pre>${objects(body.facts).map((fact, index) => `<article><h3>${index + 1}. ${html(fact.name)}</h3><p>Значение: ${html(fact.value)}; единица: ${html(fact.unit)}; предмет: ${html(fact.subject)}.</p>${evidenceHtml(fact.source_evidence)}<pre>${html(JSON.stringify(fact, null, 2))}</pre></article>`).join('')}<details><summary>Квитанции и неотобранные источники</summary><pre>${html(JSON.stringify({ batches: body.batches, pending: body.pending, omitted: body.omitted }, null, 2))}</pre></details></section>`;
+}
+
 /** Local projection of an already authorised API reading; no model, mutation or accepted-only filter. */
 export function formatExtendedRunReport(reading: ExtendedRunReview, format: ExtendedReportFormat): ExtendedReportFile {
   if (format === 'xlsx') return formatExtendedRunXlsx(reading);
@@ -96,7 +115,7 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     ? 'Базовый текстовый анализ ещё выполняется. Сохранённый визуальный проход не является завершением всей проверки окна.' : '';
   if (format === 'md') {
     const blocks = ['# Предварительный анализ раздела', disclaimer, pendingPrimary, '## Состояние, покрытие и происхождение', code(metadata),
-      '## Фактические процедуры', procedureMarkdown(result?.procedures), crossWindowMarkdown(result?.global_cross_window),
+      '## Фактические процедуры', procedureMarkdown(result?.procedures), crossWindowMarkdown(result?.global_cross_window), parametersMarkdown(result?.project_parameters),
       `## Общий свод: ${observations.length} записей`,
       ...observations.map((item, index) => observationMarkdown(item, index, sourceIndex))];
     for (const [index, window] of windows.entries()) blocks.push(`## Окно ${index + 1}: ${md(window.window_id)}`,
@@ -120,6 +139,6 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     return `<article><h3>${index + 1}. ${html(item.title)}</h3><p>${html(item.description)}</p>${origin}<p>Исходное наблюдение сохранено. Решение эксперта не принято этой моделью.</p>${item.source_evidence === undefined ? '' : `<section><h4>Цитаты исходного наблюдения</h4>${evidenceHtml(item.source_evidence)}</section>`}${advice}${fixed}<section><h4>Исходные материалы</h4><ul>${sources}</ul></section>${norms}</article>`;
   }).join('');
   const windowHtml = windows.map((window, index) => `<section><h2>Окно ${index + 1}: ${html(window.window_id)}</h2><p>${html(STATUS[plain(window.status)] ?? window.status)}</p>${window.visual_phase_complete === true && window.status === 'running' ? '<p>Визуальный проход сохранён; оставшиеся процедуры окна ещё не завершены.</p>' : ''}${procedureHtml(window.procedures)}<pre>${html(JSON.stringify(window, null, 2))}</pre></section>`).join('');
-  const content = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Предварительный анализ раздела</title><style>body{max-width:1100px;margin:32px auto;padding:0 20px;font:16px/1.5 system-ui,sans-serif;color:#15202b;background:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f7;padding:16px}article,section{border-top:1px solid #c9d1d9;padding:16px 0}h1,h2,h3{line-height:1.2}</style></head><body><h1>Предварительный анализ раздела</h1><p>${html(disclaimer)}</p>${pendingPrimary ? `<p>${html(pendingPrimary)}</p>` : ''}<h2>Состояние, покрытие и происхождение</h2><pre>${html(JSON.stringify(metadata, null, 2))}</pre><h2>Фактические процедуры</h2>${procedureHtml(result?.procedures)}${crossWindowHtml(result?.global_cross_window)}<h2>Общий свод: ${observations.length} записей</h2>${rows}${windowHtml}<h2>Полная исходная запись API</h2><p>Все переданные записи, источники, цитаты и ограничения без фильтра по модельной рекомендации.</p><pre>${html(raw)}</pre></body></html>`;
+  const content = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Предварительный анализ раздела</title><style>body{max-width:1100px;margin:32px auto;padding:0 20px;font:16px/1.5 system-ui,sans-serif;color:#15202b;background:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f7;padding:16px}article,section{border-top:1px solid #c9d1d9;padding:16px 0}h1,h2,h3{line-height:1.2}</style></head><body><h1>Предварительный анализ раздела</h1><p>${html(disclaimer)}</p>${pendingPrimary ? `<p>${html(pendingPrimary)}</p>` : ''}<h2>Состояние, покрытие и происхождение</h2><pre>${html(JSON.stringify(metadata, null, 2))}</pre><h2>Фактические процедуры</h2>${procedureHtml(result?.procedures)}${crossWindowHtml(result?.global_cross_window)}${parametersHtml(result?.project_parameters)}<h2>Общий свод: ${observations.length} записей</h2>${rows}${windowHtml}<h2>Полная исходная запись API</h2><p>Все переданные записи, источники, цитаты и ограничения без фильтра по модельной рекомендации.</p><pre>${html(raw)}</pre></body></html>`;
   return { content, mediaType: 'text/html;charset=utf-8', fileName: `${base}.html` };
 }

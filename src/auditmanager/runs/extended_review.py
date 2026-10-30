@@ -433,7 +433,12 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         for procedure in procedures:
             procedure.update(status="skipped" if terminal else "queued", reason=reason)
     version="extended-review-v3" if v3 else "extended-review-v2"
+    parameter_result = {}
+    if v3 and "project_parameters_policy" in policy:
+        from .project_parameters import planned_parameters
+        parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
+        **parameter_result,
         **({"global_cross_window": _planned_global_cross_window(policy["global_cross_window_policy"], reason=reason, terminal=terminal)}
            if v3 and "global_cross_window_policy" in policy else {}),
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
@@ -1042,6 +1047,10 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             and isinstance(resume_state.get("global_cross_window"), dict)
             and resume_state["global_cross_window"].get("policy") == policy["global_cross_window_policy"]):
         state["global_cross_window"] = deepcopy(resume_state["global_cross_window"])
+    if (resume_state is not None and "project_parameters_policy" in policy
+            and isinstance(resume_state.get("project_parameters"), dict)
+            and resume_state["project_parameters"].get("policy") == policy["project_parameters_policy"]):
+        state["project_parameters"] = deepcopy(resume_state["project_parameters"])
     state["primary_text_status"]=("pending" if visual_only else "unavailable" if
         isinstance(observations_document,dict) and observations_document.get("input_disposition")=="image_only_no_native_text"
         else "completed" if observations_document is not None else "failed")
@@ -1065,6 +1074,11 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 source_index[source["source_id"]] = source
             observations.extend({**observation, "window_id": "global-cross-window",
                 "origin_scope": "global_cross_window"} for observation in global_review.get("observations", []))
+        for source in state.get("project_parameters", {}).get("sources", []):
+            previous = source_index.get(source["source_id"])
+            if previous is not None and previous != source:
+                raise _refuse("project_parameters_source_identity_conflict")
+            source_index[source["source_id"]] = source
         state["sources"]=list(source_index.values())
         state["observations"]=observations
         if policy.get("coverage_version")=="batched-v1":
@@ -1232,6 +1246,19 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 checkpoint=checkpoint, snapshot_id=snapshot_id, state=state, policy=policy,
                 aggregate=aggregate, save=save)
             aggregate()
+        if "project_parameters_policy" in policy:
+            from .project_parameters import run_project_parameters
+            accepted_parameters = policy["project_parameters_policy"]
+            def parameter_call(request, index):
+                if type(index) is not int or not 0 <= index < accepted_parameters["max_calls"]:
+                    raise _refuse("project_parameters_approved_call_limit")
+                return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
+                    binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
+                    source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
+                    checkpoint=checkpoint, global_unknown_fence=True)
+            run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
+                state=state, accepted=accepted_parameters, durable_call=parameter_call,
+                checkpoint=checkpoint, aggregate=aggregate, save=save)
         _retain_primary_observations_v3(state,observations_document=observations_document)
         state.update(_attach_consolidation(state, version_uid=run.version_uid))
         for procedure in state["procedures"]:
@@ -1243,7 +1270,8 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         degraded=(state["coverage"]["blocks_remaining"]>0 or state["text_coverage"]["pages_remaining"]>0
             or any(record["status"]!="completed" for record in state["windows"])
             or bool(state.get("unreviewed_primary_observations"))
-            or isinstance(state.get("global_cross_window"), dict) and state["global_cross_window"]["status"] != "completed")
+            or isinstance(state.get("global_cross_window"), dict) and state["global_cross_window"]["status"] != "completed"
+            or isinstance(state.get("project_parameters"), dict) and state["project_parameters"]["status"] != "completed")
         state["report"]["status"]="partial" if degraded else "completed"
         save("partial" if degraded else "completed")
         return state
@@ -1251,6 +1279,18 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         reason=error.detail_fields.get("reason") if isinstance(error,DomainError) else "extended_v3_input_or_reply_invalid"
         reason=str(reason or "extended_v3_failed")
         state["warnings"].append(reason)
+        for key in ("global_cross_window", "project_parameters"):
+            nested = state.get(key)
+            if isinstance(nested, dict) and nested.get("status") in {"queued", "running"}:
+                nested.update(status="failed", reason=reason)
+                if isinstance(nested.get("report"), dict):
+                    nested["report"].update(status="failed", reason=reason)
+                for procedure in nested.get("procedures", []):
+                    if procedure.get("status") in {"queued", "running"}:
+                        procedure.update(status="skipped", reason=reason)
+                for receipt in nested.get("batches", []):
+                    if receipt.get("status") in {"queued", "running"}:
+                        receipt.update(status="skipped", reason=reason)
         for procedure in state["procedures"]:
             if procedure["status"] in {"queued","running"}:procedure.update(status="failed",reason=reason)
         state["report"]=_section_report_v3(state)

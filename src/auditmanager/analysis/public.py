@@ -551,3 +551,32 @@ def parse_global_cross_window_reply(text, **kwargs):
 
 
 __all__.extend(["plan_global_cross_window", "build_global_cross_window_request", "parse_global_cross_window_reply"])
+
+
+def project_parameters_policy(section):
+    from auditmanager.analysis.extended.project_parameters import policy
+    return policy(section)
+
+
+def validate_project_parameters_policy(value, *, section, compare_bundle=True):
+    from auditmanager.analysis.extended.project_parameters import validate_policy
+    return validate_policy(value, section=section, compare_bundle=compare_bundle)
+
+
+def plan_project_parameters(**kwargs):
+    from auditmanager.analysis.extended.project_parameters import plan
+    return plan(**kwargs)
+
+
+def build_project_parameters_request(**kwargs):
+    from auditmanager.analysis.extended.project_parameters import build_request
+    return build_request(**kwargs)
+
+
+def parse_project_parameters_reply(text, **kwargs):
+    from auditmanager.analysis.extended.project_parameters import parse_reply
+    return parse_reply(text, **kwargs)
+
+
+__all__.extend(["project_parameters_policy", "validate_project_parameters_policy", "plan_project_parameters",
+    "build_project_parameters_request", "parse_project_parameters_reply"])

@@ -257,6 +257,13 @@ class RunCostPreflight:
                     output_tokens += visual["max_windows"] * 72_000
                 else:
                     raise _invalid("analysis_coverage", "unsupported_plan")
+                if chars > 0 and os.environ.get("AUDITMANAGER_PROJECT_PARAMETERS", "1").strip().lower() not in {"0", "false", "off"}:
+                    from auditmanager.analysis.public import project_parameters_policy
+                    parameters = project_parameters_policy(section)
+                    extended["project_parameters_policy"] = parameters
+                    extra_calls += parameters["max_calls"]
+                    input_tokens += parameters["max_calls"] * 100_000
+                    output_tokens += parameters["max_calls"] * parameters["output_tokens"]
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
