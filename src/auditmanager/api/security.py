@@ -500,6 +500,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listStageChangeCards": _ANY_ROLE,
         "getStageChangeCard": _ANY_ROLE,
         "applyStageCardVerdicts": _EXPERT,
+        "createStageReviewCard": _EXPERT,
         "listStageCardVerdicts": _ANY_ROLE,
         "getStageChangeJournal": _ANY_ROLE,
         "streamStageChangeJournalXlsx": _ANY_ROLE,

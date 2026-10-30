@@ -12,6 +12,8 @@ from auditmanager.comparison.stage_text.fragments import extract_fragments
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 from . import classifier, reviewer, synthesis
+from .loop import CONTEXT_SCHEMA, FOLLOWUP_RESERVE_CHARS, INSTRUCTIONS, VERSION
+from . import graphic
 from .source import link_components
 from .validation import digest
 
@@ -19,11 +21,12 @@ from .validation import digest
 class StageAiMethod:
     method = "stage_review"
 
-    def __init__(self, repository, *, sessions=None, blob_store=None, profile_reader=None) -> None:
+    def __init__(self, repository, *, sessions=None, blob_store=None, profile_reader=None, graphic_source=None) -> None:
         self._repo = repository
         self._sessions = sessions
         self._blob_store = blob_store
         self._reader = profile_reader
+        self._graphics = graphic_source
         self.source_signature = ""
         self.source_profiles: list[dict[str, Any]] = []
 
@@ -34,6 +37,8 @@ class StageAiMethod:
             "review": [reviewer.PROMPT_VERSION, reviewer.SYSTEM_PROMPT, reviewer.REVIEW_SCHEMA],
             "classify": [classifier.PROMPT_VERSION, classifier.SYSTEM_PROMPT, classifier.CLASSIFICATION_SCHEMA],
             "synthesize": [synthesis.PROMPT_VERSION, synthesis.SYSTEM_PROMPT, synthesis.SYNTHESIS_SCHEMA],
+            "loop": [VERSION, INSTRUCTIONS, CONTEXT_SCHEMA],
+            "graphic": [graphic.VERSION, graphic.PROMPT, graphic.REGIONS_PER_REQUEST] if self._graphics is not None else None,
         })
 
     def _profiles(self):
@@ -86,15 +91,35 @@ class StageAiMethod:
             synthesis_chars = chars * 2 + count * 1_000 + 8_000
             if max(review_chars, classification_chars, synthesis_chars) > 240_000:
                 raise DomainError(ErrorCode.VALIDATION_FAILED, field="stage_pair_id", constraint="stage_ai_group_budget")
-            if ("review", group_id) not in completed:
-                call_groups.append(AiCallGroup(calls=review_calls,
-                    prompt_chars=review_chars, output_tokens=16_000))
-            if ("classify", group_id) not in completed:
-                call_groups.append(AiCallGroup(calls=1, prompt_chars=classification_chars,
-                                               output_tokens=12_000))
-            if ("synthesize", group_id) not in completed:
-                call_groups.append(AiCallGroup(calls=1, prompt_chars=synthesis_chars,
-                                               output_tokens=4_000))
+            for kind, calls, prompt_chars, output_tokens in (
+                ("review", review_calls, review_chars, 16_000),
+                ("classify", 1, classification_chars, 12_000),
+                ("synthesize", 1, synthesis_chars, 4_000),
+            ):
+                if (kind, group_id) in completed:
+                    continue
+                # Main, at most one context pass and one coverage pass, plus
+                # one proven-safe technical retry shared by that plan's calls.
+                call_groups.append(AiCallGroup(calls=calls, prompt_chars=prompt_chars,
+                                               output_tokens=output_tokens))
+                call_groups.append(AiCallGroup(calls=calls * 3,
+                    prompt_chars=min(240_000, prompt_chars + FOLLOWUP_RESERVE_CHARS),
+                    output_tokens=output_tokens))
+        if self._graphics is not None:
+            raw_graphics = (self._graphics.evidence(request.scope.stage_chain_run_id)
+                            if request.scope.stage_chain_run_id and request.mode is not AiMode.START else ())
+            by_pair = {(row["left_profile_id"], row["right_profile_id"]): row for row in raw_graphics}
+            for link in graphic.eligible_links(snapshot):
+                raw = by_pair.get((link["left_profile_id"], link["right_profile_id"]))
+                if request.mode is not AiMode.START and (raw is None or raw["status"] != "reliable" or not raw["regions"]):
+                    continue
+                gid = graphic.group_id(raw["evidence_id"]) if raw else None
+                groups += 1
+                for kind, images, output in (("classify", 8, 12_000), ("synthesize", 0, 4_000)):
+                    if gid is not None and (kind, gid) in completed:
+                        continue
+                    call_groups.append(AiCallGroup(calls=4, prompt_chars=120_000,
+                        output_tokens=output, images=images, image_bytes=images * graphic.MAX_IMAGE_BYTES))
         return AiCounts(groups=tuple(call_groups), units=groups, reused=0,
                         sheets=len(snapshot["all_profiles"]), pairs=len(snapshot["links"]),
                         versions=len({row["version_uid"] for row in snapshot["all_profiles"]}))

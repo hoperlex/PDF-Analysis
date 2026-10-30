@@ -900,11 +900,22 @@ class Page {
       this.#domEnabled = true;
     }
     const objectId = await this.#objectIdOf(selector, text, what);
+    // Some real pickers clear their input in React's onChange after retaining the File.
+    // Observe the browser's FileList during the native event, before that handler clears it.
+    await this.#send('Runtime.callFunctionOn', { objectId, functionDeclaration: `function () {
+      this.__pc01AttachedFile = null;
+      this.addEventListener('change', function (event) {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.__pc01AttachedFile = file === undefined ? null : { name: file.name, size: file.size, type: file.type };
+      }, { once: true, capture: true });
+    }` });
     await this.#send('DOM.setFileInputFiles', { files: [absolutePath], objectId });
     const chosen = await this.evaluate(`(() => {
       const el = ${Page.locator(selector, text)};
       const f = el === null ? null : (el.files ?? [])[0];
-      return f === undefined || f === null ? null : { name: f.name, size: f.size, type: f.type };
+      const captured = el?.__pc01AttachedFile ?? null;
+      if (el !== null) delete el.__pc01AttachedFile;
+      return captured ?? (f === undefined || f === null ? null : { name: f.name, size: f.size, type: f.type });
     })()`);
     if (chosen === null) {
       throw new Error(`${what}: the browser reports no file on the input after attaching ${absolutePath}`);

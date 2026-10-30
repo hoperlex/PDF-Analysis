@@ -6961,6 +6961,10 @@ class StageClassificationCard(_Object):
     evidence_ids: Annotated[list[StageAtomicEvidenceId], Field(min_length=1)]
     model_class: str = Field(**_NOT_GIVEN)
     policy_reasons: list[str] = Field(default_factory=list)
+    materiality: Literal["material", "non_material", "unknown"] = Field(**_NOT_GIVEN)
+    importance: Literal["high", "normal", "unknown"] = Field(**_NOT_GIVEN)
+    detail_increased: bool = Field(**_NOT_GIVEN)
+
 
 
 class StageAiClassification(_Object):
@@ -7079,6 +7083,10 @@ class StageChangeCard(_Object):
     carryover: Literal["none", "full", "partial", "stale"] = "none"
     carried_verdict_ids: list[StageCardVerdictId] = Field(default_factory=list)
     stale: bool
+    materiality: Literal["material", "non_material", "unknown"] = Field(**_NOT_GIVEN)
+    importance: Literal["high", "normal", "unknown"] = Field(**_NOT_GIVEN)
+    detail_increased: bool = Field(**_NOT_GIVEN)
+
 
 
 class StageChangeCardPage(_Object):
@@ -7165,3 +7173,8 @@ class StageAiSynthesisPage(_Object):
 class ResumeStageChainRunRequest(_Object):
     consent: ComparisonAiConsent = Field(**_NOT_GIVEN)
     retry_failed: bool = False
+
+
+class CreateStageReviewCardRequest(_Object):
+    source_ids: Annotated[list[StageAtomicEvidenceId], Field(min_length=1, max_length=100)]
+    reason: Annotated[str, Field(min_length=1, max_length=2000)]

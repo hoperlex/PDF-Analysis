@@ -26,7 +26,7 @@ def test_the_shipped_tuple_has_one_handler_for_each_kind() -> None:
         "comparison_sheet_changes",  # `CMP-VC-AISHEET-01`
         "comparison_spec",  # `CMP-VC-SPEC-01`
         "matrix_build", "page_profile", "pair_result", "series_after_preparation", "series_drive", "series_pair",
-        "stage_text_recompute",
+        "stage_chain", "stage_chain_batch", "stage_text_recompute",
     ]
     assert sorted(kinds) == shipped
     registry = HandlerRegistry.build(public.HANDLER_FACTORIES, WorkDependencies(None, None, None, None))  # type: ignore[arg-type]

@@ -103,6 +103,7 @@ SERVED_TEXT_READ_OPERATIONS = frozenset({
     "listStageRawDifferences", "listStageTextHints",
 })
 SERVED_TEXT_WRITE_OPERATIONS = frozenset({"recomputeStageTextEvidence"})
+SERVED_RUN_OPERATIONS = frozenset({"startStageChainRun", "listStageChainRuns", "getStageChainRun", "cancelStageChainRun"})
 
 
 def _client(modules: str) -> TestClient:
@@ -149,14 +150,14 @@ def test_every_stage_route_answers_a_typed_module_or_lane_refusal(
     if modules == "versions,stages" and name in (
         SERVED_PAIR_OPERATIONS | SERVED_UPLOAD_OPERATIONS
         | SERVED_LINK_OPERATIONS | SERVED_TEXT_READ_OPERATIONS
-        | SERVED_TEXT_WRITE_OPERATIONS
+        | SERVED_TEXT_WRITE_OPERATIONS | SERVED_RUN_OPERATIONS
     ):
         assert response.status_code == 404, (name, response.status_code, body)
         assert body["error_code"] == "not_found"
         return
     assert response.status_code == 503, (name, modules, response.status_code, body)
     assert body["error_code"] == "dependency_unavailable"
-    assert body["contract_version"] == "1.12.0"
+    assert body["contract_version"] == "1.13.0"
     expected = "comparison_modules" if modules == "none" else DEPENDENCIES[name]
     assert body["details"] == {"dependency": expected}, (name, modules, body)
 

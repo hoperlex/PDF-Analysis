@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
 from auditmanager.comparison.spend.model import CallRoute
+from auditmanager.comparison.spend.errors import CallFailed
 from auditmanager.comparison.stage_ai.runtime import StageAiRuntime
 from auditmanager.comparison.stage_ai.validation import digest
 from auditmanager.comparison.work.model import Failed, Yielded
@@ -56,6 +57,10 @@ class Repo:
 
     def run(self, session, run_id):
         return {"project_uid": self.source["project_uid"], "comparison_ai_job_id": uid("cai", 1)}
+
+    def graphic_progress(self, session, run_id):
+        return {row["group_id"]: dict(row, progress=row["payload"]) for row in self.units.values()
+                if row["kind"] == "classify" and row["group_id"].startswith("graphic:")}
 
     def unit(self, session, *, run_id, kind, group_id, source_sha256, payload, job_id=None):
         key = (run_id, kind, group_id, source_sha256)
@@ -112,6 +117,7 @@ class Caller:
         self.repo, self.adapter = repo, adapter
         self.calls = 0
         self.pause_next = False
+        self.transform = lambda _source, answer, _number: answer
 
     def call(self, item, route, request, *, estimate, consent):
         self.calls += 1
@@ -133,6 +139,7 @@ class Caller:
                       "evidence_ids": [row["evidence_id"] for row in source["atomic_evidence"]],
                       "decision": "INSUFFICIENT_CONTEXT", "type": "UNRESOLVED_HIGH_LEVEL_CHANGE",
                       "title": "Требуется проверка", "reason": "Контекста недостаточно."}
+        answer = self.transform(source, answer, self.calls)
         self.adapter.record(request, json.dumps(answer, ensure_ascii=False))
         response = self.adapter.complete(request)
         self.repo.priors[request.request_sha256] = {"state": "completed", "comparison_model_call_id": uid("cmc", self.calls)}
@@ -189,6 +196,8 @@ def test_review_chunks_do_not_publish_partial_group() -> None:
     assert isinstance(runtime.advance(item, run_id=uid("crn", 1), phase="review"), Yielded)
     assert caller.calls == 1 and not repo.answers
     assert isinstance(runtime.advance(item, run_id=uid("crn", 1), phase="review"), Yielded)
+    assert caller.calls == 2 and not repo.answers
+    assert isinstance(runtime.advance(item, run_id=uid("crn", 1), phase="review"), Yielded)
     assert caller.calls == 2 and len(repo.answers) == 1
     stored = next(iter(repo.answers.values()))
     assert len(stored["decisions"]) == 41
@@ -227,3 +236,107 @@ def test_missing_prerequisite_fails_shared_job_before_unit_creation() -> None:
     assert isinstance(outcome, Failed) and outcome.reason == "stage_ai_source_invalid"
     assert jobs.failures == ["stage_ai_source_invalid"]
     assert caller.calls == 0 and not repo.units
+
+
+def test_durable_context_then_coverage_keeps_every_reply_and_publishes_once() -> None:
+    runtime, item, repo, jobs, caller = scene(2)
+
+    def response(_source, answer, number):
+        if number == 1:
+            answer["decisions"] = []
+            answer["context_requests"] = [{"kind": "mark", "value": "Нагрузка", "side": "right"}]
+        elif number == 2:
+            answer["decisions"] = answer["decisions"][:1]
+        return answer
+
+    caller.transform = response
+    assert phase_to_end(runtime, item, "review")["completed"] == 1
+    assert caller.calls == 3 and len(repo.answers) == 1 and not jobs.failures
+    progress = next(iter(repo.units.values()))["payload"]
+    saved = next(iter(progress["responses"].values()))
+    assert [row["step"] for row in saved["history"]] + [saved["step"]] == ["main", "context", "coverage"]
+    matches = saved["history"][1]["context"][0]["matches"]
+    assert len(matches) == 2 and all(match["side"] == "right" for match in matches)
+    assert len({row["request_sha256"] for row in saved["history"] + [saved]}) == 3
+    assert phase_to_end(runtime, item, "review")["completed"] == 1 and caller.calls == 3
+
+
+def test_repeated_model_context_request_fails_without_third_call() -> None:
+    runtime, item, repo, jobs, caller = scene()
+    caller.transform = lambda _source, answer, _number: answer | {
+        "context_requests": [{"kind": "rows", "value": "Нагрузка", "side": "both"}]}
+    outcome = phase_to_end(runtime, item, "review")
+    assert isinstance(outcome, Failed) and caller.calls == 2 and not repo.answers
+    assert jobs.failures == ["stage_ai_answer_invalid"]
+
+
+def test_coverage_pass_is_attempted_once_then_group_fails_atomically() -> None:
+    runtime, item, repo, jobs, caller = scene()
+    caller.transform = lambda _source, answer, _number: answer | {"decisions": []}
+    outcome = phase_to_end(runtime, item, "review")
+    assert isinstance(outcome, Failed) and caller.calls == 2 and not repo.answers
+    assert jobs.failures == ["stage_ai_answer_invalid"]
+
+
+def test_one_technical_retry_is_shared_by_main_and_context() -> None:
+    runtime, item, repo, jobs, caller = scene()
+    original = caller.call
+    attempts = []
+
+    def call(*args, **kwargs):
+        attempts.append(1)
+        if len(attempts) in {1, 3}:
+            raise CallFailed("dependency_unavailable", call_id=uid("cmc", len(attempts)), retry_safe=True)
+        return original(*args, **kwargs)
+
+    caller.call = call
+    caller.transform = lambda _source, answer, _number: answer | {
+        "context_requests": [{"kind": "rows", "value": "Нагрузка", "side": "both"}]}
+    outcome = phase_to_end(runtime, item, "review")
+    assert isinstance(outcome, Failed) and len(attempts) == 3 and caller.calls == 1
+    assert not repo.answers and jobs.failures == ["stage_ai_call_failed"]
+
+
+def test_rate_limit_waits_are_durable_and_bounded_without_consuming_technical_retry() -> None:
+    runtime, item, repo, jobs, caller = scene()
+    now = [1000.0]
+    runtime._now = lambda: now[0]
+    attempts = []
+
+    def limited(_item, _route, request, **_kwargs):
+        call_id = uid("cmc", len(attempts) + 1)
+        attempts.append(call_id)
+        repo.priors[request.request_sha256] = {"state": "failed", "comparison_model_call_id": call_id}
+        raise CallFailed("dependency_unavailable", call_id=call_id, retry_safe=True,
+                         dispatch_class="rate_limited", provider_failure_kind="rate_limit")
+
+    caller.call = limited
+    for number, delay in enumerate((20, 60, 120, 300, 600), 1):
+        outcome = runtime.advance(item, run_id=uid("crn", 1), phase="review")
+        assert isinstance(outcome, Yielded) and outcome.delay_seconds == delay
+        assert len(attempts) == number
+        assert isinstance(runtime.advance(item, run_id=uid("crn", 1), phase="review"), Yielded)
+        assert len(attempts) == number
+        now[0] += delay
+    outcome = runtime.advance(item, run_id=uid("crn", 1), phase="review")
+    assert isinstance(outcome, Failed) and outcome.reason == "stage_ai_rate_limit"
+    assert len(attempts) == 6 and jobs.failures == ["stage_ai_rate_limit"]
+    assert not next(iter(repo.units.values()))["payload"]["technical_retries"]
+
+
+def test_auth_refusal_pauses_without_automatic_resend() -> None:
+    runtime, item, repo, jobs, caller = scene()
+    attempts = []
+
+    def refused(_item, _route, request, **_kwargs):
+        attempts.append(1)
+        repo.priors[request.request_sha256] = {"state": "failed", "comparison_model_call_id": uid("cmc", 1)}
+        raise CallFailed("dependency_credential_refused", call_id=uid("cmc", 1),
+                         dispatch_class="definite_refusal", provider_failure_kind="auth")
+
+    caller.call = refused
+    assert isinstance(runtime.advance(item, run_id=uid("crn", 1), phase="review"), Yielded)
+    assert jobs.state == "paused" and repo.pauses == ["auth"]
+    jobs.state = "running"
+    outcome = runtime.advance(item, run_id=uid("crn", 1), phase="review")
+    assert isinstance(outcome, Failed) and outcome.reason == "stage_ai_response_lost" and len(attempts) == 1
