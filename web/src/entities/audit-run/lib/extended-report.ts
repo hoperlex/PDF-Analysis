@@ -83,6 +83,9 @@ function parametersMarkdown(value: unknown): string {
     ...(body.visual_context_policy === undefined ? [] : ['### Контекст для визуального прохода',
       'Квитанции различают подготовленный запрос и сохранённый ответ; предоставленные кандидаты не считаются визуально подтверждёнными.',
       code({ policy: body.visual_context_policy, receipts: body.visual_context_receipts })]),
+    ...(body.review_context_policy === undefined ? [] : ['### Контекст для комплексной сверки, критики и предложений исправления',
+      'Предварительные значения переданы с источниками и явными пропусками. Новые допустимые ссылки ответа или решения эксперта из них не создаются; подготовка запроса и получение ответа различаются.',
+      code({ policy: body.review_context_policy, receipts: body.review_context_receipts })]),
     ...objects(body.facts).map((fact, index) => [`### Параметр ${index + 1}: ${md(fact.name)}`,
       `Значение: ${md(fact.value)}; единица: ${md(fact.unit)}; предмет: ${md(fact.subject)}.`,
       evidenceMarkdown(fact.source_evidence), code(fact)].join('\n\n')),
@@ -93,7 +96,7 @@ function parametersMarkdown(value: unknown): string {
 function parametersHtml(value: unknown): string {
   const body = object(value);
   if (body === null) return '';
-  return `<section><h2>Параметры проекта из источников</h2><p>Предварительные значения, не утверждённый паспорт или нормативная проверка. Единицы не пересчитывались. Контекст для изображений помечает подготовку/ответ отдельно и не является визуальным подтверждением. Отсутствие кандидата не доказывает отсутствие параметра в проекте.</p><pre>${html(JSON.stringify({ status: body.status, policy: body.policy, coverage: body.coverage, manifest_sha256: body.manifest_sha256, reason: body.reason, visual_context_policy: body.visual_context_policy, visual_context_receipts: body.visual_context_receipts }, null, 2))}</pre>${objects(body.facts).map((fact, index) => `<article><h3>${index + 1}. ${html(fact.name)}</h3><p>Значение: ${html(fact.value)}; единица: ${html(fact.unit)}; предмет: ${html(fact.subject)}.</p>${evidenceHtml(fact.source_evidence)}<pre>${html(JSON.stringify(fact, null, 2))}</pre></article>`).join('')}<details><summary>Квитанции и неотобранные источники</summary><pre>${html(JSON.stringify({ batches: body.batches, pending: body.pending, omitted: body.omitted }, null, 2))}</pre></details></section>`;
+  return `<section><h2>Параметры проекта из источников</h2><p>Предварительные значения, не утверждённый паспорт или нормативная проверка. Единицы не пересчитывались. Контекст для изображений помечает подготовку/ответ отдельно и не является визуальным подтверждением. Отсутствие кандидата не доказывает отсутствие параметра в проекте.</p><pre>${html(JSON.stringify({ status: body.status, policy: body.policy, coverage: body.coverage, manifest_sha256: body.manifest_sha256, reason: body.reason, visual_context_policy: body.visual_context_policy, visual_context_receipts: body.visual_context_receipts, review_context_policy: body.review_context_policy, review_context_receipts: body.review_context_receipts }, null, 2))}</pre>${objects(body.facts).map((fact, index) => `<article><h3>${index + 1}. ${html(fact.name)}</h3><p>Значение: ${html(fact.value)}; единица: ${html(fact.unit)}; предмет: ${html(fact.subject)}.</p>${evidenceHtml(fact.source_evidence)}<pre>${html(JSON.stringify(fact, null, 2))}</pre></article>`).join('')}<details><summary>Квитанции и неотобранные источники</summary><pre>${html(JSON.stringify({ batches: body.batches, pending: body.pending, omitted: body.omitted }, null, 2))}</pre></details></section>`;
 }
 
 /** Local projection of an already authorised API reading; no model, mutation or accepted-only filter. */

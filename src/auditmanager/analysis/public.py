@@ -493,6 +493,25 @@ def validate_native_page_piece_policy(value, **kwargs):
 __all__ += ["native_page_piece_policy", "validate_native_page_piece_policy"]
 
 
+def project_parameter_review_context_policy(parameters_policy):
+    from .extended.parameter_review_context import policy
+    return policy(parameters_policy)
+
+
+def validate_project_parameter_review_context_policy(value, **kwargs):
+    from .extended.parameter_review_context import validate_policy
+    return validate_policy(value, **kwargs)
+
+
+def attach_project_parameter_review_context(request, **kwargs):
+    from .extended.parameter_review_context import attach
+    return attach(request, **kwargs)
+
+
+__all__ += ["project_parameter_review_context_policy", "validate_project_parameter_review_context_policy",
+    "attach_project_parameter_review_context"]
+
+
 def validate_extended_coverage_policy(policy):
     from auditmanager.analysis.extended.coverage import validate_coverage_policy
     return validate_coverage_policy(policy)

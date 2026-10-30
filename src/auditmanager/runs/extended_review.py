@@ -649,6 +649,7 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     def call(request, identity):
         receipt=None
         parameter_context_receipt=None
+        parameter_review_receipt=None
         if (v3 and identity.startswith("blocks:")
                 and "project_parameter_context_policy" in window_context["policy"]):
             from auditmanager.analysis.public import attach_project_parameter_context
@@ -659,6 +660,17 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             parameter_context_receipt = {**provided_context, "request_sha256": request.request_sha256,
                 "request_prepared": True, "response_received": False}
             state.setdefault("project_parameter_context_receipts", {})[identity] = parameter_context_receipt
+            save("running")
+        review_kind = identity.split(":", 1)[0]
+        review_context = window_context["policy"].get("project_parameter_review_context_policy") if v3 else None
+        if review_context is not None and review_kind in review_context["scopes"]:
+            from auditmanager.analysis.public import attach_project_parameter_review_context
+            request, parameter_review_receipt = attach_project_parameter_review_context(request,
+                parameters=window_context["project_parameters"], accepted=review_context,
+                parameters_policy=window_context["policy"]["project_parameters_policy"], procedure=review_kind)
+            parameter_review_receipt.update(request_sha256=request.request_sha256,
+                request_prepared=True, response_received=False)
+            state.setdefault("project_parameter_review_context_receipts", {})[identity] = parameter_review_receipt
             save("running")
         if batched:
             raw_kind, raw_index=identity.split(":",1)
@@ -692,6 +704,9 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             global_unknown_fence=v3)
         if parameter_context_receipt is not None:
             parameter_context_receipt.update(response_received=True, replayed=replayed,
+                response_sha256=response.response_sha256)
+        if parameter_review_receipt is not None:
+            parameter_review_receipt.update(response_received=True, replayed=replayed,
                 response_sha256=response.response_sha256)
         if receipt is not None:
             receipt.update(response_received=True,replayed=replayed)
@@ -1169,6 +1184,13 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             parameters["visual_context_policy"] = deepcopy(policy["project_parameter_context_policy"])
             parameters["visual_context_receipts"] = [{"window_id": record["window_id"], "phase_key": identity, **receipt}
                 for record in records for identity, receipt in record.get("project_parameter_context_receipts", {}).items()]
+        if isinstance(parameters, dict) and "project_parameter_review_context_policy" in policy:
+            parameters["review_context_policy"] = deepcopy(policy["project_parameter_review_context_policy"])
+            parameters["review_context_receipts"] = [{"window_id": record["window_id"], "phase_key": identity, **receipt}
+                for record in records for identity, receipt in record.get("project_parameter_review_context_receipts", {}).items()]
+            if isinstance(global_review, dict):
+                parameters["review_context_receipts"].extend({"window_id": "global-cross-window", "phase_key": identity, **receipt}
+                    for identity, receipt in global_review.get("project_parameter_review_context_receipts", {}).items())
         state["sources"]=list(source_index.values())
         state["observations"]=observations
         if policy.get("coverage_version") == "batched-v1":
@@ -1292,6 +1314,14 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             "procedures":extended_workflow_procedures_v3(),"observations":[],"sources":[]}
             for index in range(count)]
         aggregate();save("running")
+        if "project_parameter_review_context_policy" in policy:
+            from auditmanager.analysis.public import validate_project_parameter_review_context_policy
+            try:
+                if not validate_project_parameter_review_context_policy(policy["project_parameter_review_context_policy"],
+                        parameters_policy=policy["project_parameters_policy"]):
+                    raise ValueError()
+            except ValueError:
+                raise _refuse("project_parameter_review_context_changed_requires_consent") from None
         if "norm_paragraph_context_policy" in policy:
             from .norm_context import validate_policy as validate_norm_context_policy
             try:
@@ -1800,6 +1830,16 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         if identity not in visited and len(visited) >= accepted["call_limits"][kind]:
             raise _refuse("global_cross_window_approved_phase_call_limit")
         visited.add(identity)
+        parameter_review_receipt = None
+        review_context = policy.get("project_parameter_review_context_policy")
+        if review_context is not None and kind in review_context["scopes"]:
+            from auditmanager.analysis.public import attach_project_parameter_review_context
+            request, parameter_review_receipt = attach_project_parameter_review_context(request,
+                parameters=state["project_parameters"], accepted=review_context,
+                parameters_policy=policy["project_parameters_policy"], procedure=kind)
+            parameter_review_receipt.update(request_sha256=request.request_sha256,
+                request_prepared=True, response_received=False)
+            global_state.setdefault("project_parameter_review_context_receipts", {})[identity] = parameter_review_receipt
         receipt = next(row for row in global_state["batches"] if row["procedure"] == kind and row["index"] == index)
         receipt.update(status="running", request_sha256=request.request_sha256)
         persist()
@@ -1808,6 +1848,9 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
             phase="v3:global-cross-window:" + identity, source_sha256=source_sha,
             meter=meter, store=store, publish=publish, checkpoint=checkpoint, global_unknown_fence=True)
         receipt.update(response_received=True, replayed=replayed, response_sha256=response.response_sha256)
+        if parameter_review_receipt is not None:
+            parameter_review_receipt.update(response_received=True, replayed=replayed,
+                response_sha256=response.response_sha256)
         counts = global_state.setdefault("phase_call_counts", {}).setdefault(kind, {"completed_calls": 0, "replayed": 0})
         counts["replayed" if replayed else "completed_calls"] += 1
         if response.truncated: raise _refuse("extended_response_truncated")
