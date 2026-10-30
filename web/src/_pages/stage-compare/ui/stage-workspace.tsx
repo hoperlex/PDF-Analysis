@@ -152,21 +152,21 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
         aria-controls={`stage-panel-${item.key}`} aria-selected={tab === item.key} className="am-button"
         onClick={() => { setTab(item.key); if (item.key === 'sheets') setVisitedSheets(true); }}>{item.label}</button>)}
     </div>
-    {tab === 'documentation' ? <section role="tabpanel" id="stage-panel-documentation" aria-labelledby="stage-tab-documentation">
+    {tab === 'documentation' ? <section className={styles.panel} role="tabpanel" id="stage-panel-documentation" aria-labelledby="stage-tab-documentation">
       <StageUploadPanel projectUid={projectUid} mayAct={mayAct} />
       <StagePairCatalog projectUid={projectUid} mayAct={mayAct} onRunChange={(value) => selectKnownRun(value, true)} onOpenRun={(id, owner) => { void openRun(id, owner); }} />
     </section> : null}
-    {visitedSheets ? <section hidden={tab !== 'sheets'} role="tabpanel" id="stage-panel-sheets" aria-labelledby="stage-tab-sheets">
+    {visitedSheets ? <section className={styles.panel} hidden={tab !== 'sheets'} role="tabpanel" id="stage-panel-sheets" aria-labelledby="stage-tab-sheets">
       <StageSheetMap projectUid={projectUid} mayAct={mayAct && pair?.state === 'confirmed'} pairId={pairId}
         onPairChange={choosePair} textProvider={storedPageText} {...(coherentRun === undefined ? {} : { runId: coherentRun.run_id })}
         {...(focus === undefined ? {} : { focus })} onClearFocus={() => setFocus(undefined)}
         onReviewCreated={(card) => { if (card.run_id === selection.current.runId) { setFocusedCardId(card.card_id); setTab('changes'); } }} />
     </section> : null}
-    {tab === 'changes' ? <section role="tabpanel" id="stage-panel-changes" aria-labelledby="stage-tab-changes" data-stage-selected-run={coherentRun?.run_id}>
+    {tab === 'changes' ? <section className={styles.panel} role="tabpanel" id="stage-panel-changes" aria-labelledby="stage-tab-changes" data-stage-selected-run={coherentRun?.run_id}>
       <StageChanges runId={coherentRun?.run_id} mayAct={mayAct && pair?.state === 'confirmed'} onOpenEvidence={onOpenEvidence} onOpenRawDifference={onOpenRawDifference}
         {...(focusedCardId === undefined ? {} : { focusCardId: focusedCardId })} />
     </section> : null}
-    {tab === 'journal' ? <section role="tabpanel" id="stage-panel-journal" aria-labelledby="stage-tab-journal" data-stage-selected-run={coherentRun?.run_id}>
+    {tab === 'journal' ? <section className={styles.panel} role="tabpanel" id="stage-panel-journal" aria-labelledby="stage-tab-journal" data-stage-selected-run={coherentRun?.run_id}>
       <StageJournal runId={coherentRun?.run_id} mayAct={mayAct} onOpenEvidence={onOpenEvidence} />
     </section> : null}
   </div>;

@@ -1,0 +1,30 @@
+.layout {
+  min-width: 0;
+}
+
+.list,
+.detail,
+.export {
+  min-width: 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  box-shadow: var(--am-shadow-1);
+}
+
+.list,
+.detail {
+  padding: var(--am-gap-lg);
+}
+
+.export {
+  padding: var(--am-gap-lg);
+}
+
+@media (max-width: 900px) {
+  .list,
+  .detail,
+  .export {
+    padding: var(--am-gap);
+  }
+}

@@ -64,6 +64,7 @@ import { DEFAULT_BLOCK_TAB } from '../model/tabs';
 import type { BlockTab } from '../model/tabs';
 import { BlocksTabs } from './blocks-tabs';
 import { TextLines } from './text-lines';
+import styles from './blocks-page.module.css';
 
 export function BlocksPage() {
   const [projectUid, setProjectUid] = useState<ProjectUid | null>(null);
@@ -79,44 +80,46 @@ export function BlocksPage() {
           : version.display_title ?? version.source_filename ?? version.version_uid
       }
     >
-      <h2>1. Версия</h2>
-      {version === null ? (
-        <VersionChooser
-          projectUid={projectUid}
-          onChooseProject={(uid) => setProjectUid(uid)}
-          onChooseVersion={(chosen) => setVersion(chosen)}
-        />
-      ) : (
-        <div className="am-state">
-          <p className="am-state__title">
-            {version.display_title ?? version.source_filename ?? version.version_uid}
-          </p>
-          <div className="am-state__detail">
-            <p>
-              <code>{version.version_uid}</code> · страниц {version.page_count}
+      <section className={styles.sectionPanel} aria-labelledby="blocks-version-title">
+        <h2 id="blocks-version-title">1. Версия</h2>
+        {version === null ? (
+          <VersionChooser
+            projectUid={projectUid}
+            onChooseProject={(uid) => setProjectUid(uid)}
+            onChooseVersion={(chosen) => setVersion(chosen)}
+          />
+        ) : (
+          <div className="am-state">
+            <p className="am-state__title">
+              {version.display_title ?? version.source_filename ?? version.version_uid}
             </p>
+            <div className="am-state__detail">
+              <p>
+                <code>{version.version_uid}</code> · страниц {version.page_count}
+              </p>
+            </div>
+            <div className="am-state__action">
+              <button
+                type="button"
+                className="am-button"
+                onClick={() => {
+                  setVersion(null);
+                  setProjectUid(null);
+                  setTab(DEFAULT_BLOCK_TAB);
+                }}
+              >
+                Выбрать другую версию
+              </button>
+            </div>
           </div>
-          <div className="am-state__action">
-            <button
-              type="button"
-              className="am-button"
-              onClick={() => {
-                setVersion(null);
-                setProjectUid(null);
-                setTab(DEFAULT_BLOCK_TAB);
-              }}
-            >
-              Выбрать другую версию
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </section>
 
       {version === null ? null : (
-        <>
-          <h2>2. Блоки</h2>
+        <section className={styles.sectionPanel} aria-labelledby="blocks-content-title">
+          <h2 id="blocks-content-title">2. Блоки</h2>
           <VersionBlockViews version={version} tab={tab} onTab={setTab} />
-        </>
+        </section>
       )}
     </PageShell>
   );

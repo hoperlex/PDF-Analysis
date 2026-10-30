@@ -400,7 +400,7 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
   const waiting = executor === null ? null : runWaitingSentence(executor);
 
   return (
-    <div data-run-id={status.run_id}>
+    <div className={styles.progress} data-run-id={status.run_id}>
       <p className={styles.mode}>
         <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
         <span data-provider-mode={mode}>

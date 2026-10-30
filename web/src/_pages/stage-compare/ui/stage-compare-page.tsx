@@ -9,6 +9,7 @@ import { useMe } from '@/entities/account';
 import { useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { StageWorkspace } from './stage-workspace';
+import styles from './stage-compare-page.module.css';
 
 export function StageComparePage() {
   const projects = useProjectList();
@@ -30,7 +31,7 @@ export function StageComparePage() {
       {projects.isPending || product.isPending ? <LoadingState what="сравнение стадий" /> : null}
       {moduleOff ? <UnsupportedState title="Модуль «Сравнение стадий» выключен" detail="Операции сравнения стадий на этом стенде недоступны." /> : null}
       {projects.isSuccess && moduleOn ? (
-        <label>
+        <label className={styles.projectChooser}>
           Проект{' '}
           <select value={projectUid ?? ''} onChange={(event) => setChosen(event.target.value === '' ? null : event.target.value)}>
             <option value="">— выберите —</option>
@@ -41,7 +42,9 @@ export function StageComparePage() {
       {projects.isSuccess && projectItems.length === 0 && moduleOn ? <EmptyState title="Проектов пока нет" detail="Создайте проект, затем добавьте документы П и Р." /> : null}
       {projects.isSuccess && projectItems.length > 1 && projectUid === null && moduleOn ? <EmptyState title="Выберите проект" detail="Пары и предложения относятся к одному проекту." /> : null}
       {projectUid !== null && moduleOn ? (
-        <StageWorkspace key={projectUid} projectUid={projectUid} mayAct={mayAct} />
+        <div className={styles.workspace}>
+          <StageWorkspace key={projectUid} projectUid={projectUid} mayAct={mayAct} />
+        </div>
       ) : null}
     </PageShell>
   );

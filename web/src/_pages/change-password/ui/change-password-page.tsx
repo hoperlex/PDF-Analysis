@@ -16,6 +16,7 @@
 import { PageShell } from '@/shared/ui';
 import type { ChangePasswordOutcome } from '@/features/change-password';
 import { ChangePasswordForm } from '@/features/change-password';
+import styles from './change-password-page.module.css';
 
 export interface ChangePasswordPageProps {
   /**
@@ -43,20 +44,22 @@ export function ChangePasswordPage({ outcome, mustChange, next }: ChangePassword
       title="Смена пароля"
       subtitle="Смена пароля отзывает все ранее выданные пропуска этой учётной записи."
     >
-      {mustChange === true ? (
-        <p className="am-note" data-change-password-required="true">
-          Пока пароль этой учётной записи остаётся тем, с которым система была развёрнута,
-          остальные разделы закрыты: сервер отвечает отказом на любую операцию, кроме входа
-          и смены пароля. Смените пароль здесь — и остальное откроется сразу.
+      <div className={styles.card}>
+        {mustChange === true ? (
+          <p className="am-note" data-change-password-required="true">
+            Пока пароль этой учётной записи остаётся тем, с которым система была развёрнута,
+            остальные разделы закрыты: сервер отвечает отказом на любую операцию, кроме входа
+            и смены пароля. Смените пароль здесь — и остальное откроется сразу.
+          </p>
+        ) : null}
+        <ChangePasswordForm outcome={outcome} next={next} />
+        <p className="am-note">
+          Оба пароля уходят на сервер этого приложения и дальше — на сервер учётных записей.
+          Эта страница не хранит ни пароль, ни пропуск и не обращается к хранилищу браузера.
+          Новый пропуск выдаётся сразу после смены и остаётся на сервере: в браузер
+          возвращается только непрозрачный номер сеанса.
         </p>
-      ) : null}
-      <ChangePasswordForm outcome={outcome} next={next} />
-      <p className="am-note">
-        Оба пароля уходят на сервер этого приложения и дальше — на сервер учётных записей.
-        Эта страница не хранит ни пароль, ни пропуск и не обращается к хранилищу браузера.
-        Новый пропуск выдаётся сразу после смены и остаётся на сервере: в браузер
-        возвращается только непрозрачный номер сеанса.
-      </p>
+      </div>
     </PageShell>
   );
 }

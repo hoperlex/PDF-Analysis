@@ -130,7 +130,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
           onRetry={() => void projects.refetch()}
         />
       ) : null}
-      {projects.isSuccess ? chooser : null}
+      {projects.isSuccess ? <div className={styles.toolbar}>{chooser}</div> : null}
       {moduleOff ? <ModuleOffState /> : null}
 
       {projectUid === null ? (

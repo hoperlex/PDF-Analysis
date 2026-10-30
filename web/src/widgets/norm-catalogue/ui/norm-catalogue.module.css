@@ -3,6 +3,10 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: end;
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .filters input {
@@ -13,6 +17,9 @@
 .tableWrap {
   max-width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .table {

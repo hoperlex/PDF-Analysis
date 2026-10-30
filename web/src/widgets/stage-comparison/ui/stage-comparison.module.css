@@ -23,6 +23,10 @@
 /* The one thing the element selectors cannot know about: a wide table on a narrow screen. */
 .scroller {
   overflow-x: auto;
+  max-width: 100%;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .comparison {
@@ -35,6 +39,10 @@
   flex-wrap: wrap;
   gap: var(--am-gap);
   margin-bottom: var(--am-gap-lg);
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
 }
 
 .choice {

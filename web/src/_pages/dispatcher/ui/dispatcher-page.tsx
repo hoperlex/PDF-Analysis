@@ -21,6 +21,7 @@ import { canAssignWork } from '@/entities/assignment';
 import { CreateAssignmentForm } from '@/features/create-assignment';
 import type { ExpertOption } from '@/features/transition-assignment';
 import { AssignmentBoard } from '@/widgets/assignment-board';
+import styles from './dispatcher-page.module.css';
 
 export interface DispatcherPageProps {
   /** The session's roles, as the route's guard read them. */
@@ -39,7 +40,7 @@ function AdministratorTools({ roles, viewerUid }: { readonly roles: readonly Rol
   const experts = users.isSuccess ? expertOptions(users.data.items) : [];
   return (
     <>
-      <section className="am-section" data-dispatcher-create="">
+      <section className={`am-section ${styles.panel}`} data-dispatcher-create="">
         <h2>Назначить работу</h2>
         {users.isError ? (
           <p className="am-note" data-dispatcher-experts-failure="">
@@ -48,7 +49,7 @@ function AdministratorTools({ roles, viewerUid }: { readonly roles: readonly Rol
         ) : null}
         <CreateAssignmentForm experts={experts} />
       </section>
-      <section className="am-section" data-dispatcher-list="">
+      <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
         <h2>Назначения</h2>
         <AssignmentBoard roles={roles} viewerUid={viewerUid} experts={experts} />
       </section>
@@ -62,7 +63,7 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
   const admin = canAssignWork(roles);
   return (
     <section className="am-page" data-screen="dispatcher">
-      <header className="am-page__header">
+      <header className={`am-page__header ${styles.hero}`}>
         <h1 className="am-page__title">Диспетчер</h1>
         <p className="am-page__subtitle">
           {admin
@@ -74,7 +75,7 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
         {admin ? (
           <AdministratorTools roles={roles} viewerUid={viewerUid} />
         ) : (
-          <section className="am-section" data-dispatcher-list="">
+          <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
             <h2>Мои назначения</h2>
             <AssignmentBoard roles={roles} viewerUid={viewerUid} experts={[]} />
           </section>

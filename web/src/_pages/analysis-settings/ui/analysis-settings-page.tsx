@@ -22,6 +22,7 @@ import { ArV3BetaStatus } from '@/widgets/ar-v3-beta-status';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
+import styles from './analysis-settings-page.module.css';
 
 export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: string | null }) {
   const profiles = useAnalysisProfiles();
@@ -33,10 +34,20 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
       subtitle="Профиль анализа каждого раздела: с ним сервер выполняет прогон версии, раздел которой подтвердил эксперт. Профили экран только показывает — изменить их здесь нельзя. Пресеты запуска — сохранённый выбор исполнителя для прогона."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
-      <ArV3BetaStatus />
-      <ArV3BetaPack />
-      <ArV3BetaReview groupId={groupId} />
-      <AnalysisPresets roles={me.data?.roles ?? []} />
+      <div className={styles.stack}>
+        <section className={styles.panel} aria-label="Состояние анализа АР v3">
+          <ArV3BetaStatus />
+        </section>
+        <section className={styles.panel} aria-label="Пакет анализа АР v3">
+          <ArV3BetaPack />
+        </section>
+        <section className={styles.panel} aria-label="Разбор анализа АР v3">
+          <ArV3BetaReview groupId={groupId} />
+        </section>
+        <section className={styles.panel} aria-label="Пресеты запуска">
+          <AnalysisPresets roles={me.data?.roles ?? []} />
+        </section>
+      </div>
       {profiles.isPending ? <LoadingState what="профилей анализа" /> : null}
       {failure !== null ? (
         <div data-analysis-profiles-failure={failure.kind}>
@@ -49,7 +60,9 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
         </div>
       ) : null}
       {profiles.data !== undefined && failure === null ? (
-        <AnalysisProfileTable items={profiles.data.items} />
+        <div className={styles.panel}>
+          <AnalysisProfileTable items={profiles.data.items} />
+        </div>
       ) : null}
     </PageShell>
   );

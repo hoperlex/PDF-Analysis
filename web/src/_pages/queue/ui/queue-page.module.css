@@ -1,0 +1,24 @@
+.panel,
+.intent {
+  min-width: 0;
+  margin-top: var(--am-gap-lg);
+  padding: var(--am-gap-lg);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.panel {
+  overflow-x: auto;
+}
+
+.intent {
+  border-color: var(--am-accent);
+}
+
+@media (max-width: 780px) {
+  .panel,
+  .intent {
+    padding: var(--am-gap);
+  }
+}
