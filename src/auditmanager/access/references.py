@@ -53,6 +53,9 @@ class AccountReference:
 
 
 ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
+    AccountReference("stage_chain_batch", "actor_user_uid", "RESTRICT", "this account started a stage comparison batch (CMP-SEAL-C4)"),
+    AccountReference("stage_link_repair_event", "actor_user_uid", "RESTRICT", "this account recorded or reverted a stage link repair (CMP-SEAL-C4)"),
+    AccountReference("stage_card_verdict", "actor_user_uid", "RESTRICT", "this account decided a stage change card (CMP-SEAL-C4)"),
     AccountReference(
         "app_user", "archived_by", "RESTRICT", "this account archived another account"
     ),

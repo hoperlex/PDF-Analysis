@@ -56,6 +56,7 @@ const WORK_KINDS: readonly ExecutorWorkKind[] = [
   'comparison_sheet_changes',
   'comparison_spec',
   'comparison_report',
+  'comparison_stage_review',
 ];
 
 interface Choice {

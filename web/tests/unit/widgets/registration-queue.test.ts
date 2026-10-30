@@ -35,7 +35,7 @@ function queueMarkup(request: RegistrationRequest): string {
 
 function refusal(code: ErrorEnvelope['error_code']): ApiError {
   return new ApiError(409, {
-    contract_version: '1.12.0', error_code: code,
+    contract_version: '1.13.0', error_code: code,
     message: 'Refused', correlation_id: 'cid-request-1', retryable: false,
   }, 'cid-request-1');
 }
