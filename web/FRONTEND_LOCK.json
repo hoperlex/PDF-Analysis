@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2",
-    "content_commit": "96c489775f4525ae3bdf8fa9f42bb5127f6c8d96",
-    "content_commit_subject": "beta: freeze analysis cost preflight and consent API provider",
+    "sha256": "71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8",
+    "content_commit": "44ed4d3a337dd6706de787dc32f507b7f0816356",
+    "content_commit_subject": "beta: seal priced consent backend and preserve matching algorithm unions",
     "dispatch_named_commit": "8a437cbe15c47b1655e3ef7268bd1c60a657fdd2",
-    "commit_note": "Cost preflight and consent plus historical/current price-match algorithm union; current surface230/256/618.",
+    "commit_note": "Complete priced starts and fresh re-audit consent, correct v1/v2 unions; current surface230/256/619, migration0043 unchanged.",
     "openapi_version": "3.1.0",
     "info_version": "1.13.0",
     "paths": 230,
     "operations": 256,
-    "component_schemas": 618,
+    "component_schemas": 619,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "383cdba713ea107ceaaf16fe943e946db4ab60ff510bfe17124d9daeafa431e2",
+    "snapshot_sha256": "71380d022cfd144f55611f92d43ec3ddb8948bb05a7f6a411605848040168de8",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "9caecacf62db2f0f071c3cdc7ca8e3c6b70839ff010d7b6f36ae50f672b6a36d",
-      "index.ts": "e7ebd1135b0d851b171d55ebfbc09140a014834dd2aaaeb460ed0b343eba39f0",
-      "operations.gen.ts": "0e36e093165739cfed665d875f2addb3dc0f7b5cebba36fe28f3b0e77df1fbdc",
-      "types.gen.ts": "b812c93fff34488f394a251084ab5e2c82f2294f9f8e5206d4594715aa5bf5a8"
+      "client.gen.ts": "5a0d25e9a25fc5921220f51915704bded404ff2ae5d5a0e04691332e2be143ed",
+      "index.ts": "0009dfe6b2f20337a1252d6ebea6eac79a68901444a58deb9f7c60e95f195ca1",
+      "operations.gen.ts": "fcd176bf52e7e23e80be04b9720684f146967a44de3668a71903e32c54aa4fd8",
+      "types.gen.ts": "e24deb7512a3926c4abb7ca60ea56c410c4b4fd194393b145cbb3c0fceaa591a"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
