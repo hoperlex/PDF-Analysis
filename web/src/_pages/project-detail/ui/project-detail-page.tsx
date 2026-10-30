@@ -81,6 +81,7 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
   return (
     <PageShell
       title="Проект"
+      surface="canvas"
       subtitle={<code>{projectUid}</code>}
       actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
@@ -99,7 +100,7 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
       </nav>
 
       {tab === 'documents' ? (
-        <div className={styles.stack}>
+        <div className={styles.documentGrid}>
           <section className={styles.panel} aria-label="Документы по разделам">
             <ProjectSections projectUid={projectUid} />
           </section>
