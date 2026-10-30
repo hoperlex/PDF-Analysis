@@ -441,6 +441,8 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         **parameter_result,
         **({"project_parameter_context_policy": deepcopy(policy["project_parameter_context_policy"])}
            if v3 and "project_parameter_context_policy" in policy else {}),
+        **({"norm_paragraph_context_policy": deepcopy(policy["norm_paragraph_context_policy"]), "normative_context_receipts": []}
+           if v3 and "norm_paragraph_context_policy" in policy else {}),
         **({"global_cross_window": _planned_global_cross_window(policy["global_cross_window_policy"], reason=reason, terminal=terminal)}
            if v3 and "global_cross_window_policy" in policy else {}),
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
@@ -1121,6 +1123,13 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 for record in records for identity, receipt in record.get("project_parameter_context_receipts", {}).items()]
         state["sources"]=list(source_index.values())
         state["observations"]=observations
+        if "norm_paragraph_context_policy" in policy:
+            state["norm_paragraph_context_policy"] = deepcopy(policy["norm_paragraph_context_policy"])
+            state["normative_context_receipts"] = [{"window_id": record["window_id"], "batch_index": identity, **receipt}
+                for record in records for identity, receipt in record.get("normative_context_receipts", {}).items()]
+            if isinstance(global_review, dict):
+                state["normative_context_receipts"].extend({"window_id": "global-cross-window", "batch_index": identity, **receipt}
+                    for identity, receipt in global_review.get("normative_context_receipts", {}).items())
         if policy.get("coverage_version")=="batched-v1":
             state["batches"]=[dict(batch,window_id=record["window_id"])
                 for record in records for batch in record.get("batches",[])]
@@ -1229,6 +1238,13 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             "procedures":extended_workflow_procedures_v3(),"observations":[],"sources":[]}
             for index in range(count)]
         aggregate();save("running")
+        if "norm_paragraph_context_policy" in policy:
+            from .norm_context import validate_policy as validate_norm_context_policy
+            try:
+                if not validate_norm_context_policy(policy["norm_paragraph_context_policy"]):
+                    raise ValueError("norm_paragraph_context_policy_required")
+            except ValueError:
+                raise _refuse("norm_paragraph_context_changed_requires_consent") from None
         if "project_parameter_context_policy" in policy:
             from auditmanager.analysis.public import (validate_project_parameter_context_policy,
                 validate_project_parameters_policy)
@@ -1465,13 +1481,19 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
     from auditmanager.analysis.public import (plan_extended_coverage,
         build_norm_review_request_batched_v3, parse_norm_review_batched_v3)
     kind = 'norm_verification'
+    accepted_context = window_context['policy'].get('norm_paragraph_context_policy')
     # Retrieval is local corpus work. Every observation remains present even if
     # its quote assessment is outside the separately accepted model-call limit.
     state['warnings'].extend(_norms(session, state['observations'], snapshot_id,
         full_document=True, checkpoint=checkpoint))
     registry={}
     quote_variants=False
+    context_incomplete=False
     for item in state['observations']:
+        if accepted_context is not None:
+            # The fresh request supplies an exact candidate list per input, so
+            # another observation's search excerpt must not replace this one.
+            continue
         canonical_candidates=[]
         for candidate in item.get('norm_candidates',[]):
             canonical=registry.setdefault(candidate['paragraph_id'],candidate)
@@ -1506,7 +1528,28 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
                             [candidate['paragraph_id'] for candidate in item['norm_candidates']]}
                         for key, item in indexed.items()], 'norm_context': list(registry.values()),
                     'source_sha256': state['source_sha256'], 'batch_sha256': batch['batch_sha256']})
-        parsed = parse_norm_review_batched_v3(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
+        context_receipt = None
+        if accepted_context is not None:
+            from .norm_context import attach as attach_norm_context
+            request, context_receipt = attach_norm_context(session, request, observations=indexed,
+                snapshot_id=snapshot_id, accepted=accepted_context, checkpoint=checkpoint)
+            context_incomplete = context_incomplete or context_receipt['contexts_not_provided'] > 0 or any(
+                row.get('search_quote_literal_in_paragraph') is not True
+                for row in context_receipt['context']['paragraphs'])
+            context_receipt.update(request_sha256=request.request_sha256, request_prepared=True, response_received=False)
+            state.setdefault('normative_context_receipts', {})[str(batch['index'])] = context_receipt
+            phase(kind, 'running')
+        try:
+            response = call(request, f'{kind}:b{batch["index"]:03d}')
+            if context_receipt is not None:
+                context_receipt.update(response_received=True, response_sha256=response.response_sha256)
+        finally:
+            if context_receipt is not None:
+                paid_receipt = next((row for row in state.get('batches', [])
+                    if row.get('procedure') == kind and row.get('index') == batch['index']), {})
+                if paid_receipt.get('response_received'):
+                    context_receipt.update(response_received=True, replayed=paid_receipt.get('replayed', False))
+        parsed = parse_norm_review_batched_v3(response.output_text,
             observations=indexed, allowed_sources={source['source_id'] for source in state['sources']})
         for row in parsed:
             indexed[row['input_id']].update(norm_assessment=row['norm_assessment'],
@@ -1514,9 +1557,10 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
         _coverage_complete(state, kind=kind, index=batch['index'])
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
-    incomplete = deferred or quote_variants or len(candidates) < len(state['observations'])
+    incomplete = deferred or quote_variants or context_incomplete or len(candidates) < len(state['observations'])
     phase(kind, 'partial' if incomplete else 'completed', 'approved_phase_call_limit' if deferred
-        else 'norm_quote_variants_retained' if quote_variants else None)
+        else 'norm_quote_variants_retained' if quote_variants
+        else 'norm_paragraph_context_incomplete' if context_incomplete else None)
 
 
 def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts):
@@ -1787,7 +1831,9 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         deferred = bool(plan.get("pending_batches") or plan.get("omitted") or plan["coverage"].get("truncated"))
         phase("comprehensive_analysis", "partial" if deferred else "completed",
               "approved_global_phase_call_limit_or_source_selection" if deferred else None)
-        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"]}}
+        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"],
+            **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
+                if "norm_paragraph_context_policy" in policy else {})}}
         contexts = [{"source_id": source["source_id"], "page_number": source["page_number"],
             "text": source["quote"] if source["character_field"] == "text" else "",
             "recognised_context": source["quote"] if source["character_field"] == "recognised_context" else ""}

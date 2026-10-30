@@ -15,6 +15,7 @@ import { ConsolidatedObservations } from './consolidated-observations';
 import { CoverageBudget } from './coverage-budget';
 import { CrossWindowReview } from './cross-window-review';
 import { ProjectParameters } from './project-parameters';
+import { NormativeContext } from './normative-context';
 import { extendedCandidateCounts } from './extended-review-summary';
 import styles from './extended-review.module.css';
 
@@ -45,6 +46,8 @@ const reasonLabels: Record<string, string> = {
   missing_artifact: 'Финальная запись результата ещё не получена.',
   corpus_unavailable: 'В этом прогоне нет доступного нормативного корпуса. Проверка ссылок не выполнена.',
   candidate_context_unavailable: 'Для наблюдений не найдены цитаты нормативного корпуса, пригодные для модельной сверки.',
+  norm_paragraph_context_changed_requires_consent: 'Реализация нормативного контекста изменилась после согласия. Для новых обращений нужен новый прогон со свежей оценкой.',
+  norm_paragraph_context_incomplete: 'Часть исходного нормативного контекста не передана или поисковая цитата не совпала с непрерывным текстом абзаца. Ограничения сохранены в квитанциях; актуальность и применимость требуют сверки.',
 };
 const FINAL_STATES = new Set(['completed', 'partial', 'failed', 'unavailable', 'skipped']);
 export const MAX_TERMINAL_REVIEW_READS = 8;
@@ -180,6 +183,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     {result?.coverage_version === 'batched-v1' ? <CoverageBudget mode={result?.coverage_budget_mode} limits={result?.phase_call_limits} estimatedText={result?.estimated_text_characters} pieceCharacters={result?.comprehensive_piece_characters} /> : null}
     <CrossWindowReview key={reading.run_id} value={result?.global_cross_window} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
     <ProjectParameters key={`parameters:${reading.run_id}`} value={result?.project_parameters} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+    <NormativeContext key={`norm-context:${reading.run_id}`} policy={result?.norm_paragraph_context_policy} receipts={result?.normative_context_receipts} />
     {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}

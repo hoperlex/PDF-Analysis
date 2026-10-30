@@ -84,6 +84,11 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                     from auditmanager.analysis.public import validate_project_parameters_policy
                     if not validate_project_parameters_policy(extended["project_parameters_policy"], section=section, compare_bundle=False):
                         raise ValueError()
+                if "norm_paragraph_context_policy" in extended:
+                    from .norm_context import validate_policy as validate_norm_context_policy
+                    if (extended.get("coverage_version") != "batched-v1"
+                            or not validate_norm_context_policy(extended["norm_paragraph_context_policy"], compare_bundle=False)):
+                        raise ValueError()
                 if "project_parameter_context_policy" in extended:
                     from auditmanager.analysis.public import validate_project_parameter_context_policy
                     if (not isinstance(extended.get("project_parameters_policy"), dict)

@@ -256,6 +256,15 @@ class RunCostPreflight:
                         input_tokens += global_calls * 100_000
                         output_tokens += sum(count * (6_000 if phase == "comprehensive_analysis" else 12_000)
                             for phase, count in global_limits.items())
+                    if os.environ.get("AUDITMANAGER_NORM_PARAGRAPH_CONTEXT", "1").strip().lower() not in {"0", "false", "off"}:
+                        from .norm_context import policy as norm_context_policy
+                        norm_context = norm_context_policy()
+                        extended["norm_paragraph_context_policy"] = norm_context
+                        norm_calls = visual["max_windows"] * limits["norm_verification"]
+                        norm_calls += extended.get("global_cross_window_policy", {}).get("call_limits", {}).get("norm_verification", 0)
+                        # Context augments input on existing calls only; citation/output
+                        # schemas and logical request caps are unchanged.
+                        input_tokens += norm_calls * norm_context["input_tokens_per_call"]
                 elif coverage_mode in {"legacy", "0", "off", "false"}:
                     extra_calls = visual["max_windows"] * 6
                     input_tokens += visual["max_windows"] * 600_000

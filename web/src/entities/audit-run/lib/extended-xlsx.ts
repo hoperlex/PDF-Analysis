@@ -142,6 +142,12 @@ function tables(reading: ExtendedRunReview): Table[] {
     const chunks = rawChunks(payload);
     chunks.forEach((chunk, index) => parameterReceipts.push([index + 1, chunks.length, chunk]));
   }
+  const normContextRows: Row[] = [['Окно', 'Пакет', 'Часть', 'Всего частей', 'Полная квитанция нормативного контекста, JSON, последовательные части без разделителей']];
+  for (const receipt of objects(result?.normative_context_receipts)) {
+    const payload = json(receipt).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    const chunks = rawChunks(payload);
+    chunks.forEach((chunk, index) => normContextRows.push([receipt.window_id, receipt.batch_index, index + 1, chunks.length, chunk]));
+  }
   // XML-illegal noncharacters are escaped as JSON escapes, preserving the JSON value.
   const raw = json(reading).replace(/[\uFFFE\uFFFF]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
   const rawRows: Row[] = [['Порядок', 'Полная исходная запись JSON, последовательные части без разделителей']];
@@ -149,7 +155,8 @@ function tables(reading: ExtendedRunReview): Table[] {
   return [{ name: 'Summary', rows: summary }, { name: 'Candidates', rows: candidates }, { name: 'Critic', rows: critics },
     { name: 'Corrections', rows: corrections }, { name: 'Sources', rows: sources }, { name: 'Norms', rows: norms },
     { name: 'Windows', rows: windowRows }, { name: 'Batches', rows: batchRows }, { name: 'GlobalCrossWindow', rows: globalRows },
-    { name: 'ProjectParameters', rows: parameterRows }, { name: 'ParameterReceipts', rows: parameterReceipts }, { name: 'RawJSONchunks', rows: rawRows }];
+    { name: 'ProjectParameters', rows: parameterRows }, { name: 'ParameterReceipts', rows: parameterReceipts },
+    { name: 'NormativeContext', rows: normContextRows }, { name: 'RawJSONchunks', rows: rawRows }];
 }
 
 const CRC_TABLE = new Uint32Array(256);
