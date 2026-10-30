@@ -51,8 +51,21 @@ Return changed files, actual work, no-check status, unchanged contracts, limitat
 - `src/auditmanager/analysis/extended/estimate.py`
 - `src/auditmanager/runs/preflight.py`
 - `src/auditmanager/runs/cost_policy.py`
+- `src/auditmanager/runs/extended_review.py`
 - `src/auditmanager/bootstrap/adapters.py`
 
 ## Deliverables
 
 Code, cost/public integration, current-state/beta addendum and exact dev receipt. Root owns all integration policy and named preflight composition slot.
+
+Stage UI exact grant: the Stage lane exclusively owns web/src/widgets/stage-v3-experimental/** and web/src/widgets/stage-changes/** for reports and parameter/source navigation. Ordinary extended-review UI remains Experience ownership.
+
+## Frozen batching seam
+
+Fresh ordinary v3 consent defaults to `coverage_version=batched-v1`, `phase_call_limits={block_analysis:2,comprehensive_analysis:4,norm_verification:8,finding_review:8,finding_correction:8}` per window, maximum30 additional calls. Root public helpers: extended_coverage_policy(), validate_extended_coverage_policy(policy), plan_extended_coverage(**kwargs) delegate to analysis.extended.coverage. Fresh budget reserves actual phase caps and output maxima; empty phases spend zero. `AUDITMANAGER_EXTENDED_COVERAGE=legacy` keeps fresh six-call v3 allowance. Old accepted authorities never acquire batch spending. Changed implementation SHA safely refuses old queued v3 before dispatch and requires fresh consent; do not fake legacy hashes.
+
+## Additional archive integration
+
+New concrete feature `features/export-evidence-package` is exclusively owned by Coverage lane. Stage/Experience own only their respective download controls, collecting actual source version IDs from their existing data, reports and cancellation/progress state. Consume its public buildEvidencePackage(request) returning Blob/fileName; no private imports or duplicate fetch/ZIP implementations. Root owns Git and the named feature ownership slot. No backend/model calls or extra consent. Existing full independent downloads remain available. Handback≤12:30UTC.
+
+Root exclusive post-freeze seam: read_extended_review projects actual version_uid from the verified artifact envelope/Run into result for source viewers and source ZIP. A conflicting existing result identity is refused. No model request/source SHA/worker behavior changes; old stored snapshots need no backfill. Coverage owner frozen on this file.

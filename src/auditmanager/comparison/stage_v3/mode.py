@@ -56,6 +56,7 @@ def experimental_progress(session, run_id):
             "status": ("partial" if final is not None and not final["progress"].get("coverage", {}).get("complete") else
                        "completed" if final is not None else "running"),
             "coverage": None if final is None else final["progress"].get("coverage"),
+            "source_report": None if final is None else final["progress"].get("source_report"),
             "procedures": procedures, "limitations": [
                 "Эксперимент: только собственный текст PDF; графика и распознанные таблицы не проверены.",
                 "Результат предварительный, нормы не проверены; решение принимает эксперт."]}

@@ -1,4 +1,6 @@
-import type { StageChainRun } from '@/shared/api';
+import type { StageCardEvidence, StageChainRun, StageChangeCard } from '@/shared/api';
+import { parameterRows } from '../model/report';
+import { StageV3ParameterSources } from './report';
 
 export type StageEngine = NonNullable<StageChainRun['engine']>;
 const EXPERIMENT = 'v3_native_text_experimental';
@@ -34,6 +36,9 @@ const COVERAGE_WORDS: Readonly<Record<string, string>> = {
   pages: 'Страниц', page_count: 'Страниц', left_pages: 'Страниц П', right_pages: 'Страниц Р',
   text_characters: 'Знаков', characters: 'Знаков', chars: 'Знаков', fragments: 'Фрагментов',
   left_fragments: 'Фрагментов П', right_fragments: 'Фрагментов Р', native_pages: 'Страниц с текстом',
+  pages_total: 'Учтено страниц', pages_analysed: 'Страниц с выполненным разбором', pages_pending: 'Страниц ожидает разбора',
+  pages_excluded: 'Страниц исключено с причиной', pages_failed: 'Страниц с ошибкой разбора',
+  content_unmatched: 'Непарных страниц с содержимым', content_unmatched_pending: 'Непарных страниц ожидает разбора',
 };
 
 export function StageExperimentalProgress({ progress, state }: { readonly progress: unknown; readonly state: StageChainRun['state'] }) {
@@ -54,6 +59,7 @@ export function StageExperimentalProgress({ progress, state }: { readonly progre
           {PROCEDURE_WORDS[item.name] ?? item.name} · {STATE_WORDS[item.state] ?? 'Состояние не подтверждено'}
         </li>)}</ol></>}
       {coverage === null ? null : <dl>{Object.entries(coverage).filter(([, value]) => typeof value === 'number' || typeof value === 'string').map(([name, value]) => <div key={name}><dt>{COVERAGE_WORDS[name] ?? name}</dt><dd>{text(value)}</dd></div>)}</dl>}
+      {typeof coverage?.complete === 'boolean' ? <p>{coverage.complete ? 'Запланированные текстовые процедуры охватили все учтённые страницы.' : 'Есть страницы без завершённого текстового разбора.'} Это не подтверждение полноты инженерной проверки.</p> : null}
       {strings(body.limitations).length === 0 ? null : <ul>{strings(body.limitations).map((item, index) => <li key={index}>{item}</li>)}</ul>}
     </>}
   </section>;
@@ -64,10 +70,12 @@ const VERIFICATION_WORDS: Readonly<Record<string, string>> = {
   CONFLICT: 'Противоречие — нужна проверка', UNREADABLE: 'Не удалось прочитать',
 };
 
-export function StageExperimentalParameters({ experimental }: { readonly experimental: unknown }) {
+export function StageExperimentalParameters({ experimental, card, onOpenEvidence }: { readonly experimental: unknown;
+  readonly card?: StageChangeCard; readonly onOpenEvidence?: (evidence: StageCardEvidence, card: StageChangeCard) => void }) {
   const body = object(experimental);
   if (body === null || body.engine !== EXPERIMENT) return null;
   const parameters = Array.isArray(body.parameters) ? body.parameters.flatMap((value) => { const row = object(value); return row === null ? [] : [row]; }) : [];
+  const reportRows = card === undefined ? [] : parameterRows(card);
   return <section aria-label="Параметры экспериментального V3" data-stage-v3-parameters="">
     <h5>Параметры V3 · предварительная машинная сверка</h5>
     <p>Только текст PDF. Инженер не подтверждал результат. Соответствие нормам не проверялось.</p>
@@ -78,6 +86,7 @@ export function StageExperimentalParameters({ experimental }: { readonly experim
       <tbody>{parameters.map((parameter, index) => {
         const verification = object(parameter.verification);
         const verdict = text(verification?.verdict, '');
+        const reportRow = reportRows[index];
         return <tr key={index} data-v3-parameter="" data-v3-verification={verdict || 'PENDING'}>
           <th scope="row">{text(parameter.name)}</th><td>{text(parameter.old_value)}</td><td>{text(parameter.new_value)}</td>
           <td>{text(parameter.unit, '—')}</td><td>{text(parameter.location)}</td>
@@ -86,8 +95,10 @@ export function StageExperimentalParameters({ experimental }: { readonly experim
             {verdict !== 'CORRECTED' ? null : <p>После сверки: {text(verification?.old_value)} → {text(verification?.new_value)} {text(verification?.unit, '')}.</p>}
             {Array.isArray(verification?.evidence_refs) ? <ul>{verification.evidence_refs.map((reference, number) => {
               const item = object(reference);
-              return <li key={number}>{typeof reference === 'string' ? reference : item === null ? 'Ссылка на источник не передана' : text(item.evidence_id ?? item.source_id ?? item.fragment_id, 'Ссылка на источник не передана')}</li>;
+              return <li key={number}>{typeof reference === 'string' ? reference : item === null ? 'Ссылка на источник не передана' : text(item.evidence_id ?? item.source_id ?? item.fragment_id ?? item.block_id, 'Ссылка на источник не передана')}</li>;
             })}</ul> : null}
+            {card === undefined || reportRow === undefined ? null : <StageV3ParameterSources
+              parameter={reportRow} card={card} onOpenEvidence={onOpenEvidence} />}
           </td>
         </tr>;
       })}</tbody>

@@ -54,3 +54,7 @@ Return changed files, actual work, no-check status, unchanged contracts, limitat
 ## Deliverables
 
 Readable section report with per-observation source/norm/critic/correction provenance, real source-page links where existing API/routes support them, filtering/search without loss in export, explicit batch/coverage progress matching backend actual fields. No fake source links or expert decisions. Coordinate runtime fields with coverage agent.
+
+## Additional archive integration
+
+New concrete feature `features/export-evidence-package` is exclusively owned by Coverage lane. Stage/Experience own only their respective download controls, collecting actual source version IDs from their existing data, reports and cancellation/progress state. Consume its public buildEvidencePackage(request) returning Blob/fileName; no private imports or duplicate fetch/ZIP implementations. Root owns Git and the named feature ownership slot. No backend/model calls or extra consent. Existing full independent downloads remain available. Handback≤12:30UTC.

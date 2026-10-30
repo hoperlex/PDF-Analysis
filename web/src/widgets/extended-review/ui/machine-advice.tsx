@@ -1,27 +1,15 @@
+import { EXTENDED_ADVICE as ADVICE, EXTENDED_CORRECTION_ACTION as ACTION, EXTENDED_REASONS as REASON, extendedReasonText } from '@/entities/audit-run';
+
 type RecordValue = Record<string, unknown>;
 function object(value: unknown): RecordValue | null { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RecordValue : null; }
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
-const ADVICE: Readonly<Record<string, string>> = {
-  accept: 'Сохранить как кандидат', reject: 'Рекомендует снять наблюдение', borderline: 'Пограничный случай',
-  needs_human: 'Нужна проверка человека', rewrite: 'Рекомендует уточнить формулировку',
-};
-const ACTION: Readonly<Record<string, string>> = { retain: 'Сохранить исходное наблюдение', propose_revision: 'Предложено уточнение', needs_context: 'Нужны дополнительные данные' };
-const REASON: Readonly<Record<string, string>> = {
-  visual_or_ocr_misread: 'Возможная ошибка чтения изображения или распознанного текста',
-  duplicate_or_already_covered: 'Наблюдение повторяет уже рассмотренный вопрос',
-  wrong_norm_context: 'Нормативная ссылка использована вне подходящего контекста',
-  acceptable_design_solution: 'Проектное решение может быть допустимым',
-  not_functionally_significant: 'Функциональная значимость не подтверждена',
-  insufficient_source_context: 'Недостаточно исходного контекста',
-  value_already_correct: 'Значение в источнике уже соответствует проверяемому условию',
-  false_positive_due_to_missing_context: 'Возможное ложное замечание из-за неполного контекста',
-  requirement_not_mandatory: 'Обязательность требования не подтверждена',
-  already_resolved_by_project_note: 'Вопрос может быть раскрыт в примечании проекта',
-  other: 'Иное основание; требуется сверка пояснения и источников',
-};
 function correctionReason(value: unknown): string {
   const reason = text(value).trim();
-  return REASON[reason] ?? (/[а-яё]/i.test(reason) ? reason : reason ? 'Основание уточнения требует экспертной сверки; исходная запись сохранена в выгрузке.' : '');
+  return reason ? extendedReasonText(reason) : '';
+}
+function EvidenceQuotes({ value }: { readonly value: unknown }) {
+  const entries = Array.isArray(value) ? value.flatMap((item) => { const row = object(item); return row === null ? [] : [row]; }) : [];
+  return entries.length === 0 ? null : <section><h5>Дословные свидетельства, указанные моделью</h5><ul>{entries.map((entry, index) => <li key={`${text(entry.source_id)}:${index}`}><p>Источник: <code>{text(entry.source_id) || 'Не передан'}</code>.</p><blockquote>{text(entry.quote)}</blockquote></li>)}</ul><p>Сверьте эти цитаты с исходными материалами выше; решение эксперта не принято.</p></section>;
 }
 
 export function MachineAdvice({ review, correction, reviewStatus, reviewReason }: {
@@ -44,8 +32,10 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
       {text(critic.explanation) ? <p>{text(critic.explanation)}</p> : null}
       {text(critic.human_taxonomy_reason) ? <p>Основание рекомендации: {REASON[text(critic.human_taxonomy_reason)] ?? 'Требуется экспертная сверка пояснения и источников'}</p> : null}
       {text(critic.suggested_fix) ? <p>Предложение: {text(critic.suggested_fix)}</p> : null}
+      {critic.source_dependency === 'needs_more_context' ? <p>Модель сообщает, что требуется дополнительный исходный контекст.</p> : critic.source_dependency === 'cross_section_required' ? <p>Для проверки требуются материалы смежного раздела.</p> : null}
+      {typeof critic.confidence === 'number' && Number.isFinite(critic.confidence) && critic.confidence >= 0 && critic.confidence <= 1 ? <p>Заявленная моделью уверенность: {Math.round(critic.confidence * 100)}%. Это не оценка эксперта.</p> : null}
       {critic.evidence_checked === true ? <p>Источники просмотрены моделью; экспертная проверка не выполнена.</p> : <p>Проверка источников моделью не подтверждена.</p>}
-      {Array.isArray(critic.source_evidence) && critic.source_evidence.length > 0 ? <details><summary>Данные рекомендации и источники</summary><pre>{JSON.stringify(critic.source_evidence, null, 2)}</pre></details> : null}
+      <EvidenceQuotes value={critic.source_evidence} />
     </aside>}
     {fixed === null ? null : <section data-machine-correction={text(fixed.action)}>
       <p><strong>{ACTION[text(fixed.action)] ?? 'Исправление требует проверки'}</strong>{correctionReason(fixed.reason) ? ` · ${correctionReason(fixed.reason)}` : ''}</p>
@@ -56,7 +46,7 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
         <section aria-label="Предложенный исправленный кандидат"><h5>Исправленный кандидат</h5>
           {candidate === null ? <p>Новый текст не предложен. Исходное наблюдение не удалено.</p> : <><strong>{text(candidate.title)}</strong><p>{text(candidate.description)}</p>
             {Array.isArray(candidate.source_ids) ? <p>Источники: {candidate.source_ids.filter((item): item is string => typeof item === 'string').join(', ') || 'Не переданы'}</p> : null}
-            {Array.isArray(candidate.source_evidence) && candidate.source_evidence.length > 0 ? <details><summary>Источники исправленного кандидата</summary><pre>{JSON.stringify(candidate.source_evidence, null, 2)}</pre></details> : null}
+            <EvidenceQuotes value={candidate.source_evidence} />
           </>}
         </section>
       </div>

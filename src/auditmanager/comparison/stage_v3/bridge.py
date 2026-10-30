@@ -11,6 +11,7 @@ from auditmanager.comparison.stage_text.fragments import extract_fragments
 from auditmanager.shared.errors import DomainError, ErrorCode
 from . import procedures as p
 from .mode import ENGINE, ORIGINAL_SHA
+from .report import source_report
 
 
 class V3Method(StageAiMethod):
@@ -77,16 +78,18 @@ def bundles(runtime, session, *, run_id, snapshot, phase, model):
         plans = p.plans_for(phase, snapshot, saved, model)
         if phase == "synthesize" and all(plan.group_id in saved for plan in plans):
             cards = p.canonical_cards(snapshot, saved)
-            _changes, _hints, ledger, cov, _records = p.reviewed(snapshot, saved)
+            _changes, _hints, ledger, cov, records = p.reviewed(snapshot, saved)
+            report = source_report(snapshot, records, cov, ledger)
             final_key = digest({"engine": ENGINE, "bundle": p.BUNDLE, "cards": cards,
-                                "revision": snapshot["stage_link_revision_id"]})
+                                "revision": snapshot["stage_link_revision_id"],
+                                "source_report_sha256": digest(report)})
             run = runtime._repo.run(session, run_id)
             unit = runtime._repo.unit(session, run_id=run_id, kind="classify", group_id="v3:final:cards",
                 source_sha256=final_key, job_id=run["comparison_ai_job_id"], payload={
                     "content_key": final_key, "engine": ENGINE, "prompt_bundle_version": p.BUNDLE,
-                    "coverage": cov["summary"], "quality": ledger["summary"],
+                    "coverage": cov["summary"], "quality": ledger["summary"], "source_report": report,
                     "immutable_source": {"engine": ENGINE, "original": ORIGINAL_SHA, "bundle": p.BUNDLE,
-                                         "card_keys": [digest(card) for card in cards]}})
+                                         "card_keys": [digest(card) for card in cards], "source_report_sha256": digest(report)}})
             runtime._repo.save_answer(session, run_id=run_id, kind="classify", unit=unit,
                 content_key=final_key, value=cards, model_identity={"engine": ENGINE, "model": model,
                                                                "original_source": ORIGINAL_SHA})

@@ -35,6 +35,11 @@ def enabled(policy: object) -> bool:
     if not isinstance(policy, dict) or policy.get("enabled") is not True:
         return False
     if policy.get("plan_version") == PLAN_VERSION_V3:
+        from .coverage import validate_coverage_policy
+        try:
+            validate_coverage_policy(policy)
+        except ValueError:
+            return False
         maximum=policy.get("max_blocks");windows=policy.get("max_windows");rules=policy.get("rules_sha256")
         text_pages=policy.get("text_page_limit")
         return (type(maximum) is int and 1 <= maximum <= 1000 and policy.get("window_size") == 16
@@ -55,11 +60,14 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
                 recognised: Mapping[str, Any] | None = None,
                 native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION,
                 source_offset: int = 0, source_limit: int = 16, max_sources: int = 16,
-                full_document: bool = False) -> dict:
+                full_document: bool = False, coverage_version: str | None = None) -> dict:
     if plan_version not in {PLAN_VERSION, PLAN_VERSION_V2, PLAN_VERSION_V3}:
         raise ValueError("extended_plan_version_invalid")
     if type(full_document) is not bool or full_document and plan_version != PLAN_VERSION_V2:
         raise ValueError("extended_full_document_policy_invalid")
+    if coverage_version is not None and (coverage_version != "batched-v1" or plan_version != PLAN_VERSION_V3):
+        raise ValueError("extended_coverage_version_invalid")
+    complete_text = full_document or coverage_version == "batched-v1"
     if plan_version == PLAN_VERSION_V3 and (type(source_offset) is not int or source_offset < 0
             or type(source_limit) is not int or not 1 <= source_limit <= 16
             or type(max_sources) is not int or not 1 <= max_sources <= 1000 or source_offset >= 1000):
@@ -98,7 +106,7 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
             "context": neighbors})
     text_items = []
     text_observations = (observations or {}).get("observations", [])
-    for i, item in enumerate(text_observations if full_document else text_observations[:MAX_ITEMS]):
+    for i, item in enumerate(text_observations if complete_text else text_observations[:MAX_ITEMS]):
         evidence = item.get("evidence", [])
         if not evidence:
             continue
@@ -163,7 +171,7 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
         result["warnings"].append("geometry_blocks_not_available")
     if native_sources is not None:
         result["warnings"].extend(native_sources.get("warnings", []))
-    if not full_document and len(text_observations) > MAX_ITEMS:
+    if not complete_text and len(text_observations) > MAX_ITEMS:
         result["warnings"].append("text_observations_outside_merge_window")
     if any(n["context_truncated"] for s in sources for n in s.get("context", [])):
         result["warnings"].append("page_context_truncated")

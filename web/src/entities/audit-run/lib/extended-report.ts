@@ -1,5 +1,6 @@
 import type { ExtendedRunReview } from '@/shared/api';
 import { formatExtendedRunXlsx } from './extended-xlsx';
+import { EXTENDED_ADVICE, EXTENDED_CORRECTION_ACTION, EXTENDED_NORM_STATUS, extendedReasonText } from './extended-labels';
 
 type RecordValue = Record<string, unknown>;
 export type ExtendedReportFormat = 'md' | 'html' | 'json' | 'xlsx';
@@ -19,16 +20,34 @@ function code(value: unknown): string {
   const fence = '`'.repeat(Math.max(3, ...lengths) + 1);
   return `${fence}json\n${body}\n${fence}`;
 }
+function physicalPage(value: unknown): string { return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? String(value) : 'Не передана'; }
+function evidenceMarkdown(value: unknown): string { return objects(value).map((entry) => `Источник ${md(entry.source_id)}:\n\n${md(entry.quote)}`).join('\n\n'); }
+function evidenceHtml(value: unknown): string { return `<ul>${objects(value).map((entry) => `<li>Источник ${html(entry.source_id)}<blockquote>${html(entry.quote)}</blockquote></li>`).join('')}</ul>`; }
 
 function procedureMarkdown(value: unknown): string {
   return objects(value).map((item) => `- ${md(item.title || item.id)}: ${md(STATUS[plain(item.status)] ?? item.status)}${item.reason ? `; ограничение: ${md(item.reason)}` : ''}`).join('\n');
 }
-function observationMarkdown(item: RecordValue, index: number): string {
+function observationMarkdown(item: RecordValue, index: number, sourceIndex: ReadonlyMap<string, RecordValue>): string {
   const lines = [`### ${index + 1}. ${md(item.title)}`, md(item.description), `Идентификатор: ${md(item.observation_id)}. Источники: ${md(item.source_ids)}.`,
-    `Нормативный статус: ${md(item.norm_status ?? 'Не проверено')}. Актуальность и применимость цитат требуют проверки эксперта.`];
-  if (item.review !== undefined || item.critic !== undefined) lines.push('Рекомендация машинного критика — не решение эксперта:', code(item.review ?? item.critic));
-  if (item.correction !== undefined) lines.push('Исправленный кандидат отдельно от исходного наблюдения; исходник не удалён:', code(item.correction));
-  lines.push('Полная сохранённая запись наблюдения:', code(item));
+    `Нормативный статус: ${md(EXTENDED_NORM_STATUS[plain(item.norm_status)] ?? 'Требует проверки')}. Актуальность и применимость цитат требуют проверки эксперта.`];
+  const critic = object(item.review ?? item.critic);
+  const correction = object(item.correction);
+  const original = object(correction?.original);
+  const candidate = object(correction?.candidate);
+  if (critic !== null) lines.push('#### Рекомендация машинного критика — не решение эксперта', md(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка'),
+    `Основание: ${md(extendedReasonText(critic.human_taxonomy_reason))}`, md(critic.explanation), `Предложение: ${md(critic.suggested_fix)}`, evidenceMarkdown(critic.source_evidence));
+  else lines.push('Машинная критика этого наблюдения не подтверждена переданными данными.');
+  if (correction !== null) lines.push('#### Предложенное уточнение, исходник сохранён', md(EXTENDED_CORRECTION_ACTION[plain(correction.action)] ?? 'Требуется проверка'),
+    `Основание: ${md(extendedReasonText(correction.reason))}`, 'Исходный вариант:', md(original?.title ?? item.title), md(original?.description ?? item.description),
+    'Предложенный кандидат:', candidate === null ? 'Новый текст не предложен.' : `${md(candidate.title)}\n\n${md(candidate.description)}\n\n${evidenceMarkdown(candidate.source_evidence)}`, `Требуемый контекст: ${md(correction.required_context)}`);
+  if (Array.isArray(item.source_ids)) for (const id of item.source_ids) {
+    const source = sourceIndex.get(plain(id));
+    lines.push(`Источник ${md(id)}; физическая страница PDF: ${md(physicalPage(source?.page_number))}; версия: ${md(source?.version_uid)}; SHA256: ${md(source?.crop_sha256 ?? source?.artifact_sha256 ?? source?.text_sha256)}.`,
+      source?.quote ? md(source.quote) : 'Цитата источника не передана.');
+  }
+  if (item.norm_assessment !== undefined) lines.push('Модельная сверка нормативных цитат, не подтверждение применимости:', code(item.norm_assessment));
+  for (const norm of objects(item.norm_candidates)) lines.push(`Нормативный кандидат: ${md(norm.designation)}, пункт ${md(norm.clause_number)}, страница ${md(norm.page_label)}.`, md(norm.quote));
+  lines.push('Полная запись наблюдения и все дополнительные поля сохранены в исходных данных API в конце отчёта.');
   return lines.join('\n\n');
 }
 
@@ -38,20 +57,22 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
   const result = object(reading.result);
   const windows = objects(result?.windows);
   const observations = objects(result?.observations);
+  const sourceIndex = new Map<string, RecordValue>(objects(result?.sources).map((source) => [plain(source.source_id), { ...source, version_uid: typeof source.version_uid === 'string' && source.version_uid ? source.version_uid : result?.version_uid }] as const));
   const raw = JSON.stringify(reading, null, 2) ?? 'null';
   const base = `analysis-${reading.run_id}`;
   if (format === 'json') return { content: raw, mediaType: 'application/json;charset=utf-8', fileName: `${base}.json` };
   const disclaimer = 'Предварительный машинный анализ. Рекомендации критика и исправленные кандидаты не являются решениями эксперта. Нормативные значения из исторических рубрик не подтверждены; редакция и применимость цитат требуют отдельной проверки. Все переданные записи сохранены, без фильтра по модельному принятию или отклонению.';
   const metadata = { run_id: reading.run_id, status: reading.status, workflow_version: result?.workflow_version,
-    section: result?.section, rules_sha256: result?.rules_sha256, source_provenance: result?.source_provenance,
-    coverage: result?.coverage, text_coverage: result?.text_coverage, window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
+    section: result?.section, version_uid: result?.version_uid, rules_sha256: result?.rules_sha256, source_provenance: result?.source_provenance,
+    coverage: result?.coverage, text_coverage: result?.text_coverage, coverage_version: result?.coverage_version, phase_coverage: result?.phase_coverage, phase_call_limits: result?.phase_call_limits,
+    window_progress: result?.window_progress, primary_text_status: result?.primary_text_status,
     visual_phase_complete: result?.visual_phase_complete, report: result?.report };
   const pendingPrimary = result?.primary_text_status === 'pending'
     ? 'Базовый текстовый анализ ещё выполняется. Сохранённый визуальный проход не является завершением всей проверки окна.' : '';
   if (format === 'md') {
     const blocks = ['# Предварительный анализ раздела', disclaimer, pendingPrimary, '## Состояние, покрытие и происхождение', code(metadata),
       '## Фактические процедуры', procedureMarkdown(result?.procedures), `## Общий свод: ${observations.length} записей`,
-      ...observations.map(observationMarkdown)];
+      ...observations.map((item, index) => observationMarkdown(item, index, sourceIndex))];
     for (const [index, window] of windows.entries()) blocks.push(`## Окно ${index + 1}: ${md(window.window_id)}`,
       `Состояние: ${md(STATUS[plain(window.status)] ?? window.status)}`, procedureMarkdown(window.procedures),
       ...(window.visual_phase_complete === true && window.status === 'running' ? ['Визуальный проход сохранён; оставшиеся процедуры окна ещё не завершены.'] : []),
@@ -60,7 +81,17 @@ export function formatExtendedRunReport(reading: ExtendedRunReview, format: Exte
     return { content: blocks.join('\n\n') + '\n', mediaType: 'text/markdown;charset=utf-8', fileName: `${base}.md` };
   }
   const procedureHtml = (value: unknown) => `<ol>${objects(value).map((item) => `<li><strong>${html(item.title || item.id)}</strong>: ${html(STATUS[plain(item.status)] ?? item.status)}${item.reason ? `<p>${html(item.reason)}</p>` : ''}</li>`).join('')}</ol>`;
-  const rows = observations.map((item, index) => `<article><h3>${index + 1}. ${html(item.title)}</h3><p>${html(item.description)}</p><p>Исходное наблюдение сохранено. Решение эксперта не принято этой моделью.</p><pre>${html(JSON.stringify(item, null, 2))}</pre></article>`).join('');
+  const rows = observations.map((item, index) => {
+    const critic = object(item.review ?? item.critic);
+    const correction = object(item.correction);
+    const original = object(correction?.original);
+    const candidate = object(correction?.candidate);
+    const sources = (Array.isArray(item.source_ids) ? item.source_ids : []).map((id) => { const source = sourceIndex.get(plain(id)); return `<li>Источник ${html(id)}; физическая страница PDF: ${html(physicalPage(source?.page_number))}; версия: ${html(source?.version_uid)}; SHA256: ${html(source?.crop_sha256 ?? source?.artifact_sha256 ?? source?.text_sha256)}.${source?.quote ? `<blockquote>${html(source.quote)}</blockquote>` : '<p>Цитата не передана.</p>'}</li>`; }).join('');
+    const advice = critic === null ? '<p>Машинная критика не подтверждена переданными данными.</p>' : `<section><h4>Рекомендация критика — не решение эксперта</h4><strong>${html(EXTENDED_ADVICE[plain(critic.llm_decision)] ?? 'Требуется проверка')}</strong><p>${html(extendedReasonText(critic.human_taxonomy_reason))}</p><p>${html(critic.explanation)}</p><p>Предложение: ${html(critic.suggested_fix)}</p>${evidenceHtml(critic.source_evidence)}</section>`;
+    const fixed = correction === null ? '' : `<section><h4>Уточнение, исходник сохранён</h4><p>${html(EXTENDED_CORRECTION_ACTION[plain(correction.action)] ?? 'Требуется проверка')}. ${html(extendedReasonText(correction.reason))}</p><h5>Исходный вариант</h5><strong>${html(original?.title ?? item.title)}</strong><p>${html(original?.description ?? item.description)}</p><h5>Предложенный кандидат</h5>${candidate === null ? '<p>Новый текст не предложен.</p>' : `<strong>${html(candidate.title)}</strong><p>${html(candidate.description)}</p>${evidenceHtml(candidate.source_evidence)}`}<p>Требуемый контекст: ${html(correction.required_context)}</p></section>`;
+    const norms = `<section><h4>Нормативные данные — применимость не подтверждена</h4><p>Статус: ${html(EXTENDED_NORM_STATUS[plain(item.norm_status)] ?? 'Требует проверки')}</p>${objects(item.norm_candidates).map((norm) => `<p>${html(norm.designation)}, пункт ${html(norm.clause_number)}, страница ${html(norm.page_label)}</p><blockquote>${html(norm.quote)}</blockquote>`).join('')}${item.norm_assessment === undefined ? '' : `<details><summary>Сохранённая модельная сверка цитат</summary><pre>${html(JSON.stringify(item.norm_assessment, null, 2))}</pre></details>`}</section>`;
+    return `<article><h3>${index + 1}. ${html(item.title)}</h3><p>${html(item.description)}</p><p>Исходное наблюдение сохранено. Решение эксперта не принято этой моделью.</p>${advice}${fixed}<section><h4>Исходные материалы</h4><ul>${sources}</ul></section>${norms}</article>`;
+  }).join('');
   const windowHtml = windows.map((window, index) => `<section><h2>Окно ${index + 1}: ${html(window.window_id)}</h2><p>${html(STATUS[plain(window.status)] ?? window.status)}</p>${window.visual_phase_complete === true && window.status === 'running' ? '<p>Визуальный проход сохранён; оставшиеся процедуры окна ещё не завершены.</p>' : ''}${procedureHtml(window.procedures)}<pre>${html(JSON.stringify(window, null, 2))}</pre></section>`).join('');
   const content = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Предварительный анализ раздела</title><style>body{max-width:1100px;margin:32px auto;padding:0 20px;font:16px/1.5 system-ui,sans-serif;color:#15202b;background:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f5f7;padding:16px}article,section{border-top:1px solid #c9d1d9;padding:16px 0}h1,h2,h3{line-height:1.2}</style></head><body><h1>Предварительный анализ раздела</h1><p>${html(disclaimer)}</p>${pendingPrimary ? `<p>${html(pendingPrimary)}</p>` : ''}<h2>Состояние, покрытие и происхождение</h2><pre>${html(JSON.stringify(metadata, null, 2))}</pre><h2>Фактические процедуры</h2>${procedureHtml(result?.procedures)}<h2>Общий свод: ${observations.length} записей</h2>${rows}${windowHtml}<h2>Полная исходная запись API</h2><p>Все переданные записи, источники, цитаты и ограничения без фильтра по модельной рекомендации.</p><pre>${html(raw)}</pre></body></html>`;
   return { content, mediaType: 'text/html;charset=utf-8', fileName: `${base}.html` };

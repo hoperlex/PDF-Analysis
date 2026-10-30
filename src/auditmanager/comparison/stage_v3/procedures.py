@@ -12,6 +12,7 @@ from auditmanager.comparison.stage_ai.validation import StageAiValidationError, 
 from auditmanager.comparison.stage_text.fragments import canonical_text
 from .mode import ENGINE, ORIGINAL_SHA
 from .original import schemas, validate, coverage, supplemental, dedupe, quality, verification
+from .report import REPORT_VERSION, source_catalogue, parameter_projection, event_projection, merge_sources
 
 VERSION = "native-text-v3/1"
 MAX_PAGES = 16
@@ -25,7 +26,7 @@ PROMPTS = {name: (Path(__file__).parent / "original" / "prompts" / f"{name}_PROM
 BUNDLE = digest({"version": VERSION, "original": ORIGINAL_SHA, "prompts": PROMPTS,
                  "schemas": [schemas.MAP_SCHEMA, schemas.MINER_SCHEMA, schemas.DEDUPE_SCHEMA, schemas.VERIFICATION_SCHEMA]})
 
-_VALUE_TOKEN = re.compile(r"(?<!\w)[+\-±−]\s*\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*|[^\W\d_]+|[^\s]")
+_VALUE_TOKEN = re.compile(r"[+\-±−]\s*\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*|[^\W\d_]+|[^\s]")
 
 
 def _native_value_tokens(text):
@@ -43,6 +44,10 @@ def value_in_native_text(value, text):
     wanted, source = _native_value_tokens(value), _native_value_tokens(text)
     return bool(wanted) and any(
         not (offset and source[offset - 1] in {"+", "-", "±", "−"})
+        # A range/subtraction endpoint (10-20) is not proof of a standalone
+        # signed measurement (-20). Hyphenated identifiers stay conservative.
+        and not (offset and wanted[0][0] in "+-±−" and len(wanted[0]) > 1
+                 and source[offset - 1][-1].isdigit())
         and source[offset:offset + len(wanted)] == wanted
         for offset in range(len(source) - len(wanted) + 1))
 
@@ -258,10 +263,11 @@ def plans_for(phase, snapshot, results, model):
 
 
 def canonical_cards(snapshot, results):
-    changes, hints, ledger, cov, _records = reviewed(snapshot, results)
+    changes, hints, ledger, cov, records = reviewed(snapshot, results)
     if ledger["summary"].get("source_verification_pending"):
         raise StageAiValidationError("v3_verification_incomplete")
     cards = []
+    catalogue = source_catalogue(snapshot, records)
     for change in changes:
         refs = sorted({e["block_id"] for e in change["evidence_items"]})
         if not refs:
@@ -269,12 +275,14 @@ def canonical_cards(snapshot, results):
         parameters = []
         for ordinal, parameter in enumerate(change["changed_parameters"], 1):
             work = next((w for w in ledger["verification_work_items"] if w["projectchange_id"] == change["projectchange_id"] and w["parameter_ordinal"] == ordinal), None)
-            parameters.append(dict(parameter, verification=None if work is None else work.get("result")))
+            parameters.append(parameter_projection(event=change, parameter=parameter, ordinal=ordinal,
+                work=work, catalogue=catalogue))
         summary = change["change_summary"]
         title = summary if len(summary) <= 260 else "Изменение V3: полный текст в данных эксперимента"
         cards.append({"class_name": "REVIEW", "model_class": "REVIEW", "category": "uncertain", "system": "unknown",
             "title": title, "evidence_ids": refs, "materiality": "unknown", "importance": "unknown", "detail_increased": False,
-            "experimental": {"engine": ENGINE, "source_version": ORIGINAL_SHA, "event_id": change["projectchange_id"],
+            "experimental": {**event_projection(change, catalogue),
+                "engine": ENGINE, "source_version": ORIGINAL_SHA, "event_id": change["projectchange_id"],
                 "engineering_subject": change["engineering_subject"], "change_summary": summary,
                 "parameters": parameters, "quality": ledger["summary"], "coverage": cov["summary"],
                 "source_sha256": digest([{key: fragment.get(key) for key in
@@ -286,8 +294,11 @@ def canonical_cards(snapshot, results):
         if refs:
             cards.append({"class_name": "REVIEW", "category": "uncertain", "system": "unknown",
                 "title": "Неподтверждённое наблюдение V3", "evidence_ids": refs,
-                "experimental": {"engine": ENGINE, "event_id": hint["hint_id"], "parameters": [],
-                    "observation": hint, "quality": ledger["summary"], "norms_status": "not_checked", "native_text_only": True}})
+                "experimental": {"engine": ENGINE, "source_version": ORIGINAL_SHA,
+                    "report_version": REPORT_VERSION, "event_id": hint["hint_id"], "parameters": [],
+                    "sources": [deepcopy(catalogue[ref]) for ref in refs],
+                    "coverage": cov["summary"], "observation": hint,
+                    "quality": ledger["summary"], "norms_status": "not_checked", "native_text_only": True}})
     # Distinct events can cite the same source: the existing card contract requires
     # an exact partition. Merge those cards explicitly, retaining event metadata.
     merged = []
@@ -298,10 +309,12 @@ def canonical_cards(snapshot, results):
             continue
         target = touched[0]
         target["experimental"].setdefault("related_events", []).append(card["experimental"])
+        merge_sources(target["experimental"], card["experimental"])
         target["experimental"]["parameters"].extend(card["experimental"].get("parameters", []))
         target["evidence_ids"] = sorted(set(target["evidence_ids"]) | set(card["evidence_ids"]))
         for other in touched[1:]:
             target["experimental"]["related_events"].append(other["experimental"])
+            merge_sources(target["experimental"], other["experimental"])
             target["experimental"]["parameters"].extend(other["experimental"].get("parameters", []))
             target["evidence_ids"] = sorted(set(target["evidence_ids"]) | set(other["evidence_ids"]))
             merged.remove(other)

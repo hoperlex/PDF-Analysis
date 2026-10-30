@@ -47,7 +47,8 @@ Return changed files, actual work, no-check status, unchanged contracts, limitat
 ## Allowed paths
 
 - `src/auditmanager/comparison/stage_v3/**`
-- `web/src/widgets/stage-comparison/**`
+- `web/src/widgets/stage-v3-experimental/**`
+- `web/src/widgets/stage-changes/**`
 - `web/src/widgets/stage-run-controls/**`
 - `web/src/entities/comparison/**`
 - `docs/program/SPRINT2-STAGE-1030.md`
@@ -55,3 +56,11 @@ Return changed files, actual work, no-check status, unchanged contracts, limitat
 ## Deliverables
 
 Inspect actual existing V3 route and choose concrete remaining original feature feasible in40min: structured parameter/source report downloads and/or better unmatched/coverage source-bound workflow. Prefer actual useful code over an inventory. No extra paid calls without fresh consent. Send chosen feature and additional exact required paths to root early. Preserve incoming saved-map prerequisite UI.
+
+## Exact integration grant
+
+Stage lane owns existing `web/src/widgets/stage-v3-experimental/**` and `web/src/widgets/stage-changes/**` for structured V3 parameter/source reports, downloads and existing source-page navigation. No source/decision mutation or paid calls. Other UI lanes do not own these files.
+
+## Additional archive integration
+
+New concrete feature `features/export-evidence-package` is exclusively owned by Coverage lane. Stage/Experience own only their respective download controls, collecting actual source version IDs from their existing data, reports and cancellation/progress state. Consume its public buildEvidencePackage(request) returning Blob/fileName; no private imports or duplicate fetch/ZIP implementations. Root owns Git and the named feature ownership slot. No backend/model calls or extra consent. Existing full independent downloads remain available. Handback≤12:30UTC.

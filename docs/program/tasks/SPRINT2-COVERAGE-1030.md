@@ -51,8 +51,26 @@ Return changed files, actual work, no-check status, unchanged contracts, limitat
 - `src/auditmanager/analysis/extended/workflow.py`
 - `src/auditmanager/analysis/extended/review.py`
 - `src/auditmanager/analysis/extended/coverage.py`
+- `web/src/features/export-evidence-package/**`
 - `docs/program/SPRINT2-COVERAGE-1030.md`
 
 ## Deliverables
 
 Fresh policy revision only. Separate comprehensive text pieces instead of dropped tail; bounded norm/critic/corrector batches instead of first40. Stable per-batch keys, saved replies, actual coverage/counts, global budget/unknown fences. Discuss exact new phase-call limits with root before coding dispatch.
+
+## Frozen batching seam
+
+Fresh ordinary v3 consent defaults to `coverage_version=batched-v1`, `phase_call_limits={block_analysis:2,comprehensive_analysis:4,norm_verification:8,finding_review:8,finding_correction:8}` per window, maximum30 additional calls. Root public helpers: extended_coverage_policy(), validate_extended_coverage_policy(policy), plan_extended_coverage(**kwargs) delegate to analysis.extended.coverage. Fresh budget reserves actual phase caps and output maxima; empty phases spend zero. `AUDITMANAGER_EXTENDED_COVERAGE=legacy` keeps fresh six-call v3 allowance. Old accepted authorities never acquire batch spending. Changed implementation SHA safely refuses old queued v3 before dispatch and requires fresh consent; do not fake legacy hashes.
+
+## Additional exclusive presentation archive slot
+
+The coverage source is frozen. This lane additionally owns `web/src/features/export-evidence-package/**` for a concrete read-only report+original-PDF ZIP feature. Other agents own only consumer buttons. Public API:
+
+```ts
+interface EvidencePackageReport { name: string; content: string | ArrayBuffer | Blob; mediaType?: string }
+interface EvidencePackageSource { versionUid: VersionUid; side?: 'OLD' | 'NEW' | 'SOURCE' }
+interface EvidencePackageProgress { phase: 'preparing' | 'sources' | 'packaging'; completed: number; total: number; currentVersionUid?: string }
+buildEvidencePackage({fileName, kind, runId, reports, sources, signal?, onProgress?}): Promise<{blob: Blob; fileName: string}>
+```
+
+kind is `section-analysis` or `stage-v3`. Use existing authenticated getDocumentVersion/streamDocumentVersionContent; inspect exact public names/fields. Package all requested reports and unique actual version PDFs; record side roles, actual bytes and SHA in manifest.json, verify against immutable version metadata where exposed. ZIP STORE/CRC32 may be copied from existing repository source with provenance, no new dependency/private cross-layer import. Maximum complete package64MiB, bounded entries. A missing/oversize/refused source aborts the whole package with an explicit error; no silent reports-only fallback. Signal cancellation and progress reflect only completed actual reads. No model calls, API/schema/DB or source mutation. No tests/checks. Handback≤12:30UTC.

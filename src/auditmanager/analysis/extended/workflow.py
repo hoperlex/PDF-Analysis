@@ -201,7 +201,7 @@ def review_bundle_digest(section):
     for path in sorted((root / "original_review").rglob("*")):
         if path.is_file() and path.suffix in {".py", ".md", ".txt", ".json"}:
             assets[str(path.relative_to(root))] = hashlib.sha256(path.read_bytes()).hexdigest()
-    for name in ("core.py", "workflow.py", "review.py", "native_pages.py"):
+    for name in ("core.py", "workflow.py", "review.py", "native_pages.py", "coverage.py"):
         assets[name] = hashlib.sha256((root / name).read_bytes()).hexdigest()
     return digest({"version": REVIEW_BUNDLE_VERSION, "workflow_version": WORKFLOW_V3,
                    "section": section, "section_rules": rules_digest(section), "assets": assets})
@@ -265,6 +265,15 @@ def build_norm_review_request_v3(*, model_id, run_id, section, payload, window_i
         phase="norm_verification", window_id=window_id)
 
 
+def build_comprehensive_request_batched_v3(*, model_id, run_id, section, payload, window_id=None):
+    """Fresh batched authority keeps complete observations and every supplied text piece."""
+    if payload.get("coverage_version") != "batched-v1":
+        raise ValueError("extended_batched_authority_required")
+    return _v3_request(build_comprehensive_request(model_id=model_id, run_id=run_id,
+        section=section, payload=payload), run_id=run_id, section=section,
+        phase="comprehensive_analysis", window_id=window_id)
+
+
 def deterministic_lossless_merge_v3(items, *, max_windows=MAX_WORKFLOW_WINDOWS):
     """Bounded global collection; no v2 overflow cap or hidden item dropping."""
     if type(max_windows) is not int or not 1 <= max_windows <= MAX_WORKFLOW_WINDOWS:
@@ -297,3 +306,62 @@ def deterministic_lossless_merge_v3(items, *, max_windows=MAX_WORKFLOW_WINDOWS):
         if target.get("source_kind") != original.get("source_kind"):
             target["source_kind"] = "mixed"
     return output
+
+
+def _batched_norm_schema():
+    assessment = response_schema(merge=True)['properties']['observations']['items']['properties']['norm_assessment']
+    return {'type': 'object', 'additionalProperties': False, 'required': ['assessments'],
+        'properties': {'assessments': {'type': 'array', 'maxItems': 20, 'items': {
+            'type': 'object', 'additionalProperties': False, 'required': ['input_id', 'norm_assessment'],
+            'properties': {'input_id': {'type': 'string', 'minLength': 1, 'maxLength': 160},
+                'norm_assessment': assessment}}}}}
+
+
+def build_norm_review_request_batched_v3(*, model_id, run_id, section, payload, window_id=None):
+    """Fresh compact annotations avoid repeating the full original finding in every reply."""
+    if payload.get('coverage_version') != 'batched-v1' or len(payload.get('observations', [])) > 20:
+        raise ValueError('extended_batched_norm_authority_invalid')
+    request = build_norm_review_request_v3(model_id=model_id, run_id=run_id, section=section,
+        payload=payload, window_id=window_id)
+    body = deepcopy(request.body)
+    body['system'] += ('\nДля этой новой версии формат ответа заменён: объект assessments, ровно одна '
+        'запись {input_id,norm_assessment} для каждого входа. Не возвращай title, description, source_ids '
+        'или norm_queries. Исходные наблюдения остаются неизменными; только аннотация нормативной сверки. '
+        'Цитируй дословно полную предоставленную quote соответствующего кандидата.')
+    body['output_config']['format']['schema'] = _batched_norm_schema()
+    return ModelRequest(model_id, body,
+        idempotency_scope=f'{run_id}:v3:{window_id}:batched-norm:{digest(body)}')
+
+
+def parse_norm_review_batched_v3(text, *, observations, allowed_sources=None):
+    from .review import _document, _validate
+    if not isinstance(observations, dict) or len(observations) > 20:
+        raise ValueError('extended_batched_norm_window_invalid')
+    result = _document(text)
+    _validate(result, _batched_norm_schema())
+    seen = set()
+    for row in result['assessments']:
+        key = row['input_id']
+        if key not in observations or key in seen:
+            raise ValueError('norm_review_input_partition_invalid')
+        original = observations[key]
+        if allowed_sources is not None and not set(original['source_ids']) <= set(allowed_sources):
+            raise ValueError('norm_review_source_binding_invalid')
+        candidates = {candidate['paragraph_id']: candidate for candidate in original.get('norm_candidates', [])}
+        assessment = row['norm_assessment']
+        if not candidates and assessment is not None or candidates and assessment is None:
+            raise ValueError('norm_assessment_without_corpus')
+        if assessment is not None:
+            _validate(assessment, response_schema(merge=True)['properties']['observations']
+                ['items']['properties']['norm_assessment']['anyOf'][1])
+        citations = set()
+        for citation in (assessment or {}).get('citations', []):
+            paragraph = citation['paragraph_id']
+            if (paragraph not in candidates or paragraph in citations
+                    or citation['quote'] != candidates[paragraph]['quote']):
+                raise ValueError('norm_citation_not_in_context')
+            citations.add(paragraph)
+        seen.add(key)
+    if seen != set(observations):
+        raise ValueError('norm_review_input_partition_invalid')
+    return result['assessments']

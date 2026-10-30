@@ -470,3 +470,44 @@ def run_document_context_with_visual_pages(context, *, allow_visual_only_pages=F
 
 
 __all__.append("run_document_context_with_visual_pages")
+
+
+
+def extended_coverage_policy():
+    """Fresh source-bound allowance for durable extended-review batches."""
+    from auditmanager.analysis.extended.coverage import coverage_policy
+    return coverage_policy()
+
+
+def validate_extended_coverage_policy(policy):
+    from auditmanager.analysis.extended.coverage import validate_coverage_policy
+    return validate_coverage_policy(policy)
+
+
+def plan_extended_coverage(**kwargs):
+    from auditmanager.analysis.extended.coverage import plan_extended_coverage as plan
+    return plan(**kwargs)
+
+
+__all__.extend(["extended_coverage_policy", "validate_extended_coverage_policy", "plan_extended_coverage"])
+
+
+def build_comprehensive_request_batched_v3(**kwargs):
+    from auditmanager.analysis.extended.workflow import build_comprehensive_request_batched_v3 as build
+    return build(**kwargs)
+
+
+__all__.append("build_comprehensive_request_batched_v3")
+
+
+def build_norm_review_request_batched_v3(**kwargs):
+    from auditmanager.analysis.extended.workflow import build_norm_review_request_batched_v3 as build
+    return build(**kwargs)
+
+
+def parse_norm_review_batched_v3(*args, **kwargs):
+    from auditmanager.analysis.extended.workflow import parse_norm_review_batched_v3 as parse
+    return parse(*args, **kwargs)
+
+
+__all__.extend(["build_norm_review_request_batched_v3", "parse_norm_review_batched_v3"])

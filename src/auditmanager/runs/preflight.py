@@ -212,9 +212,27 @@ class RunCostPreflight:
                     "max_blocks": visual["max_blocks"], "window_size": visual["window_size"],
                     "max_windows": visual["max_windows"], "text_page_limit": visual["text_page_limit"], "review": True,
                     "review_scope": "full_document", "rules_sha256": extended_review_bundle_digest(section), "section_code": section}
-                extra_calls = visual["max_windows"] * 6
-                input_tokens += visual["max_windows"] * 600_000
-                output_tokens += visual["max_windows"] * 72_000
+                coverage_mode = os.environ.get("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1").strip().lower()
+                if coverage_mode == "batched-v1":
+                    from auditmanager.analysis.public import extended_coverage_policy
+                    extended.update(extended_coverage_policy())
+                    limits = extended["phase_call_limits"]
+                    per_window_calls = sum(limits.values())
+                    per_window_output = sum(limits[phase] * tokens for phase, tokens in (
+                        ("block_analysis", 6_000), ("comprehensive_analysis", 6_000),
+                        ("norm_verification", 12_000), ("finding_review", 12_000),
+                        ("finding_correction", 12_000)))
+                    extra_calls = visual["max_windows"] * per_window_calls
+                    # Conservative request envelope; the accepted monetary ceiling
+                    # remains authoritative and every actual call is metered.
+                    input_tokens += visual["max_windows"] * per_window_calls * 100_000
+                    output_tokens += visual["max_windows"] * per_window_output
+                elif coverage_mode in {"legacy", "0", "off", "false"}:
+                    extra_calls = visual["max_windows"] * 6
+                    input_tokens += visual["max_windows"] * 600_000
+                    output_tokens += visual["max_windows"] * 72_000
+                else:
+                    raise _invalid("analysis_coverage", "unsupported_plan")
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}

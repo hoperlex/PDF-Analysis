@@ -9,7 +9,7 @@ import { UNCONFIRMED_LABEL } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { StageReviewRequest } from '@/widgets/stage-text-evidence';
-import { StageExperimentalParameters } from '@/widgets/stage-v3-experimental';
+import { StageExperimentalParameters, StageV3Report } from '@/widgets/stage-v3-experimental';
 
 import { readCards, readVerdicts, STAGE_REVIEW_KEYS } from '../api/reads';
 import { CARRYOVER_WORDS, CLASS_WORDS, CATEGORY_WORDS, SYSTEM_WORDS, IMPORTANCE_WORDS, MATERIALITY_WORDS,
@@ -85,7 +85,7 @@ export function StageCardView({ card, draft, mayAct, mayRequestReview = mayAct, 
     {card.verdict?.decision === 'accepted' ? <p>Принято экспертом.</p> : <p><span className="am-badge am-badge--inert" data-stage-unconfirmed="">{UNCONFIRMED_LABEL}</span></p>}
     <p>Система: {SYSTEM_WORDS[card.system]}</p>
     <p>{MATERIALITY_WORDS[card.materiality ?? 'unknown']} · Важность: {IMPORTANCE_WORDS[card.importance ?? 'unknown']}</p>
-    <StageExperimentalParameters experimental={card.experimental} />
+    <StageExperimentalParameters experimental={card.experimental} card={card} onOpenEvidence={onOpenEvidence} />
     <div className={styles.sides}>
       <CardSide side="left" card={card} onOpenEvidence={onOpenEvidence} />
       <CardSide side="right" card={card} onOpenEvidence={onOpenEvidence} />
@@ -191,6 +191,7 @@ function StageChangesBody({ runId, mayAct, onOpenEvidence, onOpenRawDifference, 
     {message === null ? null : <ErrorState title="Изменения не открылись или решение не сохранено" detail={message.detail} correlationId={message.correlationId} />}
     {mayAct ? <label><input type="checkbox" checked={expertMode} onChange={(event) => setExpertMode(event.target.checked)} />Экспертная оценка</label> : null}
     {cards.data?.cards.length === 0 ? <EmptyState title="Карточек изменений пока нет" /> : null}
+    {cards.data === undefined ? null : <StageV3Report runId={runId} cards={cards.data.cards} run={run.data} onOpenEvidence={onOpenEvidence} />}
     <StageHighLevelChanges runId={runId} cards={cards.data?.cards ?? []}
       running={run.data !== undefined && ['queued', 'running'].includes(run.data.state)} completed={run.data?.state === 'completed'} onOpenEvidence={onOpenEvidence} />
     {groupedCards(cards.data?.cards ?? []).map((section) => <details key={section.key} open={!section.collapsed}>

@@ -61,9 +61,9 @@ function tables(reading: ExtendedRunReview): Table[] {
     ? [...new Set(item.source_ids.flatMap((id) => { const page = sourcePages.get(text(id)); return page === undefined ? [] : [page]; }))].join(', ') : '';
   const summary: Row[] = [
     ['Показатель', 'Значение'], ['Тип', 'ТЕХНИЧЕСКИЙ ПРЕДВАРИТЕЛЬНЫЙ ОТЧЁТ; не экспертное заключение'],
-    ['Прогон', reading.run_id], ['Состояние ответа', reading.status], ['План', result?.workflow_version],
+    ['Прогон', reading.run_id], ['Версия исходного PDF', result?.version_uid], ['Состояние ответа', reading.status], ['План', result?.workflow_version],
     ['Раздел', result?.section], ['Отпечаток рубрик SHA256', result?.rules_sha256], ['Происхождение', result?.source_provenance],
-    ['Покрытие', result?.coverage], ['Покрытие комплексной сверки текста (страницы)', result?.text_coverage], ['Прогресс окон', result?.window_progress], ['Базовый текстовый анализ', result?.primary_text_status],
+    ['Покрытие', result?.coverage], ['Покрытие комплексной сверки текста (страницы)', result?.text_coverage], ['Версия покрытия', result?.coverage_version], ['Покрытие процедур', result?.phase_coverage], ['Принятые лимиты пакетов процедур в окне', result?.phase_call_limits], ['Прогресс окон', result?.window_progress], ['Базовый текстовый анализ', result?.primary_text_status],
     ['Визуальный проход сохранён', result?.visual_phase_complete], ['Процедуры', result?.procedures],
     ['Глобальных кандидатов', objects(result?.observations).length], ['Записей с учётом окон', entries.length],
     ['Критика и уточнение', 'Только рекомендации модели. Исходные наблюдения сохранены, решение эксперта не подменяется.'],
@@ -101,10 +101,14 @@ function tables(reading: ExtendedRunReview): Table[] {
     for (const row of objects(window.critiques)) addCritic(`${scope} · critiques`, row.observation_id, row);
     for (const row of objects(window.corrections)) addCorrection(scope, row.observation_id, row);
   }
+  const batchRows: Row[] = [['Область', 'Ключ пакета', 'Окно', 'Процедура', 'Порядковый номер (с 1)', 'Состояние', 'Входных элементов', 'ID входных записей', 'ID источников', 'Физические страницы PDF (с 1)', 'Символов на входе', 'Диапазоны текстовых фрагментов (не PDF-координаты)', 'Ограничение (код)']];
+  const addBatch = (scope: string, row: RecordValue, windowId?: unknown) => batchRows.push([scope, row.batch_key, row.window_id ?? windowId, row.procedure, typeof row.index === 'number' ? row.index + 1 : '', row.status, row.input_count, row.input_ids, row.source_ids, row.page_numbers, row.input_characters, row.context_ranges, row.reason]);
+  for (const row of objects(result?.batches)) addBatch('Общий свод', row);
+  for (const window of windows) for (const row of objects(window.batches)) addBatch('Квитанция окна', row, window.window_id);
   const sources: Row[] = [['Область', 'ID источника', 'Тип источника', 'Вид данных', 'Физическая страница PDF (с 1)', 'Версия PDF', 'SHA256 изображения/слоя', 'SHA256 текста', 'Координаты как сохранены', 'Цитата', 'Происхождение цитаты']];
   for (const { scope, item } of sourceEntries) sources.push([scope, item.source_id, item.source_type ?? item.source_kind, item.kind,
     typeof item.page_number === 'number' && Number.isSafeInteger(item.page_number) && item.page_number > 0 ? item.page_number : '',
-    item.version_uid, item.crop_sha256 ?? item.artifact_sha256, item.text_sha256, item.bbox_norm ?? item.box, item.quote, item.quote_source]);
+    text(item.version_uid) || text(result?.version_uid), item.crop_sha256 ?? item.artifact_sha256, item.text_sha256, item.bbox_norm ?? item.box, item.quote, item.quote_source]);
   const windowRows: Row[] = [['Окно', 'Порядковый номер (с 1)', 'Состояние окна', 'Визуальный проход сохранён (не всё окно)', 'Покрытие', 'ID процедуры', 'Название процедуры', 'Состояние процедуры', 'Причина']];
   for (const window of windows) {
     const prefix = [window.window_id, typeof window.index === 'number' ? window.index + 1 : '', window.status, window.visual_phase_complete, window.coverage];
@@ -117,7 +121,7 @@ function tables(reading: ExtendedRunReview): Table[] {
   rawChunks(raw).forEach((chunk, index) => rawRows.push([index + 1, chunk]));
   return [{ name: 'Summary', rows: summary }, { name: 'Candidates', rows: candidates }, { name: 'Critic', rows: critics },
     { name: 'Corrections', rows: corrections }, { name: 'Sources', rows: sources }, { name: 'Norms', rows: norms },
-    { name: 'Windows', rows: windowRows }, { name: 'RawJSONchunks', rows: rawRows }];
+    { name: 'Windows', rows: windowRows }, { name: 'Batches', rows: batchRows }, { name: 'RawJSONchunks', rows: rawRows }];
 }
 
 const CRC_TABLE = new Uint32Array(256);

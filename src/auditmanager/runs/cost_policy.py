@@ -70,6 +70,10 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                         or not isinstance(rules, str) or len(rules) != 64
                         or any(character not in "0123456789abcdef" for character in rules)):
                     raise ValueError()
+                if "coverage_version" in extended or "phase_call_limits" in extended:
+                    from auditmanager.analysis.public import validate_extended_coverage_policy
+                    if not validate_extended_coverage_policy(extended):
+                        raise ValueError()
             else:
                 raise ValueError()
         if (not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)
