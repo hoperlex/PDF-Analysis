@@ -1,40 +1,9 @@
-"""The comparison envelope: the admission rules for a plain PDF that is read for comparison only.
+"""Validate a plain comparison PDF before any version is published.
 
-`CMP-INGEST-01`, ADR-0025 decision 11 and the addendum of 2026-10-27 item 3. The portal-bundle envelope
-(:mod:`auditmanager.ingest.envelope`) refuses a page of more than 400 000 drawing elements, which is five times
-the largest page it was measured on (75 486, the owner's portal export). The real set that `CMP-MEASURE-01A`
-measured has a page of **536 426** (``v1.pdf`` p. 7, 2102 x 594 mm; 13 of its 59 pages are above 75 486), so the
-portal rule would refuse the very sets this module is for. A comparison upload is read, rendered and extracted
-only in ceilinged child processes (decisions 8 and 9), where an overrun is a typed ``RENDER_FAILED`` on that page
-and never a crash of the API; so the per-page element limit is the comparison path's own, **set from the
-measurement**, and the portal envelope is not touched (it is a different module and a different caller).
-
-========================== ============ ============ ==========================================================
-limit                      portal       comparison   basis
-========================== ============ ============ ==========================================================
-file bytes                 250 MiB      250 MiB      one bound for every PDF the product stores (R-116)
-pages                      1 to 500     1 to 500     ``ck_document_version_page_count``
-page elements              400 000      **1 000 000** 1.86 times the measured maximum (536 426); the portal figure
-                                                      is 5.3 times *its* maximum
-page characters            200 000      200 000      unchanged: the real set's text pages are far below it
-document elements          8 000 000    8 000 000    unchanged: the real set's heaviest file is about 2.4 M
-document characters        20 000 000   20 000 000   unchanged
-reader address space       512 MiB      **768 MiB**  decision 8: the scan child of the measurement ran at 768 MiB
-reader CPU and wall clock  60 s         **120 s**    a 26-page real file is read in seconds; 500 heavy pages are not
-========================== ============ ============ ==========================================================
-
-Every other rule is the portal envelope's, unchanged and in its order: a plain base name for the declared name
-(validated where the name is given), a PDF header, the size bound before any parse, no encryption, the page
-count, then per page the element and character ceilings. The **text rule is not applied**: a page with no text
-layer (a scan, a drawing whose letters are outlines) is admitted and read as an image only, and the proposal says
-so (``scan_without_text``); that is the point of «Сравнение версий». The second program the portal path starts
-(``stage_reader``, which asks ``pypdf`` and ``pdfplumber`` to open the document the way a *run* will) is not
-started: no run reads a comparison-only version, and the comparison's own readers run page by page in the
-profile children (`CMP-PROFILE-01`), where a page they cannot read is ``RENDER_FAILED`` on that page.
-
-The program that does the work is the **same** :mod:`auditmanager.ingest.pdf_reader` the portal path starts, run
-with these figures; a refusal keeps the field, constraint and message of the portal's own (``_refusal_for``), so
-a reviewer reads one wording for one fault.
+The temporary statistics intake raises numeric size, page, text, drawing,
+reader-memory and reader-time ceilings to representation limits. PDF magic,
+encryption, parseability and immutable facts are still checked. The original
+ADR-0025 policy values are preserved in its decision record for rollback.
 """
 
 from __future__ import annotations
@@ -75,12 +44,12 @@ COMPARISON_POLICY: Final[ComparisonEnvelopePolicy] = ComparisonEnvelopePolicy(
     max_bytes=_portal.MAX_BYTES,
     min_pages=_portal.MIN_PAGES,
     max_pages=_portal.MAX_PAGES,
-    page_elements=1_000_000,
+    page_elements=2**63 - 1,
     page_characters=_portal.PAGE_CHARACTERS_MAX,
     document_elements=_portal.DOCUMENT_ELEMENTS_MAX,
     document_characters=_portal.DOCUMENT_CHARACTERS_MAX,
-    address_space=768 * 1024 * 1024,
-    seconds=120,
+    address_space=2**63 - 1,
+    seconds=2**31 - 1,
 )
 
 

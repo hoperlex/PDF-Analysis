@@ -184,7 +184,7 @@ def test_the_two_server_bodies_do_not_drift() -> None:
 
 def test_the_drift_check_can_fail() -> None:
     """The mutation this guard exists for, put in front of the same function."""
-    mutated = TLS_BLOCK.read_text().replace("proxy_read_timeout 300s;", "proxy_read_timeout 30s;")
+    mutated = TLS_BLOCK.read_text().replace("proxy_read_timeout 86400s;", "proxy_read_timeout 30s;")
     assert mutated != TLS_BLOCK.read_text()
     assert application_body(PLAIN.read_text()) != application_body(mutated)
 

@@ -66,15 +66,11 @@ def test_the_default_policy_is_the_portal_policy_and_it_is_nothing_but_the_porta
 
 def test_the_portal_bounds_are_the_ruled_ones() -> None:
     assert ba.MAX_ENTRIES == 8
-    assert ba.TOTAL_BYTES == 300 * MiB
-    assert ba.MAX_RATIO == 100
-    assert ba.MEMBER_BYTES == 250 * MiB
-    assert ba.TEXT_MEMBER_BYTES == 16 * MiB
-    assert ba.BLOCKS_MEMBER_BYTES == 4 * MiB
-    assert ba.STAMP_AUDIT_BYTES == 4 * MiB
+    assert ba.TOTAL_BYTES == ba.MAX_RATIO == ba.MEMBER_BYTES == 2**63 - 1
+    assert ba.TEXT_MEMBER_BYTES == ba.BLOCKS_MEMBER_BYTES == ba.STAMP_AUDIT_BYTES == 2**63 - 1
     assert ba.DEFAULT_LIMITS == ba.BundleLimits(
-        member_bytes=250 * MiB, text_member_bytes=16 * MiB, blocks_member_bytes=4 * MiB,
-        stamp_audit_bytes=4 * MiB, total_bytes=300 * MiB, ratio=100, entries=8,
+        member_bytes=2**63 - 1, text_member_bytes=2**63 - 1, blocks_member_bytes=2**63 - 1,
+        stamp_audit_bytes=2**63 - 1, total_bytes=2**63 - 1, ratio=2**63 - 1, entries=8,
     )
 
 
@@ -103,14 +99,11 @@ def test_a_committed_bundle_is_read_the_same_with_the_default_and_with_the_porta
         (build(pdf("a.pdf"), pdf("A.pdf")), "bundle_duplicate_member",
          "Two members of the archive have the same name."),
         (build(pdf("a.pdf")), "bundle_member_set", None),
-        (build(entry("a.pdf", PDF_HEADER, declared_size=300 * MiB), entry("a_blocks.json", b"{}"),
-               entry("a_results.md", b"x")), "bundle_member_size",
-         "A member of the archive is larger than a portal bundle allows."),
         (build(z.directory("a/"), pdf("a/b.pdf")), "bundle_directory_entry",
          "The archive holds a directory entry, which a portal bundle never does."),
         (b"%PDF-1.7 a bare pdf", "portal_bundle_required", None),
     ],
-    ids=["entry-count", "name", "symlink", "encrypted", "duplicate", "member-set", "member-size",
+    ids=["entry-count", "name", "symlink", "encrypted", "duplicate", "member-set",
          "directory", "bare-pdf"],
 )
 def test_the_portal_still_refuses_in_its_own_words(

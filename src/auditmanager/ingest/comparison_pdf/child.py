@@ -92,7 +92,7 @@ def run_child(
     )
     timed_out = False
     try:
-        output, _ = child.communicate(timeout=wall_seconds)
+        output, _ = child.communicate(timeout=None if wall_seconds >= 2**31 - 1 else wall_seconds)
     except subprocess.TimeoutExpired:
         timed_out = True
         child.kill()

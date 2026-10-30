@@ -335,7 +335,7 @@
           "documents"
         ],
         "summary": "Upload one portal bundle and publish an immutable document version.",
-        "description": "The whole ingest path. The body is one portal bundle: a ZIP, recognised by its magic bytes whatever label the browser sends, holding exactly one `<stem>.pdf`, one `<stem>_blocks.json` and one `<stem>_results.md`, and optionally one `<stem>_results.html` (kept as a digest only: never stored, served or rendered) and one `<stem>_stamp_audit.json` (stored, and not used in analysis). All members share one stem. Anything else in the archive is refused, and so is any archive that is not what it claims to be (names that escape, links, encrypted members, a compression ratio above the bound, sizes beyond the bounds).\n\nA bare PDF is refused with `validation_failed` and the constraint `portal_bundle_required`; the message says how to obtain the bundle. The PDF must be unencrypted and at most 500 pages, and the whole upload at most 250 MiB; every page must carry an embedded text layer or at least one portal block. Every refusal is `validation_failed` (or `storage_integrity_error`) with a `constraint` detail, and the registered values are in the domain error catalog (`error-codes.json`, `validation_failed`).\n\nOCR is always marked: the portal's recognised text is kept as its own artifact with quality flags and is never merged into the PDF's text layer (R-116). The portal's descriptions of images are shown, marked, and never used in analysis (R-117). The upload runs no analysis. Which analysis a version gets is decided later, from the classification an expert confirms for it (`classifyDocumentVersion`, one of the fifteen sections): `startRun` routes the fourteen sections that have a registered text profile to their profile and refuses an unclassified version or a section with none, and АР is analysed only by the six-Run group (`startArV3BetaGroup`). A stated `section` here is the legacy label: it is stored and counted, it neither selects nor refuses an analysis, and it never makes a version classified (D-110, closed by W59-SECTION-SEAL-01).\n\nA third upload in flight in one API process is refused before its body is read: `503 dependency_unavailable` with `details.dependency: upload_capacity` and a `Retry-After` header. Nothing was created; the caller sends the same upload again later.\n\nOn success the version and its input manifest are immutable: there is no update or delete endpoint for either, and the database refuses both. The manifest holds one entry per stored member: `source.document`, `source.structured_companion`, `source.markdown` and, when the bundle had one, `source.stamp_audit`.",
+        "description": "The whole ingest path. The body is one portal bundle: a ZIP, recognised by its magic bytes whatever label the browser sends, holding exactly one `<stem>.pdf`, one `<stem>_blocks.json` and one `<stem>_results.md`, and optionally one `<stem>_results.html` (kept as a digest only: never stored, served or rendered) and one `<stem>_stamp_audit.json` (stored, and not used in analysis). All members share one stem. Anything else in the archive is refused, and so is any archive that is not what it claims to be (names that escape, links, encrypted members, a compression ratio above the bound, sizes beyond the bounds).\n\nA bare PDF is refused with `validation_failed` and the constraint `portal_bundle_required`; the message says how to obtain the bundle. The PDF must be unencrypted; the temporary statistics intake removes application size and page-count ceilings. Every page must carry an embedded text layer or at least one portal block. Every refusal is `validation_failed` (or `storage_integrity_error`) with a `constraint` detail, and the registered values are in the domain error catalog (`error-codes.json`, `validation_failed`).\n\nOCR is always marked: the portal's recognised text is kept as its own artifact with quality flags and is never merged into the PDF's text layer (R-116). The portal's descriptions of images are shown, marked, and never used in analysis (R-117). The upload runs no analysis. Which analysis a version gets is decided later, from the classification an expert confirms for it (`classifyDocumentVersion`, one of the fifteen sections): `startRun` routes the fourteen sections that have a registered text profile to their profile and refuses an unclassified version or a section with none, and АР is analysed only by the six-Run group (`startArV3BetaGroup`). A stated `section` here is the legacy label: it is stored and counted, it neither selects nor refuses an analysis, and it never makes a version classified (D-110, closed by W59-SECTION-SEAL-01).\n\nA third upload in flight in one API process is refused before its body is read: `503 dependency_unavailable` with `details.dependency: upload_capacity` and a `Retry-After` header. Nothing was created; the caller sends the same upload again later.\n\nOn success the version and its input manifest are immutable: there is no update or delete endpoint for either, and the database refuses both. The manifest holds one entry per stored member: `source.document`, `source.structured_companion`, `source.markdown` and, when the bundle had one, `source.stamp_audit`.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -7560,7 +7560,7 @@
           "comparison"
         ],
         "summary": "Declare an upload batch of plain PDFs for comparison.",
-        "description": "Declares the files of one batch under a project: for each a display name (a hint for the grouping proposal, never an identity), its size in bytes and its SHA-256, optionally its page count. Nothing is stored yet; the response names the batch, the part size (16 MiB, `ADR-0025` decision 10) and each file's identity, and the client then sends the parts. The limits of `ADR-0025` decision 9 -- at most 10 000 files, 100 document sets, 8 GiB and 10 000 declared pages, and the project's stored bytes -- are refused here, before the first part, as `422 validation_failed` with a registered `constraint` (`comparison_files_limit`, `comparison_sets_limit`, `comparison_batch_bytes_limit`, `comparison_batch_pages_limit`, `comparison_project_bytes_limit`); an account that already has an active batch, or an installation that already has two, is `409 conflict` (`conflict_reason: comparison_upload_active`). No error code is added. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written. `compare_after_preparation` («После подготовки сравнить все соседние версии», optional, absent means false) asks for the series of adjacent transitions to be queued for every set of the batch as soon as the set is prepared; until `CMP-SERIES-01` stores it, `true` answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and creates nothing.",
+        "description": "Declares the files of one batch under a project: for each a display name (a hint for the grouping proposal, never an identity), its size in bytes and its SHA-256, optionally its page count. Nothing is stored yet; the response names the batch, the part size (16 MiB, `ADR-0025` decision 10) and each file's identity, and the client then sends the parts. Temporary statistics intake removes the application limits on files, sets, batch bytes, declared pages and project bytes; the multipart store still has its technical part-count bound. Invalid declarations are refused as `422 validation_failed`; an account that already has an active batch, or an installation that already has two, is `409 conflict` (`conflict_reason: comparison_upload_active`). No error code is added. A keyed write: `Idempotency-Key` is required (`ADR-0025` decision 19). An expert's act (`role:expert`, `R-60`; an administrator without the expert role is refused). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written. `compare_after_preparation` («После подготовки сравнить все соседние версии», optional, absent means false) asks for the series of adjacent transitions to be queued for every set of the batch as soon as the set is prepared; until `CMP-SERIES-01` stores it, `true` answers `503 dependency_unavailable` (`details.dependency: comparison_series`) and creates nothing.",
         "security": [
           {
             "bearerAuth": []
@@ -15687,7 +15687,7 @@
             "required": true,
             "schema": {
               "type": "integer",
-              "maximum": 128,
+              "maximum": 10000,
               "minimum": 1,
               "title": "Part Number"
             }
@@ -21007,7 +21007,6 @@
               "schema": {
                 "type": "string",
                 "format": "binary",
-                "maxLength": 16777216,
                 "title": "Content"
               }
             }
@@ -22340,7 +22339,7 @@
           "file": {
             "type": "string",
             "format": "binary",
-            "description": "One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages."
+            "description": "One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. Temporary statistics intake removes application size and page-count ceilings."
           },
           "display_title": {
             "type": "string",
@@ -22365,7 +22364,7 @@
           "file": {
             "type": "string",
             "format": "binary",
-            "description": "One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. At most 250 MiB; the PDF at most 500 pages."
+            "description": "One portal bundle: a ZIP holding the PDF, its portal block list and its recognised-text markdown, and optionally the portal HTML and the stamp audit. Temporary statistics intake removes application size and page-count ceilings."
           }
         }
       },
@@ -22450,7 +22449,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Count"
           },
@@ -22826,7 +22824,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Count"
           },
@@ -22905,7 +22902,6 @@
             "oneOf": [
               {
                 "type": "integer",
-                "maximum": 500.0,
                 "minimum": 1.0
               },
               {
@@ -22918,7 +22914,6 @@
             "oneOf": [
               {
                 "type": "integer",
-                "maximum": 500.0,
                 "minimum": 1.0
               },
               {
@@ -23201,13 +23196,11 @@
           },
           "source_page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Source Page Number"
           },
           "target_page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Target Page Number"
           },
@@ -23489,7 +23482,6 @@
             "oneOf": [
               {
                 "type": "integer",
-                "maximum": 500.0,
                 "minimum": 1.0
               },
               {
@@ -23502,7 +23494,6 @@
             "oneOf": [
               {
                 "type": "integer",
-                "maximum": 500.0,
                 "minimum": 1.0
               },
               {
@@ -24162,13 +24153,11 @@
           },
           "source_page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Source Page Number"
           },
           "target_page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Target Page Number"
           },
@@ -24252,13 +24241,11 @@
           },
           "source_page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Source Page Number"
           },
           "target_page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Target Page Number"
           },
@@ -29194,7 +29181,6 @@
         "properties": {
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -29243,7 +29229,6 @@
           },
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -29606,7 +29591,6 @@
           },
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -29954,7 +29938,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Count"
           },
@@ -30782,7 +30765,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Count"
           },
@@ -31009,7 +30991,6 @@
           },
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -31518,7 +31499,6 @@
         "properties": {
           "page_number": {
             "type": "integer",
-            "maximum": 500,
             "minimum": 1
           },
           "char_start": {
@@ -31647,7 +31627,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500,
             "minimum": 1
           },
           "norms_snapshot_id": {
@@ -31670,11 +31649,9 @@
           "unread_pages": {
             "items": {
               "type": "integer",
-              "maximum": 500,
               "minimum": 1
             },
-            "type": "array",
-            "maxItems": 500
+            "type": "array"
           },
           "items": {
             "items": {
@@ -33692,7 +33669,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Count"
           }
@@ -34054,7 +34030,6 @@
           },
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -34175,7 +34150,7 @@
           "comparison_pdf"
         ],
         "title": "VersionUploadKind",
-        "description": "How a version reached the product. ``comparison_pdf`` is a plain PDF admitted for\ncomparison only (`Q-CMP-5`): no section analysis can start on it."
+        "description": "How a version reached the product. ``comparison_pdf`` is a plain PDF admitted through\ncomparison without a portal bundle. Ordinary section analysis can use its native PDF text and pages;\nportal-dependent operations still require a bundle."
       },
       "ApplyComparisonMatrixEditsRequest": {
         "properties": {
@@ -34736,7 +34711,6 @@
           },
           "page_count": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 0.0,
             "title": "Page Count"
           },
@@ -35346,7 +35320,6 @@
           },
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -38729,7 +38702,6 @@
               "$ref": "#/components/schemas/StageUploadFileDeclaration"
             },
             "type": "array",
-            "maxItems": 1000,
             "minItems": 1,
             "title": "Files"
           }
@@ -39362,7 +39334,6 @@
           },
           "page_number": {
             "type": "integer",
-            "maximum": 500.0,
             "minimum": 1.0,
             "title": "Page Number"
           },
@@ -39761,7 +39732,6 @@
               "$ref": "#/components/schemas/StageUploadFile"
             },
             "type": "array",
-            "maxItems": 1000,
             "title": "Files"
           },
           "candidates": {
@@ -39769,7 +39739,6 @@
               "$ref": "#/components/schemas/StageUploadCandidate"
             },
             "type": "array",
-            "maxItems": 1000,
             "title": "Candidates"
           },
           "created_at": {
@@ -39806,7 +39775,7 @@
           },
           "member_number": {
             "type": "integer",
-            "maximum": 1000.0,
+            "maximum": 2147483647.0,
             "minimum": 1.0,
             "title": "Member Number"
           },
@@ -39950,7 +39919,6 @@
           },
           "size_bytes": {
             "type": "integer",
-            "maximum": 2147483648.0,
             "minimum": 1.0,
             "title": "Size Bytes"
           },
@@ -40015,7 +39983,7 @@
           },
           "part_number": {
             "type": "integer",
-            "maximum": 128.0,
+            "maximum": 10000.0,
             "minimum": 1.0,
             "title": "Part Number"
           },

@@ -9,6 +9,7 @@ and the member's stable ordinal. Retry resumes the same upload and file rows.
 from __future__ import annotations
 
 import hashlib
+import contextlib
 import tempfile
 from typing import TYPE_CHECKING, BinaryIO
 
@@ -22,9 +23,9 @@ if TYPE_CHECKING:
     from .service import ComparisonUploadService
     from .views import UploadView
 
-MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
-MAX_EXPANDED_BYTES = 256 * 1024 * 1024
-MAX_PDFS = 100
+MAX_ARCHIVE_BYTES = 2**63 - 1
+MAX_EXPANDED_BYTES = 2**63 - 1
+MAX_PDFS = 2**31 - 1
 ZIP_POLICY = SetPolicy(total_bytes=MAX_EXPANDED_BYTES)
 
 
@@ -42,20 +43,27 @@ def import_zip(
 ) -> UploadView:
     from .service import DeclaredFileRequest
 
-    # This single bounded read also works for a nonseekable request stream.
-    raw = source.read(MAX_ARCHIVE_BYTES + 1)
-    if not raw or len(raw) > MAX_ARCHIVE_BYTES:
-        raise _refuse('comparison_zip_raw_max_16_mib')
-    source_digest = hashlib.sha256(raw).hexdigest()
     # The installation lock bounds temporary expansion across concurrent callers;
     # the nested PDF service uses a different creation lock and owns its own commits.
     with session_scope(service._factory) as admission:
         admission.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'), {'key': 'comparison_zip_import:v1'})
-        import shutil
-        if shutil.disk_usage(tempfile.gettempdir()).free < MAX_EXPANDED_BYTES * 2:
-            raise _refuse('comparison_zip_temporary_space')
-        with tempfile.TemporaryFile() as archive:
-            archive.write(raw)
+        seekable = bool(getattr(source, 'seekable', lambda: False)())
+        archive_context = contextlib.nullcontext(source) if seekable else tempfile.TemporaryFile()
+        with archive_context as archive:
+            if seekable:
+                source.seek(0)
+            digest = hashlib.sha256()
+            size = 0
+            while chunk := source.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_ARCHIVE_BYTES:
+                    raise _refuse('comparison_zip_raw_size')
+                digest.update(chunk)
+                if not seekable:
+                    archive.write(chunk)
+            if size == 0:
+                raise _refuse('comparison_zip_empty')
+            source_digest = digest.hexdigest()
             archive.seek(0)
             # Use the same PDF envelope as ordinary comparison intake. read_pdf
             # also checks stamps, so a late refusal cannot publish a partial set.
@@ -64,7 +72,7 @@ def import_zip(
                 return result.facts
             with extract_pdf_set(archive, policy=ZIP_POLICY, envelope=envelope) as accepted:
                 if len(accepted.members) > MAX_PDFS:
-                    raise _refuse('comparison_zip_max_100_pdfs')
+                    raise _refuse('comparison_zip_pdf_count')
                 files = [DeclaredFileRequest(m.display_name[-255:], m.size, m.sha256, m.facts.page_count if m.facts else None)
                          for m in accepted.members]
                 upload = service.create_upload(

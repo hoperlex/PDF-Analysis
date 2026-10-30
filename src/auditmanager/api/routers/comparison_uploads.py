@@ -13,10 +13,12 @@ Every write carries a required ``Idempotency-Key``.
 
 from __future__ import annotations
 
+import tempfile
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Body, Header, Path, Query
+from fastapi import APIRouter, Body, Header, Path, Query, Request
 from pydantic import BaseModel, WithJsonSchema
+from starlette.concurrency import run_in_threadpool
 
 from auditmanager.api.routers.declarations import (
     CursorParam,
@@ -50,14 +52,18 @@ def _body(model: BaseModel) -> bytes:
 
 def build_comparison_upload_routes(router: APIRouter, uploads: ComparisonUploadPort) -> None:
     @router.post('/projects/{project_uid}/comparison-zip-uploads', operation_id='importComparisonZip', tags=_TAGS, status_code=201, response_model=models.ComparisonUpload,
+        openapi_extra={'requestBody': {'required': True, 'content': {'application/zip': {'schema': {'type': 'string', 'format': 'binary', 'title': 'Content'}}}}},
         responses={**success(201, 'Reviewed bounded ZIP imported as immutable PDF upload members.'), **envelope_responses(401,403,404,409,422,500,503)})
-    def import_comparison_zip(subject: CurrentSubject, project_uid: Annotated[models.ProjectUid, Path()],
-        content: Annotated[bytes, Body(media_type='application/zip', max_length=MAX_PART_BYTES), WithJsonSchema({'type':'string','format':'binary','maxLength':MAX_PART_BYTES})],
+    async def import_comparison_zip(subject: CurrentSubject, project_uid: Annotated[models.ProjectUid, Path()], request: Request,
         idempotency_key: RequiredIdempotencyKey,
         archive_name: Annotated[str, Header(alias='X-Archive-Name', max_length=255)] = '',
     ) -> WireResponse:
-        view = uploads.import_zip(project_uid=project_uid, content=content, user_uid=subject.user_uid,
-            idempotency_key=idempotency_key, archive_name=archive_name or None)
+        with tempfile.TemporaryFile() as content:
+            async for chunk in request.stream():
+                content.write(chunk)
+            content.seek(0)
+            view = await run_in_threadpool(uploads.import_zip, project_uid=project_uid, content=content,
+                user_uid=subject.user_uid, idempotency_key=idempotency_key, archive_name=archive_name or None)
         return json_response(201, _body(view))
 
     @router.post(

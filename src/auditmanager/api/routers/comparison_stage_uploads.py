@@ -30,7 +30,7 @@ _ProjectUid = Annotated[models.ProjectUid, Path()]
 _UploadId = Annotated[models.StageUploadId, Path()]
 _FileId = Annotated[models.StageUploadFileId, Path()]
 _CandidateId = Annotated[models.StageUploadCandidateId, Path()]
-_PartNumber = Annotated[int, Query(ge=1, le=128)]
+_PartNumber = Annotated[int, Query(ge=1, le=10000)]
 
 
 def _body(model: BaseModel) -> bytes:

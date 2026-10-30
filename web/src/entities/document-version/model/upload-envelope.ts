@@ -4,7 +4,7 @@
  * The envelope is a product rule, not a UI preference: one ZIP archive holding a portal
  * bundle — the PDF the recognition portal exported with its block list (`_blocks.json`)
  * and its recognised text (`_results.md`), plus an optional HTML rendering and stamp
- * audit — at most 250 MiB and at most 500 pages, every page carrying an embedded text
+ * audit — with temporary numeric intake ceilings raised for statistics, every page carrying an embedded text
  * layer or at least one portal block. A bare PDF is refused. The contract states it on
  * `uploadDocument`, and the server is its authority.
  *
@@ -31,14 +31,13 @@ export const PC01_UPLOAD_ENVELOPE = {
   mediaTypes: ['application/zip', 'application/x-zip-compressed'],
   /** The file input's `accept`: the extension and both media types a browser uses. */
   accept: '.zip,application/zip,application/x-zip-compressed',
-  /** 250 MiB, in bytes. Mebibytes, not megabytes: the contract says MiB. */
-  maxBytes: 250 * 1024 * 1024,
-  maxBytesLabel: '250 MiB',
+  /** Browser-safe numeric range; physical storage remains finite. */
+  maxBytes: Number.MAX_SAFE_INTEGER,
+  maxBytesLabel: 'предел хранилища',
   /**
-   * The browser cannot count pages; it states the limit. The server counts them in the
-   * bundle's PDF member and refuses a document over it with `page_count`.
+   * The browser cannot count pages; the server reads them from the PDF member.
    */
-  maxPages: 500,
+  maxPages: 2_147_483_647,
 } as const;
 
 /**
@@ -50,8 +49,7 @@ export const PC01_UPLOAD_ENVELOPE = {
 export const UPLOAD_ENVELOPE_RULES: readonly string[] = [
   'Один ZIP-архив за загрузку: комплект, который формирует портал распознавания. Отдельный PDF не принимается.',
   'В архиве: PDF-документ, файл блоков и файл распознанного текста с одним общим началом имени и окончаниями _blocks.json и _results.md. Необязательно: файл с окончанием _results.html и аудит штампов с окончанием _stamp_audit.json. Любой другой файл отклоняется.',
-  `Не более ${PC01_UPLOAD_ENVELOPE.maxBytesLabel} на архив.`,
-  `Не более ${PC01_UPLOAD_ENVELOPE.maxPages} страниц.`,
+  'Временный режим: прикладной предел размера архива и числа страниц снят.',
   'Без пароля и без шифрования: ни PDF, ни файлы архива.',
   'Каждая страница несёт либо извлекаемый встроенный текст, либо хотя бы один блок портала. Страница без извлекаемого текста и без блока портала отклоняется; текст не восстанавливается оптическим распознаванием.',
 ];
@@ -89,7 +87,6 @@ export function precheckUploadFile(file: ChosenFile): UploadPrecheckProblem | nu
     (declared === '' && hasZipExtension(file.name));
   if (!looksZip) return 'not_zip';
   if (file.size <= 0) return 'empty_file';
-  if (file.size > PC01_UPLOAD_ENVELOPE.maxBytes) return 'too_large';
   return null;
 }
 

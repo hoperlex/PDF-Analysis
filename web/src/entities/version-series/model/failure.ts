@@ -61,12 +61,12 @@ export const COMPARISON_CONFLICT_SENTENCES: Readonly<Record<string, string>> = {
 
 /** `constraint`s of the comparison modules (`error-codes.json`, `validation_failed` notes). */
 export const COMPARISON_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> = {
-  comparison_files_limit: 'В одной загрузке больше 10 000 файлов. Ничего не создано.',
-  comparison_sets_limit: 'Файлы образуют больше 100 комплектов. Разделите загрузку.',
-  comparison_batch_bytes_limit: 'Заявленный объём загрузки больше 8 ГиБ. Ничего не создано.',
-  comparison_batch_pages_limit: 'В загрузке заявлено больше 10 000 страниц. Ничего не создано.',
+  comparison_files_limit: 'Число файлов превышает технический предел. Ничего не создано.',
+  comparison_sets_limit: 'Число комплектов превышает технический предел. Ничего не создано.',
+  comparison_batch_bytes_limit: 'Объём загрузки превышает технический предел. Ничего не создано.',
+  comparison_batch_pages_limit: 'Число страниц превышает технический предел. Ничего не создано.',
   comparison_project_bytes_limit:
-    'Вместе с тем, что проект уже хранит для сравнения, получилось бы больше 8 ГиБ. Ничего не создано.',
+    'Вместе с тем, что проект уже хранит для сравнения, превышен технический предел. Ничего не создано.',
   comparison_part_number: 'У этого файла не должно быть части с таким номером: размер файла требует меньше частей.',
   comparison_part_size:
     'Часть больше 16 МиБ, либо часть не последняя и короче размера части загрузки.',
@@ -81,7 +81,7 @@ export const COMPARISON_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> =
   required_together: 'Стадию и раздел указывают вместе или не указывают вовсе.',
   declared_page_count: 'Заявленное число страниц не совпало с числом страниц документа.',
   comparison_zip_unreadable: 'Это не ZIP-архив, либо его оглавление не удаётся прочитать в допустимых пределах.',
-  comparison_zip_entry_count: 'В архиве больше 1 000 записей вместе с вложенным архивом.',
+  comparison_zip_entry_count: 'Число записей архива превышает технический предел.',
   comparison_zip_member_name: 'В архиве есть имя с абсолютным путём, буквой диска, обратной косой чертой или «..».',
   comparison_zip_symlink: 'В архиве есть символическая ссылка.',
   comparison_zip_encrypted_member: 'В архиве есть зашифрованный файл.',
@@ -89,9 +89,9 @@ export const COMPARISON_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> =
   comparison_zip_duplicate_member: 'В архиве повторяется имя файла, в том числе после приведения регистра.',
   comparison_zip_member_kind: 'В архиве есть файл, который не PDF и не вложенный архив первого уровня.',
   comparison_zip_nested_depth: 'Архив вложен в архив, который сам лежит в архиве: глубже одного уровня нельзя.',
-  comparison_zip_member_size: 'Один из файлов архива больше 250 МиБ.',
-  comparison_zip_total_size: 'Содержимое архива вместе больше 2 ГиБ.',
-  comparison_zip_compression_ratio: 'Файл или архив сжат больше чем в 100 раз.',
+  comparison_zip_member_size: 'Один из файлов архива превышает технический предел размера.',
+  comparison_zip_total_size: 'Содержимое архива превышает технический предел размера.',
+  comparison_zip_compression_ratio: 'Степень сжатия файла или архива превышает технический предел.',
   comparison_zip_empty: 'В архиве нет ни одного PDF-документа.',
   comparison_consent_required:
     'Нужно подтверждение передачи: отметьте строку согласия и повторите. Исполнителю ничего не передано.',
