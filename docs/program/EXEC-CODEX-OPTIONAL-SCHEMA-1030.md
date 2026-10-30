@@ -13,7 +13,8 @@ The Codex command now gives its strict output mode an `anyOf` with two complete 
 - `python3 -m py_compile tools/executor-runner/codex_answer.py`: passed.
 - `git diff --check`: passed.
 - Synthetic live Codex CLI call on the unmodified section schema: exit 1, `invalid_json_schema`, missing `omission` in `required`. The same synthetic task through the corrected adapter: exit 0, `{"observations":[]}`. No customer document or runner token was used in these calls.
-- The corrected adapter was installed at `/opt/pdf-analysis-codex-prod/codex_answer.py` after backing up the old file as `codex_answer.py.bak-20261030-optional-schema`. Installed and candidate SHA-256 match; systemd restart succeeded and the service is active. A new real Run is needed for product acceptance; the failed Run is terminal.
+- The corrected adapter was installed at `/opt/pdf-analysis-codex-prod/codex_answer.py` after backing up the old file as `codex_answer.py.bak-20261030-optional-schema`. Installed and candidate SHA-256 match; systemd restart succeeded and the service is active. The failed Run is terminal.
+- Post-fix, the owner started `run_01M666W9WQ1Z567K6PNWBRHFXM` with a section profile. The agent claimed four model tasks and the stand accepted all four answers (`state=answered`); the last was accepted at 10:54:32 UTC. The UI's final stage outcome had not yet been reported when this evidence was recorded.
 
 ## Integration and limits
 
