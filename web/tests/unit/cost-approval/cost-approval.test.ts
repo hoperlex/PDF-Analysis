@@ -37,4 +37,15 @@ describe('explicit finite cost approval', () => {
     expect(markup).toContain('вызовов: 1');
     expect(markup).not.toContain('checked');
   });
+
+  it('permits zero approval only for an unmetered reading', () => {
+    const render = (billing: 'metered' | 'unmetered') => renderToStaticMarkup(createElement(CostApproval, {
+      estimate: { ...costEstimate({ version_uid: 'ver_fixture' }), billing,
+        estimated_cost_micros: 0, recommended_ceiling_micros: 0 },
+      ceiling: '0', approved: true, disabled: false, onCeilingChange() {}, onApprovedChange() {},
+    }));
+    expect(render('metered')).toContain('лимит должен быть положительным');
+    expect(render('metered')).not.toContain('checked');
+    expect(render('unmetered')).toContain('checked');
+  });
 });

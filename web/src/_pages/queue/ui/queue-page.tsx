@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
-import { newIdempotencyKey } from '@/shared/api';
+import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
@@ -12,11 +12,11 @@ import {
 } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useCancelRun } from '@/features/cancel-run';
-import { useReauditRun } from '@/features/reaudit-run';
+import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
 import { ComparisonQueueBlock, ExecutionQueue } from '@/widgets/execution-queue';
-import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { CostApproval, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 
 interface RunIntent {
   readonly kind: 'cancel' | 'reaudit';
@@ -68,6 +68,8 @@ export function QueuePage() {
   const account = useMe();
   const cancel = useCancelRun();
   const reaudit = useReauditRun();
+  const reauditCost = useReauditCostApproval(intent?.kind === 'reaudit' ? intent.item.run_id : null,
+    intent?.kind === 'reaudit' ? intent.key : null);
   const priority = useSetJobPriority();
   const pause = usePauseExecution();
   const busy = cancel.isPending || reaudit.isPending || priority.isPending || pause.isPending;
@@ -75,6 +77,7 @@ export function QueuePage() {
   const readFailure = queue.error === null ? null : executionFailure(queue.error, false);
   const accountFailure = account.error === null ? null : executionFailure(account.error, false);
   const next = queue.data?.page.next_cursor ?? null;
+  const costFailure = reauditCost.error === null ? null : executionFailure(reauditCost.error, false);
 
   useEffect(() => {
     const refreshAge = () => setAsOf(Date.now());
@@ -97,7 +100,12 @@ export function QueuePage() {
       let run: RunStatus | null = null;
       switch (chosen.kind) {
         case 'cancel': run = await cancel.mutateAsync({ runId: chosen.item.run_id, idempotencyKey: chosen.key }); break;
-        case 'reaudit': run = await reaudit.mutateAsync({ runId: chosen.item.run_id, idempotencyKey: chosen.key }); break;
+        case 'reaudit': {
+          if (reauditCost.consent === undefined || reauditCost.pending) return;
+          run = await reaudit.mutateAsync({ runId: chosen.item.run_id,
+            idempotencyKey: reauditCost.idempotencyKey, costConsent: reauditCost.consent });
+          break;
+        }
         case 'priority': await priority.mutateAsync({
           jobId: chosen.item.job_id, priority: chosen.priority,
           idempotencyKey: chosen.key,
@@ -112,6 +120,12 @@ export function QueuePage() {
       setCursors([]);
     } catch (error) {
       if (mine !== sequence.current) return;
+      if (chosen.kind === 'reaudit' && error instanceof ApiError && error.details?.conflict_reason === 'run_cost_estimate_stale') {
+        reauditCost.clear();
+        setCommandFailure({ kind: 'conflict', detail: 'Оценка стоимости устарела. Получите новую оценку и подтвердите лимит снова.', correlationId: error.correlationId });
+        setCompleted(false);
+        return;
+      }
       setCommandFailure(executionFailure(error, true));
       setCompleted(false);
     }
@@ -166,7 +180,17 @@ export function QueuePage() {
       {intent !== null ? (
         <section role="group" aria-label="Подтверждение команды выполнения" data-execution-intent={intent.kind}>
           <p>{intentLabel(intent)}</p>
-          <button type="button" className="am-button" disabled={busy || (commandFailure !== null && commandFailure.kind !== 'unknown_outcome')} onClick={() => void execute(intent)}>
+          {intent.kind === 'reaudit' ? <>
+            <p className="am-note">Повторный аудит требует новой оценки и согласия. Исполнителя и текущие параметры определяет сервер по исходному прогону.</p>
+            {reauditCost.pending ? <LoadingState what="стоимость повторного аудита" /> : null}
+            {costFailure === null ? null : <ErrorState title="Стоимость повторного аудита не оценена" detail={costFailure.detail} correlationId={costFailure.correlationId} />}
+            {reauditCost.estimate === null ? null : <CostApproval estimate={reauditCost.estimate} ceiling={reauditCost.ceiling}
+              approved={reauditCost.approved} disabled={busy || reauditCost.pending}
+              onCeilingChange={reauditCost.setCeiling} onApprovedChange={reauditCost.setApproved} />}
+            <button type="button" className="am-button am-button--quiet" disabled={busy || reauditCost.pending}
+              onClick={() => { setCommandFailure(null); reauditCost.refresh(); }}>Обновить оценку стоимости</button>
+          </> : null}
+          <button type="button" className="am-button" disabled={busy || (intent.kind === 'reaudit' && (reauditCost.pending || reauditCost.consent === undefined)) || (commandFailure !== null && commandFailure.kind !== 'unknown_outcome')} onClick={() => void execute(intent)}>
             {commandFailure?.kind === 'unknown_outcome' ? 'Повторить с тем же ключом' : 'Подтвердить'}
           </button>{' '}
           <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={() => { sequence.current += 1; setIntent(null); setCommandFailure(null); }}>Отмена</button>

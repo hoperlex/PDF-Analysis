@@ -56,7 +56,7 @@ export interface CostApprovalProps {
 }
 
 export function CostApproval({ estimate, ceiling, approved, disabled, onCeilingChange, onApprovedChange }: CostApprovalProps) {
-  const sufficient = ceilingMicros(ceiling, estimate.estimated_cost_micros) !== null;
+  const sufficient = ceilingMicros(ceiling, Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros)) !== null;
   return <fieldset disabled={disabled} data-cost-approval>
     <legend>Стоимость перед запуском</legend>
     <p>{estimate.billing === 'unmetered'
@@ -70,7 +70,7 @@ export function CostApproval({ estimate, ceiling, approved, disabled, onCeilingC
         onChange={(event) => onCeilingChange(event.currentTarget.value)} />
     </label>
     <p className="am-note">Рекомендуемый лимит: {microsAsUsd(estimate.recommended_ceiling_micros)} USD. Лимит должен покрывать оценку; окончательный расход зависит от ответа провайдера.</p>
-    {sufficient ? null : <p role="alert">Введите конечный неотрицательный лимит не ниже оценки, до шести знаков после запятой.</p>}
+    {sufficient ? null : <p role="alert">Введите конечный лимит не ниже оценки, до шести знаков после запятой. Для тарифицируемого подключения лимит должен быть положительным.</p>}
     <label><input type="checkbox" checked={approved && sufficient} disabled={disabled || !sufficient}
       onChange={(event) => onApprovedChange(event.currentTarget.checked)} />
       Подтверждаю оценку и лимит для выбранных параметров
