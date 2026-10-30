@@ -8,6 +8,7 @@ cases load the real package root of this tree, whatever the profiles lane has pu
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,6 @@ import pytest
 
 from auditmanager.analysis.text.profile_registry import (
     AUTHORED_SECTIONS,
-    NOT_A_TEXT_PROFILE,
     PACKAGE_FORMAT,
     PACKAGES_ROOT,
     SECTION_CODES,
@@ -23,6 +23,7 @@ from auditmanager.analysis.text.profile_registry import (
     TextProfileUnavailable,
     load_text_profile_registry,
 )
+from auditmanager.analysis.text import profile_registry
 from auditmanager.analysis.text.prompt import (
     CATEGORIES,
     MAX_OUTPUT_TOKENS,
@@ -42,7 +43,7 @@ EXPECTATIONS = Path(__file__).resolve().parent / "text_profiles" / "section_prof
 
 
 def _expected_sections() -> dict[str, tuple[str, str]]:
-    """``code -> (status, profile_version)`` for every package of this tree (АР has none)."""
+    """``code -> (status, profile_version)`` for every package of this tree."""
     rows = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))["sections"]
     return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
@@ -96,6 +97,25 @@ def test_the_reference_profile_of_the_tests_is_the_removed_ar_constant_byte_for_
     assert V1_REFERENCE_PROFILE.content_sha256 == EXPECTED_CONTENT_SHA256
 
 
+def test_original_ar_refuses_changed_source_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    shutil.copytree(PACKAGES_ROOT / "ar", tmp_path / "packages" / "ar")
+    source = tmp_path / "source"
+    shutil.copytree(profile_registry._AR_SOURCE_ROOT, source)
+    monkeypatch.setattr(profile_registry, "_AR_SOURCE_ROOT", source)
+    (source / "role.md").write_text((source / "role.md").read_text("utf-8") + "\nchanged\n", encoding="utf-8")
+    with pytest.raises(TextProfileLoadError, match="ar_original_source_digest_mismatch: role.md"):
+        load_text_profile_registry(tmp_path / "packages")
+
+
+def test_original_ar_refuses_prompt_edit_under_same_identity(tmp_path: Path) -> None:
+    package = tmp_path / "ar"
+    shutil.copytree(PACKAGES_ROOT / "ar", package)
+    prompt = package / "system_prompt.md"
+    prompt.write_text(prompt.read_text("utf-8") + "changed\n", encoding="utf-8")
+    with pytest.raises(TextProfileLoadError, match="ar_original_prompt_digest_mismatch"):
+        load_text_profile_registry(tmp_path)
+
+
 def test_a_package_keeps_v1_contract_and_replaces_only_the_system_prompt(tmp_path: Path) -> None:
     _package(tmp_path, "kj", _profile("KJ"))
     registry = load_text_profile_registry(tmp_path)
@@ -138,8 +158,8 @@ def test_resolve_needs_the_exact_pair_and_no_longer_knows_the_retired_ar_pair(tm
         ("zz", _profile("ZZ"), "section_code_unknown"),
         ("kj", _profile("kj"), "section_code_unknown"),
         ("ov", _profile("KJ"), "package_directory_mismatch"),
-        ("ar", _profile("AR"), "section_code_not_a_text_profile"),
-        ("kj", _profile("AR"), "section_code_not_a_text_profile"),
+        ("ar", _profile("AR"), "ar_original_source_identity_invalid"),
+        ("kj", _profile("AR"), "package_directory_mismatch"),
         # `text-profile/2` became a real format (`SECTION-CATEGORY-OCR-01`); the unknown one is /3.
         ("kj", _profile("KJ", format="text-profile/3"), "format_invalid"),
         ("kj", _profile("KJ", status="approved"), "status_invalid"),
@@ -193,13 +213,13 @@ def test_private_entries_are_not_packages(tmp_path: Path) -> None:
     assert set(load_text_profile_registry(tmp_path).entries) == set()
 
 
-def test_the_tree_registers_without_error_and_without_an_ar_entry_or_package() -> None:
-    """The real root: whatever packages the tree holds load, and АР is not among them."""
+def test_the_tree_registers_without_error_with_the_original_ar_package() -> None:
+    """The real root has one package for each section, including original АР."""
     registry = load_text_profile_registry()
     expected = _expected_sections()
-    assert NOT_A_TEXT_PROFILE not in registry.entries
-    assert NOT_A_TEXT_PROFILE not in registry.section_profiles()
-    assert not (PACKAGES_ROOT / "ar").exists()
+    assert "AR" in registry.entries
+    assert "AR" in registry.section_profiles()
+    assert (PACKAGES_ROOT / "ar").exists()
     packages = set(registry.entries)
     assert packages - set(expected) == set(), "a registered package has no line in the expectations file"
     assert set(expected) - packages == set(), "a line of the expectations file has no registered package"
@@ -212,13 +232,11 @@ def test_the_tree_registers_without_error_and_without_an_ar_entry_or_package() -
         assert entry.profile.prompt_bundle.system_prompt == text.removesuffix("\n")
 
 
-def test_the_tree_registers_the_fourteen_other_sections_pb_included_and_not_ar() -> None:
-    """`PB-PROFILE-01`: fire safety is routed to a profile of its own, not refused.
-    `PROD-11-AR-V1-V2-REMOVAL-01`: АР is the one of the fifteen codes with no text profile."""
+def test_the_tree_registers_all_fifteen_sections_pb_and_ar_included() -> None:
+    """The original AR package joins the fourteen existing section profiles."""
     registry = load_text_profile_registry()
-    others = SECTION_CODES - {"AR"}
-    assert set(registry.entries) == others and len(registry.entries) == 14
-    assert registry.executable_sections() == others
+    assert set(registry.entries) == SECTION_CODES and len(registry.entries) == 15
+    assert registry.executable_sections() == SECTION_CODES
     entry = registry.entries["PB"]
     status, version = _expected_sections()["PB"]
     assert entry.status == status, "PB's status is the one the expectations file names"

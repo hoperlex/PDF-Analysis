@@ -111,18 +111,11 @@ export function VersionClassificationView({
             <code>{classification.confirmed_by_user_uid}</code>).
           </p>
           {profileUnavailable ? (
-            classification.section_code === 'AR' ? (
-              <p data-profile-unavailable-note="" data-profile-unavailable-section="AR">
-                У раздела АР нет текстового профиля: обычный прогон по этой версии будет
-                отклонён. Версия АР анализируется группой из шести проверок АР v3.
-              </p>
-            ) : (
-              <p data-profile-unavailable-note="">
-                Для этого раздела профиль анализа ещё не зарегистрирован: прогон по этой версии
-                будет отклонён, пока профиль не появится. Анализ по другому разделу вместо него не
-                запускается.
-              </p>
-            )
+            <p data-profile-unavailable-note="">
+              Для этого раздела профиль анализа ещё не зарегистрирован: прогон по этой версии
+              будет отклонён, пока профиль не появится. Анализ по другому разделу вместо него не
+              запускается.
+            </p>
           ) : null}
           {canCorrectClassification(roles) && onCorrecting !== undefined ? (
             correcting ? (

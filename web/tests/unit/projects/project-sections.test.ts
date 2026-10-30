@@ -96,9 +96,8 @@ describe('nothing a reviewer reads is Latin', () => {
 /**
  * `WEB-SECTION-COPY-01`. Until this lane the registry said that exactly one section, АР, was
  * «analysed». That described the original АР-only text prompt; after `W59-SECTION-SEAL-01` and
- * `PROD-11-AR-V1-V2-REMOVAL-01` it said the opposite of the server: fourteen sections have a text
- * profile, and АР has none because it is analysed by the group of six AR v3 checks. The registry now records
- * the route of every section, and the fourteen are held to the packages the server loads, so
+ * all fifteen sections, including АР, have a text profile. The registry records
+ * the route of every section, and the fifteen are held to the packages the server loads, so
  * that a package added or removed without the catalogue changing fails here and not on a screen.
  */
 const PROFILES_DIRECTORY = join(REPO_ROOT, 'src', 'auditmanager', 'analysis', 'text', 'profiles');
@@ -115,29 +114,26 @@ function packagedSectionCodes(): string[] {
     .sort();
 }
 
-function codesAnalysedBy(route: 'text_profile' | 'six_run_group'): string[] {
+function codesAnalysedBy(route: 'text_profile'): string[] {
   return PROJECT_SECTIONS.filter((section) => section.analysedBy === route).map((s) => s.code);
 }
 
-describe('every section is analysed by one of two routes, and the registry says which', () => {
-  it('sends АР to the group of six checks and the fourteen others to their text profile', () => {
-    expect(codesAnalysedBy('six_run_group')).toEqual(['AR']);
-    expect(codesAnalysedBy('text_profile')).toHaveLength(14);
-    expect(codesAnalysedBy('text_profile')).not.toContain('AR');
-    expect(codesAnalysedBy('six_run_group').length + codesAnalysedBy('text_profile').length)
-      .toBe(PROJECT_SECTIONS.length);
+describe('every section is analysed by its own text profile', () => {
+  it('routes all fifteen sections, including АР, to their text profile', () => {
+    expect(codesAnalysedBy('text_profile')).toHaveLength(15);
+    expect(codesAnalysedBy('text_profile')).toContain('AR');
+    expect(codesAnalysedBy('text_profile').length).toBe(PROJECT_SECTIONS.length);
   });
 
   it('holds the text-profile sections to the packages the server loads, in both directions', () => {
     const packaged = packagedSectionCodes();
     expect(codesAnalysedBy('text_profile').sort()).toEqual(packaged);
-    // A package for АР is refused by the server (`profile_registry.py`); the catalogue agrees.
-    expect(packaged).not.toContain('AR');
+    expect(packaged).toContain('AR');
   });
 
   it('keeps the section pickers’ default a real section', () => {
     expect(ANALYSED_SECTION_CODE).toBe('AR');
     expect(findProjectSection(ANALYSED_SECTION_CODE))
-      .toMatchObject({ code: 'AR', analysedBy: 'six_run_group' });
+      .toMatchObject({ code: 'AR', analysedBy: 'text_profile' });
   });
 });

@@ -1,0 +1,33 @@
+{
+  "format": "text-profile/2",
+  "section_code": "AR",
+  "analysis_profile_id": "ap_39RX8F43693KEFP4DGHP4965RC",
+  "prompt_bundle_id": "pb_0HP7C8WD8TJV158AX8GW24M3AX",
+  "profile_version": "1.0.0",
+  "status": "draft",
+  "categories": [
+    "internal_contradiction",
+    "explicit_placeholder",
+    "dimensions",
+    "layout",
+    "facade",
+    "roof",
+    "documentation"
+  ],
+  "title_ru": "Архитектурные решения",
+  "source": {
+    "repository": "PDF-proverka",
+    "commit": "3c99481719218b9cfa7560886529916646c61939",
+    "files": [
+      {"path": "prompts/disciplines/AR/config.json", "sha256": "ece283a76e7975a79c92b998eaf6e4babc129ca2c862dbd610633cccfc2d36b5"},
+      {"path": "prompts/disciplines/AR/role.md", "sha256": "fda944f74c4a0bd7cd77339f2c2f8519f55d59e899be03da212f93d2ad432203"},
+      {"path": "prompts/disciplines/AR/checklist.md", "sha256": "eccb7879023a126427fd61a0ed36237eb42bbebd4bec63c4009004247d7f3179"},
+      {"path": "prompts/disciplines/AR/triage_table.md", "sha256": "837ab2bbfdc0dbb1c0c62754326869fe2f94e4e09f0b510d9b6ed643de64385a"},
+      {"path": "prompts/disciplines/AR/project_params.md", "sha256": "5d827feac80cf85760af4a1d3f8509e15defb0df771c09ea83e475e172a80f35"},
+      {"path": "prompts/disciplines/AR/drawing_types.md", "sha256": "38ef910c11c71d03819a37c258933bcf4c851ac2cce31bace2681d8fde8fa45e"},
+      {"path": "prompts/disciplines/AR/finding_categories.md", "sha256": "e0591c94b2f385a837872f37f5ef32eb057131265c32283e5f732b2c1fa236ce"},
+      {"path": "prompts/disciplines/AR/norms_reference.md", "sha256": "15362a671e97f9ac97cb9b0b161acc0f047befaa9207a4185f1805d4ade55bad"},
+      {"path": "prompts/disciplines/AR/compact_strategy.md", "sha256": "5004efa53188a2423dedc3605ca261f628ff449e01dfbe18cf81cf3ef00ddea9"}
+    ]
+  }
+}

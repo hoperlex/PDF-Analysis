@@ -17,7 +17,7 @@
   "properties": {
     "contract_version": {
       "type": "string",
-      "const": "1.12.0"
+      "const": "1.13.0"
     },
     "event_id": {
       "type": "string",

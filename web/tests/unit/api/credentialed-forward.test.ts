@@ -799,7 +799,7 @@ describe('the forward answers an ErrorEnvelope even when the API never did', () 
     expect(body.error_code).toBe('dependency_unavailable');
     // The catalog pins this one retryable, and the envelope is where the client reads it.
     expect(body.retryable).toBe(true);
-    expect(body.contract_version).toBe('1.12.0');
+    expect(body.contract_version).toBe('1.13.0');
     expect(body.correlation_id).toBe('cid-from-browser');
     // The credential must not appear in anything the browser can read.
     expect(JSON.stringify(body)).not.toContain(TOKEN);

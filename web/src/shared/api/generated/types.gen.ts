@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.12.0 (OpenAPI 3.1.0)
- *   sha256 c643581bd1e1c061d81e296cf577e2ab174fdb789e90a877286f0bb43d3229cc
+ *   AuditManager PC-01 API 1.13.0 (OpenAPI 3.1.0)
+ *   sha256 9cd30ad5172d89c138a5f33d54581b291359b407030e6e513adfb895ad2b020a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.12.0';
+export const CONTRACT_VERSION = '1.13.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'c643581bd1e1c061d81e296cf577e2ab174fdb789e90a877286f0bb43d3229cc';
+export const CONTRACT_DIGEST = '9cd30ad5172d89c138a5f33d54581b291359b407030e6e513adfb895ad2b020a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -546,8 +546,7 @@ export type AnalysisProfileSourceFile = {
  * ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
  * open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
  * lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
- * recorded, never hidden. АР has no status because it has no text profile
- * (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
+ * recorded, never hidden. The new original-source АР profile has ``draft`` status until expert review.
  */
 export const ANALYSIS_PROFILE_STATUS_VALUES = [
   'draft',
@@ -2415,7 +2414,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The single externally visible failure shape, mirroring urn:auditmanager:domain:error-envelope:v1. `retryable` is pinned to the catalog value for the reported code; a caller never infers it from the HTTP status or the message. */
 export type ErrorEnvelope = {
-  contract_version: "1.12.0";
+  contract_version: "1.13.0";
   correlation_id: CorrelationId;
   /** Safe scalar classifiers only, restricted to the safe_detail_keys the catalog declares for the reported code. The catalog's forbidden key set is rejected. */
   details?: {
