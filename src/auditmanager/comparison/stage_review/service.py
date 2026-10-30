@@ -275,7 +275,8 @@ class StageReviewService:
 
     def _counts(self, session: Session, run: Mapping[str, Any]) -> dict[str, int]:
         row = session.execute(text(
-            "SELECT count(*) AS total,count(*) FILTER(WHERE class_name='REVIEW') AS review "
+            "SELECT count(*) AS total,count(*) FILTER(WHERE class_name='REVIEW') AS review,"
+            "count(*) FILTER(WHERE class_name='PROJECT_CHANGE') AS project_changes "
             "FROM stage_change_card WHERE stage_chain_run_id=:run"
         ), {"run": run["stage_chain_run_id"]}).one()
         conflicts = session.execute(text(
@@ -289,7 +290,8 @@ class StageReviewService:
             "HAVING count(DISTINCT v.decision)>1)"
         ), {"run": run["stage_chain_run_id"], "pair": run["stage_pair_id"],
             "created": run["created_at"]}).scalar_one()
-        return {"total": int(row[0]), "review": int(row[1]), "conflicts": int(conflicts), "high_importance": 0}
+        return {"total": int(row[0]), "review": int(row[1]), "project_changes": int(row[2]),
+                "conflicts": int(conflicts), "high_importance": 0}
 
     def page(self, run_id: str, after: str | None = None, limit: int = 100
              ) -> tuple[tuple[dict[str, Any], ...], str | None, dict[str, int]]:
