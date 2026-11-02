@@ -371,6 +371,14 @@ services:
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
       AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
       AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
+      # `EXEC2-ENROLL-SSH-01` (ADR-0026 decision 7). Path A -- an agent installed over SSH from the UI -- is run
+      # by this service, which issues the enrollment grant and tells `install.sh` where the stand is, so it
+      # reads the SAME two values as the `api` (see the API service above for what each means): the stand's
+      # public origin, with the same default, and where the image keeps the agent package. The origin is never
+      # guessed: with neither it nor `ALPHA_CERT_NAME` set it is `https://`, which the worker refuses as no
+      # origin and the session fails (`enrollment_failed`).
+      AUDITMANAGER_PUBLIC_ORIGIN: ${AUDITMANAGER_PUBLIC_ORIGIN:-https://${ALPHA_CERT_NAME:-}}
+      AUDITMANAGER_AGENT_PACKAGE_DIR: ${AUDITMANAGER_AGENT_PACKAGE_DIR:-}
       # `AR-V3-BETA-PACK-INSTALL-01`. The same manifest the API reads; both services must name
       # the same file or a started group could not be executed.
       AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}

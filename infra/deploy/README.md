@@ -501,12 +501,27 @@ is a different listener (`Y3`: the number in that guard was once 200 here and wa
 
 An administrator installs the agent on a host with one copied command (path B) or over SSH (path A). The stand
 serves the package, exchanges a one-time enrollment secret for a runner token, and takes the agent's health.
-Two optional settings reach the `api` (`compose.server.yml` names them):
+Two optional settings reach the `api` **and the `worker`** (`compose.server.yml` names them, with the same
+defaults on both services: path A is executed by the worker, see below):
 
 | Variable | What it does | Unset or blank means |
 |---|---|---|
 | `AUDITMANAGER_PUBLIC_ORIGIN` | the stand's public origin, `https://host[:port]`, that the generated install command downloads the package from and the agent calls. It is the **only** source of that origin: the request's own `Host` is never used, because the web tier drops it and the guess would be the API's internal name | derived from the certificate name, `https://${ALPHA_CERT_NAME}`, unless it is set; set it for a stand reached through an SSH tunnel, a private name or a non-default port. With neither of the two set, or with a malformed value, issuing a grant is refused (`503 dependency_unavailable`, dependency `public_origin`) before anything is written |
 | `AUDITMANAGER_AGENT_PACKAGE_DIR` | the directory in the image that holds `auditmanager-agent-<version>.tar.gz` and its `.sha256` | `/app/agent-package`, where `infra/deploy/Dockerfile.api` puts the package `EXEC2-AGENT-01` builds |
+
+**Path A is run by the worker** (`EXEC2-ENROLL-SSH-01`, `src/auditmanager/executors/agent_install_runner.py`). The
+`worker` service, not the `api`, scans the host, opens the sealed SSH key, issues the enrollment grant and runs the
+package's own `install.sh` over SSH with `sudo -n`; so it needs the same two settings as the `api`
+(`AUDITMANAGER_PUBLIC_ORIGIN` tells `install.sh` where the stand is, `AUDITMANAGER_AGENT_PACKAGE_DIR` where the
+image keeps the package; the worker is built from the same image, so the default directory is there). What it
+needs beyond that is what an `ssh_command` connection already needs: the private key ring in `env/provider.env`
+(`AUDITMANAGER_SECRETS_KEYS`; without it a session fails as `secret_unreadable`) and a route from the worker
+container to the target host's SSH port. With no usable origin a session fails as `enrollment_failed`; the origin
+is never guessed. The target host passes the same destination rules as every executor destination
+(`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows them; a private range is refused as for an `ssh_command`
+connection, so a host on a private network is reached through a name or an address the rules accept). Rollback is
+to stop creating install sessions: nothing else runs, and a session left unfinished ends by itself after 30
+minutes.
 
 The package route (`GET /api/v1/runner/agent-package/<version>`) needs no credential: it is public code, and
 its integrity is the sha256 the install command carries. The stand re-hashes the archive against the `.sha256`
