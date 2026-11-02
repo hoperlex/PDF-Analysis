@@ -1,13 +1,19 @@
-# systemd unit for agent.py. Install as /etc/systemd/system/pdf-analysis-agent.service, then:
-#   sudo useradd --system --home-dir /opt/pdf-analysis-agent --shell /usr/sbin/nologin pdf-agent
+# systemd unit for agent.py. `install.sh` (the same script for the copied command and for the SSH install)
+# creates the service user, installs this file as /etc/systemd/system/pdf-analysis-agent.service and starts it.
+# By hand, the equivalent is:
+#   sudo useradd --system --user-group --create-home --home-dir /var/lib/pdf-analysis-agent --shell /usr/sbin/nologin pdf-agent
+#   sudo chmod 0700 /var/lib/pdf-analysis-agent
 #   sudo install -d -o root -g root -m 0755 /opt/pdf-analysis-agent /etc/pdf-analysis-agent
-#   sudo install -m 0644 agent.py runner_client.py /opt/pdf-analysis-agent/
+#   sudo install -m 0644 agent.py runner_client.py detect.py codex_answer.py claude_answer.py VERSION /opt/pdf-analysis-agent/
 #   sudo install -m 0644 agent.toml /etc/pdf-analysis-agent/agent.toml
 #   sudo install -m 0600 -o root -g root /dev/null /etc/pdf-analysis-agent/agent.env
 #   echo 'PDF_ANALYSIS_RUNNER_TOKEN=<token from the stand>' | sudo tee -a /etc/pdf-analysis-agent/agent.env >/dev/null
+#   sudo install -m 0644 pdf-analysis-agent.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now pdf-analysis-agent
-# agent.env is read by systemd as root before the service drops privileges, so the service user
-# never needs to read it and the token never appears on a command line.
+# agent.env is read by systemd as root before the service drops privileges, so the service user never needs to
+# read it and the token never appears on a command line. The service user's home, /var/lib/pdf-analysis-agent
+# (0700), is where the CLI logins of THAT user live (`codex login`, `claude auth login` run as it); the unit gives
+# the service write access to nothing else.
 
 [Unit]
 Description=PDF Analysis pull agent (executor channel)
@@ -20,10 +26,14 @@ User=pdf-agent
 Group=pdf-agent
 EnvironmentFile=/etc/pdf-analysis-agent/agent.env
 ExecStart=/usr/bin/python3 /opt/pdf-analysis-agent/agent.py --config /etc/pdf-analysis-agent/agent.toml
+# Where the CLIs are looked for (detect.py searches the same directories): the system's, and the service user's own.
+Environment=PATH=/var/lib/pdf-analysis-agent/.local/bin:/var/lib/pdf-analysis-agent/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+StateDirectory=pdf-analysis-agent
+StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=10
-# Exit 2 is a configuration error and exit 3 is a rejected (revoked or expired) token:
-# restarting cannot fix either, so systemd must not loop on them.
+# Exit 2 is a configuration error (no token in agent.env included) and exit 3 is a rejected (revoked or
+# expired) token: restarting cannot fix either, so systemd must not loop on them.
 RestartPreventExitStatus=2 3
 # Must exceed drain_seconds + wait_seconds of agent.toml.
 TimeoutStopSec=95
