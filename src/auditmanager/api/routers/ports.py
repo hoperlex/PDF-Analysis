@@ -194,8 +194,11 @@ class RunnerPort(Protocol):
     def revoke_token(
         self, *, connection_id: str, token_id: str, user_uid: str, idempotency_key: str
     ) -> models.RunnerTokenMetadata: ...
+    # EXEC2-PULL-01 (ADR-0026 decision 3): ``runner_instance_id`` is the agent process making the claim;
+    # the router passes it only when the request carries one.
     def claim_task(
-        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None
+        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None,
+        runner_instance_id: str | None = None,
     ) -> models.ClaimedExecutorTask | None: ...
     def read_image(
         self, *, runner: RunnerIdentity, task_id: str, blob_id: str

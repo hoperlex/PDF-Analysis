@@ -62,7 +62,7 @@ payloads (document text) and returns model answers. It never reaches PostgreSQL 
 Long poll. Request:
 
 ```json
-{"wait_seconds": 25, "max_images": 4}
+{"wait_seconds": 25, "max_images": 4, "runner_instance_id": "q3Zr8k0vXw2mN5bTjA9cLg"}
 ```
 
 `wait_seconds` is an integer in 0..25 (a value outside the range is `422`, never clamped
@@ -76,6 +76,14 @@ declared enough (and expires unclaimed if none does). **An absent value means 1*
 claim every runner sent before several images existed, so a runner that serves one image or
 none sends nothing and is handed no task of several. A runner that serves several declares how
 many; one that is nevertheless handed more fails the task with `image_input_unsupported`.
+
+`runner_instance_id` is optional, 8 to 64 characters of `A-Za-z0-9_-` (`EXEC2-PULL-01`, ADR-0026
+decision 3): the name of the **agent process** making the claim. An agent generates it at random
+when it starts (a restarted agent is a new instance) and sends it in every claim. The stand records
+it on the task it hands out, and a claim that names an instance is redelivered a held task (see the
+server notes below) **only if that instance claimed it**. A claim without the member behaves exactly
+as before, so `mcp_bridge.py` and every agent built before this member send nothing. A value
+outside the pattern is `422`.
 
 - **200** - a task, now claimed by this token:
 
@@ -124,6 +132,13 @@ Server notes (not required of runners): a claim by a token that already holds an
 claim SHOULD return that same task again (same payload, lease refreshed), so that a lost
 response or a restarted runner does not strand a task until the lease lapses. A token may
 hold at most the connection's `max claimed tasks`; beyond that the server answers `204`.
+The claims of one token are serialised by the stand (it locks the token's row for the length of
+the count and the claim), so two requests with one token never both pass the limit.
+
+An agent whose `concurrency` is above 1 against a connection whose `max claimed tasks` is 1 is
+handed its one held task again by every further claim. It therefore keeps the ids of the tasks it
+is working on and **never starts an id it is already working on**; it waits (at least 5 s) and
+claims again. It also claims only when it has a free local slot.
 
 ### 2.1a `getExecutorTaskImage` - `GET /api/v1/runner/tasks/{task_id}/images/{blob_id}`
 
@@ -213,8 +228,11 @@ limit (nginx zone, `EXEC-PULL-01` Work 4) is sized from that. Clients:
   to 10 % jitter before the next call of any kind;
 - on a network error or `5xx` back off 1 s, 2 s, 4 s … up to 60 s with jitter, and reset
   the backoff after the first success;
-- run one claim loop per token. Parallel claim loops on the same token are allowed up to
-  the connection's `max claimed tasks`.
+- run **one agent process per token** (v1). Several worker threads of that process may work
+  tasks at once, up to the connection's `max claimed tasks`; the process claims from one loop,
+  so its claims never overlap. Two processes that present one token are not a supported
+  topology: with `runner_instance_id` the stand does not redeliver one process's task to the
+  other, but each process still counts against the same limit.
 
 ## 4. operationIds
 
@@ -237,7 +255,8 @@ opaque string of `[A-Za-z0-9_-]{1,64}` and percent-encode it into the path.
 {
   "ClaimRequest": {"type": "object", "additionalProperties": false,
     "properties": {"wait_seconds": {"type": "integer", "minimum": 0, "maximum": 25},
-      "max_images": {"type": "integer", "minimum": 1, "maximum": 8}}},
+      "max_images": {"type": "integer", "minimum": 1, "maximum": 8},
+      "runner_instance_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$"}}},
   "ClaimedTask": {"type": "object", "additionalProperties": false,
     "required": ["task_id", "claim_expires_at", "deadline_at", "model", "system", "user_text", "output_schema"],
     "properties": {"task_id": {"type": "string"}, "claim_expires_at": {"type": "string", "format": "date-time"},
@@ -312,3 +331,22 @@ written, and decided the open points so:
 8. **Throttle.** The proxy counts 60 requests a minute (burst 30) per token on `/api/v1/runner/tasks/`
    and 300 a minute per address. A refused call is `429` with the `rate_limited` envelope and no
    `Retry-After` header; the client's 30 s default applies.
+
+## 8. `EXEC2-PULL-01`: one process per token, and `runner_instance_id`
+
+Nothing in sections 1 to 7 changed except the optional member of 2.1 and the sentence in section 3.
+The stand (ADR-0026 decision 3) decided:
+
+1. The claim locks the token's row (`SELECT … FROM executor_runner_token WHERE token_id = … FOR UPDATE`)
+   as the first statement of its transaction, before it counts the token's held claims, so the count
+   and the claim are one step per token. The order of locks is the token row, then task rows, nothing
+   else.
+2. The claimed task records the instance (`executor_task.claimed_by_instance_id`). It is set only
+   while a token holds the claim and cleared when the lease lapses and the task returns to `open`.
+3. At a limit of one, a claim that names an instance is redelivered only a task that instance claimed.
+   A task held by another instance, or by a claim that named none, is not handed to it: its lease
+   lapses and the task follows the re-open rule, so a restarted agent waits at most one lease for the
+   task its predecessor held. A claim that names none is redelivered the held task as before, and the
+   recorded instance is cleared. At a limit above one nothing is redelivered, as before.
+4. The agent keeps the ids of the tasks in work and does not start an id twice (2.1). One token is
+   served by one agent process; a multi-instance protocol for one token is a later decision.

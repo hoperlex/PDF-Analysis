@@ -239,6 +239,10 @@ RUNNING_STATES = {
     "stage_upload_candidate": ("confirmed", "admitting"),
     "stage_chain_run": ("queued", "running", "paused"),
     "stage_chain_step": ("queued", "running", "paused"),
+    # `D-215` (`EXEC2-PULL-01`): a task a runner holds. A run-call task is covered through its running
+    # Attempt; a standalone probe task (`origin='probe'`, no Attempt) is covered only by this entry. An
+    # `open` task is not running work: no runner has it, and the purge truncates it with the rest.
+    "executor_task": ("claimed",),
 }
 
 TEMPORARY_KEY_PREFIX = "temporary/"

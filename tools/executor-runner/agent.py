@@ -18,7 +18,9 @@ Rules kept here:
   configured command does so;
 * a model other than the one declared in the config is never claimed to have answered: a task
   that pins another model is failed with ``model_mismatch`` before any work starts;
-* a schema-invalid answer is failed with a typed reason, never retried silently.
+* a schema-invalid answer is failed with a typed reason, never retried silently;
+* one process serves one token (v1): it names itself in every claim (``runner_instance_id``, random per
+  process), claims only when a local slot is free, and never starts a task id it is already working on.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import argparse
 import base64
 import json
 import os
+import secrets
 import signal
 import subprocess
 import sys
@@ -63,6 +66,10 @@ DEFAULT_TOKEN_ENV = "PDF_ANALYSIS_RUNNER_TOKEN"
 DEADLINE_MARGIN_SECONDS = 5.0
 MAX_ANSWER_BYTES = 8 << 20
 SUBMIT_RETRY_BUDGET_SECONDS = 120.0
+#: After the stand hands back a task this process is still working on (a token whose limit is one is
+#: given its held task again), wait this long before claiming again: RUNNER_API.md 2.1's floor between
+#: claims that do not wait.
+DUPLICATE_DELIVERY_PAUSE_SECONDS = 5.0
 FORBIDDEN_KEY_EXACT = {"token", "secret", "password", "api_key", "apikey", "key", "bearer", "authorization"}
 FORBIDDEN_KEY_SUFFIXES = ("_token", "_secret", "_password", "_key")
 
@@ -77,6 +84,13 @@ KNOWN_KEYS = {
 
 class ConfigError(Exception):
     pass
+
+
+def new_instance_id() -> str:
+    """The name of this agent process in every claim (RUNNER_API.md 2.1): 22 url-safe characters,
+    random per process, so a restarted agent is a different instance and is not handed the claim its
+    predecessor held (that lapses and the task follows the stand's re-open rule)."""
+    return secrets.token_urlsafe(16)
 
 
 @dataclass
@@ -376,16 +390,38 @@ def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_k
 
 
 class Agent:
-    def __init__(self, cfg: Config, client: RunnerClient, api_key: str, err: Any) -> None:
+    def __init__(self, cfg: Config, client: RunnerClient, api_key: str, err: Any, instance_id: Optional[str] = None) -> None:
         self.cfg = cfg
         self.client = client
         self.api_key = api_key
         self._err = err
+        self.instance_id = instance_id or new_instance_id()
         self.stop = threading.Event()
         self.abort = threading.Event()
         self.auth_failed = threading.Event()
         self._workers: list[threading.Thread] = []
         self._log_lock = threading.Lock()
+        # The ids of the tasks a worker of this process is working on, guarded by its own lock: the
+        # claim loop adds an id before the worker starts and the worker removes it when it ends.
+        self._work_lock = threading.Lock()
+        self._in_work: set[str] = set()
+
+    def _enter_work(self, task_id: str) -> bool:
+        """Register a task as in work. ``False`` when it already is: the stand handed this process a
+        task it is still working on, which must not be started a second time."""
+        with self._work_lock:
+            if task_id in self._in_work:
+                return False
+            self._in_work.add(task_id)
+            return True
+
+    def _leave_work(self, task_id: str) -> None:
+        with self._work_lock:
+            self._in_work.discard(task_id)
+
+    def in_work(self) -> frozenset[str]:
+        with self._work_lock:
+            return frozenset(self._in_work)
 
     def log(self, message: str) -> None:
         text = self.client.scrub(message)
@@ -407,13 +443,15 @@ class Agent:
         claimed = 0
         self.log(
             f"started: origin={self.client.origin} mode={self.cfg.mode} declared_model={self.cfg.declared_model} "
-            f"concurrency={self.cfg.concurrency} max_tasks={max_tasks if max_tasks else 'unlimited'}"
+            f"concurrency={self.cfg.concurrency} instance={self.instance_id} "
+            f"max_tasks={max_tasks if max_tasks else 'unlimited'}"
         )
         while not self.stop.is_set() and not self.auth_failed.is_set() and (not max_tasks or claimed < max_tasks):
-            if not slots.acquire(timeout=0.5):
+            if not slots.acquire(timeout=0.5):  # claim only with a free local slot
                 continue
             try:
-                task = self.client.claim(self.cfg.wait_seconds, self.cfg.declared_max_images)
+                task = self.client.claim(
+                    self.cfg.wait_seconds, self.cfg.declared_max_images, runner_instance_id=self.instance_id)
             except RunnerAuthError:
                 slots.release()
                 self.auth_failed.set()
@@ -435,6 +473,13 @@ class Agent:
                 slots.release()
                 if self.cfg.wait_seconds == 0:
                     self.stop.wait(5.0)  # RUNNER_API.md 2.1: never poll faster than every 5 s without a wait
+                continue
+            if not self._enter_work(task["task_id"]):
+                # A token whose limit is one is given its held task again; this process is still
+                # working on it. Starting it twice would answer it twice.
+                slots.release()
+                self.log(f"{task['task_id']}: delivered again while still in work; not started a second time")
+                self.stop.wait(DUPLICATE_DELIVERY_PAUSE_SECONDS)
                 continue
             claimed += 1
             worker = threading.Thread(target=self._worker, args=(task, slots), name=task["task_id"], daemon=True)
@@ -541,6 +586,7 @@ class Agent:
             self._fail(task_id, f"agent_error: {type(error).__name__}")
         finally:
             done.set()
+            self._leave_work(task_id)  # before the slot: a task handed back later is a new piece of work
             slots.release()
 
     def _fetch_images(self, task: dict, budget: float, should_stop: Any) -> list[tuple[dict, bytes]]:
