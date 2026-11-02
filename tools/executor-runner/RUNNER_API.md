@@ -19,7 +19,8 @@ payloads (document text) and returns model answers. It never reaches PostgreSQL 
 - **Authentication.** `Authorization: Bearer <runner token>`. The token is opaque to the
   runner, one per `pull` connection, stored hashed by the stand, shown once, with an
   expiry and revocation. It is never put in a URL, a query string or a body, and a runner
-  never writes it to disk or a log.
+  never writes it to disk or a log. The one exception is `redeemExecutorEnrollment` (section 9.1),
+  whose bearer is a one-time enrollment secret that is exchanged for such a token.
 - **Bodies.** Requests with a body use `Content-Type: application/json; charset=utf-8`.
   Responses with a body are `application/json`. Request bodies are at most 1 MiB; a
   larger one is rejected `422 validation_failed`.
@@ -350,3 +351,100 @@ The stand (ADR-0026 decision 3) decided:
    recorded instance is cleared. At a limit above one nothing is redelivered, as before.
 4. The agent keeps the ids of the tasks in work and does not start an id twice (2.1). One token is
    served by one agent process; a multi-instance protocol for one token is a later decision.
+
+## 9. `EXEC2-AGENT-01`: enrollment and health (contract 1.15.0)
+
+Two operations outside `/api/v1/runner/tasks/`, added with the universal agent (ADR-0026 decisions 4 and 5). The
+clients are `RunnerClient.redeem_enrollment` and `RunnerClient.report_health`; the stand's side is
+`EXEC2-ENROLL-01`. Both follow section 1 (JSON bodies, `ErrorEnvelope`, no redirects, the credential never in a
+URL or a log) and neither is reachable with a user session.
+
+| operationId | Method and path | Bearer |
+| --- | --- | --- |
+| `redeemExecutorEnrollment` | `POST /api/v1/runner/enroll` | the enrollment secret |
+| `reportRunnerHealth` | `POST /api/v1/runner/health` | the runner token |
+
+### 9.1 `redeemExecutorEnrollment` - `POST /api/v1/runner/enroll`
+
+An administrator issues a one-time **enrollment secret** for a `pull` connection (`issueExecutorEnrollment`). It is
+shown once with the install command and is stored by the stand as a hash only. It has the shape
+`ame_<8 lower-case alphanumerics>_<43 of A-Za-z0-9_->`, expires after **15 minutes**, is single use and is bound to
+one connection. The agent exchanges it for a runner token:
+
+```http
+POST /api/v1/runner/enroll
+Authorization: Bearer ame_k3j9x2mq_…
+Content-Type: application/json; charset=utf-8
+
+{"runner_instance_id": "Qx7…", "agent_version": "0.9.0"}
+```
+
+`runner_instance_id` (required, `^[A-Za-z0-9_-]{8,64}$`) names the install; `agent_version` is optional (the contract's
+`^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$`). The secret is the bearer of this call only: the four task operations and
+`reportRunnerHealth` refuse it as they refuse any wrong token, and this operation refuses a runner token.
+
+- **201** - `{"token": "amr_…", "runner_token": {…}}` (`IssuedRunnerToken`). `token` is 56 characters and is **shown
+  once**; `runner_token` is the token's metadata (`RunnerTokenMetadata`, no secret). The runner stores the token and
+  nothing else of the answer, and from then on uses it as in sections 1 to 8.
+- **The repeat.** A repeat of the call with the **same `runner_instance_id` inside the 15-minute window** is
+  idempotent for the runner that lost the answer: the stand **revokes the token it minted before and returns a fresh
+  one**, so the runner stores only the newest. The stand never stores the secret's value.
+- **409** `conflict` with `conflict_reason` `enrollment_redeemed` - the secret was redeemed by **another** instance, or
+  this instance repeats **after the window**; `connection_archived` is refused the same way. The runner does not retry;
+  a new enrollment is issued in the stand UI. (A host that already holds a working token keeps it.)
+- **401** `authentication_required` - the secret is unknown, **expired** or **revoked** (the answer does not say
+  which). Stop; do not retry.
+- **422** `validation_failed` - a malformed body. 429 and 5xx as in section 1; the exchange may be repeated with the
+  same `runner_instance_id` inside the window.
+
+Client rules. The secret comes from the environment only (`AUDITMANAGER_ENROLLMENT_SECRET`), never an argument, a file
+or a log line, and is removed from the process environment at once. The install keeps one `runner_instance_id` (a
+random value stored beside the environment file) so that a rerun after a lost answer is the idempotent repeat above
+and a command pasted on a second host is a different instance (409). The runner token is written to the environment
+file (mode 0600) before the agent starts, and the secret is never written.
+
+### 9.2 `reportRunnerHealth` - `POST /api/v1/runner/health`
+
+The agent tells the stand what it is. Runner token as bearer. The report is stored on the calling token and is
+returned in `RunnerTokenMetadata` (`agent_version`, `clis`, `concurrency`, `execution_profile`, `features`,
+`health_reported_at`, and `online`, the freshness of `last_seen_at`). It is not an event: nothing is journalled. The
+operation is throttled with the runner zones like the task operations.
+
+```json
+{"agent_version": "0.9.0",
+ "clis": [{"cli": "claude", "installed": false, "auth_state": "unknown"},
+          {"cli": "codex", "installed": true, "version": "0.46.0", "auth_state": "valid"}],
+ "concurrency": 1, "execution_profile": "command", "features": [],
+ "runner_instance_id": "Qx7…"}
+```
+
+`ReportRunnerHealthRequest`, `additionalProperties: false`:
+
+| Member | Required | Values |
+| --- | --- | --- |
+| `agent_version` | yes | `^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$` (`unversioned` when the agent runs from a checkout) |
+| `clis` | yes | at most 8 `RunnerCliHealth` |
+| `concurrency` | yes | integer 1..16 |
+| `execution_profile` | yes | `command` or `endpoint` |
+| `features` | yes | at most 8 of `images` (the agent serves tasks that carry images) |
+| `runner_instance_id` | no | the process id of the claims (`^[A-Za-z0-9_-]{8,64}$`) |
+
+`RunnerCliHealth` is `{"cli": "claude" | "codex", "installed": bool, "version"?: string, "auth_state": "valid" |
+"login_required" | "unknown"}`; `version` matches `^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$`.
+
+**Coherence rules** (the stand answers `422 validation_failed` to a report that breaks one, so a client never builds
+one):
+
+- a client named in `clis` appears once;
+- a client with `installed: false` carries **no `version`** and `auth_state: "unknown"`;
+- `auth_state` is read only through the client's own status command (`codex login status`, `claude auth status`) and
+  is `unknown` when the client is absent, too old to ask, or the answer is not understood; it is never a credential, a
+  path or an account name. Nothing else about the machine is sent: no path, no token, no document text.
+
+- **200** - `{"recorded_at": "<RFC 3339>"}`.
+- **401**, **422**, **429**, **5xx** as in section 1. A **401** ends the reporter and leaves the exit to the claim loop,
+  which meets the same 401. A **404** (a stand without the operation) and a **422** are logged and the report is tried
+  again only at the next interval.
+
+Cadence. The agent reports at start, again whenever what it detects changes (it detects every 120 s), and otherwise
+every 600 s. It reports from a thread of its own and never delays a claim.

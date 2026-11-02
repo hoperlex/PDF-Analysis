@@ -1,4 +1,5 @@
 # Configuration of agent.py (the unattended pull agent). Copy to /etc/pdf-analysis-agent/agent.toml.
+# `install.sh` writes this file for you (one CLI, its pinned model, `concurrency = 1`) and keeps your edits on a rerun.
 #
 # Secrets never go in this file. The runner token comes from the environment variable named in
 # token_env (the systemd unit loads it from an EnvironmentFile with mode 0600); an endpoint key,
@@ -11,7 +12,8 @@ origin = "https://stand.example.org"
 token_env = "PDF_ANALYSIS_RUNNER_TOKEN"
 # Long-poll length of one claim, 0..25 seconds.
 wait_seconds = 25
-# Tasks worked on at the same time (1..8). The connection's "max claimed tasks" bounds it too.
+# Tasks worked on at the same time (1..8). The connection's "max claimed tasks" bounds it too. The agent tells
+# the stand this number in its health report; install.sh writes 1, and raising it is the administrator's act.
 concurrency = 1
 # On SIGTERM: how long tasks in flight may keep working before they are failed as agent_shutdown.
 # Keep systemd's TimeoutStopSec above drain_seconds + wait_seconds.
