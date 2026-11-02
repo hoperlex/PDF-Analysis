@@ -7,7 +7,9 @@ of ``ssh`` is refused before anything is read; a key is sealed to the session's 
 never returned, and is in no event or ledger entry; a generated key returns its public half and the
 ``authorized_keys`` line; one session per connection is unfinished at a time; the host-key fingerprint is
 confirmed by value against the observed one -- no trust on first use -- and an identical repeat answers the
-session as it stands; and until the worker lands a session stays ``requested``.
+session as it stands; and until the worker lands a session stays ``requested`` -- but not for ever: a session
+older than ``INSTALL_SESSION_SECONDS`` is finished as ``failed`` (``no_worker`` while still ``requested``,
+``timed_out`` otherwise) with its key replaced, by the next create and by a read of it, with one journal event.
 """
 
 from __future__ import annotations
@@ -28,6 +30,10 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from auditmanager.executors.agent_install import (
+    FAILURE_NO_WORKER,
+    FAILURE_TIMED_OUT,
+    INSTALL_SESSION_SECONDS,
+    OverdueInstall,
     authorized_keys_line,
     confirm_agent_install_host_key,
     create_agent_install,
@@ -35,9 +41,9 @@ from auditmanager.executors.agent_install import (
     install_destination,
     observed_fingerprint,
 )
-from auditmanager.executors.agent_install_repository import InstallRecord
+from auditmanager.executors.agent_install_repository import UNFINISHED_STATES, InstallRecord
 from auditmanager.executors.agent_package import AgentPackage
-from auditmanager.executors.model import ConnectionRecord, host_key_fingerprint
+from auditmanager.executors.model import AGENT_INSTALL_FAILURES, ConnectionRecord, host_key_fingerprint
 from auditmanager.executors.sealing import (
     PrivateRing,
     PublicRing,
@@ -45,6 +51,7 @@ from auditmanager.executors.sealing import (
     associated_data,
 )
 from auditmanager.ingest.public import CommandReplay, CommandStarted
+from auditmanager.jobs.events import _SAFE_KEYS
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 T0 = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
@@ -107,6 +114,10 @@ class FakeInstalls:
         self.current: dict[str, str] = {}
         self.replaced: set[str] = set()
         self.confirmed_calls = 0
+        #: The database's clock. A session is created at this moment and is overdue by it.
+        self.now = T0
+        #: Every ask for the sessions whose time is up: ``(connection_id, install_id or None)``.
+        self.overdue_asked: list[tuple[str, str | None]] = []
 
     def unfinished_install(self, session, connection_id):
         for row in self.rows.values():
@@ -133,7 +144,8 @@ class FakeInstalls:
             public_key=self.keys[key_secret_id]["public_material"], observed_host_key=None,
             confirmed_host_key_fingerprint=None, host_key_confirmed_at=None, host_key_confirmed_by=None,
             package_version=package_version, package_sha256=package_sha256, failure_reason=None,
-            key_removed_at=None, created_at=T0, created_by=actor_uid, updated_at=T0, finished_at=None)
+            key_removed_at=None, created_at=self.now, created_by=actor_uid, updated_at=self.now,
+            finished_at=None)
         self.rows[record.install_id] = record
         return record
 
@@ -149,6 +161,30 @@ class FakeInstalls:
             row, state="installing", confirmed_host_key_fingerprint=fingerprint,
             host_key_confirmed_at=T0 + timedelta(minutes=1), host_key_confirmed_by=actor_uid,
             updated_at=T0 + timedelta(minutes=1))
+        return True
+
+    def overdue_installs(self, session, *, connection_id, install_id=None, seconds=INSTALL_SESSION_SECONDS):
+        """``InstallLifetimeRepository.overdue_installs``: unfinished, created at least ``seconds`` ago."""
+        self.overdue_asked.append((connection_id, install_id))
+        return [
+            OverdueInstall(install_id=row.install_id, state=row.state, key_secret_id=row.key_secret_id)
+            for row in sorted(self.rows.values(), key=lambda row: (row.created_at, row.install_id))
+            if row.connection_id == connection_id and row.state in UNFINISHED_STATES
+            and (install_id is None or row.install_id == install_id)
+            and row.created_at <= self.now - timedelta(seconds=seconds)
+        ]
+
+    def fail_install(self, session, *, install_id, connection_id, from_state, reason):
+        """``InstallLifetimeRepository.fail_install``: the shape the table's CHECKs demand of a failure."""
+        row = self.rows[install_id]
+        if row.state != from_state:
+            return False
+        self.rows[install_id] = dataclasses.replace(
+            row, state="failed", failure_reason=reason, finished_at=self.now, updated_at=self.now,
+            key_secret_id=None, public_key=None, key_removed_at=row.key_removed_at or self.now)
+        replaced = self.current.pop(connection_id, None)  # no current agent_install_key remains
+        if replaced is not None:
+            self.replaced.add(replaced)
         return True
 
     def worker_observes(self, install_id: str, host_key: str) -> None:
@@ -452,6 +488,146 @@ def test_until_the_worker_lands_a_session_stays_visibly_requested() -> None:
     record = world.create()
     assert get_agent_install(None, connection_id=CONNECTION, install_id=record.install_id,  # type: ignore[arg-type]
                              repository=world.installs).state == "requested"
+
+
+# -- the end of a session -------------------------------------------------------------------------
+
+
+def read(world: World, install_id: str) -> InstallRecord:
+    return get_agent_install(None, connection_id=CONNECTION, install_id=install_id,  # type: ignore[arg-type]
+                             repository=world.installs, journal=world.journal)  # type: ignore[arg-type]
+
+
+def expired_events(world: World) -> list[dict[str, Any]]:
+    return [event for event in world.journal.events if event["event_type"] == "executor.agent_install_expired"]
+
+
+def test_a_session_lives_thirty_minutes_and_ends_with_a_reason_the_table_allows() -> None:
+    assert INSTALL_SESSION_SECONDS == 1800
+    assert {FAILURE_NO_WORKER, FAILURE_TIMED_OUT} == {"no_worker", "timed_out"} <= set(AGENT_INSTALL_FAILURES)
+
+
+def test_a_session_is_not_ended_a_moment_before_its_time_is_up() -> None:
+    world = World()
+    first = world.create("install-1")
+    world.installs.now = T0 + timedelta(seconds=INSTALL_SESSION_SECONDS - 1)
+    error = refusal(world.create, "install-2")
+    assert details(error) == {"conflict_reason": "install_in_progress"}
+    assert read(world, first.install_id).state == "requested"
+    assert expired_events(world) == [] and world.installs.replaced == set()
+    assert world.installs.current == {CONNECTION: first.key_secret_id}
+
+
+def test_the_next_create_ends_a_requested_session_nobody_took_as_no_worker_and_goes_ahead() -> None:
+    world = World()
+    first = world.create("install-1", access="pasted_key", private_key=PASTED_KEY)
+    world.installs.now = T0 + timedelta(seconds=INSTALL_SESSION_SECONDS)
+    second = world.create("install-2")
+    assert second.install_id != first.install_id and second.state == "requested"
+    ended = world.installs.rows[first.install_id]
+    assert (ended.state, ended.failure_reason) == ("failed", "no_worker")
+    assert ended.finished_at == world.installs.now and ended.updated_at == world.installs.now
+    assert ended.key_secret_id is None and ended.key_removed_at == world.installs.now
+    assert ended.public_key is None, "the reference to the key is gone with the key"
+    assert world.installs.replaced == {first.key_secret_id}
+    assert world.installs.current == {CONNECTION: second.key_secret_id}
+    assert [event["event_type"] for event in world.journal.events] == [
+        "executor.agent_install_requested", "executor.agent_install_expired",
+        "executor.agent_install_requested"], "the expiry is journaled before the new session it makes room for"
+    assert world.installs.overdue_asked == [(CONNECTION, None)] * 2, "the connection's, not one session's"
+
+
+@pytest.mark.parametrize("state", ["scanning", "awaiting_host_key", "installing"])
+def test_a_session_somebody_took_and_that_went_silent_ends_as_timed_out(state: str) -> None:
+    world = World()
+    first = world.create("install-1")
+    world.installs.rows[first.install_id] = dataclasses.replace(
+        first, state=state, observed_host_key=None if state == "scanning" else host_key_line())
+    world.installs.now = T0 + timedelta(hours=2)
+    world.create("install-2")
+    ended = world.installs.rows[first.install_id]
+    assert (ended.state, ended.failure_reason) == ("failed", "timed_out")
+    (event,) = expired_events(world)
+    assert event["payload"]["from_state"] == state and event["payload"]["reason"] == "timed_out"
+
+
+def test_a_read_of_an_overdue_session_ends_it_and_answers_the_ended_one() -> None:
+    world = World()
+    first = world.create()
+    asked = len(world.installs.overdue_asked)
+    world.installs.now = T0 + timedelta(seconds=INSTALL_SESSION_SECONDS + 5)
+    answer = read(world, first.install_id)
+    assert (answer.state, answer.failure_reason) == ("failed", "no_worker")
+    assert answer.finished_at is not None and answer.key_removed_at is not None
+    assert answer.key_secret_id is None and answer.public_key is None
+    assert world.installs.current == {} and world.installs.replaced == {first.key_secret_id}
+    assert world.installs.overdue_asked[asked:] == [(CONNECTION, first.install_id)], "that session, no other"
+    assert len(expired_events(world)) == 1
+
+
+def test_ending_a_session_is_idempotent_a_second_read_and_a_second_create_write_nothing_more() -> None:
+    world = World()
+    first = world.create()
+    world.installs.now = T0 + timedelta(minutes=45)
+    once = read(world, first.install_id)
+    events, asked = len(world.journal.events), len(world.installs.overdue_asked)
+    assert read(world, first.install_id) == once
+    assert len(world.journal.events) == events, "a finished session is not looked at again"
+    assert len(world.installs.overdue_asked) == asked
+    world.create("install-2")
+    assert len(expired_events(world)) == 1, "and the create finds nothing left to end"
+    assert world.installs.rows[first.install_id] == once
+
+
+@pytest.mark.parametrize(("state", "reason"), [("succeeded", None), ("failed", "host_unreachable")])
+def test_a_session_that_has_ended_is_never_touched_however_old(state: str, reason: str | None) -> None:
+    world = World()
+    first = world.create()
+    world.installs.worker_ends(first.install_id, state, reason)
+    before = world.installs.rows[first.install_id]
+    world.installs.now = T0 + timedelta(days=30)
+    assert read(world, first.install_id) == before
+    world.create("install-2")
+    assert world.installs.rows[first.install_id] == before
+    assert expired_events(world) == []
+    assert world.installs.overdue_asked == [(CONNECTION, None)] * 2, "a read of a finished session asks nothing"
+
+
+def test_a_session_of_another_connection_is_not_ended_by_this_ones_create() -> None:
+    world = World()
+    first = world.create()
+    other = dataclasses.replace(first, install_id="exai_01M2545JSD15ETSNNV904X991M", connection_id=OTHER_CONNECTION)
+    world.installs.rows[other.install_id] = other
+    world.installs.now = T0 + timedelta(hours=1)
+    world.create("install-2")
+    assert world.installs.rows[other.install_id] == other
+    assert world.installs.rows[first.install_id].state == "failed"
+
+
+def test_the_expiry_event_names_the_session_by_identity_and_carries_no_key_host_or_user() -> None:
+    world = World()
+    first = world.create("install-1", access="pasted_key", private_key=PASTED_KEY)
+    world.installs.now = T0 + timedelta(hours=1)
+    read(world, first.install_id)
+    (event,) = expired_events(world)
+    assert event["aggregate_type"] == "ExecutorAgentInstall" and event["aggregate_id"] == first.install_id
+    assert event["payload"] == {
+        "connection_id": CONNECTION, "secret_id": first.key_secret_id, "purpose": "agent_install_key",
+        "from_state": "requested", "to_state": "failed", "reason": "no_worker"}
+    assert set(event["payload"]) <= _SAFE_KEYS, "the journal refuses any other key"
+    said = repr(world.journal.events)
+    assert HOST not in said and USER not in said and "PASTED-KEY-BODY" not in said and "BEGIN OPENSSH" not in said
+
+
+def test_a_session_that_is_replayed_by_its_key_is_answered_without_ending_anything() -> None:
+    world = World()
+    first = world.create("install-1")
+    asked = len(world.installs.overdue_asked)
+    world.installs.now = T0 + timedelta(hours=1)
+    world.ledger.replay = {"install_id": first.install_id}
+    assert world.create("install-1") == first
+    assert len(world.installs.overdue_asked) == asked and expired_events(world) == []
+    assert world.installs.rows[first.install_id].state == "requested"
 
 
 # -- reading a session ----------------------------------------------------------------------------

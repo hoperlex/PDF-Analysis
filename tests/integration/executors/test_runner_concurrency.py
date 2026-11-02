@@ -22,6 +22,7 @@ item 11) is the design documents', which are not in the repository; each test sa
 from __future__ import annotations
 
 import threading
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +33,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.executors.public import RunnerPrincipal, claim_task
 from auditmanager.executors.runner_repository import RunnerRepository
+from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     ExecutorConnectionId,
     ExecutorConnectionRevisionId,
@@ -243,6 +245,42 @@ def test_a_cancelled_tasks_late_answer_is_refused_and_its_instance_may_stay(sess
     assert (row["state"], row["answer_text"]) == ("cancelled", None)
 
 
+@pytest.mark.parametrize("change", ["revoked", "expired", "archived"])
+def test_a_token_that_stopped_being_usable_after_it_authenticated_claims_nothing(session, surface, change: str) -> None:
+    """The review's finding: authentication happens once, before a claim's polls, so a token revoked or expired,
+    or of a connection archived, in between could still claim. The claim reads the token's usability from the row
+    it locks and refuses as it refuses a missing token. ``claim_task`` is called with the principal the seam
+    produced before the change, as the long poll's later polls are."""
+    connection_id = make_connection(surface)
+    _, meta = issue(surface, connection_id)
+    token_id = meta["token_id"]
+    (task,) = write_tasks(session, connection_id, 1)
+    store = RunnerRepository()
+    principal = RunnerPrincipal(token_id=token_id, connection_id=connection_id)
+    assert store.lock_token(session, token_id) is True, "usable until it is changed"
+
+    if change == "revoked":
+        session.execute(text("UPDATE executor_runner_token SET revoked_at = clock_timestamp(), revoked_by = :a "
+                             "WHERE token_id = :t"), {"t": token_id, "a": ACTOR})
+    elif change == "expired":  # expires_at is frozen: the guard is lifted for this one statement
+        guard = "ALTER TABLE executor_runner_token {} TRIGGER trg_executor_runner_token_frozen_guard"
+        session.execute(text(guard.format("DISABLE")))
+        session.execute(text("UPDATE executor_runner_token SET created_at = created_at - interval '2 days', "
+                             "expires_at = clock_timestamp() - interval '1 second' WHERE token_id = :t"),
+                        {"t": token_id})
+        session.execute(text(guard.format("ENABLE")))
+    else:
+        session.execute(text("UPDATE executor_connection SET archived_at = clock_timestamp(), archived_by = :a "
+                             "WHERE connection_id = :c"), {"c": connection_id, "a": ACTOR})
+
+    assert store.lock_token(session, token_id) is False
+    with pytest.raises(DomainError) as refused:
+        claim_task(lambda: nullcontext(session), principal, wait_seconds=0)  # type: ignore[arg-type]
+    assert refused.value.code is ErrorCode.AUTHENTICATION_REQUIRED
+    row = task_row(session, task)
+    assert (row["state"], row["claimed_by_token_id"], row["claim_count"]) == ("open", None, 0)
+
+
 # -- the race: committed rows, real connections ---------------------------------------------------------
 
 
@@ -388,6 +426,40 @@ def test_two_processes_with_one_token_never_work_on_the_same_task(sessions, comm
     assert got[A] == [first.task_id] * 15, "the holder is redelivered its task every time"
     assert got[B] == [], "the other instance is never handed it"
     assert _claimed(sessions, stand) == [(first.task_id, A)], "and no second task was taken"
+
+
+def test_a_claim_that_waited_for_its_tokens_lock_reads_the_revocation_committed_meanwhile(sessions, committed) -> None:
+    """The window of the finding, with two real connections. The claim is queued behind a transaction that holds
+    the token's row; that transaction revokes the token and commits; the claim gets the lock, reads the row as
+    committed (not as it was when the claim began) and is refused, taking no task."""
+    stand = committed(limit=3, tasks=1)
+    token = stand.token_ids[0]
+    holder = sessions()
+    holder.execute(text("SELECT 1 FROM executor_runner_token WHERE token_id = :t FOR UPDATE"), {"t": token})
+    result: dict[str, Any] = {}
+
+    def claim() -> None:
+        try:
+            result["task"] = _poll(sessions, stand, token, A)
+        except BaseException as error:  # noqa: BLE001 - reported by the test thread
+            result["error"] = error
+
+    waiting = threading.Thread(target=claim, daemon=True)
+    try:
+        waiting.start()
+        waiting.join(1.0)
+        assert waiting.is_alive() and not result, "the claim waits for the token's row"
+        holder.execute(text("UPDATE executor_runner_token SET revoked_at = clock_timestamp(), revoked_by = :a "
+                            "WHERE token_id = :t"), {"t": token, "a": ACTOR})
+    finally:
+        holder.commit()
+        holder.close()
+    waiting.join(30)
+    assert not waiting.is_alive(), "the claim never finished"
+    assert "task" not in result, "a revoked token was handed a task"
+    error = result["error"]
+    assert isinstance(error, DomainError) and error.code is ErrorCode.AUTHENTICATION_REQUIRED
+    assert _claimed(sessions, stand) == []
 
 
 def test_a_claim_waits_for_its_tokens_row_lock_and_a_claim_of_another_token_does_not(sessions, committed) -> None:

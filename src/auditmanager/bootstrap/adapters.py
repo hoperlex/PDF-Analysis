@@ -5474,8 +5474,9 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
     ``ring`` is the **public** ring the ``api`` seals an install session's key to (``None`` without a
     configured key, which makes ``createExecutorAgentInstall`` a typed refusal); the ``api`` holds no private
     key, so no method here opens a secret. ``public_origin`` is the stand's configured public origin
-    (``AUDITMANAGER_PUBLIC_ORIGIN``), preferred over the origin the administrator's request arrived on when
-    the install command is built. It also authenticates an enrollment secret for the seam
+    (``AUDITMANAGER_PUBLIC_ORIGIN``), the **only** source of the origin the install command is built from: an
+    absent or malformed value is a typed refusal (``dependency_unavailable`` / ``public_origin``), never the
+    origin the administrator's request arrived on. It also authenticates an enrollment secret for the seam
     (``api.security.EnrollmentSecrets``).
 
     No method returns a secret but ``issue_enrollment`` (the grant's, once) and ``redeem_enrollment`` (the
@@ -5513,8 +5514,7 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
     # -- the administrator's -----------------------------------------------------------------
 
     def issue_enrollment(
-        self, *, connection_id: str, user_uid: str, idempotency_key: str,
-        requested_origin: str | None,
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
     ) -> models.IssuedExecutorEnrollment:
         from auditmanager.executors.public import issue_executor_enrollment
 
@@ -5522,7 +5522,7 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
             issued = issue_executor_enrollment(
                 session, connection_id=connection_id, roles=self._roles(session, user_uid),
                 idempotency_key=idempotency_key, actor_uid=user_uid,
-                configured_origin=self._public_origin, requested_origin=requested_origin,
+                configured_origin=self._public_origin,
             )
             return models.IssuedExecutorEnrollment.model_validate({
                 "secret": issued.secret, "package_version": issued.package.version,
@@ -5572,7 +5572,8 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
         def work(session: Session) -> models.ExecutorAgentInstall:
             record = get_agent_install(session, connection_id=connection_id, install_id=install_id)
             return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
-        return self._read(work)
+        # `EXEC2-INT-1`: a read may end an overdue session and replace its key, so it commits.
+        return self._write(work)
 
     def confirm_agent_install_host_key(
         self, *, connection_id: str, install_id: str, host_key_fingerprint: str, user_uid: str,

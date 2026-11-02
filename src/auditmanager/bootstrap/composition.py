@@ -111,9 +111,10 @@ from auditmanager.releases.public import (
 
 
 #: `EXEC2-ENROLL-01`. The stand's public origin (``https://host[:port]``), which an agent's host calls: the
-#: install command is built from it when it is set, and from the administrator's own request when it is not.
-#: Set it when the stand is reached through a tunnel or a private name. A malformed value is a refusal of
-#: the command (``dependency_unavailable`` / ``public_origin``), never a silent fallback.
+#: install command is built from it and from nothing else (the web tier drops the forwarded ``Host``, so a
+#: request-derived origin would be the API's internal name). The deployment compose derives it from the
+#: certificate name unless it is set. An absent or malformed value is a refusal of the command
+#: (``dependency_unavailable`` / ``public_origin``), never a silent fallback.
 PUBLIC_ORIGIN_ENV = "AUDITMANAGER_PUBLIC_ORIGIN"
 
 

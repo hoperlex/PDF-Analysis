@@ -185,11 +185,19 @@ class EnrollmentRepository:
 
     def mark_redeemed(self, session: Session, enrollment_id: str, token_id: str) -> bool:
         """Redeem once: ``False`` when the grant was not pending (redeemed, revoked or expired between the
-        read and the write), in which case nothing changed."""
+        read and the write), in which case nothing changed.
+
+        **One instant** decides the window and is the redemption time: the clock is read once, in a
+        materialised one-row CTE (``clock_timestamp()`` is volatile, so the planner would otherwise
+        evaluate it where it is written, once for the ``WHERE`` and once for the ``SET``). Two reads let a
+        grant expire between them, and the row would then carry ``redeemed_at > expires_at`` --
+        ``ck_executor_enrollment_redeemed_in_window`` -- which is a 500 and not the clean refusal (the
+        caller's ``authentication_required``) a late redemption is."""
         return bool(session.execute(text(
-            "UPDATE executor_enrollment SET redeemed_at = clock_timestamp(), "
-            "runner_token_id = :token WHERE enrollment_id = :id AND redeemed_at IS NULL "
-            "AND revoked_at IS NULL AND expires_at > clock_timestamp()"
+            "WITH moment AS MATERIALIZED (SELECT clock_timestamp() AS t) "
+            "UPDATE executor_enrollment SET redeemed_at = moment.t, runner_token_id = :token "
+            "FROM moment WHERE enrollment_id = :id AND redeemed_at IS NULL "
+            "AND revoked_at IS NULL AND expires_at > moment.t"
         ), {"id": enrollment_id, "token": token_id}).rowcount)
 
     # -- agent health, on the runner token ---------------------------------------------------

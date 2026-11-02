@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Request
+from fastapi import APIRouter, Path
 from pydantic import WithJsonSchema
 
 from auditmanager.api.routers.auth import OPEN_REQUIREMENT
@@ -49,7 +49,6 @@ from auditmanager.api.security import CurrentEnrollment, CurrentRunner, CurrentS
 
 __all__ = [
     "build_enrollment_routes",
-    "requested_origin",
 ]
 
 _TAGS = ["execution"]
@@ -68,18 +67,6 @@ AgentPackageVersionParam = Annotated[
 _GZIP = {"application/gzip": {"schema": {"type": "string", "format": "binary"}}}
 
 
-def requested_origin(request: Request) -> str | None:
-    """The origin the administrator's own request arrived on: the forwarded scheme and the ``Host``.
-
-    Unvalidated here; ``agent_package.resolve_origin`` validates it (or prefers the configured one), because it
-    ends up inside the command the administrator copies to another host."""
-    host = request.headers.get("host", "").strip()
-    if not host:
-        return None
-    scheme = (request.headers.get("x-forwarded-proto") or request.url.scheme).split(",")[0].strip()
-    return f"{scheme}://{host}"
-
-
 def build_enrollment_routes(router: APIRouter, enrollment: EnrollmentPort) -> None:
     # -- the administrator's ------------------------------------------------------------------
 
@@ -93,13 +80,13 @@ def build_enrollment_routes(router: APIRouter, enrollment: EnrollmentPort) -> No
                                         descriptions={409: STATE_CONFLICT_DESCRIPTION})},
     )
     def issue_executor_enrollment(
-        request: Request, subject: CurrentSubject,
+        subject: CurrentSubject,
         connection_id: Annotated[models.ExecutorConnectionId, Path()],
         idempotency_key: RequiredIdempotencyKey,
     ) -> WireResponse:
         view = enrollment.issue_enrollment(
             connection_id=connection_id, user_uid=subject.user_uid,
-            idempotency_key=idempotency_key, requested_origin=requested_origin(request),
+            idempotency_key=idempotency_key,
         )
         return json_response(201, encode_json(view.model_dump(mode="json", exclude_unset=True)))
 

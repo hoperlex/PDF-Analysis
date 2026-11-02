@@ -32,7 +32,9 @@ What is refused, and how
 * an image with no package at all, an archive without a readable checksum, an archive over
   :data:`MAX_PACKAGE_BYTES`, a symbolic link, or bytes whose digest is not the declared one:
   ``503 dependency_unavailable``, dependency ``agent_package``. Fail closed: an older package is never served
-  in place of a broken newer one.
+  in place of a broken newer one;
+* an absent or malformed ``AUDITMANAGER_PUBLIC_ORIGIN``: ``503 dependency_unavailable``, dependency
+  ``public_origin``. The command's origin comes from that setting alone and is never guessed from the request.
 
 Nothing here reads a secret. The command it builds carries the enrollment secret **only** as the value of an
 environment variable assigned in front of ``sudo`` (the shell sets it in the child's environment, so it is
@@ -45,6 +47,7 @@ import hashlib
 import os
 import re
 import shlex
+import stat
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -178,6 +181,38 @@ def _declared_digest(path: Path) -> str | None:
     return tokens[0]
 
 
+def _read_bounded(path: Path) -> bytes:
+    """The archive's bytes, at most :data:`MAX_PACKAGE_BYTES` of them, read from one opened file.
+
+    The file is opened without following a link (``O_NOFOLLOW``: a link swapped in after the check of
+    :func:`_regular_file` is refused, not read; ``O_NONBLOCK``: a FIFO swapped in does not hang the open) and
+    must be a regular file. At most ``MAX_PACKAGE_BYTES + 1`` bytes are asked of it, so a file that grew past
+    the bound after a ``stat`` is never read whole into memory. A byte over the bound fails closed
+    (``503 agent_package``), as does any error of the open or the read."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        raise _unavailable() from None
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise _unavailable()
+        handle = os.fdopen(descriptor, "rb")
+    except DomainError:
+        os.close(descriptor)
+        raise
+    except OSError:
+        os.close(descriptor)
+        raise _unavailable() from None
+    try:
+        with handle:
+            content = handle.read(MAX_PACKAGE_BYTES + 1)
+    except OSError:
+        raise _unavailable() from None
+    if len(content) > MAX_PACKAGE_BYTES:
+        raise _unavailable()
+    return content
+
+
 def load_package(
     version: str, *, directory: Path | None = None
 ) -> tuple[AgentPackage, bytes]:
@@ -199,15 +234,9 @@ def load_package(
     declared = _declared_digest(root / (archive.name + CHECKSUM_SUFFIX))
     if declared is None:
         raise _unavailable()
-    try:
-        size = archive.stat().st_size
-        if size > MAX_PACKAGE_BYTES:
-            raise _unavailable()
-        content = archive.read_bytes()
-    except OSError:
-        raise _unavailable() from None
+    content = _read_bounded(archive)
     actual = hashlib.sha256(content).hexdigest()
-    if len(content) > MAX_PACKAGE_BYTES or actual != declared:
+    if actual != declared:
         raise _unavailable()
     return AgentPackage(version=version, sha256=actual, size_bytes=len(content), path=archive), content
 
@@ -260,23 +289,22 @@ def normalise_origin(candidate: str) -> str:
     return f"{scheme}://{host}"
 
 
-def resolve_origin(configured: str | None, requested: str | None) -> str:
-    """The origin the install command downloads from: the configured one when there is one, else the origin
-    the administrator's own request arrived on.
+def resolve_origin(configured: str | None) -> str:
+    """The origin the install command downloads from: the stand's configured public origin, validated.
 
-    The configured value (``AUDITMANAGER_PUBLIC_ORIGIN``) is how a stand reached through a tunnel or a
-    private name tells the agent's host where to call; without it the request's ``Host`` and forwarded scheme
-    are used. Either is validated by :func:`normalise_origin`. ``503 dependency_unavailable`` (dependency
-    ``public_origin``) when neither yields one: a command that names no reachable stand is no command."""
-    # A configured value that is malformed is a refusal, not a reason to trust the request's own Host.
-    candidate = configured or requested
-    if candidate:
+    The configured value (``AUDITMANAGER_PUBLIC_ORIGIN``) is the **only** source. The request's own ``Host``
+    is never consulted: behind the web tier the forwarded ``Host`` and ``X-Forwarded-*`` are dropped, so a
+    request-derived origin would silently be the API's internal name (``http://api:8000``), a command that
+    names no host the agent can reach. The value is checked by :func:`normalise_origin` because it ends up
+    inside a shell command. ``503 dependency_unavailable`` (dependency ``public_origin``) when it is absent or
+    malformed: a command that names no reachable stand is no command, and nothing is written."""
+    if configured:
         try:
-            return normalise_origin(candidate)
+            return normalise_origin(configured)
         except ValueError:
             pass
     raise DomainError(
-        ErrorCode.DEPENDENCY_UNAVAILABLE, message="the stand's public origin is not known",
+        ErrorCode.DEPENDENCY_UNAVAILABLE, message="the stand's public origin is not configured",
         dependency="public_origin",
     )
 

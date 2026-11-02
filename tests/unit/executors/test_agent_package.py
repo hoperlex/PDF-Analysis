@@ -11,6 +11,7 @@ only as the value of an environment variable in front of ``sudo``, never in an a
 from __future__ import annotations
 
 import hashlib
+import os
 import shlex
 from pathlib import Path
 
@@ -146,6 +147,59 @@ def test_a_package_that_cannot_be_trusted_is_never_served_and_never_replaced_by_
     assert package.load_package("0.9.0", directory=tmp_path)[1] == b"the older, good one"
 
 
+def test_the_archive_is_read_through_a_bound_and_never_whole(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A file that grew after the size was looked at is never read into memory in full: at most
+    ``MAX_PACKAGE_BYTES + 1`` bytes are asked of the opened file, and the byte over the bound is a refusal."""
+    archive = _publish(tmp_path, "0.9.0", b"x" * 1024)
+    monkeypatch.setattr(package, "MAX_PACKAGE_BYTES", 32)
+    asked: list[int] = []
+    real_fdopen = os.fdopen
+
+    class Spy:
+        def __init__(self, handle) -> None:
+            self._handle = handle
+
+        def __enter__(self) -> "Spy":
+            return self
+
+        def __exit__(self, *exc) -> None:
+            self._handle.close()
+
+        def fileno(self) -> int:
+            return self._handle.fileno()
+
+        def read(self, size: int = -1) -> bytes:
+            asked.append(size)
+            return self._handle.read(size)
+
+    monkeypatch.setattr(package.os, "fdopen", lambda descriptor, mode: Spy(real_fdopen(descriptor, mode)))
+    error = _refusal(package.load_package, "0.9.0", directory=tmp_path)
+    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+    assert dict(error.detail_fields) == {"dependency": "agent_package"}
+    assert asked == [33], "one read, of the bound plus one byte -- never read_bytes()"
+    # Exactly at the bound is served.
+    asked.clear()
+    archive.write_bytes(b"y" * 32)
+    (tmp_path / (archive.name + package.CHECKSUM_SUFFIX)).write_text(
+        hashlib.sha256(b"y" * 32).hexdigest(), encoding="ascii")
+    assert package.load_package("0.9.0", directory=tmp_path)[1] == b"y" * 32
+    assert asked == [33]
+
+
+def test_a_link_or_a_non_file_swapped_in_after_the_check_is_refused_by_the_open(tmp_path: Path) -> None:
+    target = tmp_path / "elsewhere"
+    target.write_bytes(b"new")
+    link = tmp_path / "link.tar.gz"
+    link.symlink_to(target)
+    for refused in (link, tmp_path, tmp_path / "missing"):
+        error = _refusal(package._read_bounded, refused)
+        assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+        assert dict(error.detail_fields) == {"dependency": "agent_package"}
+    assert package._read_bounded(target) == b"new"
+
+
 def test_a_directory_entry_that_is_not_an_archive_name_is_not_a_version(tmp_path: Path) -> None:
     _publish(tmp_path, "0.9.0")
     (tmp_path / "auditmanager-agent-latest.tar.gz").write_bytes(b"x")
@@ -181,15 +235,27 @@ def test_anything_that_is_not_an_origin_is_refused_before_it_reaches_a_shell(giv
         package.normalise_origin(given)
 
 
-def test_the_configured_origin_wins_and_a_bad_one_is_not_replaced_by_the_requests() -> None:
-    assert package.resolve_origin("https://stand.example", "http://127.0.0.1:1") == "https://stand.example"
-    assert package.resolve_origin(None, "https://asked.example") == "https://asked.example"
-    assert package.resolve_origin("", "https://asked.example") == "https://asked.example"
-    for configured, requested in (("not an origin", "https://asked.example"), (None, "bad"),
-                                  (None, None), ("", "")):
-        error = _refusal(package.resolve_origin, configured, requested)
-        assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-        assert dict(error.detail_fields) == {"dependency": "public_origin"}
+def test_the_origin_is_the_configured_one_and_only_that() -> None:
+    assert package.resolve_origin("https://stand.example") == "https://stand.example"
+    assert package.resolve_origin(" HTTPS://Stand.Example:8443 ") == "https://stand.example:8443"
+
+
+@pytest.mark.parametrize("configured", [
+    None, "", "   ", "not an origin", "https://stand.example/path", "ftp://stand.example",
+    "https://user@stand.example", "https://stand.example;rm -rf",
+])
+def test_an_absent_or_malformed_configured_origin_is_a_refusal_and_never_guessed(
+    configured: str | None,
+) -> None:
+    error = _refusal(package.resolve_origin, configured)
+    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+    assert dict(error.detail_fields) == {"dependency": "public_origin"}
+
+
+def test_no_origin_can_be_taken_from_a_request() -> None:
+    import inspect
+
+    assert list(inspect.signature(package.resolve_origin).parameters) == ["configured"]
 
 
 # -- the command -------------------------------------------------------------------------------

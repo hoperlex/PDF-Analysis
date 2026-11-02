@@ -20,6 +20,17 @@ this module (``api``)     :func:`create_agent_install` records the session in ``
 
 Until that worker lands a session stays visibly ``requested``; nothing here pretends otherwise.
 
+**A session ends.** Nothing but the worker advances a session, and it has not landed, so a session would stay
+``requested`` for ever, block every later create with ``install_in_progress`` (one unfinished session per
+connection) and keep a pasted key sealed indefinitely. A session therefore has a bounded life,
+:data:`INSTALL_SESSION_SECONDS` from its creation. An unfinished session older than that is **finished as
+``failed``** -- ``no_worker`` when it is still ``requested`` (nobody took it), ``timed_out`` in any other
+unfinished state (somebody did, and went silent) -- and its key is replaced and its reference removed, so no
+``agent_install_key`` stays current. This is done lazily and idempotently, in the transaction that is already
+open, by :func:`create_agent_install` (for that connection, before the conflict check) and by
+:func:`get_agent_install` (for that session); it needs no scheduler. The worker's own late write finds the
+session finished and changes nothing, as for a probe.
+
 Safety by construction
 ----------------------
 * **No command text comes from the caller.** The host, port and user are validated as plain values -- a
@@ -41,6 +52,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Final
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -50,9 +62,14 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     PublicFormat,
 )
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from auditmanager.executors.agent_install_repository import AgentInstallRepository, InstallRecord
+from auditmanager.executors.agent_install_repository import (
+    UNFINISHED_STATES,
+    AgentInstallRepository,
+    InstallRecord,
+)
 from auditmanager.executors.agent_package import AgentPackage, latest_package
 from auditmanager.executors.model import (
     AGENT_INSTALL_ACCESSES,
@@ -72,7 +89,12 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ExecutorAgentInstallId, ExecutorSecretId, IdempotencyKey
 
 __all__ = [
+    "FAILURE_NO_WORKER",
+    "FAILURE_TIMED_OUT",
     "INSTALL_PURPOSE",
+    "INSTALL_SESSION_SECONDS",
+    "InstallLifetimeRepository",
+    "OverdueInstall",
     "authorized_keys_line",
     "confirm_agent_install_host_key",
     "create_agent_install",
@@ -85,6 +107,13 @@ _AGGREGATE_CONNECTION: Final[str] = "ExecutorConnection"
 _AGGREGATE_INSTALL: Final[str] = "ExecutorAgentInstall"
 #: The ``executor_secret.purpose`` of a session's sealed key (``model.INSTALL_PURPOSES``).
 INSTALL_PURPOSE: Final[str] = "agent_install_key"
+#: How long an install session may stay unfinished, counted from its creation: 30 minutes. A longer one is
+#: finished as ``failed`` (module docstring, "A session ends").
+INSTALL_SESSION_SECONDS: Final[int] = 1800
+#: The two ``failure_reason`` values (``model.AGENT_INSTALL_FAILURES``) a session ends with when its time is
+#: up: nobody took it, or somebody took it and went silent.
+FAILURE_NO_WORKER: Final[str] = "no_worker"
+FAILURE_TIMED_OUT: Final[str] = "timed_out"
 #: What the contract's request allows is wider than what may reach a command line: a host, as the connection
 #: settings validate one (``model.py``), and a user name of the portable set. Anything else is refused.
 _HOST: Final[re.Pattern[str]] = re.compile(
@@ -185,6 +214,104 @@ def _need_ring(ring: PublicRing | None) -> PublicRing:
     return ring
 
 
+# -- the end of a session ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class OverdueInstall:
+    """An unfinished session whose time is up, as read under its row lock: the state it is in (which decides
+    how it ends) and the key it still names."""
+
+    install_id: str
+    state: str
+    key_secret_id: str | None
+
+
+class InstallLifetimeRepository(AgentInstallRepository):
+    """:class:`AgentInstallRepository` and the two statements of a session's end.
+
+    They are kept beside the rule that uses them because the stage-1 review fix that added them was not
+    granted ``agent_install_repository.py``. They belong in :class:`AgentInstallRepository`; moving them is a
+    cut and paste, after which this class goes and the two defaults ``InstallLifetimeRepository()`` in
+    :func:`create_agent_install` and :func:`get_agent_install` become ``AgentInstallRepository()``."""
+
+    def overdue_installs(
+        self, session: Session, *, connection_id: str, install_id: str | None = None,
+        seconds: int = INSTALL_SESSION_SECONDS,
+    ) -> list[OverdueInstall]:
+        """The connection's unfinished sessions (or just ``install_id``, when named) created at least
+        ``seconds`` ago, **locked** so that the worker cannot move one between this read and the write that
+        ends it. The clock is the database's."""
+        rows = session.execute(text(
+            "SELECT install_id, state, key_secret_id FROM executor_agent_install "
+            "WHERE connection_id = :c AND state = ANY(:states) "
+            "AND created_at <= clock_timestamp() - make_interval(secs => :seconds)"
+            + ("" if install_id is None else " AND install_id = :id")
+            + " ORDER BY created_at, install_id FOR UPDATE"
+        ), {"c": connection_id, "states": list(UNFINISHED_STATES), "seconds": seconds,
+            **({} if install_id is None else {"id": install_id})}).all()
+        return [OverdueInstall(install_id=str(row[0]), state=str(row[1]),
+                               key_secret_id=None if row[2] is None else str(row[2])) for row in rows]
+
+    def fail_install(
+        self, session: Session, *, install_id: str, connection_id: str, from_state: str, reason: str
+    ) -> bool:
+        """End the session as ``failed`` with ``reason``, drop its reference to the key and replace the
+        connection's current ``agent_install_key``. ``False`` (nothing changed) when the session was no
+        longer in ``from_state``.
+
+        The shape the table demands is met in one statement: ``failed`` carries a reason
+        (``ck_executor_agent_install_failure_shape``) and a ``finished_at``
+        (``ck_..._finished_shape``, write-once and still NULL here), and an absent ``key_secret_id`` carries
+        a ``key_removed_at`` (``ck_..._key_removed_shape``) -- kept as it is when the worker had already
+        removed the key."""
+        ended = session.execute(text(
+            "UPDATE executor_agent_install SET state = 'failed', failure_reason = :reason, "
+            "key_secret_id = NULL, key_removed_at = COALESCE(key_removed_at, clock_timestamp()), "
+            "finished_at = clock_timestamp(), updated_at = clock_timestamp() "
+            "WHERE install_id = :id AND state = :from_state"
+        ), {"id": install_id, "from_state": from_state, "reason": reason}).rowcount
+        if not ended:
+            return False
+        session.execute(text(
+            "UPDATE executor_secret SET replaced_at = clock_timestamp() "
+            "WHERE connection_id = :c AND purpose = 'agent_install_key' AND replaced_at IS NULL"
+        ), {"c": connection_id})
+        return True
+
+
+def expire_overdue_installs(
+    session: Session, installs: InstallLifetimeRepository, *, connection_id: str,
+    install_id: str | None = None, journal: Journal = append_execution_event,
+) -> int:
+    """Finish the connection's overdue sessions (or just ``install_id``) as ``failed`` and journal each.
+
+    ``no_worker`` for a session still ``requested``, ``timed_out`` for one in any other unfinished state. The
+    journal event, ``executor.agent_install_expired``, names the session, the connection, the key's identity
+    and the two states and the reason (all controlled values): never the host, the user, a fingerprint or a
+    key. Idempotent: once finished, a session is no longer overdue and nothing is written. The number of
+    sessions it ended is returned."""
+    ended = 0
+    for overdue in installs.overdue_installs(
+        session, connection_id=connection_id, install_id=install_id, seconds=INSTALL_SESSION_SECONDS,
+    ):
+        reason = FAILURE_NO_WORKER if overdue.state == "requested" else FAILURE_TIMED_OUT
+        if not installs.fail_install(
+            session, install_id=overdue.install_id, connection_id=connection_id,
+            from_state=overdue.state, reason=reason,
+        ):
+            continue
+        ended += 1
+        journal(
+            session, event_type="executor.agent_install_expired", aggregate_type=_AGGREGATE_INSTALL,
+            aggregate_id=overdue.install_id,
+            payload={"connection_id": connection_id, "purpose": INSTALL_PURPOSE,
+                     "from_state": overdue.state, "to_state": "failed", "reason": reason,
+                     **({} if overdue.key_secret_id is None else {"secret_id": overdue.key_secret_id})},
+        )
+    return ended
+
+
 # -- the three operations --------------------------------------------------------------------
 
 
@@ -192,7 +319,7 @@ def create_agent_install(
     session: Session, *, connection_id: str, access: str, ssh_host: str, ssh_port: int,
     ssh_user: str, private_key: str | None, ring: PublicRing | None, roles: Iterable[str],
     idempotency_key: str, actor_uid: str, executors: ExecutorRepository | None = None,
-    repository: AgentInstallRepository | None = None, commands: CommandRepository | None = None,
+    repository: InstallLifetimeRepository | None = None, commands: CommandRepository | None = None,
     package_source: Callable[[], AgentPackage] = latest_package,
     journal: Journal = append_execution_event,
 ) -> InstallRecord:
@@ -202,10 +329,14 @@ def create_agent_install(
     is not acceptable (the host, the port, the user, and ``private_key`` as the contract states);
     ``not_found``; ``conflict`` (``connection_archived``, ``no_revision``, ``install_in_progress``);
     ``validation_failed`` on ``kind`` (``kind_not_pull``); ``dependency_unavailable``
-    (``secrets_public_key_missing``, ``agent_package``)."""
+    (``secrets_public_key_missing``, ``agent_package``).
+
+    Under the connection's row lock and **before** the ``install_in_progress`` check, the connection's session
+    that has outlived :data:`INSTALL_SESSION_SECONDS` is finished as ``failed`` (module docstring, "A session
+    ends"), so an abandoned session never blocks the next one for ever."""
     _admin(roles)
     store, installs, ledger = (
-        executors or ExecutorRepository(), repository or AgentInstallRepository(),
+        executors or ExecutorRepository(), repository or InstallLifetimeRepository(),
         commands or CommandRepository(),
     )
     _check_key_argument(access, private_key)
@@ -234,6 +365,7 @@ def create_agent_install(
         )
     if store.current_revisions(session, [connection_id]).get(connection_id) is None:
         raise _conflict("no_revision", "the connection has no revision yet")
+    expire_overdue_installs(session, installs, connection_id=connection_id, journal=journal)
     if installs.unfinished_install(session, connection_id) is not None:
         raise _conflict(CONFLICT_INSTALL_IN_PROGRESS, "an install of this connection has not finished")
     sealing = _need_ring(ring)
@@ -275,12 +407,22 @@ def create_agent_install(
 
 def get_agent_install(
     session: Session, *, connection_id: str, install_id: str,
-    repository: AgentInstallRepository | None = None,
+    repository: InstallLifetimeRepository | None = None, journal: Journal = append_execution_event,
 ) -> InstallRecord:
-    """The session, or ``not_found`` for an unknown one and for one that is another connection's."""
-    found = (repository or AgentInstallRepository()).get_install(session, install_id)
+    """The session, or ``not_found`` for an unknown one and for one that is another connection's.
+
+    A session that has outlived :data:`INSTALL_SESSION_SECONDS` is finished as ``failed`` first, in this
+    transaction, and the answer is the session as it then stands (module docstring, "A session ends"). This
+    is a write on a read: the caller must commit it, or the next create does it again (it is idempotent)."""
+    installs = repository or InstallLifetimeRepository()
+    found = installs.get_install(session, install_id)
     if found is None or found.connection_id != connection_id:
         raise _not_found()
+    if found.state in UNFINISHED_STATES and expire_overdue_installs(
+        session, installs, connection_id=connection_id, install_id=install_id, journal=journal,
+    ):
+        found = installs.get_install(session, install_id)
+        assert found is not None
     return found
 
 

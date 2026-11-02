@@ -501,11 +501,11 @@ is a different listener (`Y3`: the number in that guard was once 200 here and wa
 
 An administrator installs the agent on a host with one copied command (path B) or over SSH (path A). The stand
 serves the package, exchanges a one-time enrollment secret for a runner token, and takes the agent's health.
-Two optional settings reach the `api` (`compose.server.yml` names them; both default to blank):
+Two optional settings reach the `api` (`compose.server.yml` names them):
 
-| Variable | What it does | Blank means |
+| Variable | What it does | Unset or blank means |
 |---|---|---|
-| `AUDITMANAGER_PUBLIC_ORIGIN` | the stand's public origin, `https://host[:port]`, that the generated install command downloads the package from and the agent calls | the origin of the administrator's own request (`Host` and the proxy's forwarded scheme) — wrong behind an SSH tunnel or a private name, so set it there. A malformed value is a refusal (`503 dependency_unavailable`, `public_origin`), never a fallback |
+| `AUDITMANAGER_PUBLIC_ORIGIN` | the stand's public origin, `https://host[:port]`, that the generated install command downloads the package from and the agent calls. It is the **only** source of that origin: the request's own `Host` is never used, because the web tier drops it and the guess would be the API's internal name | derived from the certificate name, `https://${ALPHA_CERT_NAME}`, unless it is set; set it for a stand reached through an SSH tunnel, a private name or a non-default port. With neither of the two set, or with a malformed value, issuing a grant is refused (`503 dependency_unavailable`, dependency `public_origin`) before anything is written |
 | `AUDITMANAGER_AGENT_PACKAGE_DIR` | the directory in the image that holds `auditmanager-agent-<version>.tar.gz` and its `.sha256` | `/app/agent-package`, where `infra/deploy/Dockerfile.api` puts the package `EXEC2-AGENT-01` builds |
 
 The package route (`GET /api/v1/runner/agent-package/<version>`) needs no credential: it is public code, and
