@@ -40,7 +40,6 @@ export function VersionRow({ version, href, secondary }: VersionRowProps) {
   return (
     <li
       className="am-state"
-      style={{ marginBottom: '0.5rem' }}
       data-version-uid={version.version_uid}
       data-document-uid={version.document_uid}
     >

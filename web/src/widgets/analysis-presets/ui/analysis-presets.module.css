@@ -1,0 +1,6 @@
+/* The preset lists of «Пресеты анализа»: an ordered list that draws its own cards, so it carries no bullet and no list gutter. */
+.presetList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

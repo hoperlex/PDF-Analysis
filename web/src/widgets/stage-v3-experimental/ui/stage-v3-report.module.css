@@ -1,0 +1,8 @@
+/* The parameter tables and source quotes of the V3 report. Layout only; no colour is declared here. */
+.tableScroll {
+  overflow-x: auto;
+}
+
+.quote {
+  white-space: pre-wrap;
+}

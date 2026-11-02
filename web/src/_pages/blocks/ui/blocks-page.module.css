@@ -6,6 +6,10 @@
  * `aria-current` once did.
  */
 
+.pageGroup {
+  margin-bottom: var(--am-gap);
+}
+
 .tabs {
   margin-top: var(--am-gap-sm);
   min-width: 0;
