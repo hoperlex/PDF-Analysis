@@ -1760,6 +1760,7 @@ li.am-state .am-state__detail {
 }
 
 .am-button:hover {
+  color: var(--am-ink-inverse);
   background: var(--am-accent-strong);
   border-color: var(--am-accent-strong);
   box-shadow: var(--am-shadow-2);

@@ -1,5 +1,7 @@
 import { EXTENDED_ADVICE as ADVICE, EXTENDED_CORRECTION_ACTION as ACTION, EXTENDED_REASONS as REASON, extendedReasonText } from '@/entities/audit-run';
 
+import styles from './extended-review.module.css';
+
 type RecordValue = Record<string, unknown>;
 function object(value: unknown): RecordValue | null { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RecordValue : null; }
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
@@ -39,7 +41,7 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
     </aside>}
     {fixed === null ? null : <section data-machine-correction={text(fixed.action)}>
       <p><strong>{ACTION[text(fixed.action)] ?? 'Исправление требует проверки'}</strong>{correctionReason(fixed.reason) ? ` · ${correctionReason(fixed.reason)}` : ''}</p>
-      <div className="am-decision__evidence">
+      <div className={styles.evidence}>
         <section aria-label="Исходное наблюдение"><h5>Исходное наблюдение</h5>
           {original === null ? <p>Отдельный снимок исходной записи не передан; исходная запись показана выше.</p> : <><strong>{text(original.title)}</strong><p>{text(original.description)}</p></>}
         </section>

@@ -49,13 +49,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SCREEN_REGISTRY } from '@/shared/config';
 import { DashboardEagerSeam, DashboardPage } from '@/_pages/dashboard';
+import { HomePage, HomeSectionsEagerSeam } from '@/_pages/home';
 import { KnowledgeBaseEagerSeam, KnowledgeBasePage } from '@/_pages/knowledge-base';
 // Imported for its wrapper's `dynamic()` call, which the cases below read; the review page
 // itself is rendered by the census (`ReviewPage loaded`), not here.
 import '@/_pages/review';
 import { RunPage, RunProgressEagerSeam } from '@/_pages/run';
 import { StageComparisonEagerSeam, StageComparisonPage } from '@/_pages/stage-comparison';
-import { Dashboard } from '@/widgets/dashboard';
+import { Dashboard, HomeSectionsOverview } from '@/widgets/dashboard';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RunProgress } from '@/widgets/run-progress';
@@ -65,7 +66,7 @@ import { WEB_ROOT, readText, repoRelative, walkFiles } from './lib/repo';
 import { yieldToRunnerAfterEachTest } from './lib/yield-to-runner';
 import { newClient, renderScreen } from '../unit/screens/harness';
 import { routeAddresses } from '../unit/screens/route-screens';
-import { census, palette, parseRules } from '../unit/styles/contrast';
+import { census, palette, parseRules, scopeModuleCss } from '../unit/styles/contrast';
 import type { Rule, Theme } from '../unit/styles/contrast';
 import { screens } from '../unit/styles/screens';
 import { PROJECT_UID, RUN_ID, VERSION_UID } from '../unit/review/fixtures';
@@ -152,6 +153,23 @@ const WIDGETS = [
 ] as const;
 
 const LAZY_SLICES: ReadonlySet<string> = new Set(WIDGETS.map((entry) => entry.slice));
+
+/**
+ * A sixth wrapper over one of the five slices: the front door's section overview.
+ *
+ * `HomeSectionsOverview` is exported by `widgets/dashboard`, the slice that also carries the
+ * heavy `Dashboard`, so `_pages/home` cannot import it statically either. Its wrapper is
+ * `_pages/home/ui/lazy-home-sections.tsx`: one more `dynamic()` call and one more `import()`
+ * edge into `dashboard`, with its own eager seam. The counts below are the five widgets
+ * plus this one, and the case that reads them names it, so a seventh is a failure, not a drift.
+ */
+const HOME_SECTIONS = {
+  slice: 'dashboard',
+  widget: HomeSectionsOverview as ComponentType<never>,
+  seam: 'HomeSectionsEagerSeam',
+  marker: 'data-home-sections=""',
+} as const;
+const WRAPPED_SEAMS: readonly string[] = [...WIDGETS.map((entry) => entry.seam), HOME_SECTIONS.seam];
 
 /** The wrapper's own fallback, as `<LoadingState />` renders it with no `what`. */
 const BARE_FALLBACK = '>Загрузка…<';
@@ -247,9 +265,11 @@ describe('(a) no _pages module imports one of the five widgets statically', () =
     ).toEqual([]);
   });
 
-  it('reaches each of the five through exactly one import() — the walk covers all five', () => {
+  it('reaches each of the five through exactly one import() — plus the home overview into dashboard', () => {
     const dynamics = edgesUnderPages().filter((edge) => edge.kind === 'dynamic');
-    expect(dynamics.map((edge) => edge.widget).sort()).toEqual([...LAZY_SLICES].sort());
+    expect(dynamics.map((edge) => edge.widget).sort()).toEqual(
+      [...LAZY_SLICES, HOME_SECTIONS.slice].sort(),
+    );
   });
 
   it('can fail: every spelling of a static edge is caught, and import() is not', () => {
@@ -284,12 +304,17 @@ function visibleText(markup: string): string[] {
 }
 
 describe('each wrapper loads its widget through next/dynamic, behind a typed Russian loading state', () => {
-  it('records exactly five dynamic() calls, and their loaders resolve to the five widgets', async () => {
+  it('records exactly six dynamic() calls, and their loaders resolve to the five widgets and the home overview', async () => {
     // The pages were imported above, so every wrapper has called `dynamic()` by now.
-    expect(recorded.length, 'not every wrapper called next/dynamic, or something else did').toBe(5);
+    expect(recorded.length, 'not every wrapper called next/dynamic, or something else did').toBe(6);
     const resolved = await Promise.all(recorded.map((call) => call.loader()));
-    const names = resolved.map((component) => WIDGETS.find((entry) => entry.widget === component)?.slice ?? `?${String(component)}`);
-    expect(names.sort()).toEqual([...LAZY_SLICES].sort());
+    const names = resolved.map(
+      (component) =>
+        component === HOME_SECTIONS.widget
+          ? 'home-sections'
+          : (WIDGETS.find((entry) => entry.widget === component)?.slice ?? `?${String(component)}`),
+    );
+    expect(names.sort()).toEqual([...LAZY_SLICES, 'home-sections'].sort());
   });
 
   // The name is read off the loader only to title the case; which widget a loader really
@@ -324,7 +349,7 @@ describe('each wrapper loads its widget through next/dynamic, behind a typed Rus
    * the census' `ReviewPage loaded` is that state, and (c) below reads the viewer there.
    */
   it('the product path: with the seam empty, each page draws its frame and the fallback where the widget goes', () => {
-    const pages: readonly (readonly [string, unknown, ReactElement])[] = [
+    const pages: (readonly [string, unknown, ReactElement])[] = [
       ['dashboard', DashboardEagerSeam, createElement(DashboardPage)],
       ['knowledge-base', KnowledgeBaseEagerSeam, createElement(KnowledgeBasePage)],
       ['run-progress', RunProgressEagerSeam, createElement(RunPage, { projectUid: PROJECT_UID, runId: RUN_ID })],
@@ -334,6 +359,11 @@ describe('each wrapper loads its widget through next/dynamic, behind a typed Rus
         createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
       ],
     ];
+    pages.push([
+      'home-sections',
+      HomeSectionsEagerSeam,
+      createElement(HomePage, { displayLabel: 'Иванов И. И.', roles: ['expert'] }),
+    ]);
     for (const [slice, seam, page] of pages) {
       // `null` under the harness' own provider is exactly what the product has: no provider.
       const Provider = (seam as typeof DashboardEagerSeam).Provider as ComponentType<{
@@ -343,7 +373,10 @@ describe('each wrapper loads its widget through next/dynamic, behind a typed Rus
       const markup = renderScreen(newClient(), createElement(Provider, { value: null, children: page }));
       expect(markup, `${slice}: the page frame did not render`).toContain('<h1');
       expect(markup, `${slice}: no fallback where the widget goes`).toContain(BARE_FALLBACK);
-      const marker = WIDGETS.find((entry) => entry.slice === slice)?.marker ?? '';
+      const marker =
+        slice === 'home-sections'
+          ? HOME_SECTIONS.marker
+          : (WIDGETS.find((entry) => entry.slice === slice)?.marker ?? '');
       expect(markup, `${slice}: the eager widget rendered with no seam`).not.toContain(marker);
     }
   });
@@ -352,17 +385,19 @@ describe('each wrapper loads its widget through next/dynamic, behind a typed Rus
 // ================================================ the seam: provided by the harness only
 
 describe('the eager seam is provided by the harness and by nothing under web/src', () => {
-  const SEAMS = WIDGETS.map((entry) => entry.seam);
+  const SEAMS = WRAPPED_SEAMS;
   const mentioning = walkFiles(SRC, (path) => /\.(?:ts|tsx)$/.test(path))
     .filter((path) => SEAMS.some((seam) => readText(path).includes(seam)))
     .map(repoRelative)
     .sort();
 
-  it('is named by exactly the five wrappers and their five slice indexes', () => {
+  it('is named by exactly the six wrappers and their six slice indexes', () => {
     expect(mentioning).toEqual(
       [
         'web/src/_pages/dashboard/index.ts',
         'web/src/_pages/dashboard/ui/lazy-dashboard.tsx',
+        'web/src/_pages/home/index.ts',
+        'web/src/_pages/home/ui/lazy-home-sections.tsx',
         'web/src/_pages/knowledge-base/index.ts',
         'web/src/_pages/knowledge-base/ui/lazy-knowledge-base.tsx',
         'web/src/_pages/review/index.ts',
@@ -391,7 +426,7 @@ describe('the eager seam is provided by the harness and by nothing under web/src
 
   it('is provided by the harness, once per widget, with the widget itself', () => {
     const harness = readText(join(WEB_ROOT, 'tests/unit/screens/harness.ts'));
-    for (const { seam, slice } of WIDGETS) {
+    for (const { seam, slice } of [...WIDGETS, HOME_SECTIONS]) {
       expect(harness, `${seam} is not provided by the harness`).toMatch(
         new RegExp(`${seam}\\.Provider,\\s*\\{\\s*value:\\s*\\w+\\s*\\}`),
       );
@@ -424,10 +459,7 @@ function censusRules(): Rule[] {
     .map((relativePath) => {
       const scope = (MODULE_EXPORTS[relativePath] as { readonly default: Record<string, string> }).default;
       const css = readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
-      return parseRules(
-        css.replace(/\.([a-zA-Z_][A-Za-z0-9_-]*)/g, (_m, name: string) => `.${scope[name]}`),
-        relativePath,
-      );
+      return parseRules(scopeModuleCss(css, scope), relativePath);
     })
     .flat();
   return [...parseRules(GLOBALS, 'globals.css'), ...modules];

@@ -11,6 +11,7 @@ import type { V3Parameter, V3Source } from '../model/report';
 import { formatStageV3Xlsx } from '../model/xlsx';
 import { packageSources } from '../model/package';
 import { StageGlobalConsolidation } from './global-consolidation';
+import styles from './stage-v3-report.module.css';
 
 type OpenEvidence = (evidence: StageCardEvidence, card: StageChangeCard) => void;
 
@@ -22,7 +23,7 @@ function SourceList({ sources, card, onOpenEvidence }: { readonly sources: reado
     <code>{source.sourceId}</code>{' '}
     <button type="button" className="am-button" disabled={onOpenEvidence === undefined || source.anchor?.profile_id === undefined || card.stale}
       onClick={() => { if (onOpenEvidence !== undefined && source.anchor !== undefined) onOpenEvidence(source.anchor, card); }}>Открыть источник в PDF ↗</button>
-    {source.quote === '' ? <p>Полная цитата в сохранённой карточке не передана.</p> : <blockquote style={{ whiteSpace: 'pre-wrap' }}>{source.quote}</blockquote>}
+    {source.quote === '' ? <p>Полная цитата в сохранённой карточке не передана.</p> : <blockquote className={styles.quote}>{source.quote}</blockquote>}
     {source.versionUid === '' ? null : <p>Версия: <code>{source.versionUid}</code></p>}
   </li>)}</ul>;
 }
@@ -157,7 +158,7 @@ export function StageV3Report({ runId, cards, run, onOpenEvidence }: { readonly 
       <label>Поиск параметра <input type="search" value={filter} onChange={(event) => { setFilter(event.target.value); setParameterPage(0); }} /></label>
       {parameters.length === 0 ? <p>Структурированные параметры ещё не сохранены. Наблюдения без параметров включены в выгрузку.</p> : <>
         <p>По поиску: {visible.length} из {parameters.length}. На экране до 25 параметров; выгрузки содержат все сохранённые записи.</p>
-        <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Объект и параметр</th><th>Исходный Miner</th><th>Независимая машинная сверка</th><th>Источники</th></tr></thead>
+        <div className={styles.tableScroll}><table><thead><tr><th>Объект и параметр</th><th>Исходный Miner</th><th>Независимая машинная сверка</th><th>Источники</th></tr></thead>
           <tbody>{shownParameters.map(({ card, parameter }) => <tr key={parameter.key}>
             <th scope="row">{parameter.subject}<br />{parameter.name || 'Не указано'}<p>{parameter.location}</p></th>
             <td>{parameter.oldValue || 'Не указано'} → {parameter.newValue || 'Не указано'} {parameter.unit}</td>

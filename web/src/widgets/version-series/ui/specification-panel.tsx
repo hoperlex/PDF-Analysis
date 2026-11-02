@@ -15,6 +15,7 @@ import { pdfPageUrl, useEvidenceDocument } from '@/features/open-evidence';
 import { readSpecificationReport, SpecificationReportError } from '../api/read-specification-report';
 import { formatSpecificationReport } from '../model/specification-report';
 import type { SpecificationReportFormat } from '../model/specification-report';
+import styles from './version-series.module.css';
 
 const STATE: Readonly<Record<string, string>> = {
   not_started: 'Не запускалось', not_applicable: 'Полные СО не определены', running: 'Выполняется',
@@ -40,7 +41,7 @@ function SpecificationSource({ page, side, onClose }: { readonly page: Compariso
     {!valid ? <p>Точный переход недоступен: исходная страница или версия не подтверждены.</p> : null}
     {document.isLoading ? <p role="status">Загружается исходный PDF…</p> : null}
     {document.error ? <p role="status">Исходный PDF не открылся. <button type="button" onClick={document.refetch}>Повторить</button></p> : null}
-    {url === null ? null : <><p><a href={url} target="_blank" rel="noopener noreferrer">Открыть PDF отдельно на странице {page.page_number}</a></p><object key={`${page.version_uid}:${page.page_number}`} data={url} type="application/pdf" aria-label={`Спецификация ${side}, физическая страница ${page.page_number}`} style={{ width: '100%', minHeight: 520 }}><p>Встроенный просмотр недоступен; откройте PDF по ссылке.</p></object><p>Переход по физической странице, без подсветки координат. Сверяйте номер страницы в PDF-просмотрщике.</p></>}
+    {url === null ? null : <><p><a href={url} target="_blank" rel="noopener noreferrer">Открыть PDF отдельно на странице {page.page_number}</a></p><object key={`${page.version_uid}:${page.page_number}`} data={url} type="application/pdf" aria-label={`Спецификация ${side}, физическая страница ${page.page_number}`} className={styles.specificationPdf}><p>Встроенный просмотр недоступен; откройте PDF по ссылке.</p></object><p>Переход по физической странице, без подсветки координат. Сверяйте номер страницы в PDF-просмотрщике.</p></>}
   </section>;
 }
 

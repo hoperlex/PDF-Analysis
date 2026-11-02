@@ -152,7 +152,8 @@ export function parseRules(css: string, origin: string): Rule[] {
     if (ch === '{') {
       const head = selector.trim();
       selector = '';
-      if (head.startsWith('@')) {
+      // `@keyframes` holds stops (`from`, `50%`), not selectors: skipped whole, below.
+      if (head.startsWith('@') && !/^@(?:-[a-z]+-)?keyframes\b/.test(head)) {
         i += 1; // descend into the at-rule; its inner rules are collected as their own
         continue;
       }
@@ -169,7 +170,7 @@ export function parseRules(css: string, origin: string): Rule[] {
         if (at < 0) continue;
         declarations.set(decl.slice(0, at).trim().toLowerCase(), decl.slice(at + 1).trim());
       }
-      out.push({ selector: head, declarations, order: out.length, origin });
+      if (!head.startsWith('@')) out.push({ selector: head, declarations, order: out.length, origin });
       i = j;
       continue;
     }
@@ -182,6 +183,45 @@ export function parseRules(css: string, origin: string): Rule[] {
     i += 1;
   }
   return out;
+}
+
+/**
+ * A CSS module's text with every LOCAL class selector rewritten to the name the markup carries.
+ *
+ * A module declares `.ordinal` and the markup carries `_ordinal_<hash>`, so the census
+ * reads each module through the bundler's own export (`scope`) rather than guessing the
+ * format. A `:global(...)` segment is the other half: its classes are NOT scoped -- the
+ * markup carries `am-button`, not a hashed name -- and the wrapper is not a selector the
+ * matcher knows, so it is peeled off and what it held is put back untouched. Without that,
+ * eight modules (the application frame, the dashboard, the front door, the knowledge base,
+ * ...) contributed rules that matched no element, and the measurement said nothing about them.
+ * A class selector only: the character after the dot must begin an identifier, so `0.35rem`
+ * and `82ch` are untouched.
+ */
+export function scopeModuleCss(css: string, scope: Readonly<Record<string, string>>): string {
+  const peeled: string[] = [];
+  let text = '';
+  let at = 0;
+  for (;;) {
+    const start = css.indexOf(':global(', at);
+    if (start < 0) {
+      text += css.slice(at);
+      break;
+    }
+    text += css.slice(at, start);
+    let depth = 0;
+    let end = start + ':global'.length;
+    for (; end < css.length; end += 1) {
+      if (css[end] === '(') depth += 1;
+      else if (css[end] === ')' && (depth -= 1) === 0) break;
+    }
+    peeled.push(css.slice(start + ':global('.length, end));
+    text += `@@GLOBAL${peeled.length - 1}@@`;
+    at = end + 1;
+  }
+  return text
+    .replace(/\.([a-zA-Z_][A-Za-z0-9_-]*)/g, (_match, name: string) => `.${scope[name] ?? name}`)
+    .replace(/@@GLOBAL(\d+)@@/g, (_match, index: string) => peeled[Number(index)] as string);
 }
 
 /** Split on `;` outside parentheses, so `color-mix(in srgb, …)` survives. */
@@ -296,10 +336,11 @@ export function descendants(node: Element): Element[] {
 // =================================================================== 5. selector matching
 
 /** The pseudo-classes that describe a transient state rather than a position. */
-const STATE_PSEUDOS = new Set(['hover', 'focus', 'focus-visible', 'active', 'disabled']);
+const STATE_PSEUDOS = new Set(['hover', 'focus', 'focus-visible', 'focus-within', 'active', 'disabled']);
 /** Pseudo-elements this module models as a virtual child of their origin. */
 const PSEUDO_ELEMENTS = new Set([
   'before', 'after', 'marker', 'placeholder', 'selection', 'file-selector-button',
+  '-webkit-details-marker',
 ]);
 
 export interface ParsedSelector {
@@ -397,11 +438,12 @@ function matchesCompound(element: Element, compound: string): boolean {
     if (m[2] !== undefined && !element.classes.has(m[2])) return false;
     if (m[3] !== undefined && !matchesAttribute(element, m[3])) return false;
     if (m[4] !== undefined) {
+      if (m[4] === 'only-child' && element.siblings !== 1) return false;
       if (m[4] === 'first-child' && element.index !== 0) return false;
       if (m[4] === 'last-child' && element.index !== element.siblings - 1) return false;
       if (m[4] === 'empty' && (element.children.length > 0 || element.hasOwnText)) return false;
       if (m[4] === 'root' && element.tag !== 'html') return false;
-      if (!['first-child', 'last-child', 'empty', 'root'].includes(m[4])) {
+      if (!['first-child', 'last-child', 'only-child', 'empty', 'root'].includes(m[4])) {
         UNSUPPORTED.push(compound);
         return false;
       }
@@ -411,14 +453,20 @@ function matchesCompound(element: Element, compound: string): boolean {
 }
 
 function matchesAttribute(element: Element, body: string): boolean {
-  const m = /^([\w-]+)(?:=['"]?([^'"\]]*)['"]?)?$/.exec(body.trim());
+  // `[name]`, `[name=v]`, and the three substring operators `^=`, `$=`, `*=` the sheet uses.
+  const m = /^([\w-]+)(?:([\^$*]?)=['"]?([^'"\]]*)['"]?)?$/.exec(body.trim());
   if (!m) {
     UNSUPPORTED.push(`[${body}]`);
     return false;
   }
   const value = element.attrs.get((m[1] ?? '').toLowerCase());
   if (value === undefined) return false;
-  return m[2] === undefined || value === m[2];
+  const wanted = m[3];
+  if (wanted === undefined) return true;
+  if (m[2] === '^') return value.startsWith(wanted);
+  if (m[2] === '$') return value.endsWith(wanted);
+  if (m[2] === '*') return value.includes(wanted);
+  return value === wanted;
 }
 
 /** Split a selector list on `,` outside parentheses: `:where(p, li)` is ONE selector. */
@@ -442,7 +490,22 @@ export function splitSelectorList(list: string): string[] {
  * Split a complex selector into compounds and combinators, ignoring anything inside
  * parentheses — `:where(p, li, dd)` carries spaces and commas and is ONE token.
  */
-export function splitCombinators(selector: string): string[] {
+export function splitCombinators(selector: string): readonly string[] {
+  const cached = COMBINATOR_PARTS.get(selector);
+  if (cached !== undefined) return cached;
+  const split = splitCombinatorsUncached(selector);
+  COMBINATOR_PARTS.set(selector, split);
+  return split;
+}
+
+/**
+ * `matches()` splits the same few thousand selector strings once per ELEMENT, and the census
+ * asks it about every element of every screen, so the split is memoised. The arrays are
+ * frozen: a caller that mutated one would corrupt every later match.
+ */
+const COMBINATOR_PARTS = new Map<string, readonly string[]>();
+
+function splitCombinatorsUncached(selector: string): readonly string[] {
   const parts: string[] = [];
   let buf = '';
   let depth = 0;
@@ -465,7 +528,7 @@ export function splitCombinators(selector: string): string[] {
     buf += ch;
   }
   flush();
-  return parts;
+  return Object.freeze(parts);
 }
 
 /** Full selector match, supporting descendant, `>` and `+`. */
@@ -500,6 +563,56 @@ export function matches(element: Element, base: string): boolean {
   return true;
 }
 
+/**
+ * The candidates a selector index offers for an element, in the order the rules were given.
+ *
+ * `census()` asks `matches()` about every element of every screen against every selector of
+ * the stylesheet, and a rule that cannot match an element can be told from the element's own
+ * class list or tag without evaluating it. Each selector is filed under ONE thing its
+ * SUBJECT (the compound after the last combinator) requires -- a class, else a tag -- and
+ * under nothing when the subject requires neither (`[data-x]`, `:where()`, an empty base).
+ * That is a NECESSARY condition only: the candidates are still run through `matches()`, so
+ * the index can never add a match, and a selector it files wrongly could only be missed if
+ * its subject did not require the thing it was filed under, which `anchorOf` reads off the
+ * compound the same way `matchesCompound` does.
+ */
+export function selectorIndex<T extends { readonly parsed: ParsedSelector }>(
+  entries: readonly T[],
+): (element: Element) => T[] {
+  const byClass = new Map<string, number[]>();
+  const byTag = new Map<string, number[]>();
+  const always: number[] = [];
+  const file = (map: Map<string, number[]>, key: string, at: number): void => {
+    const list = map.get(key);
+    if (list === undefined) map.set(key, [at]);
+    else list.push(at);
+  };
+  entries.forEach((entry, at) => {
+    const parts = splitCombinators(entry.parsed.base);
+    const subject = (parts[parts.length - 1] ?? '').trim().replace(/^\*/, '');
+    // `:where(...)` is an any-of, and attribute values and parenthesised arguments may hold a
+    // dot that is not a class.
+    const bare = subject.includes(':where(')
+      ? ''
+      : subject.replace(/\[[^\]]*\]/g, '').replace(/\([^)]*\)/g, '');
+    const cls = /\.([\w-]+)/.exec(bare);
+    const tag = /^([a-zA-Z][\w-]*)/.exec(bare);
+    if (cls?.[1] !== undefined) file(byClass, cls[1], at);
+    else if (tag?.[1] !== undefined) file(byTag, tag[1].toLowerCase(), at);
+    else always.push(at);
+  });
+  return (element) => {
+    const found: number[] = [...always];
+    for (const name of element.classes) {
+      const list = byClass.get(name);
+      if (list !== undefined) found.push(...list);
+    }
+    const tagged = byTag.get(element.tag);
+    if (tagged !== undefined) found.push(...tagged);
+    return found.sort((a, b) => a - b).map((at) => entries[at] as T);
+  };
+}
+
 // ============================================================= 6. colours in declarations
 
 export type Colour =
@@ -510,6 +623,38 @@ export type Colour =
 
 /** The colour a declaration value carries, or `null` when it carries none. */
 export function readColour(value: string): Colour | null {
+  const cached = COLOUR_OF_VALUE.get(value);
+  if (cached !== undefined) return cached;
+  const colour = readColourUncached(value);
+  COLOUR_OF_VALUE.set(value, colour);
+  return colour;
+}
+
+/** A declaration value reads to the same colour every time; the cascade asks per element. */
+const COLOUR_OF_VALUE = new Map<string, Colour | null>();
+
+/**
+ * The paint that sits under every other layer of a multi-layer `background`.
+ *
+ * `radial-gradient(circle at 10% 0%, var(--am-accent-light), transparent 36%), var(--am-paper)`
+ * is a faint tint in one corner over a `--am-paper` card, and text on it is judged against
+ * the card. Reading the FIRST token in the value judged it against the tint, which paints a
+ * fraction of the box and is the wrong end of the declaration: the colour layer, when there is
+ * one, is the LAST comma-separated layer. A value with no top-level comma is returned as it was.
+ */
+function lastLayer(value: string): string {
+  let depth = 0;
+  let from = 0;
+  for (let at = 0; at < value.length; at += 1) {
+    if (value[at] === '(') depth += 1;
+    else if (value[at] === ')') depth -= 1;
+    else if (value[at] === ',' && depth === 0) from = at + 1;
+  }
+  return from === 0 ? value : value.slice(from);
+}
+
+function readColourUncached(raw: string): Colour | null {
+  const value = lastLayer(raw);
   const mix = /color-mix\(\s*in\s+srgb\s*,\s*var\((--am-[\w-]+)\)\s*([\d.]+)%\s*,\s*transparent\s*\)/.exec(
     value,
   );
@@ -636,6 +781,68 @@ export interface Screen {
 }
 
 /**
+ * A screen's markup as the product serves it: inside the application frame.
+ *
+ * Every page is drawn in `<main class="am-app__main">` (`app/layout.tsx`), and `globals.css`
+ * remaps thirteen base tokens for everything below it (see `scopedPalettes`). `screens()`
+ * renders a page on its own, wrapped only in `<html><body>`, so measured as given it would
+ * carry the root palette that no reader of that page meets (S7-design-02). The wrapper is
+ * applied HERE, where the cascade is evaluated, so a caller cannot take a census of the
+ * unframed page by forgetting it. A screen that already carries the frame (`AppFrame`) or a
+ * piece of it (the pieces seeded inside `<header class="am-app__bar">`) is left alone.
+ */
+export function framed(markup: string): string {
+  if (/class="am-app(?:__(?:bar|utility|main))?"/.test(markup)) return markup;
+  const open = '<div class="am-app"><main class="am-app__main">';
+  const close = '</main></div>';
+  return markup.includes('<body>')
+    ? markup.replace('<body>', `<body>${open}`).replace('</body>', `${close}</body>`)
+    : `${open}${markup}${close}`;
+}
+
+/**
+ * A palette that applies INSIDE part of the page: the custom properties a non-root rule
+ * points at other tokens, for the elements its selector matches and everything below them.
+ *
+ * `globals.css` has one -- `[data-dashboard-showcase], .am-app__bar, .am-app__utility,
+ * .am-app__main { --am-paper: var(--am-showcase-card); ... }` -- and `palette()`, which reads
+ * the `:root` blocks, cannot see it. Every authenticated screen is drawn inside
+ * `.am-app__main`, so for thirteen base tokens the colour a reader meets is the OTHER token's
+ * value (S7-design-02). The census therefore names the token that really supplies a colour:
+ * an element inside that scope that reads `var(--am-ink-soft)` is measured as
+ * `--am-showcase-soft`. Both ends of every pair are resolved at the element that declares
+ * them, because a custom property is substituted where it is used, not where it is defined.
+ */
+export interface ScopedPalette {
+  /** The selectors that open the scope. */
+  readonly selectors: readonly string[];
+  /** The token a base token resolves to inside it. */
+  readonly alias: ReadonlyMap<TokenName, TokenName>;
+}
+
+/** Every scoped palette the rules declare. A `:root` block is a theme, not a scope: `palette()` reads it. */
+export function scopedPalettes(rules: readonly Rule[]): ScopedPalette[] {
+  const out: ScopedPalette[] = [];
+  for (const rule of rules) {
+    if (/^\s*:root/.test(rule.selector)) continue;
+    const alias = new Map<TokenName, TokenName>();
+    for (const [property, value] of rule.declarations) {
+      if (!property.startsWith('--am-')) continue;
+      const reference = /^var\((--am-[\w-]+)\)$/.exec(value.trim());
+      if (reference) alias.set(property as TokenName, reference[1] as TokenName);
+    }
+    if (alias.size > 0) out.push({ selectors: splitSelectorList(rule.selector), alias });
+  }
+  return out;
+}
+
+function aliasedColour(colour: Colour, alias: ReadonlyMap<TokenName, TokenName> | null): Colour {
+  if (alias === null || (colour.kind !== 'token' && colour.kind !== 'mix')) return colour;
+  const token = alias.get(colour.token);
+  return token === undefined ? colour : { ...colour, token };
+}
+
+/**
  * Every (foreground, background) pair that meets on these screens.
  *
  * The background of a pair is always a TOKEN, because a pair whose background is a blend
@@ -657,6 +864,11 @@ export function census(
   const stateless = parsed.filter((e) => e.parsed.states.length === 0 && e.parsed.pseudoElement === null);
   const stateful = parsed.filter((e) => e.parsed.states.length > 0 && e.parsed.pseudoElement === null);
   const pseudos = parsed.filter((e) => e.parsed.pseudoElement !== null);
+
+  const scopes = scopedPalettes(rules);
+  const statelessFor = selectorIndex(stateless);
+  const statefulFor = selectorIndex(stateful);
+  const pseudosFor = selectorIndex(pseudos);
 
   const out = new Map<string, Occurrence & { sites: string[] }>();
   const record = (occurrence: Occurrence): void => {
@@ -684,7 +896,7 @@ export function census(
   };
 
   for (const screen of screens) {
-    const root = parseMarkup(screen.markup);
+    const root = parseMarkup(framed(screen.markup));
     const all = descendants(root);
     const computedOf = new Map<Element, Computed>();
     const order = (a: { rule: Rule; parsed: ParsedSelector }, b: typeof a): number =>
@@ -692,7 +904,7 @@ export function census(
 
     for (const element of all) {
       const computed = emptyComputed();
-      for (const entry of stateless.filter((e) => matches(element, e.parsed.base)).sort(order)) {
+      for (const entry of statelessFor(element).filter((e) => matches(element, e.parsed.base)).sort(order)) {
         applyRule(computed, entry.rule);
       }
       computedOf.set(element, computed);
@@ -704,11 +916,25 @@ export function census(
       let computed = own;
       while (node) {
         const background = computed?.background ?? computedOf.get(node)?.background ?? null;
-        if (background && background.kind === 'token') return background.token;
+        if (background && background.kind === 'token') {
+          return scopeAt(node)?.get(background.token) ?? background.token;
+        }
         computed = null;
         node = node.parent;
       }
       return null;
+    };
+
+    /** The aliases in force at an element: its own scope's, else the nearest ancestor's. */
+    const scopeMemo = new Map<Element, ReadonlyMap<TokenName, TokenName> | null>();
+    const scopeAt = (node: Element | null): ReadonlyMap<TokenName, TokenName> | null => {
+      if (node === null || scopes.length === 0) return null;
+      const known = scopeMemo.get(node);
+      if (known !== undefined) return known;
+      const own = scopes.find((scope) => scope.selectors.some((selector) => matches(node, selector)));
+      const found = own !== undefined ? own.alias : scopeAt(node.parent);
+      scopeMemo.set(node, found);
+      return found;
     };
 
     const colourOf = (element: Element, own: Computed | null): Colour | null => {
@@ -716,7 +942,7 @@ export function census(
       let computed = own;
       while (node) {
         const colour = computed?.colour ?? computedOf.get(node)?.colour ?? null;
-        if (colour) return colour;
+        if (colour) return aliasedColour(colour, scopeAt(node));
         computed = null;
         node = node.parent;
       }
@@ -751,9 +977,10 @@ export function census(
       // and in the history it is the only thing that says it in colour. 1.4.11.
       if (pseudo !== null && pseudo !== 'selection' && !hasText && computed.background?.kind === 'token') {
         const behind = backgroundOf(element, null);
-        if (behind && behind !== computed.background.token) {
+        const painted = scopeAt(element)?.get(computed.background.token) ?? computed.background.token;
+        if (behind && behind !== painted) {
           record({
-            kind: 'graphic', foreground: computed.background.token,
+            kind: 'graphic', foreground: painted,
             background: behind, state, pseudo, site,
             interactive, fillDistinguishes: false,
           });
@@ -767,7 +994,8 @@ export function census(
       // against itself — 1:1 — which is the correct reading: it distinguishes nothing.
       const fillDistinguishes =
         outsideHex !== undefined && contrastRatio(backdrop, outsideHex) >= 3;
-      for (const [property, colour] of computed.edges) {
+      for (const [property, declared] of computed.edges) {
+        const colour = aliasedColour(declared, scopeAt(element));
         if (colour.kind === 'transparent' || colour.kind === 'current' || !outsideHex) continue;
         const hex = resolve(colour, tokens, outsideHex, outsideHex);
         if (!hex) continue;
@@ -795,7 +1023,7 @@ export function census(
       // each distinct state SET gets a full cascade of every rule whose states that set
       // satisfies, rather than one rule dropped on top of the resting style. Applying
       // them one at a time reports pairs no browser ever paints.
-      const applicable = stateful.filter((e) => matches(element, e.parsed.base));
+      const applicable = statefulFor(element).filter((e) => matches(element, e.parsed.base));
       const stateSets = new Map<string, string[]>();
       for (const entry of applicable) {
         const key = [...entry.parsed.states].sort().join(':');
@@ -805,14 +1033,14 @@ export function census(
         const held = new Set(states);
         const variant = emptyComputed();
         const inState = [
-          ...stateless.filter((e) => matches(element, e.parsed.base)),
+          ...statelessFor(element).filter((e) => matches(element, e.parsed.base)),
           ...applicable.filter((e) => e.parsed.states.every((s) => held.has(s))),
         ].sort(order);
         for (const entry of inState) applyRule(variant, entry.rule);
         emit(element, variant, key, null, `${site} {:${key}}`, element.hasOwnText);
       }
 
-      for (const entry of pseudos) {
+      for (const entry of pseudosFor(element)) {
         const pseudo = entry.parsed.pseudoElement as string;
         if (entry.parsed.base !== '' && !matches(element, entry.parsed.base)) continue;
         if (entry.parsed.base === '' && pseudo !== 'selection') continue;
@@ -828,7 +1056,7 @@ export function census(
           entry.parsed.states.join(':') || null,
           pseudo,
           `${site} {${entry.parsed.source.trim()}}`,
-          carriesText && (element.hasOwnText || pseudo === 'placeholder' || pseudo === 'marker' || pseudo === 'file-selector-button'),
+          carriesText && (element.hasOwnText || pseudo === 'placeholder' || pseudo === 'marker' || pseudo === '-webkit-details-marker' || pseudo === 'file-selector-button'),
         );
       }
     }
@@ -866,21 +1094,35 @@ function path(element: Element): string {
  */
 export function declaredPairs(rules: readonly Rule[]): Map<string, Occurrence & { sites: string[] }> {
   const out = new Map<string, Occurrence & { sites: string[] }>();
+  // Every screen is drawn inside the application frame, so a pair a rule declares is met in
+  // the frame's palette as well as in the root one (`scopedPalettes`): both are recorded.
+  const inFrame = scopedPalettes(rules).map((scope) => scope.alias);
+  const record = (foreground: TokenName, background: TokenName, site: string): void => {
+    const key = ['text', foreground, background, '-', '-'].join('|');
+    const existing = out.get(key);
+    if (existing) existing.sites.push(site);
+    else {
+      out.set(key, {
+        kind: 'text', foreground, background,
+        state: null, pseudo: null, site, sites: [site],
+        interactive: false, fillDistinguishes: false,
+      });
+    }
+  };
   for (const rule of rules) {
     const colour = readColour(rule.declarations.get('color') ?? '');
     const background = readColour(
       rule.declarations.get('background') ?? rule.declarations.get('background-color') ?? '',
     );
     if (colour?.kind !== 'token' || background?.kind !== 'token') continue;
-    const key = ['text', colour.token, background.token, '-', '-'].join('|');
-    const existing = out.get(key);
-    if (existing) existing.sites.push(rule.selector.trim());
-    else {
-      out.set(key, {
-        kind: 'text', foreground: colour.token, background: background.token,
-        state: null, pseudo: null, site: rule.selector.trim(), sites: [rule.selector.trim()],
-        interactive: false, fillDistinguishes: false,
-      });
+    const site = rule.selector.trim();
+    record(colour.token, background.token, site);
+    for (const alias of inFrame) {
+      const foreground = alias.get(colour.token) ?? colour.token;
+      const behind = alias.get(background.token) ?? background.token;
+      if (foreground !== colour.token || behind !== background.token) {
+        record(foreground, behind, `${site} {inside the application frame}`);
+      }
     }
   }
   return out;

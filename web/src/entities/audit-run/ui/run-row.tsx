@@ -34,7 +34,7 @@ export function RunRow({ run, href }: RunRowProps) {
   const executor = runExecutorLine(run);
   const preset = runPresetLine(run);
   return (
-    <li className="am-state" style={{ marginBottom: '0.5rem' }} data-run-id={run.run_id}>
+    <li className="am-state" data-run-id={run.run_id}>
       <p className="am-state__title">
         <Link href={href}>
           <code>{run.run_id}</code>
