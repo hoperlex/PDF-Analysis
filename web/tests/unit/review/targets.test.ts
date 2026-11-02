@@ -213,7 +213,7 @@ describe('resolution order', () => {
     expect(placeByGeometry(target({ rects: off }), PAGE)).toBeNull();
   });
 
-  it('uses the page text only for a target the geometry could not place', async () => {
+  it('reads the page text for a target the geometry could not place, and to check the lines it did', async () => {
     let reads = 0;
     const text: TextSnapshot = { items: [item('Срок поставки 30 дней', 40, 700)], transform: FLIP };
     const readText = async () => {
@@ -221,19 +221,57 @@ describe('resolution order', () => {
       return text;
     };
 
-    const placed = await placeTargets([target({ rects: lines, quote: 'Срок поставки' })], PAGE, readText);
-    expect(placed[0]?.resolution.method).toBe('lines');
+    // A region or lines with nothing to compare them with need no text at all.
+    const quiet = await placeTargets(
+      [target({ rects: lines }), target({ id: 't2', badge: '2', region: [0.1, 0.1, 0.5, 0.5], quote: 'Срок поставки' })],
+      PAGE,
+      readText,
+    );
+    expect(quiet.map((p) => p.resolution.method)).toEqual(['lines', 'region']);
     expect(reads).toBe(0);
 
+    // Lines and a quotation that has no geometry: one read serves both.
     const searched = await placeTargets(
-      [target({ rects: lines, quote: 'Срок поставки' }), target({ id: 't2', badge: '2', quote: '30 дней' })],
+      [target({ rects: ON_THE_TEXT, quote: 'Срок поставки' }), target({ id: 't2', badge: '2', quote: '30 дней' })],
       PAGE,
       readText,
     );
     expect(searched.map((p) => p.resolution.method)).toEqual(['lines', 'text']);
     expect(reads).toBe(1);
   });
+
+  it('refuses lines that the page’s own text contradicts, and lets the text decide', async () => {
+    const text: TextSnapshot = { items: [item('Срок поставки 30 дней', 40, 700)], transform: FLIP };
+    const placed = await placeTargets(
+      // Right size, on the page, but 60 points up: what a crop box that starts at (40, 60) does.
+      [target({ rects: [{ left: 40, top: 71, width: 126, height: 15 }], quote: 'Срок поставки' })],
+      PAGE,
+      async () => text,
+    );
+    expect(placed[0]?.resolution).toEqual({ status: 'found', method: 'text', occurrences: 1 });
+    expect(placed[0]?.groups[0]?.hull.top).toBeGreaterThan(125);
+  });
+
+  it('keeps the lines when the quotation is one of two occurrences and the lines are the second', async () => {
+    const text: TextSnapshot = { items: [item('Итого 100', 40, 700), item('Итого 100', 40, 500)], transform: FLIP };
+    const second = [{ left: 40, top: 331, width: 54, height: 15 }];
+    const placed = await placeTargets([target({ rects: second, quote: 'Итого 100' })], PAGE, async () => text);
+    expect(placed[0]?.resolution.method).toBe('lines');
+    expect(placed[0]?.groups[0]?.hull).toEqual(second[0]);
+  });
+
+  it('keeps the lines when the text does not contain the quotation, since nothing contradicts them', async () => {
+    const text: TextSnapshot = { items: [item('совсем другая строка', 40, 700)], transform: FLIP };
+    const placed = await placeTargets([target({ rects: lines, quote: 'Срок поставки' })], PAGE, async () => text);
+    expect(placed[0]?.resolution.method).toBe('lines');
+    // And a page with no text layer at all cannot contradict them either.
+    const scan = await placeTargets([target({ rects: lines, quote: 'Срок поставки' })], PAGE, async () => ({ items: [], transform: FLIP }));
+    expect(scan[0]?.resolution.method).toBe('lines');
+  });
 });
+
+/** Lines that sit on the text `item('Срок поставки 30 дней', 40, 700)` below. */
+const ON_THE_TEXT = [{ left: 40, top: 131, width: 126, height: 15 }];
 
 /** A y-up page of the test height seen through the viewport at scale 1: `[1, 0, 0, -1, 0, h]`. */
 const FLIP = [1, 0, 0, -1, 0, 842];

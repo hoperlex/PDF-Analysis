@@ -165,12 +165,13 @@
   }
 }
 
+/* In the margin to the left of the frame: above it, the badge covered the line before. */
 .badge {
   position: absolute;
-  bottom: 100%;
-  left: -2px;
+  top: -2px;
+  right: 100%;
   min-width: 20px;
-  margin-bottom: 4px;
+  margin-right: 8px;
   padding: 1px 6px;
   border: 1px solid var(--am-accent);
   border-radius: var(--am-radius-pill);

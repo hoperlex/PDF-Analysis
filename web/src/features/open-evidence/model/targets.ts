@@ -21,7 +21,13 @@
  *
  * A rectangle that does not lie on the page is refused, not clipped into place: geometry from
  * another extraction, or for another page box, would otherwise be drawn on the wrong text with
- * every appearance of being right.
+ * every appearance of being right. The same refusal covers geometry that lies on the page but
+ * not where the page's own text says the quotation is: the server measures from the media box
+ * and pdf.js from the crop box, so a page whose crop box does not start at the origin would put
+ * every server line a fixed distance from its text. When the page's text contains the quotation
+ * and none of its occurrences meets the server's lines, the lines are not this page's, and the
+ * text decides. When the text does not contain the quotation (a scan, a different reading of
+ * the same glyphs) nothing contradicts the lines and they stand.
  *
  * The character range selects lines and is never shown (`R-43`, `D-50`); `block_id` is not read
  * at all.
@@ -208,9 +214,19 @@ function unplaced(target: ViewerTarget, status: QuotationStatus): Placement {
   return { target, resolution: { status, method: null, occurrences: 0 }, groups: [] };
 }
 
+/** How much of the smaller of two boxes must lie inside the other for them to be the same place. */
+const SAME_PLACE = 0.5;
+
+function overlapShare(left: Rect, right: Rect): number {
+  const width = Math.min(left.left + left.width, right.left + right.width) - Math.max(left.left, right.left);
+  const height = Math.min(left.top + left.height, right.top + right.height) - Math.max(left.top, right.top);
+  if (!(width > 0 && height > 0)) return 0;
+  return (width * height) / Math.min(left.width * left.height, right.width * right.height);
+}
+
 /**
- * Place every target of one page. The page's text is asked for only if some target has no
- * geometry of its own and has a quotation to look for.
+ * Place every target of one page. The page's text is asked for when some target has a quotation
+ * to look for and either no geometry of its own, or line geometry that the text can check.
  */
 export async function placeTargets(
   targets: readonly ViewerTarget[],
@@ -219,7 +235,8 @@ export async function placeTargets(
 ): Promise<readonly Placement[]> {
   const byGeometry = targets.map((target) => placeByGeometry(target, page));
   const searching = targets.filter(
-    (target, at) => byGeometry[at] === null && (target.quote ?? '') !== '',
+    (target, at) =>
+      (target.quote ?? '') !== '' && (byGeometry[at] === null || byGeometry[at]?.resolution.method === 'lines'),
   );
   if (searching.length === 0) {
     return targets.map((target, at) => byGeometry[at] ?? unplaced(target, 'not-found'));
@@ -232,14 +249,25 @@ export async function placeTargets(
     text.transform,
   );
   return targets.map((target, at) => {
-    const given = byGeometry[at];
-    if (given !== null && given !== undefined) return given;
+    const given = byGeometry[at] ?? null;
     const found = located[searching.indexOf(target)];
+    const groups: PlacedGroup[] =
+      found?.occurrences.flatMap((occurrence) => {
+        const hull = unionRectangle(occurrence.highlights);
+        return hull === null ? [] : [{ highlights: occurrence.highlights, hull }];
+      }) ?? [];
+
+    if (given !== null) {
+      // Lines the page's own text contradicts are refused; lines nothing contradicts stand.
+      const here = given.groups[0]?.hull;
+      const contradicted =
+        given.resolution.method === 'lines' &&
+        here !== undefined &&
+        groups.length > 0 &&
+        groups.every((group) => overlapShare(here, group.hull) < SAME_PLACE);
+      if (!contradicted) return given;
+    }
     if (found === undefined) return unplaced(target, 'not-found');
-    const groups = found.occurrences.flatMap((occurrence) => {
-      const hull = unionRectangle(occurrence.highlights);
-      return hull === null ? [] : [{ highlights: occurrence.highlights, hull }];
-    });
     if (groups.length === 0) return unplaced(target, found.status === 'found' ? 'not-found' : found.status);
     return {
       target,
