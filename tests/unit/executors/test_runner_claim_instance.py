@@ -111,11 +111,12 @@ def test_the_sweep_clears_the_instance_in_the_statement_that_returns_the_task_to
 
 
 def test_the_token_lock_is_a_select_for_update_of_the_tokens_own_row() -> None:
-    found, missing = _Recording(row=(1,)), _Recording(row=None)
+    # `EXEC2-INT-1`: the lock also reads usability; `test_runner_claim_usability.py` pins the full statement.
+    found, missing = _Recording(row=(True,)), _Recording(row=None)
     assert STORE.lock_token(found, "ern_T") is True  # type: ignore[arg-type]
     assert STORE.lock_token(missing, "ern_T") is False  # type: ignore[arg-type]
     (sql, params), = found.statements
-    assert _flat(sql) == "SELECT 1 FROM executor_runner_token WHERE token_id = :t FOR UPDATE"
+    assert _flat(sql).endswith("WHERE t.token_id = :t FOR UPDATE OF t")
     assert params == {"t": "ern_T"}
 
 

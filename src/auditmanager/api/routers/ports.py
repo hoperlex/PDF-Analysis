@@ -231,8 +231,7 @@ class EnrollmentPort(Protocol):
 
     def authenticate_enrollment(self, presented: str) -> EnrollmentIdentity | None: ...
     def issue_enrollment(
-        self, *, connection_id: str, user_uid: str, idempotency_key: str,
-        requested_origin: str | None,
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
     ) -> models.IssuedExecutorEnrollment: ...
     def set_integration_authorisation(
         self, *, connection_id: str, authorised: bool, user_uid: str, idempotency_key: str

@@ -291,7 +291,7 @@ def _begin(
 
 def issue_executor_enrollment(
     session: Session, *, connection_id: str, roles: Iterable[str], idempotency_key: str,
-    actor_uid: str, configured_origin: str | None, requested_origin: str | None,
+    actor_uid: str, configured_origin: str | None,
     executors: ExecutorRepository | None = None, repository: EnrollmentRepository | None = None,
     commands: CommandRepository | None = None,
     package_source: Callable[[], AgentPackage] = latest_package,
@@ -299,14 +299,17 @@ def issue_executor_enrollment(
 ) -> IssuedEnrollment:
     """Issue a grant for a ``pull`` connection and return its secret and install command, once.
 
-    Refusals, in this order and all before anything is written: ``permission_denied``; a repeat of the key
-    (``conflict`` / ``enrollment_shown_once``: the secret was never stored); ``not_found``;
-    ``conflict`` / ``connection_archived``; ``validation_failed`` on ``kind`` (``kind_not_pull``);
-    ``conflict`` / ``no_revision``; ``dependency_unavailable`` (``agent_package``, or ``public_origin``).
+    Refusals, in this order and all before anything is written: ``permission_denied``;
+    ``dependency_unavailable`` / ``public_origin`` (the configured ``AUDITMANAGER_PUBLIC_ORIGIN`` is the only
+    source of the command's origin, and a stand without a valid one refuses before even the idempotency key
+    is recorded); a repeat of the key (``conflict`` / ``enrollment_shown_once``: the secret was never stored);
+    ``not_found``; ``conflict`` / ``connection_archived``; ``validation_failed`` on ``kind``
+    (``kind_not_pull``); ``conflict`` / ``no_revision``; ``dependency_unavailable`` / ``agent_package``.
 
     The previous grant that was neither redeemed nor revoked is revoked, and when an agent of this
     connection is online the move is journaled."""
     _admin(roles)
+    origin = resolve_origin(configured_origin)
     store, grants, ledger = (
         executors or ExecutorRepository(), repository or EnrollmentRepository(),
         commands or CommandRepository(),
@@ -330,7 +333,6 @@ def issue_executor_enrollment(
     if current is None:
         raise _conflict("no_revision", "the connection has no revision yet")
     package = package_source()
-    origin = resolve_origin(configured_origin, requested_origin)
 
     online = grants.online_tokens(session, connection_id)
     for revoked_id, was_live in grants.revoke_unredeemed(session, connection_id, actor_uid=actor_uid):

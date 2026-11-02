@@ -29,12 +29,17 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from starlette.requests import Request as StarletteRequest
 
 from auditmanager.api.routers import build_router
-from auditmanager.api.routers.executor_enrollment import requested_origin
 from auditmanager.api.schemas import models
 from auditmanager.api.security import (
     ENROLLMENT_OPERATIONS,
@@ -125,8 +130,8 @@ class StubEnrollment:
         package, content = load_package(version, directory=self.package_directory)
         return package.file_name, content
 
-    def issue_enrollment(self, *, connection_id, user_uid, idempotency_key, requested_origin):
-        self.calls.append(("issue", connection_id, requested_origin))
+    def issue_enrollment(self, *, connection_id, user_uid, idempotency_key):
+        self.calls.append(("issue", connection_id))
         self._maybe_refuse()
         return models.IssuedExecutorEnrollment.model_validate({
             "secret": SECRET, "package_version": "0.9.0", "package_sha256": "a" * 64,
@@ -409,17 +414,16 @@ def test_a_malformed_install_identity_is_a_404_and_reaches_no_port(stub) -> None
     assert answer.status == 404 and stub.calls == []
 
 
-def _scope(headers: dict[str, str], scheme: str = "http") -> StarletteRequest:
-    return StarletteRequest({
-        "type": "http", "method": "POST", "path": "/x", "query_string": b"", "scheme": scheme,
-        "server": ("testserver", 80), "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()]})
-
-
-def test_the_origin_of_a_request_is_the_forwarded_scheme_and_the_host_it_arrived_on() -> None:
-    assert requested_origin(_scope({"Host": "stand.example", "X-Forwarded-Proto": "https"})) == "https://stand.example"
-    assert requested_origin(_scope({"Host": "10.0.0.5:8080"})) == "http://10.0.0.5:8080"
-    assert requested_origin(_scope({"Host": "stand.example", "X-Forwarded-Proto": "https, http"})) == "https://stand.example"
-    assert requested_origin(_scope({})) is None
+def test_the_issue_operation_hands_the_port_no_origin_taken_from_the_request(stub) -> None:
+    """The origin of the install command is the stand's configured one; the request's ``Host`` and forwarded
+    scheme never reach the port (behind the web tier they are the API's own internal name)."""
+    admin = _surface(stub)
+    path = f"/executor-connections/{CONNECTION}/enrollments"
+    done = dispatch(admin, Request.build(
+        "POST", path, headers={"Idempotency-Key": f"enroll-{uuid4().hex}", "Host": "api:8000",
+                               "X-Forwarded-Proto": "http"}))
+    assert done.status == 201
+    assert stub.calls[-1] == ("issue", CONNECTION)
 
 
 # =================================================================================================
@@ -439,8 +443,7 @@ def package_content(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> bytes:
     return publish(tmp_path)
 
 
-@pytest.fixture
-def stand(session: Session, admin_account: str, rings, package_content: bytes):
+def build_stand(session: Session, rings, *, public_origin: str | None):
     from auditmanager.bootstrap.adapters import ExecutorAdapter, ExecutorEnrollmentAdapter
     from auditmanager.bootstrap.runner import RunnerAdapter
 
@@ -456,9 +459,14 @@ def stand(session: Session, admin_account: str, rings, package_content: bytes):
         executors=ExecutorAdapter(sessions, ring=rings.public),  # type: ignore[arg-type]
         runner=RunnerAdapter(sessions),  # type: ignore[arg-type]
         enrollment=ExecutorEnrollmentAdapter(  # type: ignore[arg-type]
-            sessions, ring=rings.public, public_origin="https://stand.example"),
+            sessions, ring=rings.public, public_origin=public_origin),
     )
     return driver.Surface(router)
+
+
+@pytest.fixture
+def stand(session: Session, admin_account: str, rings, package_content: bytes):
+    return build_stand(session, rings, public_origin="https://stand.example")
 
 
 def admin_call(surface, method: str, path: str, body: Any = None, *, key: str | None = None):
@@ -525,6 +533,28 @@ def test_a_grant_is_shown_once_stored_only_as_a_hash_and_listed_without_its_secr
     assert [item["enrollment_id"] for item in detail["enrollments"]] == [meta["enrollment_id"]]
     assert secret not in json.dumps(detail) and "secret_hash" not in json.dumps(detail)
     assert detail["enrollments"][0]["state"] == "pending"
+
+
+@pytest.mark.parametrize("configured", [None, "", "not an origin", "https://stand.example/path"])
+def test_a_stand_without_a_valid_public_origin_issues_nothing_and_never_guesses_one(
+    session, admin_account: str, rings, package_content: bytes, configured: str | None,
+) -> None:
+    """The origin of the install command is the configured one alone: the request's ``Host`` is never a
+    fallback (behind the web tier it is the API's internal name). No grant is written, and the idempotency key
+    is not spent: the same key issues once the stand is configured."""
+    unconfigured = build_stand(session, rings, public_origin=configured)
+    configured_stand = build_stand(session, rings, public_origin="https://stand.example")
+    connection_id = make_connection(configured_stand)
+    key = f"enroll-{uuid4().hex}"
+    refused = issue(unconfigured, connection_id, key=key)
+    assert refused.status == 503 and refused.json()["error_code"] == "dependency_unavailable"
+    assert refused.json()["details"] == {"dependency": "public_origin"}
+    assert read_connection(configured_stand, connection_id)["enrollments"] == []
+    assert session.execute(text("SELECT count(*) FROM executor_enrollment WHERE connection_id = :id"),
+                           {"id": connection_id}).scalar_one() == 0
+    done = issue(configured_stand, connection_id, key=key)
+    assert done.status == 201, done.body
+    assert "https://stand.example/api/v1/runner/agent-package/0.9.0" in done.json()["command"]
 
 
 def test_the_exchange_registers_the_agent_once_and_the_token_it_yields_claims_like_any_runner_token(
@@ -653,6 +683,38 @@ def test_an_expired_grant_is_a_401_indistinguishable_from_a_wrong_secret(session
     assert expired.json()["message"] == wrong.json()["message"]
     assert session.execute(text("SELECT count(*) FROM executor_runner_token WHERE connection_id = :c"),
                            {"c": connection_id}).scalar_one() == 0
+
+
+def test_redeeming_a_grant_past_its_expiry_is_a_clean_refusal_and_a_redemption_stays_inside_the_window(
+    session, stand,
+) -> None:
+    """``mark_redeemed`` decides the window and stamps the redemption with one reading of the clock, so a
+    late redemption is ``False`` (the caller's 401) and never ``ck_executor_enrollment_redeemed_in_window``
+    (a 500). An already-expired grant is the deterministic face of that race."""
+    from auditmanager.executors.enrollment_repository import EnrollmentRepository
+    from auditmanager.shared.identity import ExecutorEnrollmentId
+
+    connection_id = make_connection(stand)
+    grants = EnrollmentRepository()
+    late = str(ExecutorEnrollmentId.new())
+    session.execute(text(
+        "INSERT INTO executor_enrollment (enrollment_id, connection_id, secret_prefix, secret_hash, "
+        "created_at, created_by, expires_at) VALUES (:id, :c, 'ame_latelate', :hash, "
+        "clock_timestamp() - interval '20 minutes', :actor, clock_timestamp() - interval '1 second')"
+    ), {"id": late, "c": connection_id, "hash": hashlib.sha256(b"late").digest(),
+        "actor": driver.TEST_SUBJECT.user_uid})
+    assert grants.mark_redeemed(session, late, "ern_" + "0" * 26) is False
+    row = session.execute(text(
+        "SELECT redeemed_at, runner_token_id FROM executor_enrollment WHERE enrollment_id = :id"),
+        {"id": late}).one()
+    assert tuple(row) == (None, None), "nothing changed"
+
+    issued = issue(stand, connection_id).json()
+    assert exchange(stand, issued["secret"]).status == 201
+    redeemed = session.execute(text(
+        "SELECT redeemed_at, expires_at, runner_token_id FROM executor_enrollment WHERE enrollment_id = :id"),
+        {"id": issued["enrollment"]["enrollment_id"]}).one()
+    assert redeemed[2] is not None and redeemed[0] <= redeemed[1]
 
 
 def test_a_new_grant_revokes_the_previous_one_and_its_secret_stops_working(session, stand) -> None:
@@ -814,6 +876,130 @@ def test_a_new_install_session_replaces_the_previous_sessions_key(session, stand
         {"c": connection_id}).all())
     assert keys == {first["install_id"]: False, second.json()["install_id"]: True}
     assert second.json()["public_key"] != first["public_key"]
+
+
+INSTALL_BODY = {"access": "generated_key", "ssh_host": "agent-host.example", "ssh_port": 22, "ssh_user": "ubuntu"}
+
+
+def age_install(session: Session, install_id: str, seconds: int) -> None:
+    """Make a session ``seconds`` older. ``created_at`` is frozen by a trigger, so the guard is lifted for this
+    one statement (inside the test's own transaction, which is rolled back)."""
+    guard = "ALTER TABLE executor_agent_install {} TRIGGER trg_executor_agent_install_frozen_guard"
+    session.execute(text(guard.format("DISABLE")))
+    session.execute(text(
+        "UPDATE executor_agent_install SET created_at = created_at - make_interval(secs => :s) "
+        "WHERE install_id = :id"), {"s": seconds, "id": install_id})
+    session.execute(text(guard.format("ENABLE")))
+
+
+def current_install_keys(session: Session, connection_id: str) -> int:
+    return int(session.execute(text(
+        "SELECT count(*) FROM executor_secret WHERE connection_id = :c AND purpose = 'agent_install_key' "
+        "AND replaced_at IS NULL"), {"c": connection_id}).scalar_one())
+
+
+def expired_events(session: Session, install_id: str) -> list[dict[str, Any]]:
+    return [row[0] for row in session.execute(text(
+        "SELECT payload FROM audit_event WHERE aggregate_id = :id "
+        "AND event_type = 'executor.agent_install_expired' ORDER BY audit_event_id"), {"id": install_id}).all()]
+
+
+def test_an_abandoned_session_ends_when_it_is_read_after_its_time_and_frees_the_connection(session, stand) -> None:
+    """With no worker (`EXEC2-ENROLL-SSH-01`) nothing advances a session: it ends by its age, on a read."""
+    from auditmanager.executors.agent_install import INSTALL_SESSION_SECONDS
+
+    connection_id = make_connection(stand)
+    base = f"/executor-connections/{connection_id}/agent-installs"
+    install = admin_call(stand, "POST", base, INSTALL_BODY).json()
+    install_id = install["install_id"]
+    assert current_install_keys(session, connection_id) == 1
+
+    age_install(session, install_id, INSTALL_SESSION_SECONDS - 10)
+    early = dispatch(stand, Request.build("GET", f"{base}/{install_id}")).json()
+    assert early["state"] == "requested" and "failure_reason" not in early and expired_events(session, install_id) == []
+    assert admin_call(stand, "POST", base, INSTALL_BODY).status == 409, "still in progress"
+
+    age_install(session, install_id, 20)
+    ended = dispatch(stand, Request.build("GET", f"{base}/{install_id}"))
+    assert ended.status == 200, ended.body
+    body = ended.json()
+    assert body["state"] == "failed" and body["failure_reason"] == "no_worker"
+    assert body["finished_at"] and body["key_removed_at"], "finished, and the key is gone"
+    assert "public_key" not in body and "authorized_keys_line" not in body, "nothing of the key is shown any more"
+    row = session.execute(text(
+        "SELECT key_secret_id, key_removed_at IS NOT NULL, finished_at IS NOT NULL, state, failure_reason "
+        "FROM executor_agent_install WHERE install_id = :id"), {"id": install_id}).one()
+    assert tuple(row) == (None, True, True, "failed", "no_worker")
+    assert current_install_keys(session, connection_id) == 0, "no current agent_install_key remains"
+    replaced = session.execute(text(
+        "SELECT count(*) FROM executor_secret WHERE connection_id = :c AND purpose = 'agent_install_key' "
+        "AND replaced_at IS NOT NULL"), {"c": connection_id}).scalar_one()
+    assert replaced == 1
+
+    (event,) = expired_events(session, install_id)
+    assert set(event) == {"connection_id", "purpose", "from_state", "to_state", "reason", "secret_id"}
+    assert (event["connection_id"], event["purpose"], event["from_state"], event["to_state"], event["reason"]) == (
+        connection_id, "agent_install_key", "requested", "failed", "no_worker")
+    assert "agent-host.example" not in json.dumps(event) and "ubuntu" not in json.dumps(event)
+
+    again = dispatch(stand, Request.build("GET", f"{base}/{install_id}")).json()
+    assert again == body and len(expired_events(session, install_id)) == 1, "idempotent: nothing more is written"
+    fresh = admin_call(stand, "POST", base, INSTALL_BODY)
+    assert fresh.status == 201 and fresh.json()["install_id"] != install_id
+    assert current_install_keys(session, connection_id) == 1
+
+
+@pytest.mark.parametrize("state", ["scanning", "awaiting_host_key", "installing"])
+def test_a_session_somebody_took_ends_as_timed_out_when_the_next_create_finds_it_overdue(
+    session, stand, state: str,
+) -> None:
+    connection_id = make_connection(stand)
+    base = f"/executor-connections/{connection_id}/agent-installs"
+    pasted = Ed25519PrivateKey.generate().private_bytes(
+        Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()).decode("ascii")
+    taken = admin_call(stand, "POST", base, {**INSTALL_BODY, "access": "pasted_key", "private_key": pasted})
+    assert taken.status == 201, taken.body
+    install_id = taken.json()["install_id"]
+    line = Ed25519PrivateKey.generate().public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode()
+    steps = {
+        "scanning": "state = 'scanning'",
+        "awaiting_host_key": "state = 'awaiting_host_key', observed_host_key = :key",
+        "installing": (
+            "state = 'installing', observed_host_key = :key, confirmed_host_key_fingerprint = :fingerprint, "
+            "host_key_confirmed_at = clock_timestamp(), host_key_confirmed_by = created_by"),
+    }
+    statement = (f"UPDATE executor_agent_install SET {steps[state]}, updated_at = clock_timestamp() "
+                 "WHERE install_id = :id")
+    values = {"id": install_id, "key": line, "fingerprint": "SHA256:" + "A" * 43}
+    session.execute(text(statement), {name: value for name, value in values.items() if f":{name}" in statement})
+    age_install(session, install_id, 1801)
+
+    fresh = admin_call(stand, "POST", base, {**INSTALL_BODY, "ssh_host": "other-host.example"})
+    assert fresh.status == 201, fresh.body
+    row = session.execute(text(
+        "SELECT state, failure_reason, key_secret_id, key_removed_at IS NOT NULL, finished_at IS NOT NULL, "
+        "observed_host_key IS NOT NULL FROM executor_agent_install WHERE install_id = :id"),
+        {"id": install_id}).one()
+    assert tuple(row) == ("failed", "timed_out", None, True, True, state != "scanning"), (
+        "ended, the key gone, and what the worker had recorded is left as it was")
+    (event,) = expired_events(session, install_id)
+    assert event["from_state"] == state and event["reason"] == "timed_out"
+    assert current_install_keys(session, connection_id) == 1, "the new session's key is the only current one"
+    assert "BEGIN" not in json.dumps(event) and pasted.splitlines()[1] not in json.dumps(event)
+
+
+def test_ending_an_overdue_session_does_not_touch_another_connections_session(session, stand) -> None:
+    mine, theirs = make_connection(stand), make_connection(stand)
+    first = admin_call(stand, "POST", f"/executor-connections/{mine}/agent-installs", INSTALL_BODY).json()
+    other = admin_call(stand, "POST", f"/executor-connections/{theirs}/agent-installs", INSTALL_BODY).json()
+    for install in (first, other):
+        age_install(session, install["install_id"], 3600)
+    assert admin_call(stand, "POST", f"/executor-connections/{mine}/agent-installs", INSTALL_BODY).status == 201
+    states = dict(session.execute(text(
+        "SELECT install_id, state FROM executor_agent_install WHERE install_id = ANY(:ids)"),
+        {"ids": [first["install_id"], other["install_id"]]}).all())
+    assert states == {first["install_id"]: "failed", other["install_id"]: "requested"}
+    assert current_install_keys(session, theirs) == 1
 
 
 def test_the_host_key_is_confirmed_by_value_against_the_one_the_worker_observed(session, stand) -> None:

@@ -40,7 +40,11 @@ from auditmanager.executors.enrollment import (
     redeem_enrollment,
     report_runner_health,
 )
-from auditmanager.executors.enrollment_repository import EnrollmentRecord, enrollment_state
+from auditmanager.executors.enrollment_repository import (
+    EnrollmentRecord,
+    EnrollmentRepository,
+    enrollment_state,
+)
 from auditmanager.executors.model import ConnectionRecord
 from auditmanager.executors.runner import authenticate_runner, hash_token
 from auditmanager.executors.runner_repository import RunnerTokenRecord, StoredToken
@@ -267,7 +271,7 @@ class World:
               package=lambda: PACKAGE, **extra: Any):
         return issue_executor_enrollment(
             None, connection_id=CONNECTION, roles=roles, idempotency_key=key, actor_uid=ADMIN,  # type: ignore[arg-type]
-            configured_origin=None, requested_origin=origin, executors=self.executors,  # type: ignore[arg-type]
+            configured_origin=origin, executors=self.executors,  # type: ignore[arg-type]
             repository=self.grants, commands=self.ledger, package_source=package,  # type: ignore[arg-type]
             journal=self.journal, **extra)
 
@@ -419,6 +423,30 @@ def test_a_grant_is_refused_for_a_connection_that_cannot_take_an_agent(
     assert world.grants.rows == {} and world.journal.events == [] and world.ledger.succeeded == []
 
 
+def test_a_grant_is_redeemed_at_the_one_instant_that_decides_its_window() -> None:
+    """``mark_redeemed`` read ``clock_timestamp()`` twice, in the ``WHERE`` and in the ``SET``: a grant that
+    expired between the two was written ``redeemed_at > expires_at`` and the CHECK made it a 500. The clock is
+    read once, in a materialised CTE, and that value is both the test and the stamp. (The race itself needs a
+    database: ``tests/integration/executors/test_enrollment.py``.)"""
+
+    class Recording:
+        def __init__(self) -> None:
+            self.statements: list[tuple[str, dict[str, Any]]] = []
+
+        def execute(self, statement: Any, params: dict[str, Any]) -> Any:
+            self.statements.append((" ".join(str(statement).split()), dict(params)))
+            return type("Result", (), {"rowcount": 1})()
+
+    session = Recording()
+    assert EnrollmentRepository().mark_redeemed(session, "exen_X", "ern_T") is True  # type: ignore[arg-type]
+    (sql, params), = session.statements
+    assert params == {"id": "exen_X", "token": "ern_T"}
+    assert sql.count("clock_timestamp()") == 1, "one read of the clock, not one per use"
+    assert sql.startswith("WITH moment AS MATERIALIZED (SELECT clock_timestamp() AS t) UPDATE executor_enrollment")
+    assert "redeemed_at = moment.t" in sql and "expires_at > moment.t" in sql, "the test and the stamp are one instant"
+    assert "redeemed_at IS NULL AND revoked_at IS NULL" in sql
+
+
 def test_an_image_without_a_package_or_a_stand_without_an_origin_issues_nothing() -> None:
     world = World()
 
@@ -427,9 +455,12 @@ def test_an_image_without_a_package_or_a_stand_without_an_origin_issues_nothing(
 
     error = refusal(world.issue, package=no_package)
     assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE and details(error) == {"dependency": "agent_package"}
-    error = refusal(world.issue, origin="not an origin")
-    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE and details(error) == {"dependency": "public_origin"}
-    assert world.grants.rows == {} and world.journal.events == []
+    for origin in ("not an origin", None, ""):
+        began = len(world.ledger.began)
+        error = refusal(world.issue, origin=origin)
+        assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE and details(error) == {"dependency": "public_origin"}
+        assert world.grants.rows == {} and world.journal.events == []
+        assert len(world.ledger.began) == began, "not even the idempotency key is recorded: it is still free"
 
 
 def test_a_new_grant_revokes_the_previous_unredeemed_one_and_the_old_secret_stops_working() -> None:

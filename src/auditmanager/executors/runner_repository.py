@@ -278,11 +278,24 @@ class RunnerRepository:
         caller's transaction ends, so that the claims of one token run one after the other and the
         count of its held claims cannot change between the count and the claim that follows it.
 
-        The first statement of a claim's transaction and the only place a claim locks this row.
-        ``False`` when there is no such row (the caller refuses; nothing can be claimed for it)."""
-        return session.execute(text(
-            "SELECT 1 FROM executor_runner_token WHERE token_id = :t FOR UPDATE"
-        ), {"t": token_id}).first() is not None
+        The first statement of a claim's transaction and the only place a claim locks this row. It also
+        says whether the token is **still usable**, read from the row as the lock leaves it: not revoked,
+        not past its expiry and its connection not archived -- the same test as :meth:`token_by_prefix`
+        makes at authentication, repeated here because a claim long-polls for up to 25 s and each poll
+        authenticated only once, before it. A claim that waited for the lock of a token revoked in the
+        meantime reads the revocation (the locked row is the committed one).
+
+        ``False`` when there is no such row and when the token is no longer usable: the caller refuses
+        both alike as ``authentication_required``, and nothing is claimed for the token. The connection's
+        row is read, not locked: the administrator's writes take the connection's row first and then
+        the token's, so locking it here, after the token's, would invert that order."""
+        row = session.execute(text(
+            "SELECT (t.revoked_at IS NULL AND t.expires_at > clock_timestamp() "
+            "AND c.archived_at IS NULL) AS usable "
+            "FROM executor_runner_token t JOIN executor_connection c ON c.connection_id = t.connection_id "
+            "WHERE t.token_id = :t FOR UPDATE OF t"
+        ), {"t": token_id}).first()
+        return row is not None and bool(row[0])
 
     # -- tasks: the worker's side ----------------------------------------------------------
 
