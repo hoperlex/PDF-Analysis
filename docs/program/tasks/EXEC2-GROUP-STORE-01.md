@@ -25,17 +25,17 @@ An administrator creates a two-member group whose revisions have the same `pin_i
 
 ### P-01 — the work kinds
 - captured_at: 2026-11-02
-- command: `git grep -n -A7 '^WORK_KINDS' origin/dev -- src/auditmanager/executors/model.py`
+- command: `git grep -n -A7 '^WORK_KINDS' 27fb952e -- src/auditmanager/executors/model.py`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/executors/model.py:71:WORK_KINDS: Final[tuple[str, ...]] = (
-  origin/dev:src/auditmanager/executors/model.py-72-    "text_analysis",
-  origin/dev:src/auditmanager/executors/model.py-73-    "comparison_pair_check",
-  origin/dev:src/auditmanager/executors/model.py-74-    "comparison_sheet_changes",
-  origin/dev:src/auditmanager/executors/model.py-75-    "comparison_spec",
-  origin/dev:src/auditmanager/executors/model.py-76-    "comparison_report",
-  origin/dev:src/auditmanager/executors/model.py-77-    "comparison_stage_review",
-  origin/dev:src/auditmanager/executors/model.py-78-)
+  27fb952e:src/auditmanager/executors/model.py:98:WORK_KINDS: Final[tuple[str, ...]] = (
+  27fb952e:src/auditmanager/executors/model.py-99-    "text_analysis",
+  27fb952e:src/auditmanager/executors/model.py-100-    "comparison_pair_check",
+  27fb952e:src/auditmanager/executors/model.py-101-    "comparison_sheet_changes",
+  27fb952e:src/auditmanager/executors/model.py-102-    "comparison_spec",
+  27fb952e:src/auditmanager/executors/model.py-103-    "comparison_report",
+  27fb952e:src/auditmanager/executors/model.py-104-    "comparison_stage_review",
+  27fb952e:src/auditmanager/executors/model.py-105-)
   exit=0
   ```
 - interpretation: rules are one per value of this tuple; no new kind is added.

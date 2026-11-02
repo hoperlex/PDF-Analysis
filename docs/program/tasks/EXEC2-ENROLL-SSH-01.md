@@ -11,7 +11,7 @@ From the UI an administrator enters host, port and user, and gives SSH access by
 - API contract: 1.15.0, frozen by `EXEC2-SEAL-1`
 - analysis/comparison/event contract: unchanged
 - migration head: `0046`, created by `EXEC2-SEAL-1`; this task adds no migration
-- base commit: `integration/exec2` after `EXEC2-INT-1` is on `origin/dev`
+- base commit: `integration/exec2` at `27fb952e` (= `origin/dev` after `EXEC2-INT-1`)
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 6, 7, 18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -25,21 +25,21 @@ From the UI an administrator enters host, port and user, and gives SSH access by
 
 ### P-01 — pull connections hold no sealed secret
 - captured_at: 2026-11-02
-- command: `git grep -n '"pull": (),' origin/dev -- src/auditmanager/executors/model.py`
+- command: `git grep -n '"pull": (),' 27fb952e -- src/auditmanager/executors/model.py`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/executors/model.py:114:    "pull": (),
+  27fb952e:src/auditmanager/executors/model.py:210:    "pull": (),
   exit=0
   ```
 - interpretation: the install key needs its own purpose (`agent_install_key`, created by SEAL-1) on the install session, not on the pull connection.
 
 ### P-02 — the worker-side runner pattern
 - captured_at: 2026-11-02
-- command: `git grep -nE '^(class|def) ' origin/dev -- src/auditmanager/executors/probe_runner.py`
+- command: `git grep -nE '^(class|def) ' 27fb952e -- src/auditmanager/executors/probe_runner.py`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/executors/probe_runner.py:56:class ProbeRunner:
-  origin/dev:src/auditmanager/executors/probe_runner.py:217:def runner_for(
+  27fb952e:src/auditmanager/executors/probe_runner.py:56:class ProbeRunner:
+  27fb952e:src/auditmanager/executors/probe_runner.py:217:def runner_for(
   exit=0
   ```
 - interpretation: `ProbeRunner` and `runner_for` are the shape to copy for an install runner.

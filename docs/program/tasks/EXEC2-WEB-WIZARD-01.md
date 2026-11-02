@@ -11,7 +11,7 @@
 - API contract: 1.15.0, frozen by `EXEC2-SEAL-1`
 - analysis/comparison/event contract: unchanged
 - migration head: `0046`, created by `EXEC2-SEAL-1`; this task adds no migration
-- base commit: `integration/exec2` after `EXEC2-INT-1` is on `origin/dev`
+- base commit: `integration/exec2` at `27fb952e` (= `origin/dev` after `EXEC2-INT-1`)
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 4–9; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -25,10 +25,10 @@
 
 ### P-01 — the workers screen tabs
 - captured_at: 2026-11-02
-- command: `git grep -n 'WORKERS_TABS = ' origin/dev -- web/src/_pages/workers/model/tabs.ts`
+- command: `git grep -n 'WORKERS_TABS = ' 27fb952e -- web/src/_pages/workers/model/tabs.ts`
 - captured_output:
   ```text
-  origin/dev:web/src/_pages/workers/model/tabs.ts:13:export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
+  27fb952e:web/src/_pages/workers/model/tabs.ts:13:export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
   exit=0
   ```
 - interpretation: the wizard is a dialog in «Подключения», not a fourth tab.
@@ -48,6 +48,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `web/src/features/connect-remote-agent/**`
 - `web/src/features/manage-executor-connection/**`
 - `web/src/widgets/executor-connections/**`
+- `web/tests/unit/**`
 
 ## Forbidden hotspots
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
