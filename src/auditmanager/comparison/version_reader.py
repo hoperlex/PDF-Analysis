@@ -15,6 +15,7 @@ from typing import Final
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.ingest.public import quota
 from auditmanager.shared.identity import (
     DocumentUid,
     IdentityError,
@@ -24,12 +25,12 @@ from auditmanager.shared.identity import (
 
 
 _SHA256: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{64}\Z")
-# W55B-SEAL-01 and migration 0021 admit 1..500 pages per published version, and the comparison tables
-# (migrations 0035, 0038, 0040) still CHECK page numbers BETWEEN 1 AND 500. Migration 0044 lets a relaxed
-# intake store a longer document, but no comparison can address its pages: such a version is refused up
-# front as ``version_page_count_invalid`` and never reaches a table CHECK. REVIEW-FIX-CMP-SPEC-1102 lifts
-# the tables and this bound together.
-MAX_VERSION_PAGES: Final[int] = 500
+# W55B-SEAL-01 and migration 0021 admit 1..500 pages per published version. A relaxed intake
+# (``AUDITMANAGER_INTAKE_RELAXED=1``, read once at import through ``quota``) stores longer documents
+# (migration 0044) and migration 0045 lets every comparison table address their pages, so the bound
+# then rises to the database integer maximum. Under the default a longer version is refused up front as
+# ``version_page_count_invalid`` and never reaches a table.
+MAX_VERSION_PAGES: Final[int] = quota(500, 2**31 - 1)
 _VERSIONS = text("""
     SELECT v.version_uid, v.document_uid AS version_document_uid,
            d.document_uid AS set_document_uid, d.project_uid,

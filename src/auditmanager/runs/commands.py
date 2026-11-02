@@ -672,7 +672,7 @@ def start_audit_run(
     if known is None and cost_preflight is not None:
         estimate = cost_preflight.estimate_run(session, version_uid=str(resolved_version),
             executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
-            version_record=version_record)
+            version_record=version_record, parse_native_text=False)
         approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
         frozen, chosen_preset = estimate.frozen_route, estimate.chosen_preset
         budget = approved_cost["window_characters"]
@@ -960,7 +960,8 @@ def reaudit_run(
         if chosen_connection_id is not None and connection_route is None:
             raise _chosen_executor_unserved()
         if cost_preflight is not None:
-            estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version)
+            estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version,
+                parse_native_text=False)
             approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
             frozen = estimate.frozen_route
             budget = approved_cost["window_characters"]

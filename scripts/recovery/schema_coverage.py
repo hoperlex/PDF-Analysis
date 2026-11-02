@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0044_section_stats_uncapped"
+HEAD = "0045_comparison_page_bounds"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -57,7 +57,7 @@ TABLES = frozenset((
     "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
     "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
     # `0042_comparison_stage_review`: stage AI units and their immutable results, graphic evidence,
-    # link repairs, expert change cards and verdicts, and the durable batch. `0043` and `0044`
+    # link repairs, expert change cards and verdicts, and the durable batch. `0043`, `0044` and `0045`
     # add no table.
     "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
     "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
@@ -374,12 +374,14 @@ SEQUENCES = {
 #: From the 0041 counts (c 1073, f 300, p 109, t 9, u 104): `0042_comparison_stage_review` adds twelve
 #: tables and, net of the three check constraints it replaces in place, 65 checks, 44 foreign keys,
 #: 12 primary keys and 19 unique constraints; `0043_stage_ai_generations` adds one check and swaps
-#: one unique constraint for another; `0044_section_stats_uncapped` replaces six checks in place.
+#: one unique constraint for another; `0044_section_stats_uncapped` replaces six checks in place;
+#: `0045_comparison_page_bounds` replaces seven page-number checks in place (same names, same count),
+#: so no count moves (derived from the DDL, not measured on a database).
 CONSTRAINT_COUNTS = {"c": 1139, "f": 344, "p": 121, "t": 9, "u": 123}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
-#: index); 0043 swaps one unique index for another and 0044 adds none.
+#: index); 0043 swaps one unique index for another; 0044 and 0045 add none.
 INDEX_COUNT = 426
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).

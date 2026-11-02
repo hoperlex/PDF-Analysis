@@ -184,10 +184,16 @@ class SpecificationRepository:
             {'id':transition_id,'coverage':json.dumps(coverage,ensure_ascii=False)})
 
     def paid_dispatch_fence(self,session:Session,*,project_uid:str,job_id:str,request_sha256:str)->str|None:
+        """``None`` when a paid request for this text may be made, else the state of the call that forbids it: a call of this job or
+        of this request that is in doubt (``prepared``, ``sent``, ``unknown``), a failed one that was paid for, and a completed one
+        whose reply is **not kept**. A completed call whose reply a stored extraction holds does not forbid it: that reply is
+        accounted for, its check failed, and a new job consented for the next attempt of the batch may ask it again."""
         value=session.execute(text("SELECT c.state FROM comparison_model_call c JOIN comparison_work w "
             "ON w.comparison_work_id=c.comparison_work_id WHERE w.project_uid=:project AND "
             "((w.payload->>'ai_job_id'=:job AND c.state IN ('prepared','sent','unknown')) OR "
-            "(c.request_sha256=:sha AND (c.state IN ('prepared','sent','unknown','completed') OR "
+            "(c.request_sha256=:sha AND (c.state IN ('prepared','sent','unknown') OR "
+            "(c.state='completed' AND NOT EXISTS (SELECT 1 FROM comparison_spec_extraction e WHERE e.project_uid=:project "
+            "AND e.comparison_model_call_id=c.comparison_model_call_id)) OR "
             "(c.state='failed' AND (c.response_sha256 IS NOT NULL OR c.cost_micros>0))))) "
             "ORDER BY CASE c.state WHEN 'unknown' THEN 0 WHEN 'prepared' THEN 1 WHEN 'sent' THEN 1 ELSE 2 END LIMIT 1"),
             {'project':project_uid,'job':job_id,'sha':request_sha256}).scalar_one_or_none()

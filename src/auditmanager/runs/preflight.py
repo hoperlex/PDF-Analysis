@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from fractions import Fraction
 import hashlib
 import json
 import math
 import os
+import threading
 
 from auditmanager.analysis.public import count_native_text_characters, model_rate_sha256, pinned_models, relaxed_window_characters
 from auditmanager.documents.public import DocumentRepository, UPLOAD_KIND_COMPARISON_PDF
@@ -21,6 +23,30 @@ from .commands import _freeze_for, analysis_source_entry, route_classified_versi
 
 FORMAT = "analysis-cost-preflight/1"
 MAX_SAFE_MICROS = 9_007_199_254_740_991
+
+#: `REVIEW-FIX-CMP-SPEC-1102` (S6-04). A comparison PDF stores no `text_character_count`, and counting it parses the whole
+#: file (minutes for a drawing set). The count is a pure function of the immutable bytes and the page count, so it is kept per
+#: process under ``(blob sha256, page_count)``: the estimate parses once, and the start -- which recomputes the estimate inside
+#: its write transaction -- only reads this cache and never parses (see ``parse_native_text``). Integers only; bounded.
+_NATIVE_COUNTS_MAX = 256
+_NATIVE_COUNTS: "OrderedDict[tuple[str, int], int]" = OrderedDict()
+_NATIVE_COUNTS_LOCK = threading.Lock()
+
+
+def _cached_native_count(key):
+    with _NATIVE_COUNTS_LOCK:
+        count = _NATIVE_COUNTS.get(key)
+        if count is not None:
+            _NATIVE_COUNTS.move_to_end(key)
+        return count
+
+
+def _remember_native_count(key, count):
+    with _NATIVE_COUNTS_LOCK:
+        _NATIVE_COUNTS[key] = count
+        _NATIVE_COUNTS.move_to_end(key)
+        while len(_NATIVE_COUNTS) > _NATIVE_COUNTS_MAX:
+            _NATIVE_COUNTS.popitem(last=False)
 
 
 def _json(value):
@@ -122,7 +148,9 @@ class RunCostPreflight:
             raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis",
                 reason="cost_blocks_source_invalid") from None
 
-    def _source(self, session, version_uid, version=None):
+    def _source(self, session, version_uid, version=None, *, parse_native_text=True):
+        """``parse_native_text=False`` is the start transaction: a comparison PDF whose count is not already known (cached by an
+        earlier estimate of the same bytes) is refused as ``cost_text_count_unavailable`` and never parsed here."""
         version = version or DocumentRepository().get_version(session, VersionUid.parse(version_uid))
         if version.classification is None:
             raise DomainError(ErrorCode.VERSION_CLASSIFICATION_REQUIRED)
@@ -131,10 +159,14 @@ class RunCostPreflight:
             if self.blob_store is None:
                 raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_source")
             source = analysis_source_entry(version)
-            native_characters = count_native_text_characters(
-                self.blob_store, parse_blob_id(str(source.blob_id)),
-                expected_sha256=source.sha256, expected_page_count=version.page_count,
-            )
+            cache_key = (str(source.sha256), int(version.page_count))
+            native_characters = _cached_native_count(cache_key)
+            if native_characters is None and parse_native_text:
+                native_characters = count_native_text_characters(
+                    self.blob_store, parse_blob_id(str(source.blob_id)),
+                    expected_sha256=source.sha256, expected_page_count=version.page_count,
+                )
+                _remember_native_count(cache_key, native_characters)
         if type(native_characters) is not int or native_characters < 0:
             raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_text_count_unavailable")
         chars = native_characters + (version.recognised_character_count or 0)
@@ -198,10 +230,10 @@ class RunCostPreflight:
         return RunCostEstimateValue(_json(public), _json(authority), frozen, chosen)
 
     def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
-                     allow_native_page_pieces=True):
+                     allow_native_page_pieces=True, parse_native_text=True):
         if type(relaxed_limits) is not bool:
             raise _invalid("relaxed_limits", "boolean")
-        version, chars, source = self._source(session, version_uid, version_record)
+        version, chars, source = self._source(session, version_uid, version_record, parse_native_text=parse_native_text)
         routed = route_classified_version(version, self.sections)
         resolve = self.profiles.resolve if hasattr(self.profiles, "resolve") else self.profiles
         profile = resolve(routed.analysis_profile_id, routed.prompt_bundle_id)
@@ -349,7 +381,7 @@ class RunCostPreflight:
             input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window,
             extended_review=extended, native_page_piece_policy=page_pieces)
 
-    def estimate_reaudit(self, session, *, run_id, version_record=None):
+    def estimate_reaudit(self, session, *, run_id, version_record=None, parse_native_text=True):
         from .repository import RunRepository
         runs = RunRepository()
         source_run = runs.get(session, run_id)
@@ -357,7 +389,8 @@ class RunCostPreflight:
         from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         value = self.estimate_run(session, version_uid=source_run.version_uid,
             executor_connection_id=executor, version_record=version_record,
-            allow_native_page_pieces=str(source_run.analysis_profile_id) != str(AR_V3_BETA_PROFILE_ID))
+            allow_native_page_pieces=str(source_run.analysis_profile_id) != str(AR_V3_BETA_PROFILE_ID),
+            parse_native_text=parse_native_text)
         authority = json.loads(value.authority_json)
         # A fresh approval is for this new re-audit, never the parent's paid work.
         authority["reaudit_of_run_id"] = run_id

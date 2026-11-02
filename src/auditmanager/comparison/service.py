@@ -290,6 +290,10 @@ _REQUEST_IDENTITY_REFUSALS: Final[frozenset[str]] = frozenset({
     "project_uid_invalid", "document_uid_invalid",
     "source_version_uid_invalid", "target_version_uid_invalid",
 })
+#: A stored version longer than this deployment's page bound (500, or the integer maximum under
+#: ``AUDITMANAGER_INTAKE_RELAXED=1``) is a request the comparison cannot serve, not a contradiction in
+#: stored facts: it is refused as a validation failure of ``version_page_count`` before any table is read.
+_REQUEST_VERSION_REFUSALS: Final[frozenset[str]] = frozenset({"version_page_count_invalid"})
 _SECTION_REFUSALS: Final[Mapping[str, tuple[str, str | None]]] = {
     "source_stage_unclassified": ("stage_unclassified", SIDE_SOURCE),
     "target_stage_unclassified": ("stage_unclassified", SIDE_TARGET),
@@ -532,7 +536,7 @@ class VersionComparisonService:
             )
         except VersionPairRefused as refusal:
             reason = str(refusal)
-            if reason in _REQUEST_IDENTITY_REFUSALS:
+            if reason in _REQUEST_IDENTITY_REFUSALS or reason in _REQUEST_VERSION_REFUSALS:
                 raise ComparisonRequestInvalid(reason) from None
             if reason in _VERSION_REFUSALS:
                 raise _Refused(_VERSION_REFUSALS[reason]) from None

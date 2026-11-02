@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -145,6 +145,21 @@ def _not_found() -> DomainError:
 
 def _consent_required() -> DomainError:
     return DomainError(ErrorCode.VALIDATION_FAILED, field="consent", constraint=CONSTRAINT_CONSENT_REQUIRED)
+
+
+def _may_run_without_model(method: Any, estimate: AiEstimate) -> bool:
+    """Whether a job whose estimate has no model call may still be consented: only ``report`` and ``spec``, and only when the
+    method says its plan has local work to do.
+
+    The fact belongs to the plan the estimate was made from. ``spec`` carries it on its counts (``estimate.counts``), so another
+    request's estimate on the same method instance can never decide this one (REVIEW-FIX-CMP-SPEC-1102, S2-05). ``report`` builds a
+    method per command and still states it on the method; a method whose counts do not carry the fact is asked directly."""
+    if estimate.scope.method not in {"report", "spec"}:
+        return False
+    carried = getattr(estimate.counts, "can_run_without_model", None)
+    if carried is not None:
+        return carried is True
+    return getattr(method, "can_run_without_model", False) is True
 
 
 def _require_expert(roles: frozenset[str]) -> None:
@@ -287,8 +302,7 @@ class ComparisonAiJobService:
         if self._repo.live_on_scope(session, scope) is not None:
             raise _conflict(CONFLICT_AI_JOB_ACTIVE)
         estimate = self.estimate_in(session, scope, estimate_mode, job=estimate_job)
-        self._require_consentable(estimate, consent,
-            allow_zero_calls=scope.method in {"report", "spec"} and getattr(method, "can_run_without_model", False) is True)
+        self._require_consentable(estimate, consent, allow_zero_calls=_may_run_without_model(method, estimate))
         try:
             job_id = self._repo.insert(
                 session, estimate=estimate, user_uid=command.user_uid, command_id=str(claim.command_id),
@@ -484,8 +498,7 @@ class ComparisonAiJobService:
             raise _consent_required()
         estimate = self.estimate_in(session, job.scope, mode, job=job)
         method = self._method_of(job.scope.method)
-        self._require_consentable(estimate, consent,
-            allow_zero_calls=job.scope.method in {"report", "spec"} and getattr(method, "can_run_without_model", False) is True)
+        self._require_consentable(estimate, consent, allow_zero_calls=_may_run_without_model(method, estimate))
         if not self._repo.renew_consent(
             session, job.job_id, estimate=estimate, user_uid=user_uid, consent_no=job.consent_no,
             from_states=(job.state,),
