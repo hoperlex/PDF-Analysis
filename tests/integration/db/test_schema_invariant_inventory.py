@@ -31,6 +31,21 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: NOT resealed for ``0047_executor_groups_rules`` and ``0048_dispatch_time_binding`` either (`EXEC2-SEAL-2`, `R-149d`).
+#: What a capable runner will find on top of the 0046 figures below, derived from the DDL and not measured: columns +45
+#: (``executor_group`` 7, ``executor_group_revision`` 11, ``executor_group_member`` 4, ``executor_routing_rule_revision`` 6,
+#: ``executor_routing_mode_event`` 7, and five on each of ``audit_run`` and ``comparison_ai_job``: ``binding_state``,
+#: ``executor_group_revision_id``, ``routing_rule_revision_id``, ``wait_reason``, ``waiting_since``; the row of
+#: ``comparison_ai_job.connection_revision_id`` is redefined, same column, now nullable); relations +5 (the five tables, no
+#: view); constraints +64 (checks +47, foreign keys +8, primary keys +5, unique keys +4); indexes +16 (five primary keys,
+#: four unique keys, ``ux_executor_group_name_active``, ``ix_executor_group_member_connection``,
+#: ``ix_executor_routing_rule_group_revision``, and ``ix_*_group_revision`` and ``ix_*_pending`` on each of ``audit_run``
+#: and ``comparison_ai_job``); triggers +10 (nine on the new tables and ``trg_comparison_ai_job_binding_pin``;
+#: ``trg_audit_run_frozen_guard`` is re-created on ``am_guard_audit_run_frozen`` with two more columns in its list, so its row is
+#: redefined and the count unchanged by it); functions +4 (``am_check_executor_group_revision``,
+#: ``am_check_executor_group_member``, ``am_check_executor_routing_rule``, ``am_guard_audit_run_frozen``;
+#: ``am_guard_comparison_ai_job_consent`` is replaced, same name, so its digest moves); views, extensions, sequences,
+#: policies and the state topology unchanged.
 #: NOT resealed for ``0046_executor_capacity_enroll`` (`EXEC2-SEAL-1`, `R-149d`: no database run in EXEC-2), and the
 #: seal below has not been resealed for ``0042``-``0045`` either, so ``EXPECTED_INVENTORY`` does not describe head. What
 #: the integrator will find when a capable runner recomputes the eleven families, derived from the DDL and not measured:

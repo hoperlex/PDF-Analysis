@@ -131,7 +131,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # `EXEC2-SEAL-1` (contract 1.15.0) adds two ``GET`` operations whose path holds ``{``: ``getExecutorAgentInstall`` (on
 # ``connection_id`` and ``install_id``), which is addressed, and ``downloadAgentPackage`` (on a package ``version``), which
 # names no parent and is excluded like the section filter (:data:`PUBLIC_PACKAGE_OPERATIONS`). One hundred and ten.
-EXPECTED_ADDRESSED = 110
+# `EXEC2-SEAL-2` (contract 1.16.0) adds two more, both on ``group_id`` of an executor group (``exg_``, not the AR v3 group
+# ``arg_`` that the same parameter name carries elsewhere; see :func:`_fill_path`): ``getExecutorGroup`` and
+# ``getExecutorGroupCapacity``. An absent group is ``404 not_found``. One hundred and twelve.
+EXPECTED_ADDRESSED = 112
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -156,8 +159,10 @@ REQUIRED_QUERY: dict[str, str] = {
 # `ANALYSIS-PRESETS-01`'s ``listAnalysisPresets`` is a collection like ``listExecutorConnections``
 # (every preset, no parent), so the unaddressed half is twenty-one. `CMP-SEAL-C1` adds the comparison queue read
 # (``getComparisonQueueSummary``, the installation's queue, no parent): twenty-two. `CMP-SEAL-C2` adds the installation's
-# AI queue (``getComparisonAiQueue``, no parent): twenty-three.
-EXPECTED_UNADDRESSED = 23
+# AI queue (``getComparisonAiQueue``, no parent): twenty-three. `EXEC2-SEAL-2` adds three collections with no parent
+# identity, each answering a page (``items``): ``listExecutorGroups``, ``listExecutorRoutingRules`` (with the routing mode
+# beside the items) and ``previewExecutorRouting`` (the proposal's items beside its digest): twenty-six.
+EXPECTED_UNADDRESSED = 26
 
 #: Unaddressed `GET` operations that are not collections and are exempt from
 #: ``test_a_collection_that_names_no_parent_answers_a_page``'s page-shape assertion.
@@ -340,6 +345,22 @@ def _prefixes() -> dict[str, str]:
     return dict(catalog["identifiers"])
 
 
+def _fill_path(template: str) -> str:
+    """The path of ``template`` with every ``{parameter}`` filled by the well-formed identity that names nothing.
+
+    `EXEC2-SEAL-2`: ``group_id`` is ``ar_v3_run_group_id`` (``arg_``) on the AR v3 beta paths and
+    ``executor_group_id`` (``exg_``) under ``/executor-groups/``; the parameter name alone cannot say which, so the path
+    does. A wrong prefix would be answered ``422`` for the identity's shape, not ``404`` for its absence.
+    """
+    def fill(match: re.Match[str]) -> str:
+        parameter = match.group(1)
+        if parameter == "group_id" and template.startswith("/executor-groups/"):
+            parameter = "executor_group_id"
+        return _absent_identity(parameter)
+
+    return re.sub(r"\{(\w+)\}", fill, template)
+
+
 def _absent_identity(parameter: str) -> str:
     external = json.loads(_CATALOG.read_text(encoding="utf-8")).get("external_identifiers", {})
     if parameter in external:
@@ -483,7 +504,7 @@ def test_every_get_that_names_a_parent_refuses_an_identity_that_names_nothing(
     for operation_id, template in _addressed(_get_routes(app)):
         if operation_id in SEALED_STUB_ADDRESSED or operation_id in RUNNER_ADDRESSED or operation_id in MODULE_GATED_ADDRESSED:
             continue
-        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
+        path = _fill_path(template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         code = body.get("error_code") if isinstance(body, dict) else None
         if operation_id in MODULE_GATED_ADDRESSED:
@@ -510,7 +531,7 @@ def test_the_wired_c2_reads_are_404_for_an_absent_parent_once_the_module_is_on(a
     swept = [(op, path) for op, path in _addressed(_get_routes(app)) if op in MODULE_GATED_ADDRESSED]
     assert {op for op, _ in swept} == MODULE_GATED_ADDRESSED
     for operation_id, template in swept:
-        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template) + REQUIRED_QUERY.get(operation_id, "")
+        path = _fill_path(template) + REQUIRED_QUERY.get(operation_id, "")
         status, body = _get(app, path)
         assert (status, body.get("error_code")) == (404, "not_found"), (operation_id, status, body)
         status, body = _get(off, path)
@@ -612,7 +633,7 @@ def test_a_sealed_stub_get_with_a_parent_answers_unavailable(app: Composed) -> N
     stubs = [(op, path) for op, path in addressed if op in SEALED_STUB_ADDRESSED]
     assert {op for op, _ in stubs} == SEALED_STUB_ADDRESSED
     for operation_id, template in stubs:
-        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
+        path = _fill_path(template)
         status, body = _get(app, path + REQUIRED_QUERY.get(operation_id, ""))
         assert status == 503, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and body.get("error_code") == "dependency_unavailable", body
@@ -759,7 +780,7 @@ def test_a_runner_token_read_is_not_answered_to_a_users_credential(app: Composed
     reads = [(op, path) for op, path in addressed if op in RUNNER_ADDRESSED]
     assert {op for op, _ in reads} == RUNNER_ADDRESSED
     for operation_id, template in reads:
-        path = re.sub(r"\{(\w+)\}", lambda m: _absent_identity(m.group(1)), template)
+        path = _fill_path(template)
         status, body = _get(app, path)
         assert status == 401, f"{operation_id} answered {status}: {body}"
         assert isinstance(body, dict) and body.get("error_code") == "authentication_required", body

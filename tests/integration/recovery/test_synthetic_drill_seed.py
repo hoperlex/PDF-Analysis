@@ -125,7 +125,8 @@ def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
     # `0041_comparison_stage_core`: fifteen project-reachable stage tables.
     # `0042_comparison_stage_review`: twelve more, nine of them immutable.
     # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): `executor_enrollment`, `executor_agent_install`.
-    assert schema.tables == 124 and schema.guarded_tables >= 29
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): the group store (five tables, none seeded); `0048` adds none.
+    assert schema.tables == 129 and schema.guarded_tables >= 29
     assert len(references.available_blobs) >= 5
     assert dict(references.source_counts)["price_list_revision"] == 2
     assert {"geometry_crop_image", "prepared_text_layer"} <= roles

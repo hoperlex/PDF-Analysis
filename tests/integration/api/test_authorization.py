@@ -456,6 +456,18 @@ GUARDED = (
         "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/agent-installs/"
         "exai_01M2545JSD15ETSNNV904X991K/confirm-host-key",
     ),
+    # `EXEC2-SEAL-2`. The administrator's ten operations on executor groups, routing rules and the routing mode:
+    # behind the seam like the rest.
+    ("listExecutorGroups", "GET", "/executor-groups"),
+    ("createExecutorGroup", "POST", "/executor-groups"),
+    ("getExecutorGroup", "GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K"),
+    ("reviseExecutorGroup", "POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/revisions"),
+    ("archiveExecutorGroup", "POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/archive"),
+    ("getExecutorGroupCapacity", "GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/capacity"),
+    ("listExecutorRoutingRules", "GET", "/executor-routing-rules"),
+    ("setExecutorRoutingRule", "PUT", "/executor-routing-rules/text_analysis"),
+    ("previewExecutorRouting", "GET", "/executor-routing/preview"),
+    ("setExecutorRoutingMode", "POST", "/executor-routing/mode"),
     # `CMP-SEAL-C3`. Sweep every sealed stage operation through the same authentication
     # seam before body validation, the module flag or an unwired lane can answer.
     ("createStageAssembly", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-assemblies"),

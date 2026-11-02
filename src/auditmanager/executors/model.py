@@ -37,42 +37,83 @@ __all__ = [
     "AGENT_INSTALL_STATES",
     "API_FLAVOURS",
     "BILLINGS",
+    "BINDING_BOUND",
+    "BINDING_FROZEN_AT_START",
+    "BINDING_PENDING",
+    "BINDING_STATES",
     "CONFLICT_ENROLLMENT_REDEEMED",
     "CONFLICT_ENROLLMENT_SHOWN_ONCE",
+    "CONFLICT_GROUP_ARCHIVED",
+    "CONFLICT_GROUP_NAME_IN_USE",
+    "CONFLICT_GROUP_ROUTED",
     "CONFLICT_HOST_KEY_CHANGED",
     "CONFLICT_INSTALL_IN_PROGRESS",
     "CONFLICT_INSTALL_NOT_AWAITING_HOST_KEY",
+    "CONFLICT_PREVIEW_STALE",
+    "CONFLICT_ROUTING_MODE_RULES",
+    "CONFLICT_ROUTING_MODE_UNCHANGED",
     "CONSTRAINT_BELOW_MAX_ACTIVE_RUNS",
     "CONSTRAINT_CAPACITY_NOT_SUPPORTED_FOR_KIND",
+    "CONSTRAINT_CONFLICTS_WITH_EXECUTOR_CONNECTION_ID",
+    "CONSTRAINT_CONFLICTS_WITH_PRESET_ID",
+    "CONSTRAINT_ENVIRONMENT_SOURCE",
     "CONSTRAINT_KIND_NOT_PULL",
+    "CONSTRAINT_MAPPING_ENTRY_NOT_READY",
+    "CONSTRAINT_MAPPING_NOT_ACCEPTED",
+    "CONSTRAINT_MAPPING_REQUIRED",
+    "CONSTRAINT_MAPPING_WORK_KIND_REPEATED",
+    "CONSTRAINT_MEMBER_BILLING_MISMATCH",
+    "CONSTRAINT_MEMBER_KIND_NOT_SERVED",
+    "CONSTRAINT_MEMBER_MODEL_MISMATCH",
+    "CONSTRAINT_MEMBER_PIN_MISMATCH",
+    "CONSTRAINT_MEMBER_REPEATED",
+    "CONSTRAINT_MEMBER_REVISION_NOT_OF_CONNECTION",
     "CONSTRAINT_PACKAGE_VERSION_UNKNOWN",
+    "CONSTRAINT_PREVIEW_DIGEST_REQUIRED",
     "CONSTRAINT_PRIVATE_KEY_NOT_ACCEPTED",
     "CONSTRAINT_PRIVATE_KEY_REQUIRED",
     "CONSTRAINT_RANGE",
+    "CONSTRAINT_TIE_BREAK_ORDER_REPEATED",
+    "CONSTRAINT_UNKNOWN_EXECUTOR_CONNECTION",
+    "CONSTRAINT_UNKNOWN_EXECUTOR_GROUP",
     "DEFAULT_MAX_ACTIVE_RUNS",
     "DEPENDENCY_AGENT_PACKAGE",
+    "DEPENDENCY_NO_RULE_FOR_WORK_KIND",
+    "DEPENDENCY_PUBLIC_ORIGIN",
     "ENROLLMENT_STATES",
     "GENERIC_PURPOSES",
+    "GROUP_MEMBERS_MAX",
+    "GROUP_MEMBERS_MIN",
+    "GROUP_MEMBER_ISSUES",
+    "GROUP_STRATEGIES",
+    "GROUP_STRATEGY_LEAST_LOADED",
     "IDENTITY_BASES",
     "IDENTITY_BASIS_BY_KIND",
     "INSTALL_PURPOSES",
     "KINDS",
     "MAX_ACTIVE_RUNS_MAX",
     "MAX_ACTIVE_RUNS_MIN",
-    "PROBE_RUNNING_MARGIN_SECONDS",
-    "PULL_PROBE_WINDOW_SECONDS",
-    "PROBE_UNTAKEN_SECONDS",
-    "SERVES",
     "PROBE_OUTCOMES",
+    "PROBE_RUNNING_MARGIN_SECONDS",
+    "PROBE_UNTAKEN_SECONDS",
+    "PULL_PROBE_WINDOW_SECONDS",
     "PURPOSES",
     "PURPOSES_BY_KIND",
     "QUEUE_REASONS",
     "RATE_CHECKS",
+    "ROUTING_MODES",
+    "ROUTING_MODE_LEGACY",
+    "ROUTING_MODE_RULES",
+    "ROUTING_PREVIEW_ISSUES",
+    "ROUTING_PREVIEW_STATUSES",
     "RUNNER_CLI_AUTH_STATES",
     "RUNNER_CLI_NAMES",
     "RUNNER_EXECUTION_PROFILES",
     "RUNNER_FEATURES",
+    "SERVES",
     "TRANSPORTS",
+    "WAIT_REASONS",
+    "WAIT_REASON_NEEDS_RECONSENT",
     "WORK_KINDS",
     "ConnectionRecord",
     "ConnectionSummary",
@@ -191,6 +232,86 @@ CONFLICT_HOST_KEY_CHANGED: Final[str] = "host_key_changed"
 #: ``dependency_unavailable`` -- the ``dependency`` of a refusal: the image holds no agent package.
 #: (``secrets_public_key_missing`` already exists.)
 DEPENDENCY_AGENT_PACKAGE: Final[str] = "agent_package"
+#: ``public_origin`` -- ``issueExecutorEnrollment`` on a stand whose configured public origin is absent or malformed.
+DEPENDENCY_PUBLIC_ORIGIN: Final[str] = "public_origin"
+
+#: `EXEC2-SEAL-2` (ADR-0026 decisions 10 to 17, contract 1.16.0, migrations ``0047`` and ``0048``). **Vocabulary only:**
+#: no statement in this module reads or writes a group, a rule, the routing mode or a binding; the stage-2 and stage-3
+#: lanes do, and each stops to the integrator when it needs a value that is not here.
+#:
+#: Whether the executor of a Run or of a comparison AI job was fixed when it started (``ExecutorBindingState``;
+#: ``ck_audit_run_binding_state``, ``ck_comparison_ai_job_binding_state``). The only move is ``pending`` to ``bound``,
+#: once, together with the connection revision going from ``NULL`` to a value; ``frozen_at_start`` and ``bound`` are
+#: terminal for the machine (``binding_state`` in ``state-machines.json``).
+BINDING_FROZEN_AT_START: Final[str] = "frozen_at_start"
+BINDING_PENDING: Final[str] = "pending"
+BINDING_BOUND: Final[str] = "bound"
+BINDING_STATES: Final[tuple[str, ...]] = (BINDING_FROZEN_AT_START, BINDING_PENDING, BINDING_BOUND)
+#: Which store decides where new model work goes (``ExecutorRoutingMode``; ``ck_executor_routing_mode_event_mode``).
+#: Absent any event the mode is ``legacy``: the table is empty on a database at ``0047``.
+ROUTING_MODE_LEGACY: Final[str] = "legacy"
+ROUTING_MODE_RULES: Final[str] = "rules"
+ROUTING_MODES: Final[tuple[str, ...]] = (ROUTING_MODE_LEGACY, ROUTING_MODE_RULES)
+#: How dispatch picks among eligible members; ``least_loaded`` is the only value (``ExecutorGroupStrategy``).
+GROUP_STRATEGY_LEAST_LOADED: Final[str] = "least_loaded"
+GROUP_STRATEGIES: Final[tuple[str, ...]] = (GROUP_STRATEGY_LEAST_LOADED,)
+#: A group revision holds one to sixteen members (``ExecutorGroupRevision.members``); ``tie_break_order`` is 1 to 16.
+GROUP_MEMBERS_MIN: Final[int] = 1
+GROUP_MEMBERS_MAX: Final[int] = 16
+#: Why a member would not be chosen by dispatch (``ExecutorGroupMemberIssue``), in the order one is reported.
+GROUP_MEMBER_ISSUES: Final[tuple[str, ...]] = (
+    "revision_changed", "connection_archived", "not_served", "probe_not_ok", "runner_offline", "at_capacity",
+)
+#: What the cut-over would do with a work kind, and why a legacy route cannot become a one-member group
+#: (``ExecutorRoutingPreviewStatus``, ``ExecutorRoutingPreviewIssue``).
+ROUTING_PREVIEW_STATUSES: Final[tuple[str, ...]] = ("ready", "no_route", "incompatible")
+ROUTING_PREVIEW_ISSUES: Final[tuple[str, ...]] = ("connection_archived", "no_revision", "kind_not_served")
+#: Why pending work waits, as stored in ``audit_run.wait_reason`` and ``comparison_ai_job.wait_reason`` and as the
+#: contract's ``RunQueueReason`` spells it: the two reasons :data:`QUEUE_REASONS` derives at read time, and
+#: ``needs_reconsent`` (dispatch found the consent envelope no longer holds and called nothing). :data:`QUEUE_REASONS`
+#: itself stays the derived pair, which ``tests/unit/executors/test_capacity_pins.py`` holds equal to the query's.
+WAIT_REASON_NEEDS_RECONSENT: Final[str] = "needs_reconsent"
+WAIT_REASONS: Final[tuple[str, ...]] = QUEUE_REASONS + (WAIT_REASON_NEEDS_RECONSENT,)
+#: The typed details of the refusals the stage-2 and stage-3 operations may carry, on the catalogue's existing codes only
+#: (ADR-0026 decision 18); ``contracts/domain/v1/error-codes.json`` documents each.
+#:
+#: ``validation_failed`` -- ``constraint``, with ``field`` ``members``: a member names a connection that does not exist,
+#: a revision that is not of that connection, a connection twice, a tie-break order twice, or a connection whose kind this
+#: release does not serve;
+CONSTRAINT_UNKNOWN_EXECUTOR_CONNECTION: Final[str] = "unknown_executor_connection"
+CONSTRAINT_MEMBER_REVISION_NOT_OF_CONNECTION: Final[str] = "member_revision_not_of_connection"
+CONSTRAINT_MEMBER_REPEATED: Final[str] = "member_repeated"
+CONSTRAINT_TIE_BREAK_ORDER_REPEATED: Final[str] = "tie_break_order_repeated"
+CONSTRAINT_MEMBER_KIND_NOT_SERVED: Final[str] = "member_kind_not_served"
+#: with ``field`` ``pin_id``, ``gateway_model`` or ``billing``: a member's revision is not the pin, the model or the billing
+#: of the group revision (a group is homogeneous; mixed groups are refused);
+CONSTRAINT_MEMBER_PIN_MISMATCH: Final[str] = "member_pin_mismatch"
+CONSTRAINT_MEMBER_MODEL_MISMATCH: Final[str] = "member_model_mismatch"
+CONSTRAINT_MEMBER_BILLING_MISMATCH: Final[str] = "member_billing_mismatch"
+#: with ``field`` ``executor_group_id`` (``startRun``, ``estimateRunCost``): an unknown group, a group together with an
+#: executor connection (the value ``preset_id`` already uses) or a preset, and the ``environment`` provider source, which
+#: runs no group work;
+CONSTRAINT_UNKNOWN_EXECUTOR_GROUP: Final[str] = "unknown_executor_group"
+CONSTRAINT_CONFLICTS_WITH_EXECUTOR_CONNECTION_ID: Final[str] = "conflicts_with_executor_connection_id"
+CONSTRAINT_CONFLICTS_WITH_PRESET_ID: Final[str] = "conflicts_with_preset_id"
+CONSTRAINT_ENVIRONMENT_SOURCE: Final[str] = "environment_source"
+#: with ``field`` ``preview_digest`` or ``mapping`` (``setExecutorRoutingMode``).
+CONSTRAINT_PREVIEW_DIGEST_REQUIRED: Final[str] = "preview_digest_required"
+CONSTRAINT_MAPPING_REQUIRED: Final[str] = "mapping_required"
+CONSTRAINT_MAPPING_NOT_ACCEPTED: Final[str] = "mapping_not_accepted"
+CONSTRAINT_MAPPING_ENTRY_NOT_READY: Final[str] = "mapping_entry_not_ready"
+CONSTRAINT_MAPPING_WORK_KIND_REPEATED: Final[str] = "mapping_work_kind_repeated"
+#: ``conflict`` -- ``conflict_reason``: an archived group takes no revision, rule or run; an active group holds the name; a
+#: rule still names the group; ``setExecutorRoute`` while the mode is ``rules``; the mode named is the current one; the
+#: cut-over preview digest is stale. (``connection_archived`` already exists and applies to an archived member.)
+CONFLICT_GROUP_ARCHIVED: Final[str] = "group_archived"
+CONFLICT_GROUP_NAME_IN_USE: Final[str] = "group_name_in_use"
+CONFLICT_GROUP_ROUTED: Final[str] = "group_routed"
+CONFLICT_ROUTING_MODE_RULES: Final[str] = "routing_mode_rules"
+CONFLICT_ROUTING_MODE_UNCHANGED: Final[str] = "routing_mode_unchanged"
+CONFLICT_PREVIEW_STALE: Final[str] = "preview_stale"
+#: ``dependency_unavailable`` -- ``dependency``: a start of a work kind that has no rule while the mode is ``rules``.
+DEPENDENCY_NO_RULE_FOR_WORK_KIND: Final[str] = "no_rule_for_work_kind"
 
 #: A probe nobody takes in this long ends as ``no_worker``.
 PROBE_UNTAKEN_SECONDS: Final[int] = 120
