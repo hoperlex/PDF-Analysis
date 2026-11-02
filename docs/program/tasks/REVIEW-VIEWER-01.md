@@ -181,3 +181,25 @@ and the re-measured `web/FRONTEND_LOCK.json`. No feature flag.
   - `next build` was not run (no disk): the worker is addressed as `new URL('pdfjs-dist/build/pdf.worker.min.mjs',
     import.meta.url)`, which Next must emit as an asset; `npm run build` is the check, as the old lane noted.
   - `useVersionBlockIndex` uses the key `queryKeys.versions.blocks` like «Блоки»; no API or contract change.
+
+## Integration acceptance (pdf-analysis-56, 2026-11-02)
+
+- Owner decision, direct poll 2026-11-02 ≈ 17:20 +05: publish to `origin/dev` **without the full
+  `make gate`** that AGENTS §8 case 3 asks for a manifest/lock change (the same route as `R-145a` for
+  the first pdf.js lane); light acceptance, `next build` and the real-Chrome screenshots stand in for
+  it, and the full gate is owed by the next owner window. `origin/main`: not now (main is 26 commits
+  behind dev, including migration 0045 and infra changes that are not this task's).
+- `origin/dev` `ece9d1ef` merged (`04d3f4b2`), `web/FRONTEND_LOCK.json` `toolchain.lockfile_sha256`
+  re-measured to `17dd0e83…a1ffdf` (`70d275a5`), then `origin/dev` `27fb952e` (contract 1.15.0)
+  merged (`2294152f`); the lock keeps both changes.
+- On the tree after the first merge, against a clean worktree of `origin/dev` `ece9d1ef` with the
+  same `node_modules`: whole web suite 3974 tests / 89 red vs 3822 / 88 red; the one extra is
+  `contrast.test.ts` «reads a collocated module through the CASCADE», 122 s against its 120 s limit
+  (base 111 s in its own full run; 108 s alone on this tree) — the census got slower with the viewer
+  screens and the test was already at the edge. `tests/contract` + the journey conformance/section
+  checks: 105 failed / 126 errors vs 104 / 126; the one extra was this card's
+  `PUBLICATION_TARGET_INVALID`, fixed in `60b2b4a1` (17/17 governance tests pass). Lint: the 2
+  pre-existing `no-control-regex` errors in `export-evidence-package/model/package.ts` (identical to
+  dev). Typecheck: clean. `next build`: passed, `pdf.worker.min.*.mjs` emitted under `.next/static/media`,
+  review route 36.8 kB / 224 kB first load; `.next` removed afterwards (disk).
+- Not run: the live browser journey on a stand and the full gate (disk ~1 GB free; owner decision above).
