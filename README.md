@@ -1,5 +1,9 @@
 # AuditManager Greenfield — bootstrap package
 
+For work on the current application, start with the [context guide](docs/context/README.md),
+[agent rules](AGENTS.md) and [current state](docs/program/CURRENT_STATE.md). The bootstrap
+instructions below are preserved as the foundation record and do not describe the current wave.
+
 This repository is a **starter kit for developing a new application from scratch**. It is not a copy of the legacy code and assumes no runtime dependency on the old application.
 
 The legacy `PDF-proverka-main` is used only as:

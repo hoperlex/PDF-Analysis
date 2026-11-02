@@ -1,96 +1,61 @@
 # `origin/main` auto-deploy policy
 
-**Effective for publication decisions from 2026-10-02.** GitHub auto-deploy from `origin/main`
-is operational: run `36873558201`, attempt 2, deployed and verified exact commit `608632a`.
-That success proves the mechanism, not standing permission to invoke it.
+**Effective 2026-11-02 for future release decisions.** A push or merge to `origin/main`
+starts an external deployment. The workflow deploys the triggering SHA and verifies the
+host, but it does not run a pre-deployment test suite. A release integrator therefore
+records the checks on the exact candidate before publishing it.
 
-## The two refs
+## Authority and refs
 
-- `origin/dev` is the default publication ref for a clean, gated development candidate. Updating
-  it does not deploy the public alpha and must not be described as deployed acceptance.
-- `origin/main` is the auto-deploy ref. It is updated only after a separate direct instruction
-  from the repository owner to publish the exact candidate to `main`.
+- `origin/dev` carries development candidates. A candidate may be labelled unverified;
+  publication there is not a deployment or acceptance claim.
+- `origin/main` carries the release trigger line. Only the named release integrator,
+  acting under an owner-assigned release task or standing release role that names this
+  ref, may update it. Delegation covers successive candidates; the owner does not need
+  to merge in GitHub or approve each SHA separately.
+- A coding lane, ordinary integration task or green check does not inherit release
+  authority. This policy change does not itself appoint a release integrator or publish
+  a candidate.
 
-A task title, integration role, green gate, release target, earlier permission or an instruction
-such as “continue”/“close the wave” is not authority to update `origin/main`. Without a direct
-main-publication instruction, the integrator stops after publishing the candidate to
-`origin/dev` and reports the exact SHA awaiting deployment authority.
+## Release evidence for one exact candidate
 
-## The boundary
+The release integrator writes a short record tied to one full SHA:
 
-A push or merge to `origin/main` is an externally consequential deployment request. It is not a
-repository-only cleanup operation. This includes a pull-request merge, an integration
-fast-forward and any command that updates `refs/heads/main`.
+1. Diff from the currently deployed/main tree and the affected behavior, contracts,
+   migrations, auth, dependencies and deploy inputs. Name tests chosen for each risk.
+2. Results of those focused checks on the candidate. For a migration, include upgrade
+   and rollback/recovery evidence; for external effects, the relevant integration test;
+   for a changed screen, browser proof when its interaction matters. Include build or
+   typecheck for affected packages. `git diff --check` always runs.
+3. Any failed or missing relevant check and its impact. A failure blocks publication;
+   an unverified critical path (auth, data integrity, migration or deployment) also
+   blocks it. Do not convert host exhaustion into a pass.
+4. Whether a complete `make gate` would cover a risk not already covered by the chosen
+   checks. Run it once on a capable runner when it would; its absence is not by itself a
+   blocker. A prior gate on another SHA is never substituted for candidate evidence.
 
-Only an explicitly assigned integration task whose integration contract names `origin/main`,
-and which is acting on that separate direct owner instruction for the exact candidate, may
-perform the update. Implementation, documentation, review and repair lanes do not inherit push
-authority from having a green local branch. A normal integration task may publish its gated
-candidate to `origin/dev` without gaining `origin/main` authority.
+The release record may be a concise integration report. It need not restate every task
+file, contract count or historical decision when those inputs did not change.
 
-The operator-provided temporary alpha address is
-`https://audit.135.106.164.147.sslip.io/`. On 2026-10-01 at 14:46 MSK it was observed with a
-valid TLS chain, `/` answered `307` to `/projects`, and unauthenticated
-`/api/v1/openapi.json` answered `401`. This is point-in-time reachability evidence only. It does
-not identify the deployed Git revision and must not replace `infra/deploy/verify-deployed.sh`.
+## Publish
 
-## Before updating `origin/main`
+1. Fetch `origin` and record remote `main`, `dev` and the candidate SHA. Require a clean
+   candidate tree and prove `origin/main` is an ancestor of the candidate. Never force
+   push or move `main` backwards.
+2. Recheck remote `main` immediately before publication. If it moved, reconcile and
+   rerun checks affected by the changed diff. Push the exact checked SHA, with no fix
+   appended after the checks. Only one main deployment is in flight.
+3. Prefer a direct fast-forward push by the release integrator. A GitHub merge button is
+   not a required approval step and must not manufacture a different, unchecked SHA.
 
-The integration owner must keep one evidence chain for one exact candidate SHA:
+## Verify and recover
 
-1. Record the direct owner instruction authorising this exact candidate for `origin/main`.
-2. Fetch `origin` and record the current remote `main`; stop if it moved during integration.
-3. Require a clean candidate tree and prove the update is a fast-forward with
-   `git merge-base --is-ancestor origin/main <candidate>`.
-4. Run the complete canonical `make gate` on that exact candidate and require the literal
-   `GATE OK` sentinel. A partial rerun, an inherited earlier log or a gate from another SHA is
-   not evidence. The one exception is `R-125`: a run voided by infrastructure (exit `137`,
-   `StorageUnavailableError`, a MinIO restart) on this exact SHA, clean tree and stand is
-   completed by rerunning, whole, every test directory that failed. The gate record names the
-   voided run, its failure lines, the rerun directories and their results. A failure that is
-   not infrastructural is never completed this way.
-5. Re-read the frozen contract counts, error catalog, migration head and deployment inputs. Any
-   owned change must be recorded by the integration task; an unowned change stops publication.
-6. Re-read `origin/main` immediately before the push. Push the intended SHA as a fast-forward;
-   never force, never move `main` backwards and never add a post-gate fix to the pushed tip.
+A successful push is not a successful deployment. Keep the release open until the
+workflow succeeds for the triggering SHA, `infra/deploy/verify-deployed.sh` succeeds on
+that same tree, and the public origin passes its TLS/application/auth smoke checks.
+Record the SHA, workflow run and verification output without secrets. If deployment
+fails, report it and use a reviewed forward fix or revert with the same release process;
+never force-push `main` or hide failure behind a second unreviewed push.
 
-Only one deployment publication may be in flight. The workflow must serialize main deployments;
-a later push must not race or silently cancel the proof for an earlier SHA.
-
-## After the push
-
-A successful Git push proves only that Git accepted the ref. The integration task remains open
-until all of the following hold for the same SHA:
-
-1. The GitHub workflow completed successfully rather than being skipped, cancelled or green on
-   an unrelated job.
-2. The deployment job selected the triggering commit SHA, not whatever `main` happened to name
-   later.
-3. On the deployment host, `infra/deploy/verify-deployed.sh` exits `0` against the checkout used
-   for deployment.
-4. The public origin answers over verified TLS, `/` reaches the application, and an
-   unauthenticated protected API operation is refused by the application boundary.
-5. The integration report records the candidate SHA, workflow run identity and the literal
-   verification results without copying secrets or `docker compose config` output.
-
-If any item fails, report a failed or incomplete deployment. Do not repair it with an unreviewed
-follow-up push merely because the change is small.
-
-## Rollback and secrets
-
-Rollback is another deployment: create an explicit reviewed revert, run the complete gate and
-fast-forward that new commit through the same procedure. Rewriting or force-pushing `main` is
-forbidden.
-
-GitHub and host credentials belong in protected environment/host storage. They do not belong in
-repository files, workflow logs, task reports or chat. The ignored deployment env files remain
-host-owned and mode `0600`.
-
-## What this document does not claim
-
-- It does not implement or enable the workflow.
-- It does not claim what SHA is currently deployed.
-- It does not turn `origin/dev`, tags or agent branches into deployment triggers or grant
-  `origin/main` authority by implication.
-- It does not replace `infra/deploy/deploy.sh`, `infra/deploy/readiness.sh` or
-  `infra/deploy/verify-deployed.sh`.
+GitHub and host credentials remain in protected stores. They do not belong in source,
+logs, task reports or chat.
