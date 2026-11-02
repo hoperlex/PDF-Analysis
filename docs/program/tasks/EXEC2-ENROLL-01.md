@@ -88,6 +88,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `scripts/recovery/grant_classification.py`
 - `tests/unit/executors/test_enrollment.py`
 - `tests/unit/executors/test_agent_package.py`
+- `tests/unit/executors/test_agent_install_api.py`
 - `tests/integration/executors/test_enrollment.py`
 
 ## Forbidden hotspots
