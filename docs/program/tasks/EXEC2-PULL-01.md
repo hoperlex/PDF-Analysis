@@ -85,6 +85,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/executors/runner.py`
 - `src/auditmanager/executors/runner_repository.py`
 - `src/auditmanager/api/routers/runner.py`
+- `src/auditmanager/bootstrap/runner.py`
 - `src/auditmanager/bootstrap/adapters.py`
 - `src/auditmanager/api/routers/ports.py`
 - `tools/executor-runner/agent.py`
