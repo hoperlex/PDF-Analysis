@@ -88,6 +88,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/workers/service.py`
 - `docs/program/DEBT_REGISTER.md`
 - `tests/integration/comparison/spend/test_connection_single_user.py`
+- `tests/unit/runs/test_run_status_executor.py`
 - `tools/executor-runner/claude_answer.py`
 - `tools/executor-runner/codex_answer.py`
 - `tests/unit/jobs/**`
