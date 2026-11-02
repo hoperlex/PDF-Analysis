@@ -165,27 +165,27 @@ The integrator re-runs every premise command on the actual base before dispatch 
 ## Deliverables
 - The date prefix `20261103` of the migration file is the dispatch date; the integrator fixes it when it re-captures the premises.
 - OpenAPI 1.15.0 adds:
--   - `max_active_runs` (integer 1–16, default 1) in the revision settings of every kind;
--   - `occupancy` (`capacity`, `active_runs`, `active_calls`) on the connection read models;
--   - `queue_reason` (`executor_at_capacity`, `runner_offline` or null) on the Run read models;
--   - the optional `runner_instance_id` (`^[A-Za-z0-9_-]{8,64}$`) in the `claimExecutorTask` body;
--   - `POST /executor-connections/{connection_id}/enrollments` (administrator, idempotency key). The secret, the package version and sha256, and the copyable command are shown once.
--   - `POST /runner/enroll` (enrollment secret as bearer; returns a runner token once)
--   - `POST /runner/health` (runner token; sanitised enumerations only)
--   - `GET /runner/agent-package/{version}` (no authentication; `application/gzip`)
--   - `POST /executor-connections/{connection_id}/agent-installs`, `GET …/agent-installs/{install_id}` and `POST …/agent-installs/{install_id}/confirm-host-key` (administrator)
--   - `POST /executor-connections/{connection_id}/integration-authorisation` (administrator; the R-149b mark)
--   - the health fields on `RunnerTokenMetadata`;
--   - typed refusal details (`constraint`/`conflict_reason`/`dependency` values) on the existing codes only.
+  - `max_active_runs` (integer 1–16, default 1) in the revision settings of every kind;
+  - `occupancy` (`capacity`, `active_runs`, `active_calls`) on the connection read models;
+  - `queue_reason` (`executor_at_capacity`, `runner_offline` or null) on the Run read models;
+  - the optional `runner_instance_id` (`^[A-Za-z0-9_-]{8,64}$`) in the `claimExecutorTask` body;
+  - `POST /executor-connections/{connection_id}/enrollments` (administrator, idempotency key). The secret, the package version and sha256, and the copyable command are shown once.
+  - `POST /runner/enroll` (enrollment secret as bearer; returns a runner token once)
+  - `POST /runner/health` (runner token; sanitised enumerations only)
+  - `GET /runner/agent-package/{version}` (no authentication; `application/gzip`)
+  - `POST /executor-connections/{connection_id}/agent-installs`, `GET …/agent-installs/{install_id}` and `POST …/agent-installs/{install_id}/confirm-host-key` (administrator)
+  - `POST /executor-connections/{connection_id}/integration-authorisation` (administrator; the R-149b mark)
+  - the health fields on `RunnerTokenMetadata`;
+  - typed refusal details (`constraint`/`conflict_reason`/`dependency` values) on the existing codes only.
 - Version literal 1.15.0 in every file of premise P-01. The path and operation counts move in every file of P-02 to the figures the new contract actually has.
 - Migration `0046_executor_capacity_enrollment`:
--   - nullable `executor_connection_revision.max_active_runs` (1–16; NULL reads as 1);
--   - `executor_task.claimed_by_instance_id`;
--   - the health columns on `executor_runner_token`;
--   - tables `executor_enrollment` and `executor_agent_install` with ID checks and immutability where ADR-0026 says so;
--   - `agent_install_key` added to the secret purposes;
--   - the integration-authorisation columns on `executor_connection`;
--   - a downgrade that refuses when it would drop data in use.
+  - nullable `executor_connection_revision.max_active_runs` (1–16; NULL reads as 1);
+  - `executor_task.claimed_by_instance_id`;
+  - the health columns on `executor_runner_token`;
+  - tables `executor_enrollment` and `executor_agent_install` with ID checks and immutability where ADR-0026 says so;
+  - `agent_install_key` added to the secret purposes;
+  - the integration-authorisation columns on `executor_connection`;
+  - a downgrade that refuses when it would drop data in use.
 - `executors/model.py`: the vocabulary only (purposes, settings fields, new kinds of refusal detail); no behaviour.
 - New operations mapped in `api/security.py`: administrator ones to the administrator map, runner ones to the runner set, the enroll exchange and the package to their own principal kinds as stubs the ENROLL lane fills.
 - The `D-213` inventories in the allowed paths name the new tables and columns.

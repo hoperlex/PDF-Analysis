@@ -52,10 +52,10 @@ The integrator re-runs every premise command on the actual base before dispatch 
 ## Deliverables
 - Merges and per-lane path checks.
 - Reviews:
--   - lock order across `jobs/repository.py` and `comparison/spend/*`;
--   - every `connection_revision_id` reader in premise lists of GROUP-RUN-01 and GROUP-CMP-01 handles `pending`;
--   - `environment` refusal;
--   - ceilings against the bound member.
+  - lock order across `jobs/repository.py` and `comparison/spend/*`;
+  - every `connection_revision_id` reader in premise lists of GROUP-RUN-01 and GROUP-CMP-01 handles `pending`;
+  - `environment` refusal;
+  - ceilings against the bound member.
 - Upgrade and rollback steps in `EXEC2-INT-3.md` for the release integrator, who writes the Russian `release-notes/<version>.json` at the version bump; no VERSION change on dev. `CURRENT_STATE`, push with exact read-back.
 - B3 §11 item 21 noted as a pending run in `D-292`.
 

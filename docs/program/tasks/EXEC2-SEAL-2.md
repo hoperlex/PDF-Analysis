@@ -102,25 +102,25 @@ The integrator re-runs every premise command on the actual base before dispatch 
 ## Deliverables
 - The date prefixes are the dispatch date, as in SEAL-1.
 - OpenAPI 1.16.0 adds:
--   - `GET/POST /executor-groups`
--   - `GET /executor-groups/{group_id}`
--   - `POST /executor-groups/{group_id}/revisions`
--   - `POST /executor-groups/{group_id}/archive`
--   - `GET /executor-groups/{group_id}/capacity`
--   - `GET /executor-routing-rules`
--   - `PUT /executor-routing-rules/{work_kind}` (administrator, idempotency key)
--   - `GET /executor-routing/preview`
--   - `POST /executor-routing/mode` (cut-over and rollback with a confirmed mapping)
--   - `executor_group_id` on `startRun` and `estimateRunCost`, mutually exclusive with `executor_connection_id` and `preset_id`;
--   - group, rule and planned-model fields on the comparison estimates and consents;
--   - `binding_state`, the planned and the bound model and connection, `wait_reason` and `waiting_since` on the Run and comparison-job read models.
+  - `GET/POST /executor-groups`
+  - `GET /executor-groups/{group_id}`
+  - `POST /executor-groups/{group_id}/revisions`
+  - `POST /executor-groups/{group_id}/archive`
+  - `GET /executor-groups/{group_id}/capacity`
+  - `GET /executor-routing-rules`
+  - `PUT /executor-routing-rules/{work_kind}` (administrator, idempotency key)
+  - `GET /executor-routing/preview`
+  - `POST /executor-routing/mode` (cut-over and rollback with a confirmed mapping)
+  - `executor_group_id` on `startRun` and `estimateRunCost`, mutually exclusive with `executor_connection_id` and `preset_id`;
+  - group, rule and planned-model fields on the comparison estimates and consents;
+  - `binding_state`, the planned and the bound model and connection, `wait_reason` and `waiting_since` on the Run and comparison-job read models.
 - Migration `0047`: the tables of decisions 10 and 11 plus the routing mode, with ID checks, uniqueness, immutability triggers and no hard delete of a referenced revision.
 - Migration `0048`:
--   - `binding_state` on `audit_run` and `comparison_ai_job`; every existing row becomes `frozen_at_start`;
--   - `comparison_ai_job.connection_revision_id` becomes nullable, with a CHECK tying NULL to `pending`;
--   - rule and group revision references;
--   - `wait_reason` and `waiting_since`;
--   - both guards re-created with the exception of decision 12.
+  - `binding_state` on `audit_run` and `comparison_ai_job`; every existing row becomes `frozen_at_start`;
+  - `comparison_ai_job.connection_revision_id` becomes nullable, with a CHECK tying NULL to `pending`;
+  - rule and group revision references;
+  - `wait_reason` and `waiting_since`;
+  - both guards re-created with the exception of decision 12.
 - Pins and the `D-213` inventories as in SEAL-1. Models and client regenerated.
 
 ## Required tests
