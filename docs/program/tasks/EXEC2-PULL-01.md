@@ -85,6 +85,8 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/executors/runner.py`
 - `src/auditmanager/executors/runner_repository.py`
 - `src/auditmanager/api/routers/runner.py`
+- `src/auditmanager/bootstrap/adapters.py`
+- `src/auditmanager/api/routers/ports.py`
 - `tools/executor-runner/agent.py`
 - `tools/executor-runner/runner_client.py`
 - `tools/executor-runner/RUNNER_API.md`
@@ -101,6 +103,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
 - `src/auditmanager/shared/errors/**`: EXEC-2 adds no error code (ADR-0026 decision 18)
 - paths another EXEC-2 task owns in the same stage (`EXEC2-PLAN.md` section 5)
+- in `src/auditmanager/bootstrap/adapters.py` and `src/auditmanager/api/routers/ports.py`, which three stage-1 lanes share: any function or class outside this task's own port; new code goes in a section headed with this task id, and the integrator merges the lanes one by one
 - `src/auditmanager/jobs/**` (`EXEC2-CAP-01`)
 
 ## Non-goals
