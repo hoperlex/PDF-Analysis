@@ -10,8 +10,8 @@ OpenAPI 1.15.0 declares every stage-1 addition of ADR-0026 decisions 1–9. Migr
 - domain contract: version literal 1.14.0 → 1.15.0; new identifier prefixes for the enrollment and the install session
 - API contract: 1.14.0 → 1.15.0, owned by this task
 - analysis/comparison/event contract: version literal 1.14.0 → 1.15.0 only
-- migration head: `0045_comparison_page_bounds` once `REVIEW-FIX-INT-1102` is on `origin/dev`; this task owns slot `0046`
-- base commit: `origin/dev` after `REVIEW-FIX-INT-1102`; the integrator creates `integration/exec2` there
+- migration head: `0045_comparison_page_bounds` (on `origin/dev` since `31c66307`); this task owns slot `0046`
+- base commit: `integration/exec2` = `origin/dev` `ece9d1ef` plus the assignment commit of this task
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 1–9, 18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -94,14 +94,14 @@ OpenAPI 1.15.0 declares every stage-1 addition of ADR-0026 decisions 1–9. Migr
 
 ### P-03 — the migration head this task builds on
 - captured_at: 2026-11-02
-- command: `git ls-tree --name-only integration/review-fix-1102 db/migrations/versions/ | grep -E '_004[45]_'`
+- command: `git ls-tree --name-only origin/dev db/migrations/versions/ | grep -E '_004[45]_'`
 - captured_output:
   ```text
   db/migrations/versions/20261030_0044_section_stats_uncapped.py
   db/migrations/versions/20261102_0045_comparison_page_bounds.py
   exit=0
   ```
-- interpretation: after `REVIEW-FIX-INT-1102` the head is 0045; 0046 is the next free slot.
+- interpretation: the head is 0045; 0046 is the next free slot.
 
 ### P-04 — the operation-to-principal map
 - captured_at: 2026-11-02
@@ -142,7 +142,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `tests/contract/api_v1/test_cmp_seal_c4.py`
 - `tests/contract/api_v1/test_contract_seal.py`
 - `src/auditmanager/executors/model.py`
-- `db/migrations/versions/20261103_0046_executor_capacity_enrollment.py`
+- `db/migrations/versions/20261102_0046_executor_capacity_enrollment.py`
 - `infra/deploy/apply-grants.sh`
 - `scripts/recovery/grant_classification.py`
 - `scripts/recovery/product_purge.py`
@@ -163,7 +163,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - no group or rule schema (stage 2, `EXEC2-SEAL-2`)
 
 ## Deliverables
-- The date prefix `20261103` of the migration file is the dispatch date; the integrator fixes it when it re-captures the premises.
+- The migration file name carries the dispatch date `20261102`.
 - OpenAPI 1.15.0 adds:
   - `max_active_runs` (integer 1–16, default 1) in the revision settings of every kind;
   - `occupancy` (`capacity`, `active_runs`, `active_calls`) on the connection read models;
