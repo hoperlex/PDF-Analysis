@@ -214,6 +214,54 @@ class RunnerPort(Protocol):
     ) -> models.ExecutorTaskAck: ...
 
 
+# EXEC2-ENROLL-01 -------------------------------------------------------------------------------------
+# The universal agent: the enrollment grant and its exchange, the agent's health, the package route, the
+# API side of an install over SSH and the integration-authorisation mark (ADR-0026 decisions 4 to 9).
+# This section is the lane's own; the ports around it belong to others.
+from auditmanager.api.security import EnrollmentIdentity  # noqa: E402
+
+
+class EnrollmentPort(Protocol):
+    """The universal agent (`EXEC2-ENROLL-01`): five administrator operations, and the three an agent calls.
+
+    ``authenticate_enrollment`` is the seam's (it satisfies ``api.security.EnrollmentSecrets``). The
+    administrator's methods re-read the actor's role in their own transaction. No method returns a secret
+    but ``issue_enrollment`` (the grant's, once) and ``redeem_enrollment`` (the runner token's, once); an
+    install session returns the public half of a generated key and never a private one."""
+
+    def authenticate_enrollment(self, presented: str) -> EnrollmentIdentity | None: ...
+    def issue_enrollment(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str,
+        requested_origin: str | None,
+    ) -> models.IssuedExecutorEnrollment: ...
+    def set_integration_authorisation(
+        self, *, connection_id: str, authorised: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection: ...
+    def create_agent_install(
+        self, *, connection_id: str, body: models.CreateExecutorAgentInstallRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorAgentInstall: ...
+    def get_agent_install(
+        self, *, connection_id: str, install_id: str
+    ) -> models.ExecutorAgentInstall: ...
+    def confirm_agent_install_host_key(
+        self, *, connection_id: str, install_id: str, host_key_fingerprint: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorAgentInstall: ...
+    def redeem_enrollment(
+        self, *, enrollment: EnrollmentIdentity, runner_instance_id: str
+    ) -> models.IssuedRunnerToken: ...
+    def report_health(
+        self, *, runner: RunnerIdentity, body: models.ReportRunnerHealthRequest
+    ) -> models.RunnerHealthAck: ...
+    def read_package(self, *, version: str) -> tuple[str, bytes]:
+        """``(file name, bytes)`` of the package of exactly this version, verified against its digest."""
+        ...
+
+
+__all__ += ["EnrollmentPort"]
+
+
 class UploadedDocument(Protocol):
     """What an upload produced, and whether it created anything.
 

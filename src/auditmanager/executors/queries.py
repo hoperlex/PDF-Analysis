@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from auditmanager.executors.integration_mark import IntegrationMark
 from auditmanager.executors.model import (
     ConnectionSummary,
     ProbeRecord,
@@ -75,9 +76,13 @@ class Occupancy:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OccupiedConnectionSummary(ConnectionSummary):
-    """A :class:`ConnectionSummary` that also carries the connection's occupancy at read time."""
+    """A :class:`ConnectionSummary` that also carries the connection's occupancy at read time (`EXEC2-CAP-01`)
+    and the administrator's integration-authorisation mark (`EXEC2-ENROLL-01`, `R-149b`), read with the
+    summary so that every view of a connection -- the list, a created, revised or archived connection, the
+    detail -- shows both without a read of its own."""
 
     occupancy: Occupancy
+    integration_mark: IntegrationMark | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +135,7 @@ def _summaries(
     revisions = store.current_revisions(session, ids)
     secrets = store.current_secrets(session, ids)
     counts = store.unit_counts(session, ids)
+    marks = store.integration_marks(session, ids)
     routed: dict[str, list[str]] = {}
     for route in store.current_routes(session):
         for connection_id in (route.primary_connection_id, route.standby_connection_id):
@@ -142,6 +148,9 @@ def _summaries(
             secrets=tuple(secrets.get(connection.connection_id, ())),
             routed_work_kinds=tuple(sorted(set(routed.get(connection.connection_id, ())))),
             occupancy=Occupancy(*counts[connection.connection_id]),
+            integration_mark=(
+                IntegrationMark(connection.connection_id, *marks[connection.connection_id])
+                if connection.connection_id in marks else None),
         )
         for connection in connections
     )

@@ -57,6 +57,10 @@ class Fake(ExecutorRepository):
         self.log.append("runner_online")
         return self.online
 
+    def integration_marks(self, session: Any, connection_ids: Any) -> dict[str, Any]:
+        # `EXEC2-ENROLL-01`: ``_summaries`` also reads the administrator's mark; no connection here has one.
+        return {}
+
     def list_connections(self, session: Any, *, limit: int = 500) -> list[ConnectionRecord]:
         return list(self.connections)
 
