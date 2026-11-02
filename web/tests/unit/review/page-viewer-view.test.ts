@@ -172,6 +172,18 @@ describe('the marks', () => {
     expect(draw({ activeTargetId: null })).not.toContain('data-active="true"');
   });
 
+  it('gives the active frame, and only it, the ring that plays when the viewer arrives', () => {
+    const frameOf = (markup: string, id: string) =>
+      markup.match(new RegExp(`<button[^>]*data-target-id="${id}"[^>]*>.*?</button>`))?.[0] ?? '';
+    const markup = draw({ activeTargetId: 'q2' });
+    expect(frameOf(markup, 'q2')).toMatch(/<span class="[^"]*_arrival_[^"]*" aria-hidden="true">/);
+    expect(frameOf(markup, 'q1')).not.toContain('_arrival_');
+    // The ring is a child, so the frame keeps its element and a glide to it is not cut.
+    expect(frameOf(draw({ activeTargetId: 'q2', pulse: 7 }), 'q2').replace(/_arrival_\w+/, '')).toBe(
+      frameOf(markup, 'q2').replace(/_arrival_\w+/, ''),
+    );
+  });
+
   it('names the quotation in the tooltip of its frame, as the server sent it', () => {
     const markup = draw();
     expect(markup).toContain('title="первая цитата"');
@@ -219,6 +231,10 @@ describe('the one control', () => {
     for (const title of ['Уменьшить (клавиша «−»)', 'Приблизить (клавиша «+»)', 'Показать страницу целиком (клавиша «0»)', 'К фрагменту']) {
       expect(markup).toContain(`title="${title}"`);
     }
+  });
+
+  it('starts faded and is made opaque by focus in state, not by a selector the census cannot read', () => {
+    expect(draw()).toContain('data-engaged="false"');
   });
 
   it('says the zoom as a percentage', () => {

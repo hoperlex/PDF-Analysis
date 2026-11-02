@@ -75,9 +75,7 @@ export function ViewerMarks({
           const quote = placed.target.quote;
           return (
             <button
-              // The pulse is part of the key of the ACTIVE frame only: a new key is a new element,
-              // and a new element plays its entrance once.
-              key={`${placed.target.id}:${at}:${active ? pulse : 'quiet'}`}
+              key={`${placed.target.id}:${at}`}
               type="button"
               className={styles.frame}
               data-active={active ? 'true' : 'false'}
@@ -100,6 +98,11 @@ export function ViewerMarks({
               }
             >
               <span className={styles.badge}>{placed.target.badge}</span>
+              {/*
+                The single pulse is a child that is new each time the viewer arrives: the frame
+                itself keeps its element, so the glide to the target is never cut by a remount.
+              */}
+              {active ? <span key={pulse} className={styles.arrival} aria-hidden="true" /> : null}
             </button>
           );
         }),

@@ -143,8 +143,7 @@
 }
 
 /* One ring that leaves the active frame when the viewer arrives on it: the single pulse. */
-.frame[data-active='true']::after {
-  content: '';
+.arrival {
   position: absolute;
   inset: -4px;
   border: 2px solid var(--am-accent);
@@ -210,7 +209,7 @@
 }
 
 .controls:hover,
-.controls:focus-within {
+.controls[data-engaged='true'] {
   opacity: 1;
 }
 

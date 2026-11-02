@@ -59,7 +59,7 @@ import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
-import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
+import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
 import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
@@ -1012,6 +1012,17 @@ export function screens(): Screen[] {
       normDocumentId: NORM_DOCUMENT_ID, items: NORM_PARAGRAPHS, onFirst: null, onNext: noop,
     }),
   )));
+  /*
+   * The norm's source PDF, opened at a page. It is the one surface still drawn by the browser's own
+   * reader -- an `<object>` addressed by `#page=N` -- and the rule for that element used to be
+   * reached by the evidence viewer's screen, which now draws with the page viewer. Without this
+   * screen `.am-evidence__object` is a colour rule no screen reaches.
+   */
+  add('NormPdf opened at a page', withRouter(createElement(NormPdf, {
+    document: normDocument(), page: 12,
+    documentUrl: 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100',
+    isLoading: false, error: null,
+  })));
   add('NormSnapshotList loaded, administrator', withRouter(createElement(NormSnapshotList, {
     items: NORM_SNAPSHOTS, current: { kind: 'current', snapshot: NORM_SNAPSHOTS[0]! },
     canDesignate: true, busy: false, onDesignate: noop,
