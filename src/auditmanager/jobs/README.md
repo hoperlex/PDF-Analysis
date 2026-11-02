@@ -13,13 +13,21 @@ intake is off. `enqueue`, an unpause and a lease reclaim that requeues `NOTIFY`
 Attempt is resumed only when no provider effect of it can have spent: a recorded call never
 does (D-150), a live one that may have been sent fails the run with that uncertainty recorded.
 
-One executor connection has at most one active Run (`EXEC-PAR-QUEUE-01`). A Run's connection is the
-one its frozen revision belongs to (`audit_run.connection_revision_id`); a Run without one is never
-limited. A Run is *active* while its Job is `leased`, `running` or `retry_wait` -- an unreleased
-Lease, live or expired, so a killed worker's connection stays busy until the reclaim releases it.
-`next_queued_run` skips a Job whose connection is busy and returns the next one in the unchanged
-priority-then-age order; the claim takes a transaction-scoped advisory lock on the connection
-(before the dispatch-control row), re-checks under it, and a claim that loses raises
-`ExecutionNotClaimed` having written nothing.
+One executor connection serves at most as many **units** at once as its capacity, which is one unless
+its current revision says more (`EXEC-PAR-QUEUE-01`, widened by `EXEC2-CAP-01`, ADR-0026 decision 1). A
+Run's connection is the one its frozen revision belongs to (`audit_run.connection_revision_id`); a Run
+without one takes no lock and no unit and is never limited. A unit is a Run that is *active* -- its Job is
+`leased`, `running` or `retry_wait`, an unreleased Lease, live or expired, so a killed worker's connection
+keeps its unit until the reclaim releases it -- or a comparison model call in `prepared` or `sent` whose
+attempt is still live (`CMP-SPEND-01`). The capacity is `max_active_runs` of the connection's **current**
+(highest-numbered) revision; NULL, or no revision, reads as one, and with one the behaviour is exactly the
+old single-active-Run rule. A lowered capacity governs new claims only and never stops a Run in flight.
+
+`next_queued_run` skips a Job whose connection already holds as many Runs as its capacity (the Runs this
+process has handed to a slot count) and returns the next one in the unchanged priority-then-age order. The
+claim takes a transaction-scoped advisory lock on the connection (before the dispatch-control row), counts
+the units in use under it, and compares them with the capacity; a claim that loses raises
+`ExecutionNotClaimed` having written nothing. The comparison call preparation takes the same lock and asks
+the same question (`comparison/spend/repository.py`), so a Run and a call never both take the last unit.
 
 Create subfolders/classes only when a real use case requires them. Keep internal APIs private by default.

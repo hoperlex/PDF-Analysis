@@ -149,7 +149,7 @@ def test_the_runs_claim_names_an_active_comparison_call_the_way_this_context_doe
     """The Run claim's mirror of ``connection_has_active_call``: the same two states of the call and three of the attempt."""
     from auditmanager.jobs import repository as jobs
 
-    run_side = str(jobs._CONNECTION_HAS_OTHER_ACTIVE_RUN)  # type: ignore[attr-defined]
+    run_side = str(jobs._CONNECTION_UNITS)  # type: ignore[attr-defined]
     ours = str(repository._CONNECTION_HAS_ACTIVE_CALL)  # type: ignore[attr-defined]
     for fragment in ("c.state IN ('prepared', 'sent')", "a.state IN ('created', 'leased', 'running')"):
         assert fragment in ours
