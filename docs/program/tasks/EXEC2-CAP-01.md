@@ -83,6 +83,11 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/api/routers/ports.py`
 - `src/auditmanager/api/routers/runs.py`
 - `src/auditmanager/api/routers/executors.py`
+- `src/auditmanager/api/schemas/runs.py`
+- `src/auditmanager/executors/public.py`
+- `src/auditmanager/workers/service.py`
+- `docs/program/DEBT_REGISTER.md`
+- `tests/integration/comparison/spend/test_connection_single_user.py`
 - `tools/executor-runner/claude_answer.py`
 - `tools/executor-runner/codex_answer.py`
 - `tests/unit/jobs/**`
