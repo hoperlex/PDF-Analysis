@@ -211,10 +211,16 @@ def review_bundle_digest(section):
                    "section": section, "section_rules": rules_digest(section), "assets": assets})
 
 
-def _v3_request(request, *, run_id, section, phase, window_id=None, relaxed_limits=False):
-    from .section_rules import section_instructions
+def v3_request_ceiling(relaxed_limits=False):
+    """The body size a v3 request may reach: the builders' check and every context decorator's re-check."""
     if type(relaxed_limits) is not bool:
         raise ValueError("extended_relaxed_limits_invalid")
+    return LIFTED_V3_REQUEST_BYTES if relaxed_limits else MAX_V3_REQUEST_BYTES
+
+
+def _v3_request(request, *, run_id, section, phase, window_id=None, relaxed_limits=False):
+    from .section_rules import section_instructions
+    ceiling = v3_request_ceiling(relaxed_limits)
     body = deepcopy(request.body)
     payload = json.loads(body["messages"][0]["content"])
     window = window_id or payload.get("window_id") or "window-1"
@@ -226,7 +232,6 @@ def _v3_request(request, *, run_id, section, phase, window_id=None, relaxed_limi
         payload.setdefault("context_coverage", {})["truncated"] = True
     body["messages"][0]["content"] = canonical(payload)
     body["system"] += "\n\n" + section_instructions(section, phase)
-    ceiling = LIFTED_V3_REQUEST_BYTES if relaxed_limits else MAX_V3_REQUEST_BYTES
     if len(canonical(body).encode("utf-8")) > ceiling:
         raise ValueError("extended_v3_request_window_too_large")
     return ModelRequest(request.model_id, body,

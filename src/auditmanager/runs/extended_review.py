@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Any
 
 from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode,
-    build_extended_request, extended_digest, finalize_extended_items,
+    build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
     pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload)
 from auditmanager.documents.public import DocumentRepository
@@ -626,6 +626,23 @@ def _bounds_lifted(policy):
     return policy.get("unbounded_stats") is True
 
 
+#: The body size the section builders allow a norm request (`analysis/extended/workflow.py`
+#: MAX_V3_REQUEST_BYTES; a ``relaxed_limits`` run lifts it). The norm paragraph context is attached
+#: after that check, so the final body is measured again. A unit test pins the figure to the builders'.
+_NORM_REQUEST_BODY_BYTES = 900_000
+
+
+def _norm_request_within_bounds(request, *, policy):
+    if not _bounds_lifted(policy) and len(extended_canonical(request.body).encode("utf-8")) > _NORM_REQUEST_BODY_BYTES:
+        raise ValueError("norm_paragraph_context_request_window_too_large")
+
+
+def _reply_refusal_code(error):
+    """What a parser said about a refused reply, when that is a plain code; a decoder message is not kept."""
+    code = str(error)
+    return code if code.isidentifier() and code.islower() else "reply_unreadable"
+
+
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
         window_context=None, full_document=False):
@@ -660,13 +677,16 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         receipt=None
         parameter_context_receipt=None
         parameter_review_receipt=None
+        # Only the batched builders take ``relaxed_limits``; a decorator holds the ceiling of the builder
+        # that made the request.
         if (v3 and identity.startswith("blocks:")
                 and "project_parameter_context_policy" in window_context["policy"]):
             from auditmanager.analysis.public import attach_project_parameter_context
             request, provided_context = attach_project_parameter_context(request,
                 parameters=window_context["project_parameters"],
                 accepted=window_context["policy"]["project_parameter_context_policy"],
-                parameters_policy=window_context["policy"]["project_parameters_policy"])
+                parameters_policy=window_context["policy"]["project_parameters_policy"],
+                relaxed_limits=batched and _bounds_lifted(window_context["policy"]))
             parameter_context_receipt = {**provided_context, "request_sha256": request.request_sha256,
                 "request_prepared": True, "response_received": False}
             state.setdefault("project_parameter_context_receipts", {})[identity] = parameter_context_receipt
@@ -677,7 +697,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             from auditmanager.analysis.public import attach_project_parameter_review_context
             request, parameter_review_receipt = attach_project_parameter_review_context(request,
                 parameters=window_context["project_parameters"], accepted=review_context,
-                parameters_policy=window_context["policy"]["project_parameters_policy"], procedure=review_kind)
+                parameters_policy=window_context["policy"]["project_parameters_policy"], procedure=review_kind,
+                relaxed_limits=batched and _bounds_lifted(window_context["policy"]))
             parameter_review_receipt.update(request_sha256=request.request_sha256,
                 request_prepared=True, response_received=False)
             state.setdefault("project_parameter_review_context_receipts", {})[identity] = parameter_review_receipt
@@ -993,6 +1014,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return state
     except (DomainError,ValueError,TypeError,KeyError) as error:
         reason=(error.detail_fields.get("reason") or (error.code.value if v3 else None)) if isinstance(error,DomainError) else "extended_reply_or_source_invalid"
+        if isinstance(error,ValueError) and str(error).endswith("_window_too_large"):
+            reason=str(error)  # a request over the size bound is not an invalid reply or source
         reason=str(reason or "extended_workflow_failed")
         for procedure in state["procedures"]:
             if procedure["status"]=="running": procedure.update(status="failed",reason=reason)
@@ -1530,6 +1553,15 @@ def _coverage_complete(state, *, kind, index, partial=False, reason=None):
         characters_processed=sum(batch.get('input_characters', 0) for batch in completed))
 
 
+def _coverage_failed(state, *, kind, index, error):
+    """A batch whose paid reply the parser refused: the receipt says so, the batches after it still run.
+
+    ``response_received`` stays as the call left it, so the receipt shows that the reply was paid for.
+    """
+    row = next(row for row in state['batches'] if row['procedure'] == kind and row['index'] == index)
+    row.update(status='failed', reason=f'{kind}_reply_refused', error_code=_reply_refusal_code(error))
+
+
 def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, phase, call, window_context):
     from auditmanager.analysis.public import plan_extended_coverage, build_comprehensive_request_batched_v3
     kind = 'comprehensive_analysis'
@@ -1613,6 +1645,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
             phase(kind, 'unavailable', 'corpus_unavailable' if snapshot_id is None else 'candidate_context_unavailable')
         return
     phase(kind, 'running')
+    refused_replies = 0
     for batch in plan['batches']:
         indexed = {row['input_id']: row['item'] for row in batch['items']}
         registry = {candidate['paragraph_id']: candidate for item in indexed.values()
@@ -1630,6 +1663,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
             from .norm_context import attach as attach_norm_context
             request, context_receipt = attach_norm_context(session, request, observations=indexed,
                 snapshot_id=snapshot_id, accepted=accepted_context, checkpoint=checkpoint)
+            _norm_request_within_bounds(request, policy=window_context['policy'])
             context_incomplete = context_incomplete or context_receipt['contexts_not_provided'] > 0 or any(
                 row.get('search_quote_literal_in_paragraph') is not True
                 for row in context_receipt['context']['paragraphs'])
@@ -1646,16 +1680,27 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
                     if row.get('procedure') == kind and row.get('index') == batch['index']), {})
                 if paid_receipt.get('response_received'):
                     context_receipt.update(response_received=True, replayed=paid_receipt.get('replayed', False))
-        parsed = parse_norm_review_batched_v3(response.output_text,
-            observations=indexed, allowed_sources={source['source_id'] for source in state['sources']})
+        try:
+            parsed = parse_norm_review_batched_v3(response.output_text,
+                observations=indexed, allowed_sources={source['source_id'] for source in state['sources']})
+        except ValueError as error:
+            # The reply is paid for and saved; one refused reply costs its own batch, not the window.
+            _coverage_failed(state, kind=kind, index=batch['index'], error=error)
+            for item in indexed.values():
+                item.update(norm_review_status='not_reviewed', norm_review_reason=f'{kind}_reply_refused')
+            refused_replies += 1
+            phase(kind, 'running')
+            continue
         for row in parsed:
             indexed[row['input_id']].update(norm_assessment=row['norm_assessment'],
                 norm_review_status='reviewed', norm_review_reason=None)
         _coverage_complete(state, kind=kind, index=batch['index'])
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
-    incomplete = deferred or quote_variants or context_incomplete or len(candidates) < len(state['observations'])
+    incomplete = (deferred or refused_replies or quote_variants or context_incomplete
+        or len(candidates) < len(state['observations']))
     phase(kind, 'partial' if incomplete else 'completed', 'approved_phase_call_limit' if deferred
+        else f'{kind}_reply_refused' if refused_replies
         else 'norm_quote_variants_retained' if quote_variants
         else 'norm_paragraph_context_incomplete' if context_incomplete else None)
 
@@ -1673,6 +1718,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         limit=None if window_context['policy'].get('unbounded_stats') else limits[kind])
     _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_id)
     critic_cut = False
+    refused_replies = 0
     correction_targets = []
     if not state['observations']:
         phase(kind, 'completed', 'no_observations')
@@ -1692,8 +1738,18 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
         critic_cut |= cut
-        reviews = parse_critic_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
-            observations=indexed, sources=sources, allowed_sources=references, context=context)
+        response = call(request, f'{kind}:b{batch["index"]:03d}')
+        try:
+            reviews = parse_critic_reply(response.output_text,
+                observations=indexed, sources=sources, allowed_sources=references, context=context)
+        except ValueError as error:
+            # The reply is paid for and saved; one refused reply costs its own batch, not the window.
+            _coverage_failed(state, kind=kind, index=batch['index'], error=error)
+            for item in indexed.values():
+                item.update(review_status='not_reviewed', review_reason=f'{kind}_reply_refused')
+            refused_replies += 1
+            phase(kind, 'running')
+            continue
         state['reviews'].extend(reviews); state['critiques'].extend(reviews)
         for review in reviews:
             item = indexed[review['input_id']]
@@ -1705,8 +1761,9 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
     if state['observations']:
-        phase(kind, 'partial' if deferred or critic_cut else 'completed',
-            'approved_phase_call_limit' if deferred else 'context_window_truncated' if critic_cut else None)
+        phase(kind, 'partial' if deferred or critic_cut or refused_replies else 'completed',
+            'approved_phase_call_limit' if deferred else f'{kind}_reply_refused' if refused_replies
+            else 'context_window_truncated' if critic_cut else None)
     kind = 'finding_correction'
     plan = plan_extended_coverage(kind=kind, items=correction_targets,
         limit=None if window_context['policy'].get('unbounded_stats') else limits[kind])
@@ -1716,6 +1773,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
     else:
         phase(kind, 'running')
     any_partial = False
+    refused_replies = 0
     for batch in plan['batches']:
         indexed = {row['input_id']: row['item'] for row in batch['items']}
         # Re-key only the immutable critic input identity for this disjoint
@@ -1735,8 +1793,16 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         payload = json.loads(request.body['messages'][0]['content'])
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
-        corrections = parse_corrector_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
-            observations=indexed, critiques=critiques, sources=sources, allowed_sources=references, context=context)
+        response = call(request, f'{kind}:b{batch["index"]:03d}')
+        try:
+            corrections = parse_corrector_reply(response.output_text,
+                observations=indexed, critiques=critiques, sources=sources, allowed_sources=references, context=context)
+        except ValueError as error:
+            # The critic rows of this batch stay without a proposal; the batches after it still run.
+            _coverage_failed(state, kind=kind, index=batch['index'], error=error)
+            refused_replies += 1
+            phase(kind, 'running')
+            continue
         state['corrections'].extend(corrections)
         for row in corrections:
             indexed[row['input_id']]['correction'] = row
@@ -1747,8 +1813,9 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
     if correction_targets:
-        phase(kind, 'partial' if deferred or any_partial else 'completed',
-            'approved_phase_call_limit' if deferred else 'context_window_truncated' if any_partial else None)
+        phase(kind, 'partial' if deferred or any_partial or refused_replies else 'completed',
+            'approved_phase_call_limit' if deferred else f'{kind}_reply_refused' if refused_replies
+            else 'context_window_truncated' if any_partial else None)
     phase('report_generation', 'running')
     state['report'] = _section_report_v3(state, window_id=window_id)
     phase('report_generation', 'completed')

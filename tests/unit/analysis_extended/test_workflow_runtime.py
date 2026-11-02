@@ -215,9 +215,12 @@ def test_read_helper_exposes_planned_or_terminal_skip_receipt_without_blob_reads
     class Context:
         def __enter__(self):return Session()
         def __exit__(self,*_):pass
-    monkeypatch.setattr(runtime,'RunRepository',lambda:NS(get=lambda *_:NS(state=state),stage_results=lambda *_:[]))
+    # The read projection carries the Run's own `version_uid` in every branch (SPRINT2-INT-1030: the evidence
+    # package binds the source PDF to it), so the Run double has one.
+    monkeypatch.setattr(runtime,'RunRepository',lambda:NS(get=lambda *_:NS(state=state,version_uid='ver_run'),stage_results=lambda *_:[]))
     import auditmanager.runs.cost_policy as cost
     monkeypatch.setattr(cost,'read_run_cost_policy',lambda *_,**__:NS(extended_review=policy))
     value=runtime.read_extended_review(Context,None,'run')
     assert value['status']==expected_status and len(value['result']['procedures'])==expected_procedures
+    assert value['result']['version_uid']=='ver_run'
     if state=='failed':assert all(p['status']=='skipped' for p in value['result']['procedures'])

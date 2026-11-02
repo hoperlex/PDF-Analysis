@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from .core import canonical, digest
+from .workflow import v3_request_ceiling
 
 VERSION = "preliminary-project-parameter-context-v1"
 
@@ -32,7 +33,8 @@ def validate_policy(value, *, parameters_policy, compare_bundle=True):
     return True
 
 
-def attach(request, *, parameters, accepted, parameters_policy):
+def attach(request, *, parameters, accepted, parameters_policy, relaxed_limits=False):
+    ceiling = v3_request_ceiling(relaxed_limits)
     if not validate_policy(accepted, parameters_policy=parameters_policy):
         raise ValueError("project_parameter_context_policy_required")
     body = deepcopy(dict(request.body))
@@ -83,6 +85,8 @@ def attach(request, *, parameters, accepted, parameters_policy):
         "проверяй собственный источник. Не выдумывай отсутствующие параметры и не превращай подсказку в нарушение. "
         "source_ids ответа допускаются ТОЛЬКО из allowed_visual_source_ids исходного визуального пакета. "
         "context_fact_id не является разрешённым source_id. Обрезанный охват не доказывает отсутствие данных.")
+    if len(canonical(body).encode("utf-8")) > ceiling:
+        raise ValueError("project_parameter_context_request_window_too_large")
     receipt = {"version": VERSION, "context_sha256": context_sha, "provided_fact_ids": selected_ids,
         "parameter_status": parameters.get("status"), "candidates_received": len(facts),
         "facts_provided": len(selected_ids), "facts_not_provided": len(facts) - len(selected_ids),
