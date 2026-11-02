@@ -112,6 +112,17 @@ from auditmanager.executors.sealing import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 from sqlalchemy.orm import Session
 
+# EXEC2-CAP-01 (ADR-0026 decision 1): the capacity reads of a connection, for the `api` adapters and for
+# `EXEC2-GROUP-RUN-01` / `EXEC2-GROUP-CMP-01`.
+from auditmanager.executors.queries import (
+    Occupancy,
+    capacity_of,
+    occupancies,
+    occupancy_of,
+    run_queue_reason,
+    used_units,
+)
+
 if TYPE_CHECKING:
     from auditmanager.executors.operations import OperationRefused, import_env
 
@@ -197,6 +208,13 @@ __all__ = [
     "set_secret",
     "submit_answer",
     "sweep",
+    # EXEC2-CAP-01
+    "Occupancy",
+    "capacity_of",
+    "occupancies",
+    "occupancy_of",
+    "run_queue_reason",
+    "used_units",
 ]
 
 

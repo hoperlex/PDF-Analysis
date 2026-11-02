@@ -1412,7 +1412,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
     silent answer to a question the object cannot answer.
     """
-    from auditmanager.executors.public import executor_of_revision, preset_of_revision
+    from auditmanager.executors.public import (
+        executor_of_revision,
+        preset_of_revision,
+        run_queue_reason,
+    )
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
@@ -1477,6 +1481,14 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         preset=None if used_preset is None else RunPresetView(
             preset_id=used_preset.preset_id, revision_no=used_preset.revision_no,
             name=used_preset.name,
+        ),
+        # `EXEC2-CAP-01`. Why a waiting run waits, from the database now. Asked only of a run that
+        # froze a revision and may still be waiting (a run of the `environment` source has no
+        # executor to wait for, and a terminal run costs no query).
+        queue_reason=(
+            run_queue_reason(session, run_id)
+            if run.connection_revision_id is not None and run.state in ("queued", "running")
+            else None
         ),
         stages=tuple(
             StageStateView(
@@ -5322,7 +5334,21 @@ def _executor_connection_view(summary: Any) -> dict[str, Any]:
         archived_at=connection.archived_at,
         current_revision_id=None if revision is None else revision.revision_id,
         current_revision_no=None if revision is None else revision.revision_no,
+        occupancy=None if revision is None else _occupancy_view(summary.occupancy),
     )
+
+
+# --- EXEC2-CAP-01 (ADR-0026 decision 1) -------------------------------------------------------------------
+
+
+def _occupancy_view(occupancy: Any) -> dict[str, int]:
+    """`ExecutorOccupancy`: the capacity of the connection's current revision and the units in use now,
+    read from the database by ``executors.queries`` when the summary was built and stored nowhere. The
+    contract has it present once the connection has a current revision, so the caller omits it before."""
+    return {
+        "capacity": occupancy.capacity, "active_runs": occupancy.active_runs,
+        "active_calls": occupancy.active_calls,
+    }
 
 
 def _analysis_preset_view(record: Any) -> dict[str, Any]:
