@@ -25,8 +25,9 @@ What it does, in five threads
   ``slots`` is ``AUDITMANAGER_WORKER_SLOTS`` (`EXEC-PAR-QUEUE-01`; one by default). With more
   than one, the dispatch loop fills a free slot straight after it filled the last one rather
   than waiting for the next poll, never offers a run it has already handed to a slot, and
-  asks for a Job whose executor connection is free: a connection has one active run, so a run
-  for a busy connection waits in the queue and does not hold a slot (see ``jobs``).
+  asks for a Job whose executor connection has a free unit: a connection serves as many runs at
+  once as its capacity (one unless its current revision says more; `EXEC2-CAP-01`), so a run for
+  a full connection waits in the queue and does not hold a slot (see ``jobs``).
 * **probes** -- when a probe runner is given (`EXEC-HTTP-01`), a thread that takes the
   ``requested`` connection probes and runs them on this worker's network path. A draining worker
   takes no new probe.

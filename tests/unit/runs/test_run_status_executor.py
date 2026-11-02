@@ -64,6 +64,8 @@ def _view(monkeypatch: pytest.MonkeyPatch, revision: str | None, answers: dict[s
     monkeypatch.setattr(findings, "published_finding_count", lambda session, run_id: 0)
     monkeypatch.setattr(findings, "diagnostics", lambda session, run_id: ())
     monkeypatch.setattr(executors_public, "executor_of_revision", executor_of_revision)
+    # `EXEC2-CAP-01`: a queued Run that froze a revision now asks for its queue reason.
+    monkeypatch.setattr(executors_public, "run_queue_reason", lambda session, run_id: None)
     return _run_status_view(None, RUN), asked  # type: ignore[arg-type]
 
 

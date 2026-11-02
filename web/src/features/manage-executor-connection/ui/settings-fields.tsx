@@ -14,6 +14,11 @@
  * Fields that belong to another kind or another transport are not drawn, so a form never
  * posts a field the server would refuse. Nothing here is a secret: the key is entered
  * elsewhere, through a form that is never a JavaScript value.
+ *
+ * **«Одновременных прогонов»** (`EXEC2-WEB-CAP-01`) is drawn for every kind. Beside it stands the
+ * coupled limit of the kind (ADR-0026 decision 2) and the `R-149a` notice: client documents are
+ * not checked, so capacity above one is for test data. The server judges the coupling; the hint
+ * only lets a person avoid the refusal.
  */
 
 import { useState } from 'react';
@@ -28,6 +33,10 @@ import {
 } from '@/shared/api';
 import {
   BILLING_LABELS,
+  CAPACITY_COUPLING_HINTS,
+  CAPACITY_FIELD_LABEL,
+  CAPACITY_HINT,
+  CLIENT_DOCUMENTS_NOTICE,
   FLAVOUR_LABELS,
   PULL_CLIENT_LABELS,
   SSH_PROFILE_LABELS,
@@ -35,6 +44,7 @@ import {
 } from '@/entities/executor-connection';
 
 import {
+  ACTIVE_RUNS_MAX,
   ANSWER_DEADLINE_MIN_SECONDS,
   CLAIMED_TASKS_MAX,
   FIELD_NAMES,
@@ -207,6 +217,26 @@ export function SettingsFields({ kind, pinnedModels, initial, idPrefix }: Settin
           <input id={id('parallel')} name={FIELD_NAMES.maxParallelCalls} type="number" required min={1} max={PARALLEL_MAX} defaultValue={start.maxParallelCalls} />
         </div>
       ) : null}
+      <div className="am-form__field" data-executor-capacity-field={kind}>
+        <label htmlFor={id('active-runs')}>{CAPACITY_FIELD_LABEL}</label>
+        <input
+          id={id('active-runs')}
+          name={FIELD_NAMES.maxActiveRuns}
+          type="number"
+          required
+          min={1}
+          max={ACTIVE_RUNS_MAX}
+          defaultValue={start.maxActiveRuns}
+          aria-describedby={`${id('active-runs-hint')} ${id('active-runs-coupling')} ${id('active-runs-notice')}`}
+        />
+        <p className="am-form__hint" id={id('active-runs-hint')}>{CAPACITY_HINT}</p>
+        <p className="am-form__hint" id={id('active-runs-coupling')} data-executor-capacity-coupling={kind}>
+          {CAPACITY_COUPLING_HINTS[kind]}
+        </p>
+        <p className="am-form__hint" id={id('active-runs-notice')} data-executor-capacity-notice>
+          {CLIENT_DOCUMENTS_NOTICE}
+        </p>
+      </div>
       <div className="am-form__field">
         <label htmlFor={id('timeout')}>Время ожидания ответа, секунд</label>
         <input id={id('timeout')} name={FIELD_NAMES.timeoutSeconds} type="number" required min={1} max={TIMEOUT_MAX_SECONDS} defaultValue={start.timeoutSeconds} />

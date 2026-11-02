@@ -393,6 +393,22 @@ class ExecutorTaskId(OpaqueId, prefix="ext", entity="ExecutorTask"):
     """Identity of one task a ``pull`` connection hands to a runner (`EXEC-PULL-01`)."""
 
 
+class ExecutorEnrollmentId(OpaqueId, prefix="exen", entity="ExecutorEnrollment"):
+    """Identity of one enrollment grant of the universal agent (`EXEC2-SEAL-1`, migration ``0046``).
+
+    Minted by ``auditmanager.executors``. The grant's secret, its shown prefix and its hash are
+    attributes and never identities: the value is shown once and only its one-way hash is stored.
+    """
+
+
+class ExecutorAgentInstallId(OpaqueId, prefix="exai", entity="ExecutorAgentInstall"):
+    """Identity of one install session of the universal agent over SSH (`EXEC2-SEAL-1`, migration ``0046``).
+
+    Minted by ``auditmanager.executors``; never derived from the host, the user or the host-key
+    fingerprint, all of which are attributes of the session.
+    """
+
+
 class ComparisonUploadId(OpaqueId, prefix="cbt", entity="ComparisonUpload"):
     """Identity of one upload batch of plain PDFs for comparison (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 10)."""
 

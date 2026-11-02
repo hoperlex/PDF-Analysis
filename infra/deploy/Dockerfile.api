@@ -51,6 +51,17 @@ COPY pyproject.toml uv.lock .python-version ./
 ENV UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/app/.venv
 RUN uv sync --frozen --no-dev --python "$(command -v python3.12)"
 
+# EXEC2-AGENT-01 (ADR-0026 decision 6): the universal agent's package, built deterministically from
+# `tools/executor-runner/` and the repository VERSION by the stdlib-only `package.py` -- no dependency, no
+# network. The stand serves it by exact version (EXEC2-ENROLL-01 reads AUDITMANAGER_AGENT_PACKAGE_DIR, default
+# /app/agent-package) and the sha256 beside it is the one the install command carries. After `uv sync`, so a
+# change to the agent never re-resolves the closure.
+COPY VERSION /tmp/agent-package-src/VERSION
+COPY tools/executor-runner/ /tmp/agent-package-src/executor-runner/
+RUN python /tmp/agent-package-src/executor-runner/package.py \
+      --version "$(cat /tmp/agent-package-src/VERSION)" --out /app/agent-package \
+ && rm -rf /tmp/agent-package-src
+
 FROM python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254
 
 # Two additions, each for one reason. curl: the compose health check polls `T-3`'s liveness
@@ -68,6 +79,7 @@ RUN useradd --system --create-home --uid 10001 auditmanager
 
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
+COPY --from=build /app/agent-package/ /app/agent-package/
 COPY src/ /app/src/
 COPY db/ /app/db/
 # THE IMAGE IS NOT JUST `src/`. Four things under the runtime resolve a repository path

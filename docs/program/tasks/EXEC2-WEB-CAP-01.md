@@ -66,11 +66,13 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `web/src/widgets/executor-connections/**`
 - `web/src/entities/executor-connection/**`
 - `web/src/entities/audit-run/**`
+- `web/tests/unit/**`
 
 ## Forbidden hotspots
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
 - `src/auditmanager/shared/errors/**`: EXEC-2 adds no error code (ADR-0026 decision 18)
 - paths another EXEC-2 task owns in the same stage (`EXEC2-PLAN.md` section 5)
+- in `src/auditmanager/bootstrap/adapters.py` and `src/auditmanager/api/routers/ports.py`, which three stage-1 lanes share: any function or class outside this task's own port; new code goes in a section headed with this task id, and the integrator merges the lanes one by one
 - `web/src/_pages/workers/**` (stage 3)
 - `web/src/features/start-run/**` (stage 3)
 
@@ -82,7 +84,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - The capacity field (1–16) with the coupled-limit hints of decision 2 and the server's refusals mapped to Russian messages.
 - Occupancy on the card. The Run waiting reason wherever a queued Run is shown.
 - The `R-149a` notice on the connection list.
-- Component tests for B1 §6 item 13.
+- Component tests for B1 §6 item 13, as new files under `web/tests/unit/` (no existing test file is edited).
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker

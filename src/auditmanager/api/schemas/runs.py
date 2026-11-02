@@ -110,6 +110,11 @@ class RunStatusView:
     #: `ANALYSIS-PRESETS-01`. The preset revision the run was started with; ``None`` for a run
     #: started without one, rendered only when present.
     preset: RunPresetView | None = None
+    #: `EXEC2-CAP-01` (``RunQueueReason`` of contract 1.15.0). Why a queued run is waiting for its
+    #: executor, derived from the database at read time: ``runner_offline`` or
+    #: ``executor_at_capacity``. ``None`` for a run that is not waiting for one, rendered only when
+    #: present.
+    queue_reason: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -202,4 +207,6 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
             "revision_no": view.preset.revision_no,
             "name": view.preset.name,
         }
+    if view.queue_reason is not None:
+        body["queue_reason"] = view.queue_reason
     return body

@@ -6,23 +6,24 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.14.0 (OpenAPI 3.1.0)
- *   sha256 11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466
+ *   AuditManager PC-01 API 1.15.0 (OpenAPI 3.1.0)
+ *   sha256 0a54238832934bb332250bf169d2f6a824411a36ba24e4481aaaed4e4b97e8a9
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.14.0';
+export const CONTRACT_VERSION = '1.15.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466';
+export const CONTRACT_DIGEST = '0a54238832934bb332250bf169d2f6a824411a36ba24e4481aaaed4e4b97e8a9';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'Account',
   'AccountPage',
+  'AgentPackageVersion',
   'AnalysisPreset',
   'AnalysisPresetList',
   'AnalysisPresetState',
@@ -259,6 +260,7 @@ export const SCHEMA_NAMES = [
   'ComparisonVersionOrderList',
   'ComparisonVersionOrderSource',
   'ConfirmComparisonUploadSetRequest',
+  'ConfirmExecutorAgentInstallHostKeyRequest',
   'ConfirmStagePairRequest',
   'ConfirmStageUploadCandidateRequest',
   'ConfirmedComparisonFile',
@@ -268,6 +270,7 @@ export const SCHEMA_NAMES = [
   'CreateAssignmentRequest',
   'CreateComparisonReportRequest',
   'CreateComparisonUploadRequest',
+  'CreateExecutorAgentInstallRequest',
   'CreateExecutorConnectionRequest',
   'CreateProjectRequest',
   'CreateStageAssemblyRequest',
@@ -298,14 +301,24 @@ export const SCHEMA_NAMES = [
   'ExecutionQueuePage',
   'ExecutionWorker',
   'ExecutionWorkerPage',
+  'ExecutorAgentInstall',
+  'ExecutorAgentInstallAccess',
+  'ExecutorAgentInstallFailure',
+  'ExecutorAgentInstallId',
+  'ExecutorAgentInstallState',
   'ExecutorApiFlavour',
   'ExecutorBilling',
   'ExecutorConnection',
   'ExecutorConnectionDetail',
   'ExecutorConnectionId',
   'ExecutorConnectionList',
+  'ExecutorEnrollmentId',
+  'ExecutorEnrollmentMetadata',
+  'ExecutorEnrollmentState',
   'ExecutorIdentityBasis',
+  'ExecutorIntegrationAuthorisation',
   'ExecutorKind',
+  'ExecutorOccupancy',
   'ExecutorPinnedModel',
   'ExecutorProbe',
   'ExecutorProbeId',
@@ -348,6 +361,7 @@ export const SCHEMA_NAMES = [
   'IssueRunnerTokenRequest',
   'IssueTokenRequest',
   'IssueTokenResponse',
+  'IssuedExecutorEnrollment',
   'IssuedRunnerToken',
   'JobId',
   'MarkReleaseNotesReadRequest',
@@ -442,6 +456,7 @@ export const SCHEMA_NAMES = [
   'ProposalVerdict',
   'ProviderMode',
   'ReauditRunRequest',
+  'RedeemExecutorEnrollmentRequest',
   'RegistrationRequest',
   'RegistrationRequestId',
   'RegistrationRequestPage',
@@ -452,6 +467,7 @@ export const SCHEMA_NAMES = [
   'ReleaseList',
   'ReleaseNoteItem',
   'ReleaseNoteKind',
+  'ReportRunnerHealthRequest',
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
   'ResumeStageChainRunRequest',
@@ -467,10 +483,17 @@ export const SCHEMA_NAMES = [
   'RunId',
   'RunNormReferences',
   'RunPreset',
+  'RunQueueReason',
   'RunState',
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'RunnerCliAuthState',
+  'RunnerCliHealth',
+  'RunnerCliName',
+  'RunnerExecutionProfile',
+  'RunnerFeature',
+  'RunnerHealthAck',
   'RunnerImage',
   'RunnerImageBlobId',
   'RunnerTokenMetadata',
@@ -488,6 +511,7 @@ export const SCHEMA_NAMES = [
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
+  'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
   'SetExecutorSecretRequest',
   'SetGlobalVendorListRequest',
@@ -670,6 +694,11 @@ export type AccountPage = {
   items: Array<Account>;
   page: PageInfo;
 };
+
+export type AgentPackageVersion = string;
+
+/** The contract pattern for `AgentPackageVersion`. Anchored; use with `new RegExp()`. */
+export const AGENT_PACKAGE_VERSION_PATTERN = "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$";
 
 /** The current revision of one preset. `preset_id` is the preset for its whole life; `revision_id` and `revision_no` name this revision. The name is a label, never an identity. */
 export type AnalysisPreset = {
@@ -1165,9 +1194,14 @@ export type ChangePasswordRequest = {
   new_password: string;
 };
 
-/** The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25). */
+/**
+ * The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25).
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decision 3): the optional `runner_instance_id` names the agent process making the claim. A task already held by a token is redelivered only to the instance that claimed it; a claim without the field behaves as before. One token is served by one agent process.
+ */
 export type ClaimExecutorTaskRequest = {
   max_images?: number;
+  runner_instance_id?: string;
   wait_seconds?: number;
 };
 
@@ -3433,6 +3467,11 @@ export type ConfirmComparisonUploadSetRequest = {
   section_code?: ProjectSection;
 };
 
+/** The fingerprint the administrator read and confirms. It must equal the one the worker observed; there is no trust on first use. */
+export type ConfirmExecutorAgentInstallHostKeyRequest = {
+  host_key_fingerprint: string;
+};
+
 export type ConfirmStagePairRequest = {
   assembly_id?: StageAssemblyId;
   left_document_uid: DocumentUid;
@@ -3506,6 +3545,15 @@ export type CreateComparisonReportRequest = {
 export type CreateComparisonUploadRequest = {
   compare_after_preparation?: boolean;
   files: Array<ComparisonUploadFileDeclaration>;
+};
+
+/** Write-only where it carries a key. `private_key` is required for `pasted_key` and refused for `generated_key`; the API seals it to the stand's public key and never returns it. */
+export type CreateExecutorAgentInstallRequest = {
+  access: ExecutorAgentInstallAccess;
+  private_key?: string;
+  ssh_host: string;
+  ssh_port: number;
+  ssh_user: string;
 };
 
 export type CreateExecutorConnectionRequest = {
@@ -3710,7 +3758,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.14.0";
+  contract_version: "1.15.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3785,6 +3833,76 @@ export type ExecutionWorkerPage = {
   page: PageInfo;
 };
 
+/** One install session of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7). For `generated_key` access it carries the public half and its `authorized_keys` line, which the administrator adds to the host; the private half is sealed and never returned. `observed_host_key_fingerprint` is what the worker saw (derived from the stored key line, as `ExecutorRevision.host_key_fingerprint` is); the install does not proceed until the administrator confirms exactly that fingerprint. `key_removed_at` is when the stand's key was removed from the host and its sealed secret destroyed. */
+export type ExecutorAgentInstall = {
+  access: ExecutorAgentInstallAccess;
+  authorized_keys_line?: string;
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  failure_reason?: ExecutorAgentInstallFailure;
+  finished_at?: string;
+  host_key_confirmed_at?: string;
+  host_key_confirmed_by?: UserUid;
+  install_id: ExecutorAgentInstallId;
+  key_removed_at?: string;
+  observed_host_key_fingerprint?: string;
+  package_sha256?: string;
+  package_version?: AgentPackageVersion;
+  public_key?: string;
+  ssh_host: string;
+  ssh_port: number;
+  ssh_user: string;
+  state: ExecutorAgentInstallState;
+  updated_at: string;
+};
+
+/** How the administrator gives the stand SSH access to the host: a key the stand generates (the administrator adds its public half to the host) or a pasted private key, which is sealed. Passwords are not accepted. */
+export const EXECUTOR_AGENT_INSTALL_ACCESS_VALUES = [
+  'generated_key',
+  'pasted_key',
+] as const;
+
+/** ExecutorAgentInstallAccess - the closed value set above. */
+export type ExecutorAgentInstallAccess = (typeof EXECUTOR_AGENT_INSTALL_ACCESS_VALUES)[number];
+
+/** The sanitised reason a failed install failed; never a host output, a path or a credential. */
+export const EXECUTOR_AGENT_INSTALL_FAILURE_VALUES = [
+  'host_unreachable',
+  'ssh_refused',
+  'host_key_changed',
+  'host_key_not_confirmed',
+  'sudo_password_required',
+  'unsupported_platform',
+  'package_unavailable',
+  'install_failed',
+  'enrollment_failed',
+  'secret_unreadable',
+  'no_worker',
+  'timed_out',
+] as const;
+
+/** ExecutorAgentInstallFailure - the closed value set above. */
+export type ExecutorAgentInstallFailure = (typeof EXECUTOR_AGENT_INSTALL_FAILURE_VALUES)[number];
+
+export type ExecutorAgentInstallId = string;
+
+/** The contract pattern for `ExecutorAgentInstallId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_AGENT_INSTALL_ID_PATTERN = "^exai_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** `requested -> scanning -> awaiting_host_key -> installing -> succeeded | failed`. */
+export const EXECUTOR_AGENT_INSTALL_STATE_VALUES = [
+  'requested',
+  'scanning',
+  'awaiting_host_key',
+  'installing',
+  'succeeded',
+  'failed',
+] as const;
+
+/** ExecutorAgentInstallState - the closed value set above. */
+export type ExecutorAgentInstallState = (typeof EXECUTOR_AGENT_INSTALL_STATE_VALUES)[number];
+
 /** ExecutorApiFlavour. */
 export const EXECUTOR_API_FLAVOUR_VALUES = [
   'openai_chat',
@@ -3803,7 +3921,7 @@ export const EXECUTOR_BILLING_VALUES = [
 /** ExecutorBilling - the closed value set above. */
 export type ExecutorBilling = (typeof EXECUTOR_BILLING_VALUES)[number];
 
-/** A connection: where a process sends model work. Its secrets are metadata only. */
+/** A connection: where a process sends model work. Its secrets are metadata only. `occupancy` (`EXEC2-SEAL-1`) is present once the connection has a current revision; `integration_authorisation` is present while the administrator's mark is set (`pull` connections only). */
 export type ExecutorConnection = {
   archived_at?: string;
   connection_id: ExecutorConnectionId;
@@ -3812,7 +3930,9 @@ export type ExecutorConnection = {
   current_revision_id?: ExecutorRevisionId;
   current_revision_no?: number;
   display_name: string;
+  integration_authorisation?: ExecutorIntegrationAuthorisation;
   kind: ExecutorKind;
+  occupancy?: ExecutorOccupancy;
   routed_work_kinds: Array<ExecutorWorkKind>;
   secrets: Array<ExecutorSecretMetadata>;
 };
@@ -3823,9 +3943,12 @@ export type ExecutorConnection = {
  * For a ``pull`` connection (`EXEC-PULL-01`) it also carries the runner tokens' metadata and
  * the number of tasks waiting for, or held by, a runner right now. Both are absent for the
  * other kinds. A token's value is never here: it was shown once, when it was issued.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decision 4): for a ``pull`` connection it also carries its last 10 enrollment grants, newest first, as metadata only (state, expiry, redemption time): the grant's secret and its hash are never here, since the secret was shown once, when it was issued. Absent for the other kinds.
  */
 export type ExecutorConnectionDetail = {
   connection: ExecutorConnection;
+  enrollments?: Array<ExecutorEnrollmentMetadata>;
   open_task_count?: number;
   probes: Array<ExecutorProbe>;
   revisions: Array<ExecutorRevision>;
@@ -3842,6 +3965,37 @@ export type ExecutorConnectionList = {
   pinned_models: Array<ExecutorPinnedModel>;
 };
 
+export type ExecutorEnrollmentId = string;
+
+/** The contract pattern for `ExecutorEnrollmentId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_ENROLLMENT_ID_PATTERN = "^exen_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** What the API ever says about an enrollment grant after it was issued (`EXEC2-SEAL-1`, ADR-0026 decision 4): that it exists, its non-secret prefix, its derived state and its dates. The secret and its hash are never returned. */
+export type ExecutorEnrollmentMetadata = {
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  enrollment_id: ExecutorEnrollmentId;
+  expires_at: string;
+  redeemed_at?: string;
+  revoked_at?: string;
+  revoked_by?: UserUid;
+  runner_token_id?: ExecutorRunnerTokenId;
+  secret_prefix: string;
+  state: ExecutorEnrollmentState;
+};
+
+/** Derived at read time: `pending` until redeemed, revoked or past `expires_at`. */
+export const EXECUTOR_ENROLLMENT_STATE_VALUES = [
+  'pending',
+  'redeemed',
+  'expired',
+  'revoked',
+] as const;
+
+/** ExecutorEnrollmentState - the closed value set above. */
+export type ExecutorEnrollmentState = (typeof EXECUTOR_ENROLLMENT_STATE_VALUES)[number];
+
 /** ``reported``: the response named the model. ``declared``: the executor asserted it. */
 export const EXECUTOR_IDENTITY_BASIS_VALUES = [
   'reported',
@@ -3850,6 +4004,12 @@ export const EXECUTOR_IDENTITY_BASIS_VALUES = [
 
 /** ExecutorIdentityBasis - the closed value set above. */
 export type ExecutorIdentityBasis = (typeof EXECUTOR_IDENTITY_BASIS_VALUES)[number];
+
+/** The administrator's mark that the command-line clients behind a `pull` connection are authorised for this integration (`R-149b`, ADR-0026 decision 8): when it was set and by whom. It is one of four distinct statuses (installed, authentication valid, authorised for this integration, model probe passed) and implies none of the other three. */
+export type ExecutorIntegrationAuthorisation = {
+  authorised_at: string;
+  authorised_by: UserUid;
+};
 
 /**
  * How a connection reaches the model: the stand calls an HTTP API, the stand runs a
@@ -3863,6 +4023,13 @@ export const EXECUTOR_KIND_VALUES = [
 
 /** ExecutorKind - the closed value set above. */
 export type ExecutorKind = (typeof EXECUTOR_KIND_VALUES)[number];
+
+/** Used and total capacity of a connection (`EXEC2-SEAL-1`, ADR-0026 decision 1), derived from the database at read time and stored nowhere. `capacity` is `max_active_runs` of the current revision (1 when absent); `active_runs` counts the connection's Runs in `leased`, `running` or `retry_wait`; `active_calls` counts its comparison model calls in `prepared` or `sent` whose attempt is live. Each counts one unit, so the connection is full when their sum reaches `capacity`. */
+export type ExecutorOccupancy = {
+  active_calls: number;
+  active_runs: number;
+  capacity: number;
+};
 
 /**
  * One model of the provider lock a revision may name, with its pinned rates (USD per
@@ -3956,7 +4123,11 @@ export const EXECUTOR_RATE_CHECK_VALUES = [
 /** ExecutorRateCheck - the closed value set above. */
 export type ExecutorRateCheck = (typeof EXECUTOR_RATE_CHECK_VALUES)[number];
 
-/** One immutable revision of a connection, with its latest probe. */
+/**
+ * One immutable revision of a connection, with its latest probe.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 2): `max_active_runs` (1 to 16, absent means 1) is the most units of this connection that may be in use at once, where a Run in `leased`, `running` or `retry_wait` and a comparison model call in `prepared` or `sent` each count one. A lowered value governs new claims only and never stops work in flight. The coupled limits are validated on the revision and refused as `422 validation_failed`: `max_claimed_tasks` of a `pull` connection and a set `max_parallel_calls` of an `http_api` connection must each be at least `max_active_runs` (field `max_claimed_tasks` or `max_parallel_calls`, constraint `below_max_active_runs`), and an `ssh_command` connection takes a value above one only once its wrappers isolate concurrent invocations (field `max_active_runs`, constraint `capacity_not_supported_for_kind`).
+ */
 export type ExecutorRevision = {
   allow_client_documents: boolean;
   answer_deadline_seconds?: number;
@@ -3970,6 +4141,7 @@ export type ExecutorRevision = {
   host_key?: string;
   host_key_fingerprint?: string;
   latest_probe?: ExecutorProbe;
+  max_active_runs?: number;
   max_claimed_tasks?: number;
   max_parallel_calls?: number;
   pin_id: string;
@@ -4306,6 +4478,15 @@ export type IssueTokenResponse = {
   is_default_credential: boolean;
   /** The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer. */
   token: string;
+};
+
+/** The grant, **shown once**: it is stored only as a one-way hash, so no operation can return the `secret` or the `command` that carries it again. `package_version` and `package_sha256` name the agent package the command downloads and verifies. Copy the command now; a lost one is replaced by a new grant, which revokes this one. */
+export type IssuedExecutorEnrollment = {
+  command: string;
+  enrollment: ExecutorEnrollmentMetadata;
+  package_sha256: string;
+  package_version: AgentPackageVersion;
+  secret: string;
 };
 
 /**
@@ -5242,6 +5423,12 @@ export type ReauditRunRequest = {
   cost_consent?: RunCostConsent;
 };
 
+/** The exchange of an enrollment secret for a runner token. `runner_instance_id` names the agent process and makes a repeat of the exchange inside its window idempotent. */
+export type RedeemExecutorEnrollmentRequest = {
+  agent_version?: string;
+  runner_instance_id: string;
+};
+
 /** One registration request, as an administrator reads it. No credential material. */
 export type RegistrationRequest = {
   /** The account an approval created. Null while pending, on a rejected request, and after that account was purged. */
@@ -5333,6 +5520,16 @@ export const RELEASE_NOTE_KIND_VALUES = [
 /** ReleaseNoteKind - the closed value set above. */
 export type ReleaseNoteKind = (typeof RELEASE_NOTE_KIND_VALUES)[number];
 
+/** An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded strings only. */
+export type ReportRunnerHealthRequest = {
+  agent_version: string;
+  clis: Array<RunnerCliHealth>;
+  concurrency: number;
+  execution_profile: RunnerExecutionProfile;
+  features: Array<RunnerFeature>;
+  runner_instance_id?: string;
+};
+
 export type ResetUserPasswordRequest = {
   /** The password the account signs in with next and must then change. It is held to the deployment's password policy against the account's login, and it appears in no response body, no error detail and no diagnostic record. */
   temporary_password: string;
@@ -5351,7 +5548,11 @@ export type ResumeStageChainRunRequest = {
   retry_failed?: boolean;
 };
 
-/** A new immutable revision of a connection: the full settings, never a patch. */
+/**
+ * A new immutable revision of a connection: the full settings, never a patch.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 2): `max_active_runs` (1 to 16, absent means 1) is the most units of this connection that may be in use at once, where a Run in `leased`, `running` or `retry_wait` and a comparison model call in `prepared` or `sent` each count one. A lowered value governs new claims only and never stops work in flight. The coupled limits are validated on the revision and refused as `422 validation_failed`: `max_claimed_tasks` of a `pull` connection and a set `max_parallel_calls` of an `http_api` connection must each be at least `max_active_runs` (field `max_claimed_tasks` or `max_parallel_calls`, constraint `below_max_active_runs`), and an `ssh_command` connection takes a value above one only once its wrappers isolate concurrent invocations (field `max_active_runs`, constraint `capacity_not_supported_for_kind`).
+ */
 export type ReviseExecutorConnectionRequest = {
   allow_client_documents: boolean;
   answer_deadline_seconds?: number;
@@ -5360,6 +5561,7 @@ export type ReviseExecutorConnectionRequest = {
   billing: ExecutorBilling;
   gateway_model: string;
   host_key?: string;
+  max_active_runs?: number;
   max_claimed_tasks?: number;
   max_parallel_calls?: number;
   pin_id: string;
@@ -5470,6 +5672,15 @@ export type RunPreset = {
   revision_no: number;
 };
 
+/** `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5): why a queued Run is not running. `executor_at_capacity`: every unit of its executor connection is in use. `runner_offline`: the connection is a `pull` connection and no runner of it is online. */
+export const RUN_QUEUE_REASON_VALUES = [
+  'executor_at_capacity',
+  'runner_offline',
+] as const;
+
+/** RunQueueReason - the closed value set above. */
+export type RunQueueReason = (typeof RUN_QUEUE_REASON_VALUES)[number];
+
 /** The audit_run states of contracts/domain/v1/state-machines.json. The success terminal is `published`; there is no `succeeded` run state. `created` is transient and rarely observed by a client. `cancelled` is declared by the contract and is unreachable in PC-01, which has no cancel command. */
 export const RUN_STATE_VALUES = [
   'created',
@@ -5517,6 +5728,8 @@ export type RunStatus = {
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
   published_finding_count?: number;
+  /** `EXEC2-SEAL-1`: why a `queued` Run is waiting for its executor, derived from the database at read time. Null (and omitted) for a Run that is not waiting for one. */
+  queue_reason?: RunQueueReason | null;
   reaudit_of_run_id?: RunId;
   run_id: RunId;
   stages: Array<StageState>;
@@ -5538,6 +5751,55 @@ export type RunStatusPage = {
   page: PageInfo;
 };
 
+/** The authentication state of a client, read only through its official mechanism and reported as a closed enumeration: `valid`, `login_required`, or `unknown` (not installed, or the client offers no official way to tell). Never a credential, a path or an account name. */
+export const RUNNER_CLI_AUTH_STATE_VALUES = [
+  'valid',
+  'login_required',
+  'unknown',
+] as const;
+
+/** RunnerCliAuthState - the closed value set above. */
+export type RunnerCliAuthState = (typeof RUNNER_CLI_AUTH_STATE_VALUES)[number];
+
+/** One client's sanitised health as an agent reports it (`EXEC2-SEAL-1`, ADR-0026 decision 5). */
+export type RunnerCliHealth = {
+  auth_state: RunnerCliAuthState;
+  cli: RunnerCliName;
+  installed: boolean;
+  version?: string;
+};
+
+/** The official command-line clients an agent detects (ADR-0026 decision 8). */
+export const RUNNER_CLI_NAME_VALUES = [
+  'claude',
+  'codex',
+] as const;
+
+/** RunnerCliName - the closed value set above. */
+export type RunnerCliName = (typeof RUNNER_CLI_NAME_VALUES)[number];
+
+/** How the agent answers a task: it runs a command (`command`) or calls a local OpenAI-compatible endpoint (`endpoint`). */
+export const RUNNER_EXECUTION_PROFILE_VALUES = [
+  'command',
+  'endpoint',
+] as const;
+
+/** RunnerExecutionProfile - the closed value set above. */
+export type RunnerExecutionProfile = (typeof RUNNER_EXECUTION_PROFILE_VALUES)[number];
+
+/** A capability the agent declares; `images` means it serves tasks that carry images. */
+export const RUNNER_FEATURE_VALUES = [
+  'images',
+] as const;
+
+/** RunnerFeature - the closed value set above. */
+export type RunnerFeature = (typeof RUNNER_FEATURE_VALUES)[number];
+
+/** The report was stored on the calling runner token. */
+export type RunnerHealthAck = {
+  recorded_at: string;
+};
+
 /** One checked saved PNG, retrievable only by the current runner claim. */
 export type RunnerImage = {
   blob_id: RunnerImageBlobId;
@@ -5557,14 +5819,23 @@ export const RUNNER_IMAGE_BLOB_ID_PATTERN = "^blob_[0-9A-HJKMNP-TV-Z]{26}$";
  * What the API ever says about a runner token after it was issued: that it exists, its
  * non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
  * The value and its hash are never returned.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decision 5): the health an agent last reported on this token, as closed enumerations and bounded strings (no secret, no path to a credential and no document text), and `online`, the freshness of `last_seen_at` under a bounded threshold, read at the time of the request. All of them are absent for a token whose runner has not reported.
  */
 export type RunnerTokenMetadata = {
+  agent_version?: string;
+  clis?: Array<RunnerCliHealth>;
+  concurrency?: number;
   connection_id: ExecutorConnectionId;
   created_at: string;
   created_by: UserUid;
+  execution_profile?: RunnerExecutionProfile;
   expires_at: string;
+  features?: Array<RunnerFeature>;
+  health_reported_at?: string;
   last_seen_address?: string;
   last_seen_at?: string;
+  online?: boolean;
   revoked_at?: string;
   revoked_by?: UserUid;
   token_id: ExecutorRunnerTokenId;
@@ -5755,6 +6026,11 @@ export type SetCurrentNormSnapshotRequest = {
 
 export type SetExecutionPausedRequest = {
   paused: boolean;
+};
+
+/** `true` sets the mark, `false` clears it. Setting an already set mark or clearing an absent one answers the connection as it stands. */
+export type SetExecutorIntegrationAuthorisationRequest = {
+  authorised: boolean;
 };
 
 export type SetExecutorRouteRequest = {

@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466",
-    "content_commit": "af581631a57d77754d61a771518112e8c6a64298",
-    "content_commit_subject": "hotfix: lift temporary analysis and PDF intake quotas",
+    "sha256": "0a54238832934bb332250bf169d2f6a824411a36ba24e4481aaaed4e4b97e8a9",
+    "content_commit": "7d9df746",
+    "content_commit_subject": "chore: assign EXEC2-SEAL-1 on integration/exec2",
     "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
-    "commit_note": "Re-measured 2026-11-02 by REVIEW-FIX-TESTS-1102 from the tree: af581631 (SECTION-STATS-UNCAPPED-1030) is the last commit that changed contracts/api/v1/openapi.json and the generated client; the lock had not been rewritten since 6eb7c089. Surface 233/259/620 unchanged.",
+    "commit_note": "Resealed 2026-11-02 by EXEC2-SEAL-1: contract 1.15.0 (ADR-0026 stage 1). content_commit names the base commit 7d9df746 the seal was made on top of, not a commit that contains the change; the integrator's commit of this seal is the first to carry these bytes. Surface 241/267/644.",
     "openapi_version": "3.1.0",
-    "info_version": "1.14.0",
-    "paths": 233,
-    "operations": 259,
-    "component_schemas": 620,
+    "info_version": "1.15.0",
+    "paths": 241,
+    "operations": 267,
+    "component_schemas": 644,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466",
+    "snapshot_sha256": "0a54238832934bb332250bf169d2f6a824411a36ba24e4481aaaed4e4b97e8a9",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "f1b3276cf2ecb2f46097852b5ba0e74cd889d8515bd0dab53aa7acb3697031b3",
-      "index.ts": "a3b39747d16490988336d6dfff6760c789baa9ad820b10c8d129e84643598470",
-      "operations.gen.ts": "70a6f30f2bfe6029d4257c5075e507d3114b6550dc51585ba97162464d8c05d2",
-      "types.gen.ts": "0e503bb9d3ad2b72b19796f4214a25ec103fe5423032a03942dc2c4f35d1daa0"
+      "client.gen.ts": "54603d17f9ea5c4021e45e1dfac34b3b7f8b27f38b86856827bfcede990ccff7",
+      "index.ts": "a84d5fb8cfc92c8c874dba69ad7cfa583e11eceadc2452b783c72ba537054b9b",
+      "operations.gen.ts": "075b586c88ef32d80018e41d4c393f2cd52438eaf78bb33c5daf1ebf369dfaac",
+      "types.gen.ts": "a1c2cf030a8460bb6b688d90740eec9c01931e81b96a6677073ec20445bc1094"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

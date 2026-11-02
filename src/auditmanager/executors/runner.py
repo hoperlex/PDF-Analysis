@@ -35,6 +35,33 @@ empty ``204``. The state is the process's, as is the pool it protects; with seve
 processes each bounds its own pool and a token can park one claim per process, never more
 threads than one process has.
 
+The claim transaction (`EXEC2-PULL-01`, ADR-0026 decision 3)
+-----------------------------------------------------------
+Each poll of :func:`claim_task` is one short transaction, and these are its statements in order:
+
+1. ``SELECT (<revoked_at IS NULL AND expires_at > clock_timestamp() AND connection not archived>) ...
+   FROM executor_runner_token t JOIN executor_connection c ... WHERE t.token_id = :t FOR UPDATE OF t``:
+   the claims of one token queue here, so the count of the token's held claims and the claim that follows
+   it are one atomic step *per token*, and two processes that present one token never both pass the
+   limit. The statement also reports whether the token is still usable, read from the row as the lock
+   leaves it: a token revoked or expired, or of a connection archived, since it authenticated is refused
+   as a missing one is (``authentication_required``) and claims nothing; the connection's row is read
+   and not locked;
+2. the connection's current revision is read (``max_claimed_tasks``; no lock);
+3. ``sweep``: the connection's tasks whose Attempt is gone, whose deadline passed or whose lease
+   lapsed are brought up to date (a lapsed claim returns to ``open`` and loses its instance);
+4. at a limit of one, ``redeliver``: the token's held task again, lease refreshed, and, when the claim
+   names an instance, only a task that instance claimed;
+5. ``held_claims`` below the limit, then ``claim_next``: the oldest open task, ``SKIP LOCKED``.
+
+**Lock order: the token row, then task rows, nothing else.** No claim takes the connection's advisory
+lock, and no path locks a task row and then a token row (``_own_task`` locks one task row; token
+authentication touches the token in a transaction of its own), so the order cannot form a cycle.
+
+One token is served by one agent process (v1). ``runner_instance_id`` is what keeps a second process
+that presents the same token from being handed the first one's task again; it is not a protocol for
+sharing a token.
+
 The functions here run in the caller's transaction and never commit. A refusal raises before any
 write, so a refused answer (``422``) leaves the claim exactly as it was.
 
@@ -437,6 +464,7 @@ def claim_task(
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
     slots: LongPollSlots | None = None, max_images: int | None = None,
+    runner_instance_id: str | None = None,
 ) -> ClaimedTask | None:
     """Long poll: the connection's oldest open task, now claimed by this token, or ``None``
     after ``wait_seconds``. Each attempt is its own short transaction, so a waiting runner
@@ -455,7 +483,17 @@ def claim_task(
     ``max_images`` is the most images one task may carry that this runner serves, as it declared
     it in the claim (ADR-0025 decision 18); ``None`` is a claim that declared nothing, which every
     runner deployed before `CMP-EXEC-IMAGES-01` is, and means 1. The task handed back never has
-    more images than that, on a fresh claim and on a redelivery."""
+    more images than that, on a fresh claim and on a redelivery.
+
+    ``runner_instance_id`` (`EXEC2-PULL-01`, ADR-0026 decision 3) names the agent process making the
+    claim. A claim records it on the task it takes, and a claim that names one is redelivered only a
+    task that instance claimed; ``None`` is a claim that named none, which every runner deployed before
+    `EXEC2-PULL-01` is, and behaves exactly as before.
+
+    A token that does not exist, and a token that has stopped being usable since it authenticated -- revoked,
+    past its expiry, or of a connection archived in the meantime -- are refused alike as an unauthenticated
+    one (``authentication_required``): each poll takes the token's row lock and reads the token's usability
+    from the locked row, so a runner polling for 25 s does not outlive a revocation by more than its poll."""
     declared = DEFAULT_CLAIM_IMAGES if max_images is None else max_images
     pool = _LONG_POLLS if slots is None else slots
     wait = max(0, min(int(wait_seconds), MAX_WAIT_SECONDS))
@@ -463,7 +501,8 @@ def claim_task(
     try:
         return _poll(
             session_factory, principal, wait=wait if holds_slot else 0, executors=executors,
-            repository=repository, sleep=sleep, monotonic=monotonic, max_images=declared)
+            repository=repository, sleep=sleep, monotonic=monotonic, max_images=declared,
+            runner_instance_id=runner_instance_id)
     finally:
         if holds_slot:
             pool.release(principal.token_id)
@@ -473,6 +512,7 @@ def _poll(
     session_factory: Callable[[], Session], principal: RunnerPrincipal, *, wait: int,
     executors: ExecutorRepository | None, repository: RunnerRepository | None,
     sleep: Callable[[float], None], monotonic: Callable[[], float], max_images: int,
+    runner_instance_id: str | None = None,
 ) -> ClaimedTask | None:
     store = repository or RunnerRepository()
     revisions = executors or ExecutorRepository()
@@ -480,6 +520,13 @@ def _poll(
     first = True
     while True:
         with session_factory() as session:
+            # `EXEC2-PULL-01`: the token's row before anything is counted or claimed. The lock is
+            # held to the commit below, so a second claim of the token waits here, not between the
+            # count and the claim. The order of the statements is the module docstring's. The same
+            # statement says whether the token is still usable (not revoked, not expired, its
+            # connection not archived): one that is not claims nothing, exactly as a missing one.
+            if not store.lock_token(session, principal.token_id):
+                raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
             current = revisions.current_revisions(session, [principal.connection_id]).get(
                 principal.connection_id)
             limit = 1 if current is None else (current.settings.max_claimed_tasks or 1)
@@ -492,12 +539,12 @@ def _poll(
             if limit == 1:
                 row = store.redeliver(
                     session, token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
-                    max_images=max_images)
+                    max_images=max_images, runner_instance_id=runner_instance_id)
             if row is None and store.held_claims(session, principal.token_id) < limit:
                 row = store.claim_next(
                     session, connection_id=principal.connection_id,
                     token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
-                    max_images=max_images)
+                    max_images=max_images, runner_instance_id=runner_instance_id)
             session.commit()
         if row is not None:
             return _claimed(row)

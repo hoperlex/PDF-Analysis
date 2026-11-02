@@ -10,8 +10,8 @@ OpenAPI 1.15.0 declares every stage-1 addition of ADR-0026 decisions 1–9. Migr
 - domain contract: version literal 1.14.0 → 1.15.0; new identifier prefixes for the enrollment and the install session
 - API contract: 1.14.0 → 1.15.0, owned by this task
 - analysis/comparison/event contract: version literal 1.14.0 → 1.15.0 only
-- migration head: `0045_comparison_page_bounds` once `REVIEW-FIX-INT-1102` is on `origin/dev`; this task owns slot `0046`
-- base commit: `origin/dev` after `REVIEW-FIX-INT-1102`; the integrator creates `integration/exec2` there
+- migration head: `0045_comparison_page_bounds` (on `origin/dev` since `31c66307`); this task owns slot `0046`
+- base commit: `integration/exec2` = `origin/dev` `ece9d1ef` plus the assignment commit of this task
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 1–9, 18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -94,14 +94,14 @@ OpenAPI 1.15.0 declares every stage-1 addition of ADR-0026 decisions 1–9. Migr
 
 ### P-03 — the migration head this task builds on
 - captured_at: 2026-11-02
-- command: `git ls-tree --name-only integration/review-fix-1102 db/migrations/versions/ | grep -E '_004[45]_'`
+- command: `git ls-tree --name-only origin/dev db/migrations/versions/ | grep -E '_004[45]_'`
 - captured_output:
   ```text
   db/migrations/versions/20261030_0044_section_stats_uncapped.py
   db/migrations/versions/20261102_0045_comparison_page_bounds.py
   exit=0
   ```
-- interpretation: after `REVIEW-FIX-INT-1102` the head is 0045; 0046 is the next free slot.
+- interpretation: the head is 0045; 0046 is the next free slot.
 
 ### P-04 — the operation-to-principal map
 - captured_at: 2026-11-02
@@ -136,13 +136,30 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `infra/deploy/proxy/nginx.conf`
 - `infra/deploy/proxy/tls-server.conf`
 - `web/src/shared/api/generated/**`
+- `web/openapi/openapi.json`
 - `web/src/shared/api/credentialed-forward.ts`
 - `web/src/app/bff/v1/[...path]/route.ts`
 - `tests/support/expected_facts.json`
 - `tests/contract/api_v1/test_cmp_seal_c4.py`
 - `tests/contract/api_v1/test_contract_seal.py`
+- `web/FRONTEND_LOCK.json`
+- `web/tests/**`
+- `web/src/shared/api/authorization.ts`
+- `tests/contract/domain_p02/test_openapi_document.py`
+- `tests/integration/api/test_authorization.py`
+- `tests/integration/api/test_role_register.py`
+- `tests/integration/recovery/test_grant_classification.py`
+- `tests/integration/recovery/test_synthetic_drill_compare.py`
+- `tests/integration/recovery/test_synthetic_drill_seed.py`
+- `tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py`
+- `infra/deploy/README.md`
+- `infra/deploy/serve.py`
+- `src/auditmanager/api/README.md`
+- `src/auditmanager/api/health.py`
+- `src/auditmanager/api/routers/errors.py`
+- `src/auditmanager/api/routers/declarations.py`
 - `src/auditmanager/executors/model.py`
-- `db/migrations/versions/20261103_0046_executor_capacity_enrollment.py`
+- `db/migrations/versions/20261102_0046_executor_capacity_enrollment.py`
 - `infra/deploy/apply-grants.sh`
 - `scripts/recovery/grant_classification.py`
 - `scripts/recovery/product_purge.py`
@@ -163,7 +180,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - no group or rule schema (stage 2, `EXEC2-SEAL-2`)
 
 ## Deliverables
-- The date prefix `20261103` of the migration file is the dispatch date; the integrator fixes it when it re-captures the premises.
+- The migration file name carries the dispatch date `20261102`.
 - OpenAPI 1.15.0 adds:
   - `max_active_runs` (integer 1–16, default 1) in the revision settings of every kind;
   - `occupancy` (`capacity`, `active_runs`, `active_calls`) on the connection read models;
@@ -178,7 +195,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
   - the health fields on `RunnerTokenMetadata`;
   - typed refusal details (`constraint`/`conflict_reason`/`dependency` values) on the existing codes only.
 - Version literal 1.15.0 in every file of premise P-01. The path and operation counts move in every file of P-02 to the figures the new contract actually has.
-- Migration `0046_executor_capacity_enrollment`:
+- Migration revision id `0046_executor_capacity_enroll` (`alembic_version.version_num` is `varchar(32)`, so the 33-character `0046_executor_capacity_enrollment` cannot be stored); the file keeps the longer name:
   - nullable `executor_connection_revision.max_active_runs` (1–16; NULL reads as 1);
   - `executor_task.claimed_by_instance_id`;
   - the health columns on `executor_runner_token`;
@@ -188,7 +205,9 @@ The integrator re-runs every premise command on the actual base before dispatch 
   - a downgrade that refuses when it would drop data in use.
 - `executors/model.py`: the vocabulary only (purposes, settings fields, new kinds of refusal detail); no behaviour.
 - New operations mapped in `api/security.py`: administrator ones to the administrator map, runner ones to the runner set, the enroll exchange and the package to their own principal kinds as stubs the ENROLL lane fills.
-- The `D-213` inventories in the allowed paths name the new tables and columns.
+- The `D-213` inventories in the allowed paths name the new tables and columns; both new tables start in `SEALED_NOT_YET_WRITTEN`.
+- `web/tests/**` and `web/FRONTEND_LOCK.json`: only the contract-version literal, the surface counts and the generated-file hashes move; no test logic changes.
+- `ExecutorConnectionDetail.enrollments`: the connection's enrollment metadata (state, expiry, redemption; never a secret) so a reloaded wizard can show «ожидает регистрации».
 - Server models and web client regenerated with the repository's generators.
 
 ## Required tests

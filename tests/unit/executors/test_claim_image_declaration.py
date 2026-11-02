@@ -43,6 +43,9 @@ class _Recording:
     def __init__(self) -> None:
         self.asked: list[tuple[str, int]] = []
 
+    def lock_token(self, session: Any, token_id: str) -> bool:  # EXEC2-PULL-01: the claim locks the token first
+        return True
+
     def sweep(self, session: Any, connection_id: str) -> None: ...
 
     def clear_terminal_payloads(self, session: Any, **kwargs: Any) -> None: ...

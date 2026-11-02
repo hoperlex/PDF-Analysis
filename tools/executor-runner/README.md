@@ -12,6 +12,7 @@ case where the stand connects out.
 | `mcp_bridge.py` | Stdio MCP server for a Claude Code session: tools `claim_task`, `submit_answer`, `report_failure`. |
 | `workspace/` | The dedicated Claude Code workspace: settings that deny every built-in tool, and the loop skill. |
 | `agent.py`, `agent.example.toml`, `pdf-analysis-agent.service` | Unattended agent (command or local OpenAI-compatible model) and its systemd unit. |
+| `install.sh`, `detect.py`, `package.py` | The installer of the agent on Ubuntu LTS (both install paths, section B1), the detection of the `codex` and `claude` CLIs the agent reports, and the builder of the deterministic agent package the stand serves. |
 | `ssh-forced-command.sh` | Remote side of the `claude_code_headless` SSH profile. |
 | `codex_answer.py`, `agent.codex-ssh.example.toml` | Codex CLI answer command and pull-agent example over an outbound SSH forward. |
 | `claude_answer.py`, `agent.claude-ssh.example.toml` | Claude Code CLI (`claude-opus-5` by default, or `claude-sonnet-5` with `--model`) on the owner's subscription: the pull agent's answer command (section E) and, with `--ssh-envelope`, the forced command of a stand-initiated SSH connection (section F). |
@@ -142,9 +143,67 @@ and watch the probe task be claimed and answered; the connection shows «на с
 
 For a recognition machine or a box with a local model, behind NAT, with no open port.
 
+### B1. Install it with `install.sh` (the universal agent, `EXEC2-AGENT-01`)
+
+`install.sh` is the one installer of both paths of ADR-0026 decision 6: the administrator pastes the command the
+stand prints for an enrollment (path B), or the stand's worker runs the same script over SSH with `sudo -n`
+(path A). It needs Ubuntu LTS, systemd and `python3` 3.11 or newer (Ubuntu 24.04), and runs as root from the
+directory the package was unpacked into. The package is built by `package.py` into the API image and served by
+version (`GET /runner/agent-package/{version}`); the command checks its sha256 before unpacking.
+
+```bash
+cd "$(mktemp -d)" && curl -fsSL -o agent.tar.gz https://<stand>/api/v1/runner/agent-package/<version> \
+  && echo '<sha256>  agent.tar.gz' | sha256sum -c - && tar -xzf agent.tar.gz \
+  && AUDITMANAGER_ENROLLMENT_SECRET=<secret> AUDITMANAGER_STAND_ORIGIN=https://<stand> \
+     AUDITMANAGER_AGENT_MODEL=<gateway_model> \
+     sudo --preserve-env=AUDITMANAGER_ENROLLMENT_SECRET,AUDITMANAGER_STAND_ORIGIN,AUDITMANAGER_AGENT_MODEL \
+     bash install.sh
+```
+
+What it does, in order: refuses wrong input before changing anything; creates or reuses the service user
+`pdf-agent` (home `/var/lib/pdf-analysis-agent`, mode 0700); installs the agent under `/opt/pdf-analysis-agent`;
+writes `/etc/pdf-analysis-agent/agent.toml` with `concurrency = 1` and the environment file `agent.env` (mode
+0600, root); exchanges the one-time secret for a runner token (`agent.py --enroll-only`, which stores the token in
+`agent.env`); installs the unit and starts it. The service never restarts on exit 2 (configuration, including a
+missing token) or exit 3 (a refused token).
+
+- **The secret** is read only from `AUDITMANAGER_ENROLLMENT_SECRET`: never an argument (`--secret` is refused),
+  never echoed, logged or written, removed from the installer's environment at once. A grant lasts 15 minutes and
+  is single use.
+- **Which model and CLI answer: no default.** The agent must declare exactly the model its connection pins
+  (`gateway_model`) and the stand refuses an answer from another, so the model comes only from
+  `AUDITMANAGER_AGENT_MODEL` (the stand's command carries it) or `--model`. A fresh install without one is refused
+  (exit 64) before anything changes, as is a model no answer command serves. The CLI follows from the model:
+  `claude-opus-5` and `claude-sonnet-5` are answered by Claude Code (`claude_answer.py`), `gpt-6-sol` by Codex
+  (`codex_answer.py`). `AUDITMANAGER_AGENT_CLI` / `--cli` may only confirm that; a contradiction is refused. A CLI the
+  service user does not have yet does not stop the install: the agent reports `installed=false` and the installer
+  prints the install and login step.
+- **Signing the CLI in is yours, and happens as the service user**: `sudo -u pdf-agent -H codex login --device-auth`
+  or `sudo -u pdf-agent -H claude auth login`. The installer never copies a credential from any account, and a CLI
+  signed in only under another account is reported `login_required`, never borrowed.
+- **Rerun** is safe: unchanged files are left, an existing `agent.toml` and `agent.env` are kept (so the runner
+  token and the configured model keep working; a rerun without a model keeps the configured one, a different model
+  is applied only with `--reconfigure`, and the installer says when it did not apply it), the service restarts only
+  after a change. The same secret again inside its window is the stand's idempotent repeat: it revokes the token it minted before and
+  returns a fresh one, and only the newest is stored. A secret the stand has spent, or one redeemed from another
+  host, keeps the installed token.
+- **`--uninstall`** removes the service, unit, code, `agent.toml` and `agent.env`. It never touches an installed
+  CLI or any login, and leaves the service user and its home; revoke the token in the stand UI.
+- `--package FILE --sha256 DIGEST` verifies an archive before anything is installed (path A uses it).
+
+The agent reports to the stand (`POST /runner/health`, `RUNNER_API.md` section 9) at start, every ten minutes and whenever detection changes:
+its package version, concurrency, profile, and for `claude` and `codex` whether they are installed, their version
+and their login state. The state comes only from the CLI's own command, run as the service user: `codex login
+status` and `claude auth status` (exit status only; the output, which may name an account, is never read). A
+Claude Code older than 2.1.268, a timeout or an unexpected answer is reported `unknown`. Paths, tokens and account
+names are never reported. `PDF_ANALYSIS_CLI_DIRS` (absolute directories, colon-separated) replaces the directories
+searched when a CLI lives under a non-standard prefix; set `PATH` to match for the answer command.
+
+### B2. By hand
+
 ```bash
 sudo install -d /opt/pdf-analysis-agent /etc/pdf-analysis-agent
-sudo install -m 0644 agent.py runner_client.py /opt/pdf-analysis-agent/
+sudo install -m 0644 agent.py runner_client.py detect.py /opt/pdf-analysis-agent/
 sudo install -m 0644 agent.example.toml /etc/pdf-analysis-agent/agent.toml    # then edit it
 ```
 
@@ -175,6 +234,15 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   not restart-loop on 2 or 3). `journalctl -u pdf-analysis-agent` shows the log; it holds task
   ids and timings, never the token or the payload.
 - Revoke: the same «Отозвать» button; the agent exits 3 at its next call.
+- `[runner] concurrency` (1 to 8, default 1) is how many tasks this process works at once. It needs the
+  connection's «Заданий в работе» (`max_claimed_tasks`) to be at least as large: with the stand's
+  limit of one, the stand hands the agent its one held task again, and the agent, which keeps the ids of the
+  tasks it is working on, does not start that task a second time and waits at least 5 s before it claims
+  again. The agent claims only when a local slot is free.
+- **Run one agent process per token** (v1). The agent names itself in every claim with a random
+  `runner_instance_id` (new at each start), and the stand hands a task it already holds only back to the
+  instance that took it; a restarted agent therefore waits at most one claim lease (120 s) for the task its
+  predecessor held. Two processes presenting one token are not a supported setup (`RUNNER_API.md`, section 8).
 
 ## C. SSH profile `claude_code_headless`
 

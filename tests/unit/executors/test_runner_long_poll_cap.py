@@ -65,6 +65,9 @@ class _Rows:
         self.looks = 0
         self._on_look = on_look
 
+    def lock_token(self, session: Any, token_id: str) -> bool:  # EXEC2-PULL-01: the claim locks the token first
+        return True
+
     def sweep(self, session: Any, connection_id: str) -> None:
         self.looks += 1
         if self._on_look is not None:

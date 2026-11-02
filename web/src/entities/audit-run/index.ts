@@ -69,6 +69,8 @@ export { PRESET_FIELD, presetRefusal } from './model/preset-refusal';
 export type { RunPresetLine } from './model/run-preset';
 export { runPresetLine, runPresetSentence, runPresetValue } from './model/run-preset';
 
+export { QUEUE_REASON_LABELS, runQueueReason, runQueueReasonLabel } from './model/run-queue-reason';
+
 export type { RunExecutorLine } from './model/run-executor';
 export {
   runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,

@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0045_comparison_page_bounds"
+HEAD = "0046_executor_capacity_enroll"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -58,13 +58,14 @@ TABLES = frozenset((
     "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
     # `0042_comparison_stage_review`: stage AI units and their immutable results, graphic evidence,
     # link repairs, expert change cards and verdicts, and the durable batch. `0043`, `0044` and `0045`
-    # add no table.
+    # add no table. `0046_executor_capacity_enroll` adds `executor_enrollment` and `executor_agent_install`
+    # (listed beside the other executor tables below).
     "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
     "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
-    "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
+    "execution_control", "executor_agent_install", "executor_connection", "executor_connection_revision", "executor_enrollment", "executor_probe",
     "executor_route_event", "executor_runner_token", "executor_secret", "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call", "norm_chunk",
     "norm_chunk_build", "norm_current_snapshot", "norm_current_snapshot_event", "norm_custody_admission",
@@ -277,9 +278,16 @@ TRIGGERS = (
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
     ("document_version_classification_correction", "trg_document_version_classification_correction_chain", "am_check_classification_correction_chain", 7),
     ("document_version_classification_correction", "trg_document_version_classification_correction_immutable", "am_immutable_row", 27),
+    # `0046_executor_capacity_enroll`: the enrollment grant's identity, hash and expiry are frozen and its
+    # redemption and revocation write-once; an install session's identity, host and user are frozen and its
+    # observed host key, confirmed fingerprint and finish are write-once (19 = ROW | BEFORE | UPDATE).
+    ("executor_agent_install", "trg_executor_agent_install_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_agent_install", "trg_executor_agent_install_write_once", "am_guard_write_once_columns", 19),
     ("executor_connection", "trg_executor_connection_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_connection", "trg_executor_connection_write_once", "am_guard_write_once_columns", 19),
     ("executor_connection_revision", "trg_executor_connection_revision_immutable", "am_immutable_row", 27),
+    ("executor_enrollment", "trg_executor_enrollment_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_enrollment", "trg_executor_enrollment_write_once", "am_guard_write_once_columns", 19),
     ("executor_probe", "trg_executor_probe_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_route_event", "trg_executor_route_event_append_only", "am_append_only", 27),
     ("executor_runner_token", "trg_executor_runner_token_frozen_guard", "am_guard_frozen_columns", 19),
@@ -376,13 +384,19 @@ SEQUENCES = {
 #: 12 primary keys and 19 unique constraints; `0043_stage_ai_generations` adds one check and swaps
 #: one unique constraint for another; `0044_section_stats_uncapped` replaces six checks in place;
 #: `0045_comparison_page_bounds` replaces seven page-number checks in place (same names, same count),
-#: so no count moves (derived from the DDL, not measured on a database).
-CONSTRAINT_COUNTS = {"c": 1139, "f": 344, "p": 121, "t": 9, "u": 123}
+#: so no count moves; `0046_executor_capacity_enroll` adds two tables and, net of the two secret checks it
+#: redefines in place, 47 checks (revision 1, task 2, runner token 6, connection 3, `executor_enrollment` 12,
+#: `executor_agent_install` 23), four foreign keys (the enrollment's connection and runner token, the install's
+#: connection and sealed key), two primary keys and two unique constraints (the enrollment's prefix and hash):
+#: c 1186, f 348, p 123, u 125 (derived from the DDL, not measured on a database).
+CONSTRAINT_COUNTS = {"c": 1186, "f": 348, "p": 123, "t": 9, "u": 125}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
-#: index); 0043 swaps one unique index for another; 0044 and 0045 add none.
-INDEX_COUNT = 426
+#: index); 0043 swaps one unique index for another; 0044 and 0045 add none; 0046 adds eight (two primary keys,
+#: two unique constraints, the partial unique index of one live grant per connection, the partial unique index of
+#: one unfinished install per connection, and one listing index on each of the two tables).
+INDEX_COUNT = 434
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((
