@@ -59,6 +59,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/executors/agent_install.py`
 - `src/auditmanager/executors/agent_install_runner.py`
 - `src/auditmanager/executors/agent_install_repository.py`
+- `src/auditmanager/bootstrap/adapters.py`
 - `src/auditmanager/api/routers/executor_enrollment.py`
 - `src/auditmanager/bootstrap/composition.py`
 - `src/auditmanager/executors/queries.py`
@@ -79,11 +80,12 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - no persistent SSH after install
 
 ## Deliverables
+- Builds on the API side `EXEC2-ENROLL-01` delivered (session records, read, host-key confirmation).
 - The install-session state machine: requested → scanning → awaiting_host_key → installing → succeeded or failed, with a sanitised reason.
 - The worker runner: host-key scan and confirmation compare (no TOFU); upload of the package on stdin; `sudo -n install.sh`; then removal of the stand's `authorized_keys` line and the secret.
 - Composition wiring of the runner in the worker.
 - Tests for B2 §11 item 1 (scripted SSH host).
-- `ExecutorConnection.secrets` never lists an `agent_install_key` row (`executors/queries.py`); remove `executor_agent_install` from `SEALED_NOT_YET_WRITTEN`; command types `create_executor_agent_install` and `confirm_executor_agent_install_host_key` as SEAL-1 registered them.
+- `ExecutorConnection.secrets` never lists an `agent_install_key` row (`executors/queries.py`); command types `create_executor_agent_install` and `confirm_executor_agent_install_host_key` as SEAL-1 registered them.
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker
