@@ -57,9 +57,10 @@ viewer: the evidence viewer and the extended-review source inspector.
 - addendum_path: not_applicable
 
 ## Publication authority
-- development_target: none (the integrator merges into `origin/dev` after the review-fix wave
-  of pdf-analysis-8c is published)
+- development_target: origin/dev
 - origin_main_authority: none
+
+Published to `origin/dev` only after the review-fix wave of pdf-analysis-8c is on it.
 
 ## Allowed paths
 - `docs/program/tasks/REVIEW-VIEWER-01.md`
