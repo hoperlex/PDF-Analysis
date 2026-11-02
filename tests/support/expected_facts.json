@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 241,
+    "path_count": 250,
     "operations": [
       [
         "DELETE",
@@ -225,8 +225,33 @@
       ],
       [
         "GET",
+        "/executor-groups",
+        "listExecutorGroups"
+      ],
+      [
+        "GET",
+        "/executor-groups/{group_id}",
+        "getExecutorGroup"
+      ],
+      [
+        "GET",
+        "/executor-groups/{group_id}/capacity",
+        "getExecutorGroupCapacity"
+      ],
+      [
+        "GET",
         "/executor-routes",
         "listExecutorRoutes"
+      ],
+      [
+        "GET",
+        "/executor-routing-rules",
+        "listExecutorRoutingRules"
+      ],
+      [
+        "GET",
+        "/executor-routing/preview",
+        "previewExecutorRouting"
       ],
       [
         "GET",
@@ -965,6 +990,26 @@
       ],
       [
         "POST",
+        "/executor-groups",
+        "createExecutorGroup"
+      ],
+      [
+        "POST",
+        "/executor-groups/{group_id}/archive",
+        "archiveExecutorGroup"
+      ],
+      [
+        "POST",
+        "/executor-groups/{group_id}/revisions",
+        "reviseExecutorGroup"
+      ],
+      [
+        "POST",
+        "/executor-routing/mode",
+        "setExecutorRoutingMode"
+      ],
+      [
+        "POST",
         "/findings/{finding_uid}/decisions",
         "appendDecision"
       ],
@@ -1310,6 +1355,11 @@
       ],
       [
         "PUT",
+        "/executor-routing-rules/{work_kind}",
+        "setExecutorRoutingRule"
+      ],
+      [
+        "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
       ],
@@ -1591,6 +1641,7 @@
       "CreateComparisonUploadRequest",
       "CreateExecutorAgentInstallRequest",
       "CreateExecutorConnectionRequest",
+      "CreateExecutorGroupRequest",
       "CreateProjectRequest",
       "CreateStageAssemblyRequest",
       "CreateStageReviewCardRequest",
@@ -1627,6 +1678,8 @@
       "ExecutorAgentInstallState",
       "ExecutorApiFlavour",
       "ExecutorBilling",
+      "ExecutorBinding",
+      "ExecutorBindingState",
       "ExecutorConnection",
       "ExecutorConnectionDetail",
       "ExecutorConnectionId",
@@ -1634,6 +1687,18 @@
       "ExecutorEnrollmentId",
       "ExecutorEnrollmentMetadata",
       "ExecutorEnrollmentState",
+      "ExecutorGroup",
+      "ExecutorGroupCapacity",
+      "ExecutorGroupDetail",
+      "ExecutorGroupId",
+      "ExecutorGroupList",
+      "ExecutorGroupMember",
+      "ExecutorGroupMemberIssue",
+      "ExecutorGroupMemberStatus",
+      "ExecutorGroupPlan",
+      "ExecutorGroupRevision",
+      "ExecutorGroupRevisionId",
+      "ExecutorGroupStrategy",
       "ExecutorIdentityBasis",
       "ExecutorIntegrationAuthorisation",
       "ExecutorKind",
@@ -1649,6 +1714,18 @@
       "ExecutorRevisionId",
       "ExecutorRoute",
       "ExecutorRouteList",
+      "ExecutorRoutingMappingEntry",
+      "ExecutorRoutingMode",
+      "ExecutorRoutingModeEventId",
+      "ExecutorRoutingModeResult",
+      "ExecutorRoutingModeState",
+      "ExecutorRoutingPreview",
+      "ExecutorRoutingPreviewIssue",
+      "ExecutorRoutingPreviewItem",
+      "ExecutorRoutingPreviewStatus",
+      "ExecutorRoutingRule",
+      "ExecutorRoutingRuleList",
+      "ExecutorRoutingRuleRevisionId",
       "ExecutorRunnerTokenId",
       "ExecutorSecretId",
       "ExecutorSecretMetadata",
@@ -1791,6 +1868,7 @@
       "ResumeComparisonAiJobRequest",
       "ResumeStageChainRunRequest",
       "ReviseExecutorConnectionRequest",
+      "ReviseExecutorGroupRequest",
       "ReviseStageAssemblyRequest",
       "Role",
       "RunActivity",
@@ -1832,6 +1910,8 @@
       "SetExecutionPausedRequest",
       "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
+      "SetExecutorRoutingModeRequest",
+      "SetExecutorRoutingRuleRequest",
       "SetExecutorSecretRequest",
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
@@ -1990,6 +2070,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0046_executor_capacity_enroll",
-  "contract_version": "1.15.0"
+  "migration_head": "0048_dispatch_time_binding",
+  "contract_version": "1.16.0"
 }

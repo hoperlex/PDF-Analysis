@@ -409,6 +409,36 @@ class ExecutorAgentInstallId(OpaqueId, prefix="exai", entity="ExecutorAgentInsta
     """
 
 
+class ExecutorGroupId(OpaqueId, prefix="exg", entity="ExecutorGroup"):
+    """Identity of one executor group (`EXEC2-SEAL-2`, migration ``0047``, ADR-0026 decision 10).
+
+    Minted by ``auditmanager.executors``. The display name is an attribute and never an identity; the
+    name of the table avoids ``ar_v3_run_group``, whose identity is ``arg``.
+    """
+
+
+class ExecutorGroupRevisionId(OpaqueId, prefix="exgr", entity="ExecutorGroupRevision"):
+    """Identity of one immutable revision of an executor group (`EXEC2-SEAL-2`, migration ``0047``).
+
+    Minted by ``auditmanager.executors``. A Run or a comparison job admitted by a rule or a group freezes this
+    identity, and never the group's current revision at the time of dispatch.
+    """
+
+
+class ExecutorRoutingRuleRevisionId(OpaqueId, prefix="exrr", entity="ExecutorRoutingRuleRevision"):
+    """Identity of one revision of the routing rule of a work kind (`EXEC2-SEAL-2`, migration ``0047``).
+
+    Minted by ``auditmanager.executors``. The work kind and the rule number are attributes of the row.
+    """
+
+
+class ExecutorRoutingModeEventId(OpaqueId, prefix="exrm", entity="ExecutorRoutingModeEvent"):
+    """Identity of one change of the routing mode (`EXEC2-SEAL-2`, migration ``0047``, ADR-0026 decision 17).
+
+    Minted by ``auditmanager.executors``; the mode in force is the latest event, never a flag.
+    """
+
+
 class ComparisonUploadId(OpaqueId, prefix="cbt", entity="ComparisonUpload"):
     """Identity of one upload batch of plain PDFs for comparison (`CMP-SEAL-C0`, migration ``0038``, ADR-0025 decision 10)."""
 

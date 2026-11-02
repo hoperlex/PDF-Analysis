@@ -139,6 +139,9 @@ READ_WRITE = frozenset((
     "executor_agent_install",
     "executor_connection",
     "executor_enrollment",
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): a group is archived once and its dispatch rotation cursor advances; the
+    # guard triggers pin the rest. No statement exists yet; `EXEC2-GROUP-STORE-01` writes it.
+    "executor_group",
     "executor_probe",
     "executor_runner_token",
     "executor_secret",
@@ -178,6 +181,9 @@ APPEND_ONLY = frozenset((
     "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): group revisions and members are immutable (`am_immutable_row`), rule
+    # revisions and routing-mode events append-only (`am_append_only`); all four are in `schema_coverage.TRIGGERS`.
+    "executor_group_member", "executor_group_revision", "executor_routing_mode_event", "executor_routing_rule_revision",
     "finding_evidence", "finding_observation", "finding_observation_norm_citation",
     "input_manifest_entry", "model_call", "norm_chunk", "norm_chunk_build",
     "norm_current_snapshot_event", "norm_custody_binding", "norm_document", "norm_embedding",
@@ -211,6 +217,11 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): `executor_enrollment` and `executor_agent_install` left
     # the set when `EXEC2-ENROLL-01` wrote the grant, the install session's API side (create, read, confirm the
     # host key) and the sealed key's row. `EXEC2-ENROLL-SSH-01` adds the worker's statements to the second.
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): the group store is written by `EXEC2-GROUP-STORE-01` (groups,
+    # revisions, members, rules) and `EXEC2-CUTOVER-01` (the routing-mode journal); each lane removes its tables when its
+    # first statement lands. Neither lane's allowed paths name this file, so the integrator removes them at the merge.
+    "executor_group", "executor_group_member", "executor_group_revision", "executor_routing_mode_event",
+    "executor_routing_rule_revision",
 ))
 
 #: ``SELECT``.
