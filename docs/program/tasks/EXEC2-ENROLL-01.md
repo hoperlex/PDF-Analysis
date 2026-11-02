@@ -64,8 +64,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/executors/enrollment_repository.py`
 - `src/auditmanager/executors/agent_install.py`
 - `src/auditmanager/executors/agent_install_repository.py`
-- `src/auditmanager/executors/commands.py`
-- `src/auditmanager/executors/queries.py`
+- `src/auditmanager/executors/integration_mark.py`
 - `src/auditmanager/executors/agent_package.py`
 - `src/auditmanager/executors/public.py`
 - `src/auditmanager/api/routers/executor_enrollment.py`
@@ -103,7 +102,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - The enrollment and package routes are registered in `api/app.py` and get their principal kinds in `api/security.py`; the proxy throttles both (per address).
 - Moving an agent: issuing an enrollment for a connection that already has an online agent is allowed and journalled. Revoking the old token stays the existing operation.
 - The API side of path A so that the 1.15.0 document is served whole: `createExecutorAgentInstall` records a session in `requested`, `getExecutorAgentInstall` reads it, `confirmExecutorAgentInstallHostKey` records the confirmation against the observed key. The worker runner that scans, installs and finishes a session is `EXEC2-ENROLL-SSH-01`; until it lands a session stays visibly `requested`.
-- `setExecutorIntegrationAuthorisation` (the R-149b mark) and `ExecutorConnectionDetail.enrollments`.
+- `setExecutorIntegrationAuthorisation` (the R-149b mark, in `integration_mark.py`) and `ExecutorConnectionDetail.enrollments`, read through this task's own modules and composed in this task's region of `bootstrap/adapters.py`; `executors/commands.py` and `executors/queries.py` belong to `EXEC2-CAP-01` in stage 1.
 - Tests for B2 §11 items 2, 7 and 8 (server half).
 - Remove `executor_enrollment` and `executor_agent_install` from `SEALED_NOT_YET_WRITTEN` in `scripts/recovery/grant_classification.py` once this task writes it; move `THROTTLED_OPERATIONS` in `tests/contract/test_proxy_rate_limits.py` with the new proxy throttles; command types and event names are the ones SEAL-1 registered (`issue_executor_enrollment`, `executor.`-prefixed events).
 
