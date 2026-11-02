@@ -194,10 +194,18 @@ describe('focusing a rectangle', () => {
 
   it('is limited by the width when the target is wide and by the height when it is tall', () => {
     const at = stage();
-    const wide = focusView({ left: 60, top: 300, width: 480, height: 10 }, at);
-    const tall = focusView({ left: 300, top: 100, width: 10, height: 600 }, at);
-    expect(onScreen({ left: 60, top: 300, width: 480, height: 10 }, wide, at).width + 2 * FOCUS_PADDING).toBeLessThanOrEqual(FOCUS_SHARE * PANE.width + 1e-6);
-    expect(onScreen({ left: 300, top: 100, width: 10, height: 600 }, tall, at).height + 2 * FOCUS_PADDING).toBeLessThanOrEqual(FOCUS_SHARE * PANE.height + 1e-6);
+    const wide: Rect = { left: 60, top: 300, width: 480, height: 10 };
+    const tall: Rect = { left: 300, top: 100, width: 10, height: 200 };
+    const wideBox = onScreen(wide, focusView(wide, at), at);
+    const tallBox = onScreen(tall, focusView(tall, at), at);
+    expect(wideBox.width + 2 * FOCUS_PADDING).toBeCloseTo(FOCUS_SHARE * PANE.width, 4);
+    expect(tallBox.height + 2 * FOCUS_PADDING).toBeCloseTo(FOCUS_SHARE * PANE.height, 4);
+  });
+
+  it('leaves a target that is bigger than the share at the whole page, not smaller than it', () => {
+    const at = stage();
+    const tall: Rect = { left: 300, top: 100, width: 10, height: 600 };
+    expect(focusView(tall, at).zoom).toBe(1);
   });
 
   it('never blows a tiny target up past four times the fit', () => {

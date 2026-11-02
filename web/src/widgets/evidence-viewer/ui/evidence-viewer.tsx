@@ -31,16 +31,16 @@ import { useMemo, useRef, useState } from 'react';
 import type { FindingObservation, VersionBlockIndex } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState } from '@/shared/ui';
-import type { TargetResolution, ViewerTarget } from '@/features/open-evidence';
-import { PageViewer, lineRects } from '@/features/open-evidence';
+import type { TargetResolution } from '@/features/open-evidence';
+import { PageViewer } from '@/features/open-evidence';
 import {
-  anchorMatchesQuotation,
   declaredPages,
   evidenceOnPage,
   observationProviderMode,
 } from '@/entities/finding-observation';
 
 import { FindingBasis } from './finding-basis';
+import { quotationTargetId, quotationTargets } from '../model/quotation-targets';
 import { QuotationCard } from './quotation-card';
 
 export interface EvidenceViewerProps {
@@ -88,19 +88,7 @@ function EvidencePanes({
   const [chosen, setChosen] = useState<Scoped<string> | null>(null);
   const [reported, setReported] = useState<Scoped<ReadonlyMap<string, TargetResolution>> | null>(null);
 
-  const targets = useMemo<readonly ViewerTarget[]>(
-    () =>
-      quotations.map((item, at) => ({
-        id: `q${item.evidence_ordinal}`,
-        badge: String(at + 1),
-        quote: item.quote,
-        // The server's lines are used only when its anchor agrees with the quotation beside it:
-        // an anchor that disagrees is already reported as a discrepancy, and lines picked by it
-        // would frame text nobody quoted.
-        rects: anchorMatchesQuotation(item) ? (lineRects(blockIndex, item) ?? undefined) : undefined,
-      })),
-    [quotations, blockIndex],
-  );
+  const targets = useMemo(() => quotationTargets(quotations, blockIndex), [quotations, blockIndex]);
 
   const resolutions = reported !== null && reported.scope === scope ? reported.value : null;
   const firstPlaced = targets.find((target) => resolutions?.get(target.id)?.status === 'found');
@@ -174,14 +162,14 @@ function EvidencePanes({
               key={`${item.evidence_ordinal}`}
               item={item}
               badge={String(at + 1)}
-              placement={resolutions?.get(`q${item.evidence_ordinal}`) ?? null}
-              active={activeId === `q${item.evidence_ordinal}`}
+              placement={resolutions?.get(quotationTargetId(item)) ?? null}
+              active={activeId === quotationTargetId(item)}
               onSelect={() => {
-                choose(`q${item.evidence_ordinal}`);
+                choose(quotationTargetId(item));
               }}
               itemRef={(element) => {
-                if (element === null) cards.current.delete(`q${item.evidence_ordinal}`);
-                else cards.current.set(`q${item.evidence_ordinal}`, element);
+                if (element === null) cards.current.delete(quotationTargetId(item));
+                else cards.current.set(quotationTargetId(item), element);
               }}
             />
           ))}
