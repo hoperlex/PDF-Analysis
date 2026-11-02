@@ -82,6 +82,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 ## Deliverables
 - Builds on the API side `EXEC2-ENROLL-01` delivered (session records, read, host-key confirmation).
 - The install-session state machine: requested → scanning → awaiting_host_key → installing → succeeded or failed, with a sanitised reason.
+- The install target passes the same `DestinationPolicy` as every executor destination (T-9) before any connection (the API side accepts loopback/private/link-local syntactically; the stage-1 review flagged it).
 - The worker runner: host-key scan and confirmation compare (no TOFU); upload of the package on stdin; `sudo -n install.sh`; then removal of the stand's `authorized_keys` line and the secret.
 - Composition wiring of the runner in the worker.
 - Tests for B2 §11 item 1 (scripted SSH host).
