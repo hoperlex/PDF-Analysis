@@ -49,7 +49,8 @@ def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -
     # `0035_comparison_records`: +2 tables.
     # `0041_comparison_stage_core`: fifteen stage tables; no new view.
     # `0042_comparison_stage_review`: twelve more tables; no new view.
-    assert len(first["tables"]) == 122 and len(first["views"]) == 5
+    # `0046_executor_capacity_enrollment`: two more tables (`executor_enrollment`, `executor_agent_install`); no new view.
+    assert len(first["tables"]) == 124 and len(first["views"]) == 5
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

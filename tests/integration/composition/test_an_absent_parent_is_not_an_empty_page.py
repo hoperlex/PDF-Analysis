@@ -128,7 +128,10 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # ``contracts/api/v1/openapi.json`` (a ``GET`` whose path holds ``{``, except ``getSectionSpecification``), which gave
 # 91 for the 1.12.0 document this literal was last measured against, and 109 for 1.14.0 (110 with the section filter).
 # `REVIEW-FIX-TESTS-1102`: one hundred and nine. The unaddressed half is unchanged at twenty-three.
-EXPECTED_ADDRESSED = 109
+# `EXEC2-SEAL-1` (contract 1.15.0) adds two ``GET`` operations whose path holds ``{``: ``getExecutorAgentInstall`` (on
+# ``connection_id`` and ``install_id``), which is addressed, and ``downloadAgentPackage`` (on a package ``version``), which
+# names no parent and is excluded like the section filter (:data:`PUBLIC_PACKAGE_OPERATIONS`). One hundred and ten.
+EXPECTED_ADDRESSED = 110
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
@@ -307,6 +310,13 @@ CURRENT_SNAPSHOT_COLLECTIONS = frozenset({"listNormDocuments"})
 #: outside the fifteen is ``404 not_found`` (``SectionSpecification``).
 SECTION_FILTER_OPERATIONS = frozenset({"getSectionSpecification"})
 
+#: `EXEC2-SEAL-1`. ``downloadAgentPackage`` is addressed by the *version of public code* the image holds
+#: (``/runner/agent-package/{version}``), not by a parent identity: it is answered with no credential, has no
+#: parent to be missing, and refuses a version the image does not hold as ``422 validation_failed``
+#: (``package_version_unknown``), never as a ``404`` for an identity. It joins neither half of the rule above;
+#: its own answers are ``EXEC2-ENROLL-01``'s tests.
+PUBLIC_PACKAGE_OPERATIONS = frozenset({"downloadAgentPackage"})
+
 
 #: Path parameters whose name is not the catalog's key for the identity they carry. Written out
 #: rather than guessed: ``group_id`` is ``ar_v3_run_group_id`` (``arg_``, `AR-V3-BETA-SIX-RUN-02`), and
@@ -320,6 +330,8 @@ _CATALOG_KEY: dict[str, str] = {
     # `ANALYSIS-PRESETS-01`: a preset is identified by the audit event written with its first
     # revision (``evt_``), so its path parameter takes that catalogue key.
     "preset_id": "audit_event_id",
+    # `EXEC2-SEAL-1`: an agent install session of a connection (``exai_``).
+    "install_id": "executor_agent_install_id",
 }
 
 
@@ -424,7 +436,9 @@ def _get_routes(app: Composed) -> tuple[tuple[str, str], ...]:
 
 def _addressed(routes: tuple[tuple[str, str], ...]) -> tuple[tuple[str, str], ...]:
     return tuple(
-        (op, path) for op, path in routes if "{" in path and op not in SECTION_FILTER_OPERATIONS
+        (op, path)
+        for op, path in routes
+        if "{" in path and op not in SECTION_FILTER_OPERATIONS and op not in PUBLIC_PACKAGE_OPERATIONS
     )
 
 

@@ -31,6 +31,16 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: NOT resealed for ``0046_executor_capacity_enroll`` (`EXEC2-SEAL-1`, `R-149d`: no database run in EXEC-2), and the
+#: seal below has not been resealed for ``0042``-``0045`` either, so ``EXPECTED_INVENTORY`` does not describe head. What
+#: the integrator will find when a capable runner recomputes the eleven families, derived from the DDL and not measured:
+#: columns +41 (``executor_connection_revision`` 1, ``executor_task`` 1, ``executor_runner_token`` 6,
+#: ``executor_connection`` 2, ``executor_enrollment`` 11, ``executor_agent_install`` 20); relations +2 (the two tables);
+#: constraints +55 (checks +47, foreign keys +4, primary keys +2, unique keys +2; ``ck_executor_secret_purpose`` and
+#: ``ck_executor_secret_public_material`` are redefined, same rows, so only their digest moves); indexes +8 (two primary
+#: keys, the two unique keys of the grant, ``ux_executor_enrollment_pending``, ``ux_executor_agent_install_open`` and one
+#: ``ix_*_connection`` on each table); triggers +4 (a frozen and a write-once guard on each table); functions, views,
+#: extensions, sequences, policies and the state topology unchanged.
 #: Resealed by `CMP-SEAL-C2` for ``0040_comparison_ai_reports``, measured, not predicted: a fresh database upgraded to
 #: ``0040`` was recomputed in all eleven families and compared with the 0039 seal below. Six families moved, each by exactly
 #: the migration's DDL and nothing was removed: columns +181 -> 1188 (the twelve tables 180 and ``comparison_work.comparison_ai_job_id``);

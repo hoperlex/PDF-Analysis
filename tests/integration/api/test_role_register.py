@@ -30,6 +30,7 @@ import json
 import pytest
 
 from auditmanager.api.security import (
+    ENROLLMENT_OPERATIONS,
     OPERATION_ROLES,
     OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES,
     OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES,
@@ -233,6 +234,28 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "POST",
         "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/runner-tokens/"
         "ern_01M2545JSD15ETSNNV904X991T/revoke",
+    ),
+    # `EXEC2-SEAL-1`. The universal agent: the grant, the SSH install session and the
+    # integration-authorisation mark are an administrator's. The agent's own operations
+    # (`reportRunnerHealth`, `redeemExecutorEnrollment`, `downloadAgentPackage`) are not role-gated.
+    "issueExecutorEnrollment": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/enrollments"
+    ),
+    "setExecutorIntegrationAuthorisation": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/integration-authorisation"
+    ),
+    "createExecutorAgentInstall": (
+        "POST", "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/agent-installs"
+    ),
+    "getExecutorAgentInstall": (
+        "GET",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/agent-installs/"
+        "exai_01M2545JSD15ETSNNV904X991T",
+    ),
+    "confirmExecutorAgentInstallHostKey": (
+        "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/agent-installs/"
+        "exai_01M2545JSD15ETSNNV904X991T/confirm-host-key",
     ),
     # `W55A-SEAL-01`. The norms operations (R-80 any-role reads; R-113 administrator history
     # and designation). `q` is supplied so the role refusal is the only one in play.
@@ -643,6 +666,13 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "archiveAnalysisPreset": _ADMIN,
     "issueRunnerToken": _ADMIN,
     "revokeRunnerToken": _ADMIN,
+    # `EXEC2-SEAL-1`: the agent's enrollment, its install over SSH (a host and a user are named) and the
+    # integration-authorisation mark are administrator acts, reads of an install included.
+    "issueExecutorEnrollment": _ADMIN,
+    "setExecutorIntegrationAuthorisation": _ADMIN,
+    "createExecutorAgentInstall": _ADMIN,
+    "getExecutorAgentInstall": _ADMIN,
+    "confirmExecutorAgentInstallHostKey": _ADMIN,
     # `W55A-SEAL-01` (R-113): who designated which snapshot, and the designation itself.
     "listNormSnapshotEvents": _ADMIN,
     "setCurrentNormSnapshot": _ADMIN,
@@ -696,7 +726,9 @@ def test_the_registers_are_the_ruled_ones() -> None:
         "issueToken",
         "submitRegistration",
         "readRegistrationStatus",
+        "downloadAgentPackage",
     }
+    assert ENROLLMENT_OPERATIONS == {"redeemExecutorEnrollment"}
     assert OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES == {"issueToken", "changePassword", "getMe"}
     assert OPERATIONS_AN_INCOMPLETE_PROFILE_REACHES == {
         "getMe",
@@ -714,7 +746,10 @@ def test_every_guarded_operation_is_in_the_role_register(router: Surface) -> Non
     what reports it rather than letting it sit closed unnoticed.
     """
     assert set(OPERATION_ROLES) == (
-        router.operation_ids - UNAUTHENTICATED_OPERATIONS - RUNNER_OPERATIONS
+        router.operation_ids
+        - UNAUTHENTICATED_OPERATIONS
+        - RUNNER_OPERATIONS
+        - ENROLLMENT_OPERATIONS
     )
     assert set(SAMPLES) == set(OPERATION_ROLES)
 

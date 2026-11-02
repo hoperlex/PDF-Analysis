@@ -134,7 +134,11 @@ READ_WRITE = frozenset((
     "stage_ai_unit", "stage_chain_batch", "stage_chain_batch_item",
     "document",
     "execution_control",               # singleton upsert (jobs/repository.py)
+    # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): a grant is redeemed or revoked once, and an install session
+    # advances through its states and loses its sealed key when it ends. Both take UPDATE; neither has a statement yet.
+    "executor_agent_install",
     "executor_connection",
+    "executor_enrollment",
     "executor_probe",
     "executor_runner_token",
     "executor_secret",
@@ -204,6 +208,10 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # launch queue, until `CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01` and
     # `CMP-VC-REPORT-01` write them.
     # `0041_comparison_stage_core`: C3 tables remain unused until their stage lanes wire them.
+    # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): the grant is written by `EXEC2-ENROLL-01`, the install
+    # session by `EXEC2-ENROLL-SSH-01`; each lane removes its table when its first statement lands. Neither lane's
+    # allowed paths name this file, so the integrator removes them at the merge that brings the statement.
+    "executor_agent_install", "executor_enrollment",
 ))
 
 #: ``SELECT``.

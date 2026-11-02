@@ -11,7 +11,20 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Combined current contract `1.13.0`
+## Current contract `1.15.0` (`EXEC2-SEAL-1`)
+
+Additive stage-1 surface of executor capacity and the universal agent (ADR-0026 decisions 1 to 9, rulings
+`R-149a`…`R-149f`): `max_active_runs` in the revision settings; `occupancy` and `integration_authorisation` on
+`ExecutorConnection`; `enrollments` on `ExecutorConnectionDetail`; `queue_reason` on `RunStatus`; the optional `runner_instance_id` of `claimExecutorTask`; the
+health fields of `RunnerTokenMetadata`; and the operations `issueExecutorEnrollment`, `redeemExecutorEnrollment`,
+`reportRunnerHealth`, `downloadAgentPackage` (no credential), `createExecutorAgentInstall`,
+`getExecutorAgentInstall`, `confirmExecutorAgentInstallHostKey` and `setExecutorIntegrationAuthorisation`.
+The current API has 241 paths, 267 operations and 644 schemas; migration head `0046`. No error code is added:
+refusals are typed details of existing codes (`contracts/domain/v1/error-codes.json` notes). The domain
+identifiers gain `executor_enrollment_id` (`exen`) and `executor_agent_install_id` (`exai`). The operations are
+sealed here and implemented by the stage-1 lanes; none behaves until its lane lands.
+
+## Combined contract `1.13.0` (historical)
 
 The serial CMP integrator reconciles C2–C4 with owner hotfixes06b94745/99b337fb.
 The current API has230paths/256operations/619schemas; migration head0043.

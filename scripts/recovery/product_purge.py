@@ -97,9 +97,14 @@ KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `ANALYSIS-PRESETS-01` (`0037_analysis_presets`): a preset is a named choice of one of those
 #: connections, kept with them. ``audit_run.preset_revision_id`` (PRODUCT) references it, never the
 #: other way round.
+#: `EXEC2-SEAL-1` (`0046_executor_capacity_enroll`): an enrollment grant (the hash of its secret and
+#: the token it produced) and an install session (a host, a user, a fingerprint and a sealed key) are
+#: the stand's configuration of its own runners, like the tokens: they reference a connection, a runner
+#: token and a secret, never a run, a document or a call, and hold no document text.
 KEEP_EXECUTOR_TABLES = frozenset((
-    "analysis_preset_revision", "executor_connection", "executor_connection_revision",
-    "executor_probe", "executor_route_event", "executor_runner_token", "executor_secret",
+    "analysis_preset_revision", "executor_agent_install", "executor_connection",
+    "executor_connection_revision", "executor_enrollment", "executor_probe", "executor_route_event",
+    "executor_runner_token", "executor_secret",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
@@ -161,6 +166,10 @@ KEEP_COMMAND_TYPES = frozenset((
     "set_executor_secret",
     # `EXEC-PULL-01`: a runner token is issued and revoked as configuration.
     "issue_runner_token", "revoke_runner_token",
+    # `EXEC2-SEAL-1`: the operationId of each keyed administrator write of the enrollment and install
+    # operations, as the snake case the other executor commands use.
+    "confirm_executor_agent_install_host_key", "create_executor_agent_install",
+    "issue_executor_enrollment", "set_executor_integration_authorisation",
     # `ANALYSIS-PRESETS-01`: a preset is administered and kept like the connections it names.
     "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
 ))
