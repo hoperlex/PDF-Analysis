@@ -59,6 +59,7 @@ version above 500 pages is accepted by every comparison table (migration 0045).
 - `scripts/recovery/schema_coverage.py`
 - `tests/unit/comparison/specification/**`
 - `tests/unit/runs/**`
+- `src/auditmanager/comparison/service.py`
 
 ## Forbidden hotspots
 - contracts, composition root, `infra/**`, root dependency/lock files, global styles
@@ -77,6 +78,7 @@ version above 500 pages is accepted by every comparison table (migration 0045).
 - S2-11: a "complete" extraction needs positions or an explicit empty table header.
 - S6-04: the comparison-PDF character count is computed once when the version completes (or cached by blob sha256) and never inside the start transaction.
 - Unit tests for each.
+- `comparison/service.py` maps the up-front `version_page_count_invalid` refusal of `version_reader` to a typed validation refusal instead of `ComparisonIntegrityError`.
 
 ## Verification
 - Optional per owner instruction. Proof check if run: `.venv/bin/pytest -q tests/unit/comparison/specification tests/unit/runs`.

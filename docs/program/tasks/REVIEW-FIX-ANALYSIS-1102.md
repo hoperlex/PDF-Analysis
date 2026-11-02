@@ -41,6 +41,7 @@ request after context decorators; zero-call assembly opens only when there is so
 - `src/auditmanager/norms/paragraph_context.py`
 - `tests/unit/analysis/**`
 - `tests/unit/norms/**`
+- `tests/unit/analysis_extended/**`
 
 ## Forbidden hotspots
 - contracts, migrations, composition root, `infra/**`, root dependency/lock files, global styles
@@ -55,6 +56,7 @@ request after context decorators; zero-call assembly opens only when there is so
 - S3-05: each context decorator re-runs the request byte check after attaching and fails the window cleanly when over the limit.
 - S1-sprints-05: `can_run_without_model` also requires at least one editable unit with a chunk.
 - Unit tests for each of the four.
+- Three tests in `tests/unit/analysis_extended` fail on the base as well (reported by REVIEW-FIX-BOUNDS-1102: `runs/extended_review.py` around line 422, `run.version_uid`). Decide from the code whether the code or the test is wrong against the BLOCK/SPRINT reports and fix that side; never loosen the assertion.
 
 ## Verification
 - Optional per owner instruction. Proof check if run: `.venv/bin/pytest -q tests/unit/analysis tests/unit/norms`.

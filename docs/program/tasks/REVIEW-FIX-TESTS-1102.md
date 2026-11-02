@@ -54,6 +54,7 @@ the R-66 menu guard and the comparison-PDF refusal tests describe the tree as it
 - `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/authorization.ts`
 - `src/auditmanager/api/app.py`
+- `web/src/entities/document-version/model/upload-envelope.ts`
 
 ## Forbidden hotspots
 - `src/**` except `web/src/shared/api/authorization.ts` and the surface-count prose in `src/auditmanager/api/app.py`, contracts, migrations, `infra/**`, root dependency/lock files, global styles
@@ -72,6 +73,9 @@ the R-66 menu guard and the comparison-PDF refusal tests describe the tree as it
 - Any pin this wave made stale (contract prose digests, recovery inventories), re-measured, never loosened.
 - `tests/contract/api_v1/test_surface_counts_in_prose.py`: the "256 operations" prose in `src/auditmanager/api/app.py` and `authorization.ts` becomes 259; decide with evidence why the binary `web/public/fonts/UbuntuSans-variable.ttf` is scanned and exclude binaries from the prose scan rather than editing the font.
 - Known limitation, record only: DB-measured inventories (`tests/integration/db/test_schema_invariant_inventory.py`, `test_schema_shape.py`, `test_migration_lifecycle.py`) still pin 0041-era counts and hashes; they need a re-measure on a database at the new head and are not changed by derivation in this task.
+- S3-04: `tests/unit/runs/test_cost_preflight.py` follows the shipped default plan v3 (two tests; one sets the v2 plan explicitly, one asserts v3 and the relaxed window count).
+- `tests/e2e/test_upload_limit_headroom.py` (5 tests, red since af581631): restore the web client `maxBytes` in `upload-envelope.ts` to the server sandbox PDF member cap (250 MiB), which holds in both intake modes.
+- A unit test that fails with `No module named 'scripts'` (test_executor_choice): find why the import path differs from the other suites and fix the test setup, not the product.
 
 ## Verification
 - Optional per owner instruction. Proof checks if run: the frontend lock guard and `.venv/bin/pytest -q tests/contract/program tests/support`.
