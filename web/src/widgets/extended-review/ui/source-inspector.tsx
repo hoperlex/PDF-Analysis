@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { portalBlockCropUrl } from '@/shared/api';
 import type { VersionUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { pdfPageUrl, useEvidenceDocument } from '@/features/open-evidence';
+import type { TargetResolution, ViewerTarget } from '@/features/open-evidence';
+import { PageViewer, pdfPageUrl, regionOf, resolutionSentence, useEvidenceDocument } from '@/features/open-evidence';
 import styles from './extended-review.module.css';
 
 type Source = Record<string, unknown>;
@@ -35,6 +36,20 @@ export function SourceInspector({ source, fallbackVersion, projectUid, onClose }
   const document = useEvidenceDocument(showPdf && version && page !== null ? version as VersionUid : null);
   const crop = portal && version && text(source.source_id) ? portalBlockCropUrl(version, text(source.source_id)) : null;
   const pageUrl = document.objectUrl !== null && page !== null ? pdfPageUrl(document.objectUrl, page) : null;
+  // What the page viewer is asked to mark: the region the source itself carries when it is a real
+  // one (a native page carries the whole page, which marks nothing), else the quotation searched
+  // in the page text. A source with neither is shown as a page and nothing is claimed about it.
+  const quote = text(source.quote);
+  const region = regionOf(source.bbox_norm);
+  const targets = useMemo<readonly ViewerTarget[]>(
+    () => quote === '' && region === null ? [] : [{ id: 'source', badge: '1', ...(quote === '' ? {} : { quote }), ...(region === null ? {} : { region }) }],
+    [quote, region],
+  );
+  const [placed, setPlaced] = useState<ReadonlyMap<string, TargetResolution>>(new Map());
+  const resolution = placed.get('source');
+  const placement = targets.length === 0
+    ? 'Источник не указывает место на странице: показана вся страница, ничего не отмечено.'
+    : resolution === undefined ? null : resolutionSentence(resolution);
   return <section className={styles.sourceInspector} aria-label="Исходная страница и цитата" data-extended-source={text(source.source_id)}>
     <div className={styles.toolbar}><h3>{page === null ? 'Страница не указана' : `Физическая страница PDF ${page}`} · {kind}</h3><button type="button" className="am-button am-button--quiet" onClick={onClose}>Закрыть источник</button></div>
     <p>{text(source.source_id) ? <>Источник: <code>{text(source.source_id)}</code>.</> : <>Исходная запись: <code>{text(source.origin_id) || 'Идентификатор не передан'}</code>.</>} {version ? <>Версия PDF: <code>{version}</code>.</> : 'Версия PDF не передана.'}</p>
@@ -51,7 +66,11 @@ export function SourceInspector({ source, fallbackVersion, projectUid, onClose }
       {!showPdf ? <button type="button" className="am-button" onClick={() => setShowPdf(true)}>Показать физическую страницу PDF {page}</button> : null}
       {document.isLoading ? <p role="status">Загружается исходный PDF…</p> : null}
       {document.error ? <p role="status">Не удалось загрузить исходный PDF. <button type="button" onClick={document.refetch}>Повторить</button></p> : null}
-      {pageUrl === null ? null : <><p><a href={pageUrl} target="_blank" rel="noopener noreferrer">Открыть PDF на странице {page} отдельно</a></p><object key={`${version}:${page}`} className={styles.pdfPage} data={pageUrl} type="application/pdf" aria-label={`Исходный PDF, физическая страница ${page}`}><p>Встроенный просмотр PDF недоступен; откройте страницу по ссылке выше.</p></object><p>Навигация по физической странице PDF, без подсветки или утверждения координат. Браузер может показать документ с первой страницы; сверяйте номер в его панели.</p></>}
+      {pageUrl === null || document.objectUrl === null ? null : <>
+        <p><a href={pageUrl} target="_blank" rel="noopener noreferrer">Открыть PDF на странице {page} отдельно</a></p>
+        <PageViewer documentUrl={document.objectUrl} pageNumber={page} targets={targets} activeTargetId={targets.length === 0 ? null : 'source'} onResolved={setPlaced} label={`Исходный PDF, физическая страница ${page}`} />
+        {placement === null ? null : <p role="status">{placement}</p>}
+      </>}
     </>}
   </section>;
 }

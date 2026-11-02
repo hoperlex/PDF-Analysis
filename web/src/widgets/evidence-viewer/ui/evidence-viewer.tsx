@@ -7,17 +7,16 @@
  * extracted quotation beside it.
  *
  * The quotation is the load-bearing half. `PROTOTYPE_PROFILE.md` §8 asks that a reviewer
- * open the page from a finding and view its exact quotation; `P3-WEB-02` lists a bounding
- * box, a highlight rectangle and text-layer selection sync as explicit non-goals. So the
- * page is context and the quotation is evidence, and the quotation is rendered as the
- * server sent it — `{item.quote}` in JSX escapes markup and changes nothing else. No trim,
+ * open the page from a finding and view its exact quotation, and the quotation is rendered as
+ * the server sent it — `{item.quote}` in JSX escapes markup and changes nothing else. No trim,
  * no collapse, no ellipsis, no smart quotes; `entities/finding-observation/model/quotation`
- * explains why at length.
+ * explains why at length. The page is context and the frames on it are a navigation aid.
  *
- * The page island is bounded to one `<object>`. `OD-09` is untaken and this session may add
- * no dependency, so it is the browser's own PDF viewer addressed by the `#page=N` fragment.
- * Its limits are stated to the reviewer rather than hidden: page-level navigation, no
- * overlay.
+ * The page is drawn by `PageViewer` (`features/open-evidence`), which opens on the quotation:
+ * the lines it sits on are framed from the server's own line geometry when the screen has it
+ * (`blockIndex`), and from a search of the page text when it has not; a quotation that neither
+ * can place is left unframed and the card says so. Each card carries the number of its frame,
+ * and choosing either moves the other.
  *
  * Navigation is restricted to the observation's declared pages. Offering the other pages of
  * the document invites a reviewer to decide against text this finding never cited.
@@ -27,20 +26,22 @@
  * the merged observations. A finding without them shows nothing more than it ever did.
  */
 
-import type { Evidence, FindingObservation } from '@/shared/api';
+import { useMemo, useRef, useState } from 'react';
+
+import type { FindingObservation, VersionBlockIndex } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState } from '@/shared/ui';
-import { pdfPageUrl } from '@/features/open-evidence';
+import type { TargetResolution, ViewerTarget } from '@/features/open-evidence';
+import { PageViewer, lineRects } from '@/features/open-evidence';
 import {
-  anchorLabel,
   anchorMatchesQuotation,
-  anchorRangeLabel,
   declaredPages,
   evidenceOnPage,
   observationProviderMode,
 } from '@/entities/finding-observation';
 
 import { FindingBasis } from './finding-basis';
+import { QuotationCard } from './quotation-card';
 
 export interface EvidenceViewerProps {
   readonly observation: FindingObservation;
@@ -52,50 +53,146 @@ export interface EvidenceViewerProps {
   readonly documentUrl: string | null;
   readonly isLoading?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
+  /**
+   * `getVersionBlocks` for this version, read by the review screen (which owns the queries), or
+   * null while it is unavailable. Without it the quotations are searched in the page text.
+   */
+  readonly blockIndex?: VersionBlockIndex | null | undefined;
+}
+
+/** What a reader has chosen, and the page it was chosen on: a new finding or page forgets it. */
+interface Scoped<T> {
+  readonly scope: string;
+  readonly value: T;
 }
 
 /**
- * The declared page at a fixed zoom with the thumbnail pane closed. Left to itself, Chrome
- * fits the whole document to its widest sheet, so in a volume with wide drawing sheets an A4
- * page came out a few dozen pixels wide; it ignores `view=Fit` and `view=FitH`. 85 % fits an
- * A4 page across the full-width pane.
+ * The page and its cards for one declared page. Its own component so the choices below can be
+ * state: the early return for a finding with no evidence would otherwise sit above the hooks.
  */
-function viewerUrl(documentUrl: string, page: number): string {
-  return `${pdfPageUrl(documentUrl, page)}&zoom=85&navpanes=0`;
-}
+function EvidencePanes({
+  observation,
+  page,
+  documentUrl,
+  isLoading,
+  error,
+  blockIndex,
+}: Pick<EvidenceViewerProps, 'observation' | 'documentUrl' | 'isLoading' | 'error' | 'blockIndex'> & {
+  readonly page: number;
+}) {
+  const quotations = useMemo(() => evidenceOnPage(observation, page), [observation, page]);
+  const scope = `${observation.finding_observation_id}:${page}`;
 
-function QuotationCard({ item }: { item: Evidence }) {
-  const consistent = anchorMatchesQuotation(item);
+  // The card the reader chose, and what the viewer last reported about this page. Both belong to
+  // one finding on one page; a different finding or page starts with neither.
+  const [chosen, setChosen] = useState<Scoped<string> | null>(null);
+  const [reported, setReported] = useState<Scoped<ReadonlyMap<string, TargetResolution>> | null>(null);
+
+  const targets = useMemo<readonly ViewerTarget[]>(
+    () =>
+      quotations.map((item, at) => ({
+        id: `q${item.evidence_ordinal}`,
+        badge: String(at + 1),
+        quote: item.quote,
+        // The server's lines are used only when its anchor agrees with the quotation beside it:
+        // an anchor that disagrees is already reported as a discrepancy, and lines picked by it
+        // would frame text nobody quoted.
+        rects: anchorMatchesQuotation(item) ? (lineRects(blockIndex, item) ?? undefined) : undefined,
+      })),
+    [quotations, blockIndex],
+  );
+
+  const resolutions = reported !== null && reported.scope === scope ? reported.value : null;
+  const firstPlaced = targets.find((target) => resolutions?.get(target.id)?.status === 'found');
+  const activeId = chosen !== null && chosen.scope === scope ? chosen.value : (firstPlaced?.id ?? null);
+
+  const cards = useRef<Map<string, HTMLLIElement>>(new Map());
+  const choose = (id: string) => {
+    setChosen({ scope, value: id });
+    cards.current.get(id)?.scrollIntoView({ block: 'nearest' });
+  };
+
   return (
-    <li className="am-quotation" data-evidence-ordinal={item.evidence_ordinal}>
-      {/*
-        `data-evidence-quote` carries the same string as the visible text so a test can
-        assert byte-identity against the API value without parsing rendered markup.
-      */}
-      <blockquote className="am-quotation__text" data-evidence-quote={item.quote}>
-        {item.quote}
-      </blockquote>
-      {/*
-        `block_id` is deliberately not rendered. The contract calls it "a secondary anchor
-        into this version's block index. Not a contract identifier" — it is an internal
-        index handle that tells the reviewer nothing the page number does not, and printing
-        an internal handle is how an object key reaches a screen when something upstream
-        puts one in the wrong field. The leakage check in
-        tests/unit/review/key-leakage.test.ts caught exactly that and this is the repair.
+    <div className="am-evidence__panes">
+      <div className="am-evidence__page">
+        {isLoading === true ? <LoadingState what="страницу документа" /> : null}
+        {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
+        {isLoading !== true && (error === undefined || error === null) ? (
+          documentUrl === null ? (
+            <ErrorState
+              title="Страницу не удалось показать"
+              detail={
+                <p>
+                  Байты документа недоступны. Эта панель никогда не рисует пустую
+                  страницу так, будто в PDF ничего нет.
+                </p>
+              }
+            />
+          ) : (
+            <PageViewer
+              documentUrl={documentUrl}
+              pageNumber={page}
+              targets={targets}
+              activeTargetId={activeId}
+              onTargetSelect={choose}
+              onResolved={(results) => {
+                setReported({ scope, value: results });
+              }}
+              label={`Страница ${page} проверяемого документа`}
+            />
+          )
+        ) : null}
+      </div>
 
-        The character range is not rendered here either, by owner ruling `R-43` (`D-50`):
-        it is a document-global offset in the coordinate system of one extractor, and no
-        second extractor resolves it. It appears only inside the alert below, where it is
-        the evidence of a discrepancy.
-      */}
-      <p className="am-quotation__anchor">{anchorLabel(item)}</p>
-      {consistent ? null : (
-        <p className="am-quotation__inconsistent" role="alert">
-          Заявленная длина фрагмента не совпадает с цитатой. Якорь показан так, как его
-          прислал сервер, и здесь он не пересчитывается: {anchorRangeLabel(item)}.
+      <div className="am-evidence__quotations">
+        <h3>Цитаты на странице {page}</h3>
+        {/*
+          * NO EMPTY BRANCH HERE, and its absence is the repair `D-85` asked for.
+          *
+          * A `quotations.length === 0` case stood here and could not run on any input:
+          * `pages` is the DISTINCT set of `page_number` over this observation's own
+          * evidence, and `page` is either an `activePage` that is in that set or
+          * `pages[0]`. So `page` always cites at least one quotation, and the branch was
+          * dead code carrying a dead CSS rule -- the empty-case paragraph, now deleted
+          * from `globals.css` -- which is how the census came to report it as a colour
+          * rule no screen reaches. Its class name is deliberately not repeated here:
+          * `styling-layer.test.ts` reads every product class token out of this file,
+          * comments included, and requires the stylesheet to declare each one. It caught
+          * this very sentence twice -- first for naming the deleted class, then for the
+          * bare prefix in the explanation -- which is the guard being right both times.
+          *
+          * The invariant is asserted rather than trusted:
+          * `tests/unit/review/viewer-and-panels.test.ts` renders this viewer with an
+          * `activePage` the observation does not cite and with pages in a scrambled
+          * order, and requires a quotation on the page that comes back. An observation
+          * with no evidence at all never reaches here -- `pages.length === 0` is refused
+          * by `EvidenceViewer`, as a reported integrity violation rather than an empty panel.
+          */}
+        <ul className="am-quotation-list">
+          {quotations.map((item, at) => (
+            <QuotationCard
+              key={`${item.evidence_ordinal}`}
+              item={item}
+              badge={String(at + 1)}
+              placement={resolutions?.get(`q${item.evidence_ordinal}`) ?? null}
+              active={activeId === `q${item.evidence_ordinal}`}
+              onSelect={() => {
+                choose(`q${item.evidence_ordinal}`);
+              }}
+              itemRef={(element) => {
+                if (element === null) cards.current.delete(`q${item.evidence_ordinal}`);
+                else cards.current.set(`q${item.evidence_ordinal}`, element);
+              }}
+            />
+          ))}
+        </ul>
+        <p className="am-evidence__limits">
+          Рамки и подсветка на странице помогают найти место: это подсказка, а не свидетельство.
+          Свидетельство — цитата: она показана точно так, как её прислал сервер, и по рамке не
+          пересчитывается.
         </p>
-      )}
-    </li>
+      </div>
+    </div>
   );
 }
 
@@ -107,6 +204,7 @@ export function EvidenceViewer({
   documentUrl,
   isLoading,
   error,
+  blockIndex,
 }: EvidenceViewerProps) {
   const pages = declaredPages(observation);
 
@@ -125,7 +223,6 @@ export function EvidenceViewer({
   }
 
   const page = pages.includes(activePage) ? activePage : (pages[0] as number);
-  const quotations = evidenceOnPage(observation, page);
 
   return (
     <div className="am-evidence" data-active-page={page}>
@@ -150,78 +247,14 @@ export function EvidenceViewer({
         </span>
       </nav>
 
-      <div className="am-evidence__panes">
-        <div className="am-evidence__page">
-          {isLoading === true ? <LoadingState what="страницу документа" /> : null}
-          {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
-          {isLoading !== true && (error === undefined || error === null) ? (
-            documentUrl === null ? (
-              <ErrorState
-                title="Страницу не удалось показать"
-                detail={
-                  <p>
-                    Байты документа недоступны. Эта панель никогда не рисует пустую
-                    страницу так, будто в PDF ничего нет.
-                  </p>
-                }
-              />
-            ) : (
-              /*
-                `key` makes a page change mount a fresh element. Chrome's viewer ignores a
-                change of the fragment alone on a live `<object>` and leaves a blank pane.
-              */
-              <object
-                key={page}
-                className="am-evidence__object"
-                data={viewerUrl(documentUrl, page)}
-                type="application/pdf"
-                aria-label={`Страница ${page} проверяемого документа`}
-                data-viewer-src={viewerUrl(documentUrl, page)}
-              >
-                <p>
-                  Этот браузер не умеет показывать PDF внутри страницы. Свидетельство —
-                  цитата рядом с панелью; сама страница нужна как контекст.
-                </p>
-              </object>
-            )
-          ) : null}
-        </div>
-
-        <div className="am-evidence__quotations">
-          <h3>Цитаты на странице {page}</h3>
-          {/*
-            * NO EMPTY BRANCH HERE, and its absence is the repair `D-85` asked for.
-            *
-            * A `quotations.length === 0` case stood here and could not run on any input:
-            * `pages` is the DISTINCT set of `page_number` over this observation's own
-            * evidence, and `page` is either an `activePage` that is in that set or
-            * `pages[0]`. So `page` always cites at least one quotation, and the branch was
-            * dead code carrying a dead CSS rule -- the empty-case paragraph, now deleted
-            * from `globals.css` -- which is how the census came to report it as a colour
-            * rule no screen reaches. Its class name is deliberately not repeated here:
-            * `styling-layer.test.ts` reads every product class token out of this file,
-            * comments included, and requires the stylesheet to declare each one. It caught
-            * this very sentence twice -- first for naming the deleted class, then for the
-            * bare prefix in the explanation -- which is the guard being right both times.
-            *
-            * The invariant is asserted rather than trusted:
-            * `tests/unit/review/viewer-and-panels.test.ts` renders this viewer with an
-            * `activePage` the observation does not cite and with pages in a scrambled
-            * order, and requires a quotation on the page that comes back. An observation
-            * with no evidence at all never reaches here -- `pages.length === 0` is refused
-            * above, as a reported integrity violation rather than an empty panel.
-            */}
-          <ul className="am-quotation-list">
-            {quotations.map((item) => (
-              <QuotationCard key={`${item.evidence_ordinal}`} item={item} />
-            ))}
-          </ul>
-          <p className="am-evidence__limits">
-            Навигация только по страницам: без подсветки фрагмента и рамки. Цитата выше —
-            точная строка, которую шлюз привязки проверил по её якорю.
-          </p>
-        </div>
-      </div>
+      <EvidencePanes
+        observation={observation}
+        page={page}
+        documentUrl={documentUrl}
+        isLoading={isLoading}
+        error={error}
+        blockIndex={blockIndex}
+      />
 
       <FindingBasis observation={observation} mergedObservations={mergedObservations} />
     </div>

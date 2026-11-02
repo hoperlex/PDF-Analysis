@@ -2106,8 +2106,12 @@ li.am-state .am-state__detail {
   color: var(--am-ink-muted);
 }
 
-/* One column: beside the quotations the page got half the detail column and could not be
-   read. The page takes the full width and its quotations follow it. */
+/*
+ * The page takes the width and its quotations follow it. On a wide screen they sit beside it
+ * instead: the page viewer is a pan-and-zoom surface, so a narrower pane costs the reader a drag
+ * and not legibility, which the single column was chosen to protect when the page was a fixed
+ * image.
+ */
 .am-evidence__panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2115,15 +2119,21 @@ li.am-state .am-state__detail {
   align-items: start;
 }
 
-.am-evidence__page {
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
-  background: var(--am-surface-sunken);
-  padding: var(--am-gap-sm);
-  box-shadow: var(--am-shadow-inset);
+@media (min-width: 1400px) {
+  .am-evidence__panes {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  }
 }
 
-/* The page itself. It was rendered at thumbnail size and could not be read. */
+/* The viewer inside draws its own frame; this only lets it shrink with the column. */
+.am-evidence__page {
+  min-width: 0;
+}
+
+/*
+ * The browser's own PDF reader, still used by the norm document view (`norm-document.tsx`),
+ * which keeps the `#page=` approach: only the review screen moved to the page viewer.
+ */
 .am-evidence__object {
   display: block;
   width: 100%;

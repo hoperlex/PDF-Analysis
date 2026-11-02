@@ -1,0 +1,306 @@
+/*
+ * The page viewer. Every colour, radius, gap, shadow and duration below is a global `--am-*` token;
+ * a module defines none of its own. The page image is white in both themes (pdf.js paints it and
+ * the theme cannot repaint it), so what sits ON the page, the highlights and frames, is judged
+ * against white in the dark theme too: that is why the frame carries a second ring in the
+ * page-surface colour, and why the fill is multiplied into the page instead of laid over it.
+ */
+
+.root {
+  min-width: 0;
+}
+
+.stage {
+  position: relative;
+}
+
+/* ---- the viewport: clips, takes the pointer, and is the one focusable surface ----------- */
+
+.viewport {
+  position: relative;
+  overflow: hidden;
+  height: clamp(420px, 78vh, 900px);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface-sunken);
+  box-shadow: var(--am-shadow-inset);
+  cursor: grab;
+  /* Pan and pinch are ours; the screen is scrolled from outside the viewport. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: contain;
+}
+
+.viewport[data-dragging='true'] {
+  cursor: grabbing;
+}
+
+.viewport:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+/* ---- the page: one canvas, moved and scaled by a transform -------------------------------- */
+
+.sheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-3);
+  will-change: transform;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A programmatic move (focus, fit, a step, a double click) glides; a drag or a wheel does not. */
+.viewport[data-animate='true'] .sheet {
+  transition: transform var(--am-motion-slow) var(--am-ease);
+}
+
+/* While the next page is read the old one stays, dimmed: never an empty box. */
+.root[data-viewer-state='rendering'] .sheet,
+.root[data-viewer-state='rendering'] .marks {
+  opacity: 0.55;
+}
+
+.root[data-viewer-state='rendering'] .marks {
+  pointer-events: none;
+}
+
+/* ---- the marks: highlights, frames, badges ------------------------------------------------ */
+
+.marks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Position and size come from the view, inline; the glide follows the sheet's own curve. */
+.highlight,
+.frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+}
+
+.viewport[data-animate='true'] .highlight,
+.viewport[data-animate='true'] .frame {
+  transition:
+    transform var(--am-motion-slow) var(--am-ease),
+    width var(--am-motion-slow) var(--am-ease),
+    height var(--am-motion-slow) var(--am-ease);
+}
+
+/*
+ * The fill: one translucent box per covered line. Multiplied into the page so dark glyphs stay
+ * dark under it, whatever the theme.
+ */
+.highlight {
+  border-radius: 2px;
+  background: var(--am-accent);
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+}
+
+.highlight[data-active='true'] {
+  opacity: 0.3;
+}
+
+/*
+ * The frame round the whole spot. Clickable, so it takes the pointer back from the marks layer;
+ * a press on it that moves becomes a drag (the viewport captures the pointer at that point).
+ */
+.frame {
+  margin: 0;
+  padding: 0;
+  border: 2px dashed var(--am-accent);
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--am-paper);
+  color: var(--am-accent);
+  cursor: inherit;
+  pointer-events: auto;
+}
+
+.frame[data-active='true'] {
+  border-style: solid;
+}
+
+/* The global focus rule rounds every button to its own radius; the frame keeps its corners. */
+.frame:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--am-accent);
+  outline-offset: 4px;
+}
+
+/* One ring that leaves the active frame when the viewer arrives on it: the single pulse. */
+.frame[data-active='true']::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--am-accent);
+  border-radius: 6px;
+  opacity: 0;
+  animation: arrive calc(var(--am-motion-slow) * 2) var(--am-ease) 1;
+  pointer-events: none;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+.badge {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  min-width: 20px;
+  margin-bottom: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-paper);
+  color: var(--am-accent);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  box-shadow: var(--am-shadow-2);
+}
+
+.frame[data-active='true'] .badge {
+  background: var(--am-accent);
+  color: var(--am-ink-inverse);
+}
+
+/* ---- the one control: a pill in the corner ------------------------------------------------ */
+
+.controls {
+  position: absolute;
+  right: var(--am-gap);
+  bottom: var(--am-gap);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-2);
+  opacity: 0.78;
+  transition: opacity var(--am-motion-base) var(--am-ease);
+}
+
+.controls:hover,
+.controls:focus-within {
+  opacity: 1;
+}
+
+/* A finger has no hover to reveal it with. */
+@media (pointer: coarse) {
+  .controls {
+    opacity: 1;
+  }
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0 var(--am-gap-sm);
+  border: 0;
+  border-radius: var(--am-radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--am-motion-fast) var(--am-ease);
+}
+
+.control:hover {
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+.control:focus-visible {
+  border-radius: var(--am-radius-pill);
+}
+
+.percent {
+  min-width: 56px;
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+}
+
+/* The target mark: a ring with a dot, drawn with two borders so it needs no icon or font. */
+.crosshair {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.crosshair::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---- the states that stand in for a page ------------------------------------------------- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--am-gap);
+  background: var(--am-surface-sunken);
+  cursor: default;
+}
+
+.overlay > * {
+  max-width: 480px;
+}
+
+/* ---- the one muted line under the viewport ----------------------------------------------- */
+
+.hint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  max-width: none;
+  margin: var(--am-gap-sm) 0 0;
+  color: var(--am-ink-soft);
+  font-size: var(--am-text-xs);
+}

@@ -9,9 +9,10 @@
  *     which quotation this is;
  *   - the **span-mismatch alert** can be made unreachable, so an anchor that disagrees
  *     with the string beside it would be shown as if it agreed;
- *   - the `<object>` can drop the `#page=` fragment, so the PDF island opens on page 1
- *     whatever page the finding cited — the existing assertion looks for the fragment
- *     anywhere in the markup and `data-viewer-src` still carries it;
+ *   - the page viewer can be handed another page than the one the finding cited, so the
+ *     reviewer is shown text it never quoted — the root of the viewer carries the page it was
+ *     asked for (`data-viewer-page`), and that is where it is asserted now that the browser's
+ *     own reader and its `#page=` fragment are gone from this screen;
  *   - the **empty-comment refusal** can be made unreachable, so a refused comment would
  *     look like a comment that was sent;
  *   - the **current verdict** can be derived from the pending intent rather than from the
@@ -224,19 +225,23 @@ describe('an anchor that disagrees with its quotation is said so, in the open', 
   });
 });
 
-describe('the PDF island is pointed at the declared page', () => {
-  it('addresses the fragment on the object element itself, not only on a data attribute', () => {
+describe('the page viewer is pointed at the declared page', () => {
+  it('names the declared page and the fetched document on the viewer itself', () => {
     const markup = viewer(anchored({ quote: 'on page eleven', page_number: 11 }), 11);
-    // `data=` is what the browser follows. `data-viewer-src` is a test affordance, so
-    // asserting the fragment appears "somewhere in the markup" is not the same claim.
-    expect(markup).toContain(`data="${OBJECT_URL}#page=11&amp;zoom=85&amp;navpanes=0"`);
+    // Asserted on the viewer's root, not "somewhere in the markup": `data-active-page` belongs to
+    // the screen and would stay right while the viewer was handed another page.
+    expect(markup).toMatch(
+      new RegExp(`<div class="[^"]*" data-viewer-state="loading" data-viewer-src="${OBJECT_URL}" data-viewer-page="11">`),
+    );
   });
 
-  it('never points the object at the bare blob URL', () => {
-    // Without the fragment the browser opens page 1 of the document, silently showing the
-    // reviewer text this finding did not cite.
+  it('leaves no browser PDF reader on the screen', () => {
+    // The `<object>` showed the reviewer the document from its first page whenever it ignored
+    // the fragment, and brought a toolbar and a thumbnail pane the product cannot hide.
     const markup = viewer(anchored({ quote: 'on page eleven', page_number: 11 }), 11);
-    expect(markup).not.toContain(`data="${OBJECT_URL}"`);
+    expect(markup).not.toContain('<object');
+    expect(markup).not.toContain('application/pdf');
+    expect(markup).not.toContain('#page=');
   });
 });
 
