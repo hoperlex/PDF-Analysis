@@ -63,6 +63,8 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `tools/executor-runner/package.py`
 - `tools/executor-runner/agent.py`
 - `tools/executor-runner/agent.example.toml`
+- `tools/executor-runner/runner_client.py`
+- `tools/executor-runner/RUNNER_API.md`
 - `tools/executor-runner/pdf-analysis-agent.service`
 - `tools/executor-runner/README.md`
 - `tests/unit/executor_runner/**`
