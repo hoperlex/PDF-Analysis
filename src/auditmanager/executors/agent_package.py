@@ -87,6 +87,9 @@ MAX_PACKAGE_BYTES: Final[int] = 32 * 1024 * 1024
 #: The two variables ``install.sh`` reads. The first is the enrollment secret and exists nowhere else.
 ENROLLMENT_SECRET_ENV: Final[str] = "AUDITMANAGER_ENROLLMENT_SECRET"
 STAND_ORIGIN_ENV: Final[str] = "AUDITMANAGER_STAND_ORIGIN"
+#: The model the agent declares (`EXEC2-INT-1`): the ``gateway_model`` of the connection's current revision,
+#: which the stand holds every pull answer equal to. ``install.sh`` never picks a model of its own.
+AGENT_MODEL_ENV: Final[str] = "AUDITMANAGER_AGENT_MODEL"
 #: The served path of the package route, relative to the origin (the proxy mounts the API at ``/api/v1``).
 DOWNLOAD_PATH: Final[str] = "/api/v1/runner/agent-package/{version}"
 
@@ -281,13 +284,15 @@ def resolve_origin(configured: str | None, requested: str | None) -> str:
 # -- the command ------------------------------------------------------------------------------
 
 
-def install_command(*, origin: str, package: AgentPackage, secret: str) -> str:
+def install_command(*, origin: str, package: AgentPackage, secret: str, model: str) -> str:
     """The copyable command of path B: download the package, verify its sha256, unpack it, run ``install.sh``.
 
     The secret is the value of :data:`ENROLLMENT_SECRET_ENV`, assigned in front of ``sudo`` -- an assignment
     of the shell, which puts it in the child's environment and in no argument vector -- and carried through
     ``sudo`` by ``--preserve-env`` (which names variables and takes no value). The command runs in a fresh
-    temporary directory. ``--proto =https`` is added when the origin is ``https``: a downgrade is a refusal."""
+    temporary directory. ``--proto =https`` is added when the origin is ``https``: a downgrade is a refusal.
+    ``model`` is the connection's pinned ``gateway_model`` (:data:`AGENT_MODEL_ENV`): the installer configures
+    the agent to declare exactly it and derives the CLI from it, never a default of its own."""
     url = origin + DOWNLOAD_PATH.format(version=package.version)
     flags = "-fsSL --proto '=https' --tlsv1.2" if origin.startswith("https://") else "-fsSL"
     archive = "agent.tar.gz"
@@ -297,5 +302,6 @@ def install_command(*, origin: str, package: AgentPackage, secret: str) -> str:
         f"echo {shlex.quote(f'{package.sha256}  {archive}')} | sha256sum -c -",
         f"tar -xzf {archive}",
         f"{ENROLLMENT_SECRET_ENV}={shlex.quote(secret)} {STAND_ORIGIN_ENV}={shlex.quote(origin)} "
-        f"sudo --preserve-env={ENROLLMENT_SECRET_ENV},{STAND_ORIGIN_ENV} bash install.sh",
+        f"{AGENT_MODEL_ENV}={shlex.quote(model)} "
+        f"sudo --preserve-env={ENROLLMENT_SECRET_ENV},{STAND_ORIGIN_ENV},{AGENT_MODEL_ENV} bash install.sh",
     ))

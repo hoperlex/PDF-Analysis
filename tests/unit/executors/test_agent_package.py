@@ -198,7 +198,7 @@ def test_the_configured_origin_wins_and_a_bad_one_is_not_replaced_by_the_request
 def _command(origin: str = "https://stand.example") -> tuple[str, package.AgentPackage]:
     digest = hashlib.sha256(b"archive").hexdigest()
     found = package.AgentPackage(version="0.9.0", sha256=digest, size_bytes=7, path=Path("/nowhere"))
-    return package.install_command(origin=origin, package=found, secret=SECRET), found
+    return package.install_command(origin=origin, package=found, secret=SECRET, model="claude-opus-5"), found
 
 
 def test_the_command_downloads_verifies_unpacks_and_installs_in_that_order() -> None:
@@ -224,7 +224,10 @@ def test_the_secret_is_in_one_environment_assignment_and_in_no_argument_vector()
     first_argument = next(index for index, word in enumerate(words) if word not in assignments)
     argv = words[first_argument:]
     assert argv[0] == "sudo" and all(SECRET not in word for word in argv)
-    assert f"--preserve-env={package.ENROLLMENT_SECRET_ENV},{package.STAND_ORIGIN_ENV}" in argv
+    assert (f"--preserve-env={package.ENROLLMENT_SECRET_ENV},{package.STAND_ORIGIN_ENV},"
+            f"{package.AGENT_MODEL_ENV}") in argv
+    # The model the agent declares is the connection's pinned one, never the installer's choice.
+    assert f"{package.AGENT_MODEL_ENV}=claude-opus-5" in assignments
     assert not any(word in ("env", "-E") for word in argv), "no `env VAR=value` and no value in argv"
     assert SECRET not in command.split(" && ")[1] and SECRET not in command.split(" && ")[2]
 

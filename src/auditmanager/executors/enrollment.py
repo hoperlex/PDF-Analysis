@@ -326,7 +326,8 @@ def issue_executor_enrollment(
             ErrorCode.VALIDATION_FAILED, message="only a pull connection takes an agent",
             field="kind", constraint=CONSTRAINT_KIND_NOT_PULL,
         )
-    if store.current_revisions(session, [connection_id]).get(connection_id) is None:
+    current = store.current_revisions(session, [connection_id]).get(connection_id)
+    if current is None:
         raise _conflict("no_revision", "the connection has no revision yet")
     package = package_source()
     origin = resolve_origin(configured_origin, requested_origin)
@@ -361,7 +362,8 @@ def issue_executor_enrollment(
     ledger.succeed(session, claimed.command_id, {"enrollment_id": record.enrollment_id})
     return IssuedEnrollment(
         record=record, secret=value, package=package,
-        command=install_command(origin=origin, package=package, secret=value),
+        command=install_command(origin=origin, package=package, secret=value,
+                                model=current.settings.gateway_model),
     )
 
 
