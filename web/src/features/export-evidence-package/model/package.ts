@@ -58,9 +58,29 @@ function progress(options: EvidencePackageOptions, value: EvidencePackageProgres
   cancelled(options.signal);
   options.onProgress?.(value);
 }
+/**
+ * A path separator (`/` or `\`) or an ASCII control character (U+0000-U+001F, U+007F) anywhere in
+ * `value`. Read by code unit rather than by a character class, because a class holding the
+ * control range is what `no-control-regex` refuses; every character in it is below U+0080, so a
+ * code-unit scan and the former `/[\\/\u0000-\u001f\u007f]/u` agree on every string.
+ */
+function hasSeparatorOrControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x5c || code === 0x2f || code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+function hasControl(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
 function safeName(value: string, label: string): string {
   if (typeof value !== 'string' || !value.trim() || value === '.' || value === '..'
-    || /[\\/\u0000-\u001f\u007f]/u.test(value) || encoder.encode(value).length > 200) {
+    || hasSeparatorOrControl(value) || encoder.encode(value).length > 200) {
     throw new EvidencePackageError('invalid_request', `${label}: требуется короткое имя файла без пути.`);
   }
   return value;
@@ -207,7 +227,7 @@ export async function buildEvidencePackage(options: EvidencePackageOptions): Pro
     for (const report of options.reports) {
       const name = safeName(report.name, 'Имя отчёта');
       if (report.mediaType !== undefined && (typeof report.mediaType !== 'string'
-        || report.mediaType.length > 160 || /[\u0000-\u001f\u007f]/u.test(report.mediaType))) {
+        || report.mediaType.length > 160 || hasControl(report.mediaType))) {
         throw new EvidencePackageError('invalid_request', 'Некорректный тип файла отчёта.');
       }
       const normalizedName = name.normalize('NFC').toLowerCase();

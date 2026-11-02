@@ -29,10 +29,11 @@ import type { ReactElement } from 'react';
 
 import { DashboardEagerSeam } from '@/_pages/dashboard';
 import { KnowledgeBaseEagerSeam } from '@/_pages/knowledge-base';
+import { HomeSectionsEagerSeam } from '@/_pages/home';
 import { EvidenceViewerEagerSeam } from '@/_pages/review';
 import { RunProgressEagerSeam } from '@/_pages/run';
 import { StageComparisonEagerSeam } from '@/_pages/stage-comparison';
-import { Dashboard } from '@/widgets/dashboard';
+import { Dashboard, HomeSectionsOverview } from '@/widgets/dashboard';
 import { EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RunProgress } from '@/widgets/run-progress';
@@ -43,8 +44,8 @@ import { render } from '../review/fixtures';
 /**
  * THE EAGER SEAM, `W50-LAZY-01` — `W50-PLAN.md` §3.4's second requirement.
  *
- * Five heavy widgets reach their pages through `next/dynamic` wrappers
- * (`_pages/<slice>/ui/lazy-*.tsx`). A dynamic import never resolves inside one synchronous
+ * Five heavy widgets, and the front door's section overview from the `dashboard` slice,
+ * reach their pages through `next/dynamic` wrappers (`_pages/<slice>/ui/lazy-*.tsx`). A dynamic import never resolves inside one synchronous
  * `renderToStaticMarkup` pass, so without this every instrument that renders a page here —
  * the contrast census (`tests/unit/styles/screens.ts`), the language guards
  * (`rendered-language`, `gender-agreement`), `screen-set`, and the screen tests — would
@@ -76,7 +77,11 @@ function withEagerWidgets(element: ReactElement): ReactElement {
         createElement(
           RunProgressEagerSeam.Provider,
           { value: RunProgress },
-          createElement(StageComparisonEagerSeam.Provider, { value: StageComparison }, element),
+          createElement(
+            StageComparisonEagerSeam.Provider,
+            { value: StageComparison },
+            createElement(HomeSectionsEagerSeam.Provider, { value: HomeSectionsOverview }, element),
+          ),
         ),
       ),
     ),

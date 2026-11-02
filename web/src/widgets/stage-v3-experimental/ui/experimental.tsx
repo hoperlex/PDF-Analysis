@@ -2,6 +2,7 @@ import type { StageCardEvidence, StageChainRun, StageChangeCard } from '@/shared
 import { parameterRows } from '../model/report';
 import { StageV3ParameterSources } from './report';
 import { StageCardOriginalEvents } from './global-consolidation';
+import styles from './stage-v3-report.module.css';
 
 export type StageEngine = NonNullable<StageChainRun['engine']>;
 const EXPERIMENT = 'v3_native_text_experimental';
@@ -101,7 +102,7 @@ export function StageExperimentalParameters({ experimental, card, onOpenEvidence
     <p>Только текст PDF. Инженер не подтверждал результат. Соответствие нормам не проверялось.</p>
     {body.engineering_subject === undefined ? null : <p>Объект: {text(body.engineering_subject)}</p>}
     {body.change_summary === undefined ? null : <p>{text(body.change_summary)}</p>}
-    {parameters.length === 0 ? <p>Структурированные параметры не переданы.</p> : <div style={{ overflowX: 'auto' }}><table>
+    {parameters.length === 0 ? <p>Структурированные параметры не переданы.</p> : <div className={styles.tableScroll}><table>
       <thead><tr><th>Параметр</th><th>Было</th><th>Стало</th><th>Единица</th><th>Место</th><th>Машинная сверка</th></tr></thead>
       <tbody>{parameters.map((parameter, index) => {
         const verification = object(parameter.verification);

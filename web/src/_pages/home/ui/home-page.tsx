@@ -45,7 +45,6 @@ import { screenRolesAdmit } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
 import { UnknownRoleError, roleLabels } from '@/entities/account';
 import { MyTasks } from '@/widgets/my-tasks';
-import { HomeSectionsOverview } from '@/widgets/dashboard';
 import {
   PendingRegistrationsTile,
   RecentProjectsTile,
@@ -54,6 +53,7 @@ import {
 } from '@/widgets/home-tiles';
 
 import styles from './home-page.module.css';
+import { LazyHomeSections } from './lazy-home-sections';
 
 export interface HomePageProps {
   /** The account's name as the server resolves it (`Фамилия И. О.`), never empty. */
@@ -124,7 +124,7 @@ export function HomePage({ displayLabel, roles }: HomePageProps) {
             {tasks || summary ? (
               <div className={styles.overviewGrid}>
                 {tasks ? <div className={styles.tasks}><MyTasks roles={roles} listHref={DISPATCHER_SCREEN} /></div> : null}
-                {summary ? <div className={styles.sections}><HomeSectionsOverview /></div> : null}
+                {summary ? <div className={styles.sections}><LazyHomeSections /></div> : null}
               </div>
             ) : null}
             {projects || summary || registrations ? (
