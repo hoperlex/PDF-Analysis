@@ -19,6 +19,32 @@ from auditmanager.shared.identity import AuditEventId, IdempotencyKey
 
 from .service import BATCH_WORK_KIND, StageChainService, StagePipeline, conflict
 
+#: Detail fields of a refusal that are codes, never free text or identifiers of foreign data.
+_REFUSAL_DETAIL_FIELDS = ("conflict_reason", "constraint", "field", "dependency", "aggregate_type",
+                          "required_capability")
+
+
+def refusal_detail(error: DomainError) -> dict[str, str]:
+    """What the audit trail keeps of a refusal: the catalog code and the codes it carried."""
+    detail = {"error_code": error.code.value}
+    for name in _REFUSAL_DETAIL_FIELDS:
+        value = error.detail_fields.get(name)
+        if isinstance(value, str) and 0 < len(value) <= 128:
+            detail[name] = value
+    return detail
+
+
+def _record_item_failure(session: Session, *, batch_id: str, item_id: str, pair_id: str,
+                         revision_id: str, actor: str, error: DomainError) -> None:
+    """Why a batch item could not start. The item row has only a state, so the reason is an
+    audit event written in the transaction that marks the item ``failed``."""
+    session.execute(text(
+        "INSERT INTO audit_event (audit_event_id,event_type,aggregate_type,aggregate_id,payload) "
+        "VALUES (:event,'stage.batch_item_failed','StageChainBatch',:batch,CAST(:payload AS jsonb))"
+    ), {"event": str(AuditEventId.new()), "batch": batch_id,
+        "payload": json.dumps({"actor_uid": actor, "item_id": item_id, "pair_id": pair_id,
+                               "link_revision_id": revision_id, **refusal_detail(error)}, sort_keys=True)})
+
 
 class StageBatchService:
     def __init__(self, chains: StageChainService) -> None:
@@ -265,11 +291,13 @@ class StageBatchHandler:
                                                 with_ai=bool(batch[3]), consent=dict(row[5]) or None,
                                                 batch_id=batch_id, engine=engine_for_batch(session, batch_id),
                                                 stage_v3_policy=policy_for_batch(session, batch_id))
-                    except DomainError:
+                    except DomainError as error:
                         session.execute(text(
                             "UPDATE stage_chain_batch_item SET state = 'failed', updated_at = clock_timestamp() "
                             "WHERE stage_chain_batch_item_id = :item"
                         ), {"item": row[0]})
+                        _record_item_failure(session, batch_id=batch_id, item_id=str(row[0]), pair_id=str(row[1]),
+                                             revision_id=str(row[2]), actor=str(batch[2]), error=error)
                         return Yielded()
                     session.execute(text(
                         "UPDATE stage_chain_batch_item SET state = 'running', stage_chain_run_id = :run, "

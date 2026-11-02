@@ -45,6 +45,7 @@ item that cannot start records why.
 - `tests/unit/comparison/stage_repair/**`
 - `tests/unit/comparison/stage_review/**`
 - `tests/integration/comparison/stage_run/**`
+- `tests/unit/comparison/stage_run/**`
 
 ## Forbidden hotspots
 - contracts, migrations, `scripts/recovery/**`, composition root, `infra/**`, root dependency/lock files, global styles
