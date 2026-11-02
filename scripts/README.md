@@ -1,5 +1,11 @@
 # Scripts
 
+For source-backed documentation discovery, use `python3 scripts/docs_context.py search
+'<phrase>' --path docs/program/` and then `python3 scripts/docs_context.py show
+docs/path.md:<start>-<end>`. See [the context guide](../docs/context/README.md).
+`index --output .local/docs-context-index.jsonl` exports a rebuildable local JSONL index;
+the repository does not maintain a second copy of documentation prose.
+
 Repository-local operational/developer scripts only. Each script must have a stable purpose, safe defaults and a documented caller. Business rules must not live only in a one-off script.
 
 ## Lane preparation and technical handoff

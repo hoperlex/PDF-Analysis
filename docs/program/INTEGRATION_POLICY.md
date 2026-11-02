@@ -1,45 +1,40 @@
 # Integration policy
 
-## Branches
+## Working refs and worktrees
 
-- `main` — last accepted integration/checkpoint-capable line;
-- `integration/<wave>` — single convergence branch;
-- `agent/<task_id>` — isolated implementation branch/worktree.
+- `dev` is the shared development line; `main` is the auto-deploy release line.
+- A single owner can make a small, isolated change on the appropriate development
+  checkout. Create a short-lived branch/worktree when work is concurrent, the base must
+  remain fixed, or isolation protects uncommitted work. Reuse it through the task; do
+  not create a branch for each stage, review or small correction.
+- Use one integration branch only when several concurrent changes need convergence.
+  Prefer a small vertical change over a mandatory contract → provider → consumer → QA
+  branch chain when one owner can safely edit it.
+- After integration, remove clean, idle worktrees with `scripts/worktree_cleanup.py`.
+  Delete a local branch only after confirming its work landed by content (`git cherry`
+  when history was rewritten) and that no task, review or handoff still uses its name
+  as a reference. Prefer immutable commit SHAs in new records. Never infer safe
+  deletion from age or branch name alone.
 
-## Merge order
+## Ownership
 
-1. contract commit/freeze;
-2. low-level providers/adapters and independent test scaffolding;
-3. application use cases;
-4. API provider;
-5. generated client;
-6. frontend consumer;
-7. observability/ops wiring;
-8. integration-only composition/migration reconciliation;
-9. E2E/manual evidence.
+One writer at a time for a shared contract, migration head, root lockfile,
+composition root or global style surface. A change in those paths needs an identified
+owner and affected-consumer checks, but it does not automatically need multiple task
+files or a full gate on the development server. Generated OpenAPI client changes are
+made from the owned contract, not hand-edited.
 
-Actual order may vary if dependencies are explicit, but consumer never precedes missing contract freeze in `main/integration`.
+## Acceptance and publication
 
-## Conflict ownership
+Use `AGENTS.md` §8's risk-based checks on the changed behavior. A merge into `dev`
+may carry an explicitly labelled unverified candidate; its known gaps travel with it.
+Do not describe it as accepted or deployable until the relevant checks pass. Do not
+repeat the full suite after each merge when the next merge changes the candidate.
 
-Agent resolves conflicts only within its allowed paths. Conflict in hotspot is handed to integrator. Repeated conflict indicates task decomposition failure and should change next wave design.
+The delegated release integrator decides and records the exact release candidate and
+checks under `MAIN_AUTODEPLOY_POLICY.md`, then fast-forwards `main` and verifies the
+workflow and host. The owner need not perform a GitHub merge for every release.
 
-## Migration ownership
-
-One migration owner per wave. Parallel lanes submit requested schema changes as contract artifacts/tests; migration owner serializes them from one head.
-
-## Generated code
-
-Generated OpenAPI client is regenerated once per frozen API contract by owner/integrator. Agents must not hand-edit generated files.
-
-## Integration rejection
-
-Integration task rejects a branch if:
-
-- tests were not run or cannot be reproduced;
-- it changed a frozen contract without authorization;
-- it introduces a new direct data writer;
-- it depends on local uncommitted state;
-- it exposes S3 keys/secrets;
-- retry/idempotency behavior is undefined;
-- TODO silently bypasses a required failure/security gate.
+Reject or pause integration for an unowned contract change, secret exposure, silent
+failure path, unresolved data-integrity/retry behavior, or a failed relevant check.
+Record a resource-blocked check as unverified rather than treating it as green.
