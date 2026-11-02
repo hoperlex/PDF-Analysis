@@ -13,6 +13,10 @@
  * `EXEC-PAR-WEB-01`: a run that froze an executor names it, with its pinned model; a run in the
  * queue says it is waiting for that executor. A run with none (the environment source) draws
  * no line at all.
+ *
+ * `EXEC2-WEB-CAP-01`: a queued run whose reading says why names it — «В очереди: исполнитель занят»
+ * or «В очереди: раннер не в сети» — in the executor line, with the machine value in
+ * `data-run-queue-reason`.
  */
 
 import Link from 'next/link';
@@ -48,7 +52,9 @@ export function RunRow({ run, href }: RunRowProps) {
             ? ''
             : ` · завершён ${formatInstant(run.terminal_at)}`}
         </p>
-        {executor === null ? null : <p data-run-executor>{runExecutorSentence(executor)}</p>}
+        {executor === null ? null : (
+          <p data-run-executor data-run-queue-reason={executor.queueReason}>{runExecutorSentence(executor)}</p>
+        )}
         {preset === null ? null : <p data-run-preset>{runPresetSentence(preset)}</p>}
         <p>
           Находок{' '}
