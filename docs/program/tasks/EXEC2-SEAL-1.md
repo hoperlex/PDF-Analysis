@@ -150,6 +150,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `tests/integration/api/test_role_register.py`
 - `tests/integration/recovery/test_grant_classification.py`
 - `tests/integration/recovery/test_synthetic_drill_compare.py`
+- `tests/integration/recovery/test_synthetic_drill_seed.py`
 - `tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py`
 - `infra/deploy/README.md`
 - `infra/deploy/serve.py`
