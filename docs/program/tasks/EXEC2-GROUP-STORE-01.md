@@ -60,6 +60,15 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/api/routers/executor_groups.py`
 - `src/auditmanager/api/app.py`
 - `src/auditmanager/api/security.py`
+- `src/auditmanager/api/routers/__init__.py`
+- `src/auditmanager/api/routers/ports.py`
+- `src/auditmanager/bootstrap/adapters.py`
+- `src/auditmanager/bootstrap/composition.py`
+- `src/auditmanager/api/routers/runs.py`
+- `scripts/recovery/grant_classification.py`
+- `tests/integration/api/test_role_register.py`
+- `tests/integration/api/test_authorization.py`
+- `tests/unit/runs/test_group_start_refused.py`
 - `tests/unit/executors/test_groups.py`
 - `tests/unit/executors/test_group_selection.py`
 - `tests/integration/executors/test_groups.py`
@@ -75,6 +84,10 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - no dispatch, no admission, no cut-over
 
 ## Deliverables
+- Eight operations served: listExecutorGroups, createExecutorGroup, getExecutorGroup, reviseExecutorGroup, archiveExecutorGroup, getExecutorGroupCapacity, listExecutorRoutingRules (with the current mode, read from the mode events; empty = legacy), setExecutorRoutingRule. previewExecutorRouting and setExecutorRoutingMode stay with EXEC2-CUTOVER-01 (stage 3).
+- Reads (list/get/capacity of groups, list of rules) are any-role, like listExecutorConnections; writes are administrator (security.py, test_role_register.py, test_authorization.py).
+- Until EXEC2-GROUP-RUN-01: startRun and estimateRunCost with executor_group_id are refused explicitly (dependency_unavailable, dependency executor_group_dispatch), never silently started on the default route.
+- Remove the five group/rule/mode tables from SEALED_NOT_YET_WRITTEN as this task writes them.
 - Commands with idempotency keys and journal events, validation per decision 10, and archive semantics.
 - `group_selection.choose(members, used, capacity, rotation)`: pure; minimum `used/capacity`; no division by zero; persisted rotation tie-break.
 - `capacity` read for a group, built on `EXEC2-CAP-01`'s readers.
