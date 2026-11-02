@@ -53,9 +53,10 @@ the R-66 menu guard and the comparison-PDF refusal tests describe the tree as it
 - `web/tests/**`
 - `web/FRONTEND_LOCK.json`
 - `web/src/shared/api/authorization.ts`
+- `src/auditmanager/api/app.py`
 
 ## Forbidden hotspots
-- `src/**` except `web/src/shared/api/authorization.ts`, contracts, migrations, `infra/**`, root dependency/lock files, global styles
+- `src/**` except `web/src/shared/api/authorization.ts` and the surface-count prose in `src/auditmanager/api/app.py`, contracts, migrations, `infra/**`, root dependency/lock files, global styles
 
 ## Non-goals
 - Weakening any assertion; re-capturing a characterization corpus without first asserting the new behaviour.
@@ -69,6 +70,8 @@ the R-66 menu guard and the comparison-PDF refusal tests describe the tree as it
 - S9-07: one test that a group start on a comparison-only source still writes nothing where refusal remains.
 - S9-09: the loosened `calls >= 5` returns to the exact count the code produces.
 - Any pin this wave made stale (contract prose digests, recovery inventories), re-measured, never loosened.
+- `tests/contract/api_v1/test_surface_counts_in_prose.py`: the "256 operations" prose in `src/auditmanager/api/app.py` and `authorization.ts` becomes 259; decide with evidence why the binary `web/public/fonts/UbuntuSans-variable.ttf` is scanned and exclude binaries from the prose scan rather than editing the font.
+- Known limitation, record only: DB-measured inventories (`tests/integration/db/test_schema_invariant_inventory.py`, `test_schema_shape.py`, `test_migration_lifecycle.py`) still pin 0041-era counts and hashes; they need a re-measure on a database at the new head and are not changed by derivation in this task.
 
 ## Verification
 - Optional per owner instruction. Proof checks if run: the frontend lock guard and `.venv/bin/pytest -q tests/contract/program tests/support`.

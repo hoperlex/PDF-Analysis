@@ -76,6 +76,7 @@ product purge and restore auditing accept a database at migration head `0044_sec
 - `tests/integration/recovery/**`
 - `tests/contract/test_compose_flag_forwarding.py`
 - `tests/contract/test_recovery_schema_head.py`
+- `infra/deploy/apply-grants.sh`
 
 ## Forbidden hotspots
 - contracts, migrations, composition root, root dependency/lock files, global styles

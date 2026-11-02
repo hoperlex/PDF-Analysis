@@ -7,7 +7,6 @@ from copy import deepcopy
 import pytest
 
 from auditmanager.comparison.version_reader import (
-    MAX_VERSION_PAGES,
     VersionPairRefused,
     read_ordered_version_pair,
 )
@@ -20,6 +19,8 @@ OTHER_DOCUMENT = "doc_01M2545JSD15ETSNNV904X991K"
 SOURCE = "ver_01M2545JSD15ETSNNV904X991J"
 TARGET = "ver_01M2545JSD15ETSNNV904X991K"
 OTHER_VERSION = "ver_01M2545JSD15ETSNNV904X991M"
+# The legacy 500-page version; the module bound itself is not a safe loop or fixture size.
+LEGACY_PAGES = 500
 
 
 def _rows():
@@ -92,8 +93,8 @@ def test_exact_membership_and_order_from_one_select() -> None:
 
 def test_w55b_maximum_500_page_versions_are_read_but_501_refuses() -> None:
     rows = deepcopy(_rows())
-    rows[0]["page_count"] = MAX_VERSION_PAGES
-    rows[1]["page_count"] = MAX_VERSION_PAGES
+    rows[0]["page_count"] = LEGACY_PAGES
+    rows[1]["page_count"] = LEGACY_PAGES
     pair = _read(_Session(rows))
     assert pair.source.page_count == pair.target.page_count == 500
     rows[1]["page_count"] = 501

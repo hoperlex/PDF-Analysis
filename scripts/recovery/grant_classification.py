@@ -96,7 +96,6 @@ ALL_TABLE_PRIVILEGES = ("SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REF
 #: :func:`observed_statements` names the statement for each; ``tests/integration/recovery/
 #: test_grant_classification.py`` holds the two together.
 READ_WRITE = frozenset((
-    'stage_ai_unit', 'stage_chain_batch', 'stage_chain_batch_item',
     "account_release_mark",            # INSERT ... ON CONFLICT (user_uid) DO UPDATE (releases/repository.py)
     "analysis_artifact_publication",  # INSERT, UPDATE, upsert (jobs/repository.py)
     "app_user",                       # INSERT, UPDATE, DELETE of an archived account (access/accounts.py)
@@ -130,6 +129,9 @@ READ_WRITE = frozenset((
     # `0041_comparison_stage_core`: bounded intake receipts and chain progress change state.
     "stage_upload", "stage_upload_file", "stage_upload_part", "stage_upload_candidate",
     "stage_pair", "stage_chain_run", "stage_chain_step",
+    # `0042_comparison_stage_review` (`0043_stage_ai_generations`): an AI unit advances through its states
+    # and a batch and its items are paused, resumed and finished; the guard triggers pin their frozen columns.
+    "stage_ai_unit", "stage_chain_batch", "stage_chain_batch_item",
     "document",
     "execution_control",               # singleton upsert (jobs/repository.py)
     "executor_connection",
@@ -153,7 +155,6 @@ READ_WRITE = frozenset((
 #: refuses ``UPDATE`` (and, but for the four ``norm_*`` ``no_update`` tables, ``DELETE``) or is
 #: inserted into by the code and by nothing else.
 APPEND_ONLY = frozenset((
-    'stage_ai_review', 'stage_ai_classification', 'stage_ai_synthesis', 'stage_graphic_evidence', 'stage_link_repair', 'stage_link_repair_event', 'stage_change_card', 'stage_card_evidence', 'stage_card_verdict',
     "analysis_preset_revision", "ar_v3_run_group", "ar_v3_run_group_member", "audit_event",
     "comparison_sheet_link", "comparison_summary", "comparison_version_order",
     # `0039_comparison_core`: the builds of the matrix, the manual edit history and the accepted AI links.
@@ -164,6 +165,12 @@ APPEND_ONLY = frozenset((
     # `0041_comparison_stage_core`: expert acts and deterministic evidence are immutable.
     "stage_assembly", "stage_assembly_member", "stage_link_revision", "stage_link_item",
     "stage_text_fragment", "stage_text_exclusion", "stage_text_difference", "stage_text_hint",
+    # `0042_comparison_stage_review`: AI results, graphic evidence, link repairs, change cards and expert verdicts
+    # carry `am_immutable_row` in `schema_coverage.TRIGGERS`, which `classification_problems` requires of every
+    # append-only table that is not in APPEND_ONLY_BY_CODE_EVIDENCE.
+    "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis", "stage_graphic_evidence",
+    "stage_link_repair", "stage_link_repair_event", "stage_change_card", "stage_card_evidence",
+    "stage_card_verdict",
     "document_version",
     "document_version_classification", "document_version_classification_correction",
     "executor_connection_revision", "executor_route_event", "expert_decision_event",

@@ -100,6 +100,11 @@ _STAGE_ASSEMBLIES = "SELECT stage_assembly_id FROM stage_assembly WHERE project_
 _STAGE_PAIRS = "SELECT stage_pair_id FROM stage_pair WHERE project_uid = :p"
 _STAGE_REVISIONS = f"SELECT stage_link_revision_id FROM stage_link_revision WHERE stage_pair_id IN ({_STAGE_PAIRS})"
 _STAGE_RUNS = f"SELECT stage_chain_run_id FROM stage_chain_run WHERE stage_pair_id IN ({_STAGE_PAIRS})"
+# `0042_comparison_stage_review`: a batch belongs to the project; the AI units and their results, the graphic evidence,
+# the repairs and the cards belong to a run; a repair event belongs to a repair and a verdict to a card.
+_STAGE_BATCHES = "SELECT stage_chain_batch_id FROM stage_chain_batch WHERE project_uid = :p"
+_STAGE_REPAIRS = f"SELECT stage_link_repair_id FROM stage_link_repair WHERE stage_chain_run_id IN ({_STAGE_RUNS})"
+_STAGE_CARDS = f"SELECT stage_change_card_id FROM stage_change_card WHERE stage_chain_run_id IN ({_STAGE_RUNS})"
 SLICES: dict[str, str] = {
     "project": "project_uid = :p",
     "document": "project_uid = :p",
@@ -180,6 +185,19 @@ SLICES: dict[str, str] = {
     "stage_text_hint": f"stage_pair_id IN ({_STAGE_PAIRS})",
     "stage_chain_run": f"stage_pair_id IN ({_STAGE_PAIRS})",
     "stage_chain_step": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    # `0042_comparison_stage_review`: the stage AI review, graphic evidence, repairs, expert cards and the durable batch.
+    "stage_chain_batch": "project_uid = :p",
+    "stage_chain_batch_item": f"stage_chain_batch_id IN ({_STAGE_BATCHES})",
+    "stage_ai_unit": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_ai_review": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_ai_classification": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_ai_synthesis": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_graphic_evidence": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_link_repair": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_link_repair_event": f"stage_link_repair_id IN ({_STAGE_REPAIRS})",
+    "stage_change_card": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_card_evidence": f"stage_chain_run_id IN ({_STAGE_RUNS})",
+    "stage_card_verdict": f"stage_change_card_id IN ({_STAGE_CARDS})",
 }
 _BLOB_SOURCES = (
     f"SELECT blob_id FROM input_manifest_entry WHERE version_uid IN ({_VERSIONS}) "
@@ -425,7 +443,9 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # project directly. `0040_comparison_ai_reports`: the twelve tables of the version comparison AI, specifications, reports
     # and launch queue join it (49 -> 61); the jobs, answers, questions, descriptions, sheet items, extractions, comparisons,
     # reports and the launch queue reference the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 76
+    # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches join
+    # it (76 -> 88); only the batch references the project directly.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 88
     assert set(closure.direct) == {
         "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
@@ -433,7 +453,7 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
         "comparison_sheet_pair_result", "comparison_spec_comparison", "comparison_spec_extraction",
         "comparison_summary", "comparison_upload",
         "comparison_version_order", "comparison_work", "document", "finding", "optimisation_pass",
-        "stage_upload", "stage_assembly", "stage_pair",
+        "stage_upload", "stage_assembly", "stage_pair", "stage_chain_batch",
         "price_list_revision", "vendor_list_revision", "work_assignment",
     }
     # `0038_comparison_foundation`: an upload batch and an order revision carry the receipt of the write
@@ -445,16 +465,19 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
         "optimisation_proposal_decision",
         "stage_upload", "stage_assembly", "stage_assembly_member", "stage_pair",
         "stage_link_revision", "stage_chain_run",
+        # `0042_comparison_stage_review`: a batch, a repair event and a card verdict carry the receipt of their write.
+        "stage_chain_batch", "stage_link_repair_event", "stage_card_verdict",
     }
 
 
-def test_the_four_cycles_of_the_closure_are_deleted_in_one_statement_each(migrated_engine: Engine) -> None:
+def test_the_five_cycles_of_the_closure_are_deleted_in_one_statement_each(migrated_engine: Engine) -> None:
     with migrated_engine.connect() as connection:
         _, closure = tool.check_schema(connection)
     order = tool.deletion_order(closure.tables, [(k.child, k.parent) for k in closure.edges])
+    # `0042_comparison_stage_review`: a chain run names its AI job and a stage-review job names its run.
     assert sorted(group for group in order if len(group) > 1) == [
-        ("attempt", "job"), ("comparison_work", "comparison_work_attempt"), ("document", "document_version"),
-        ("finding", "finding_observation"),
+        ("attempt", "job"), ("comparison_ai_job", "stage_chain_run"), ("comparison_work", "comparison_work_attempt"),
+        ("document", "document_version"), ("finding", "finding_observation"),
     ]
     position = {table: index for index, group in enumerate(order) for table in group}
     for key in closure.edges:

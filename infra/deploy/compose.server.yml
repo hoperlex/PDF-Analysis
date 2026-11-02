@@ -253,6 +253,24 @@ services:
       # Presentation comparison exposure is explicit in both API and worker.
       AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
       AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
+      # `REVIEW-FIX-SEAMS-1102`. The rollback switches of the paid analysis plan. The API prices
+      # every fresh estimate (`runs/preflight.py`) and picks the stage plan of every fresh stage
+      # run (`comparison/stage_v3/policy.py`); the worker executes the consent and the policy that
+      # were frozen at the start and never reads them, so they are named here only. Each default
+      # is the code's own default. A `1` switch is turned off by `0`, `false` or `off`; the plan
+      # names take `v2` / `legacy` as in `alpha.env.example`.
+      AUDITMANAGER_EXTENDED_ANALYSIS_PLAN: ${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v3}
+      AUDITMANAGER_EXTENDED_COVERAGE: ${AUDITMANAGER_EXTENDED_COVERAGE:-batched-v1}
+      AUDITMANAGER_EXTENDED_CROSS_WINDOW: ${AUDITMANAGER_EXTENDED_CROSS_WINDOW:-1}
+      AUDITMANAGER_NATIVE_PAGE_PIECES: ${AUDITMANAGER_NATIVE_PAGE_PIECES:-1}
+      AUDITMANAGER_NORM_PARAGRAPH_CONTEXT: ${AUDITMANAGER_NORM_PARAGRAPH_CONTEXT:-1}
+      AUDITMANAGER_PROJECT_PARAMETERS: ${AUDITMANAGER_PROJECT_PARAMETERS:-1}
+      AUDITMANAGER_PROJECT_PARAMETER_CONTEXT: ${AUDITMANAGER_PROJECT_PARAMETER_CONTEXT:-1}
+      AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT: ${AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT:-1}
+      AUDITMANAGER_STAGE_V3_PLAN: ${AUDITMANAGER_STAGE_V3_PLAN:-windowed-global-v1}
+      # Relaxed intake limits (`REVIEW-FIX-BOUNDS-1102`), read on the upload and ingest path; the
+      # worker gets the same value as the API. `0`, the default, keeps the strict limits.
+      AUDITMANAGER_INTAKE_RELAXED: ${AUDITMANAGER_INTAKE_RELAXED:-0}
       # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
       # are sealed to. Public, so they live in alpha.env and reach both services; the private
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
@@ -335,6 +353,9 @@ services:
       # Presentation comparison exposure is explicit in both API and worker.
       AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
       AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
+      # `REVIEW-FIX-BOUNDS-1102`. Relaxed intake limits; the same value the API reads. `0`, the
+      # default, keeps the strict limits.
+      AUDITMANAGER_INTAKE_RELAXED: ${AUDITMANAGER_INTAKE_RELAXED:-0}
       # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
       # are sealed to. Public, so they live in alpha.env and reach both services; the private
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.

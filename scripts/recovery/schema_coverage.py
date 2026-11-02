@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0041_comparison_stage_core"
+HEAD = "0044_section_stats_uncapped"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -56,6 +56,12 @@ TABLES = frozenset((
     "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
     "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
     "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
+    # `0042_comparison_stage_review`: stage AI units and their immutable results, graphic evidence,
+    # link repairs, expert change cards and verdicts, and the durable batch. `0043` and `0044`
+    # add no table.
+    "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
+    "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
+    "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_connection", "executor_connection_revision", "executor_probe",
@@ -238,6 +244,34 @@ TRIGGERS = (
     ("stage_upload_file", "trg_stage_upload_file_write_once", "am_guard_write_once_columns", 19),
     ("stage_upload_candidate", "trg_stage_upload_candidate_write_once", "am_guard_write_once_columns", 19),
     ("stage_pair", "trg_stage_pair_write_once", "am_guard_write_once_columns", 19),
+    # `0042_comparison_stage_review`: 19 = ROW | BEFORE | UPDATE (frozen pins), 23 = ROW | BEFORE |
+    # INSERT | UPDATE (scope checks), 27 = ROW | BEFORE | DELETE | UPDATE (the nine immutable results).
+    ("stage_chain_run", "trg_stage_chain_c4_pins", "am_guard_frozen_columns", 19),
+    ("stage_chain_run", "trg_stage_effective_revision", "am_check_stage_effective_revision", 23),
+    ("comparison_ai_job", "trg_stage_ai_job_scope", "am_check_stage_ai_job_scope", 23),
+    ("comparison_ai_job", "trg_stage_ai_job_pin", "am_guard_frozen_columns", 19),
+    ("stage_ai_unit", "trg_stage_ai_unit_scope", "am_check_stage_c4_scope", 23),
+    ("stage_graphic_evidence", "trg_stage_graphic_evidence_scope", "am_check_stage_c4_scope", 23),
+    ("stage_link_repair", "trg_stage_link_repair_scope", "am_check_stage_c4_scope", 23),
+    ("stage_change_card", "trg_stage_change_card_scope", "am_check_stage_c4_scope", 23),
+    ("stage_card_evidence", "trg_stage_card_evidence_scope", "am_check_stage_c4_scope", 23),
+    ("stage_card_verdict", "trg_stage_card_verdict_scope", "am_check_stage_c4_scope", 23),
+    ("stage_chain_batch_item", "trg_stage_chain_batch_item_scope", "am_check_stage_c4_scope", 23),
+    ("stage_link_repair_event", "trg_stage_link_repair_event_scope", "am_check_stage_c4_scope", 23),
+    ("stage_ai_review", "trg_stage_ai_review_immutable", "am_immutable_row", 27),
+    ("stage_ai_classification", "trg_stage_ai_classification_immutable", "am_immutable_row", 27),
+    ("stage_ai_synthesis", "trg_stage_ai_synthesis_immutable", "am_immutable_row", 27),
+    ("stage_graphic_evidence", "trg_stage_graphic_evidence_immutable", "am_immutable_row", 27),
+    ("stage_link_repair", "trg_stage_link_repair_immutable", "am_immutable_row", 27),
+    ("stage_link_repair_event", "trg_stage_link_repair_event_immutable", "am_immutable_row", 27),
+    ("stage_change_card", "trg_stage_change_card_immutable", "am_immutable_row", 27),
+    ("stage_card_evidence", "trg_stage_card_evidence_immutable", "am_immutable_row", 27),
+    ("stage_card_verdict", "trg_stage_card_verdict_immutable", "am_immutable_row", 27),
+    ("stage_ai_unit", "trg_stage_ai_unit_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_chain_batch", "trg_stage_chain_batch_frozen_guard", "am_guard_frozen_columns", 19),
+    ("stage_chain_batch_item", "trg_stage_chain_batch_item_frozen_guard", "am_guard_frozen_columns", 19),
+    # `0043_stage_ai_generations`: a unit's generation is pinned once written.
+    ("stage_ai_unit", "trg_stage_ai_generation_pin", "am_guard_frozen_columns", 19),
     ("contract_state_transition", "trg_contract_state_transition_immutable", "am_immutable_row", 31),
     ("document_version", "trg_document_version_immutable", "am_immutable_row", 27),
     ("document_version_classification", "trg_document_version_classification_immutable", "am_immutable_row", 27),
@@ -337,10 +371,16 @@ SEQUENCES = {
 
 #: ``pg_constraint.contype -> count`` in schema ``public`` at ``HEAD``: p primary key, u unique,
 #: f foreign key, c check, t constraint trigger. A restore that lost one is not the schema.
-CONSTRAINT_COUNTS = {"c": 1073, "f": 300, "p": 109, "t": 9, "u": 104}
+#: From the 0041 counts (c 1073, f 300, p 109, t 9, u 104): `0042_comparison_stage_review` adds twelve
+#: tables and, net of the three check constraints it replaces in place, 65 checks, 44 foreign keys,
+#: 12 primary keys and 19 unique constraints; `0043_stage_ai_generations` adds one check and swaps
+#: one unique constraint for another; `0044_section_stats_uncapped` replaces six checks in place.
+CONSTRAINT_COUNTS = {"c": 1139, "f": 344, "p": 121, "t": 9, "u": 123}
 
-#: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included).
-INDEX_COUNT = 386
+#: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
+#: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
+#: index); 0043 swaps one unique index for another and 0044 adds none.
+INDEX_COUNT = 426
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

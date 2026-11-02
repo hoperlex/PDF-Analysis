@@ -12,7 +12,6 @@ from auditmanager.comparison.sheet_match_suggestions import (
     SheetMatchSuggestionRefused,
     suggest_exact_sheet_matches,
 )
-from auditmanager.comparison.version_reader import MAX_VERSION_PAGES
 from auditmanager.comparison.version_reader import OrderedVersionPair, VersionFacts
 
 PROJECT = "prj_01M2545JSD15ETSNNV904X991J"
@@ -20,6 +19,8 @@ DOCUMENT = "doc_01M2545JSD15ETSNNV904X991J"
 SOURCE = "ver_01M2545JSD15ETSNNV904X991J"
 TARGET = "ver_01M2545JSD15ETSNNV904X991K"
 COMPARISON = "cmp_00000000000000000000000001"
+# The legacy 500-page snapshot; never derive a loop bound from the database integer maximum.
+LEGACY_PAGES = 500
 
 
 def _pair(source_pages: int = 3, target_pages: int = 3) -> OrderedVersionPair:
@@ -65,9 +66,9 @@ def test_reordered_maps_are_stable_and_changed_text_has_no_match() -> None:
 
 def test_complete_500_page_text_rich_snapshot_can_suggest_moved_sheets() -> None:
     source = {number: f"Лист {number}\n" + "А" * 3_570
-              for number in range(1, MAX_VERSION_PAGES + 1)}
-    target = {number: source[MAX_VERSION_PAGES + 1 - number]
-              for number in range(1, MAX_VERSION_PAGES + 1)}
+              for number in range(1, LEGACY_PAGES + 1)}
+    target = {number: source[LEGACY_PAGES + 1 - number]
+              for number in range(1, LEGACY_PAGES + 1)}
     assert sum(len(page.encode("utf-8")) for page in source.values()) > 2_000_000
     result = _suggest(version_pair=_pair(500, 500), source_pages=source, target_pages=target)
     assert len(result) == 500
