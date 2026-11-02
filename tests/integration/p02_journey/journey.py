@@ -169,6 +169,11 @@ P02_TABLES = (
     "executor_route_event",
     "executor_runner_token",
     "executor_task",
+    # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`). The enrollment grants of the universal agent and its
+    # SSH install sessions. The journey issues no enrollment and starts no install (nothing under this directory
+    # names those operations), so both counts are expected unchanged across a replay.
+    "executor_enrollment",
+    "executor_agent_install",
     # `0032_ar_v3_run_group`. A group of six runs of one version and its members. Only
     # `start_ar_v3_group` writes them (behind the reviewed-pack registry, empty here); the
     # journey starts single runs, so both counts are expected unchanged across a replay.

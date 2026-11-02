@@ -4,8 +4,9 @@ The contract declares one scheme at its root since `W13-SEAL`'s reseal (`a5f4001
 
     "bearerAuth": {"type": "http", "scheme": "bearer"}
 
-and ``security: [{"bearerAuth": []}]`` over every operation but three -- the exchange and,
-since `W49-SEAL-01`, the two registration operations an applicant with no account uses.
+and ``security: [{"bearerAuth": []}]`` over every operation but four -- the exchange and,
+since `W49-SEAL-01`, the two registration operations an applicant with no account uses, and,
+since `EXEC2-SEAL-1`, the public agent package.
 **That declares the seam, not its implementation.** No issuer, no discovery URL, no flow and
 no token format appears in the document, and none may be added here: the deployment decides
 them and the same operations must keep working when it does. The alpha's implementation was
@@ -198,6 +199,7 @@ __all__ = [
     "AccountStandings",
     "CurrentRunner",
     "CurrentSubject",
+    "ENROLLMENT_OPERATIONS",
     "IssuedCredential",
     "RUNNER_OPERATIONS",
     "RevocationNotices",
@@ -240,15 +242,21 @@ API_TOKEN_VARIABLE: Final[str] = "AUDITMANAGER_API_TOKEN"
 #: out a credential, neither names an account by anything but the pair the caller typed, and
 #: the status read answers every pair it cannot prove with the exchange's own
 #: ``authentication_required``.
+#:
+#: `EXEC2-SEAL-1` (ADR-0026 decision 6): ``downloadAgentPackage`` is the fourth. The agent package is
+#: public code with no secret, built into the image and served by version; its integrity is the sha256 that
+#: ``issueExecutorEnrollment`` writes into the install command, so a credential would protect nothing and
+#: would have to be handed to the host before the agent exists. The contract declares ``security: []`` for
+#: it, and it must be throttled per address at the proxy (`EXEC2-ENROLL-01`).
 UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset(
-    {"issueToken", "submitRegistration", "readRegistrationStatus"}
+    {"issueToken", "submitRegistration", "readRegistrationStatus", "downloadAgentPackage"}
 )
 
 #: `EXEC-PULL-01` (`R-143`). The operations a **runner** calls with a runner token: a Claude Code
 #: session behind the stdio bridge, or an unattended agent. A register by ``operationId``, for
 #: :data:`UNAUTHENTICATED_OPERATIONS`'s reason.
 #:
-#: A runner token is its **own principal type**, never a user session. These four operations are
+#: A runner token is its **own principal type**, never a user session. These operations are
 #: authenticated by it and by nothing else -- no account is read, no role is checked, and a user's
 #: credential presented to one is ``authentication_required`` like any wrong token. In the other
 #: direction a runner token is not a credential this seam's signer produced, so every other
@@ -258,10 +266,28 @@ UNAUTHENTICATED_OPERATIONS: Final[frozenset[str]] = frozenset(
 #:
 #: The document declares the same single ``bearerAuth`` scheme for them: a bearer credential on
 #: the wire, whose issuer is the only difference, and the seam is what the document never names.
+#:
+#: `EXEC2-SEAL-1`: ``reportRunnerHealth`` joins them. An agent reports its version, its clients and their
+#: sanitised authentication state on the token it holds; the report is stored on that token.
 RUNNER_OPERATIONS: Final[frozenset[str]] = frozenset({
     "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
-    "failExecutorTask", "getExecutorTaskImage",
+    "failExecutorTask", "getExecutorTaskImage", "reportRunnerHealth",
 })
+
+#: `EXEC2-SEAL-1` (ADR-0026 decision 4). The operations a universal agent calls with an **enrollment
+#: secret**: ``redeemExecutorEnrollment`` exchanges one for a runner token. A third principal type beside a
+#: user session and a runner token -- a single-use grant bound to one ``pull`` connection, stored only as a
+#: hash -- and presented under the same ``bearerAuth`` scheme. The secret reaches no other operation: the
+#: runner operations refuse it as any wrong token, and a user operation as any forged credential.
+#:
+#: **This is the declaration and nothing more; the authentication is `EXEC2-ENROLL-01`'s.** What it leaves
+#: for that lane: a port beside :class:`RunnerTokens` that resolves a presented secret to the grant (lookup
+#: by prefix, constant-time comparison of the hash, single-use and expiry under the exchange's own
+#: transaction), the branch in :func:`build_authorization_dependency` that publishes it on
+#: ``request.state`` for the one handler, and the matching ``Current...`` dependency. Until then the
+#: operation is closed by default: the dependency treats a presented secret as a forged user credential and
+#: answers ``authentication_required``, which is the answer a wrong secret gets afterwards too.
+ENROLLMENT_OPERATIONS: Final[frozenset[str]] = frozenset({"redeemExecutorEnrollment"})
 
 #: `R-50`. The operations a credential minted for an account **still on its seeded
 #: password** may reach, by ``operationId``. Everything else answers ``permission_denied``.
@@ -650,6 +676,15 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # value is shown once and no operation returns it again.
         "issueRunnerToken": _ADMIN,
         "revokeRunnerToken": _ADMIN,
+        # `EXEC2-SEAL-1` (ADR-0026). The enrollment grant of a universal agent, the install of it over SSH
+        # and the integration-authorisation mark are administrator acts; the commands re-read the role set in
+        # their own transaction. Reading an install session is the administrator's too: it names a host, a
+        # user and a host-key fingerprint, which the executor reads (`_ANY_ROLE`) never show.
+        "issueExecutorEnrollment": _ADMIN,
+        "setExecutorIntegrationAuthorisation": _ADMIN,
+        "createExecutorAgentInstall": _ADMIN,
+        "getExecutorAgentInstall": _ADMIN,
+        "confirmExecutorAgentInstallHostKey": _ADMIN,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,
