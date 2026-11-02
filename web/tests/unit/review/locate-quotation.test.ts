@@ -148,6 +148,12 @@ describe('rectangles follow the page transform', () => {
 
   it('cuts a partly covered run at the character fraction of its advance, with a bleed on each cut side', () => {
     const rect = spanRectangle(run('abcdefghij', 0, 80), 2, 5, page);
+    // The bleed is real (a box cut at the exact fraction clipped the last glyph of a quotation)
+    // and less than a character (a whole neighbouring glyph would be a claim nobody made).
+    expect(CUT_BLEED).toBeGreaterThan(0);
+    expect(CUT_BLEED).toBeLessThan(1);
+    expect(rect?.left).toBeLessThan(2);
+    expect((rect?.left ?? 0) + (rect?.width ?? 0)).toBeGreaterThan(5);
     // Characters 2..5 of ten, one unit each, and `CUT_BLEED` of a character on both cut sides.
     expect(rect?.left).toBeCloseTo(2 - CUT_BLEED);
     expect(rect?.width).toBeCloseTo(3 + 2 * CUT_BLEED);

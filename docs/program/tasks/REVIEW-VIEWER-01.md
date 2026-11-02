@@ -118,7 +118,65 @@ Revert the branch merge together with its `web/package.json` and `web/package-lo
 and the re-measured `web/FRONTEND_LOCK.json`. No feature flag.
 
 ## Handoff
-- changed files:
-- commands/results:
+- changed files (all under the allowed paths; `web/FRONTEND_LOCK.json`, `contracts/**`, `src/**`, `db/**`, `infra/**`
+  and `web/src/shared/api/**` untouched):
+  - new, `web/src/features/open-evidence/`: `model/{pdfjs-runtime,page-geometry,locate-quotation,view-state,targets,
+    use-pdf-document,use-page-content,use-element-size,use-version-block-index}.ts`,
+    `ui/{page-viewer,page-viewer-view,viewer-marks,viewer-controls}.tsx`, `ui/page-viewer.module.css`;
+    `index.ts` and `model/page-url.ts` (header) changed
+  - new, `web/src/widgets/evidence-viewer/`: `model/quotation-targets.ts`, `ui/quotation-card.tsx`,
+    `ui/evidence-viewer.module.css`; `ui/evidence-viewer.tsx`, `index.ts` rewritten
+  - `web/src/widgets/extended-review/ui/source-inspector.tsx` (viewer instead of `<object>`),
+    `extended-review.module.css` (dead `.pdfPage` removed)
+  - `web/src/_pages/review/ui/review-page.tsx` (`useVersionBlockIndex`, `blockIndex` handed down)
+  - `web/src/app/globals.css` (`am-evidence__panes` columns on wide screens, `am-evidence__page`; `am-evidence__object`
+    kept: the norm document still uses it)
+  - tests: `web/tests/unit/review/{view-state,targets,page-geometry,page-viewer-view,quotation-cards,locate-quotation,
+    locate-quotation-pdf}.test.ts` and `mini-pdf.ts` new; `evidence-viewer.test.ts` and `viewer-and-panels.test.ts`
+    rewritten (the `<object>`/`#page=` assertions now assert the viewer, same intent); `web/tests/unit/styles/screens.ts`
+    (viewer states, quotation cards, `NormPdf`)
+- commands/results (host load average 12-19 throughout; `df` 1.3 GB free before the whole-suite runs; nothing
+  built, installed or pushed):
+  - `npx vitest run` whole suite on the final tree: 29 files / 110 tests red. The same suite on a clean archive of the
+    base `4ab29560` (same `node_modules`): 29 files / 108 red. The two extra are `contrast.test.ts` cases that timed out
+    at the 120 s limit under load (baseline passed them at 109 s and 71 s) and pass alone on this tree (101 s, 63 s).
+    Every other red is identical in both runs: `frontend-lock.guard` (2, expected: `pdfjs-dist` is a new dependency),
+    `query-key-shape.guard` typecheck, `lazy-boundary.guard` (a) (`_pages/home` imports `widgets/dashboard`),
+    `rendered-language.guard` (5), 8 in `tests/unit/styles`, the AR v3 run-list screens, upload envelope, error codes
+    and others. None names the review viewer.
+  - `tests/unit/styles` alone, this tree vs base: the same 8 reds. Their detail differs only by: `.pdfPage` (dead,
+    removed) no longer unreached; two more *sites* of the already-failing `am-state__loading-lines` pair (the viewer's
+    loading state); no pair of the viewer is below its threshold in either palette.
+  - `npm run lint -- --quiet`: 2 errors, both `no-control-regex` in `export-evidence-package/model/package.ts` (not
+    touched). `npm run typecheck`: exit 2, one error, `stage-comparison/model/saved-results.ts(199,29)` (not touched).
+    `git diff --check 4ab29560`: clean. (`origin/dev` has since moved to `9617c759`, one docs commit, no overlap.)
+  - 7 mutation probes, each reddened a test and was reverted: lines the text contradicts accepted; closed instead of
+    half-open character range; no right-edge bounds check; the whole page accepted as a region; no bleed on a cut text
+    box; no absolute cap on automatic focus; pan not clamped.
+  - real Chrome 156 (headless shell) over CDP against a throwaway Vite harness mounting the real `EvidenceViewer` and
+    `SourceInspector` with the real hooks, on the AR section PDF of `synthetic-project-mayak-7` and variants of it (wide
+    sheet, `/Rotate 90`, crop box off the origin), with the block index built by the backend's own `extract_document` and
+    `_build_blocks`: 25 screenshots in `.local/reports/review-viewer-01/`; frames sit on the lines (pixel check of the
+    canvas ink inside each frame, margins symmetric); the point under the cursor stays under it on ctrl+wheel
+    (0.2864 -> 0.2862 of the page); plain wheel not taken; drag, keys `+ - 0` and arrows, double click, tab order,
+    touch pinch (1.35x -> 5.42x) and one-finger pan, keyboard focus on the pill. Harness and its server removed.
 - known limits:
+  - the server measures from the media box and pdf.js from the crop box. A page whose crop box does not start at the
+    origin would put every server line a fixed distance off; this is caught only when the page text contains the
+    quotation (the lines are then refused and the text decides). On a scan with such a crop box the lines stand,
+    shifted. A `/Rotate` page agreed with the server in the one case measured.
+  - text-layer boxes for a quotation that starts or ends inside a text item are a character-fraction estimate widened by
+    half a character on the cut sides: they can include a sliver of the neighbouring glyph, never clip the last one.
+  - the whole page is drawn as one bitmap capped at 16 M pixels, re-drawn when a zoom settles; a very large sheet at
+    the maximum zoom is stretched past the cap (softer, never blank). No tiled rendering.
+  - pdf.js is given no `wasmUrl`, `cMapUrl`, `standardFontDataUrl` or `iccUrl`: JPX/JBIG2 images, CJK CMaps and
+    non-embedded standard fonts may draw wrongly. The project PDFs measured here embed what they use.
+  - `bbox_norm` is read in the orientation pdf.js draws (rotation applied); not measured on a rotated portal page.
+  - narrow panes (420 px) open on the active target at 1.2 px/pt, the line wider than the pane; the reader pans along it.
+  - the contract stays: the character range and `block_id` are never rendered; the hint line says «Ctrl», which no
+    rendered-language screen reaches today.
 - integration notes:
+  - re-measure `web/FRONTEND_LOCK.json` after merging (new dependency `pdfjs-dist` 6.4.299); the guard is red until then.
+  - `next build` was not run (no disk): the worker is addressed as `new URL('pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url)`, which Next must emit as an asset; `npm run build` is the check, as the old lane noted.
+  - `useVersionBlockIndex` uses the key `queryKeys.versions.blocks` like «Блоки»; no API or contract change.
