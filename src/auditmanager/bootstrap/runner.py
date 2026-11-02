@@ -109,12 +109,13 @@ class RunnerAdapter(_SessionHolder):
         return RunnerPrincipal(token_id=runner.token_id, connection_id=runner.connection_id)
 
     def claim_task(
-        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None
+        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None,
+        runner_instance_id: str | None = None,
     ) -> models.ClaimedExecutorTask | None:
         from auditmanager.executors.public import claim_task
 
         task = claim_task(self._sessions, self._principal(runner), wait_seconds=wait_seconds,
-                          max_images=max_images)
+                          max_images=max_images, runner_instance_id=runner_instance_id)
         if task is None:
             return None
         return models.ClaimedExecutorTask.model_validate({

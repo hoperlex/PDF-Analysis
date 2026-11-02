@@ -300,6 +300,9 @@ __all__ = [
     "ExecutorProbeId",
     "ExecutorRunnerTokenId",
     "ExecutorTaskId",
+    "ExecutorEnrollmentId",
+    "ExecutorAgentInstallId",
+    "AgentPackageVersion",
     "ExecutorKind",
     "ExecutorWorkKind",
     "ExecutorApiFlavour",
@@ -327,6 +330,27 @@ __all__ = [
     "ExecutorRoute",
     "ExecutorRouteList",
     "SetExecutorRouteRequest",
+    "ExecutorOccupancy",
+    "ExecutorIntegrationAuthorisation",
+    "RunQueueReason",
+    "RunnerCliName",
+    "RunnerCliAuthState",
+    "RunnerExecutionProfile",
+    "RunnerFeature",
+    "RunnerCliHealth",
+    "ExecutorEnrollmentState",
+    "ExecutorAgentInstallAccess",
+    "ExecutorAgentInstallState",
+    "ExecutorAgentInstallFailure",
+    "ExecutorEnrollmentMetadata",
+    "IssuedExecutorEnrollment",
+    "RedeemExecutorEnrollmentRequest",
+    "ReportRunnerHealthRequest",
+    "RunnerHealthAck",
+    "SetExecutorIntegrationAuthorisationRequest",
+    "CreateExecutorAgentInstallRequest",
+    "ExecutorAgentInstall",
+    "ConfirmExecutorAgentInstallHostKeyRequest",
     "PresetId",
     "PresetRevisionId",
     "AnalysisPresetState",
@@ -684,6 +708,18 @@ ExecutorRunnerTokenId = TypeAliasType(
 ExecutorTaskId = TypeAliasType(
     "ExecutorTaskId", Annotated[str, Field(pattern=rf"^ext_{_ULID}$")]
 )
+#: `EXEC2-SEAL-1` (ADR-0026, migration ``0046``). An enrollment grant of the universal agent, an install
+#: session of it over SSH, and the version of the agent package the image holds (``major.minor.patch``).
+ExecutorEnrollmentId = TypeAliasType(
+    "ExecutorEnrollmentId", Annotated[str, Field(pattern=rf"^exen_{_ULID}$")]
+)
+ExecutorAgentInstallId = TypeAliasType(
+    "ExecutorAgentInstallId", Annotated[str, Field(pattern=rf"^exai_{_ULID}$")]
+)
+AgentPackageVersion = TypeAliasType(
+    "AgentPackageVersion",
+    Annotated[str, Field(pattern=r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$")],
+)
 #: `W55A-SEAL-01`. The normative corpus's three public identities (`NORM-Q07`), declared in
 #: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
 NormsSnapshotId = TypeAliasType(
@@ -964,7 +1000,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.14.0"]
+    contract_version: Literal["1.15.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1498,6 +1534,15 @@ class RunPreset(_Object):
     name: Annotated[str, Field(min_length=1, max_length=120)]
 
 
+class RunQueueReason(str, enum.Enum):
+    """`EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5): why a queued Run is not running.
+    `executor_at_capacity`: every unit of its executor connection is in use.
+    `runner_offline`: the connection is a `pull` connection and no runner of it is online."""
+
+    EXECUTOR_AT_CAPACITY = "executor_at_capacity"
+    RUNNER_OFFLINE = "runner_offline"
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1556,6 +1601,9 @@ class RunStatus(_Object):
     #: `ANALYSIS-PRESETS-01`. The preset the run was started with, read-only; null (and omitted)
     #: for a run started without one.
     preset: RunPreset | None = Field(default=None, json_schema_extra=optional_property)
+    #: `EXEC2-SEAL-1`. Why a ``queued`` Run is waiting for its executor, derived at read time; null (and
+    #: omitted) for a Run that is not waiting for one.
+    queue_reason: RunQueueReason | None = Field(default=None, json_schema_extra=optional_property)
 
 
 class RunStatusPage(_Object):
@@ -4042,10 +4090,30 @@ class ExecutorRevisionSettings(_Object):
     max_claimed_tasks: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `EXEC2-SEAL-1` (ADR-0026 decision 1). The capacity of the connection, for every kind; absent
+    #: means 1. The coupled limits of decision 2 are validated by the executors context.
+    max_active_runs: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+_CAPACITY_NOTE = (
+    "`EXEC2-SEAL-1` (ADR-0026 decisions 1 and 2): `max_active_runs` (1 to 16, absent means 1) is the most "
+    "units of this connection that may be in use at once, where a Run in `leased`, `running` or `retry_wait` "
+    "and a comparison model call in `prepared` or `sent` each count one. A lowered value governs new claims "
+    "only and never stops work in flight. The coupled limits are validated on the revision and refused as "
+    "`422 validation_failed`: `max_claimed_tasks` of a `pull` connection and a set `max_parallel_calls` of an "
+    "`http_api` connection must each be at least `max_active_runs` (field `max_claimed_tasks` or "
+    "`max_parallel_calls`, constraint `below_max_active_runs`), and an `ssh_command` connection takes a value "
+    "above one only once its wrappers isolate concurrent invocations (field `max_active_runs`, constraint "
+    "`capacity_not_supported_for_kind`)."
+)
 
 
 class ReviseExecutorConnectionRequest(ExecutorRevisionSettings):
-    """A new immutable revision of a connection: the full settings, never a patch."""
+    __doc__ = (
+        "A new immutable revision of a connection: the full settings, never a patch.\n\n" + _CAPACITY_NOTE
+    )
 
 
 class ExecutorProbe(_Object):
@@ -4083,7 +4151,7 @@ class ExecutorProbe(_Object):
 
 
 class ExecutorRevision(ExecutorRevisionSettings):
-    """One immutable revision of a connection, with its latest probe."""
+    __doc__ = "One immutable revision of a connection, with its latest probe.\n\n" + _CAPACITY_NOTE
 
     revision_id: ExecutorRevisionId
     connection_id: ExecutorConnectionId
@@ -4113,8 +4181,34 @@ class ExecutorSecretMetadata(_Object):
     )
 
 
+class ExecutorOccupancy(_Object):
+    """Used and total capacity of a connection (`EXEC2-SEAL-1`, ADR-0026 decision 1), derived from the
+    database at read time and stored nowhere. `capacity` is `max_active_runs` of the current revision
+    (1 when absent); `active_runs` counts the connection's Runs in `leased`, `running` or `retry_wait`;
+    `active_calls` counts its comparison model calls in `prepared` or `sent` whose attempt is live. Each
+    counts one unit, so the connection is full when their sum reaches `capacity`."""
+
+    capacity: Annotated[int, Field(ge=1, le=16)]
+    active_runs: Annotated[int, Field(ge=0)]
+    active_calls: Annotated[int, Field(ge=0)]
+
+
+class ExecutorIntegrationAuthorisation(_Object):
+    """The administrator's mark that the command-line clients behind a `pull` connection are authorised
+    for this integration (`R-149b`, ADR-0026 decision 8): when it was set and by whom. It is one of four
+    distinct statuses (installed, authentication valid, authorised for this integration, model probe
+    passed) and implies none of the other three."""
+
+    authorised_at: datetime
+    authorised_by: UserUid
+
+
 class ExecutorConnection(_Object):
-    """A connection: where a process sends model work. Its secrets are metadata only."""
+    __doc__ = (
+        "A connection: where a process sends model work. Its secrets are metadata only."
+        " `occupancy` (`EXEC2-SEAL-1`) is present once the connection has a current revision;"
+        " `integration_authorisation` is present while the administrator's mark is set (`pull` connections only)."
+    )
 
     connection_id: ExecutorConnectionId
     kind: ExecutorKind
@@ -4126,6 +4220,10 @@ class ExecutorConnection(_Object):
     archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_revision_id: ExecutorRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_revision_no: Annotated[int, Field(ge=1)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    occupancy: ExecutorOccupancy = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    integration_authorisation: ExecutorIntegrationAuthorisation = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4140,7 +4238,9 @@ class ExecutorConnectionDetail(_Object):
 
     For a ``pull`` connection (`EXEC-PULL-01`) it also carries the runner tokens' metadata and
     the number of tasks waiting for, or held by, a runner right now. Both are absent for the
-    other kinds. A token's value is never here: it was shown once, when it was issued."""
+    other kinds. A token's value is never here: it was shown once, when it was issued.
+
+    `EXEC2-SEAL-1` (ADR-0026 decision 4): for a ``pull`` connection it also carries its last 10 enrollment grants, newest first, as metadata only (state, expiry, redemption time): the grant's secret and its hash are never here, since the secret was shown once, when it was issued. Absent for the other kinds."""
 
     connection: ExecutorConnection
     revisions: list[ExecutorRevision]
@@ -4149,6 +4249,9 @@ class ExecutorConnectionDetail(_Object):
         default=None, json_schema_extra=optional_property
     )
     open_task_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    enrollments: Annotated[list["ExecutorEnrollmentMetadata"], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4265,10 +4368,58 @@ class ExecutorTaskState(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class RunnerCliName(str, enum.Enum):
+    """The official command-line clients an agent detects (ADR-0026 decision 8)."""
+
+    CLAUDE = "claude"
+    CODEX = "codex"
+
+
+class RunnerCliAuthState(str, enum.Enum):
+    """The authentication state of a client, read only through its official mechanism and reported as a
+    closed enumeration: `valid`, `login_required`, or `unknown` (not installed, or the client offers no
+    official way to tell). Never a credential, a path or an account name."""
+
+    VALID = "valid"
+    LOGIN_REQUIRED = "login_required"
+    UNKNOWN = "unknown"
+
+
+class RunnerExecutionProfile(str, enum.Enum):
+    """How the agent answers a task: it runs a command (`command`) or calls a local OpenAI-compatible
+    endpoint (`endpoint`)."""
+
+    COMMAND = "command"
+    ENDPOINT = "endpoint"
+
+
+class RunnerFeature(str, enum.Enum):
+    """A capability the agent declares; `images` means it serves tasks that carry images."""
+
+    IMAGES = "images"
+
+
+class RunnerCliHealth(_Object):
+    """One client's sanitised health as an agent reports it (`EXEC2-SEAL-1`, ADR-0026 decision 5)."""
+
+    cli: RunnerCliName
+    installed: bool
+    version: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    auth_state: RunnerCliAuthState
+
+
 class RunnerTokenMetadata(_Object):
-    """What the API ever says about a runner token after it was issued: that it exists, its
-    non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
-    The value and its hash are never returned."""
+    __doc__ = (
+        "What the API ever says about a runner token after it was issued: that it exists, its\n"
+        "non-secret prefix, when it expires or was revoked, and when and from where it was last seen.\n"
+        "The value and its hash are never returned."
+        "\n\n`EXEC2-SEAL-1` (ADR-0026 decision 5): the health an agent last reported on this token, as closed "
+        "enumerations and bounded strings (no secret, no path to a credential and no document text), and `online`, "
+        "the freshness of `last_seen_at` under a bounded threshold, read at the time of the request. All of them "
+        "are absent for a token whose runner has not reported."
+    )
 
     token_id: ExecutorRunnerTokenId
     connection_id: ExecutorConnectionId
@@ -4282,6 +4433,23 @@ class RunnerTokenMetadata(_Object):
     last_seen_address: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    clis: Annotated[list[RunnerCliHealth], Field(max_length=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    concurrency: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    execution_profile: RunnerExecutionProfile = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    features: Annotated[list[RunnerFeature], Field(max_length=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    health_reported_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    online: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class IssueRunnerTokenRequest(_Object):
@@ -4303,7 +4471,12 @@ class IssuedRunnerToken(_Object):
 
 
 class ClaimExecutorTaskRequest(_Object):
-    """The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25)."""
+    __doc__ = (
+        "The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25)."
+        "\n\n`EXEC2-SEAL-1` (ADR-0026 decision 3): the optional `runner_instance_id` names the agent process making "
+        "the claim. A task already held by a token is redelivered only to the instance that claimed it; a claim "
+        "without the field behaves as before. One token is served by one agent process."
+    )
 
     wait_seconds: Annotated[int, Field(ge=0, le=25)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
@@ -4312,6 +4485,10 @@ class ClaimExecutorTaskRequest(_Object):
     #: serves; absent means 1, the shape every deployed runner sends today. The server never hands
     #: out a task with more images than declared.
     max_images: Annotated[int, Field(ge=1, le=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: `EXEC2-SEAL-1`. The agent process making the claim; 8 to 64 characters of ``A-Za-z0-9_-``.
+    runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4382,6 +4559,202 @@ class FailExecutorTaskRequest(_Object):
 class ExecutorTaskAck(_Object):
     task_id: ExecutorTaskId
     state: ExecutorTaskState
+
+
+# --- the universal agent: enrollment, health and the install over SSH (`EXEC2-SEAL-1`) ------------
+#
+# ADR-0026 decisions 4 to 9, owner ruling `R-149b`. Sealed as contract 1.15.0 with the storage of
+# migration ``0046``; the operations are implemented by `EXEC2-ENROLL-01` (enrollment, health, package),
+# `EXEC2-ENROLL-SSH-01` (the install session) and `EXEC2-CAP-01` (capacity). A lane that needs a field
+# stops to the integrator and never edits these. Refusals are the catalogue's existing codes with typed
+# details only (``executors.model`` names the values).
+
+
+class ExecutorEnrollmentState(str, enum.Enum):
+    """Derived at read time: `pending` until redeemed, revoked or past `expires_at`."""
+
+    PENDING = "pending"
+    REDEEMED = "redeemed"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
+class ExecutorAgentInstallAccess(str, enum.Enum):
+    """How the administrator gives the stand SSH access to the host: a key the stand generates (the
+    administrator adds its public half to the host) or a pasted private key, which is sealed.
+    Passwords are not accepted."""
+
+    GENERATED_KEY = "generated_key"
+    PASTED_KEY = "pasted_key"
+
+
+class ExecutorAgentInstallState(str, enum.Enum):
+    """`requested -> scanning -> awaiting_host_key -> installing -> succeeded | failed`."""
+
+    REQUESTED = "requested"
+    SCANNING = "scanning"
+    AWAITING_HOST_KEY = "awaiting_host_key"
+    INSTALLING = "installing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ExecutorAgentInstallFailure(str, enum.Enum):
+    """The sanitised reason a failed install failed; never a host output, a path or a credential."""
+
+    HOST_UNREACHABLE = "host_unreachable"
+    SSH_REFUSED = "ssh_refused"
+    HOST_KEY_CHANGED = "host_key_changed"
+    HOST_KEY_NOT_CONFIRMED = "host_key_not_confirmed"
+    SUDO_PASSWORD_REQUIRED = "sudo_password_required"
+    UNSUPPORTED_PLATFORM = "unsupported_platform"
+    PACKAGE_UNAVAILABLE = "package_unavailable"
+    INSTALL_FAILED = "install_failed"
+    ENROLLMENT_FAILED = "enrollment_failed"
+    SECRET_UNREADABLE = "secret_unreadable"
+    NO_WORKER = "no_worker"
+    TIMED_OUT = "timed_out"
+
+
+class ExecutorEnrollmentMetadata(_Object):
+    """What the API ever says about an enrollment grant after it was issued (`EXEC2-SEAL-1`, ADR-0026
+    decision 4): that it exists, its non-secret prefix, its derived state and its dates. The secret and
+    its hash are never returned."""
+
+    enrollment_id: ExecutorEnrollmentId
+    connection_id: ExecutorConnectionId
+    secret_prefix: Annotated[str, Field(pattern=r"^ame_[0-9a-z]{8}$")]
+    state: ExecutorEnrollmentState
+    created_at: datetime
+    created_by: UserUid
+    expires_at: datetime
+    redeemed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    runner_token_id: ExecutorRunnerTokenId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    revoked_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    revoked_by: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class IssuedExecutorEnrollment(_Object):
+    """The grant, **shown once**: it is stored only as a one-way hash, so no operation can return the
+    `secret` or the `command` that carries it again. `package_version` and `package_sha256` name the agent
+    package the command downloads and verifies. Copy the command now; a lost one is replaced by a new
+    grant, which revokes this one."""
+
+    secret: Annotated[str, Field(min_length=56, max_length=56)] = Field(
+        json_schema_extra={"readOnly": True}
+    )
+    package_version: AgentPackageVersion
+    package_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    command: Annotated[str, Field(min_length=1, max_length=4096)] = Field(
+        json_schema_extra={"readOnly": True}
+    )
+    enrollment: ExecutorEnrollmentMetadata
+
+
+class RedeemExecutorEnrollmentRequest(_Object):
+    """The exchange of an enrollment secret for a runner token. `runner_instance_id` names the agent process
+    and makes a repeat of the exchange inside its window idempotent."""
+
+    runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")]
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ReportRunnerHealthRequest(_Object):
+    """An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded
+    strings only."""
+
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")]
+    clis: Annotated[list[RunnerCliHealth], Field(max_length=8)]
+    concurrency: Annotated[int, Field(ge=1, le=16)]
+    execution_profile: RunnerExecutionProfile
+    features: Annotated[list[RunnerFeature], Field(max_length=8)]
+    runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class RunnerHealthAck(_Object):
+    """The report was stored on the calling runner token."""
+
+    recorded_at: datetime
+
+
+class SetExecutorIntegrationAuthorisationRequest(_Object):
+    """`true` sets the mark, `false` clears it. Setting an already set mark or clearing an absent one
+    answers the connection as it stands."""
+
+    authorised: bool
+
+
+def _optional_write_only(schema: dict[str, Any]) -> None:
+    """``optional_property`` and ``writeOnly`` for one field: absent is allowed, and no response carries it."""
+    optional_property(schema)
+    schema["writeOnly"] = True
+
+
+class CreateExecutorAgentInstallRequest(_Object):
+    """Write-only where it carries a key. `private_key` is required for `pasted_key` and refused for
+    `generated_key`; the API seals it to the stand's public key and never returns it."""
+
+    access: ExecutorAgentInstallAccess
+    ssh_host: Annotated[str, Field(min_length=1, max_length=253)]
+    ssh_port: Annotated[int, Field(ge=1, le=65535)]
+    ssh_user: Annotated[str, Field(min_length=1, max_length=64)]
+    private_key: Annotated[str, Field(min_length=8, max_length=8192)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=_optional_write_only
+    )
+
+
+class ExecutorAgentInstall(_Object):
+    """One install session of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7).
+    For `generated_key` access it carries the public half and its `authorized_keys` line, which the
+    administrator adds to the host; the private half is sealed and never returned.
+    `observed_host_key_fingerprint` is what the worker saw (derived from the stored key line, as
+    `ExecutorRevision.host_key_fingerprint` is); the install does not proceed until the administrator
+    confirms exactly that fingerprint. `key_removed_at` is when the stand's key was removed from the
+    host and its sealed secret destroyed."""
+
+    install_id: ExecutorAgentInstallId
+    connection_id: ExecutorConnectionId
+    state: ExecutorAgentInstallState
+    access: ExecutorAgentInstallAccess
+    ssh_host: Annotated[str, Field(min_length=1, max_length=253)]
+    ssh_port: Annotated[int, Field(ge=1, le=65535)]
+    ssh_user: Annotated[str, Field(min_length=1, max_length=64)]
+    public_key: Annotated[str, Field(min_length=1, max_length=2048)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    authorized_keys_line: Annotated[str, Field(min_length=1, max_length=2200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    observed_host_key_fingerprint: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    host_key_confirmed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    host_key_confirmed_by: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    package_version: AgentPackageVersion = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    package_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    failure_reason: ExecutorAgentInstallFailure = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    key_removed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    created_at: datetime
+    created_by: UserUid
+    updated_at: datetime
+    finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ConfirmExecutorAgentInstallHostKeyRequest(_Object):
+    """The fingerprint the administrator read and confirms. It must equal the one the worker observed;
+    there is no trust on first use."""
+
+    host_key_fingerprint: Annotated[str, Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")]
 
 
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------

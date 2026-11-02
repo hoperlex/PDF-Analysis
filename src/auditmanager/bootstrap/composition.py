@@ -56,6 +56,7 @@ from auditmanager.bootstrap.adapters import (
     DocumentAdapter,
     ExecutionAdapter,
     ExecutorAdapter,
+    ExecutorEnrollmentAdapter,
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
@@ -107,6 +108,14 @@ from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
+
+
+#: `EXEC2-ENROLL-01`. The stand's public origin (``https://host[:port]``), which an agent's host calls: the
+#: install command is built from it and from nothing else (the web tier drops the forwarded ``Host``, so a
+#: request-derived origin would be the API's internal name). The deployment compose derives it from the
+#: certificate name unless it is set. An absent or malformed value is a refusal of the command
+#: (``dependency_unavailable`` / ``public_origin``), never a silent fallback.
+PUBLIC_ORIGIN_ENV = "AUDITMANAGER_PUBLIC_ORIGIN"
 
 
 def summary_model_for(provider_mode: str) -> Any:
@@ -668,6 +677,14 @@ def build_application(
         # `EXEC-PULL-01`. The pull channel: runner tokens, and the four operations a runner
         # calls with one. It also authenticates the token (the seam asks this port).
         runner=RunnerAdapter(sessions, blob_store=store),
+        # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health,
+        # the package route, the API side of an install over SSH and the integration-authorisation mark. It
+        # seals an install session's key to the same public ring and takes the stand's configured public
+        # origin for the install command; it also authenticates an enrollment secret (the seam asks it).
+        enrollment=ExecutorEnrollmentAdapter(
+            sessions, ring=resolved.secrets_public_ring,
+            public_origin=env.get(PUBLIC_ORIGIN_ENV) or None,
+        ),
     )
     return Application(
         router=router,

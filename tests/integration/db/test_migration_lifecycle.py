@@ -64,6 +64,10 @@ EXPECTED_TABLES = {
     # `0031_executor_pull_channel`: a runner's credential (hash only) and the tasks it takes.
     "executor_runner_token",
     "executor_task",
+    # `0046_executor_capacity_enroll`: a universal agent's single-use enrollment grant (hash only) and its
+    # SSH install sessions (`EXEC2-SEAL-1`, ADR-0026).
+    "executor_enrollment",
+    "executor_agent_install",
     # `0032_ar_v3_run_group`: a group of six runs of one version, and its six members.
     "ar_v3_run_group",
     "ar_v3_run_group_member",

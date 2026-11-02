@@ -23,7 +23,7 @@ down`. This is the deployed stack.
 
 | Path | What it is |
 |---|---|
-| `Dockerfile.api` | the 259 operations under uvicorn, plus `T-3`'s health plane |
+| `Dockerfile.api` | the 267 operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
@@ -249,7 +249,7 @@ work without deleting its stored evidence. An unknown value stops startup.
 Two ports on the API container, from **one built application**:
 
 ```
-:8000   the 259 operations, mounted by the proxy at /api/v1
+:8000   the 267 operations, mounted by the proxy at /api/v1
 :8001   /healthz and /readyz — no credential, no product meaning, no contract
 ```
 
@@ -496,6 +496,34 @@ Between those two states the plain port keeps serving, and there is deliberately
 `deploy.sh`'s `proxy-answers` guard requires **401** on `/api/v1/openapi.json` there, and a `301` is not 401, so
 it would turn a successful deploy into a refusal. The redirect lives on the challenge listener (port 80), which
 is a different listener (`Y3`: the number in that guard was once 200 here and was wrong).
+
+## The universal agent — `EXEC2-ENROLL-01` (ADR-0026 decisions 4 to 9)
+
+An administrator installs the agent on a host with one copied command (path B) or over SSH (path A). The stand
+serves the package, exchanges a one-time enrollment secret for a runner token, and takes the agent's health.
+Two optional settings reach the `api` (`compose.server.yml` names them):
+
+| Variable | What it does | Unset or blank means |
+|---|---|---|
+| `AUDITMANAGER_PUBLIC_ORIGIN` | the stand's public origin, `https://host[:port]`, that the generated install command downloads the package from and the agent calls. It is the **only** source of that origin: the request's own `Host` is never used, because the web tier drops it and the guess would be the API's internal name | derived from the certificate name, `https://${ALPHA_CERT_NAME}`, unless it is set; set it for a stand reached through an SSH tunnel, a private name or a non-default port. With neither of the two set, or with a malformed value, issuing a grant is refused (`503 dependency_unavailable`, dependency `public_origin`) before anything is written |
+| `AUDITMANAGER_AGENT_PACKAGE_DIR` | the directory in the image that holds `auditmanager-agent-<version>.tar.gz` and its `.sha256` | `/app/agent-package`, where `infra/deploy/Dockerfile.api` puts the package `EXEC2-AGENT-01` builds |
+
+The package route (`GET /api/v1/runner/agent-package/<version>`) needs no credential: it is public code, and
+its integrity is the sha256 the install command carries. The stand re-hashes the archive against the `.sha256`
+file on every issue and every download, and refuses (`503`, `agent_package`) a package whose digest, checksum
+file or size is wrong rather than serve an older one.
+
+The proxy throttles the two unauthenticated calls per client address, in zones of their own
+(`infra/deploy/proxy/nginx.conf`; the key is `$binary_remote_addr`, see the next section for what it follows):
+
+| Zone | Counts | Rate, burst |
+|---|---|---|
+| `enrollment_exchange` | `POST /api/v1/runner/enroll` | 6 r/m, 10 |
+| `agent_package` | `GET /api/v1/runner/agent-package/<version>` | 30 r/m, 20 |
+
+The agent's health report (`POST /api/v1/runner/health`) is counted by the runner-channel zones
+(`runner_channel` per token, `runner_address` per address), which now match `/api/v1/runner/tasks/` and
+`/api/v1/runner/health`. `tests/contract/test_proxy_rate_limits.py` holds all of it.
 
 ## The client address — `REAL-IP-EDGE-01`, and what a host nginx in front must send
 

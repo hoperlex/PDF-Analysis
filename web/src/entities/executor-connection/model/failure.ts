@@ -13,6 +13,9 @@ import { ApiError } from '@/shared/api';
 import { executionFailure } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 
+import { CAPACITY_FIELD_LABEL } from './capacity';
+import { SSH_PROFILE_LABELS } from './vocabulary';
+
 const FIELD_LABELS: Readonly<Record<string, string>> = {
   display_name: 'Название',
   kind: 'Вид подключения',
@@ -32,6 +35,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   pull_client: 'Клиент',
   answer_deadline_seconds: 'Срок ответа',
   max_claimed_tasks: 'Заданий в работе',
+  max_active_runs: CAPACITY_FIELD_LABEL,
   purpose: 'Назначение ключа',
   value: 'Ключ',
   work_kind: 'Вид работы',
@@ -59,6 +63,21 @@ const CONSTRAINT_SENTENCES: Readonly<Record<string, string>> = {
   required: 'поле нужно заполнить.',
   range: 'значение вне допустимого диапазона: от 1 до 365 дней.',
   kind_not_pull: 'токены выпускаются только для подключений вида «Клиент забирает задания».',
+  // `EXEC2-SEAL-1` (ADR-0026 decision 2): the coupled limits of `max_active_runs`. The field that
+  // carries the refusal is `max_claimed_tasks` (a `pull` connection) or `max_parallel_calls` (an
+  // `http_api` one), and its label is put in front of this sentence.
+  below_max_active_runs: 'значение меньше числа одновременных прогонов; увеличьте его или уменьшите число прогонов.',
+  capacity_not_supported_for_kind:
+    `для профиля «${SSH_PROFILE_LABELS.custom_command}» допустимо только значение 1; параллельные запуски своей команды стенд пока не изолирует.`,
+};
+
+/**
+ * A constraint whose wording depends on the field it refused. `range` is the case: the sentence
+ * above is the bound of a token's lifetime, and `max_active_runs` has its own bound (1 to 16).
+ * Keyed `field/constraint`; consulted before `CONSTRAINT_SENTENCES`.
+ */
+const FIELD_CONSTRAINT_SENTENCES: Readonly<Record<string, string>> = {
+  'max_active_runs/range': 'целое число от 1 до 16.',
 };
 
 const CONFLICT_SENTENCES: Readonly<Record<string, string>> = {
@@ -84,9 +103,10 @@ export function connectionRefusalSentence(error: ApiError): string | null {
   if (error.errorCode === 'validation_failed') {
     const constraint = stringDetail(error, 'constraint');
     if (constraint === null) return null;
-    const sentence = CONSTRAINT_SENTENCES[constraint];
-    if (sentence === undefined) return null;
     const field = stringDetail(error, 'field');
+    const sentence = (field === null ? undefined : FIELD_CONSTRAINT_SENTENCES[`${field}/${constraint}`])
+      ?? CONSTRAINT_SENTENCES[constraint];
+    if (sentence === undefined) return null;
     const label = field === null ? undefined : FIELD_LABELS[field];
     return label === undefined ? sentence.charAt(0).toUpperCase() + sentence.slice(1) : `${label}: ${sentence}`;
   }

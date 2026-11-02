@@ -103,13 +103,17 @@ PATHS = {
 #: which the POST-driven cases below iterate.
 IMAGE_OPERATION = "getExecutorTaskImage"
 IMAGE_PATH = f"/runner/tasks/{TASK}/images/{BLOB}"
+#: The sixth (`EXEC2-SEAL-1`) is the agent's health report: a POST under ``/runner/`` but not ``/runner/tasks/``,
+#: answered by the enrollment port rather than this file's ``RunnerPort`` stand-in. Its seam and its answers are
+#: ``test_enrollment.py``; it is named here so that the register stays whole.
+HEALTH_OPERATION = "reportRunnerHealth"
 BODIES = {"submitExecutorTaskAnswer": {"output_text": "{}", "model": "m"},
           "failExecutorTask": {"reason": "model_mismatch: x"}}
 
 
-def test_the_runner_operations_are_exactly_the_four_posts_and_the_image_read_under_runner_tasks() -> None:
-    assert set(PATHS) | {IMAGE_OPERATION} == RUNNER_OPERATIONS
-    assert IMAGE_OPERATION not in PATHS
+def test_the_runner_operations_are_the_four_posts_the_image_read_and_the_health_report() -> None:
+    assert set(PATHS) | {IMAGE_OPERATION, HEALTH_OPERATION} == RUNNER_OPERATIONS
+    assert IMAGE_OPERATION not in PATHS and HEALTH_OPERATION not in PATHS
 
 
 def test_a_runner_token_reaches_the_image_read_and_the_port_sees_its_identity(surface, stub) -> None:

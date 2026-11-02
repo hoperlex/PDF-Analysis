@@ -32,11 +32,33 @@ from auditmanager.executors.destinations import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
+    "AGENT_INSTALL_ACCESSES",
+    "AGENT_INSTALL_FAILURES",
+    "AGENT_INSTALL_STATES",
     "API_FLAVOURS",
     "BILLINGS",
+    "CONFLICT_ENROLLMENT_REDEEMED",
+    "CONFLICT_ENROLLMENT_SHOWN_ONCE",
+    "CONFLICT_HOST_KEY_CHANGED",
+    "CONFLICT_INSTALL_IN_PROGRESS",
+    "CONFLICT_INSTALL_NOT_AWAITING_HOST_KEY",
+    "CONSTRAINT_BELOW_MAX_ACTIVE_RUNS",
+    "CONSTRAINT_CAPACITY_NOT_SUPPORTED_FOR_KIND",
+    "CONSTRAINT_KIND_NOT_PULL",
+    "CONSTRAINT_PACKAGE_VERSION_UNKNOWN",
+    "CONSTRAINT_PRIVATE_KEY_NOT_ACCEPTED",
+    "CONSTRAINT_PRIVATE_KEY_REQUIRED",
+    "CONSTRAINT_RANGE",
+    "DEFAULT_MAX_ACTIVE_RUNS",
+    "DEPENDENCY_AGENT_PACKAGE",
+    "ENROLLMENT_STATES",
+    "GENERIC_PURPOSES",
     "IDENTITY_BASES",
     "IDENTITY_BASIS_BY_KIND",
+    "INSTALL_PURPOSES",
     "KINDS",
+    "MAX_ACTIVE_RUNS_MAX",
+    "MAX_ACTIVE_RUNS_MIN",
     "PROBE_RUNNING_MARGIN_SECONDS",
     "PULL_PROBE_WINDOW_SECONDS",
     "PROBE_UNTAKEN_SECONDS",
@@ -44,7 +66,12 @@ __all__ = [
     "PROBE_OUTCOMES",
     "PURPOSES",
     "PURPOSES_BY_KIND",
+    "QUEUE_REASONS",
     "RATE_CHECKS",
+    "RUNNER_CLI_AUTH_STATES",
+    "RUNNER_CLI_NAMES",
+    "RUNNER_EXECUTION_PROFILES",
+    "RUNNER_FEATURES",
     "TRANSPORTS",
     "WORK_KINDS",
     "ConnectionRecord",
@@ -83,7 +110,17 @@ TRANSPORTS: Final[tuple[str, ...]] = ("direct", "vpn", "ssh_tunnel")
 SSH_PROFILES: Final[tuple[str, ...]] = ("claude_code_headless", "custom_command")
 PULL_CLIENTS: Final[tuple[str, ...]] = ("claude_code_session", "agent")
 BILLINGS: Final[tuple[str, ...]] = ("metered", "not_metered")
-PURPOSES: Final[tuple[str, ...]] = ("api_key", "ssh_private_key")
+#: The purposes a connection's own secret can have: what ``setExecutorSecret`` takes
+#: (``ExecutorSecretPurpose`` in the contract names exactly these two) and ``PURPOSES_BY_KIND`` distributes.
+GENERIC_PURPOSES: Final[tuple[str, ...]] = ("api_key", "ssh_private_key")
+#: `EXEC2-SEAL-1` (ADR-0026 decision 7). The sealed SSH key of an agent install session. It lives in
+#: ``executor_secret`` (migration ``0046``) and belongs to the session that
+#: ``executor_agent_install.key_secret_id`` names, **not** to a connection kind: it is in no tuple of
+#: :data:`PURPOSES_BY_KIND`, so :func:`refuse_purpose` refuses it for every kind (``purpose_not_for_kind``) and the
+#: generic ``setExecutorSecret`` path cannot write one. The contract's request enum does not carry it either.
+INSTALL_PURPOSES: Final[tuple[str, ...]] = ("agent_install_key",)
+#: Every value of ``executor_secret.purpose`` (``ck_executor_secret_purpose``).
+PURPOSES: Final[tuple[str, ...]] = GENERIC_PURPOSES + INSTALL_PURPOSES
 RATE_CHECKS: Final[tuple[str, ...]] = ("checked", "not_reported", "mismatch", "not_metered")
 PROBE_OUTCOMES: Final[tuple[str, ...]] = (
     "ok", "ip_refused", "credential_refused", "model_mismatch", "rate_mismatch", "timeout",
@@ -97,6 +134,64 @@ IDENTITY_BASES: Final[tuple[str, ...]] = ("reported", "declared")
 IDENTITY_BASIS_BY_KIND: Final[Mapping[str, str]] = {
     "http_api": "reported", "ssh_command": "reported", "pull": "declared",
 }
+#: `EXEC2-SEAL-1` (ADR-0026 decision 1). The capacity of a connection: the most units (a Run in ``leased``,
+#: ``running`` or ``retry_wait``, a comparison model call in ``prepared`` or ``sent``) in use at once. Absent
+#: on a revision means :data:`DEFAULT_MAX_ACTIVE_RUNS`. The coupled limits of decision 2 are `EXEC2-CAP-01`.
+MAX_ACTIVE_RUNS_MIN: Final[int] = 1
+MAX_ACTIVE_RUNS_MAX: Final[int] = 16
+DEFAULT_MAX_ACTIVE_RUNS: Final[int] = 1
+#: Why a queued Run is not running (``RunQueueReason`` in the contract).
+QUEUE_REASONS: Final[tuple[str, ...]] = ("executor_at_capacity", "runner_offline")
+#: The state of an enrollment grant, derived at read time (``ExecutorEnrollmentState``).
+ENROLLMENT_STATES: Final[tuple[str, ...]] = ("pending", "redeemed", "expired", "revoked")
+#: An agent install session (``ExecutorAgentInstall*``; ``ck_executor_agent_install_*``).
+AGENT_INSTALL_ACCESSES: Final[tuple[str, ...]] = ("generated_key", "pasted_key")
+AGENT_INSTALL_STATES: Final[tuple[str, ...]] = (
+    "requested", "scanning", "awaiting_host_key", "installing", "succeeded", "failed",
+)
+AGENT_INSTALL_FAILURES: Final[tuple[str, ...]] = (
+    "host_unreachable", "ssh_refused", "host_key_changed", "host_key_not_confirmed",
+    "sudo_password_required", "unsupported_platform", "package_unavailable", "install_failed",
+    "enrollment_failed", "secret_unreadable", "no_worker", "timed_out",
+)
+#: What an agent reports about itself (``RunnerCliName``, ``RunnerCliAuthState``,
+#: ``RunnerExecutionProfile``, ``RunnerFeature``): closed enumerations, never a credential or a path.
+RUNNER_CLI_NAMES: Final[tuple[str, ...]] = ("claude", "codex")
+RUNNER_CLI_AUTH_STATES: Final[tuple[str, ...]] = ("valid", "login_required", "unknown")
+RUNNER_EXECUTION_PROFILES: Final[tuple[str, ...]] = ("command", "endpoint")
+RUNNER_FEATURES: Final[tuple[str, ...]] = ("images",)
+
+#: `EXEC2-SEAL-1`. The typed details of the refusals the stage-1 operations may carry, on the catalogue's
+#: existing codes only (ADR-0026 decision 18); ``contracts/domain/v1/error-codes.json`` documents each. A detail
+#: names a field or a class and never a value.
+#:
+#: ``validation_failed`` -- the ``constraint`` of a refusal (the ``field`` is named beside each):
+#: the pull ``max_claimed_tasks`` or the ``http_api`` ``max_parallel_calls`` below ``max_active_runs``;
+CONSTRAINT_BELOW_MAX_ACTIVE_RUNS: Final[str] = "below_max_active_runs"
+#: ``max_active_runs`` above one on an ``ssh_command`` revision before its wrappers isolate invocations;
+CONSTRAINT_CAPACITY_NOT_SUPPORTED_FOR_KIND: Final[str] = "capacity_not_supported_for_kind"
+#: a value outside its range (``max_active_runs`` is 1 to 16; ``runner.py`` already says the same of a lifetime);
+CONSTRAINT_RANGE: Final[str] = "range"
+#: an enrollment, an install or an integration-authorisation mark on a connection that is not ``pull``
+#: (field ``kind``; ``runner.issue_runner_token`` already says it);
+CONSTRAINT_KIND_NOT_PULL: Final[str] = "kind_not_pull"
+#: an install with ``pasted_key`` access and no key, or a key sent with ``generated_key`` (field ``private_key``);
+CONSTRAINT_PRIVATE_KEY_REQUIRED: Final[str] = "private_key_required"
+CONSTRAINT_PRIVATE_KEY_NOT_ACCEPTED: Final[str] = "private_key_not_accepted"
+#: a package version the image does not hold (field ``version``).
+CONSTRAINT_PACKAGE_VERSION_UNKNOWN: Final[str] = "package_version_unknown"
+#: ``conflict`` -- the ``conflict_reason`` of a refusal: a repeat of the key that issued a grant, a secret already
+#: exchanged, an install still unfinished, an install not at the host-key confirmation, and a fingerprint other
+#: than the observed one. (``connection_archived`` and ``no_revision`` already exist.)
+CONFLICT_ENROLLMENT_SHOWN_ONCE: Final[str] = "enrollment_shown_once"
+CONFLICT_ENROLLMENT_REDEEMED: Final[str] = "enrollment_redeemed"
+CONFLICT_INSTALL_IN_PROGRESS: Final[str] = "install_in_progress"
+CONFLICT_INSTALL_NOT_AWAITING_HOST_KEY: Final[str] = "install_not_awaiting_host_key"
+CONFLICT_HOST_KEY_CHANGED: Final[str] = "host_key_changed"
+#: ``dependency_unavailable`` -- the ``dependency`` of a refusal: the image holds no agent package.
+#: (``secrets_public_key_missing`` already exists.)
+DEPENDENCY_AGENT_PACKAGE: Final[str] = "agent_package"
+
 #: A probe nobody takes in this long ends as ``no_worker``.
 PROBE_UNTAKEN_SECONDS: Final[int] = 120
 #: A ``running`` probe ends by its own timeout plus this margin, if its worker died.
@@ -107,7 +202,8 @@ PROBE_RUNNING_MARGIN_SECONDS: Final[int] = 30
 PULL_PROBE_WINDOW_SECONDS: Final[int] = 240
 
 #: Which secrets a kind can hold. ``pull`` keeps no sealed secret: its runner tokens (a later
-#: slice) are stored as one-way hashes and shown once.
+#: slice) are stored as one-way hashes and shown once. :data:`INSTALL_PURPOSES` is deliberately in none
+#: of these tuples (see there).
 PURPOSES_BY_KIND: Final[Mapping[str, tuple[str, ...]]] = {
     "http_api": ("api_key", "ssh_private_key"),
     "ssh_command": ("ssh_private_key",),
@@ -148,6 +244,9 @@ class RevisionSettings:
     pull_client: str | None = None
     answer_deadline_seconds: int | None = None
     max_claimed_tasks: int | None = None
+    #: `EXEC2-SEAL-1`. The capacity of the connection; applies to every kind, so it is in no kind's
+    #: required or optional set below. ``None`` reads as :data:`DEFAULT_MAX_ACTIVE_RUNS`.
+    max_active_runs: int | None = None
 
 
 #: Settings by kind: (required, optional). Everything else must be absent.
@@ -289,6 +388,10 @@ def validate_settings(
         raise _refuse("pin_id", "model_not_pinned")
     if settings.billing not in BILLINGS:
         raise _refuse("billing", "enum")
+    if settings.max_active_runs is not None and not (
+        MAX_ACTIVE_RUNS_MIN <= settings.max_active_runs <= MAX_ACTIVE_RUNS_MAX
+    ):
+        raise _refuse("max_active_runs", CONSTRAINT_RANGE)
     required = set(_REQUIRED[kind])
     optional = set(_OPTIONAL[kind])
     if kind == "http_api" and settings.transport == "ssh_tunnel":

@@ -13,6 +13,7 @@ answer except :meth:`task_for_claim` (to the runner that holds the claim) and
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -91,6 +92,22 @@ def _declared(max_images: int) -> int:
     if type(max_images) is not int or not 1 <= max_images <= MAX_CLAIM_IMAGES:
         raise ValueError("max_images is an integer from 1 to 8")
     return max_images
+
+
+#: `EXEC2-PULL-01` (ADR-0026 decision 3): the agent process that makes a claim. The wire's pattern
+#: (``ClaimExecutorTaskRequest.runner_instance_id``) and the database CHECK
+#: ``ck_executor_task_claimed_by_instance_format`` say the same.
+_INSTANCE_ID: Final = re.compile(r"[A-Za-z0-9_-]{8,64}")
+
+
+def _instance(runner_instance_id: str | None) -> str | None:
+    """``None`` is a claim that named no instance, which every runner deployed before
+    `EXEC2-PULL-01` is; a name is checked before any statement runs."""
+    if runner_instance_id is None:
+        return None
+    if not isinstance(runner_instance_id, str) or _INSTANCE_ID.fullmatch(runner_instance_id) is None:
+        raise ValueError("runner_instance_id is 8 to 64 characters of A-Za-z0-9_-")
+    return runner_instance_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +273,30 @@ class RunnerRepository:
             "OR last_seen_at < clock_timestamp() - make_interval(secs => :every))"
         ), {"id": token_id, "address": address, "every": every_seconds})
 
+    def lock_token(self, session: Session, token_id: str) -> bool:
+        """`EXEC2-PULL-01` (ADR-0026 decision 3): take the token's row ``FOR UPDATE``, held until the
+        caller's transaction ends, so that the claims of one token run one after the other and the
+        count of its held claims cannot change between the count and the claim that follows it.
+
+        The first statement of a claim's transaction and the only place a claim locks this row. It also
+        says whether the token is **still usable**, read from the row as the lock leaves it: not revoked,
+        not past its expiry and its connection not archived -- the same test as :meth:`token_by_prefix`
+        makes at authentication, repeated here because a claim long-polls for up to 25 s and each poll
+        authenticated only once, before it. A claim that waited for the lock of a token revoked in the
+        meantime reads the revocation (the locked row is the committed one).
+
+        ``False`` when there is no such row and when the token is no longer usable: the caller refuses
+        both alike as ``authentication_required``, and nothing is claimed for the token. The connection's
+        row is read, not locked: the administrator's writes take the connection's row first and then
+        the token's, so locking it here, after the token's, would invert that order."""
+        row = session.execute(text(
+            "SELECT (t.revoked_at IS NULL AND t.expires_at > clock_timestamp() "
+            "AND c.archived_at IS NULL) AS usable "
+            "FROM executor_runner_token t JOIN executor_connection c ON c.connection_id = t.connection_id "
+            "WHERE t.token_id = :t FOR UPDATE OF t"
+        ), {"t": token_id}).first()
+        return row is not None and bool(row[0])
+
     # -- tasks: the worker's side ----------------------------------------------------------
 
     def insert_task(
@@ -327,7 +368,8 @@ class RunnerRepository:
     def sweep(self, session: Session, connection_id: str) -> None:
         """Bring the connection's live tasks up to date, in this order: a task whose Attempt is
         gone is cancelled; a task past its deadline expires; a claim whose lease lapsed returns
-        the task to ``open``. Idempotent, and run before every claim."""
+        the task to ``open`` (and clears the instance that held it). Idempotent, and run before
+        every claim."""
         session.execute(text(
             "UPDATE executor_task t SET state = 'cancelled', terminal_at = clock_timestamp() "
             "WHERE t.connection_id = :c AND t.state IN ('open', 'claimed') "
@@ -342,6 +384,7 @@ class RunnerRepository:
         ), {"c": connection_id})
         session.execute(text(
             "UPDATE executor_task SET state = 'open', claimed_by_token_id = NULL, "
+            "claimed_by_instance_id = NULL, "
             "claim_expires_at = NULL WHERE connection_id = :c AND state = 'claimed' "
             "AND claim_expires_at <= clock_timestamp()"
         ), {"c": connection_id})
@@ -354,33 +397,51 @@ class RunnerRepository:
 
     def redeliver(
         self, session: Session, *, token_id: str, lease_seconds: int,
-        max_images: int = DEFAULT_CLAIM_IMAGES,
+        max_images: int = DEFAULT_CLAIM_IMAGES, runner_instance_id: str | None = None,
     ) -> ClaimedRow | None:
         """The claim this token already holds, with its lease refreshed.
 
         Never a task with more images than ``max_images``: a claim that declares fewer than the
-        held task needs is not handed it again (its lease lapses and the task returns to ``open``)."""
+        held task needs is not handed it again (its lease lapses and the task returns to ``open``).
+
+        `EXEC2-PULL-01` (ADR-0026 decision 3). A claim that names an instance is handed only a
+        task that **that instance** claimed: a task held by another instance, or by a claim that
+        named none, is not redelivered to it (its lease lapses and the task follows the
+        re-open rule). A claim that names none is handed the token's held task as before, and the
+        task's recorded instance is cleared, so the instance that held it earlier is not handed
+        it again behind that claim's back. The redelivered task records the instance it is handed to."""
+        instance = _instance(runner_instance_id)
         row = session.execute(text(
             "UPDATE executor_task SET claim_expires_at = "
-            "LEAST(clock_timestamp() + make_interval(secs => :lease), deadline_at) "
+            "LEAST(clock_timestamp() + make_interval(secs => :lease), deadline_at), "
+            "claimed_by_instance_id = CAST(:instance AS text) "
             "WHERE task_id = (SELECT task_id FROM executor_task WHERE claimed_by_token_id = :t "
             "AND state = 'claimed' AND claim_expires_at > clock_timestamp() "
             f"AND {_image_count()} <= :max_images "
+            "AND (CAST(:instance AS text) IS NULL "
+            "OR claimed_by_instance_id = CAST(:instance AS text)) "
             "ORDER BY created_at, task_id LIMIT 1 FOR UPDATE) "
             "RETURNING task_id, claim_expires_at, deadline_at, expected_model, payload"
-        ), {"t": token_id, "lease": lease_seconds, "max_images": _declared(max_images)}).first()
+        ), {"t": token_id, "lease": lease_seconds, "max_images": _declared(max_images),
+            "instance": instance}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def claim_next(
         self, session: Session, *, connection_id: str, token_id: str, lease_seconds: int,
-        max_images: int = DEFAULT_CLAIM_IMAGES,
+        max_images: int = DEFAULT_CLAIM_IMAGES, runner_instance_id: str | None = None,
     ) -> ClaimedRow | None:
         """Claim the oldest open task of the connection whose Attempt is live **and whose images
         the claim can serve**: never a task with more images than ``max_images`` (ADR-0025
         decision 18). A task too large for this claim is skipped, not waited on, so it neither
-        blocks the claims behind it nor is handed to a runner that would have to refuse it."""
+        blocks the claims behind it nor is handed to a runner that would have to refuse it.
+
+        `EXEC2-PULL-01`: the claimed task records ``runner_instance_id`` (``NULL`` for a claim that
+        named none), which is what :meth:`redeliver` matches. The column is set only together with
+        the token (``ck_executor_task_instance_with_token``) and cleared by :meth:`sweep`."""
+        instance = _instance(runner_instance_id)
         row = session.execute(text(
             "UPDATE executor_task t SET state = 'claimed', claimed_by_token_id = :token, "
+            "claimed_by_instance_id = CAST(:instance AS text), "
             "claim_expires_at = LEAST(clock_timestamp() + make_interval(secs => :lease), "
             "t.deadline_at), first_claimed_at = COALESCE(t.first_claimed_at, clock_timestamp()), "
             "claim_count = t.claim_count + 1 "
@@ -394,7 +455,7 @@ class RunnerRepository:
             "ORDER BY p.created_at, p.task_id FOR UPDATE OF p SKIP LOCKED LIMIT 1) "
             "RETURNING t.task_id, t.claim_expires_at, t.deadline_at, t.expected_model, t.payload"
         ), {"c": connection_id, "token": token_id, "lease": lease_seconds,
-            "max_images": _declared(max_images)}).first()
+            "max_images": _declared(max_images), "instance": instance}).first()
         return None if row is None else ClaimedRow(row[0], row[1], row[2], row[3], _payload(row[4]))
 
     def payload_of(self, session: Session, task_id: str) -> Mapping[str, Any] | None:

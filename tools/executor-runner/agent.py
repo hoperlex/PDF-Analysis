@@ -8,7 +8,14 @@ connects to it. Standard library only (Python 3.11+, ``tomllib``).
     PDF_ANALYSIS_RUNNER_TOKEN=... python3 agent.py --config agent.toml [--max-tasks N]
 
 Exit codes: 0 normal stop (signal or ``--max-tasks`` reached), 2 configuration error,
-3 the stand rejected the token (401: wrong, expired or revoked; restarting will not help).
+3 the stand rejected the token or the one-time enrollment secret (restarting will not help),
+75 the stand could not be reached while enrolling (the same secret may be tried again).
+
+``EXEC2-AGENT-01``: besides claiming, the process tells the stand what it is (``POST /runner/health``: version,
+detected CLIs with their official auth state, concurrency, profile, features) at start, every ten minutes and
+whenever detection changes; and ``--enroll-only --env-file F`` (what ``install.sh`` runs, as root) exchanges the
+one-time secret in ``AUDITMANAGER_ENROLLMENT_SECRET`` for a runner token, stores the token in ``F`` and removes
+the secret from ``F``.
 
 Rules kept here:
 
@@ -18,7 +25,11 @@ Rules kept here:
   configured command does so;
 * a model other than the one declared in the config is never claimed to have answered: a task
   that pins another model is failed with ``model_mismatch`` before any work starts;
-* a schema-invalid answer is failed with a typed reason, never retried silently.
+* a schema-invalid answer is failed with a typed reason, never retried silently;
+* the enrollment secret comes from the environment only, is removed from this process's environment at
+  once and is never logged, written or sent anywhere but as the bearer of the one exchange;
+* one process serves one token (v1): it names itself in every claim (``runner_instance_id``, random per
+  process), claims only when a local slot is free, and never starts a task id it is already working on.
 """
 
 from __future__ import annotations
@@ -27,6 +38,8 @@ import argparse
 import base64
 import json
 import os
+import re
+import secrets
 import signal
 import subprocess
 import sys
@@ -41,7 +54,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+import detect
 from runner_client import (
+    AGENT_VERSION_RE,
     Backoff,
     RunnerAuthError,
     RunnerClient,
@@ -58,11 +73,22 @@ from runner_client import (
 EXIT_OK = 0
 EXIT_CONFIG = 2
 EXIT_AUTH = 3
+EXIT_TEMPFAIL = 75  # sysexits EX_TEMPFAIL: enrolling failed for a reason a retry may cure
 
 DEFAULT_TOKEN_ENV = "PDF_ANALYSIS_RUNNER_TOKEN"
+#: `EXEC2-AGENT-01`: the one-time enrollment secret, in the environment of `install.sh` and of `--enroll-only`.
+ENROLLMENT_SECRET_ENV = "AUDITMANAGER_ENROLLMENT_SECRET"
+#: The report is repeated this often, and sooner when detection changes; detection itself runs this often.
+HEALTH_REPORT_SECONDS = 600.0
+HEALTH_DETECT_SECONDS = 120.0
+UNVERSIONED = "unversioned"
 DEADLINE_MARGIN_SECONDS = 5.0
 MAX_ANSWER_BYTES = 8 << 20
 SUBMIT_RETRY_BUDGET_SECONDS = 120.0
+#: After the stand hands back a task this process is still working on (a token whose limit is one is
+#: given its held task again), wait this long before claiming again: RUNNER_API.md 2.1's floor between
+#: claims that do not wait.
+DUPLICATE_DELIVERY_PAUSE_SECONDS = 5.0
 FORBIDDEN_KEY_EXACT = {"token", "secret", "password", "api_key", "apikey", "key", "bearer", "authorization"}
 FORBIDDEN_KEY_SUFFIXES = ("_token", "_secret", "_password", "_key")
 
@@ -77,6 +103,13 @@ KNOWN_KEYS = {
 
 class ConfigError(Exception):
     pass
+
+
+def new_instance_id() -> str:
+    """The name of this agent process in every claim (RUNNER_API.md 2.1): 22 url-safe characters,
+    random per process, so a restarted agent is a different instance and is not handed the claim its
+    predecessor held (that lapses and the task follows the stand's re-open rule)."""
+    return secrets.token_urlsafe(16)
 
 
 @dataclass
@@ -376,16 +409,38 @@ def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_k
 
 
 class Agent:
-    def __init__(self, cfg: Config, client: RunnerClient, api_key: str, err: Any) -> None:
+    def __init__(self, cfg: Config, client: RunnerClient, api_key: str, err: Any, instance_id: Optional[str] = None) -> None:
         self.cfg = cfg
         self.client = client
         self.api_key = api_key
         self._err = err
+        self.instance_id = instance_id or new_instance_id()
         self.stop = threading.Event()
         self.abort = threading.Event()
         self.auth_failed = threading.Event()
         self._workers: list[threading.Thread] = []
         self._log_lock = threading.Lock()
+        # The ids of the tasks a worker of this process is working on, guarded by its own lock: the
+        # claim loop adds an id before the worker starts and the worker removes it when it ends.
+        self._work_lock = threading.Lock()
+        self._in_work: set[str] = set()
+
+    def _enter_work(self, task_id: str) -> bool:
+        """Register a task as in work. ``False`` when it already is: the stand handed this process a
+        task it is still working on, which must not be started a second time."""
+        with self._work_lock:
+            if task_id in self._in_work:
+                return False
+            self._in_work.add(task_id)
+            return True
+
+    def _leave_work(self, task_id: str) -> None:
+        with self._work_lock:
+            self._in_work.discard(task_id)
+
+    def in_work(self) -> frozenset[str]:
+        with self._work_lock:
+            return frozenset(self._in_work)
 
     def log(self, message: str) -> None:
         text = self.client.scrub(message)
@@ -407,13 +462,15 @@ class Agent:
         claimed = 0
         self.log(
             f"started: origin={self.client.origin} mode={self.cfg.mode} declared_model={self.cfg.declared_model} "
-            f"concurrency={self.cfg.concurrency} max_tasks={max_tasks if max_tasks else 'unlimited'}"
+            f"concurrency={self.cfg.concurrency} instance={self.instance_id} "
+            f"max_tasks={max_tasks if max_tasks else 'unlimited'}"
         )
         while not self.stop.is_set() and not self.auth_failed.is_set() and (not max_tasks or claimed < max_tasks):
-            if not slots.acquire(timeout=0.5):
+            if not slots.acquire(timeout=0.5):  # claim only with a free local slot
                 continue
             try:
-                task = self.client.claim(self.cfg.wait_seconds, self.cfg.declared_max_images)
+                task = self.client.claim(
+                    self.cfg.wait_seconds, self.cfg.declared_max_images, runner_instance_id=self.instance_id)
             except RunnerAuthError:
                 slots.release()
                 self.auth_failed.set()
@@ -435,6 +492,13 @@ class Agent:
                 slots.release()
                 if self.cfg.wait_seconds == 0:
                     self.stop.wait(5.0)  # RUNNER_API.md 2.1: never poll faster than every 5 s without a wait
+                continue
+            if not self._enter_work(task["task_id"]):
+                # A token whose limit is one is given its held task again; this process is still
+                # working on it. Starting it twice would answer it twice.
+                slots.release()
+                self.log(f"{task['task_id']}: delivered again while still in work; not started a second time")
+                self.stop.wait(DUPLICATE_DELIVERY_PAUSE_SECONDS)
                 continue
             claimed += 1
             worker = threading.Thread(target=self._worker, args=(task, slots), name=task["task_id"], daemon=True)
@@ -541,6 +605,7 @@ class Agent:
             self._fail(task_id, f"agent_error: {type(error).__name__}")
         finally:
             done.set()
+            self._leave_work(task_id)  # before the slot: a task handed back later is a new piece of work
             slots.release()
 
     def _fetch_images(self, task: dict, budget: float, should_stop: Any) -> list[tuple[dict, bytes]]:
@@ -642,21 +707,296 @@ class Agent:
             self.log(f"{task_id}: could not report the failure ({error.message})")
 
 
+# ------------------------------------------------------------- health report and enrollment
+# `EXEC2-AGENT-01` (ADR-0026 decisions 4, 5, 8). The stand calls are ``RunnerClient.report_health`` and
+# ``RunnerClient.redeem_enrollment`` (RUNNER_API.md section 9).
+
+
+def agent_version(directory: Optional[Path] = None) -> str:
+    """The package version: the ``VERSION`` file ``install.sh`` puts beside this file. A checkout has
+    none and says so, in the contract's pattern, instead of inventing a number."""
+    try:
+        text = ((directory or Path(__file__).resolve().parent) / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return UNVERSIONED
+    return text if AGENT_VERSION_RE.fullmatch(text) else UNVERSIONED
+
+
+def build_health_report(cfg: Config, instance_id: str, clis: list[dict], version: str) -> dict:
+    """``ReportRunnerHealthRequest`` of contract 1.15.0: enumerations and bounded strings, nothing else.
+
+    The stand refuses an incoherent report, so one is never built: a client named twice, or a client that is
+    not installed yet carries a version or a known authentication state."""
+    names = [item["cli"] for item in clis]
+    if len(set(names)) != len(names):
+        raise ValueError("a client is named twice in one health report")
+    if any(not item["installed"] and ("version" in item or item["auth_state"] != detect.AUTH_UNKNOWN) for item in clis):
+        raise ValueError("a client that is not installed has a version or an authentication state")
+    return {
+        "agent_version": version,
+        "clis": clis,
+        "concurrency": cfg.concurrency,
+        "execution_profile": cfg.mode,
+        "features": ["images"] if cfg.accept_images else [],
+        "runner_instance_id": instance_id,
+    }
+
+
+def _describe(clis: list[dict]) -> str:
+    return ", ".join(f"{item['cli']}:{'installed' if item['installed'] else 'absent'}/{item['auth_state']}" for item in clis)
+
+
+class HealthReporter:
+    """Tells the stand what this agent is: once at start, every ``report_seconds``, and at once when what
+    detection finds changes. Runs beside the claim loop and never blocks it.
+
+    A refusal of the token (401) ends the reporter and nothing else: the claim loop meets the same 401 and owns
+    the exit code. A stand without the route (404) or one that refuses the report (422) is logged and tried again
+    only at the next interval; a throttled or unreachable stand is tried again after the wait it asks for or
+    after a growing pause."""
+
+    def __init__(
+        self,
+        cfg: Config,
+        client: RunnerClient,
+        instance_id: str,
+        log: Any,
+        stop: threading.Event,
+        *,
+        detector: Any = None,
+        version: Optional[str] = None,
+        report_seconds: float = HEALTH_REPORT_SECONDS,
+        detect_seconds: float = HEALTH_DETECT_SECONDS,
+    ) -> None:
+        self.cfg = cfg
+        self.client = client
+        self.instance_id = instance_id
+        self.log = log
+        self.stop = stop
+        self.detector = detector or detect.detect_all
+        self.version = version if version is not None else agent_version()
+        self.report_seconds = report_seconds
+        self.detect_seconds = detect_seconds
+        self.sent: list[dict] = []  # the last reports the stand accepted, oldest first (the tests read it)
+
+    def report(self) -> dict:
+        return build_health_report(self.cfg, self.instance_id, self.detector(), self.version)
+
+    def start(self) -> threading.Thread:
+        thread = threading.Thread(target=self.run, name="health-reporter", daemon=True)
+        thread.start()
+        return thread
+
+    def run(self) -> None:
+        backoff = Backoff(1.0, 60.0)
+        last: Optional[dict] = None
+        last_at = 0.0
+        pending: Optional[dict] = None
+        while not self.stop.is_set():
+            if pending is None:
+                try:
+                    report = self.report()
+                except Exception as error:  # noqa: BLE001 - detection must not take the agent down
+                    self.log(f"health: detection failed ({type(error).__name__}); trying again later")
+                    self.stop.wait(self.detect_seconds)
+                    continue
+                if last is None or report != last or time.monotonic() - last_at >= self.report_seconds:
+                    pending = report
+            if pending is not None:
+                outcome, wait = self._send(pending)
+                if outcome == "token":
+                    return
+                if outcome == "retry":  # the same report again; detection is not repeated meanwhile
+                    self.stop.wait(wait if wait > 0 else backoff.next_delay())
+                    continue
+                backoff.reset()
+                if outcome == "accepted" and (last is None or pending["clis"] != last["clis"]):
+                    self.log(f"health: reported {_describe(pending['clis'])}")
+                last, last_at, pending = pending, time.monotonic(), None
+            self.stop.wait(self.detect_seconds)
+
+    def _send(self, report: dict) -> tuple[str, float]:
+        """``("accepted" | "deferred" | "token" | "retry", seconds)``. ``deferred``: the stand will not take
+        this report now, so the next try is the next interval's. ``token``: the stand refused the token.
+        ``retry``: try the same report again after ``seconds`` (0 means the backoff's pause)."""
+        try:
+            self.client.report_health(report)
+        except RunnerAuthError:
+            self.log("health: the stand rejected the runner token; the claim loop will stop the agent")
+            return "token", 0.0
+        except RunnerThrottled as error:
+            return "retry", throttle_delay(error)
+        except RunnerUnavailable as error:
+            self.log(f"health: the stand is not reachable ({error.message}); trying again")
+            return "retry", 0.0
+        except RunnerError as error:
+            if error.status in (404, 405):
+                self.log(f"health: this stand does not take health reports (HTTP {error.status}); trying again in "
+                         f"{int(self.report_seconds)}s")
+            else:
+                self.log(f"health: the stand refused the report (HTTP {error.status} {error.error_code or ''}): {error.message}")
+            return "deferred", 0.0
+        self.sent.append(report)
+        del self.sent[:-16]
+        return "accepted", 0.0
+
+
+class EnrollmentRefused(Exception):
+    """The stand will not exchange this secret (unknown, expired, revoked, redeemed): retrying cannot help."""
+
+
+class EnrollmentUnavailable(Exception):
+    """The stand could not be reached or did not answer: the same secret may be tried again in its window."""
+
+
+INSTANCE_FILE_NAME = "enroll-instance"
+_INSTANCE_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+
+def enrollment_instance_id(env_file: Path) -> str:
+    """The ``runner_instance_id`` of the exchange, persisted beside the environment file (mode 0600): one per
+    install, new on a host that never enrolled. A rerun on the same install -- the answer was lost, install.sh ran
+    again inside the 15-minute window -- sends the same id and so gets the stand's idempotent repeat (a fresh
+    token; the one minted before is revoked, and only the newest is stored). Another host has another id and is
+    refused with 409 ``enrollment_redeemed``, so a command pasted on two hosts enrolls only the first. The id
+    names the exchange and is not a credential; it is not the per-process id of the claims."""
+    path = env_file.with_name(INSTANCE_FILE_NAME)
+    for _ in range(3):
+        try:
+            existing, present = path.read_text(encoding="ascii").strip(), True
+        except FileNotFoundError:
+            existing, present = "", False
+        except UnicodeDecodeError:
+            existing, present = "", True
+        if _INSTANCE_RE.fullmatch(existing):
+            return existing
+        if present:  # an empty or damaged file (a crash between create and write): replace it
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+        try:
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            continue  # another process created it between our read and our create; read it again
+        with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+            handle.write(secrets.token_urlsafe(16) + "\n")
+    raise OSError("the enrollment instance file could not be created")
+
+
+def store_runner_token(env_file: Path, token_env: str, token: str, drop: tuple[str, ...] = ()) -> None:
+    """Write ``token_env=token`` into the environment file (mode 0600, replaced atomically) and remove every
+    line that sets ``token_env`` or a name in ``drop`` (the spent enrollment secret). Other lines stay."""
+    names = {token_env, *drop}
+    try:
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+        status: Optional[os.stat_result] = env_file.stat()
+    except FileNotFoundError:
+        lines, status = [], None
+    kept = [line for line in lines if line.partition("=")[0].strip() not in names]
+    kept.append(f"{token_env}={token}")
+    temporary = env_file.with_name(f".{env_file.name}.{secrets.token_hex(4)}.part")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(kept) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        if status is not None and os.geteuid() == 0:
+            os.chown(temporary, status.st_uid, status.st_gid)
+        os.replace(temporary, env_file)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
+def enroll_with_grant(cfg: Config, secret: str, env_file: Optional[str]) -> str:
+    """Exchange the one-time secret for a runner token and store the token. Returns the token.
+
+    Nothing is sent unless the token can be stored: a spent secret with the token lost would leave the host
+    needing a new enrollment. Raises ``ConfigError`` (cannot store, bad origin), ``EnrollmentRefused`` or
+    ``EnrollmentUnavailable``."""
+    if not env_file:
+        raise ConfigError("an enrollment secret needs --env-file PATH: the runner token it yields is stored there")
+    path = Path(env_file)
+    if not os.access(path.parent, os.W_OK) or (path.exists() and not os.access(path, os.W_OK)):
+        raise ConfigError(f"cannot store the runner token in {env_file} from this process (run the enrollment as root, "
+                          "for example with install.sh); the secret was not used")
+    client = RunnerClient(cfg.origin, secret, allow_insecure_http=cfg.allow_insecure_http, ca_file=cfg.ca_file)
+    try:
+        issued = client.redeem_enrollment(secret, enrollment_instance_id(path), agent_version())
+    except RunnerAuthError:
+        raise EnrollmentRefused(
+            "the stand refused the enrollment secret (HTTP 401): it is unknown, expired (a secret lasts 15 minutes), "
+            "revoked, or belongs to another stand. Issue a new enrollment in the stand UI.") from None
+    except RunnerNotFound:
+        raise EnrollmentRefused("the stand has no enrollment route (HTTP 404): is the origin right, and is the stand up to date?") from None
+    except RunnerConflict:
+        raise EnrollmentRefused(
+            "the stand refused the enrollment secret (HTTP 409): it was already redeemed, or the connection is archived. "
+            "Issue a new enrollment in the stand UI.") from None
+    except OSError as error:
+        raise ConfigError(f"cannot keep the enrollment instance file beside {env_file} ({type(error).__name__}); "
+                          "the secret was not used") from None
+    except (RunnerThrottled, RunnerUnavailable) as error:
+        raise EnrollmentUnavailable(
+            f"the stand did not take the enrollment ({error.message}); run the installer again within the "
+            "15-minute window: the same secret is accepted again from this host.") from None
+    except RunnerError as error:
+        raise EnrollmentRefused(f"the stand refused the enrollment (HTTP {error.status}): {error.message}") from None
+    token = issued["token"]
+    try:
+        store_runner_token(path, cfg.token_env, token, drop=(ENROLLMENT_SECRET_ENV,))
+    except OSError as error:
+        raise ConfigError(f"the stand issued the runner token but it could not be stored in {env_file} "
+                          f"({type(error).__name__}); run the installer again within 15 minutes") from None
+    return token
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent.py", description="Unattended pull agent for the PDF Analysis executor channel.")
     parser.add_argument("--config", required=True, help="path to the TOML configuration (see agent.example.toml)")
     parser.add_argument("--origin", help="override [runner] origin")
     parser.add_argument("--max-tasks", type=int, default=0, help="stop after claiming this many tasks (0 = run until stopped)")
+    parser.add_argument("--env-file", help=f"the environment file the runner token is stored in; with {ENROLLMENT_SECRET_ENV} in the "
+                                           "environment the secret is exchanged for a token first (install.sh does this as root)")
+    parser.add_argument("--enroll-only", action="store_true",
+                        help=f"exchange {ENROLLMENT_SECRET_ENV} for a runner token, store it in --env-file and exit")
     return parser
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    # The one-time secret leaves this process's environment at once: the answer command and everything it
+    # starts inherit the environment, and none of them has any use for it.
+    grant = os.environ.pop(ENROLLMENT_SECRET_ENV, "")
     try:
         cfg = load_config(args.config)
         if args.origin:
             cfg.origin = args.origin
-        token = os.environ.get(cfg.token_env, "")
+        if args.enroll_only and not grant:
+            raise ConfigError(f"environment variable {ENROLLMENT_SECRET_ENV} is not set (it holds the one-time enrollment secret)")
+        if args.enroll_only and not args.env_file:
+            raise ConfigError("--enroll-only needs --env-file PATH")
+        if grant:
+            token = enroll_with_grant(cfg, grant, args.env_file)
+        else:
+            token = os.environ.get(cfg.token_env, "")
+    except EnrollmentRefused as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_AUTH
+    except EnrollmentUnavailable as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_TEMPFAIL
+    except (ConfigError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_CONFIG
+    if args.enroll_only:
+        print(f"enrolled: the runner token is stored in {args.env_file}; the enrollment secret is spent")
+        return EXIT_OK
+    try:
         if not token:
             raise ConfigError(f"environment variable {cfg.token_env} is not set (it holds the runner token)")
         api_key = os.environ.get(cfg.endpoint_api_key_env, "") if cfg.mode == "endpoint" and cfg.endpoint_api_key_env else ""
@@ -668,6 +1008,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("error: --max-tasks must be 0 or more", file=sys.stderr)
         return EXIT_CONFIG
     agent = Agent(cfg, client, api_key, sys.stderr)
+    HealthReporter(cfg, client, agent.instance_id, agent.log, agent.stop).start()
 
     def on_signal(signum: int, _frame: Any) -> None:
         agent.log(f"signal {signum}: stopping after the tasks in flight")
@@ -675,7 +1016,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
-    return agent.run(args.max_tasks or None)
+    try:
+        return agent.run(args.max_tasks or None)
+    finally:
+        agent.stop.set()  # the health reporter ends with the claim loop
 
 
 if __name__ == "__main__":

@@ -200,10 +200,11 @@ class ComparisonModelCaller:
                 connection_id = repository.connection_of(session, route.connection_revision_id)
                 if connection_id is None:
                     raise ValueError("the route names a connection revision that does not exist")
-                # The Run claim's own lock: this and a Run's claim cannot both pass their check.
+                # The Run claim's own lock: this and a Run's claim cannot both pass their check on the last
+                # unit. `EXEC2-CAP-01`: a call takes one unit of the connection's capacity, the way a Run
+                # does; with the default capacity of one that is "no Run and no other call is active".
                 repository.lock_connection(session, connection_id)
-                if (repository.connection_has_active_run(session, connection_id)
-                        or repository.connection_has_active_call(session, connection_id)):
+                if not repository.connection_has_free_unit(session, connection_id):
                     raise CallRefused(REASON_CONNECTION_BUSY, pauses_job=False)
             if not unmetered:
                 assert consent is not None  # a live call without one was refused before the database

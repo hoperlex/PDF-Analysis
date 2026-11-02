@@ -10,6 +10,11 @@
  *
  * A `pull` connection (`EXEC-PULL-01`) has no key and no address: its card carries the panel of
  * runner tokens instead, with «на связи» and the number of open tasks.
+ *
+ * `EXEC2-WEB-CAP-01`: a connection with a current revision carries its occupancy, and the card
+ * says «Занято N из M» from it — runs and comparison calls together, the calls named only when
+ * there is one. A connection without the reading draws no line, and no sentence anywhere says
+ * «свободно»: the server counts a unit held by unresolved remote work as in use.
  */
 
 import { useState } from 'react';
@@ -25,6 +30,7 @@ import type {
 import { formatInstant } from '@/shared/lib';
 import {
   BILLING_LABELS,
+  CAPACITY_FIELD_LABEL,
   FLAVOUR_LABELS,
   IDENTITY_BASIS_LABELS,
   KIND_LABELS,
@@ -39,6 +45,8 @@ import {
   WORK_KIND_LABELS,
   connectionRunnerIsOnline,
   currentRevision,
+  occupancyReading,
+  occupancySentence,
   probeIsOnCurrentSecret,
   probeOutcomeSentence,
   requiredPurposes,
@@ -74,7 +82,29 @@ function Moment({ at }: { readonly at: string }) {
   return <time dateTime={at}>{formatInstant(at)}</time>;
 }
 
+/**
+ * «Занято N из M» (`EXEC2-WEB-CAP-01`). Drawn for an archived connection too: work that was
+ * running when it was archived still holds its units.
+ */
+function OccupancyLine({ connection }: { readonly connection: ExecutorConnection }) {
+  const reading = occupancyReading(connection);
+  if (reading === null) return null;
+  return (
+    <p
+      data-executor-occupancy={reading.state}
+      data-executor-occupancy-used={reading.used}
+      data-executor-occupancy-capacity={reading.capacity}
+      data-executor-occupancy-runs={reading.runs}
+      data-executor-occupancy-calls={reading.calls}
+    >
+      {occupancySentence(reading)}
+    </p>
+  );
+}
+
 function RevisionSummary({ revision }: { readonly revision: ExecutorRevision }) {
+  // A revision without the member is a revision from before capacity existed: one at a time.
+  const activeRuns = revision.max_active_runs ?? 1;
   return (
     <dl data-executor-revision={revision.revision_no}>
       <dt>Настройки</dt>
@@ -107,6 +137,8 @@ function RevisionSummary({ revision }: { readonly revision: ExecutorRevision }) 
       </dd>
       <dt>Тарификация</dt>
       <dd data-executor-billing={revision.billing}>{BILLING_LABELS[revision.billing]}</dd>
+      <dt>{CAPACITY_FIELD_LABEL}</dt>
+      <dd data-executor-active-runs={activeRuns}>{activeRuns}</dd>
       <dt>Ожидание ответа</dt>
       <dd>{revision.timeout_seconds} с{revision.max_parallel_calls !== undefined ? `; параллельных вызовов ${revision.max_parallel_calls}` : ''}</dd>
       <dt>Документы заказчика</dt>
@@ -240,6 +272,8 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
       {connection.routed_work_kinds.length > 0 ? (
         <p data-executor-routed>Назначено: {connection.routed_work_kinds.map((work) => WORK_KIND_LABELS[work]).join(', ')}.</p>
       ) : null}
+
+      <OccupancyLine connection={connection} />
 
       {revision !== undefined ? <RevisionSummary revision={revision} /> : detail === undefined ? (
         <p data-executor-revision-state={detailFailed ? 'failed' : 'pending'}>

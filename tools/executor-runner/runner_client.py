@@ -32,6 +32,9 @@ import urllib.request
 from typing import Any, Optional
 
 API_PREFIX = "/api/v1/runner/tasks"
+#: `EXEC2-AGENT-01`: the two runner operations that are not under `/tasks/` (RUNNER_API.md section 9).
+ENROLL_PATH = "/api/v1/runner/enroll"
+HEALTH_PATH = "/api/v1/runner/health"
 MAX_REQUEST_BYTES = 1 << 20
 MAX_RESPONSE_BYTES = 16 << 20
 MAX_IMAGE_BYTES = 16 << 20
@@ -43,6 +46,11 @@ DEFAULT_RETRY_AFTER = 30.0
 MAX_RETRY_AFTER = 300.0
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 IMAGE_ID_RE = re.compile(r"^blob_[0-9A-HJKMNP-TV-Z]{26}$")
+#: `EXEC2-PULL-01`: the agent process named in a claim (RUNNER_API.md 2.1). The stand checks the same pattern.
+INSTANCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+#: `EXEC2-AGENT-01`: the contract's `agent_version`, and the shape of a runner token (56 characters).
+AGENT_VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")
+RUNNER_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{56}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BLOCK_ID_RE = re.compile(r"^blk_[0-9a-f]{32}$")
 #: The opaque crop reference of a comparison crop (the contract's pattern). Echoed, never parsed.
@@ -273,10 +281,12 @@ class RunnerClient:
         except (TypeError, ValueError):
             return
 
-    def _call(self, path: str, body: Optional[dict], timeout: float) -> tuple[int, Any]:
+    def _call(self, path: str, body: Optional[dict], timeout: float, *, bearer: Optional[str] = None) -> tuple[int, Any]:
+        """One POST. ``bearer`` is the credential of this call when it is not the runner token (the enrollment
+        secret of ``redeem_enrollment``); it is scrubbed from everything that leaves this method like the token."""
         url = self.origin + path
         headers = {
-            "Authorization": "Bearer " + self._token,
+            "Authorization": "Bearer " + (bearer or self._token),
             "Accept": "application/json",
             "User-Agent": USER_AGENT,
         }
@@ -299,7 +309,7 @@ class RunnerClient:
                 ) from None
         except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError, http.client.HTTPException, ssl.SSLError, OSError) as error:
             reason = getattr(error, "reason", error)
-            raise RunnerUnavailable(self.scrub(f"network error: {type(reason).__name__}: {reason}")) from None
+            raise RunnerUnavailable(self._scrub_also(self.scrub(f"network error: {type(reason).__name__}: {reason}"), bearer)) from None
         if len(raw) > MAX_RESPONSE_BYTES:
             raise RunnerUnavailable("response is larger than 16 MiB", status=status)
         self._note_date(response_headers)
@@ -310,9 +320,13 @@ class RunnerClient:
                 return status, json.loads(raw.decode("utf-8"))
             except (ValueError, UnicodeDecodeError):
                 raise RunnerUnavailable("the stand answered 2xx with a body that is not JSON", status=status) from None
-        raise self._error_for(status, raw, response_headers)
+        raise self._error_for(status, raw, response_headers, bearer=bearer)
 
-    def _error_for(self, status: int, raw: bytes, headers: Any) -> RunnerError:
+    @staticmethod
+    def _scrub_also(text: str, secret: Optional[str]) -> str:
+        return text.replace(secret, "***") if secret and text else text
+
+    def _error_for(self, status: int, raw: bytes, headers: Any, bearer: Optional[str] = None) -> RunnerError:
         error_code = None
         message = ""
         correlation_id = headers.get("X-Correlation-Id") if headers is not None else None
@@ -328,7 +342,7 @@ class RunnerClient:
             cid = document.get("correlation_id")
             if isinstance(cid, str):
                 correlation_id = cid
-        message = self.scrub(message)[:512] or f"HTTP {status}"
+        message = self._scrub_also(self.scrub(message), bearer)[:512] or f"HTTP {status}"
         retry_after = parse_retry_after(headers.get("Retry-After") if headers is not None else None)
         kwargs = dict(status=status, error_code=error_code, retry_after=retry_after, correlation_id=correlation_id)
         if status == 401:
@@ -352,20 +366,30 @@ class RunnerClient:
 
     # --------------------------------------------------------------- operations
 
-    def claim(self, wait_seconds: int, max_images: int = 1) -> Optional[dict]:
+    def claim(self, wait_seconds: int, max_images: int = 1, runner_instance_id: Optional[str] = None) -> Optional[dict]:
         """claimExecutorTask. Returns the task document, or None on 204 (nothing arrived).
 
         ``max_images`` is the most images one task may carry that this runner serves; the stand
         never hands a task with more. 1 is what every runner sent before several images existed,
         and it is sent as nothing at all, so a runner that serves one image speaks exactly the
-        wire it always spoke (a stand older than several images would refuse the new member)."""
+        wire it always spoke (a stand older than several images would refuse the new member).
+
+        ``runner_instance_id`` (8 to 64 characters of ``A-Za-z0-9_-``) names the agent process making
+        the claim, so that the stand redelivers a task it already holds only to the process that took
+        it. ``None``, which is what the stdio bridge sends, leaves the member out of the body."""
         if not isinstance(wait_seconds, int) or isinstance(wait_seconds, bool) or not 0 <= wait_seconds <= MAX_WAIT_SECONDS:
             raise RunnerRejected("wait_seconds must be an integer in 0..25", status=422, error_code="validation_failed")
         if not isinstance(max_images, int) or isinstance(max_images, bool) or not 1 <= max_images <= MAX_IMAGES:
             raise RunnerRejected("max_images must be an integer in 1..8", status=422, error_code="validation_failed")
+        if runner_instance_id is not None and (
+            not isinstance(runner_instance_id, str) or not INSTANCE_ID_RE.fullmatch(runner_instance_id)
+        ):
+            raise RunnerRejected("runner_instance_id must match [A-Za-z0-9_-]{8,64}", status=422, error_code="validation_failed")
         body: dict[str, Any] = {"wait_seconds": wait_seconds}
         if max_images > 1:
             body["max_images"] = max_images
+        if runner_instance_id is not None:
+            body["runner_instance_id"] = runner_instance_id
         _, document = self._call(f"{API_PREFIX}/claim", body, wait_seconds + 20.0)
         if document is None:
             return None
@@ -452,3 +476,43 @@ class RunnerClient:
         text = (reason or "unspecified")[:512]
         _, document = self._call(self._task_path(task_id, "fail"), {"reason": text}, self.timeout)
         return document if isinstance(document, dict) else {}
+
+    # ------------------------------------------------ `EXEC2-AGENT-01`: enrollment and health
+
+    def redeem_enrollment(self, secret: str, runner_instance_id: str, agent_version: Optional[str] = None) -> dict:
+        """redeemExecutorEnrollment: exchange the one-time enrollment ``secret`` for a runner token.
+
+        The secret is the bearer of this one call (there is no runner token yet, so the client of an
+        enrollment is constructed with the secret as its token) and is scrubbed from every message that leaves
+        here. ``runner_instance_id`` (8 to 64 characters of ``A-Za-z0-9_-``) names the install: a repeat inside
+        the stand's 15-minute window with the same name is idempotent, the stand revokes the token it minted
+        before and returns a fresh one. Returns the stand's document, ``{"token": <56 characters, shown once>,
+        "runner_token": {...}}``; a document that is not one is ``RunnerUnavailable`` (the exchange can be
+        repeated, so nothing is lost). 401 is ``RunnerAuthError``: an unknown, expired or revoked secret.
+        409 is ``RunnerConflict``: redeemed by another instance, redeemed too long ago, or the connection is
+        archived."""
+        if not isinstance(secret, str) or not secret or any(ch.isspace() or ord(ch) < 33 for ch in secret):
+            raise RunnerRejected("the enrollment secret is empty or contains whitespace", status=422, error_code="validation_failed")
+        if not isinstance(runner_instance_id, str) or not INSTANCE_ID_RE.fullmatch(runner_instance_id):
+            raise RunnerRejected("runner_instance_id must match [A-Za-z0-9_-]{8,64}", status=422, error_code="validation_failed")
+        body: dict[str, Any] = {"runner_instance_id": runner_instance_id}
+        if agent_version is not None:
+            if not isinstance(agent_version, str) or not AGENT_VERSION_RE.fullmatch(agent_version):
+                raise RunnerRejected("agent_version does not match the contract's pattern", status=422, error_code="validation_failed")
+            body["agent_version"] = agent_version
+        _, document = self._call(ENROLL_PATH, body, self.timeout, bearer=secret)
+        token = document.get("token") if isinstance(document, dict) else None
+        if not isinstance(token, str) or not RUNNER_TOKEN_RE.fullmatch(token) or not isinstance(document.get("runner_token"), dict):
+            raise RunnerUnavailable("the stand answered an enrollment with a document that is not a runner token", status=201)
+        return document
+
+    def report_health(self, report: dict) -> dict:
+        """reportRunnerHealth: tell the stand the agent's version, CLIs, concurrency, profile and features
+        (``ReportRunnerHealthRequest``; the caller builds it and the stand refuses an incoherent one with 422).
+        Returns the acknowledgement ``{"recorded_at": ...}``."""
+        if not isinstance(report, dict):
+            raise RunnerRejected("a health report is a JSON object", status=422, error_code="validation_failed")
+        _, document = self._call(HEALTH_PATH, report, self.timeout)
+        if not isinstance(document, dict) or not isinstance(document.get("recorded_at"), str):
+            raise RunnerUnavailable("the stand answered a health report with a document that is not an acknowledgement", status=200)
+        return document

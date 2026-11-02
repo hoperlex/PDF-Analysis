@@ -44,7 +44,8 @@ _LOCK_JOB_WAIT = text(
 #: definition). ``queued`` is waiting and the other four are terminal. The state machine writes
 #: the Lease and the Job state together, so this set and "has an unreleased Lease" agree.
 _ACTIVE_JOB_STATES = "('leased', 'running', 'retry_wait')"
-#: One connection serves at most one active Run (`EXEC-PAR-DECISION-01`, ruling 3). The
+#: One connection serves at most as many active units as its capacity -- one unless its current revision
+#: says more (`EXEC-PAR-DECISION-01`, ruling 3; `EXEC2-CAP-01`). The
 #: connection of a Run is the one its frozen revision belongs to: ``audit_run.connection_revision_id``
 #: is written once at INSERT, and a Run with none (the ``environment`` source) is never limited.
 _CONNECTION_OF_RUN = text(
@@ -59,33 +60,47 @@ _LOCK_CONNECTION = text(
     "SELECT pg_advisory_xact_lock("
     "hashtextextended('auditmanager.executor_connection|' || :connection_id, 0))"
 )
-#: Is the connection busy: with another active Run, or -- `CMP-SPEND-01` (ADR-0025 decision 4; the grant
-#: of the PROD-20 owner) -- with an active **comparison model call**: a ``prepared`` or ``sent`` row of
-#: ``comparison_model_call`` whose attempt still holds its work item (a killed worker's call stays active
-#: until the queue's reclaim ends the attempt, the same rule as a Run's expired Lease). The comparison
-#: wrapper takes the same advisory lock (:data:`_LOCK_CONNECTION`) before it prepares a call and asks the
-#: mirror of this question, so a Run's claim and a comparison call never both pass their check. The
-#: comparison table is empty while no comparison module is on, so a plain Run is decided exactly as before.
-_CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
-    "SELECT EXISTS (SELECT 1 FROM job other_job "
+#: `EXEC2-CAP-01` (ADR-0026 decision 1). How many **units** of the connection are in use, and how many it
+#: has. A unit is an active Run other than the one being claimed (the Job states of
+#: :data:`_ACTIVE_JOB_STATES`) or -- `CMP-SPEND-01` (ADR-0025 decision 4; the grant of the PROD-20 owner) --
+#: an active **comparison model call**: a ``prepared`` or ``sent`` row of ``comparison_model_call`` whose
+#: attempt still holds its work item (a killed worker's call stays active until the queue's reclaim ends the
+#: attempt, the same rule as a Run's expired Lease). Each counts one. The capacity is ``max_active_runs`` of
+#: the connection's **current** revision (the highest ``revision_no``), and one when that is NULL (a revision
+#: written before the setting) or the connection has no revision, so a connection nobody configured is
+#: decided exactly as it was: busy with one unit. The comparison wrapper takes the same advisory lock
+#: (:data:`_LOCK_CONNECTION`) before it prepares a call and asks the mirror of this question, so a Run's claim
+#: and a comparison call never both pass their check on the last unit. The comparison table is empty while no
+#: comparison module is on, so a plain Run is decided by the first count alone.
+_CONNECTION_UNITS = text(
+    "SELECT ((SELECT count(*) FROM job other_job "
     "JOIN audit_run other ON other.run_id = other_job.run_id "
     "JOIN executor_connection_revision peer ON peer.revision_id = other.connection_revision_id "
     "WHERE peer.connection_id = :connection_id AND other.run_id <> :run_id "
     f"AND other_job.state IN {_ACTIVE_JOB_STATES}) "
-    "OR EXISTS (SELECT 1 FROM comparison_model_call active_call "
+    "+ (SELECT count(*) FROM comparison_model_call active_call "
     "JOIN comparison_work_attempt active_attempt "
     "ON active_attempt.comparison_work_attempt_id = active_call.comparison_work_attempt_id "
     "JOIN executor_connection_revision call_peer "
     "ON call_peer.revision_id = active_call.connection_revision_id "
     "WHERE call_peer.connection_id = :connection_id "
     "AND active_call.state IN ('prepared', 'sent') "
-    "AND active_attempt.state IN ('created', 'leased', 'running'))"
+    "AND active_attempt.state IN ('created', 'leased', 'running'))) AS units_in_use, "
+    "COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
+    "WHERE current_revision.connection_id = :connection_id "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1) AS capacity"
 )
 #: The dispatcher's hint. ``:submitted`` is the Runs this process has already handed to a slot:
-#: they are not offered again, and their connections count as held, because a slot that has not
-#: claimed yet has not written its Job state. The hint is advisory -- the claim re-checks under the
-#: lock -- but it is what keeps a slot from being spent on a Run whose connection is busy: the next
-#: Job for a free connection is the one returned.
+#: they are not offered again, and they count as held units of their connections, because a slot that has
+#: not claimed yet has not written its Job state. The hint is advisory -- the claim re-checks under the
+#: lock -- but it is what keeps a slot from being spent on a Run whose connection is full: the next Job for
+#: a connection with a free unit is the one returned.
+#:
+#: `EXEC2-CAP-01`: the test is "units held < capacity" (``max_active_runs`` of the connection's current
+#: revision, one when absent), where it was "nothing held". ``held`` names each held *Run* (an active Job, or
+#: a submitted Run), once -- ``UNION`` removes a submitted Run whose Job is already active -- and ``loaded``
+#: counts them per connection. The hint counts Runs only, as it always did; the claim also counts the
+#: connection's active comparison calls, so at worst the hint offers a Run the claim then refuses.
 #:
 #: ``held`` is built from the few active Jobs (the ``ix_job_dispatch`` prefix on ``state``) and the
 #: few submitted Runs, never from the history of a connection's Runs: written as a correlated
@@ -93,22 +108,27 @@ _CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
 #: (5703 buffers against 10, 13.9 ms against 0.1 ms on 20 000 Runs), and that grows with the history.
 _NEXT_JOB = text(
     "WITH held AS ("
-    "SELECT rev.connection_id FROM job active_job "
+    "SELECT rev.connection_id, active_job.run_id FROM job active_job "
     "JOIN audit_run active_run ON active_run.run_id = active_job.run_id "
     "JOIN executor_connection_revision rev ON rev.revision_id = active_run.connection_revision_id "
     f"WHERE active_job.state IN {_ACTIVE_JOB_STATES} "
     "UNION "
-    "SELECT rev.connection_id FROM audit_run submitted_run "
+    "SELECT rev.connection_id, submitted_run.run_id FROM audit_run submitted_run "
     "JOIN executor_connection_revision rev ON rev.revision_id = submitted_run.connection_revision_id "
-    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[]))) "
+    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[]))), "
+    "loaded AS (SELECT connection_id, count(*) AS units FROM held GROUP BY connection_id) "
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
     "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
     "AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
-    "JOIN held ON held.connection_id = mine.connection_id "
-    "WHERE mine.revision_id = r.connection_revision_id) "
+    "JOIN loaded ON loaded.connection_id = mine.connection_id "
+    "WHERE mine.revision_id = r.connection_revision_id "
+    "AND loaded.units >= COALESCE((SELECT current_revision.max_active_runs "
+    "FROM executor_connection_revision current_revision "
+    "WHERE current_revision.connection_id = mine.connection_id "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1)) "
     "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1 "
     "FOR UPDATE OF r SKIP LOCKED"
 )
@@ -953,20 +973,25 @@ class JobRepository:
 
     @staticmethod
     def _hold_connection_limit(session: Session, *, run_id: str) -> None:
-        """One active Run per connection, decided under a lock the claim keeps to its commit.
+        """No more units in use per connection than its capacity, decided under a lock the claim keeps.
 
-        `EXEC-PAR-QUEUE-01`. Take the connection's advisory lock, then ask whether another Run
-        of that connection is active (:data:`_ACTIVE_JOB_STATES`). Two claims of one connection
-        queue on the lock, and the second reads the first's committed Job state; a claim that
-        finds the connection busy raises before it has written anything, so its Run and Job
-        stay as the caller found them (:class:`ExecutionNotClaimed`).
+        `EXEC-PAR-QUEUE-01`, widened by `EXEC2-CAP-01` (ADR-0026 decision 1). Take the connection's advisory
+        lock, then count the units in use other than this Run (:data:`_CONNECTION_UNITS`) and compare them
+        with the capacity of the connection's current revision. Two claims of one connection queue on the
+        lock, and the second reads the first's committed Job state, so with one unit left exactly one of them
+        wins; a claim that finds the connection full raises before it has written anything, so its Run and
+        Job stay as the caller found them (:class:`ExecutionNotClaimed`). With the default capacity of one
+        this is the old "another Run or call is active" check, to the row.
+
+        A lowered capacity governs new claims only: a Run already active keeps its unit and is never
+        stopped, and the count simply stays at or above the new capacity until enough of them end.
 
         This is taken and decided **before** the dispatch-control row is locked. That row's lock
         also happens to serialise every claim, but the connection limit must not depend on a
         lock taken for another purpose: ahead of it the limit is decided by its own lock alone,
         and removing that lock lets two claims both pass the check. Every claim takes the locks
         in one order (worker intake, connection, control, Run, Job), so none waits in a cycle.
-        A Run without a connection takes no lock and is never limited.
+        A Run without a connection takes no lock and no unit and is never limited.
         """
         connection_id = session.execute(
             _CONNECTION_OF_RUN, {"run_id": run_id}
@@ -974,13 +999,13 @@ class JobRepository:
         if connection_id is None:
             return
         session.execute(_LOCK_CONNECTION, {"connection_id": connection_id})
-        if session.execute(
-            _CONNECTION_HAS_OTHER_ACTIVE_RUN,
-            {"connection_id": connection_id, "run_id": run_id},
-        ).scalar_one():
+        units_in_use, capacity = session.execute(
+            _CONNECTION_UNITS, {"connection_id": connection_id, "run_id": run_id},
+        ).one()
+        if units_in_use >= capacity:
             raise DomainError(
                 ErrorCode.CONFLICT,
-                message="the run's executor connection already has an active run",
+                message="the run's executor connection has no free capacity unit",
                 aggregate_type="ExecutorConnection",
             )
 
