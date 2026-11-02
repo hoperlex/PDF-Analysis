@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TextRun } from '@/features/open-evidence/model/locate-quotation';
 import {
+  CUT_BLEED,
   foldPageText,
   foldQuotation,
   locateQuotation,
@@ -145,10 +146,24 @@ describe('rectangles follow the page transform', () => {
     expect((rect?.top ?? 0) + (rect?.height ?? 0)).toBeCloseTo(20 + 2.4);
   });
 
-  it('cuts a partly covered run at the character fraction of its advance', () => {
+  it('cuts a partly covered run at the character fraction of its advance, with a bleed on each cut side', () => {
     const rect = spanRectangle(run('abcdefghij', 0, 80), 2, 5, page);
-    expect(rect?.left).toBeCloseTo(2);
-    expect(rect?.width).toBeCloseTo(3);
+    // Characters 2..5 of ten, one unit each, and `CUT_BLEED` of a character on both cut sides.
+    expect(rect?.left).toBeCloseTo(2 - CUT_BLEED);
+    expect(rect?.width).toBeCloseTo(3 + 2 * CUT_BLEED);
+  });
+
+  it('bleeds only the side that is cut, and never past the item', () => {
+    const fromStart = spanRectangle(run('abcdefghij', 0, 80), 0, 5, page);
+    expect(fromStart?.left).toBeCloseTo(0);
+    expect(fromStart?.width).toBeCloseTo(5 + CUT_BLEED);
+    const toEnd = spanRectangle(run('abcdefghij', 0, 80), 6, 10, page);
+    expect(toEnd?.left).toBeCloseTo(6 - CUT_BLEED);
+    expect(toEnd?.width).toBeCloseTo(4 + CUT_BLEED);
+    // Cut one character in from either end: the bleed would cross the item's own edge.
+    const nearStart = spanRectangle(run('abcdefghij', 0, 80), 1, 9, page);
+    expect(nearStart?.left).toBeCloseTo(1 - CUT_BLEED);
+    expect(spanRectangle(run('abcdefghij', 0, 80), 0, 10, page)?.width).toBeCloseTo(10);
   });
 
   it('scales with the viewport', () => {

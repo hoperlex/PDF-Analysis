@@ -52,12 +52,27 @@ export const MAX_ZOOM = 10;
 /** And the most in absolute terms: CSS pixels per point. A 10 pt letter is then 120 px tall. */
 export const MAX_PIXELS_PER_POINT = 12;
 
-/** A focus never goes beyond this multiple of the fit, so a one-word target is not blown up. */
+/** A focus never goes beyond this multiple of the fit. */
 export const MAX_FOCUS_ZOOM = 4;
+/**
+ * Nor beyond this many CSS pixels per PDF point, so a short target is not blown up until the page
+ * around it is lost: at 2 px per point a 10 pt line is 20 px tall and a reader still sees its
+ * neighbours. Only the AUTOMATIC focus is held to it; the reader can zoom on to the maximum.
+ */
+export const FOCUS_SCALE = 2;
+/**
+ * The least the automatic focus draws a point at, in CSS pixels, when the pane is too narrow to
+ * show the target at the share below. A 370 pt line in a 340 px pane fitted at the share is 5 px
+ * tall and cannot be read; at this scale a 10 pt line is 12 px tall, the target is wider than the
+ * pane and is read by panning along it, and it starts at the left edge.
+ */
+export const READABLE_SCALE = 1.2;
 /** A focused target takes at most this share of the viewport's width and of its height. */
 export const FOCUS_SHARE = 0.6;
 /** Screen pixels left around the target inside that share, for its frame and badge. */
 export const FOCUS_PADDING = 10;
+/** Room kept to the left of a target wider than the pane: its frame, and its badge in the margin. */
+export const FOCUS_EDGE = FOCUS_PADDING + 28;
 
 /** One press of `+` or `-`, one click on a control. */
 export const ZOOM_STEP = 1.25;
@@ -160,26 +175,34 @@ export function panBy(view: View, dx: number, dy: number, stage: Stage): View {
 }
 
 /**
- * The view that brings `target` (page points) to the middle of the viewport, as large as is
- * comfortable: its width and height each take at most `FOCUS_SHARE` of the viewport once
- * `FOCUS_PADDING` is allowed around it, never more than `MAX_FOCUS_ZOOM` times the fit, never
- * less than the whole page. A page that already fits takes only the centring, which the clamp
- * refuses, so a small page simply stays whole.
+ * The view that brings `target` (page points) into the viewport, as large as is comfortable.
+ *
+ * Its width and height each take at most `FOCUS_SHARE` of the viewport once `FOCUS_PADDING` is
+ * allowed around it, but the zoom is never more than `FOCUS_SCALE` pixels per point or
+ * `MAX_FOCUS_ZOOM` times the fit, and never less than the whole page. The width alone yields to
+ * `READABLE_SCALE`: a pane too narrow to show a line at the share draws it readable and wider
+ * than the pane rather than whole and too small to read. A target that fits across is centred; one
+ * that does not starts at the left edge, where a reader starts a line. The height has no such
+ * exception, so a target never overflows the pane vertically. The clamp still refuses to push the
+ * page off, so a page that already fits simply stays whole.
  */
 export function focusView(target: Rect, stage: Stage): View {
   const room = (viewport: number) => Math.max(1, FOCUS_SHARE * viewport - 2 * FOCUS_PADDING);
-  const limits = [
-    MAX_FOCUS_ZOOM,
-    maxZoom(stage),
-    target.width > 0 ? room(stage.viewport.width) / (target.width * stage.fit) : Infinity,
-    target.height > 0 ? room(stage.viewport.height) / (target.height * stage.fit) : Infinity,
-  ];
-  const zoom = clampZoom(Math.min(...limits), stage);
+  const byWidth =
+    target.width > 0 ? room(stage.viewport.width) / (target.width * stage.fit) : Number.POSITIVE_INFINITY;
+  const byHeight =
+    target.height > 0 ? room(stage.viewport.height) / (target.height * stage.fit) : Number.POSITIVE_INFINITY;
+  const ceiling = Math.min(MAX_FOCUS_ZOOM, FOCUS_SCALE / stage.fit, maxZoom(stage));
+  const readable = READABLE_SCALE / stage.fit;
+  const zoom = clampZoom(Math.min(ceiling, byHeight, Math.max(byWidth, readable)), stage);
   const scale = stage.fit * zoom;
+  const wide = target.width * scale + 2 * FOCUS_EDGE > stage.viewport.width;
   return clampView(
     {
       zoom,
-      x: stage.viewport.width / 2 - (target.left + target.width / 2) * scale,
+      x: wide
+        ? FOCUS_EDGE - target.left * scale
+        : stage.viewport.width / 2 - (target.left + target.width / 2) * scale,
       y: stage.viewport.height / 2 - (target.top + target.height / 2) * scale,
     },
     stage,

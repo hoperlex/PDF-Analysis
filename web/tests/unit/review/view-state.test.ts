@@ -12,12 +12,15 @@ import type { Rect } from '@/features/open-evidence/model/locate-quotation';
 import type { Stage, View } from '@/features/open-evidence/model/view-state';
 import {
   FIT_INSET,
+  FOCUS_EDGE,
   FOCUS_PADDING,
+  FOCUS_SCALE,
   FOCUS_SHARE,
   MAX_FOCUS_ZOOM,
   MAX_PIXELS_PER_POINT,
   MAX_ZOOM,
   PAN_STEP,
+  READABLE_SCALE,
   clampView,
   contentSize,
   doubleClickView,
@@ -193,12 +196,13 @@ describe('focusing a rectangle', () => {
   });
 
   it('is limited by the width when the target is wide and by the height when it is tall', () => {
-    const at = stage();
-    const wide: Rect = { left: 60, top: 300, width: 480, height: 10 };
+    // A pane wide enough that the readable floor does not come into it.
+    const at = stage(A4, { width: 1200, height: 700 });
+    const wide: Rect = { left: 60, top: 300, width: 400, height: 10 };
     const tall: Rect = { left: 300, top: 100, width: 10, height: 200 };
     const wideBox = onScreen(wide, focusView(wide, at), at);
     const tallBox = onScreen(tall, focusView(tall, at), at);
-    expect(wideBox.width + 2 * FOCUS_PADDING).toBeCloseTo(FOCUS_SHARE * PANE.width, 4);
+    expect(wideBox.width + 2 * FOCUS_PADDING).toBeCloseTo(FOCUS_SHARE * 1200, 4);
     expect(tallBox.height + 2 * FOCUS_PADDING).toBeCloseTo(FOCUS_SHARE * PANE.height, 4);
   });
 
@@ -208,11 +212,21 @@ describe('focusing a rectangle', () => {
     expect(focusView(tall, at).zoom).toBe(1);
   });
 
-  it('never blows a tiny target up past four times the fit', () => {
+  it('never blows a short target up past two pixels per point, so the page around it is not lost', () => {
     const at = stage();
     const view = focusView({ left: 200, top: 200, width: 6, height: 6 }, at);
-    expect(view.zoom).toBeLessThanOrEqual(MAX_FOCUS_ZOOM);
-    expect(view.zoom).toBeCloseTo(MAX_FOCUS_ZOOM);
+    expect(view.zoom * at.fit).toBeCloseTo(FOCUS_SCALE);
+    // On a desktop A4 pane that is a little over twice the whole-page fit, not four times it.
+    expect(view.zoom).toBeLessThan(MAX_FOCUS_ZOOM);
+    expect(view.zoom).toBeGreaterThan(2);
+    // The reader may still go further by hand.
+    expect(zoomAt(view, 1e9, viewportCentre(at), at).zoom).toBeGreaterThan(view.zoom);
+  });
+
+  it('holds a target on a sheet where two pixels per point would be more than four times the fit to four', () => {
+    const at = stage(SHEET);
+    const view = focusView({ left: 600, top: 300, width: 40, height: 14 }, at);
+    expect(view.zoom).toBe(MAX_FOCUS_ZOOM);
   });
 
   it('never goes below the whole page, so a target as big as the page leaves it whole', () => {
@@ -236,6 +250,50 @@ describe('focusing a rectangle', () => {
     expect(box.left + box.width).toBeLessThanOrEqual(PANE.width);
   });
 });
+
+describe('focusing in a pane too narrow for the share', () => {
+  const narrow = { width: 340, height: 600 };
+  const line: Rect = { left: 48, top: 194, width: 370, height: 10 };
+
+  it('draws the line readable and wider than the pane, not whole and too small to read', () => {
+    const at = stage(A4, narrow);
+    const view = focusView(line, at);
+    // At the share the line would be about 5 px tall; it is drawn at the readable scale.
+    expect(view.zoom * at.fit).toBeCloseTo(READABLE_SCALE);
+    expect(view.zoom).toBeGreaterThan(1.5);
+    expect(onScreenWidth(line, view, at)).toBeGreaterThan(narrow.width);
+  });
+
+  it('starts it at the left edge of the pane, with room for the frame and its badge', () => {
+    const at = stage(A4, narrow);
+    const view = focusView(line, at);
+    expect(toScreen(line, view, at).left).toBeCloseTo(FOCUS_EDGE);
+  });
+
+  it('centres a target that fits across the pane, and keeps the share for a pane that can hold it', () => {
+    const wide = stage(A4, { width: 1200, height: 700 });
+    // A line in the middle of the page, so the page's own centring is the target's.
+    const middle: Rect = { left: 117.5, top: 194, width: 360, height: 10 };
+    const view = focusView(middle, wide);
+    const box = toScreen(middle, view, wide);
+    expect(box.left + box.width / 2).toBeCloseTo(600, 4);
+    expect(view.zoom * wide.fit).toBeGreaterThan(READABLE_SCALE);
+  });
+
+  it('never lets a target overflow the pane vertically, however narrow the pane is', () => {
+    for (const pane of [{ width: 340, height: 500 }, { width: 1200, height: 500 }]) {
+      const at = stage(A4, pane);
+      const paragraph: Rect = { left: 60, top: 300, width: 300, height: 400 };
+      const box = toScreen(paragraph, focusView(paragraph, at), at);
+      expect(box.top).toBeGreaterThanOrEqual(0);
+      expect(box.top + box.height).toBeLessThanOrEqual(pane.height);
+    }
+  });
+});
+
+function onScreenWidth(rect: Rect, view: View, at: Stage): number {
+  return toScreen(rect, view, at).width;
+}
 
 describe('opening a page with nothing to point at', () => {
   it('opens a portrait page as wide as the pane allows, at its top', () => {

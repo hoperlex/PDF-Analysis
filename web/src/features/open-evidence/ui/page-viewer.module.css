@@ -184,6 +184,18 @@
   box-shadow: var(--am-shadow-2);
 }
 
+/*
+ * A fragment found in the page text usually starts mid-line, so the margin to its left is the
+ * text before it; its badge goes above the corner instead, in the gap between the lines.
+ */
+.frame[data-method='text'] .badge {
+  top: auto;
+  right: auto;
+  bottom: 100%;
+  left: -2px;
+  margin: 0 0 4px;
+}
+
 .frame[data-active='true'] .badge {
   background: var(--am-accent);
   color: var(--am-ink-inverse);

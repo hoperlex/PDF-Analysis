@@ -172,12 +172,22 @@ function multiply(a: Matrix, b: Matrix): readonly [number, number, number, numbe
   ];
 }
 
+/**
+ * A proportional face does not advance by the same width for every character, so a cut made at a
+ * character FRACTION of the item's advance can fall a fraction of a glyph away from the cut it
+ * means (measured: the last «а» of a quotation sat just outside its box). Each side of a box that
+ * is cut inside the item, not at its start or its end, is widened by this many characters, so the
+ * glyph on the edge is inside the box. The box never leaves the item.
+ */
+export const CUT_BLEED = 0.5;
+
 /** How far a glyph box reaches above and below the baseline, in em. Covers ascenders and descenders. */
 const ASCENT_EM = 0.92;
 const DESCENT_EM = 0.24;
 
 /**
- * The box of `run.str[start, end)` in viewport pixels, or null when the item has no extent.
+ * The box of `run.str[start, end)` in viewport pixels, or null when the item has no extent. A side
+ * cut inside the item is widened by `CUT_BLEED` characters.
  *
  * Works in the viewport's own frame: the item's matrix is carried through the viewport
  * transform, so a page rotated by `/Rotate` or a rotated run comes out as the axis-aligned
@@ -202,8 +212,8 @@ export function spanRectangle(
   const unitAlong = { x: placed[0] / along, y: placed[1] / along };
   const unitUp = { x: placed[2] / up, y: placed[3] / up };
 
-  const from = Math.max(0, start) / length;
-  const to = Math.min(length, end) / length;
+  const from = Math.max(0, start > 0 ? start - CUT_BLEED : 0) / length;
+  const to = Math.min(length, end < length ? end + CUT_BLEED : length) / length;
 
   const xs: number[] = [];
   const ys: number[] = [];
