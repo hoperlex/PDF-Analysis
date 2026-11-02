@@ -65,6 +65,14 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/executors/agent_install.py`
 - `src/auditmanager/executors/agent_install_repository.py`
 - `src/auditmanager/executors/integration_mark.py`
+- `src/auditmanager/api/routers/__init__.py`
+- `src/auditmanager/executors/repository.py`
+- `src/auditmanager/executors/queries.py`
+- `infra/deploy/compose.server.yml`
+- `infra/deploy/README.md`
+- `tests/integration/executors/test_runner_seam.py`
+- `tests/unit/executors/test_capacity_queries.py`
+- `tests/integration/executors/test_connection_capacity.py`
 - `src/auditmanager/executors/agent_package.py`
 - `src/auditmanager/executors/public.py`
 - `src/auditmanager/api/routers/executor_enrollment.py`
