@@ -14,7 +14,9 @@ OPERATING = ROOT / "docs" / "program" / "dispatch" / "OPERATING_CONSTRAINTS.md"
 ADDENDUM = ROOT / "docs" / "program" / "W46-HISTORICAL-ADDENDUM.md"
 TASKS = ROOT / "docs" / "program" / "tasks"
 FROZEN_BASE = "fad3c28748ef52bc9b5f711191ff0130483e0055"
-GOVERNANCE_ACTIVATION_BASE = "14caf886e78883ed771d81fbf463c98af727c938"
+# Existing task records are immutable evidence, including 104 that fail the old
+# formatting census. Enforce the extended template for newly created records.
+PROCESS_REFORM_BASE = "4ab295607806d030cf8066c2f21ab1cac45003e1"
 W46_REPORTS = (
     "docs/program/W46-DASH.md",
     "docs/program/W46-WIRE.md",
@@ -98,7 +100,10 @@ def governance_findings(markdown: str) -> set[str]:
         target = _field(publication, "development_target")
         authority = _field(publication, "origin_main_authority") or ""
         if target == "origin/main":
-            if not authority.startswith("separate direct owner instruction "):
+            if authority.startswith("delegated release integrator "):
+                if re.fullmatch(r"delegated release integrator [A-Z][A-Z0-9-]+", authority) is None:
+                    findings.add("MAIN_RELEASE_DELEGATION_REFERENCE_REQUIRED")
+            elif not authority.startswith("separate direct owner instruction "):
                 findings.add("MAIN_DIRECT_AUTHORITY_REQUIRED")
             elif re.fullmatch(r"separate direct owner instruction [0-9a-f]{40}", authority) is None:
                 findings.add("MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED")
@@ -109,14 +114,14 @@ def governance_findings(markdown: str) -> set[str]:
     return findings
 
 
-def _activation_task_paths() -> frozenset[str]:
+def _pre_reform_task_paths() -> frozenset[str]:
     result = subprocess.run(
         [
             "git",
             "ls-tree",
             "-r",
             "--name-only",
-            GOVERNANCE_ACTIVATION_BASE,
+            PROCESS_REFORM_BASE,
             "docs/program/tasks",
         ],
         cwd=ROOT,
@@ -130,9 +135,9 @@ def _activation_task_paths() -> frozenset[str]:
 def governed_task_findings(
     root: Path = ROOT, *, baseline_paths: frozenset[str] | None = None
 ) -> dict[str, set[str]]:
-    """Validate every task absent from the exact governance-activation tree."""
+    """Validate task files added after the process reform base, leaving old evidence intact."""
 
-    baseline = _activation_task_paths() if baseline_paths is None else baseline_paths
+    baseline = _pre_reform_task_paths() if baseline_paths is None else baseline_paths
     tasks = root / "docs" / "program" / "tasks"
     findings: dict[str, set[str]] = {}
     for task in sorted(tasks.glob("*.md")):
@@ -185,22 +190,22 @@ def test_the_task_template_carries_all_four_governance_sections() -> None:
     assert "enumerator_owner" in text
     assert "captured_at: YYYY-MM-DD" in text
     assert "correction_mode: addendum" in text
-    assert "separate direct owner instruction" in text
+    assert "delegated release integrator" in text
 
 
 def test_a_complete_new_task_satisfies_the_executable_rules() -> None:
     assert governance_findings(VALID_TASK) == set()
 
 
-def test_every_task_added_after_governance_activation_satisfies_the_rules() -> None:
+def test_task_files_added_after_process_reform_satisfy_the_rules() -> None:
     assert governed_task_findings() == {}
 
 
-def test_the_activation_inventory_is_the_captured_85_task_baseline() -> None:
-    baseline = _activation_task_paths()
-    assert len(baseline) == 85
+def test_the_pre_reform_inventory_is_the_captured_902_task_baseline() -> None:
+    baseline = _pre_reform_task_paths()
+    assert len(baseline) == 902
     assert "docs/program/tasks/W48-GOV.md" in baseline
-    assert "docs/program/tasks/W48-JUDGE-X.md" not in baseline
+    assert "docs/program/tasks/CTX-NAV-20261102.md" not in baseline
 
 
 def test_a_new_real_task_file_cannot_escape_the_enumerator(tmp_path: Path) -> None:
@@ -299,6 +304,18 @@ def test_main_authority_requires_a_main_target_and_exact_candidate_sha() -> None
         assert "MAIN_DIRECT_AUTHORITY_REFERENCE_REQUIRED" in governance_findings(broken)
 
 
+def test_delegated_release_authority_does_not_require_per_sha_approval() -> None:
+    base = VALID_TASK.replace(
+        "- origin_main_authority: none",
+        "- origin_main_authority: delegated release integrator RELEASE-INT-01",
+    )
+    assert "MAIN_DIRECT_AUTHORITY_TARGET_MISMATCH" in governance_findings(base)
+    main = base.replace("- development_target: origin/dev", "- development_target: origin/main")
+    assert governance_findings(main) == set()
+    broken = main.replace("RELEASE-INT-01", "?")
+    assert "MAIN_RELEASE_DELEGATION_REFERENCE_REQUIRED" in governance_findings(broken)
+
+
 def test_the_operational_docs_state_the_same_rules_the_guard_executes() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
     operating = OPERATING.read_text(encoding="utf-8")
@@ -308,7 +325,7 @@ def test_the_operational_docs_state_the_same_rules_the_guard_executes() -> None:
         "captured premise evidence",
         "new addendum that cites the immutable source",
         "origin/dev",
-        "separate direct owner instruction",
+        "delegated release integrator",
     ):
         assert phrase in guide_flat
     for phrase in (

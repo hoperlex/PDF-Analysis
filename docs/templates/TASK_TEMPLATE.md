@@ -1,5 +1,10 @@
 # Task <TASK_ID> — <result>
 
+Use this extended record only for coordinated work: shared contracts, migration,
+deployment, concurrent owners or a decision that must survive a handoff. A routine
+single-owner change needs no task file; record its result, scope and focused checks
+in the commit or concise handoff (`AGENTS.md` §2).
+
 ## Outcome
 One measurable user/technical result.
 
@@ -49,9 +54,11 @@ name the source and a new owned addendum path; never instruct a lane to rewrite 
 - development_target: none
 - origin_main_authority: none
 
-For a development publication use `development_target: origin/dev`. `origin/main` may appear as
-a target only with `origin_main_authority: separate direct owner instruction <reference>` for the
-exact candidate; an integration or closeout task is not authority by implication.
+For a development publication use `development_target: origin/dev`. A release task
+may use `development_target: origin/main` with
+`origin_main_authority: delegated release integrator <task-id>`; the release integrator
+selects and verifies the exact candidate under `MAIN_AUTODEPLOY_POLICY.md`. Older
+records may retain their historical per-SHA authority wording.
 
 ## Allowed paths
 - `path/to/exact-file`
