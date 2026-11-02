@@ -45,18 +45,58 @@ def consent(value, cap=None):
     return {"estimate_digest": value.estimate_digest, "ceiling_micros": value.as_dict()["recommended_ceiling_micros"] if cap is None else cap, "confirmed": True}
 
 
-def test_all_fourteen_sections_price_before_start_and_large_normal_inputs_get_explicit_windows(registry):
+PLAN_ENV = "AUDITMANAGER_EXTENDED_ANALYSIS_PLAN"
+
+
+def test_all_sections_price_before_start_under_the_v2_plan_when_it_is_named(registry, monkeypatch):
+    """The v2 plan is an explicit choice since the shipped default became v3 (`S3-04`)."""
+    monkeypatch.setenv(PLAN_ENV, "v2")
     policy = service(registry)
+    assert len(registry.entries) == 15
     for section in registry.entries:
         small = estimate(policy, version(section, 500, 1))
         large = estimate(policy, version(section, 20_000_000, 500))
-        assert small.as_dict()["calls"] >= 5
-        assert json.loads(small.authority_json)["extended_review"]["max_blocks"] == "all"
+        # v2 reserves, for one page of 500 characters and no image count: 1 text window, 13 image
+        # calls (100 possible images / 8), 16 comprehensive calls (page + text pieces + images +
+        # window) and 30 norm calls = 1 + 13 + 16 + 30. No section changes that sum.
+        assert small.as_dict()["calls"] == 60
+        assert json.loads(small.authority_json)["extended_review"] == {
+            "enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}
         assert large.as_dict()["calls"] > 12
         assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
         accepted = large.approve(consent(large), actor_user_uid="expert")
         assert accepted["extended_review"]["plan_version"] == "extended-review-v2"
-        assert accepted["max_windows"] >= large.as_dict()["windows"]
+        assert accepted["max_windows"] == max(12, large.as_dict()["windows"])
+        assert accepted["approved_by_user_uid"] == "expert"
+
+
+def test_all_sections_price_before_start_under_the_default_v3_plan(registry, monkeypatch):
+    """Nothing names a plan: the shipped default is v3, which bounds the visual scope by the page count."""
+    monkeypatch.delenv(PLAN_ENV, raising=False)
+    policy = service(registry)
+    for section in registry.entries:
+        small = estimate(policy, version(section, 500, 1))
+        large = estimate(policy, version(section, 20_000_000, 500))
+        small_review = json.loads(small.authority_json)["extended_review"]
+        large_review = json.loads(large.authority_json)["extended_review"]
+        # One page: 1 text window + 1 visual window of (2 block + 4 comprehensive + 8 norm +
+        # 8 review + 8 correction) calls + 8 project-parameter calls. No global cross-window pass
+        # exists below 16 text pages.
+        assert small.as_dict()["calls"] == 39
+        assert (small_review["plan_version"], small_review["max_blocks"], small_review["max_windows"]) == (
+            "extended-review-v3", 1, 1)
+        assert "global_cross_window_policy" not in small_review
+        # 500 pages: the visual scope stops at 500 blocks over 32 windows of (2 + 128 + 8 + 8 + 8)
+        # calls, then 32 global calls and 8 project-parameter calls, on top of the text windows.
+        windows = large.as_dict()["windows"]
+        assert windows > 12
+        assert large.as_dict()["calls"] == windows + 32 * 154 + 32 + 8
+        assert (large_review["plan_version"], large_review["max_blocks"], large_review["max_windows"]) == (
+            "extended-review-v3", 500, 32)
+        assert large.as_dict()["estimated_cost_micros"] > small.as_dict()["estimated_cost_micros"] > 0
+        accepted = large.approve(consent(large), actor_user_uid="expert")
+        assert accepted["extended_review"]["plan_version"] == "extended-review-v3"
+        assert accepted["max_windows"] == windows
         assert accepted["approved_by_user_uid"] == "expert"
 
 
@@ -122,12 +162,22 @@ def test_raised_output_price_and_route_rate_preset_changes_are_bound(registry):
     assert estimate(policy, source, preset_id="preset1").estimate_digest != old.estimate_digest
 
 
-def test_section_stats_consent_accepts_zero_ceiling_and_keeps_source_binding(registry):
+def test_section_stats_consent_accepts_zero_ceiling_and_keeps_source_binding(registry, monkeypatch):
+    monkeypatch.delenv(PLAN_ENV, raising=False)
     value = estimate(service(registry), version("AR", 300_000, 30), relaxed_limits=True)
     approved = value.approve(consent(value, 0))
     assert approved["uncapped_stats"] is True
     assert approved["ceiling_micros"] == 0
-    assert approved["max_windows"] >= 30
+    assert approved["extended_review"]["plan_version"] == "extended-review-v3"
+    assert approved["extended_review"]["unbounded_stats"] is True
+    # Native page pieces are on by default (`7e4b3364`): the cap follows the estimated windows
+    # (11 here), floored at 12, and no longer follows the page count (30).
+    assert value.as_dict()["windows"] == 11
+    assert approved["max_windows"] == 12
+    # Without page pieces the relaxed cap is the page count, which is the reading the old pin made.
+    paged = service(registry).estimate_run(None, version_uid=VERSION, version_record=version("AR", 300_000, 30),
+                                           relaxed_limits=True, allow_native_page_pieces=False)
+    assert paged.approve(consent(paged, 0))["max_windows"] == 30
     normal = estimate(service(registry), version("AR", 300_000, 30))
     with pytest.raises(DomainError):
         normal.approve(consent(normal, 0))
@@ -237,3 +287,30 @@ def test_six_scope_group_prices_all_calls_and_pins_each_verified_set(monkeypatch
     route.billing = "unmetered"
     free = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
     assert free.as_dict()["estimated_cost_micros"] == 0 and free.approve(consent(free))["billing"] == "unmetered"
+
+
+def test_section_run_bounds_hold_unless_the_run_asks_for_relaxed_limits(registry, monkeypatch):
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "1")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1")
+    policy = service(registry)
+    within = json.loads(estimate(policy, version("AR", 300_000, 500)).authority_json)["extended_review"]
+    assert within["text_page_limit"] == 500 and "unbounded_stats" not in within
+    with pytest.raises(DomainError) as failure:
+        estimate(policy, version("AR", 300_000, 501))
+    assert failure.value.detail_fields["reason"] == "cost_page_count_unavailable"
+    relaxed = json.loads(estimate(policy, version("AR", 300_000, 501), relaxed_limits=True).authority_json)
+    assert relaxed["extended_review"]["unbounded_stats"] is True
+    assert relaxed["extended_review"]["text_page_limit"] == 501
+
+
+def test_only_the_batched_coverage_can_lift_the_section_run_bounds(registry, monkeypatch):
+    # The worker recognises a relaxed run by the stamp of the batched coverage policy, so a
+    # relaxed run priced under another coverage keeps the bounds rather than being priced for a
+    # run the worker would then refuse.
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "1")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_COVERAGE", "legacy")
+    with pytest.raises(DomainError) as failure:
+        estimate(service(registry), version("AR", 300_000, 501), relaxed_limits=True)
+    assert failure.value.detail_fields["reason"] == "cost_page_count_unavailable"

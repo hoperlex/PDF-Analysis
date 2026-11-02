@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import re
 
 from sqlalchemy import text
 
@@ -14,8 +15,22 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import NormDocumentId, NormParagraphId, NormsSnapshotId
 
 from .search import resolve_scope
+from .search.fragment import HEADLINE_OPTIONS
 
 VERSION = "norm-paragraph-context-v1"
+
+
+def _fragment_delimiter() -> str:
+    """What the search puts between the two fragments of one excerpt, read from the search's own options."""
+    found = re.search(r'FragmentDelimiter="([^"]*)"', HEADLINE_OPTIONS)
+    if found is None or not found.group(1).strip():
+        raise RuntimeError("norm_search_fragment_delimiter_unreadable")
+    return found.group(1)
+
+
+#: A stored search excerpt may be several fragments of one paragraph joined by this string; it is
+#: not text of the paragraph, so the quote is looked up one fragment at a time.
+FRAGMENT_DELIMITER = _fragment_delimiter()
 
 _PRIMARY = text("""
     SELECT p.norm_paragraph_id, p.norm_document_pk, p.ordinal, p.page_label,
@@ -66,6 +81,23 @@ def _piece(row) -> dict:
         "excerpt_sha256": hashlib.sha256(value.encode("utf-8")).hexdigest()}
 
 
+def _locate_fragments(session, arguments, whole):
+    """The quote is several fragments of the paragraph: literal when every fragment is in it.
+
+    The paragraph window is centred on the first fragment found; when none is found the row of the
+    whole quote stays (the window then opens at the paragraph start). The stored quote is not changed.
+    """
+    fragments = list(dict.fromkeys(part.strip() for part in arguments["quote"].split(FRAGMENT_DELIMITER)
+        if part.strip()))
+    centred, found = None, 0
+    for fragment in fragments:
+        row = session.execute(_PRIMARY, {**arguments, "quote": fragment}).mappings().one_or_none()
+        if row is not None and int(row["quote_position"]) > 0:
+            found += 1
+            centred = row if centred is None else centred
+    return (whole if centred is None else centred), bool(fragments) and found == len(fragments)
+
+
 def read_norm_paragraph_context(session, *, snapshot_id: str, document_id: str,
         paragraph_id: str, quote: str, paragraph_characters: int = 6000,
         neighbor_characters: int = 1000) -> dict:
@@ -78,18 +110,22 @@ def read_norm_paragraph_context(session, *, snapshot_id: str, document_id: str,
             or type(neighbor_characters) is not int or not 1 <= neighbor_characters <= 1000):
         raise ValueError("norm_paragraph_context_input_invalid")
     resolve_scope(session, snapshot)
-    row = session.execute(_PRIMARY, {"snapshot": snapshot, "document": document,
-        "paragraph": paragraph, "quote": quote, "paragraph_characters": paragraph_characters}).mappings().one_or_none()
+    arguments = {"snapshot": snapshot, "document": document,
+        "paragraph": paragraph, "quote": quote, "paragraph_characters": paragraph_characters}
+    row = session.execute(_PRIMARY, arguments).mappings().one_or_none()
     if row is None:
         raise DomainError(ErrorCode.REQUIRED_NORM_UNAVAILABLE,
             reference_kind="norm_paragraph_context", reference_id=paragraph)
+    literal = int(row["quote_position"]) > 0
+    if not literal and FRAGMENT_DELIMITER in quote:
+        row, literal = _locate_fragments(session, arguments, row)
     neighbors = session.execute(_NEIGHBORS, {"snapshot": snapshot, "document_pk": row["norm_document_pk"],
         "ordinal": row["ordinal"], "neighbor_characters": neighbor_characters}).mappings().all()
     return {"version": VERSION, "snapshot_id": snapshot, "document_id": document,
         "paragraph_id": paragraph, "title": str(row["title"]),
         "drawn_on": None if row["drawn_on"] is None else row["drawn_on"].isoformat(),
         "source_attribution": str(row["source_attribution"]),
-        "search_quote_literal_in_paragraph": int(row["quote_position"]) > 0,
+        "search_quote_literal_in_paragraph": literal,
         "search_quote_paragraph_character_start": int(row["quote_position"]) - 1 if int(row["quote_position"]) > 0 else None,
         "primary": _piece(row), "neighbors": [_piece(neighbor) for neighbor in neighbors],
         "edition_applicability_verified": False, "neighbor_citations_allowed": False}

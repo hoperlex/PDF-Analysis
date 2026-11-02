@@ -308,6 +308,10 @@ So: **before removing a worktree or a branch, verify by content — `git cherry 
 <branch>` — not by counting commits.** `merge-base --is-ancestor` has the same blind spot for
 the same reason.
 
+Also check whether a task, review or handoff cites the branch name. A contained commit can
+still need its local ref as a historical locator; use an immutable SHA in new records and
+retain cited refs until their references are deliberately reconciled.
+
 ## 5. `make bootstrap` needs an explicit base interpreter
 
 When the ambient interpreter is an active virtualenv, run:
@@ -724,13 +728,12 @@ example and carries hashes of the records it leaves untouched.
 The current rule deliberately does **not** require `origin/dev == origin/main`: the refs now have
 different roles.
 
-- A clean, gated development candidate is published to `origin/dev` by its named integration
-  owner and read back as an exact SHA.
-- `origin/main` triggers external auto-deploy. It is updated only after a separate direct owner
-  instruction naming publication of the exact candidate and the procedure in
-  `docs/program/MAIN_AUTODEPLOY_POLICY.md`.
-- A task that says “close”, “integrate”, “continue” or “publish the candidate” does not acquire
-  `origin/main` authority. Without the separate instruction it stops at `origin/dev` and reports
-  the SHA awaiting deployment authority.
+- A development candidate is published to `origin/dev` with its actual verification status
+  and read back as an exact SHA. An unverified candidate is never described as accepted.
+- `origin/main` triggers external auto-deploy. A delegated release integrator owns the
+  risk-based checks, exact fast-forward and post-deploy verification in
+  `docs/program/MAIN_AUTODEPLOY_POLICY.md`; the owner need not merge each SHA in GitHub.
+- An ordinary coding or integration task does not acquire `origin/main` authority from
+  “close”, “integrate” or a green check. The release role or task must name the ref.
 - Branch equality, workflow SHA and deployed SHA are separate facts. Read back and quote only
   the facts the task actually owns; never describe a dev candidate as deployed.

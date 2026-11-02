@@ -115,6 +115,34 @@ def test_a_classified_comparison_only_version_is_refused_by_its_kind_and_nothing
     assert _written(session) == before, "the refusal wrote a command, a group, a run or a job"
 
 
+class _PreflightThatMustNotBeAsked:
+    """The cost preflight the served composition passes (`require_cost_consent=True`); pricing anything is the failure."""
+
+    def estimate_group(self, *args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("the group was priced before its source's kind was asked")
+
+
+def test_the_refusal_stands_under_the_served_consent_policy_and_nothing_is_priced_or_written(session: Session) -> None:
+    """`REVIEW-FIX-TESTS-1102` (S9-07): the same refusal when the start runs as the composed application runs it.
+
+    The served start carries a cost preflight and, here, no consent. The kind of the source is asked first, so the
+    answer is the refusal that remains for this input -- not the consent's ``422`` -- and neither the estimate nor any
+    table is touched. (Over HTTP the consent gate itself is covered by
+    ``tests/integration/composition/test_the_served_start_requires_a_priced_consent.py``.)
+    """
+    version = _version(session, kind=UPLOAD_KIND_COMPARISON_PDF, role=MANIFEST_ROLE_COMPARISON_PDF, section="AR")
+    before = _written(session)
+    with pytest.raises(DomainError) as refused:
+        start_ar_v3_group(
+            session, version_uid=version, idempotency_key="v3-comparison-only-served", provider_mode="recorded",
+            pack=_pack(), input_budget_characters=1000, cost_preflight=_PreflightThatMustNotBeAsked(),
+            cost_consent=None,
+        )
+    assert refused.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert refused.value.detail_fields == {"reason": COMPARISON_ONLY_VERSION_REASON}
+    assert _written(session) == before, "the refusal wrote a command, a group, a run or a job"
+
+
 def test_an_unclassified_comparison_only_version_is_refused_by_its_kind_before_the_classification_is_asked(
     session: Session,
 ) -> None:

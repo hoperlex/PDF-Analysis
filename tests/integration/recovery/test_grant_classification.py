@@ -77,7 +77,9 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     assert sum(len(c) for c in (grants.READ_WRITE, grants.APPEND_ONLY, grants.READ_ONLY, grants.NONE)) == len(classified)
     # `0037_analysis_presets`: analysis_preset_revision (`0035_comparison_records`: comparison_sheet_link, comparison_summary)
     # `0040_comparison_ai_reports`: the twelve tables of the version comparison AI, specifications, reports and launch queue
-    assert len(coverage.TABLES) == 110
+    # `0041_comparison_stage_core`: fifteen stage tables (95 -> 110). `0042_comparison_stage_review`: twelve more
+    # (110 -> 122); `0043` and `0044` add none.
+    assert len(coverage.TABLES) == 122
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:

@@ -1,5 +1,10 @@
 # Documentation index
 
+For current work, start with [the context guide](context/README.md),
+[agent rules](../AGENTS.md), and [current state](program/CURRENT_STATE.md). The
+catalogue below preserves the early programme's links and dated task labels; it is
+not a live status board. Use the assigned task and current source records for status.
+
 ## Product
 - [Product synopsis](PRODUCT_SYNOPSIS.md)
 - [Legacy behavior baseline](LEGACY_BEHAVIOR_BASELINE.md)

@@ -176,10 +176,13 @@ export function compareSavedResults(left: SavedResultSide, right: SavedResultSid
   const result: SavedResultRow[] = [];
   // An unavailable list is not an empty side. Do not publish one-sided finding differences for it.
   if (left.findings !== null && right.findings !== null) {
-    const targets = new Map(right.findings.map((row, index) => [row.finding_uid, { row, index }]));
-    const leftIds = new Set(left.findings.map((row) => row.finding_uid));
+    // Property narrowing does not reach the callbacks below, so bind the checked lists once.
+    const leftFindings = left.findings;
+    const rightFindings = right.findings;
+    const targets = new Map(rightFindings.map((row, index) => [row.finding_uid, { row, index }]));
+    const leftIds = new Set(leftFindings.map((row) => row.finding_uid));
     const exact = new Map<string, { indices: number[]; next: number }>();
-    right.findings.forEach((row, index) => {
+    rightFindings.forEach((row, index) => {
       // Reserve durable-ID matches before any content match can consume them.
       if (leftIds.has(row.finding_uid)) return;
       const key = exactFindingKey(row, right);
@@ -187,7 +190,7 @@ export function compareSavedResults(left: SavedResultSide, right: SavedResultSid
       const bucket = exact.get(key) ?? { indices: [], next: 0 };
       bucket.indices.push(index); exact.set(key, bucket);
     });
-    left.findings.forEach((row, index) => {
+    leftFindings.forEach((row, index) => {
       let target = targets.get(row.finding_uid);
       let basis: SavedResultRow['matchBasis'] = target === undefined ? null : 'finding_uid';
       if (target === undefined) {
@@ -196,7 +199,7 @@ export function compareSavedResults(left: SavedResultSide, right: SavedResultSid
         const targetIndex = bucket === undefined ? undefined : bucket.indices[bucket.next];
         if (bucket !== undefined && targetIndex !== undefined) {
           bucket.next += 1;
-          const candidate = right.findings[targetIndex]!;
+          const candidate = rightFindings[targetIndex]!;
           target = { row: candidate, index: targetIndex }; basis = 'exact_source_content';
         }
       }

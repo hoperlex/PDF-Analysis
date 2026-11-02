@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 
 from .core import canonical, digest
+from .review import MAX_REQUEST_BYTES
+from .workflow import v3_request_ceiling
 
 VERSION = "preliminary-parameter-review-context-v1"
 SCOPES = ["comprehensive_analysis", "finding_review", "finding_correction"]
@@ -34,7 +36,12 @@ def validate_policy(value, *, parameters_policy, compare_bundle=True):
     return True
 
 
-def attach(request, *, parameters, accepted, parameters_policy, procedure):
+def attach(request, *, parameters, accepted, parameters_policy, procedure, relaxed_limits=False):
+    # The ceiling of the builder that made the request: the critic and the corrector hold the review
+    # figure for every run; a window's comprehensive request holds the v3 figure, which a relaxed run lifts.
+    # The global cross-window request is built under the review figure and is never lifted.
+    lifted = v3_request_ceiling(relaxed_limits)
+    ceiling = lifted if procedure == "comprehensive_analysis" else MAX_REQUEST_BYTES
     if not validate_policy(accepted, parameters_policy=parameters_policy) or procedure not in accepted["scopes"]:
         raise ValueError("project_parameter_review_context_policy_required")
     body = deepcopy(dict(request.body))
@@ -87,6 +94,8 @@ def attach(request, *, parameters, accepted, parameters_policy, procedure):
         "context_fact_id/context_source_id не расширяют разрешённые идентичности и не заменяют цитаты реально "
         "переданного исходного пакета. Сохрани оригиналы/закрытую схему и оговорки охвата; при недостатке "
         "проверяемого контекста запроси ручную сверку, не придумывай нарушение или исправление.")
+    if len(canonical(body).encode("utf-8")) > ceiling:
+        raise ValueError("project_parameter_review_context_request_window_too_large")
     context_sha = digest(context)
     receipt = {"version": VERSION, "procedure": procedure, "context_sha256": context_sha, "context": context,
         "provided_fact_ids": selected, "allowed_original_source_ids": allowed,

@@ -4,8 +4,10 @@ Reading starts nothing: no job, no model, no PDF. The state of a transition is d
 comparison and from the job that runs it:
 
 * no row, but the reading of **both** versions is already stored under its content key (another transition read the same text): the
-  comparison needs no request and no job, so it is made on the read -- ``completed``, computed from the stored readings, never
-  stored (a job that has nothing to send is the core's ``comparison_ai_nothing_to_do``);
+  comparison needs no request and no job, so it is made on the read of **that one transition** -- ``completed``, computed from the
+  stored readings, never stored. The list of a series does not make it: finding the key plans the whole text of both versions, which a
+  list of up to :data:`PAGE_MAX` transitions would repeat per row; a transition without a row is ``not_started`` there, and a job on it
+  has nothing to send (the core's zero-call assembly);
 * no row, and no specification sheet in either version: ``not_applicable`` (method «листовой ИИ»: there is nothing to read as a whole);
 * no row, and a specification sheet: ``not_started``;
 * a row ``queued`` or ``running``: ``running``, or ``paused`` while its job is paused, with the phase it is in;
@@ -27,7 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.comparison.specification.reader import SpecificationReader, spec_candidates
 from auditmanager.comparison.specification.check import REASON_ANSWER, REASON_SOURCE
 from auditmanager.comparison.specification.repository import ComparisonRow, SpecificationRepository, TransitionScope
-from auditmanager.comparison.specification.transition import (REASON_NOT_PARSED, REASON_STORED_UNUSABLE,
+from auditmanager.comparison.specification.transition import (REASON_NOT_PARSED, REASON_PAGE_COUNT, REASON_STORED_UNUSABLE,
     TransitionOutcome, TransitionRun)
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -65,7 +67,14 @@ class SpecificationService:
         """The comparison of a transition with no row whose two readings are both stored: made now, from the store, with no request
         (``ask`` is ``None``, so nothing can be sent). Known unusable source/saved-answer states are
         diagnostics, not an empty comparison; ready text awaiting a model remains ``None``."""
-        old, new = self._run.read(scope, ask=None)
+        try:
+            old, new = self._run.read(scope, ask=None)
+        except DomainError as failure:
+            if failure.code is not ErrorCode.ANALYSIS_INPUT_INVALID:
+                raise
+            # A version whose source document or page count cannot be established (no source, or two): one transition's diagnostic,
+            # not a failure of the read of the transition or of the list around it.
+            return TransitionOutcome("incomplete", REASON_PAGE_COUNT, None, [], None, None, None, None)
         if not (old.complete and new.complete):
             blocked = next((side for side in (old, new) if not side.complete and side.reason in
                 {REASON_NOT_PARSED, REASON_SOURCE, REASON_ANSWER, REASON_STORED_UNUSABLE}), None)
@@ -138,7 +147,7 @@ class SpecificationService:
             if len(items) == bounded:
                 more = True
                 break
-            items.append(self._view(scope, row, sheets))
+            items.append(self._view(scope, row, sheets, plan=False))
             last_no = scope.transition_no
         return SpecificationPage(items, last_no if more else None)
 
@@ -162,9 +171,10 @@ class SpecificationService:
             return "paused" if row.job_state == "paused" else "running"
         return row.state
 
-    def _view(self, scope: TransitionScope, row: ComparisonRow | None, sheets: tuple[int, int]) -> dict[str, Any]:
+    def _view(self, scope: TransitionScope, row: ComparisonRow | None, sheets: tuple[int, int], *, plan: bool = True) -> dict[str, Any]:
+        """``plan=False`` is the list of a series: a transition without a row is not planned there (see the module)."""
         state = self._state(row, sheets)
-        free = self._free_outcome(scope) if row is None and state == "not_started" else None
+        free = self._free_outcome(scope) if plan and row is None and state == "not_started" else None
         if free is not None:
             state = free.state
         out: dict[str, Any] = {

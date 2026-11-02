@@ -11,14 +11,16 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.access.public import AccountRepository
 from auditmanager.comparison.ai_jobs.service import ComparisonAiJobService
 from auditmanager.comparison.modules import MODULE_VERSIONS, enabled_modules, parse_modules
-from auditmanager.comparison.queue.model import ACTIVE, AI_STEPS, LAUNCH_KIND, STEP_ORDER, STEPS, queue_view
+from auditmanager.comparison.queue.model import (
+    ACTIVE, AI_STEPS, LAUNCH_KIND, STEP_ORDER, STEPS, launch_dedupe_key, queue_view,
+)
 from auditmanager.comparison.queue.repository import LaunchQueueRepository
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import DocumentUid, IdempotencyKey, ProjectUid
+from auditmanager.shared.identity import CommandId, DocumentUid, IdempotencyKey, ProjectUid
 
 
 def _conflict(reason: str) -> DomainError:
@@ -70,10 +72,13 @@ class ComparisonLaunchQueueService:
     def _view(self, session: Session, project_uid: str) -> dict[str, Any]:
         return queue_view(project_uid, self._repo.queue(session, project_uid), self._repo.entries(session, project_uid))
 
-    def _start_work(self, session: Session, project_uid: str, user_uid: str) -> None:
+    def _start_work(self, session: Session, project_uid: str, user_uid: str, command_id: CommandId) -> None:
+        # One item per start command (see :func:`launch_dedupe_key`). Items of one project may overlap
+        # while an older one drains; that is safe because the move from ``waiting`` to ``running`` and the
+        # move to a final state are conditional UPDATEs and every child start is keyed by the entry id.
         self._work.enqueue(
             session, project_uid=project_uid, module=MODULE_VERSIONS, kind=LAUNCH_KIND,
-            payload={"project_uid": project_uid}, dedupe_key=f"{LAUNCH_KIND}:{project_uid}",
+            payload={"project_uid": project_uid}, dedupe_key=launch_dedupe_key(project_uid, str(command_id)),
             created_by_user_uid=user_uid, max_attempts=10,
         )
 
@@ -134,7 +139,7 @@ class ComparisonLaunchQueueService:
             self._repo.insert_entries(session, project_uid=project_uid, selected=selected, restart=restart,
                                       actor_user_uid=user_uid, actor_label=actor_label, command_id=str(claim.command_id))
             if not queue["paused"] and queue["failure_reason"] is None:
-                self._start_work(session, project_uid, user_uid)
+                self._start_work(session, project_uid, user_uid, claim.command_id)
             view = self._view(session, project_uid)
             self._commands.succeed(session, claim.command_id, {"queue": _jsonable(view)})
             return _jsonable(view)
@@ -165,7 +170,7 @@ class ComparisonLaunchQueueService:
                     if entry["state"] == "failed":
                         self._repo.move(session, entry["comparison_launch_entry_id"], from_state="failed", to_state="waiting")
                         break
-                self._start_work(session, project_uid, user_uid)
+                self._start_work(session, project_uid, user_uid, claim.command_id)
             elif command_type == "clear_comparison_launch_queue":
                 self._repo.delete_not_running(session, project_uid)
                 if not any(row["state"] == "running" for row in self._repo.entries(session, project_uid)):

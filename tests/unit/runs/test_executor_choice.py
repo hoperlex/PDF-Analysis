@@ -24,6 +24,7 @@ What PostgreSQL does with the same rows is in ``tests/integration/runs/test_exec
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -273,7 +274,14 @@ def test_a_named_start_journals_the_choice_once_with_identities_only() -> None:
     }
 
 
-def test_the_journal_event_is_a_product_event_the_purge_classifies() -> None:
+def test_the_journal_event_is_a_product_event_the_purge_classifies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `scripts` is a namespace package at the repository root. `python -m pytest` (the Makefile's
+    # invocation) puts the working directory on `sys.path`; the console script `.venv/bin/pytest`
+    # does not, and `pythonpath = ["src"]` names only `src`. The test names its own import root so
+    # it holds under both spellings instead of passing under one of them.
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from scripts.recovery import product_purge
 
     assert EXECUTOR_CHOSEN_EVENT.startswith(product_purge.PRODUCT_EVENT_PREFIXES)

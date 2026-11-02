@@ -223,5 +223,7 @@ def test_a_transition_whose_two_readings_are_already_stored_is_read_without_a_jo
     assert view["totals"] == {"changed": 0, "removed": 0, "added": 0, "unclear": 0, "renumbered": 0, "moved": 0}
     assert view["extraction_a_id"] and view["extraction_b_id"] and "job_id" not in view and "comparison_id" not in view
     assert service.list_changes(transition_id=earlier.transition_id, kind=None, offset=0, limit=10) == ([], None)
+    # `REVIEW-FIX-CMP-SPEC-1102`: the list does not make the on-read comparison (finding the key plans the whole text of both
+    # versions, per row), so a transition with no row is `not_started` there while its own read above says `completed`.
     page = service.list_specifications(series_id=series["series_id"], after_no=0, limit=10)
-    assert {i["transition_id"]: i["state"] for i in page.items} == {earlier.transition_id: "completed", scope.transition_id: "completed"}
+    assert {i["transition_id"]: i["state"] for i in page.items} == {earlier.transition_id: "not_started", scope.transition_id: "completed"}

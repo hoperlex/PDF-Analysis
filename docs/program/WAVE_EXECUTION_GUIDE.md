@@ -1,5 +1,9 @@
 # Main guide — waves, contract freezes and checkpoints
 
+This guide retains the original wave procedure. For new routine work, use the lighter
+task, branch and check rules in `AGENTS.md` §§2, 7–8 and `INTEGRATION_POLICY.md`.
+Historical wave and checkpoint evidence is unchanged.
+
 Это основной operational документ для AI-agent разработки.
 
 ## 1. Roles
@@ -129,9 +133,10 @@ that cites the immutable source. The source record is not rewritten to make the 
 
 Development publication and deployment publication are different integration outcomes:
 
-- `origin/dev` is the default ref for the exact clean, gated development candidate;
-- `origin/main` is an auto-deploy action and requires a separate direct owner instruction for
-  that exact candidate. A green gate, wave close or integration role never implies it.
+- `origin/dev` is the default ref for a development candidate, with its verification
+  status stated explicitly;
+- `origin/main` is an auto-deploy action owned by the delegated release integrator under
+  `MAIN_AUTODEPLOY_POLICY.md`. The owner does not need to merge each SHA in GitHub.
 
 ## 4. Shared hotspots
 
@@ -147,30 +152,18 @@ Always single-owner per wave:
 
 ## 5. Worktree model
 
-Default:
-
-```text
-main
-integration/W4.2
-agent/W4.2-STO-01  (worktree A)
-agent/W4.2-JOB-02  (worktree B)
-agent/W4.2-WEB-01  (worktree C)
-agent/W4.2-QA-01   (worktree D)
-```
-
-Task starts from frozen commit. Agent does not stack on another unmerged agent branch. Integration is the only convergence point.
+Use the existing development checkout for sequential, single-owner work. Add one
+short-lived branch/worktree per concurrent change only when it needs isolation; reuse
+it through implementation and review. An integration branch is useful when concurrent
+changes converge, not a default for every task. Record the base SHA when it matters to
+the result and clean up finished worktrees after their content is safely integrated.
 
 ## 6. Task size
 
-Target: one bounded context and one measurable result, usually 0.5–3 engineering days equivalent. If one task modifies shared schema + backend + frontend + migration, split it into:
-
-```text
-contract task
-  → backend provider
-  → frontend consumer
-  → independent tests
-  → integration task
-```
+Target one measurable result. Split a change only when owners must work concurrently,
+a frozen contract needs independent approval, or the resulting diff cannot be reviewed
+or verified as one unit. A small vertical change can include contract, backend,
+frontend and tests under one owner with focused checks.
 
 ## 7. Stop conditions
 

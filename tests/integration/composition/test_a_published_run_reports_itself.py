@@ -47,6 +47,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.run_consent import consented_body, plain_analysis_pricing
 
 #: `T-6`. Written out, not imported from the seam it authenticates against. The secret
 #: the signing key is derived from; the credential is minted from it below.
@@ -164,12 +165,17 @@ def published_run() -> dict[str, Any]:
     )
     assert answer.status_code == 200, answer.content
 
-    answer = client.post(
-        "/runs",
-        headers=auth
-        | {IDEMPOTENCY_HEADER: f"w17view-{tag}-run", "Content-Type": "application/json"},
-        content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
-    )
+    # `REVIEW-FIX-TESTS-1102`: the composed application refuses a start without a priced consent, so
+    # the start carries one taken from the estimate of this very version. Built once: the replay below
+    # must repeat the same consent, which is part of the command's fingerprint.
+    with plain_analysis_pricing():
+        run_body = consented_body(client, auth, {"version_uid": version_uid})
+        answer = client.post(
+            "/runs",
+            headers=auth
+            | {IDEMPOTENCY_HEADER: f"w17view-{tag}-run", "Content-Type": "application/json"},
+            content=json.dumps(run_body).encode("utf-8"),
+        )
     assert answer.status_code == 202, answer.content
     started = answer.json()
     # `D-20`. The `202` reports what was **accepted**, and execution happens on a carrier
@@ -197,7 +203,7 @@ def published_run() -> dict[str, Any]:
         "/runs",
         headers=auth
         | {IDEMPOTENCY_HEADER: f"w17view-{tag}-run", "Content-Type": "application/json"},
-        content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+        content=json.dumps(run_body).encode("utf-8"),
     )
     assert answer.status_code == 202, answer.content
     replayed = answer.json()

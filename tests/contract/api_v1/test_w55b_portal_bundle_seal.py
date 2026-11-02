@@ -188,8 +188,9 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     # prp_ and vnl_; W60-OPT-PROPOSALS-01 opp_, opr_ and opd_; EXEC-SEAL-01 exc_, excr_, exs_,
     # epb_ and ert_; EXEC-PULL-01 ern_ and ext_; CMP-SEAL-C0 cbt_, cus_, cuf_, cvo_, cpr_, cq_, cqa_
     # and cmc_; CMP-SEAL-C1 cmx_, cme_, cak_, cser_, ctn_, ctp_ and csp_. C2 adds eleven
-    # identities; C3 adds the fourteen stage upload, pair, map, text and chain identities.
-    assert len(IDENTIFIERS["identifiers"]) == 88
+    # identities; C3 adds the fourteen stage upload, pair, map, text and chain identities; C4 adds the twelve of
+    # its stage review (the 88 above grew to 100 at contract 1.13.0; re-measured by `REVIEW-FIX-TESTS-1102`).
+    assert len(IDENTIFIERS["identifiers"]) == 100
 
 
 # --- the error catalog --------------------------------------------------------------------

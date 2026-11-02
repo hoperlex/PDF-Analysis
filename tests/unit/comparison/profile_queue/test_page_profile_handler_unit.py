@@ -26,6 +26,7 @@ from auditmanager.comparison.public import (
     HandlerRegistry,
     HandlerRegistryError,
     PageProfileHandler,
+    WorkDependencies,
     Yielded,
     page_profile_handler,
 )
@@ -181,7 +182,10 @@ def test_the_handler_has_the_kind_the_profile_lane_named_and_is_the_one_factory_
 
 
 def test_the_shipped_tuple_holds_one_handler_for_the_kind_and_a_second_is_refused() -> None:
-    dependencies: Any = SimpleNamespace()
+    # The whole shipped tuple is applied, and a later handler (`stage_text_recompute_handler`) reads
+    # `dependencies.session_factory` in its constructor: a bare namespace stands for the bundle only for
+    # the page-profile factory alone. The empty bundle is the one the other registry tests build.
+    dependencies: Any = WorkDependencies(None, None, None, None)  # type: ignore[arg-type]
     registry = HandlerRegistry.build(HANDLER_FACTORIES, dependencies)
     assert PAGE_PROFILE_WORK_KIND in registry.kinds
     assert [factory(dependencies).kind for factory in HANDLER_FACTORIES].count(PAGE_PROFILE_WORK_KIND) == 1

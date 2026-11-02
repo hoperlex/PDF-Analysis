@@ -87,3 +87,32 @@ def test_unsupported_frozen_visual_window_refuses_instead_of_silently_disabling(
     frozen = {"enabled": True, "max_blocks": maximum, "plan_version": "extended-review-v2"}
     with pytest.raises(DomainError):
         read(monkeypatch, {"cost_consent": consent() | {"extended_review": frozen}})
+
+
+def v3_frozen(blocks, pages, **extra):
+    return {"enabled": True, "plan_version": "extended-review-v3", "max_blocks": blocks, "window_size": 16,
+            "max_windows": max((blocks + 15) // 16, (pages + 15) // 16), "text_page_limit": pages,
+            "review": True, "rules_sha256": "0" * 64, "section_code": "AR", **extra}
+
+
+@pytest.mark.parametrize("blocks, pages", [(1001, 16), (16, 501), (1001, 501)])
+def test_section_run_bounds_hold_unless_the_run_asked_for_relaxed_limits(monkeypatch, blocks, pages):
+    data = consent() | {"extended_review": v3_frozen(blocks, pages)}
+    with pytest.raises(DomainError):
+        read(monkeypatch, {"cost_consent": data})
+    with pytest.raises(DomainError):
+        read(monkeypatch, {"relaxed_limits": False, "cost_consent": data})
+    assert read(monkeypatch, {"relaxed_limits": True, "cost_consent": data}).extended_review["max_blocks"] == blocks
+
+
+def test_the_bounds_themselves_are_accepted_for_every_run(monkeypatch):
+    frozen = v3_frozen(1000, 500)
+    assert read(monkeypatch, {"cost_consent": consent() | {"extended_review": frozen}}).extended_review == frozen
+
+
+def test_the_lift_stamp_without_relaxed_limits_is_refused(monkeypatch):
+    stamped = v3_frozen(16, 16, unbounded_stats=True)
+    with pytest.raises(DomainError):
+        read(monkeypatch, {"cost_consent": consent() | {"extended_review": stamped}})
+    assert read(monkeypatch, {"relaxed_limits": True,
+                              "cost_consent": consent() | {"extended_review": stamped}}).extended_review == stamped

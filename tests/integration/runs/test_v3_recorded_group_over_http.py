@@ -69,6 +69,7 @@ from auditmanager.jobs.public import JobRepository
 from auditmanager.runs.public import PACK_MANIFEST_ENV, ReviewAttestation, seal_manifest
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
+from tests.support.run_consent import run_consent
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 OPENAPI = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
@@ -445,7 +446,13 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
         out.db["after_refusals"] = _counts(factory, served.version_uid)
         out.db["submitted_after_refusals"] = installed.held.submitted + empty.held.submitted
 
-        x["start"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=body)
+        # `REVIEW-FIX-TESTS-1102`: the stock composition starts a group only with a priced consent, taken from
+        # the group estimate of this version. Built once: the replays below repeat the same consent, which is
+        # part of the command's fingerprint. The refusals above are decided before the consent is read.
+        priced = wire.call("POST", f"{GROUPS}/cost-estimate", token=tokens["expert"], body=body)
+        assert priced.status == 200, priced.text
+        started_body = {**body, "cost_consent": run_consent(priced.data)}
+        x["start"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=started_body)
         group = x["start"].data
         gid = group["group_id"]
         out.db["after_start"] = _counts(factory, served.version_uid)
@@ -456,7 +463,7 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
             out.db["next_queued_run_after_start"] = JobRepository().next_queued_run(session)
         x["group_before"] = wire.call("GET", f"{GROUPS}/{gid}", token=tokens["expert"])
         x["review_before"] = wire.call("GET", f"{GROUPS}/{gid}/review", token=tokens["expert"])
-        x["start_again"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=body)
+        x["start_again"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=started_body)
         x["start_reused_key"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start",
                                           body={"version_uid": other.version_uid})
         out.db["after_replay"] = _counts(factory, served.version_uid)
@@ -482,7 +489,7 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
         x["group_after"] = wire.call("GET", f"{GROUPS}/{gid}", token=tokens["expert"])
         x["review_after"] = wire.call("GET", f"{GROUPS}/{gid}/review", token=tokens["expert"])
         x["review_after_again"] = wire.call("GET", f"{GROUPS}/{gid}/review", token=tokens["admin"])
-        x["start_after"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=body)
+        x["start_after"] = wire.call("POST", GROUPS, token=tokens["expert"], key="accept-start", body=started_body)
         x["pack_after"] = wire.call("GET", PACK, token=tokens["expert"])
         out.db["after_carry"] = _counts(factory, served.version_uid)
         out.db["states_after"] = _runs_of_group(factory, gid)

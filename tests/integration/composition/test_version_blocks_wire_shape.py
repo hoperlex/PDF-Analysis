@@ -38,6 +38,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.run_consent import consented_body, plain_analysis_pricing
 
 DEPLOYMENT_SECRET = "version-blocks-wire-shape-token"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -78,6 +79,21 @@ def app() -> Any:
 
 def _auth() -> dict[str, str]:
     return {"Authorization": f"Bearer {static_token()}"}
+
+
+def _start_run(app: TestClient, tag: str, version_uid: str) -> Any:
+    """``startRun`` as the web client makes it: priced first, then started with that consent.
+
+    `REVIEW-FIX-TESTS-1102`: the composed application refuses a start without a confirmed
+    consent, so the suite takes the consent from the estimate of this very version.
+    """
+    with plain_analysis_pricing():
+        body = consented_body(app, _auth(), {"version_uid": version_uid})
+        return app.post(
+            "/runs",
+            headers=_auth() | {IDEMPOTENCY_HEADER: f"{tag}-run", "Content-Type": "application/json"},
+            content=json.dumps(body).encode("utf-8"),
+        )
 
 
 def _publish_a_version(app: TestClient, tag: str, *, classify: bool = False) -> str:
@@ -176,11 +192,7 @@ def test_a_published_run_flips_the_status_and_fills_the_blocks(app: TestClient) 
     tag = f"prod-{uuid.uuid4().hex[:8]}"
     version_uid = _publish_a_version(app, tag, classify=True)
 
-    answer = app.post(
-        "/runs",
-        headers=_auth() | {IDEMPOTENCY_HEADER: f"{tag}-run", "Content-Type": "application/json"},
-        content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
-    )
+    answer = _start_run(app, tag, version_uid)
     assert answer.status_code == 202, answer.content
     started = answer.json()
     assert started["state"] == "queued", started
@@ -207,11 +219,7 @@ def test_a_published_run_serves_the_portal_blocks_and_their_crops(app: TestClien
 
     tag = f"portal-{uuid.uuid4().hex[:8]}"
     version_uid = _publish_a_version(app, tag, classify=True)
-    answer = app.post(
-        "/runs",
-        headers=_auth() | {IDEMPOTENCY_HEADER: f"{tag}-run", "Content-Type": "application/json"},
-        content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
-    )
+    answer = _start_run(app, tag, version_uid)
     assert answer.status_code == 202, answer.content
     run_id = answer.json()["run_id"]
     assert app.app.state.run_carrier.drain(timeout=300), "the run never finished"

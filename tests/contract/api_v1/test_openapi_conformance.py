@@ -1265,13 +1265,15 @@ class TestN8JsonNumbers:
     """`N8`: a JSON number is one type. Python's `int` and `float` are two."""
 
     def test_an_integral_float_bound_is_invisible(self, contract: dict[str, Any]) -> None:
-        """What pydantic actually writes for `Field(ge=1, le=30)`, measured below in
-        `TestAgainstARealGeneratedDocument`."""
+        """What pydantic actually writes for `Field(ge=0)`: `0.0` where the contract says `0`, measured below in
+        `TestAgainstARealGeneratedDocument`. `Project.document_count` carries an integer bound in the contract;
+        `DocumentVersion.page_count` carried one too until the temporary intake lift removed its ceiling
+        (`af581631`), after which planting a ceiling there is a difference and not a spelling."""
         report = report_for(
             contract,
-            lambda document: document["components"]["schemas"]["DocumentVersion"]["properties"][
-                "page_count"
-            ].update({"maximum": 500.0, "minimum": 1.0}),
+            lambda document: document["components"]["schemas"]["Project"]["properties"][
+                "document_count"
+            ].update({"minimum": 0.0}),
         )
         assert_silent(report)
 
@@ -1279,11 +1281,11 @@ class TestN8JsonNumbers:
         """The boundary of `N8`: equal in value is invisible, different in value is not."""
         report = report_for(
             contract,
-            lambda document: document["components"]["schemas"]["DocumentVersion"]["properties"][
-                "page_count"
-            ].__setitem__("maximum", 500.5),
+            lambda document: document["components"]["schemas"]["Project"]["properties"][
+                "document_count"
+            ].__setitem__("minimum", 0.5),
         )
-        assert_reported_at(report, "schemas.DocumentVersion.properties.page_count.maximum")
+        assert_reported_at(report, "schemas.Project.properties.document_count.minimum")
 
     def test_a_boolean_is_never_a_number(self) -> None:
         assert differences({"required": True}, {"required": 1}) != []

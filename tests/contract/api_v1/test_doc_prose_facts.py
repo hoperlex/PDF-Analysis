@@ -408,13 +408,16 @@ def _true_migration_head() -> str:
         # "revision = ..." in the earliest files) -- skipped as arbitrary non-`=` text
         # rather than pinned to one spelling, so a future annotation style does not
         # silently stop matching.
-        revision = re.search(r'^revision\s*(?::[^=\n]+)?=\s*"([^"]+)"', text, re.MULTILINE)
+        # Either quote style: migration 0043 spells its revision ids with single quotes, and a
+        # parser that only reads double quotes finds no revision in it and stops the whole head
+        # computation (`REVIEW-FIX-TESTS-1102`, S9-04).
+        revision = re.search(r'^revision\s*(?::[^=\n]+)?=\s*(["\'])([^"\']+)\1', text, re.MULTILINE)
         down = re.search(
-            r'^down_revision\s*(?::[^=\n]+)?=\s*(None|"([^"]+)")', text, re.MULTILINE
+            r'^down_revision\s*(?::[^=\n]+)?=\s*(None|(["\'])([^"\']+)\2)', text, re.MULTILINE
         )
         assert revision, f"{path}: no `revision = \"...\"` found"
         assert down, f"{path}: no `down_revision = ...` found"
-        revisions[revision.group(1)] = down.group(2)
+        revisions[revision.group(2)] = down.group(3)
     children = set(revisions.values())
     heads = [rev for rev in revisions if rev not in children]
     assert len(heads) == 1, f"expected exactly one migration head, found {heads}"

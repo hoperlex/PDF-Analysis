@@ -30,6 +30,18 @@ def _conflict(reason: str) -> DomainError:
     return DomainError(ErrorCode.CONFLICT, conflict_reason=reason)
 
 
+def undo_reopens_run(run_state: str) -> bool:
+    """Whether an undo puts its source run back to work.
+
+    A ``completed`` run holds review cards materialised for the repaired map. Step 7 refuses to
+    rewrite cards whose keys changed with the map (``stage_review_materialization_changed``), so a
+    reopened completed run could only end ``failed``. Undo then records the expert revision and the
+    text recomputation and leaves the run as it finished; the newer revision makes it stale, and the
+    expert starts a fresh run on the undone map (the journey of ``CMP-JOURNEY-C4-01``).
+    """
+    return run_state != "completed"
+
+
 class StageRepairService:
     def __init__(self, sessions: sessionmaker[Session]) -> None:
         self.sessions = sessions
@@ -295,7 +307,7 @@ class StageRepairService:
             StageChainService(self.sessions).lock_command(session, str(source_run))
             row = session.execute(text(
                 "SELECT x.stage_chain_run_id, x.before_snapshot, x.after_revision_id, "
-                "r.stage_pair_id, r.with_ai, r.pinned_version_uids, p.project_uid "
+                "r.stage_pair_id, r.with_ai, r.pinned_version_uids, p.project_uid, r.state "
                 "FROM stage_link_repair x JOIN stage_chain_run r USING(stage_chain_run_id) "
                 "JOIN stage_pair p ON p.stage_pair_id = r.stage_pair_id "
                 "WHERE x.stage_link_repair_id = :repair FOR UPDATE OF r"
@@ -321,25 +333,27 @@ class StageRepairService:
                 idempotency_key=f"stage-repair-undo-text:{repair_id}:{revision}",
             )
             self._event(session, repair_id, "undone", user_uid, str(claim.command_id), revision, child.run_id)
-            session.execute(text(
-                "UPDATE stage_chain_run SET effective_link_revision_id = :revision, "
-                "state = :state, pause_reason = :reason, updated_at = clock_timestamp() "
-                "WHERE stage_chain_run_id = :run"
-            ), {"run": row[0], "revision": revision,
-                "state": "paused" if row[4] else "queued",
-                "reason": "comparison_consent_required" if row[4] else None})
-            session.execute(text(
-                "UPDATE stage_chain_step SET state = 'queued', counts = '{}'::jsonb, "
-                "failure_reason = NULL, started_at = NULL, finished_at = NULL "
-                "WHERE stage_chain_run_id = :run AND step_no >= 2"
-            ), {"run": row[0]})
-            if not row[4]:
-                ComparisonWorkRepository().enqueue(
-                    session, project_uid=str(row[6]), module="stages", kind="stage_chain",
-                    payload={"run_id": str(row[0])}, dedupe_key=f"stage_chain:{row[0]}",
-                    created_by_user_uid=user_uid,
-                )
+            reopen = undo_reopens_run(str(row[7]))
+            if reopen:
+                session.execute(text(
+                    "UPDATE stage_chain_run SET effective_link_revision_id = :revision, "
+                    "state = :state, pause_reason = :reason, updated_at = clock_timestamp() "
+                    "WHERE stage_chain_run_id = :run"
+                ), {"run": row[0], "revision": revision,
+                    "state": "paused" if row[4] else "queued",
+                    "reason": "comparison_consent_required" if row[4] else None})
+                session.execute(text(
+                    "UPDATE stage_chain_step SET state = 'queued', counts = '{}'::jsonb, "
+                    "failure_reason = NULL, started_at = NULL, finished_at = NULL "
+                    "WHERE stage_chain_run_id = :run AND step_no >= 2"
+                ), {"run": row[0]})
+                if not row[4]:
+                    ComparisonWorkRepository().enqueue(
+                        session, project_uid=str(row[6]), module="stages", kind="stage_chain",
+                        payload={"run_id": str(row[0])}, dedupe_key=f"stage_chain:{row[0]}",
+                        created_by_user_uid=user_uid,
+                    )
             self.commands.succeed(session, claim.command_id,
                                   {"repair_id": repair_id, "revision_id": revision,
-                                   "recompute_run_id": child.run_id})
+                                   "recompute_run_id": child.run_id, "run_reopened": reopen})
             return self._view(session, repair_id)

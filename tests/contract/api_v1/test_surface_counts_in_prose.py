@@ -47,7 +47,16 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 #: scanner beside this module, and migration source is immutable history. A new top-level runtime,
 #: operator or generator directory therefore enters without changing this file.
 NON_LIVE_PATH_PARTS = frozenset({"artifacts", "contracts", "docs", "fixtures", "tests"})
-NON_LIVE_PREFIXES = ("db/migrations/", "web/openapi/", "src/auditmanager/comparison/report/fonts/")
+#: `web/public/fonts/` is the web client's bundled typeface (`fe55ec53`), a TrueType binary with no prose in it and
+#: nothing a surface count could be stated in -- the same role as the report package's fonts beside it in this tuple.
+#: It is excluded by path, not by "binary": the guard below that no opaque file sits in the live surface stays in
+#: force, so a binary no one has classified (a new image, an archive) still reddens it and must be named here.
+NON_LIVE_PREFIXES = (
+    "db/migrations/",
+    "web/openapi/",
+    "web/public/fonts/",
+    "src/auditmanager/comparison/report/fonts/",
+)
 NON_LIVE_FILES = frozenset({"web/FRONTEND_LOCK.json"})
 #: P02_SEAMS is a maintained implementation input, not a wave/history report, so it is the one
 #: documentation role explicitly admitted after the role exclusions above (`D-100`).

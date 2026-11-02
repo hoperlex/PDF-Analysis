@@ -14,6 +14,18 @@ TERMINAL: Final[frozenset[str]] = frozenset({"done", "skipped", "failed"})
 STEP_ORDER: Final[dict[str, int]] = {name: index for index, name in enumerate(STEPS)}
 
 
+def launch_dedupe_key(project_uid: str, command_id: str) -> str:
+    """The dedupe key of the work item one start command owns.
+
+    The key carries the command: a work item that has already read "nothing waiting" and is about to
+    be finalised as ``Completed`` stays live for a moment, and a key shared by every command of the
+    project would let a later enqueue deduplicate into that dying item and leave its entry waiting.
+    A retried command replays its stored outcome before it reaches the queue, so one command still
+    yields one item.
+    """
+    return f"{LAUNCH_KIND}:{project_uid}:{command_id}"
+
+
 def queue_view(project_uid: str, queue: Mapping[str, Any] | None, entries: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Contract shape derived from durable rows. Reading an untouched project is ``idle``."""
     counts = Counter(str(row["state"]) for row in entries)

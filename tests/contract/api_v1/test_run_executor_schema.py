@@ -110,8 +110,9 @@ def test_the_request_schema_declares_the_field_optional_and_by_reference(openapi
     assert schema["additionalProperties"] is False
     assert schema["properties"]["executor_connection_id"]["$ref"] == "#/components/schemas/ExecutorConnectionId"
     # `ANALYSIS-PRESETS-01` adds the optional `preset_id`; the executor field is what it was.
+    # `BETA-COST-PREFLIGHT-1030` adds the start's `relaxed_limits` and `cost_consent`; neither touches the executor field.
     assert set(schema["properties"]) == {
-        "version_uid", "provider_mode", "executor_connection_id", "preset_id"}
+        "version_uid", "provider_mode", "executor_connection_id", "preset_id", "relaxed_limits", "cost_consent"}
 
 
 # --- RunStatus.executor --------------------------------------------------------------------------

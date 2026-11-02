@@ -118,7 +118,17 @@ _ABSENT_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 # names no parent. Seventy-five.
 # `CMP-SEAL-C3`: all sixteen stage GETs address a project, pair, upload, link revision
 # or chain run; none is an unaddressed deployment collection.
-EXPECTED_ADDRESSED = 91
+# `CMP-SEAL-C4` (contract 1.13.0) adds sixteen: ``estimateStageChainRun`` (on ``stage_link_revision_id``),
+# ``getStageChainBatch``, the chain run's ``listStageAiReviews``, ``listStageClassifications``, ``getStageSynthesis``,
+# ``listStageGraphicEvidence``, ``listStageLinkRepairs``, ``listStageChangeCards``, ``getStageChangeJournal`` and the
+# journal's ``.xlsx`` / ``.pdf`` / ``.html`` streams (all on ``stage_chain_run_id``), ``getStageChangeCard`` and
+# ``listStageCardVerdicts`` (on ``stage_change_card_id``), ``getStageProfileText`` (on ``comparison_page_profile_id``)
+# and ``getStageAssembly``. Contract 1.14.0 adds two more: ``getExtendedRunReview`` (on ``run_id``) and
+# ``streamComparisonTechnicalReport`` (on ``comparison_series_id``). The count is the file's own rule applied to
+# ``contracts/api/v1/openapi.json`` (a ``GET`` whose path holds ``{``, except ``getSectionSpecification``), which gave
+# 91 for the 1.12.0 document this literal was last measured against, and 109 for 1.14.0 (110 with the section filter).
+# `REVIEW-FIX-TESTS-1102`: one hundred and nine. The unaddressed half is unchanged at twenty-three.
+EXPECTED_ADDRESSED = 109
 
 #: Addressed ``GET`` operations with a required query parameter, and a well-formed value for
 #: it naming nothing. Without it the bare path would be ``422`` for the missing parameter --
