@@ -175,6 +175,15 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   not restart-loop on 2 or 3). `journalctl -u pdf-analysis-agent` shows the log; it holds task
   ids and timings, never the token or the payload.
 - Revoke: the same «Отозвать» button; the agent exits 3 at its next call.
+- `[runner] concurrency` (1 to 8, default 1) is how many tasks this process works at once. It needs the
+  connection's «Заданий в работе» (`max_claimed_tasks`) to be at least as large: with the stand's
+  limit of one, the stand hands the agent its one held task again, and the agent, which keeps the ids of the
+  tasks it is working on, does not start that task a second time and waits at least 5 s before it claims
+  again. The agent claims only when a local slot is free.
+- **Run one agent process per token** (v1). The agent names itself in every claim with a random
+  `runner_instance_id` (new at each start), and the stand hands a task it already holds only back to the
+  instance that took it; a restarted agent therefore waits at most one claim lease (120 s) for the task its
+  predecessor held. Two processes presenting one token are not a supported setup (`RUNNER_API.md`, section 8).
 
 ## C. SSH profile `claude_code_headless`
 

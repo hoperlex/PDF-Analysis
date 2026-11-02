@@ -711,3 +711,68 @@ def test_the_runner_tokens_are_kept_and_the_tasks_are_purged_with_the_product() 
     commands = {"issue_runner_token", "revoke_runner_token"}
     assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
     assert tool.classification_problems() == []
+
+
+# --- D-215: a task a runner holds is running work (EXEC2-PULL-01) ---------------------------------
+
+
+def _claimed_probe_task(stand: Stand) -> str:
+    """A probe task that a runner holds: no run, no job and no Attempt, so only the task itself says
+    that work is running (a run-call task is also covered through its running Attempt)."""
+    from tests.integration.db.test_executor_pull_migration import _connection, _probe, _task, _token
+
+    with stand.engine.begin() as connection:
+        connection_id, revision_id = _connection(connection)
+        token = _token(connection, connection_id)
+        probe = _probe(connection, connection_id, revision_id)
+        task = _task(connection, connection_id, revision_id, probe_id=probe)
+    sql(stand, "UPDATE executor_task SET state = 'claimed', claimed_by_token_id = :t, "
+               "claim_expires_at = now() + interval '1 minute', claim_count = 1, first_claimed_at = now() "
+               "WHERE task_id = :k", t=token, k=task)
+    return task
+
+
+def test_the_running_states_name_the_claimed_executor_task_and_only_that_state() -> None:
+    """``open`` is not running work: no runner has it. ``answered``, ``failed``, ``expired`` and
+    ``cancelled`` are over. Only ``claimed`` is a task a runner may still be answering."""
+    assert tool.RUNNING_STATES["executor_task"] == ("claimed",)
+    assert "executor_task" in tool.PRODUCT_TABLES, "the table the guard protects is the one the purge truncates"
+
+
+def test_a_claimed_probe_task_is_running_work_and_the_purge_refuses_it(stand: Stand) -> None:
+    """`D-215`. Before this entry a probe task held by a runner did not stop the purge, which truncated
+    ``executor_task`` under the runner: its answer was lost and the KEEP probe row stayed without a task."""
+    _claimed_probe_task(stand)
+    before = state_of(stand)
+    code, out, err = invoke(tool, stand, "plan")
+    assert code == tool.EXIT_REFUSED, (code, out, err)
+    assert "work is running right now" in err and "{'executor_task': 1}" in err, err
+    assert state_of(stand) == before, "a refusal must leave the database and the bucket as they were"
+
+
+@pytest.mark.parametrize("ending", ["open", "cancelled"])
+def test_a_task_nobody_holds_does_not_stop_the_purge(stand: Stand, ending: str) -> None:
+    """The control that makes the refusal above mean something: the guard looks at ``claimed``, not at the
+    table. An open task and a finished one go with the product, as they always did."""
+    task = _claimed_probe_task(stand)
+    if ending == "open":
+        sql(stand, "UPDATE executor_task SET state = 'open', claimed_by_token_id = NULL, "
+                   "claim_expires_at = NULL WHERE task_id = :k", k=task)
+    else:
+        sql(stand, "UPDATE executor_task SET state = 'cancelled', terminal_at = now() WHERE task_id = :k", k=task)
+    code, out, err = invoke(tool, stand, "plan")
+    assert code == 0, (code, out, err)
+    assert "work is running right now" not in err
+
+
+def test_without_its_entry_the_purge_does_not_see_a_claimed_probe_task(
+    stand: Stand, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mutation: the entry is the whole fix. With ``executor_task`` out of ``RUNNING_STATES`` the same stand
+    that was refused above is let through, which is the defect `D-215` recorded."""
+    _claimed_probe_task(stand)
+    assert invoke(tool, stand, "plan")[0] == tool.EXIT_REFUSED
+    monkeypatch.setattr(tool, "RUNNING_STATES",
+                        {table: states for table, states in tool.RUNNING_STATES.items() if table != "executor_task"})
+    code, out, err = invoke(tool, stand, "plan")
+    assert code == 0, (code, out, err)  # the mutated table lets the purge through while a runner holds the task

@@ -43,6 +43,8 @@ DEFAULT_RETRY_AFTER = 30.0
 MAX_RETRY_AFTER = 300.0
 TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 IMAGE_ID_RE = re.compile(r"^blob_[0-9A-HJKMNP-TV-Z]{26}$")
+#: `EXEC2-PULL-01`: the agent process named in a claim (RUNNER_API.md 2.1). The stand checks the same pattern.
+INSTANCE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 BLOCK_ID_RE = re.compile(r"^blk_[0-9a-f]{32}$")
 #: The opaque crop reference of a comparison crop (the contract's pattern). Echoed, never parsed.
@@ -352,20 +354,30 @@ class RunnerClient:
 
     # --------------------------------------------------------------- operations
 
-    def claim(self, wait_seconds: int, max_images: int = 1) -> Optional[dict]:
+    def claim(self, wait_seconds: int, max_images: int = 1, runner_instance_id: Optional[str] = None) -> Optional[dict]:
         """claimExecutorTask. Returns the task document, or None on 204 (nothing arrived).
 
         ``max_images`` is the most images one task may carry that this runner serves; the stand
         never hands a task with more. 1 is what every runner sent before several images existed,
         and it is sent as nothing at all, so a runner that serves one image speaks exactly the
-        wire it always spoke (a stand older than several images would refuse the new member)."""
+        wire it always spoke (a stand older than several images would refuse the new member).
+
+        ``runner_instance_id`` (8 to 64 characters of ``A-Za-z0-9_-``) names the agent process making
+        the claim, so that the stand redelivers a task it already holds only to the process that took
+        it. ``None``, which is what the stdio bridge sends, leaves the member out of the body."""
         if not isinstance(wait_seconds, int) or isinstance(wait_seconds, bool) or not 0 <= wait_seconds <= MAX_WAIT_SECONDS:
             raise RunnerRejected("wait_seconds must be an integer in 0..25", status=422, error_code="validation_failed")
         if not isinstance(max_images, int) or isinstance(max_images, bool) or not 1 <= max_images <= MAX_IMAGES:
             raise RunnerRejected("max_images must be an integer in 1..8", status=422, error_code="validation_failed")
+        if runner_instance_id is not None and (
+            not isinstance(runner_instance_id, str) or not INSTANCE_ID_RE.fullmatch(runner_instance_id)
+        ):
+            raise RunnerRejected("runner_instance_id must match [A-Za-z0-9_-]{8,64}", status=422, error_code="validation_failed")
         body: dict[str, Any] = {"wait_seconds": wait_seconds}
         if max_images > 1:
             body["max_images"] = max_images
+        if runner_instance_id is not None:
+            body["runner_instance_id"] = runner_instance_id
         _, document = self._call(f"{API_PREFIX}/claim", body, wait_seconds + 20.0)
         if document is None:
             return None

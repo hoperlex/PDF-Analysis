@@ -224,7 +224,9 @@ def test_idle_agent_keeps_claiming_and_stops_cleanly_on_sigterm(tmp_path):
         cfg = S.agent_config(tmp_path / "agent.toml", runner.origin, argv=["/bin/true"])
         with S.AgentProcess(cfg) as proc:
             claims = runner.wait_for("claim", 3, timeout=10)  # 204 after each 1 s wait, then claim again
-            assert all(c["body"] == {"wait_seconds": 1} for c in claims[:3])
+            # `EXEC2-PULL-01`: every claim also names the process (`runner_instance_id`); the rest is as it was
+            assert all({k: v for k, v in c["body"].items() if k != "runner_instance_id"} == {"wait_seconds": 1}
+                       for c in claims[:3])
             proc.terminate()
             assert proc.wait(timeout=10) == 0
             assert "stopped" in proc.stderr
@@ -537,7 +539,8 @@ def test_an_agent_that_declares_nothing_sends_the_old_claim_and_refuses_what_it_
         proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_L2", images=[i for i, _ in made])],
                                         max_images=None)
         assert code == 0, proc.stderr
-        assert runner.of_kind("claim")[0]["body"] == {"wait_seconds": 1}, "the wire every agent has always spoken"
+        sent = {k: v for k, v in runner.of_kind("claim")[0]["body"].items() if k != "runner_instance_id"}
+        assert sent == {"wait_seconds": 1}, "the wire every agent has always spoken, bar the process name"
         assert runner.of_kind("fail")[0]["body"]["reason"] == "image_input_unsupported"
         assert runner.of_kind("image") == [] and runner.of_kind("answer") == []
         assert not list(records.glob("*.images.json")), "the command never ran"

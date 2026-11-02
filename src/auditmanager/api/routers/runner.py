@@ -113,11 +113,16 @@ def build_runner_routes(router: APIRouter, runner: RunnerPort) -> None:
     def claim_executor_task(
         identity: CurrentRunner, body: models.ClaimExecutorTaskRequest,
     ) -> WireResponse:
-        task = runner.claim_task(
-            runner=identity,
-            wait_seconds=_DEFAULT_WAIT_SECONDS if body.wait_seconds is None else body.wait_seconds,
-            max_images=body.max_images,
-        )
+        wait_seconds = _DEFAULT_WAIT_SECONDS if body.wait_seconds is None else body.wait_seconds
+        if body.runner_instance_id is None:
+            # `EXEC2-PULL-01`: a claim that names no instance reaches the port with the arguments it
+            # had before the field existed (ADR-0026 decision 3).
+            task = runner.claim_task(
+                runner=identity, wait_seconds=wait_seconds, max_images=body.max_images)
+        else:
+            task = runner.claim_task(
+                runner=identity, wait_seconds=wait_seconds, max_images=body.max_images,
+                runner_instance_id=body.runner_instance_id)
         if task is None:
             return WireResponse(204, ())
         return json_response(200, encode_json(task.model_dump(mode="json", exclude_unset=True)))
