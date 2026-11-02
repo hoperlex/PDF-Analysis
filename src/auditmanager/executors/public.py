@@ -161,9 +161,13 @@ from auditmanager.executors.queries import (
 )
 
 if TYPE_CHECKING:
+    from auditmanager.executors.agent_install_runner import AgentInstallRunner, install_runner_for
     from auditmanager.executors.operations import OperationRefused, import_env
 
 __all__ = [
+    # `EXEC2-ENROLL-SSH-01`: the worker's half of path A, resolved on first use (see `__getattr__`).
+    "AgentInstallRunner",
+    "install_runner_for",
     # `EXEC2-ENROLL-01`.
     "AgentPackage",
     "EnrollmentPrincipal",
@@ -285,6 +289,9 @@ __all__ = [
 #: ``operations`` imports this module (and so do ``probe_runner`` and ``resolver``): a top-level
 #: import here would break ``import auditmanager.executors.operations`` on the cycle.
 _OPERATIONS_EXPORTS = frozenset({"OperationRefused", "import_env"})
+#: The same for the install runner (`EXEC2-ENROLL-SSH-01`): ``agent_install_runner`` imports ``open_secret`` and
+#: ``SecretUnreadableError`` from this module, so it cannot be imported at the top of it.
+_INSTALL_RUNNER_EXPORTS = frozenset({"AgentInstallRunner", "install_runner_for"})
 
 
 def __getattr__(name: str) -> object:
@@ -292,6 +299,10 @@ def __getattr__(name: str) -> object:
         from auditmanager.executors import operations
 
         return getattr(operations, name)
+    if name in _INSTALL_RUNNER_EXPORTS:
+        from auditmanager.executors import agent_install_runner
+
+        return getattr(agent_install_runner, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
