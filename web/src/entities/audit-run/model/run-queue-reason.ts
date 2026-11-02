@@ -4,7 +4,8 @@
  * The server derives the reason at read time and says it only for a `queued` Run that is waiting
  * for its executor connection (ADR-0026 decisions 1 and 5): `executor_at_capacity` when every unit
  * of the connection is in use, `runner_offline` when it is a `pull` connection and no runner of it
- * is online. For any other Run the member is `null` or absent.
+ * is online, `needs_reconsent` (`EXEC2-SEAL-2`) when a Run routed to an executor group needs a
+ * fresh cost consent before it may be dispatched. For any other Run the member is `null` or absent.
  *
  * A reason is drawn only beside the state it explains. A Run that is not `queued` carries no
  * waiting label even if a stale reading still holds a reason, and a reason this table does not know
@@ -19,6 +20,7 @@ import { RUN_QUEUE_REASON_VALUES } from '@/shared/api';
 export const QUEUE_REASON_LABELS: Readonly<Record<RunQueueReason, string>> = {
   executor_at_capacity: 'В очереди: исполнитель занят',
   runner_offline: 'В очереди: раннер не в сети',
+  needs_reconsent: 'В очереди: нужно новое согласие на стоимость',
 };
 
 /** The reason a queued Run waits, or `null` when it is not queued or carries none this screen knows. */
