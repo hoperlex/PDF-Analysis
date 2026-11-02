@@ -30,7 +30,9 @@ transport must never refuse, with ``max_bytes``, a file the envelope would have 
     pre-check  <=  MAX_BYTES  <  UPLOAD_MAX_BODY  <  nginx's cap in each upload location
 
 The pre-check may equal ``MAX_BYTES`` (both say 250 MiB once the browser's constant is raised)
-and may not exceed it.
+and may not exceed it. ``MAX_BYTES`` is ``quota(PDF_MEMBER_BYTES, ...)`` since `REVIEW-FIX-BOUNDS-1102`: the relaxed
+intake mode lifts it, and the sandbox figure ``PDF_MEMBER_BYTES`` (250 MiB) it is derived from does not move, so the chain
+is read around the sandbox figure -- the pre-check is at most that in both modes.
 
 **What changed under `W55B-STREAM-01`.** There used to be one number on each side:
 ``maxBytes`` against the one ``client_max_body_size``. The upload route's cap moved to
@@ -170,21 +172,34 @@ def bytes_of_label(label: str) -> int:
     return round(float(match.group(1)) * _BINARY_UNITS[match.group(2)])
 
 
-#: ``MAX_BYTES: Final[int] = 250 * 1024 * 1024`` -- the name at the start of the line, as above.
+#: ``PDF_MEMBER_BYTES: Final[int] = 250 * 1024 * 1024`` -- the name at the start of the line, as above.
+#: Since `REVIEW-FIX-BOUNDS-1102` the envelope's size bound is ``MAX_BYTES = quota(PDF_MEMBER_BYTES, ...)``: the
+#: sandbox figure (the archive readers inflate no member past it) is the same in both intake modes, and the
+#: relaxed mode lifts only ``MAX_BYTES`` above it. The chain is therefore held around the sandbox figure, which
+#: is the smaller of the two modes' bounds -- a pre-check at or below it is below the envelope in either mode.
 _ENVELOPE_LIMIT = re.compile(
-    r"^MAX_BYTES\s*:\s*Final\[int\]\s*=\s*([0-9_ *]+?)\s*(?:#.*)?$", re.MULTILINE
+    r"^PDF_MEMBER_BYTES\s*:\s*Final\[int\]\s*=\s*([0-9_ *]+?)\s*(?:#.*)?$", re.MULTILINE
+)
+#: ``MAX_BYTES`` must still be derived from that figure, or reading the figure would say nothing about the envelope.
+_ENVELOPE_DERIVED = re.compile(
+    r"^MAX_BYTES\s*:\s*Final\[int\]\s*=\s*quota\(\s*PDF_MEMBER_BYTES\s*,", re.MULTILINE
 )
 
 
 def envelope_max_bytes(source: str) -> int:
-    """The admission envelope's size bound, read out of the module that enforces it."""
+    """The admission envelope's size bound that holds in both intake modes, read out of the module that enforces it."""
     found = _ENVELOPE_LIMIT.findall(source)
     if len(found) != 1:
         raise AssertionError(
-            f"expected exactly one definition of `MAX_BYTES` in envelope.py, found {len(found)}. "
+            f"expected exactly one definition of `PDF_MEMBER_BYTES` in envelope.py, found {len(found)}. "
             "The envelope's bound is what the pre-check and the transport are held around."
         )
-    return _product(found[0], "`MAX_BYTES`")
+    if len(_ENVELOPE_DERIVED.findall(source)) != 1:
+        raise AssertionError(
+            "`MAX_BYTES` in envelope.py is no longer `quota(PDF_MEMBER_BYTES, ...)`: the sandbox figure this "
+            "guard reads would no longer be the envelope's bound."
+        )
+    return _product(found[0], "`PDF_MEMBER_BYTES`")
 
 
 def api_body_limits(source: str) -> dict[str, int]:
@@ -539,9 +554,10 @@ def test_control_a_raised_precheck_is_detected() -> None:
 
 
 _ENVELOPE_PY_LIKE = '''
-"""MAX_BYTES: Final[int] = 1 in a docstring is not a definition."""
+"""PDF_MEMBER_BYTES: Final[int] = 1 in a docstring is not a definition."""
 
-MAX_BYTES: Final[int] = 250 * 1024 * 1024
+PDF_MEMBER_BYTES: Final[int] = 250 * 1024 * 1024
+MAX_BYTES: Final[int] = quota(PDF_MEMBER_BYTES, 2**63 - 1)
 '''
 
 
@@ -555,8 +571,10 @@ def test_control_the_envelope_bound_is_read_and_the_chain_around_it_can_fail() -
     assert envelope_problems(26214400, 300 * 1024 * 1024, api), "an envelope past it"
     for unreadable in (
         _ENVELOPE_PY_LIKE.replace("250 * 1024 * 1024", "ENVELOPE_MIB * 1024 * 1024"),
-        _ENVELOPE_PY_LIKE.replace("MAX_BYTES: Final[int] = 250 * 1024 * 1024", ""),
-        _ENVELOPE_PY_LIKE + "MAX_BYTES: Final[int] = 5 * 1024 * 1024\n",
+        _ENVELOPE_PY_LIKE.replace("PDF_MEMBER_BYTES: Final[int] = 250 * 1024 * 1024", ""),
+        _ENVELOPE_PY_LIKE + "PDF_MEMBER_BYTES: Final[int] = 5 * 1024 * 1024\n",
+        # The figure is still there but the envelope no longer derives from it.
+        _ENVELOPE_PY_LIKE.replace("quota(PDF_MEMBER_BYTES, 2**63 - 1)", "250 * 1024 * 1024"),
     ):
         with pytest.raises(AssertionError):
             envelope_max_bytes(unreadable)

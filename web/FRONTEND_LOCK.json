@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd",
-    "content_commit": "9ead7da5550ff73562ad0115e51b8b32afc9d1a0",
-    "content_commit_subject": "Merge remote-tracking branch 'origin/dev' into integration/compare-modules",
+    "sha256": "11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466",
+    "content_commit": "af581631a57d77754d61a771518112e8c6a64298",
+    "content_commit_subject": "hotfix: lift temporary analysis and PDF intake quotas",
     "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
-    "commit_note": "Emergency owner-authorised analysis/ZIP/export/V3 surface233/259/620; migration0043 unchanged; incoming owner UI preserved.",
+    "commit_note": "Re-measured 2026-11-02 by REVIEW-FIX-TESTS-1102 from the tree: af581631 (SECTION-STATS-UNCAPPED-1030) is the last commit that changed contracts/api/v1/openapi.json and the generated client; the lock had not been rewritten since 6eb7c089. Surface 233/259/620 unchanged.",
     "openapi_version": "3.1.0",
     "info_version": "1.14.0",
     "paths": 233,
     "operations": 259,
     "component_schemas": 620,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "05397fad027834c0f037d0890e4a059207b7881445b810cbc0bac2137b7233dd",
+    "snapshot_sha256": "11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "88150d81b8cfb5f71a4de5a977f888c325b40def51b01f1940c6999b27a7962e",
-      "index.ts": "2cb6313d3be8c2e17c72a4fb90868cd9112d0928ba8e23afcd1a9fbf65537ae4",
-      "operations.gen.ts": "012c019c0b8e4d0f27f2f8b3b8cda6e9e8e688c8fd4fb5637414ee14e97e8647",
-      "types.gen.ts": "7cbef6dd8e06f783bea5fd9328463b325e1183ad983e93d8fe8d04c2150a8bda"
+      "client.gen.ts": "f1b3276cf2ecb2f46097852b5ba0e74cd889d8515bd0dab53aa7acb3697031b3",
+      "index.ts": "a3b39747d16490988336d6dfff6760c789baa9ad820b10c8d129e84643598470",
+      "operations.gen.ts": "70a6f30f2bfe6029d4257c5075e507d3114b6550dc51585ba97162464d8c05d2",
+      "types.gen.ts": "0e503bb9d3ad2b72b19796f4214a25ec103fe5423032a03942dc2c4f35d1daa0"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

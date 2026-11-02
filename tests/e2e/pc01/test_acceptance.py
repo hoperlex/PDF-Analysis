@@ -198,7 +198,7 @@ def journey(client: Client) -> Journey:
         "would refuse the unclassified version.",
     )
 
-    answer = client.start_run(version_uid=version["version_uid"], key=key("run"))
+    answer = client.start_run(version_uid=version["version_uid"], key=key("run"), consent=True)
     assert answer.status == 202, _blocked(
         "startRun",
         answer,
@@ -1059,7 +1059,7 @@ def test_c9_replaying_the_upload_command_publishes_no_second_version(
 def test_c9_replaying_the_run_command_creates_no_second_run(
     journey: Journey, client: Client
 ) -> None:
-    answer = client.start_run(version_uid=journey.version_uid, key=key("run"))
+    answer = client.start_run(version_uid=journey.version_uid, key=key("run"), consent=True)
     assert answer.status in (200, 202), answer.body
     assert answer.json["run_id"] == journey.run_id
     findings = client.run_findings(journey.run_id)
