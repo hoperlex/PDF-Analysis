@@ -4,10 +4,12 @@
 bytes, an encrypted PDF, an oversize file, an over-page-count file and any page without
 extractable embedded text, each with ``validation_failed`` and a constraint detail."
 
-The temporary statistics envelope accepts an unencrypted PDF up to the storage
-representation limits for bytes and pages. The earlier 250 MiB / 500 page policy
-is recorded by `W55B-INGEST-01` for rollback. Anything
-outside it is a typed :class:`~auditmanager.shared.errors.DomainError`, and the caller never
+The envelope of a PDF is: unencrypted, at most 250 MiB, between one and five hundred
+pages (`W55B-INGEST-01`, owner ruling R-116; it was 25 MiB and thirty pages). A deployment that
+sets ``AUDITMANAGER_INTAKE_RELAXED=1`` (:mod:`auditmanager.ingest.intake_mode`) lifts the numeric
+quotas -- bytes, pages, drawing elements and characters -- to the temporary statistics values;
+the reader's address space and clock below are a sandbox and do not move with it. Anything
+outside the envelope is a typed :class:`~auditmanager.shared.errors.DomainError`, and the caller never
 reaches the store or the database, so "nothing was published" is true because nothing was
 attempted.
 
@@ -126,6 +128,8 @@ from typing import Any, BinaryIO, Final
 
 from auditmanager.shared.errors import DomainError, ErrorCode
 
+from .intake_mode import quota
+
 __all__ = [
     "ACCEPTED_MEDIA_TYPE",
     "DOCUMENT_CHARACTERS_MAX",
@@ -138,6 +142,7 @@ __all__ = [
     "PAGE_ELEMENTS_MAX",
     "PDFIUM_LOCK",
     "PDF_MAGIC",
+    "PDF_MEMBER_BYTES",
     "READER_ADDRESS_SPACE",
     "READER_SECONDS",
     "TEXTLESS_PAGE_CHARACTERS",
@@ -148,13 +153,19 @@ __all__ = [
     "validate_source_filename",
 ]
 
-#: One unencrypted PDF, at most 250 MiB (R-116). The whole upload is held to the same figure:
-#: the PDF is almost all of a bundle, and the browser pre-check, the API's body cap and the
-#: proxy's are set around it (``tests/e2e/test_upload_limit_headroom.py``).
-MAX_BYTES: Final[int] = 2**63 - 1  # temporary statistics intake; storage's signed 64-bit ceiling
-#: The schema agrees: ``ck_document_version_page_count CHECK (page_count BETWEEN 1 AND 500)``.
+#: One PDF as a member of an archive or of an upload body, at most 250 MiB (R-116). This is a
+#: sandbox figure -- the archive readers inflate no member past it -- and the relaxed intake
+#: mode does not move it.
+PDF_MEMBER_BYTES: Final[int] = 250 * 1024 * 1024
+#: One unencrypted PDF, at most 250 MiB (R-116); a relaxed deployment lifts this quota to the
+#: storage's signed 64-bit ceiling. The whole upload is held to the same figure: the PDF is
+#: almost all of a bundle, and the browser pre-check, the API's body cap and the proxy's are
+#: set around it (``tests/e2e/test_upload_limit_headroom.py``) and stay finite in both modes.
+MAX_BYTES: Final[int] = quota(PDF_MEMBER_BYTES, 2**63 - 1)
+#: The schema agrees: ``ck_document_version_page_count CHECK (page_count BETWEEN 1 AND 500)``
+#: (migration 0044 widened it to the ``integer`` the relaxed mode needs).
 MIN_PAGES: Final[int] = 1
-MAX_PAGES: Final[int] = 2**31 - 1  # document_version.page_count is INTEGER
+MAX_PAGES: Final[int] = quota(500, 2**31 - 1)
 #: A page with fewer pypdfium2 characters than this is counted as text-less (the
 #: ``textless_pages`` of a version; ``W55B-FREEZE-01``). It is a count of what pypdfium2
 #: reads, line breaks included -- not a statement that the page has no text layer.
@@ -188,26 +199,27 @@ PDFIUM_LOCK: Final[threading.Lock] = threading.Lock()
 
 #: A page's drawing elements: five times the real maximum (75 486). pdfplumber holds one page
 #: at a time (``analysis.stages.extraction``), so this bounds a run's page at about 800 MiB.
-PAGE_ELEMENTS_MAX: Final[int] = 2**63 - 1
+PAGE_ELEMENTS_MAX: Final[int] = quota(400_000, 2**63 - 1)
 #: A page's characters: ten times the real maximum (19 132). PDFium's text page holds about
 #: 220 bytes a character (`W55B-JUDGE-X` p5).
-PAGE_CHARACTERS_MAX: Final[int] = 2**31 - 1
+PAGE_CHARACTERS_MAX: Final[int] = quota(200_000, 2**31 - 1)
 #: A document's drawing elements: six times the real maximum (1 300 705), above the owner's
 #: export carried to 500 pages (about 6.2 M) and `W55B-REHEARSAL-01`'s 500-sheet vector set
 #: (7.5 M), so a page of the most complex drawing a ceiling admits cannot be repeated on
 #: every one of five hundred pages (one shared content stream did exactly that in
 #: `W55B-JUDGE-X` p9). Two pdfplumber passes over it take about 500 to 660 s.
-DOCUMENT_ELEMENTS_MAX: Final[int] = 2**63 - 1
+DOCUMENT_ELEMENTS_MAX: Final[int] = quota(8_000_000, 2**63 - 1)
 #: A document's characters: ten times the real maximum (1 892 768), and a hundred times under
 #: the ``integer`` ``text_character_count`` is stored in (2**31 - 1).
-DOCUMENT_CHARACTERS_MAX: Final[int] = 2**31 - 1
+DOCUMENT_CHARACTERS_MAX: Final[int] = quota(20_000_000, 2**31 - 1)
 #: The reader's address space: eight times what every real document needs (each of them is
 #: read inside 64 MiB, and none inside 48 MiB). Two uploads at once can make the API's host
-#: hold at most twice this for their readers, whatever their PDFs do.
-READER_ADDRESS_SPACE: Final[int] = 2**63 - 1
+#: hold at most twice this for their readers, whatever their PDFs do. A sandbox figure: the
+#: relaxed intake mode does not move it.
+READER_ADDRESS_SPACE: Final[int] = 512 * 1024 * 1024
 #: The reader's CPU time and the envelope's wall clock for it, in seconds: twenty times the
-#: slowest real document (2.9 s). Inside the BFF's 290 s and nginx's 300 s.
-READER_SECONDS: Final[int] = 2**31 - 1
+#: slowest real document (2.9 s). Inside the BFF's 290 s and nginx's 300 s. A sandbox figure.
+READER_SECONDS: Final[int] = 60
 
 #: The program :func:`inspect_pdf` starts, beside this module.
 _READER: Final[Path] = Path(__file__).with_name("pdf_reader.py")
@@ -479,7 +491,7 @@ def _run_reader(program: Path, descriptor: int, settings: dict[str, Any]) -> dic
     )
     timed_out = False
     try:
-        output, _ = reader.communicate(timeout=None if READER_SECONDS >= 2**31 - 1 else READER_SECONDS)
+        output, _ = reader.communicate(timeout=READER_SECONDS)
     except subprocess.TimeoutExpired:
         timed_out = True
         reader.kill()

@@ -7,19 +7,26 @@ from auditmanager.analysis.recognised.portal import IMAGE, read_block_list
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.storage.public import parse_blob_id
 
-MAX_VISUAL_SOURCES = 2**31 - 1
-MAX_TEXT_PAGES = 2**31 - 1
+from .core import LIFTED_SECTION_BOUND, SECTION_MAX_SOURCES, SECTION_MAX_TEXT_PAGES
+
+MAX_VISUAL_SOURCES = SECTION_MAX_SOURCES
+MAX_TEXT_PAGES = SECTION_MAX_TEXT_PAGES
 VISUAL_WINDOW_SIZE = 16
 
 
-def estimate_visual_scope(*, version, blob_store=None):
+def estimate_visual_scope(*, version, blob_store=None, relaxed_limits=False):
     """Count actual portal IMAGE inputs; a native/TEXT-only PDF uses page visuals.
 
     This is input accounting, not a claim that every page or portal box will pass
-    geometry admission. The worker reports those later refusals explicitly.
+    geometry admission. The worker reports those later refusals explicitly. The source and
+    page bounds are the section run's; a run that asked for ``relaxed_limits`` lifts them.
     """
+    if type(relaxed_limits) is not bool:
+        raise ValueError("extended_relaxed_limits_invalid")
+    max_sources = LIFTED_SECTION_BOUND if relaxed_limits else MAX_VISUAL_SOURCES
+    max_pages = LIFTED_SECTION_BOUND if relaxed_limits else MAX_TEXT_PAGES
     pages = version.page_count
-    if type(pages) is not int or not 1 <= pages <= MAX_TEXT_PAGES:
+    if type(pages) is not int or not 1 <= pages <= max_pages:
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="source_preparation",
                           reason="cost_page_count_unavailable")
     companion = next((entry for entry in version.manifest
@@ -35,7 +42,7 @@ def estimate_visual_scope(*, version, blob_store=None):
         images = sum(block.block_type == IMAGE for block in blocks)
         kind, count = ("portal_image_blocks", images) if images else ("portal_page_visuals", pages)
         companion_sha = companion.sha256
-    if count > MAX_VISUAL_SOURCES:
+    if count > max_sources:
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="source_preparation",
                           reason="cost_visual_source_limit_exceeded")
     maximum = count

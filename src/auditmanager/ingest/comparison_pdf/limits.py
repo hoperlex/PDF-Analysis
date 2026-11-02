@@ -1,9 +1,31 @@
-"""Temporary statistics intake for comparison PDF batches.
+"""The limits of ADR-0025 decision 9 for a comparison upload, as typed refusals before the first part.
 
-The application quotas on file count, set count, declared bytes, pages and
-project bytes are raised to the database representation limits. Multipart
-storage still accepts at most 10 000 parts per file, each 16 MiB. Active batch
-counts remain a concurrency guard. Tests can lower constants to check refusals.
+The numbers are the architect's defaults (``CMP-ADR-01``), revisable only by a dated addendum to the ADR
+(decision 27), so they are constants here and **not** schema bounds: the contract carries structure only.
+A deployment that sets ``AUDITMANAGER_INTAKE_RELAXED=1`` (:mod:`auditmanager.ingest.intake_mode`) lifts every
+quota in the table to the database representation limit; the multipart storage still accepts at most 10 000
+parts per file, each 16 MiB.
+
+====================== =============================== =====================================================
+quantity               value                           refusal (``validation_failed``, field ``files``)
+====================== =============================== =====================================================
+files per batch        10 000                          ``comparison_files_limit``
+document sets          100                             ``comparison_sets_limit``
+declared bytes         8 GiB                           ``comparison_batch_bytes_limit``
+declared pages         10 000                          ``comparison_batch_pages_limit``
+project stored bytes   8 GiB (stored + declared)       ``comparison_project_bytes_limit``
+one file               250 MiB (the envelope's)        ``byte_size <= 262144000`` on ``content``
+active batches         1 per account, 2 per install    ``conflict`` / ``comparison_upload_active``
+====================== =============================== =====================================================
+
+Each is refused **before the first part and before any row exists** (a refusal has nothing to roll back). The
+checks run cheapest first, so a batch that breaks several is refused for the first on the list. A file name is
+never echoed.
+
+**Sets.** A batch's real grouping is read from the stamps, after the bytes arrive. At declaration only the
+names exist, so the limit is checked on the *name* grouping (the folder, else the base name:
+:func:`auditmanager.ingest.comparison_pdf.names.group_key`), the original's own limit of 100 projects. The stamp
+grouping is held to the same number when files are placed (:mod:`auditmanager.ingest.comparison_pdf.service`).
 """
 
 from __future__ import annotations
@@ -12,6 +34,7 @@ from collections.abc import Iterable, Sequence
 from typing import Final
 
 from auditmanager.ingest.envelope import MAX_BYTES, MAX_PAGES
+from auditmanager.ingest.intake_mode import quota
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 from .names import group_key, name_hint
@@ -32,11 +55,11 @@ __all__ = [
 ]
 
 GIB: Final[int] = 1024 * 1024 * 1024
-MAX_FILES: Final[int] = 2**31 - 1
-MAX_SETS: Final[int] = 2**31 - 1
-MAX_BATCH_BYTES: Final[int] = 2**63 - 1
-MAX_BATCH_PAGES: Final[int] = 2**31 - 1
-MAX_PROJECT_BYTES: Final[int] = 2**63 - 1
+MAX_FILES: Final[int] = quota(10_000, 2**31 - 1)
+MAX_SETS: Final[int] = quota(100, 2**31 - 1)
+MAX_BATCH_BYTES: Final[int] = quota(8 * GIB, 2**63 - 1)
+MAX_BATCH_PAGES: Final[int] = quota(10_000, 2**31 - 1)
+MAX_PROJECT_BYTES: Final[int] = quota(8 * GIB, 2**63 - 1)
 #: The envelope's size bound for one PDF (250 MiB, R-116): the comparison path does not widen it.
 MAX_FILE_BYTES: Final[int] = MAX_BYTES
 ACTIVE_UPLOADS_PER_ACCOUNT: Final[int] = 1
@@ -45,7 +68,7 @@ ACTIVE_UPLOADS_PER_INSTALLATION: Final[int] = 2
 PART_BYTES: Final[int] = 16 * 1024 * 1024
 #: ``comparison_upload_part.part_number`` is ``1..10000`` (S3's own bound); 250 MiB needs 16 at 16 MiB.
 _MAX_PART_NUMBER: Final[int] = 10_000
-assert MAX_PAGES == 2**31 - 1  # document_version.page_count INTEGER
+assert MAX_PAGES == quota(500, 2**31 - 1)  # the declaration's own bound (``ComparisonUploadFileDeclaration.page_count``)
 
 
 class DeclaredFile:

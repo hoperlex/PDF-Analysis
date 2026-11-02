@@ -237,3 +237,30 @@ def test_six_scope_group_prices_all_calls_and_pins_each_verified_set(monkeypatch
     route.billing = "unmetered"
     free = policy.estimate_group(None, version_uid=VERSION, version_record=version("AR"))
     assert free.as_dict()["estimated_cost_micros"] == 0 and free.approve(consent(free))["billing"] == "unmetered"
+
+
+def test_section_run_bounds_hold_unless_the_run_asks_for_relaxed_limits(registry, monkeypatch):
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "1")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1")
+    policy = service(registry)
+    within = json.loads(estimate(policy, version("AR", 300_000, 500)).authority_json)["extended_review"]
+    assert within["text_page_limit"] == 500 and "unbounded_stats" not in within
+    with pytest.raises(DomainError) as failure:
+        estimate(policy, version("AR", 300_000, 501))
+    assert failure.value.detail_fields["reason"] == "cost_page_count_unavailable"
+    relaxed = json.loads(estimate(policy, version("AR", 300_000, 501), relaxed_limits=True).authority_json)
+    assert relaxed["extended_review"]["unbounded_stats"] is True
+    assert relaxed["extended_review"]["text_page_limit"] == 501
+
+
+def test_only_the_batched_coverage_can_lift_the_section_run_bounds(registry, monkeypatch):
+    # The worker recognises a relaxed run by the stamp of the batched coverage policy, so a
+    # relaxed run priced under another coverage keeps the bounds rather than being priced for a
+    # run the worker would then refuse.
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS", "1")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3")
+    monkeypatch.setenv("AUDITMANAGER_EXTENDED_COVERAGE", "legacy")
+    with pytest.raises(DomainError) as failure:
+        estimate(service(registry), version("AR", 300_000, 501), relaxed_limits=True)
+    assert failure.value.detail_fields["reason"] == "cost_page_count_unavailable"

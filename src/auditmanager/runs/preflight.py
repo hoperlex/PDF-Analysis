@@ -244,13 +244,18 @@ class RunCostPreflight:
             requested = os.environ.get("AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "v3").strip().lower()
             if requested in {"v3", "extended-review-v3"}:
                 from auditmanager.analysis.public import estimate_extended_visual_scope, extended_review_bundle_digest
-                visual = estimate_extended_visual_scope(version=version, blob_store=self.blob_store)
+                coverage_mode = os.environ.get("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1").strip().lower()
+                # The section-run bounds (1000 sources, 500 text pages, 63 windows, 900 000 request
+                # bytes) hold unless the run asked for relaxed_limits. The worker recognises such a
+                # run by the `unbounded_stats` stamp of the batched coverage policy below, so only
+                # that coverage mode can lift them (`REVIEW-FIX-BOUNDS-1102`).
+                visual = estimate_extended_visual_scope(version=version, blob_store=self.blob_store,
+                    relaxed_limits=relaxed_limits and coverage_mode == "batched-v1")
                 section = version.classification.section_code
                 extended = {"enabled": True, "plan_version": "extended-review-v3",
                     "max_blocks": visual["max_blocks"], "window_size": visual["window_size"],
                     "max_windows": visual["max_windows"], "text_page_limit": visual["text_page_limit"], "review": True,
                     "review_scope": "full_document", "rules_sha256": extended_review_bundle_digest(section), "section_code": section}
-                coverage_mode = os.environ.get("AUDITMANAGER_EXTENDED_COVERAGE", "batched-v1").strip().lower()
                 if coverage_mode in {"batched-v1", "batched-fixed-v1"}:
                     from auditmanager.analysis.public import extended_coverage_policy
                     extended.update(extended_coverage_policy(**({"text_characters": chars,

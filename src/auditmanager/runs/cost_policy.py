@@ -45,6 +45,9 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         digest, billing = consent["estimate_digest"], consent["billing"]
         ceiling = consent.get("run_limits_micros", {}).get(run_id, consent["ceiling_micros"])
         uncapped_stats = consent.get("uncapped_stats", False)
+        # The section-run bounds hold unless the run asked for relaxed_limits (`REVIEW-FIX-BOUNDS-1102`).
+        lifted = outcome.get("relaxed_limits", False) is True
+        section_sources, section_pages = (2**31 - 1, 2**31 - 1) if lifted else (1000, 500)
         window, maximum = consent.get("window_characters"), consent.get("max_windows")
         model, rates = consent["model_id"], consent["rate_sha256"]
         revision = consent.get("connection_revision_id")
@@ -68,10 +71,11 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                 section = extended.get("section_code")
                 if (not isinstance(section, str) or not 1 <= len(section) <= 8
                         or any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for character in section)
-                        or type(blocks) is not int or not 1 <= blocks <= 2**31 - 1
+                        or type(blocks) is not int or not 1 <= blocks <= section_sources
                         or type(extended.get("window_size")) is not int or extended["window_size"] != 16
                         or type(extended.get("max_windows")) is not int
-                        or type(text_limit) is not int or not 1 <= text_limit <= 2**31 - 1
+                        or type(text_limit) is not int or not 1 <= text_limit <= section_pages
+                        or extended.get("unbounded_stats") is True and not lifted
                         or extended["max_windows"] != max((blocks + 15) // 16, (text_limit + 15) // 16)
                         or extended.get("review") is not True
                         or not isinstance(rules, str) or len(rules) != 64

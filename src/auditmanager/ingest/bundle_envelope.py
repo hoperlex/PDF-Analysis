@@ -67,6 +67,7 @@ from .bundle_archive import (
 )
 from .crop_geometry import uncuttable_image_block
 from .envelope import TEXTLESS_PAGE_CHARACTERS, inspect_pdf, page_text_refusal
+from .intake_mode import quota
 
 __all__ = [
     "BundleAdmission",
@@ -88,17 +89,20 @@ __all__ = [
 # a document (the corpus' 500-page bundle; the export has 129 over 30 pages), at most 5 IMAGE
 # blocks on a page and 47 in a document (the export; the corpus has none). The export's
 # density over the 500-page ceiling would be about 2 150 blocks and 783 IMAGE blocks.
+#
+# These are intake quotas: a relaxed deployment (``AUDITMANAGER_INTAKE_RELAXED=1``,
+# :mod:`auditmanager.ingest.intake_mode`) lifts them to the integer ceiling.
 
 #: Blocks of any type on one page: eleven times the densest real page (9).
-MAX_BLOCKS_PER_PAGE: Final[int] = 2**31 - 1
+MAX_BLOCKS_PER_PAGE: Final[int] = quota(100, 2**31 - 1)
 #: Blocks of any type in one bundle: six times the largest real list (500), and above the
 #: export's density carried to 500 pages (about 2 150).
-MAX_BLOCKS: Final[int] = 2**31 - 1
+MAX_BLOCKS: Final[int] = quota(3_000, 2**31 - 1)
 #: IMAGE blocks -- the crops a run cuts -- in one bundle: twenty-one times the real maximum
 #: (47), above the export's density carried to 500 pages (about 783). At the measured cost of
 #: a worst-case crop (0.42 s and 11.4 MiB of PNG at the pixel cap, `W55B-JUDGE-X` p7) this
 #: keeps a run's crops inside the stage watchdog's 900 s.
-MAX_IMAGE_BLOCKS: Final[int] = 2**31 - 1
+MAX_IMAGE_BLOCKS: Final[int] = quota(1_000, 2**31 - 1)
 
 # -- the pinned schema, in code ---------------------------------------------------------
 #
@@ -108,6 +112,9 @@ MAX_IMAGE_BLOCKS: Final[int] = 2**31 - 1
 SCHEMA_REQUIRED_TOP: Final[tuple[str, ...]] = ("schema_version", "coordinate_space", "pages", "blocks")
 SCHEMA_VERSION: Final[int] = 1
 COORDINATE_SPACE: Final[str] = "normalized_page_top_left"
+# The pinned schema's own page bound is the integer ceiling (``contracts/analysis`` is frozen);
+# the 500-page quota is the PDF member's rule (``envelope.MAX_PAGES``), which the block list's
+# page count must equal (``blocks_page_count``).
 PAGES_MIN, PAGES_MAX = 1, 2**31 - 1
 PAGE_REQUIRED: Final[tuple[str, ...]] = ("page_index", "width_px", "height_px", "rotation")
 ROTATIONS: Final[tuple[int, ...]] = (0, 90, 180, 270)

@@ -616,6 +616,16 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
     phase("norm_verification", "partial" if len(candidates) < len(items) else "completed")
 
 
+def _bounds_lifted(policy):
+    """Whether the frozen policy belongs to a ``relaxed_limits`` run (`REVIEW-FIX-BOUNDS-1102`).
+
+    Preflight stamps ``unbounded_stats`` on the policy of such a run and of no other; the
+    section-run bounds (1000 sources, 63 windows, 500 text pages, 900 000 request bytes) hold
+    for every other run.
+    """
+    return policy.get("unbounded_stats") is True
+
+
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
         window_context=None, full_document=False):
@@ -767,7 +777,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             else:
                 native = prepare_native_page_sources(version_uid=run.version_uid,source_ref=source,
                     blob_store=store,max_pages=16 if v3 else version.page_count if full_document else 16,checkpoint=checkpoint,
-                    **({"window_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
+                    **({"window_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"],
+                        "relaxed_limits":_bounds_lifted(window_context["policy"])} if v3 else {}))
             if text_only_portal:
                 native["warnings"].append("portal_text_only_native_page_visuals")
             if bind_native is not None: bind_native(native["artifacts"])
@@ -777,7 +788,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             observations=observations_document,recognised=data.get("prepared.recognised_text"),
             native_sources=native,plan_version="extended-review-v3" if v3 else "extended-review-v2",full_document=full_document,
             **({"coverage_version":"batched-v1"} if batched else {}),
-            **({"source_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
+            **({"source_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"],
+                "relaxed_limits":_bounds_lifted(window_context["policy"])} if v3 else {}))
         if v3:
             window_total=(native["source_window"]["slots"] if native is not None else len([s for s in planned["sources"] if s["kind"]=="image"]))
             planned["source_window_total"]=planned["coverage"]["blocks_total"]
@@ -1543,7 +1555,8 @@ def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, pha
             'batch_index': batch['index'], 'batch_sha256': batch['batch_sha256']}
         request = build_comprehensive_request_batched_v3(model_id=binding.config.model_id,
             run_id=run.run_id, section=state['section'], payload=payload,
-            window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}')
+            window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}',
+            relaxed_limits=_bounds_lifted(window_context['policy']))
         parsed = parse_extended_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
             allowed_sources=set(batch['source_ids']))
         output.extend(parsed)
@@ -1606,7 +1619,7 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
             for candidate in item['norm_candidates']}
         request = build_norm_review_request_batched_v3(model_id=binding.config.model_id,
             run_id=run.run_id, section=state['section'], window_id=window_context['window_id'] +
-                f':norm:b{batch["index"]:03d}', payload={'coverage_version': 'batched-v1',
+                f':norm:b{batch["index"]:03d}', relaxed_limits=_bounds_lifted(window_context['policy']), payload={'coverage_version': 'batched-v1',
                     'observations': [{'input_id': key, 'title': item['title'], 'description': item['description'],
                         'source_ids': item['source_ids'], 'norm_candidate_ids':
                             [candidate['paragraph_id'] for candidate in item['norm_candidates']]}
