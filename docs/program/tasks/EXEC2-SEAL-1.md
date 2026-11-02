@@ -136,6 +136,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `infra/deploy/proxy/nginx.conf`
 - `infra/deploy/proxy/tls-server.conf`
 - `web/src/shared/api/generated/**`
+- `web/openapi/openapi.json`
 - `web/src/shared/api/credentialed-forward.ts`
 - `web/src/app/bff/v1/[...path]/route.ts`
 - `tests/support/expected_facts.json`
