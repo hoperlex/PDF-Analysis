@@ -473,6 +473,9 @@ def _assemble(
                 environ, standings=getattr(router, "credentials", None), notices=notices,
                 # `EXEC-PULL-01`. The pull channel's port also authenticates a runner token.
                 runner_tokens=getattr(router, "runner_tokens", None),
+                # `EXEC2-ENROLL-01`. The same router carries the port that authenticates an enrollment
+                # secret, for the one operation that takes one.
+                enrollment_secrets=getattr(router, "enrollment", None),
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and

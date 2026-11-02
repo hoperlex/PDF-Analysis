@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from auditmanager.executors.integration_mark import IntegrationMark
 from auditmanager.executors.model import (
     ConnectionSummary,
     ProbeRecord,
@@ -21,6 +22,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "ConnectionDetail",
+    "MarkedConnectionSummary",
     "RunExecutor",
     "connection_detail",
     "executor_of_revision",
@@ -29,6 +31,15 @@ __all__ = [
     "resolve_route",
     "sweep",
 ]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MarkedConnectionSummary(ConnectionSummary):
+    """A :class:`ConnectionSummary` that also carries the administrator's integration-authorisation mark
+    (`EXEC2-ENROLL-01`, `R-149b`), read with the summary so that every view of a connection -- the list, a
+    created, revised or archived connection, the detail -- shows it without a read of its own."""
+
+    integration_mark: IntegrationMark | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,17 +91,21 @@ def _summaries(
     ids = [connection.connection_id for connection in connections]
     revisions = store.current_revisions(session, ids)
     secrets = store.current_secrets(session, ids)
+    marks = store.integration_marks(session, ids)
     routed: dict[str, list[str]] = {}
     for route in store.current_routes(session):
         for connection_id in (route.primary_connection_id, route.standby_connection_id):
             if connection_id is not None:
                 routed.setdefault(connection_id, []).append(route.work_kind)
     return tuple(
-        ConnectionSummary(
+        MarkedConnectionSummary(
             connection=connection,
             current_revision=revisions.get(connection.connection_id),
             secrets=tuple(secrets.get(connection.connection_id, ())),
             routed_work_kinds=tuple(sorted(set(routed.get(connection.connection_id, ())))),
+            integration_mark=(
+                IntegrationMark(connection.connection_id, *marks[connection.connection_id])
+                if connection.connection_id in marks else None),
         )
         for connection in connections
     )

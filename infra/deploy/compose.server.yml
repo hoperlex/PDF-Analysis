@@ -276,6 +276,13 @@ services:
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
       AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
       AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
+      # `EXEC2-ENROLL-01` (ADR-0026 decisions 4 and 6). Both optional and read by the `api` only. The stand's
+      # public origin (`https://host[:port]`) that the generated agent install command downloads from; blank
+      # takes the origin of the administrator's own request, which is wrong behind a tunnel or a private
+      # name. And where the image keeps the agent package (`auditmanager-agent-<version>.tar.gz` and its
+      # `.sha256`); blank is the image's own `/app/agent-package`.
+      AUDITMANAGER_PUBLIC_ORIGIN: ${AUDITMANAGER_PUBLIC_ORIGIN:-}
+      AUDITMANAGER_AGENT_PACKAGE_DIR: ${AUDITMANAGER_AGENT_PACKAGE_DIR:-}
       # `AR-V3-BETA-PACK-INSTALL-01`. Path INSIDE the container of the sealed reviewed-pack
       # manifest (`/run/ar-v3/<file>`, mounted read-only below); blank installs no pack.
       AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}

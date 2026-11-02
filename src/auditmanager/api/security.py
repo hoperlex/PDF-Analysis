@@ -171,7 +171,7 @@ import hmac
 import json
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Annotated, Any, Callable, Final, Mapping, Protocol, runtime_checkable
 
@@ -197,9 +197,12 @@ __all__ = [
     "AuthorizationDependency",
     "AccountStanding",
     "AccountStandings",
+    "CurrentEnrollment",
     "CurrentRunner",
     "CurrentSubject",
     "ENROLLMENT_OPERATIONS",
+    "EnrollmentIdentity",
+    "EnrollmentSecrets",
     "IssuedCredential",
     "RUNNER_OPERATIONS",
     "RevocationNotices",
@@ -210,6 +213,7 @@ __all__ = [
     "bearer_scheme",
     "build_authorization_dependency",
     "build_signer",
+    "current_enrollment",
     "current_runner",
     "current_subject",
     "derive_signing_key",
@@ -280,13 +284,14 @@ RUNNER_OPERATIONS: Final[frozenset[str]] = frozenset({
 #: hash -- and presented under the same ``bearerAuth`` scheme. The secret reaches no other operation: the
 #: runner operations refuse it as any wrong token, and a user operation as any forged credential.
 #:
-#: **This is the declaration and nothing more; the authentication is `EXEC2-ENROLL-01`'s.** What it leaves
-#: for that lane: a port beside :class:`RunnerTokens` that resolves a presented secret to the grant (lookup
-#: by prefix, constant-time comparison of the hash, single-use and expiry under the exchange's own
-#: transaction), the branch in :func:`build_authorization_dependency` that publishes it on
-#: ``request.state`` for the one handler, and the matching ``Current...`` dependency. Until then the
-#: operation is closed by default: the dependency treats a presented secret as a forged user credential and
-#: answers ``authentication_required``, which is the answer a wrong secret gets afterwards too.
+#: **The authentication is `EXEC2-ENROLL-01`'s** (``auditmanager.executors.enrollment``): a port beside
+#: :class:`RunnerTokens`, :class:`EnrollmentSecrets`, resolves a presented secret to the grant it names
+#: (shape, prefix lookup, constant-time hash comparison, expiry, revocation), and the branch in
+#: :func:`build_authorization_dependency` publishes the grant on ``request.state`` for the one handler that
+#: asks for :data:`CurrentEnrollment`. A grant that was already exchanged is still resolved, so the exchange
+#: itself can answer ``enrollment_redeemed``; an unknown, wrong, expired or revoked secret is the one
+#: ``authentication_required``. With no port wired (``create_documentation_app``) the operation is closed:
+#: every secret is ``authentication_required``, as a missing account port closes the rest.
 ENROLLMENT_OPERATIONS: Final[frozenset[str]] = frozenset({"redeemExecutorEnrollment"})
 
 #: `R-50`. The operations a credential minted for an account **still on its seeded
@@ -925,6 +930,32 @@ class RunnerTokens(Protocol):
         """The identity of this presented token, or ``None``."""
 
 
+@dataclass(frozen=True, slots=True)
+class EnrollmentIdentity:
+    """Who an enrollment exchange is: one grant of one connection that proved its secret
+    (`EXEC2-ENROLL-01`).
+
+    Not a :class:`Subject` and not a :class:`RunnerIdentity`: no account, no role, no token. It is the seam's
+    own vocabulary; the ``executors`` boundary's principal is translated into it by the adapter.
+    ``exchange_key`` is derived from the presented secret and is as sensitive as the secret: it lives for
+    this request and is in no repr."""
+
+    enrollment_id: str
+    connection_id: str
+    exchange_key: bytes = field(repr=False)
+
+
+@runtime_checkable
+class EnrollmentSecrets(Protocol):
+    """The one thing the seam needs to authenticate an enrollment secret, and nothing more.
+
+    ``None`` is the single answer for a secret that is unknown, wrong, revoked or expired without having
+    been exchanged: a refusal, never a permissive default, and not an oracle for which."""
+
+    def authenticate_enrollment(self, presented: str) -> EnrollmentIdentity | None:
+        """The identity of this presented secret, or ``None``."""
+
+
 def derive_signing_key(secret: str) -> bytes:
     """The signing key for a deployment secret, or a refusal for an empty one.
 
@@ -1278,6 +1309,7 @@ def build_authorization_dependency(
     standings: AccountStandings | None = None,
     notices: RevocationNotices | None = None,
     runner_tokens: RunnerTokens | None = None,
+    enrollment_secrets: EnrollmentSecrets | None = None,
 ) -> object:
     """The dependency that guards the surface, closed over this environment's signer.
 
@@ -1304,6 +1336,9 @@ def build_authorization_dependency(
     ``runner_tokens`` (`EXEC-PULL-01`) is how the four :data:`RUNNER_OPERATIONS` authenticate.
     ``None`` -- the default, and ``create_documentation_app`` -- refuses them, like a missing
     account port refuses everything else.
+
+    ``enrollment_secrets`` (`EXEC2-ENROLL-01`) is how the one :data:`ENROLLMENT_OPERATIONS` entry
+    authenticates: an enrollment secret, a principal of its own. ``None`` refuses it the same way.
     """
     signer = build_signer(environ)
 
@@ -1354,6 +1389,16 @@ def build_authorization_dependency(
             if identity is None:
                 raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
             request.state.runner = identity
+            return
+        if operation in ENROLLMENT_OPERATIONS:
+            # `EXEC2-ENROLL-01`. An enrollment secret, a principal of its own: no account, no role,
+            # no runner token. The exchange itself decides single use, the window and the connection.
+            if enrollment_secrets is None or credentials is None:
+                raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+            grant = enrollment_secrets.authenticate_enrollment(credentials.credentials)
+            if grant is None:
+                raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+            request.state.enrollment = grant
             return
         if signer is None or credentials is None or standings is None:
             raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
@@ -1506,3 +1551,19 @@ def current_runner(request: Request) -> RunnerIdentity:
 
 #: What a runner operation writes to receive the authenticated runner.
 CurrentRunner = Annotated[RunnerIdentity, Depends(current_runner)]
+
+
+def current_enrollment(request: Request) -> EnrollmentIdentity:
+    """The grant the seam authenticated for this request (`EXEC2-ENROLL-01`).
+
+    Only the enrollment exchange may depend on this, and the seam either published an identity or refused
+    the request before any handler ran; the refusal below is the unreachable branch's typed answer, as
+    :func:`current_runner`'s is. A runner token or a user's session never satisfies it."""
+    identity = getattr(request.state, "enrollment", None)
+    if not isinstance(identity, EnrollmentIdentity):
+        raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
+    return identity
+
+
+#: What the enrollment exchange writes to receive the authenticated grant.
+CurrentEnrollment = Annotated[EnrollmentIdentity, Depends(current_enrollment)]

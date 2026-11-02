@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.model import (
+    GENERIC_PURPOSES,
     PROBE_RUNNING_MARGIN_SECONDS,
     PROBE_UNTAKEN_SECONDS,
     PULL_PROBE_WINDOW_SECONDS,
@@ -82,6 +83,13 @@ def _typed_parameter(name: str) -> str:
 
 #: A probe row may be listed for a connection at most this many times.
 PROBE_HISTORY: Final[int] = 10
+#: «Online» is the freshness of a runner token's ``last_seen_at`` (ADR-0026 decision 5): a usable token seen
+#: within this many seconds belongs to an agent that is there. One figure for every reader of it -- the
+#: connection's runner tokens (`EXEC2-ENROLL-01`), the dispatcher's «a runner is online» (`EXEC2-CAP-01`) and the
+#: move of an agent. ``touch_token`` writes ``last_seen_at`` at most every 5 s and an idle runner's long poll
+#: lasts at most 25 s, so an agent that is waiting for work is seen far more often than this; 120 s is also a
+#: claim's lease, after which an agent that has not been seen has lost any claim it held.
+RUNNER_ONLINE_SECONDS: Final[int] = 120
 
 
 def _connection(row: Mapping[str, Any]) -> ConnectionRecord:
@@ -149,6 +157,20 @@ class ExecutorRepository:
             "ORDER BY archived_at IS NOT NULL, created_at DESC, connection_id DESC LIMIT :limit"
         ), {"limit": limit}).mappings().all()
         return [_connection(row) for row in rows]
+
+    def integration_marks(
+        self, session: Session, connection_ids: Sequence[str]
+    ) -> dict[str, tuple[Any, str]]:
+        """``(authorised_at, authorised_by)`` of each connection whose integration-authorisation mark is set
+        (`EXEC2-ENROLL-01`, `R-149b`): the connection summaries carry it, so it is read here with them."""
+        if not connection_ids:
+            return {}
+        rows = session.execute(text(
+            "SELECT connection_id, integration_authorised_at, integration_authorised_by "
+            "FROM executor_connection WHERE connection_id = ANY(:ids) "
+            "AND integration_authorised_at IS NOT NULL"
+        ), {"ids": list(connection_ids)}).all()
+        return {str(row[0]): (row[1], str(row[2])) for row in rows}
 
     def archive_connection(
         self, session: Session, connection_id: str, *, actor_uid: str
@@ -232,13 +254,18 @@ class ExecutorRepository:
     def current_secrets(
         self, session: Session, connection_ids: Sequence[str]
     ) -> dict[str, list[SecretRecord]]:
+        """The connection's own current secrets: only the purposes a connection can hold
+        (:data:`~auditmanager.executors.model.GENERIC_PURPOSES`). The sealed key of an agent install session
+        (``agent_install_key``, `EXEC2-ENROLL-01`) is a current secret of the *session*, not of the
+        connection: it is never listed beside the connection's key, and ``ExecutorSecretMetadata`` could not
+        carry its purpose."""
         if not connection_ids:
             return {}
         rows = session.execute(text(
             f"SELECT {_SECRET_COLUMNS} FROM executor_secret "
-            "WHERE connection_id = ANY(:ids) AND replaced_at IS NULL "
+            "WHERE connection_id = ANY(:ids) AND replaced_at IS NULL AND purpose = ANY(:purposes) "
             "ORDER BY connection_id, purpose"
-        ), {"ids": list(connection_ids)}).mappings().all()
+        ), {"ids": list(connection_ids), "purposes": list(GENERIC_PURPOSES)}).mappings().all()
         found: dict[str, list[SecretRecord]] = {}
         for row in rows:
             found.setdefault(row["connection_id"], []).append(_secret(row))

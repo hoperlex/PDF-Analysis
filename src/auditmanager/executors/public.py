@@ -31,6 +31,43 @@ from auditmanager.executors.commands import (
     set_route,
     set_secret,
 )
+# `EXEC2-ENROLL-01` (ADR-0026 decisions 4 to 9): the enrollment grant and the exchange, the agent's health, the
+# package the image holds, the API side of an install over SSH and the integration-authorisation mark.
+from auditmanager.executors.agent_install import (
+    authorized_keys_line,
+    confirm_agent_install_host_key,
+    create_agent_install,
+    get_agent_install,
+    install_destination,
+    observed_fingerprint,
+)
+from auditmanager.executors.agent_install_repository import InstallRecord
+from auditmanager.executors.agent_package import (
+    AgentPackage,
+    available_versions,
+    latest_package,
+    load_package,
+)
+from auditmanager.executors.enrollment import (
+    EnrollmentPrincipal,
+    IssuedEnrollment,
+    RedeemedToken,
+    authenticate_enrollment,
+    enrollments_of,
+    issue_executor_enrollment,
+    redeem_enrollment,
+    report_runner_health,
+    token_health_of,
+)
+from auditmanager.executors.enrollment_repository import (
+    EnrollmentRecord,
+    TokenHealth,
+)
+from auditmanager.executors.integration_mark import (
+    IntegrationMark,
+    integration_marks_of,
+    set_integration_authorisation,
+)
 from auditmanager.executors.destinations import DestinationPolicy
 from auditmanager.executors.image_input import (
     MAX_IMAGE_BYTES,
@@ -116,6 +153,32 @@ if TYPE_CHECKING:
     from auditmanager.executors.operations import OperationRefused, import_env
 
 __all__ = [
+    # `EXEC2-ENROLL-01`.
+    "AgentPackage",
+    "EnrollmentPrincipal",
+    "EnrollmentRecord",
+    "InstallRecord",
+    "IntegrationMark",
+    "IssuedEnrollment",
+    "RedeemedToken",
+    "TokenHealth",
+    "authenticate_enrollment",
+    "authorized_keys_line",
+    "available_versions",
+    "confirm_agent_install_host_key",
+    "create_agent_install",
+    "enrollments_of",
+    "get_agent_install",
+    "install_destination",
+    "integration_marks_of",
+    "issue_executor_enrollment",
+    "latest_package",
+    "load_package",
+    "observed_fingerprint",
+    "redeem_enrollment",
+    "report_runner_health",
+    "set_integration_authorisation",
+    "token_health_of",
     "CLAIM_LEASE_SECONDS",
     "MAX_IMAGES",
     "MAX_IMAGE_BYTES",

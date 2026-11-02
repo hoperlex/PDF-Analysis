@@ -5066,6 +5066,7 @@ class ExecutorAdapter(_SessionHolder):
             }
             if detail.summary.connection.kind == "pull":
                 body.update(_pull_channel_facts(session, connection_id))
+                _compose_enrollment_facts(session, connection_id, body)  # EXEC2-ENROLL-01
             return models.ExecutorConnectionDetail.model_validate(body)
         return self._write(work)
 
@@ -5322,6 +5323,8 @@ def _executor_connection_view(summary: Any) -> dict[str, Any]:
         archived_at=connection.archived_at,
         current_revision_id=None if revision is None else revision.revision_id,
         current_revision_no=None if revision is None else revision.revision_no,
+        # `EXEC2-ENROLL-01`: the administrator's mark, read with the summary (`MarkedConnectionSummary`).
+        integration_authorisation=_integration_mark_view(getattr(summary, "integration_mark", None)),
     )
 
 
@@ -5357,6 +5360,255 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
         ],
         "open_task_count": open_task_count(session, connection_id),
     }
+
+
+# EXEC2-ENROLL-01 ------------------------------------------------------------------------------------
+#
+# The universal agent (ADR-0026 decisions 4 to 9): the enrollment grant and its exchange, the agent's health,
+# the package route, the API side of an install over SSH and the integration-authorisation mark. Thin, like
+# every adapter here: the rules live in ``auditmanager.executors`` (``enrollment``, ``agent_install``,
+# ``integration_mark``, ``agent_package``). This section is the lane's own.
+
+
+def _enrollment_view(record: Any) -> dict[str, Any]:
+    """A grant's metadata. Neither the secret nor its hash is a field of the record."""
+    return _present(
+        enrollment_id=record.enrollment_id, connection_id=record.connection_id,
+        secret_prefix=record.secret_prefix, state=record.state, created_at=record.created_at,
+        created_by=record.created_by, expires_at=record.expires_at,
+        redeemed_at=record.redeemed_at, runner_token_id=record.runner_token_id,
+        revoked_at=record.revoked_at, revoked_by=record.revoked_by,
+    )
+
+
+def _runner_health_fields(health: Any) -> dict[str, Any]:
+    """What an agent last reported on a token, and whether it is online now: closed enumerations only."""
+    return {
+        "agent_version": health.agent_version, "clis": [dict(item) for item in health.clis],
+        "concurrency": health.concurrency, "execution_profile": health.execution_profile,
+        "features": list(health.features), "health_reported_at": health.reported_at,
+        "online": health.online,
+    }
+
+
+def _with_runner_health(session: Session, views: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The token views with the health of each token that has reported; the others are unchanged."""
+    from auditmanager.executors.public import token_health_of
+
+    health = token_health_of(session, [view["token_id"] for view in views])
+    return [
+        {**view, **(_runner_health_fields(health[view["token_id"]]) if view["token_id"] in health else {})}
+        for view in views
+    ]
+
+
+def _integration_mark_view(mark: Any) -> dict[str, Any] | None:
+    """`ExecutorIntegrationAuthorisation`, or ``None`` (the property is then absent) while no mark is set."""
+    if mark is None:
+        return None
+    return {"authorised_at": mark.authorised_at, "authorised_by": mark.authorised_by}
+
+
+def _compose_enrollment_facts(session: Session, connection_id: str, body: dict[str, Any]) -> None:
+    """Add to a ``pull`` connection's detail what this lane owns: its last grants (metadata only) and the
+    agents' health on the runner tokens that ``_pull_channel_facts`` listed. (The administrator's
+    integration-authorisation mark rides on the connection summary: ``_executor_connection_view``.) The one
+    call the shared mapping makes into this section."""
+    from auditmanager.executors.public import enrollments_of
+
+    body["enrollments"] = [_enrollment_view(record) for record in enrollments_of(session, connection_id)]
+    if body.get("runner_tokens"):
+        body["runner_tokens"] = _with_runner_health(session, body["runner_tokens"])
+
+
+def _agent_install_view(record: Any) -> dict[str, Any]:
+    """An install session. A generated key shows its public half and the ``authorized_keys`` line (public by
+    nature); the sealed private half is not a field of the record, and a pasted key shows nothing."""
+    from auditmanager.executors.public import authorized_keys_line, observed_fingerprint
+
+    return _present(
+        install_id=record.install_id, connection_id=record.connection_id, state=record.state,
+        access=record.access, ssh_host=record.ssh_host, ssh_port=record.ssh_port,
+        ssh_user=record.ssh_user, public_key=record.public_key,
+        authorized_keys_line=(None if record.public_key is None
+                              else authorized_keys_line(record.public_key, record.install_id)),
+        observed_host_key_fingerprint=observed_fingerprint(record),
+        host_key_confirmed_at=record.host_key_confirmed_at,
+        host_key_confirmed_by=record.host_key_confirmed_by,
+        package_version=record.package_version, package_sha256=record.package_sha256,
+        failure_reason=record.failure_reason, key_removed_at=record.key_removed_at,
+        created_at=record.created_at, created_by=record.created_by, updated_at=record.updated_at,
+        finished_at=record.finished_at,
+    )
+
+
+class ExecutorEnrollmentAdapter(_SessionHolder):
+    """The universal agent (`EXEC2-ENROLL-01`): the port of ``api.routers.executor_enrollment``.
+
+    ``ring`` is the **public** ring the ``api`` seals an install session's key to (``None`` without a
+    configured key, which makes ``createExecutorAgentInstall`` a typed refusal); the ``api`` holds no private
+    key, so no method here opens a secret. ``public_origin`` is the stand's configured public origin
+    (``AUDITMANAGER_PUBLIC_ORIGIN``), preferred over the origin the administrator's request arrived on when
+    the install command is built. It also authenticates an enrollment secret for the seam
+    (``api.security.EnrollmentSecrets``).
+
+    No method returns a secret but ``issue_enrollment`` (the grant's, once) and ``redeem_enrollment`` (the
+    runner token's, once); no view built here carries a hash, a private key or a sealed byte."""
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, ring: Any = None,
+        public_origin: str | None = None,
+    ) -> None:
+        super().__init__(session_factory)
+        self._ring = ring
+        self._public_origin = public_origin
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> Any:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    # -- the seam ---------------------------------------------------------------------------
+
+    def authenticate_enrollment(self, presented: str) -> Any:
+        from auditmanager.api.security import EnrollmentIdentity
+        from auditmanager.executors.public import authenticate_enrollment
+
+        def work(session: Session) -> Any:
+            principal = authenticate_enrollment(session, presented)
+            if principal is None:
+                return None
+            return EnrollmentIdentity(
+                enrollment_id=principal.enrollment_id, connection_id=principal.connection_id,
+                exchange_key=principal.exchange_key)
+        return self._read(work)
+
+    # -- the administrator's -----------------------------------------------------------------
+
+    def issue_enrollment(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str,
+        requested_origin: str | None,
+    ) -> models.IssuedExecutorEnrollment:
+        from auditmanager.executors.public import issue_executor_enrollment
+
+        def work(session: Session) -> models.IssuedExecutorEnrollment:
+            issued = issue_executor_enrollment(
+                session, connection_id=connection_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+                configured_origin=self._public_origin, requested_origin=requested_origin,
+            )
+            return models.IssuedExecutorEnrollment.model_validate({
+                "secret": issued.secret, "package_version": issued.package.version,
+                "package_sha256": issued.package.sha256, "command": issued.command,
+                "enrollment": _enrollment_view(issued.record),
+            })
+        return self._write(work)
+
+    def set_integration_authorisation(
+        self, *, connection_id: str, authorised: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection:
+        from auditmanager.executors.public import connection_detail, set_integration_authorisation
+
+        def work(session: Session) -> models.ExecutorConnection:
+            set_integration_authorisation(
+                session, connection_id=connection_id, authorised=authorised,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            # The summary is read after the write, in the same transaction, so it carries the mark as it stands.
+            summary = connection_detail(session, connection_id).summary
+            return models.ExecutorConnection.model_validate(_executor_connection_view(summary))
+        return self._write(work)
+
+    def create_agent_install(
+        self, *, connection_id: str, body: models.CreateExecutorAgentInstallRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorAgentInstall:
+        from auditmanager.executors.public import create_agent_install
+
+        def work(session: Session) -> models.ExecutorAgentInstall:
+            record = create_agent_install(
+                session, connection_id=connection_id, access=body.access.value,
+                ssh_host=body.ssh_host, ssh_port=body.ssh_port, ssh_user=body.ssh_user,
+                private_key=body.private_key, ring=self._ring,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
+        return self._write(work)
+
+    def get_agent_install(
+        self, *, connection_id: str, install_id: str
+    ) -> models.ExecutorAgentInstall:
+        from auditmanager.executors.public import get_agent_install
+
+        def work(session: Session) -> models.ExecutorAgentInstall:
+            record = get_agent_install(session, connection_id=connection_id, install_id=install_id)
+            return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
+        return self._read(work)
+
+    def confirm_agent_install_host_key(
+        self, *, connection_id: str, install_id: str, host_key_fingerprint: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorAgentInstall:
+        from auditmanager.executors.public import confirm_agent_install_host_key
+
+        def work(session: Session) -> models.ExecutorAgentInstall:
+            record = confirm_agent_install_host_key(
+                session, connection_id=connection_id, install_id=install_id,
+                fingerprint=host_key_fingerprint, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
+        return self._write(work)
+
+    # -- the agent's -------------------------------------------------------------------------
+
+    def redeem_enrollment(
+        self, *, enrollment: Any, runner_instance_id: str
+    ) -> models.IssuedRunnerToken:
+        from auditmanager.bootstrap.runner import runner_token_view
+        from auditmanager.executors.public import EnrollmentPrincipal, redeem_enrollment
+
+        def work(session: Session) -> models.IssuedRunnerToken:
+            redeemed = redeem_enrollment(
+                session,
+                EnrollmentPrincipal(
+                    enrollment_id=enrollment.enrollment_id, connection_id=enrollment.connection_id,
+                    exchange_key=enrollment.exchange_key),
+                runner_instance_id=runner_instance_id,
+            )
+            (view,) = _with_runner_health(session, [runner_token_view(redeemed.record)])
+            return models.IssuedRunnerToken.model_validate(
+                {"token": redeemed.value, "runner_token": view})
+        return self._write(work)
+
+    def report_health(
+        self, *, runner: Any, body: models.ReportRunnerHealthRequest
+    ) -> models.RunnerHealthAck:
+        from auditmanager.executors.public import report_runner_health
+
+        def work(session: Session) -> models.RunnerHealthAck:
+            recorded = report_runner_health(
+                session, runner.token_id, agent_version=body.agent_version,
+                clis=[
+                    {"cli": item.cli.value, "installed": item.installed,
+                     "auth_state": item.auth_state.value,
+                     **({} if item.version is None else {"version": item.version})}
+                    for item in body.clis
+                ],
+                concurrency=body.concurrency, execution_profile=body.execution_profile.value,
+                features=[feature.value for feature in body.features],
+            )
+            return models.RunnerHealthAck.model_validate({"recorded_at": recorded})
+        return self._write(work)
+
+    def read_package(self, *, version: str) -> tuple[str, bytes]:
+        from auditmanager.executors.public import load_package
+
+        package, content = load_package(version)
+        return package.file_name, content
 
 
 #: `CMP-SEAL-C1`: the stable class name of the withdrawn `0035` operations while the versions module is on.
