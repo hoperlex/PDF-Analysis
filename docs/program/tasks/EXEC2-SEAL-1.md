@@ -142,6 +142,21 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `tests/support/expected_facts.json`
 - `tests/contract/api_v1/test_cmp_seal_c4.py`
 - `tests/contract/api_v1/test_contract_seal.py`
+- `web/FRONTEND_LOCK.json`
+- `web/tests/**`
+- `web/src/shared/api/authorization.ts`
+- `tests/contract/domain_p02/test_openapi_document.py`
+- `tests/integration/api/test_authorization.py`
+- `tests/integration/api/test_role_register.py`
+- `tests/integration/recovery/test_grant_classification.py`
+- `tests/integration/recovery/test_synthetic_drill_compare.py`
+- `tests/integration/composition/test_an_absent_parent_is_not_an_empty_page.py`
+- `infra/deploy/README.md`
+- `infra/deploy/serve.py`
+- `src/auditmanager/api/README.md`
+- `src/auditmanager/api/health.py`
+- `src/auditmanager/api/routers/errors.py`
+- `src/auditmanager/api/routers/declarations.py`
 - `src/auditmanager/executors/model.py`
 - `db/migrations/versions/20261102_0046_executor_capacity_enrollment.py`
 - `infra/deploy/apply-grants.sh`
@@ -179,7 +194,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
   - the health fields on `RunnerTokenMetadata`;
   - typed refusal details (`constraint`/`conflict_reason`/`dependency` values) on the existing codes only.
 - Version literal 1.15.0 in every file of premise P-01. The path and operation counts move in every file of P-02 to the figures the new contract actually has.
-- Migration `0046_executor_capacity_enrollment`:
+- Migration revision id `0046_executor_capacity_enroll` (`alembic_version.version_num` is `varchar(32)`, so the 33-character `0046_executor_capacity_enrollment` cannot be stored); the file keeps the longer name:
   - nullable `executor_connection_revision.max_active_runs` (1–16; NULL reads as 1);
   - `executor_task.claimed_by_instance_id`;
   - the health columns on `executor_runner_token`;
@@ -189,7 +204,9 @@ The integrator re-runs every premise command on the actual base before dispatch 
   - a downgrade that refuses when it would drop data in use.
 - `executors/model.py`: the vocabulary only (purposes, settings fields, new kinds of refusal detail); no behaviour.
 - New operations mapped in `api/security.py`: administrator ones to the administrator map, runner ones to the runner set, the enroll exchange and the package to their own principal kinds as stubs the ENROLL lane fills.
-- The `D-213` inventories in the allowed paths name the new tables and columns.
+- The `D-213` inventories in the allowed paths name the new tables and columns; both new tables start in `SEALED_NOT_YET_WRITTEN`.
+- `web/tests/**` and `web/FRONTEND_LOCK.json`: only the contract-version literal, the surface counts and the generated-file hashes move; no test logic changes.
+- `ExecutorConnectionDetail.enrollments`: the connection's enrollment metadata (state, expiry, redemption; never a secret) so a reloaded wizard can show «ожидает регистрации».
 - Server models and web client regenerated with the repository's generators.
 
 ## Required tests

@@ -69,6 +69,8 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/api/security.py`
 - `infra/deploy/proxy/nginx.conf`
 - `infra/deploy/proxy/tls-server.conf`
+- `tests/contract/test_proxy_rate_limits.py`
+- `scripts/recovery/grant_classification.py`
 - `tests/unit/executors/test_enrollment.py`
 - `tests/unit/executors/test_agent_package.py`
 - `tests/integration/executors/test_enrollment.py`
@@ -92,6 +94,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - The enrollment and package routes are registered in `api/app.py` and get their principal kinds in `api/security.py`; the proxy throttles both (per address).
 - Moving an agent: issuing an enrollment for a connection that already has an online agent is allowed and journalled. Revoking the old token stays the existing operation.
 - Tests for B2 §11 items 2, 7 and 8 (server half).
+- Remove `executor_enrollment` from `SEALED_NOT_YET_WRITTEN` in `scripts/recovery/grant_classification.py` once this task writes it; move `THROTTLED_OPERATIONS` in `tests/contract/test_proxy_rate_limits.py` with the new proxy throttles; command types and event names are the ones SEAL-1 registered (`issue_executor_enrollment`, `executor.`-prefixed events).
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker

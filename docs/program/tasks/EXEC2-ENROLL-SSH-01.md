@@ -61,6 +61,8 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/executors/agent_install_repository.py`
 - `src/auditmanager/api/routers/executor_enrollment.py`
 - `src/auditmanager/bootstrap/composition.py`
+- `src/auditmanager/executors/queries.py`
+- `scripts/recovery/grant_classification.py`
 - `tests/unit/executors/test_agent_install.py`
 - `tests/integration/executors/test_agent_install.py`
 
@@ -80,6 +82,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - The worker runner: host-key scan and confirmation compare (no TOFU); upload of the package on stdin; `sudo -n install.sh`; then removal of the stand's `authorized_keys` line and the secret.
 - Composition wiring of the runner in the worker.
 - Tests for B2 §11 item 1 (scripted SSH host).
+- `ExecutorConnection.secrets` never lists an `agent_install_key` row (`executors/queries.py`); remove `executor_agent_install` from `SEALED_NOT_YET_WRITTEN`; command types `create_executor_agent_install` and `confirm_executor_agent_install_host_key` as SEAL-1 registered them.
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker
