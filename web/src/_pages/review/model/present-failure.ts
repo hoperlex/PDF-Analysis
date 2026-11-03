@@ -27,6 +27,7 @@ import {
   isAuthorizationErrorCode,
 } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
+import { RunFindingsReadFault } from '@/entities/finding';
 
 export interface PresentFailureOptions {
   /** What the user was trying to see or do, in their words. */
@@ -95,4 +96,28 @@ export function presentFailureOrNull(
 ): ErrorStateProps | null {
   if (error === null || error === undefined) return null;
   return presentFailure(error, options);
+}
+
+/**
+ * `presentFailureOrNull` for the run's finding list, which has one failure no response
+ * carried: the server's paging contradicting itself (`RunFindingsReadFault`). It is shown
+ * with its own sentence, which says why no list is shown, and with a retry -- the read is
+ * a plain GET, and a second attempt is exactly what a reviewer would try. Every other
+ * failure is presented as before.
+ */
+export function presentFindingsFailure(
+  error: unknown,
+  options: PresentFailureOptions,
+): ErrorStateProps | null {
+  if (error instanceof RunFindingsReadFault) {
+    return {
+      title: options.title,
+      detail: error.message,
+      correlationId: null,
+      ...(options.onRetry === undefined
+        ? {}
+        : { onRetry: options.onRetry, retryLabel: options.retryLabel }),
+    };
+  }
+  return presentFailureOrNull(error, options);
 }

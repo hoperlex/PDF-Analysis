@@ -288,13 +288,21 @@ describe('this slice adds no second polling loop', () => {
   const isAllowedExtendedReviewPoll = ({ path }: { path: string }) =>
     ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
 
+  // The fourth named exception, the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md` §7.1). The
+  // execution queue and journal refresh themselves. The option is written once, in `operational-poll.ts`, and applied by spread
+  // to those two queries only; the assertion further down holds the source to that shape.
+  const ALLOWED_OPERATIONAL_LIST_POLL = [join('entities', 'execution', 'api', 'operational-poll.ts')];
+  const isAllowedOperationalListPoll = ({ path }: { path: string }) =>
+    ALLOWED_OPERATIONAL_LIST_POLL.some((allowed) => path.endsWith(allowed));
+
   it('schedules no interval and no timer of its own', () => {
     const offenders = sources.filter(
       (file) =>
         /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
         !isAllowedProbePoll(file) &&
         !isAllowedComparisonPoll(file) &&
-        !isAllowedExtendedReviewPoll(file),
+        !isAllowedExtendedReviewPoll(file) &&
+        !isAllowedOperationalListPoll(file),
     );
     expect(offenders.map((o) => o.path)).toEqual([]);
   });
@@ -342,6 +350,32 @@ describe('this slice adds no second polling loop', () => {
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
+  });
+
+  it('lets the operational lists poll only through the policy function, only while visible, and only the queue and the journal', () => {
+    const named = sources.filter(isAllowedOperationalListPoll);
+    expect(named.map((f) => f.path)).toHaveLength(ALLOWED_OPERATIONAL_LIST_POLL.length);
+    for (const file of named) {
+      const text = code(file);
+      // No timer of its own: React Query owns the schedule and this module only answers "how long?".
+      expect(text, file.path).not.toMatch(/setInterval\s*\(|setTimeout\s*\(/);
+      // Exactly one use of the option, and it is the policy function; never in the background.
+      expect(text.match(/refetchInterval\b/g), file.path).toHaveLength(1);
+      expect(text, file.path).toMatch(/refetchInterval:\s*operationalListRefetchInterval,/);
+      expect(text, file.path).toMatch(/refetchIntervalInBackground:\s*false,/);
+      expect(text, file.path).toMatch(/operationalListInterval\(\{ failures: consecutiveFailures\(query\), visible: tabIsVisible\(\) \}\)/);
+      // And it never reaches the run endpoint.
+      expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+    }
+    // The spread is in the queue and the journal read, and in nothing else of the entity.
+    const hooks = sources.find((file) => file.path.endsWith(join('entities', 'execution', 'api', 'use-execution.ts')));
+    expect(hooks).toBeDefined();
+    const body = code(hooks!);
+    expect(body.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g)).toHaveLength(2);
+    const section = (name: string) => body.split(`export function ${name}`)[1]?.split('\nexport ')[0] ?? '';
+    expect(section('queueQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
+    expect(section('journalQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
+    expect(section('workersQueryOptions')).not.toContain('OPERATIONAL_LIST_POLL');
   });
 
   it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {

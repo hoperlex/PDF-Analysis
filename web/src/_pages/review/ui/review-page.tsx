@@ -36,12 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import type { FindingObservationId, FindingUid, ProjectUid, RunId } from '@/shared/api';
-import {
-  getFinding,
-  listDecisionHistory,
-  listRunFindings,
-  queryKeys,
-} from '@/shared/api';
+import { getFinding, listDecisionHistory, queryKeys } from '@/shared/api';
 import { ErrorState, LoadingState, PageShell, RunStateBadge } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
@@ -55,10 +50,10 @@ import { useExportRun } from '@/features/export-run';
 import type { DecisionIntent } from '@/widgets/decision-panel';
 import { useRecordVerdict } from '@/features/record-verdict';
 import { runStatusQueryOptions } from '@/entities/audit-run';
-import { admitFindings, groupByCategory } from '@/entities/finding';
+import { admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
 import { firstDeclaredPage } from '@/entities/finding-observation';
 
-import { presentFailureOrNull } from '../model/present-failure';
+import { presentFailureOrNull, presentFindingsFailure } from '../model/present-failure';
 import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
@@ -79,10 +74,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // whatever that place writes.
   const runQuery = useQuery(runStatusQueryOptions(runId));
 
-  const findingsQuery = useQuery({
-    queryKey: queryKeys.runs.findings(runId),
-    queryFn: ({ signal }) => listRunFindings({ path: { run_id: runId } }, { signal }),
-  });
+  // The COMPLETE list: every page of the run's findings, or the error of the page that
+  // failed. The query resolves only once the last page has arrived, so the list below is
+  // never a first page presented as the whole run (`entities/finding`).
+  const findingsQuery = useQuery(runFindingsQueryOptions(runId));
 
   // The admission gate runs before anything is grouped or rendered. Whatever the page
   // contained, only findings reach the widgets.
@@ -187,7 +182,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               setSelection(selectFinding(findingUid));
             }}
             isLoading={findingsQuery.isPending}
-            error={presentFailureOrNull(findingsQuery.error, {
+            error={presentFindingsFailure(findingsQuery.error, {
               title: 'Не удалось загрузить находки',
               onRetry: () => {
                 void findingsQuery.refetch();

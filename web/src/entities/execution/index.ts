@@ -15,3 +15,5 @@ export {
 } from './model/workers';
 export type { RunWorker, WorkerGroups } from './model/workers';
 export { RunWorkerLine } from './ui/run-worker-line';
+export { UpdateTime, updateTimeLabel } from './ui/update-time';
+export type { UpdateTimeProps } from './ui/update-time';

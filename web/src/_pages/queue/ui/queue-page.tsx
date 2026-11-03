@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 
 import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
@@ -8,7 +8,7 @@ import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  canExecute, executionFailure, jobHoldsLease, runWorker, useExecutionQueue, useWorkerLookup,
+  UpdateTime, canExecute, executionFailure, jobHoldsLease, runWorker, useExecutionQueue, useWorkerLookup,
 } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useCancelRun } from '@/features/cancel-run';
@@ -59,7 +59,6 @@ export function QueuePage() {
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
   const [completed, setCompleted] = useState(false);
-  const [asOf, setAsOf] = useState<number | null>(null);
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
   const queue = useExecutionQueue(cursor);
@@ -78,14 +77,10 @@ export function QueuePage() {
   const readFailure = queue.error === null ? null : executionFailure(queue.error, false);
   const accountFailure = account.error === null ? null : executionFailure(account.error, false);
   const next = queue.data?.page.next_cursor ?? null;
+  // Row ages are measured at the last successful read, so they never claim a moment the data
+  // does not describe. `0` means no read has succeeded yet.
+  const asOf = queue.dataUpdatedAt > 0 ? queue.dataUpdatedAt : null;
   const costFailure = reauditCost.error === null ? null : executionFailure(reauditCost.error, false);
-
-  useEffect(() => {
-    const refreshAge = () => setAsOf(Date.now());
-    refreshAge();
-    window.addEventListener('focus', refreshAge);
-    return () => window.removeEventListener('focus', refreshAge);
-  }, []);
 
   function select(nextIntent: NewIntent) {
     sequence.current += 1;
@@ -135,11 +130,12 @@ export function QueuePage() {
   return (
     <PageShell
       title="Очередь"
-      subtitle="Устойчивые задачи прогонов. Данные обновляются при возврате на вкладку и по запросу."
-      actions={<button className="am-button am-button--quiet" type="button" onClick={() => { setAsOf(Date.now()); void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>}
+      subtitle="Устойчивые задачи прогонов. Данные обновляются автоматически, пока вкладка открыта, и по запросу."
+      actions={<button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>}
     >
-      {readFailure === null && queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
-      {readFailure === null && account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
+      <UpdateTime dataUpdatedAt={queue.dataUpdatedAt} failed={queue.isError} />
+      {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
+      {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
         <button
           type="button"
           className="am-button am-button--quiet"
@@ -157,13 +153,18 @@ export function QueuePage() {
         </div>
       ) : null}
       {queue.isPending ? <LoadingState what="очередь" /> : null}
-      {readFailure !== null ? <div data-execution-read-failure={readFailure.kind}><ErrorState title="Очередь не открылась" detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void queue.refetch()} /></div> : null}
+      {/*
+        * A failed read with no data is «не открылась». A failed read after a successful one keeps
+        * the last page on screen under the stale line (`UpdateTime`), because a periodic read
+        * that blinked must not erase the queue; the failure is still said, never swallowed.
+        */}
+      {readFailure !== null ? <div data-execution-read-failure={readFailure.kind}><ErrorState title={queue.data === undefined ? 'Очередь не открылась' : 'Очередь не обновилась'} detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void queue.refetch()} /></div> : null}
       {/*
         * `C-27`: every complete account may read the queue, so its rows do not wait for
         * `getMe`. Until the roles are read — or when that read fails — `roles` is empty and
         * the widget draws no command; the server refuses a command by role anyway.
         */}
-      {queue.data !== undefined && readFailure === null ? (
+      {queue.data !== undefined ? (
         <div className={styles.panel}>
           <ExecutionQueue
             items={queue.data.items}
