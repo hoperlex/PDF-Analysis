@@ -553,6 +553,9 @@ PAGE_AGGREGATES: dict[str, set[str]] = {
     # `W55B-SEAL-01`. The status that tells a produced geometry with no blocks from one never
     # produced, the run it came from, and the whole version's block count.
     "listVersionPortalBlocks": {"version_uid", "status", "produced_by_run_id", "block_count"},
+    # `UI-PARITY-P0A`. The number of journal entries that match the filters, on every page: the knowledge base's
+    # «N записей». A property of the filtered listing and not of the page's items.
+    "listDecisions": {"total"},
 }
 
 
@@ -913,7 +916,9 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `CMP-SEAL-C2` adds ``getComparisonAiQueue``: the installation's AI queue addresses no identity either.
     # `EXEC2-SEAL-2` adds three reads of the installation's own routing: the group list, the routing rules (one per
     # work kind, with the mode) and the cut-over preview each take no identity, no filter and no body.
-    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
+    # `UI-PARITY-P0A` removes ``getDashboardSummary``: it takes the optional ``project_uid`` filter, so it now
+    # declares the ``404`` and ``422`` an input-taking operation must (``listDecisions`` already had its own).
+    {"getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
      "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting"}
@@ -1013,11 +1018,12 @@ def test_no_operation_declares_a_cookie_parameter_today(openapi_document: dict) 
     assert found == [], f"a cookie parameter now exists and needs a decision: {found}"
 
 
-def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
+def test_a_required_cookie_parameter_makes_an_input_less_operation_take_input(
     openapi_document: dict,
 ) -> None:
-    """`X-7`'s own mutation: a required cookie parameter added to `getDashboardSummary`,
-    the one operation this document declares as input-less.
+    """`X-7`'s own mutation: a required cookie parameter added to `listReleases`,
+    an operation this document declares as input-less. (`UI-PARITY-P0A` moved this subject
+    from `getDashboardSummary`, which now takes the optional `project_uid`, to `listReleases`.)
 
     Before this repair, `_takes_caller_input` counted ``path``, ``query`` and a
     ``header`` other than ``X-Correlation-Id`` -- three of OpenAPI 3.1's four parameter
@@ -1034,7 +1040,7 @@ def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
     the operation takes input.
     """
     mutated = copy.deepcopy(openapi_document)
-    operation = mutated["paths"]["/dashboard"]["get"]
+    operation = mutated["paths"]["/releases"]["get"]
     operation.setdefault("parameters", []).append(
         {
             "in": "cookie",
@@ -1045,14 +1051,14 @@ def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
     )
 
     operations = _operations(mutated)
-    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(mutated, operations["listReleases"]) is True
 
     # The real two-sided rule, run against the mutated document: now that the cookie
-    # counts, a `getDashboardSummary` that still declares no client-fault response is
+    # counts, a `listReleases` that still declares no client-fault response is
     # the defect X's first direction names -- caller input with no way to report it
     # malformed -- and the rule itself, unchanged, is what catches it.
     with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
-        _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+        _assert_client_fault_rule(mutated, "listReleases", operations["listReleases"])
 
 
 def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
@@ -1065,7 +1071,7 @@ def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
     ordinary case every other input-taking operation is already in.
     """
     mutated = copy.deepcopy(openapi_document)
-    operation = mutated["paths"]["/dashboard"]["get"]
+    operation = mutated["paths"]["/releases"]["get"]
     operation.setdefault("parameters", []).append(
         {
             "in": "cookie",
@@ -1082,9 +1088,9 @@ def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
     }
 
     operations = _operations(mutated)
-    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(mutated, operations["listReleases"]) is True
     # The real rule, run against the honestly-repaired mutation: no exception.
-    _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+    _assert_client_fault_rule(mutated, "listReleases", operations["listReleases"])
 
 
 def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
@@ -1100,7 +1106,7 @@ def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
     reproduction exercises that merge for the ``cookie`` branch specifically.
     """
     mutated = copy.deepcopy(openapi_document)
-    path_item = mutated["paths"]["/dashboard"]
+    path_item = mutated["paths"]["/releases"]
     path_item.setdefault("parameters", []).append(
         {
             "in": "cookie",
@@ -1114,9 +1120,9 @@ def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
     )
 
     operations = _operations(mutated)
-    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(mutated, operations["listReleases"]) is True
     with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
-        _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+        _assert_client_fault_rule(mutated, "listReleases", operations["listReleases"])
 
 
 def test_the_correlation_header_exemption_is_case_insensitive(openapi_document: dict) -> None:
@@ -1126,25 +1132,25 @@ def test_the_correlation_header_exemption_is_case_insensitive(openapi_document: 
     contract's own ``X-Correlation-Id``, is still the same header on the wire and must
     still be exempt.
 
-    Both directions, on `getDashboardSummary` (input-less today): a differently-cased
+    Both directions, on `listReleases` (input-less today): a differently-cased
     correlation header alone must not count as caller input, and adding one alongside
     a genuinely new header must still count -- the exemption is for *one* header, not
     for every header once any capitalisation of the correlation header is present.
     """
     only_recased = copy.deepcopy(openapi_document)
-    path_item = only_recased["paths"]["/dashboard"]
+    path_item = only_recased["paths"]["/releases"]
     path_item["get"]["parameters"] = [{"in": "header", "name": "x-correlation-id"}]
     operations = _operations(only_recased)
-    assert _takes_caller_input(only_recased, operations["getDashboardSummary"]) is False
+    assert _takes_caller_input(only_recased, operations["listReleases"]) is False
 
     with_a_real_header_too = copy.deepcopy(openapi_document)
-    path_item = with_a_real_header_too["paths"]["/dashboard"]
+    path_item = with_a_real_header_too["paths"]["/releases"]
     path_item["get"]["parameters"] = [
         {"in": "header", "name": "X-CORRELATION-ID"},
         {"in": "header", "name": "X-Scope", "required": True, "schema": {"type": "string"}},
     ]
     operations = _operations(with_a_real_header_too)
-    assert _takes_caller_input(with_a_real_header_too, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(with_a_real_header_too, operations["listReleases"]) is True
 
 
 # ---------------------------------------------------------------------------

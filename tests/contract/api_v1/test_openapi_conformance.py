@@ -583,7 +583,10 @@ class TestN1ComponentReferenceResolution:
         # address it by identity, and `setExecutorRoutingRule` names a group revision that may not exist.
         # The runner-token operations of the agent (`redeemExecutorEnrollment`, `reportRunnerHealth`,
         # `downloadAgentPackage`) address nothing by identity and declare no `404`.
-        assert len(report) == 208, report
+        # `UI-PARITY-P0A` adds one: `getDashboardSummary` names a project in its optional `project_uid`
+        # filter, and a project that does not exist is `not_found` and never a summary of zeros (as the
+        # unknown `project_uid` filter of `getSectionSpecification` is `404` too).
+        assert len(report) == 209, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

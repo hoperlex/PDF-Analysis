@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.16.0 (OpenAPI 3.1.0)
- *   sha256 0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20
+ *   AuditManager PC-01 API 1.17.0 (OpenAPI 3.1.0)
+ *   sha256 c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.16.0';
+export const CONTRACT_VERSION = '1.17.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20';
+export const CONTRACT_DIGEST = 'c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -3636,7 +3636,7 @@ export type CreateStageUploadRequest = {
 /** Opaque pagination token. It encodes the sort key of the last item on the page and nothing else; it is never a database row number or sequence value. */
 export type Cursor = string;
 
-/** `getDashboardSummary`'s whole answer. All four panels, one read, no filter. */
+/** `getDashboardSummary`'s whole answer. All four panels, one read, one optional filter: the request's `project_uid` (`UI-PARITY-P0A`) restricts every panel to that project and the answer carries no echo of it. */
 export type DashboardSummary = {
   documents_by_project: Array<ProjectDocumentCount>;
   findings_by_verdict: Array<VerdictCount>;
@@ -3689,7 +3689,7 @@ export type DecisionId = string;
 /** The contract pattern for `DecisionId`. Anchored; use with `new RegExp()`. */
 export const DECISION_ID_PATTERN = "^dec_[0-9A-HJKMNP-TV-Z]{26}$";
 
-/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. */
+/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
@@ -3699,22 +3699,29 @@ export type DecisionRecord = {
   /** How many events the ledger holds for this finding, including this one. A count greater than one means the expert returned to the finding. */
   decision_event_count: number;
   decision_id: DecisionId;
+  document_name: string;
+  document_uid: DocumentUid;
   event_type: DecisionEventType;
   finding_observation_id: FindingObservationId;
   /** The observation's own words, as `FindingObservation.finding_text` carries them. It is the analysis's text and not this API's prose, so it is in whatever language the analysis produced. */
   finding_text: string;
   finding_uid: FindingUid;
+  project_name: string;
   project_uid: ProjectUid;
   recorded_at: string;
   run_id: RunId;
+  section?: ProjectSection;
   severity?: Severity;
   /** The verdict this event carries, or null for a comment. */
   verdict?: Verdict | null;
+  version_uid: VersionUid;
 };
 
 export type DecisionRecordPage = {
   items: Array<DecisionRecord>;
   page: PageInfo;
+  /** The number of decision-journal entries that match the filters, on every page of the listing -- not the number of items on this page. */
+  total: number;
 };
 
 /**
@@ -3811,7 +3818,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.16.0";
+  contract_version: "1.17.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;

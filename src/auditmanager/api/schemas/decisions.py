@@ -78,6 +78,11 @@ class DecisionRecordView:
     recorded_at: datetime
     project_uid: str
     run_id: str
+    #: `UI-PARITY-P0A`. Where the decision belongs. The two names are joined at read time.
+    document_uid: str
+    version_uid: str
+    project_name: str
+    document_name: str
     category: str
     finding_text: str
     current_verdict: str
@@ -85,6 +90,10 @@ class DecisionRecordView:
     verdict: str | None = None
     comment: str | None = None
     severity: str | None = None
+    #: The version's expert-confirmed section code; ``None`` while nobody has classified it.
+    #: Omitted from the wire body, never sent as ``null`` -- the convention ``DocumentVersion.section``
+    #: and ``SectionDocumentCount.section`` already carry.
+    section: str | None = None
 
 
 def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
@@ -102,6 +111,10 @@ def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
         "recorded_at": timestamp(view.recorded_at),
         "project_uid": view.project_uid,
         "run_id": view.run_id,
+        "document_uid": view.document_uid,
+        "version_uid": view.version_uid,
+        "project_name": view.project_name,
+        "document_name": view.document_name,
         "category": view.category,
         "finding_text": view.finding_text,
         "current_verdict": view.current_verdict,
@@ -109,6 +122,8 @@ def decision_record_body(view: DecisionRecordView) -> dict[str, Any]:
     }
     if view.severity is not None:
         body["severity"] = view.severity
+    if view.section is not None:
+        body["section"] = view.section
     return body
 
 
