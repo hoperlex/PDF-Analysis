@@ -12,6 +12,10 @@
  * (`./executor-refusal.ts`) is rendered as itself, with a retry only when the envelope says it
  * is retryable, and never with another executor or the route in its place.
  *
+ * `EXEC2-WEB-GROUPS-01`: the same holds for the executor group the person chose, and for a start
+ * while the stand routes by rules and the work kind has no rule (`./group-refusal.ts`). Neither
+ * offers another group, a connection or the route in its place.
+ *
  * `analysis_input_invalid` is kept distinct from `validation_failed`: the first says the
  * declared analysis inputs are not acceptable, the second says the request was malformed,
  * and collapsing them would hide which one the operator has to fix.
@@ -36,6 +40,8 @@ import {
 
 import { executorRefusal } from './executor-refusal';
 import type { ExecutorRefusalKind } from './executor-refusal';
+import { groupRefusal } from './group-refusal';
+import type { GroupRefusalKind } from './group-refusal';
 import { presetRefusal } from './preset-refusal';
 import type { PresetRefusalKind } from './preset-refusal';
 import { inputBudgetSentence } from './input-budget';
@@ -53,6 +59,7 @@ export type RunFailureKind =
   | 'section_profile_unavailable'
   | ExecutorRefusalKind
   | PresetRefusalKind
+  | GroupRefusalKind
   | 'reference_unavailable'
   | 'provider_unavailable'
   | 'not_found'
@@ -126,6 +133,11 @@ function fromApiError(error: ApiError): RunFailure {
   // `ANALYSIS-PRESETS-01`: a refusal of the preset the person chose is said as itself.
   const preset = presetRefusal(error);
   if (preset !== null) return { ...base, ...preset };
+
+  // `EXEC2-WEB-GROUPS-01`: a refusal of the group the person chose, or of a start while the stand
+  // routes by rules and the work kind has no rule, is said as itself — never as the provider.
+  const group = groupRefusal(error);
+  if (group !== null) return { ...base, ...group };
 
   switch (error.errorCode) {
     case 'dependency_unavailable':

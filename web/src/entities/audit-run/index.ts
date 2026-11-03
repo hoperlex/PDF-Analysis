@@ -63,13 +63,21 @@ export { classifyRunFailure } from './model/run-failure';
 export type { ExecutorRefusal, ExecutorRefusalKind } from './model/executor-refusal';
 export { EXECUTOR_DEPENDENCY, EXECUTOR_FIELD, executorRefusal } from './model/executor-refusal';
 
+export type { GroupRefusal, GroupRefusalKind } from './model/group-refusal';
+export { GROUP_FIELD, groupRefusal } from './model/group-refusal';
+
 export type { PresetRefusal, PresetRefusalKind } from './model/preset-refusal';
 export { PRESET_FIELD, presetRefusal } from './model/preset-refusal';
 
 export type { RunPresetLine } from './model/run-preset';
 export { runPresetLine, runPresetSentence, runPresetValue } from './model/run-preset';
 
-export { QUEUE_REASON_LABELS, runQueueReason, runQueueReasonLabel } from './model/run-queue-reason';
+export { QUEUE_REASON_LABELS, knownQueueReason, runQueueReason, runQueueReasonLabel } from './model/run-queue-reason';
+
+export type { QueueItemWaitingReading } from './model/queue-item-waiting';
+export { queueItemWaiting } from './model/queue-item-waiting';
+export type { QueueItemWaitingProps } from './ui/queue-item-waiting';
+export { QueueItemWaiting } from './ui/queue-item-waiting';
 
 export type { RunExecutorLine } from './model/run-executor';
 export {

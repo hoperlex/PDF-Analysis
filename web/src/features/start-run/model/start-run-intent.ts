@@ -19,13 +19,22 @@
  * version in the start's own transaction, and the same key with the executor chosen by hand is
  * another request. The signature carries the preset, so choosing another one is another intent.
  *
+ * **A group is a third way, and the three are exclusive** (`EXEC2-WEB-GROUPS-01`, ADR-0026 decisions 12
+ * to 14). `executor_group_id` names an executor group instead of a connection or a preset: the stand
+ * admits the run on the group's current revision, and the connection is chosen when the work is sent.
+ * It is exclusive with `executor_connection_id` and `preset_id` (`422 validation_failed`), so the
+ * command and the body hold **at most one** of the three — a group beats a preset, which beats a
+ * connection — and a caller that supplies two still sends one. The signature carries the group, so
+ * choosing another group is another intent. «Автоматически (по типу задачи)» is the absence of all
+ * three, as «По умолчанию (маршрут)» always was.
+ *
  * The optional raised-limit choice is also part of the request and the intent. With the switch
  * off, both the signature and body keep their earlier shape for existing idempotency keys.
  * A cost-approved start additionally pins the estimate digest and exact approved ceiling.
  * Agreement gates submission; merely unchecking/rechecking an unchanged payload is still its retry.
  */
 
-import type { ExecutorConnectionId, PresetId, StartRunRequest, VersionUid } from '@/shared/api';
+import type { ExecutorConnectionId, ExecutorGroupId, PresetId, StartRunRequest, VersionUid } from '@/shared/api';
 
 export type RunCostConsent = NonNullable<StartRunRequest['cost_consent']>;
 
@@ -40,6 +49,8 @@ export interface StartRunCommand {
   /** The person explicitly chose the temporary raised-limit policy. Absent for the standard policy. */
   readonly relaxedLimits?: true | undefined;
   readonly costConsent?: RunCostConsent | undefined;
+  /** The executor group the person chose. Absent unless a group was chosen; never `null`; exclusive with the other two. */
+  readonly executorGroupId?: ExecutorGroupId | undefined;
 }
 
 export interface StartRunIntent {
@@ -50,9 +61,10 @@ export interface StartRunIntent {
 }
 
 /**
- * The intent of starting `versionUid` with the chosen preset, or on the chosen executor, or on the
- * route's when neither is chosen. A preset wins: the control never offers both, and the request
- * never carries both.
+ * The intent of starting `versionUid` with the chosen group, or the chosen preset, or on the chosen
+ * executor, or on the route's (or the rule's) when none is chosen. A group wins over a preset and a
+ * preset over an executor: the control never offers more than one, and the request never carries more
+ * than one.
  */
 export function startRunIntent(
   versionUid: VersionUid,
@@ -60,13 +72,16 @@ export function startRunIntent(
   presetId: PresetId | null = null,
   relaxedLimits = false,
   costConsent?: RunCostConsent,
+  executorGroupId: ExecutorGroupId | null = null,
 ): StartRunIntent {
   const baseSignature =
-    presetId !== null
-      ? `start-run:${versionUid}:preset:${presetId}`
-      : executorConnectionId === null
-        ? `start-run:${versionUid}`
-        : `start-run:${versionUid}:executor:${executorConnectionId}`;
+    executorGroupId !== null
+      ? `start-run:${versionUid}:group:${executorGroupId}`
+      : presetId !== null
+        ? `start-run:${versionUid}:preset:${presetId}`
+        : executorConnectionId === null
+          ? `start-run:${versionUid}`
+          : `start-run:${versionUid}:executor:${executorConnectionId}`;
   const selectedSignature = relaxedLimits ? `${baseSignature}:relaxed-limits` : baseSignature;
   return {
     signature: costConsent === undefined ? selectedSignature
@@ -76,26 +91,36 @@ export function startRunIntent(
       idempotencyKey,
       ...(relaxedLimits ? { relaxedLimits: true } : {}),
       ...(costConsent === undefined ? {} : { costConsent }),
-      ...(presetId !== null
-        ? { presetId }
-        : executorConnectionId === null
-          ? {}
-          : { executorConnectionId }),
+      ...(executorGroupId !== null
+        ? { executorGroupId }
+        : presetId !== null
+          ? { presetId }
+          : executorConnectionId === null
+            ? {}
+            : { executorConnectionId }),
     }),
   };
 }
 
-/** The request body of a command: `preset_id` or `executor_connection_id`, only when one was chosen. */
-export function startRunBody({ versionUid, executorConnectionId, presetId, relaxedLimits, costConsent }: StartRunCommand): StartRunRequest {
+/**
+ * The request body of a command: `executor_group_id`, `preset_id` or `executor_connection_id`, only
+ * when one was chosen, and **never more than one**. The first of the three that is present wins, in
+ * the order group, preset, connection — the server refuses a body that carries two.
+ */
+export function startRunBody({
+  versionUid, executorConnectionId, presetId, relaxedLimits, costConsent, executorGroupId,
+}: StartRunCommand): StartRunRequest {
   return {
     version_uid: versionUid,
     ...(relaxedLimits ? { relaxed_limits: true } : {}),
     ...(costConsent === undefined ? {} : { cost_consent: costConsent }),
-    ...(presetId !== undefined
-      ? { preset_id: presetId }
-      : executorConnectionId === undefined
-        ? {}
-        : { executor_connection_id: executorConnectionId }),
+    ...(executorGroupId !== undefined
+      ? { executor_group_id: executorGroupId }
+      : presetId !== undefined
+        ? { preset_id: presetId }
+        : executorConnectionId === undefined
+          ? {}
+          : { executor_connection_id: executorConnectionId }),
   };
 }
 

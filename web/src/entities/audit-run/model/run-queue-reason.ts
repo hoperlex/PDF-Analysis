@@ -23,16 +23,30 @@ export const QUEUE_REASON_LABELS: Readonly<Record<RunQueueReason, string>> = {
   needs_reconsent: 'В очереди: нужно новое согласие на стоимость',
 };
 
-/** The reason a queued Run waits, or `null` when it is not queued or carries none this screen knows. */
-export function runQueueReason(run: Pick<RunStatus, 'state' | 'queue_reason'>): RunQueueReason | null {
+/**
+ * The reason a queued Run waits, or `null` when it is not queued or carries none this screen knows.
+ *
+ * `EXEC2-WEB-GROUPS-01`: a Run admitted by a rule or a group (`binding_state` `pending`) carries its
+ * stored `wait_reason` and no `queue_reason`; the words are the same. `queue_reason` is read first,
+ * so a Run that carries both keeps the reason the server derived at read time.
+ */
+export function runQueueReason(
+  run: Pick<RunStatus, 'state' | 'queue_reason' | 'wait_reason'>,
+): RunQueueReason | null {
   if (run.state !== 'queued') return null;
-  const reason = run.queue_reason;
+  return knownQueueReason(run.queue_reason) ?? knownQueueReason(run.wait_reason);
+}
+
+/** A reason this screen knows the word for, or `null` for an absent one and for a value it does not know. */
+export function knownQueueReason(reason: string | null | undefined): RunQueueReason | null {
   if (reason === undefined || reason === null) return null;
-  return (RUN_QUEUE_REASON_VALUES as readonly string[]).includes(reason) ? reason : null;
+  return (RUN_QUEUE_REASON_VALUES as readonly string[]).includes(reason) ? (reason as RunQueueReason) : null;
 }
 
 /** «В очереди: исполнитель занят» — or `null` when there is nothing more specific than the state's own label. */
-export function runQueueReasonLabel(run: Pick<RunStatus, 'state' | 'queue_reason'>): string | null {
+export function runQueueReasonLabel(
+  run: Pick<RunStatus, 'state' | 'queue_reason' | 'wait_reason'>,
+): string | null {
   const reason = runQueueReason(run);
   return reason === null ? null : QUEUE_REASON_LABELS[reason];
 }
