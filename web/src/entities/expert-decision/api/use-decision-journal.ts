@@ -15,11 +15,16 @@
  *
  * The cursor is opaque. It is handed back exactly as received, never parsed and never
  * constructed.
+ *
+ * `project_uid` (`UI-PARITY-P0A`) restricts the journal to one project; absent is «Все проекты».
+ * It is one of the filters and so part of the cache key, and a cursor belongs to the filters it
+ * was issued under: the caller starts again from the first page when the project changes. An
+ * unknown project is not an error here: the server answers an empty page with `total: 0`.
  */
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DecisionRecordPage, FindingCategory, Verdict } from '@/shared/api';
+import type { DecisionRecordPage, FindingCategory, ProjectUid, Verdict } from '@/shared/api';
 import { listDecisions, queryKeys } from '@/shared/api';
 
 /** Page size. Inside the contract's 1..200 bound and equal to the contract default. */
@@ -28,11 +33,13 @@ export const JOURNAL_PAGE_LIMIT = 50;
 export interface DecisionJournalQuery {
   readonly category?: FindingCategory | undefined;
   readonly verdict?: Verdict | undefined;
+  readonly project_uid?: ProjectUid | undefined;
   readonly cursor?: string | undefined;
 }
 
-export function useDecisionJournal({ category, verdict, cursor }: DecisionJournalQuery = {}) {
+export function useDecisionJournal({ category, verdict, project_uid, cursor }: DecisionJournalQuery = {}) {
   const filters = {
+    ...(project_uid === undefined ? {} : { project_uid }),
     ...(category === undefined ? {} : { category }),
     ...(verdict === undefined ? {} : { verdict }),
     ...(cursor === undefined ? {} : { cursor }),

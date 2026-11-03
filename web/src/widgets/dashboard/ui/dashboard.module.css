@@ -57,6 +57,34 @@
   font-size: var(--am-text-base);
 }
 
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
+  margin: var(--am-gap) 0 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-base);
+}
+
+.scopeKey {
+  font-size: var(--am-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.scopeValue {
+  min-width: 0;
+  color: var(--am-ink);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.way {
+  margin: var(--am-gap) 0 0;
+}
+
 .heroArt {
   position: relative;
   width: 220px;

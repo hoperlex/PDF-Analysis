@@ -109,6 +109,41 @@ describe('a row addresses its finding by the identities the record carries', () 
   });
 });
 
+describe('a row says where it belongs: «Проект · Документ · Раздел» (UI-PARITY-P0A)', () => {
+  function place(markup: string): string {
+    const match = markup.match(/<p class="am-kb__meta" data-record-place="true">([^<]*)<\/p>/);
+    if (match === null) throw new Error('no place line in the markup');
+    return match[1]!;
+  }
+
+  it('joins the project, the document and the confirmed section’s catalogue name', () => {
+    const markup = render(createElement(KnowledgeBase, { records: [record({ section: 'KM' })] }));
+    expect(place(markup)).toBe('Школа · АР-1 · Конструкции металлические (КМ)');
+  });
+
+  it('carries the names the record carries, not an identity', () => {
+    const markup = render(
+      createElement(KnowledgeBase, { records: [record({ project_name: 'Больница', document_name: 'Том 3' })] }),
+    );
+    expect(place(markup)).toContain('Больница · Том 3');
+    expect(place(markup)).not.toContain(PROJECT_UID);
+  });
+
+  it('omits the section part, and invents no label, when the record has no section', () => {
+    const markup = render(createElement(KnowledgeBase, { records: [record()] }));
+    expect(place(markup)).toBe('Школа · АР-1');
+    expect(markup).not.toContain('Без раздела');
+  });
+
+  it('fails closed on a section code the catalogue does not hold', () => {
+    const broken = { ...record(), section: 'ZZ' } as unknown as DecisionRecord;
+    const markup = render(createElement(KnowledgeBase, { records: [broken] }));
+    expect(markup).toContain('data-knowledge-base-fault="closed-vocabulary"');
+    expect(markup).not.toContain('data-record-place');
+    expect(markup).not.toContain('ZZ');
+  });
+});
+
 describe('hostile-width reviewer text remains in a contained knowledge-base row', () => {
   it('renders an unbroken 400-character comment under the row containment class', () => {
     const unbroken = 'Ж'.repeat(400);
