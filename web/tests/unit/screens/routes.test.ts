@@ -672,6 +672,8 @@ describe('every screen address is built once and matches a route file on disk', 
       normDocument: routes.normDocument(NORM_DOCUMENT_ID),
       // `CMP-VC-UI-01`: the menu item «Сравнение версий», drawn by the frame for a session that may open it.
       versionComparison: routes.versionComparison(),
+      // `CMP-STAGE-UI`: «Сравнение стадий», linked from the version page beside «Сравнение версий».
+      stageComparison: routes.stageComparison(),
     };
     // The names are checked against the module rather than trusted, so a builder added
     // without a line here is red rather than silently unlinked.

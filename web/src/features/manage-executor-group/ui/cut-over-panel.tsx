@@ -17,7 +17,7 @@
  *    shown and the mapping of the `ready` work kinds. A proposal that changed in the meantime is
  *    refused as stale and the panel offers to read it again; it never sends a digest it did not show.
  *
- * **Back.** «Вернуться к Primary/Standby» asks first and says what stays: groups and rules are kept
+ * **Back.** «Вернуться к основному и резервному подключению» (`ROLLBACK_LABEL`) asks first and says what stays: groups and rules are kept
  * and unused, and work already admitted by rules or a group finishes on its own group and is never
  * read again through a legacy route. Then it sends `legacy`, which takes neither digest nor mapping.
  *

@@ -164,8 +164,24 @@ describe('the control takes its key and its request from the same choice', () =>
   const source = readText(join(WEB_ROOT, 'src', 'features', 'start-run', 'ui', 'start-run-control.tsx'));
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-  it('derives one intent from the version, executor, preset and limit choice', () => {
-    expect(code).toContain('startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits)');
+  it('derives one intent from the version, the one selector and the limit choice', () => {
+    // `EXEC2-WEB-GROUPS-01` (ADR-0026 decisions 12 to 14): the intent no longer takes the raw connection and
+    // preset state. It takes `selectors`, which `startSelectors` makes from the radio and the three choices,
+    // so at most ONE of group, preset and connection reaches the request, and the estimate's intent and the
+    // start's intent are built from the same selectors (the second adds the consent).
+    expect(code).toContain('const selectors = startSelectors(startChoice);');
+    expect(code).toContain(
+      'const startChoice: StartChoice = { mode, groupId: chosenGroup, connectionId: chosen, presetId: chosenPreset };',
+    );
+    expect(code.match(/startRunIntent\(/g)).toHaveLength(2);
+    expect(code).toContain(
+      'versionUid, selectors.executorConnectionId, selectors.presetId, relaxedLimits, undefined, selectors.executorGroupId,',
+    );
+    expect(code).toContain(
+      'versionUid, selectors.executorConnectionId, selectors.presetId, relaxedLimits, cost.draftConsent,\n    selectors.executorGroupId,',
+    );
+    // The raw state is never handed to the intent.
+    expect(code).not.toMatch(/startRunIntent\([^)]*\b(chosen|chosenPreset|chosenGroup)\b/);
   });
 
   it('mints the key for that intent and sends that intent’s command', () => {
@@ -174,7 +190,11 @@ describe('the control takes its key and its request from the same choice', () =>
   });
 
   it('clears a refusal when the choice changes, because it was about the old choice', () => {
-    expect(code).toMatch(/setChosen\(next\);\s*mutation\.reset\(\);/);
+    // Every way to change the choice -- the radio, the group select, the connection select, the preset
+    // select and the limit toggle -- resets the mutation and the estimate in the same handler.
+    expect(code).toMatch(/setChosen\(next\);\s*setMode\(next === null \? 'auto' : 'connection'\);\s*mutation\.reset\(\);\s*cost\.reset\(\);/);
+    expect(code).toMatch(/setChosenGroup\(next\);\s*mutation\.reset\(\);\s*cost\.reset\(\);/);
+    expect(code).toMatch(/setChosenPreset\(after\.presetId\);\s*mutation\.reset\(\);\s*cost\.reset\(\);/);
     expect(code).toMatch(/setRelaxedLimits\(event\.currentTarget\.checked\);\s*mutation\.reset\(\);/);
     expect(code).toContain('const locked = mutation.isPending || cost.pending');
     expect(code).toContain('disabled={locked}');
@@ -188,11 +208,21 @@ describe('the control takes its key and its request from the same choice', () =>
     // `ANALYSIS-PRESETS-01`: choosing a preset fills the executor, so the preset select's own change
     // handler clears the hand-chosen connection (`setChosen(null)` straight after `setChosenPreset`).
     // That is still the person's change; no other place may call it, and nothing reacts to an error.
-    expect(code.match(/setChosen\(/g)).toHaveLength(2);
+    //
+    // `EXEC2-WEB-GROUPS-01`: the radio is a third place a person changes the choice: `selectMode` drops what
+    // belongs to another mode (`chooseMode`) and so sets the connection, the preset and the group from it
+    // (`setChosen(after.connectionId)`). That too is the person's change, and it is the only addition.
+    expect(code.match(/setChosen\(/g)).toHaveLength(3);
     expect(code).toContain('setChosen(next)');
+    expect(code).toContain('setChosen(after.connectionId)');
     expect(code.match(/setChosen\(null\)/g)).toHaveLength(1);
-    expect(code).toMatch(/setChosenPreset\(next\);[\s\S]{0,200}?setChosen\(null\);\s*mutation\.reset\(\);/);
-    expect(code.match(/setChosenPreset\(/g)).toHaveLength(1);
+    expect(code).toMatch(/setChosenPreset\(next\);[\s\S]{0,200}?setChosen\(null\);/);
+    expect(code.match(/setChosenPreset\(/g)).toHaveLength(2);
+    expect(code.match(/setChosenGroup\(/g)).toHaveLength(2);
+    // No setter of the choice or the mode is reachable from the answer of a request.
+    const answered = code.match(/mutation\.mutate\([\s\S]*?\n {4}\}\);/)?.[0] ?? '';
+    expect(answered).toContain('onError');
+    expect(answered).not.toMatch(/set(Chosen|ChosenPreset|ChosenGroup|Mode|RelaxedLimits)\(/);
     // A stale cost reading clears only its approval. The option setters remain exclusively
     // in the change handlers counted above; no refusal may select another executor/preset.
     expect(code).toContain("error.details?.conflict_reason === 'run_cost_estimate_stale'");

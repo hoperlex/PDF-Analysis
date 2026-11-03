@@ -52,7 +52,14 @@ interface Contract {
       string,
       {
         operationId?: string;
-        responses?: Record<string, { $ref?: string }>;
+        responses?: Record<
+          string,
+          {
+            $ref?: string;
+            description?: string;
+            content?: Record<string, { schema?: { $ref?: string } }>;
+          }
+        >;
         security?: ReadonlyArray<Record<string, unknown>>;
       }
     >
@@ -73,6 +80,43 @@ const catalog = readJson<Catalog>(ERROR_CATALOG_PATH);
 const BLIND_SPOTS: Readonly<Record<string, string>> = {
   analysis_failed:
     'the InternalError response names it as "a declared run failure" in words, not as a code',
+};
+
+/**
+ * `D-292`. Twenty-seven operations of the stage-comparison chain (`CMP-SEAL-C3`, `CMP-SEAL-C4`) and
+ * the comparison ZIP import declare their failures *inline*, not as a `$ref` to `components/responses`:
+ * the seven generic statuses, each with one short sentence and the `ErrorEnvelope` body. The
+ * derivation reads the codes of a response out of a component's description, and a generic sentence
+ * names none, so it cannot read these. They are registered here **by their exact sentence**: each is
+ * the shorter wording of the component whose status it repeats. A new inline sentence, or an inline
+ * status that is not in this table, is not read as one of these -- it reddens `declaredFailureResponses`
+ * -- so the register cannot widen by accident. The contract is not edited to put these behind
+ * `$ref`s; it is reported (`EXEC2-FIX-WEB`): an inline response is a form this derivation can only
+ * read through the sentence.
+ */
+const INLINE_FAILURES: Readonly<Record<string, { readonly component: string; readonly sentence: string }>> = {
+  '401': {
+    component: 'AuthenticationRequired',
+    sentence: 'No credential was presented, or the deployment does not accept it.',
+  },
+  '403': {
+    component: 'PermissionDenied',
+    sentence: 'The authenticated subject is not permitted this operation on this resource.',
+  },
+  '404': {
+    component: 'NotFound',
+    sentence: 'The addressed aggregate does not exist or is not visible to this caller.',
+  },
+  '409': {
+    component: 'IdempotencyConflict',
+    sentence: 'The idempotency key was already used with a different payload fingerprint.',
+  },
+  '422': {
+    component: 'ValidationFailed',
+    sentence: 'The request was refused by a declared rule. `details` names which.',
+  },
+  '500': { component: 'InternalError', sentence: 'A server-side fault. Nothing was created.' },
+  '503': { component: 'DependencyUnavailable', sentence: 'A required dependency is unavailable.' },
 };
 
 /** `not_found` -> `NotFound`, the naming the contract's response components already use. */
@@ -127,11 +171,25 @@ function declaredFailureResponses(): Array<{
       for (const [status, response] of Object.entries(operation.responses ?? {})) {
         if (status.startsWith('2')) continue;
         const ref = response.$ref;
-        expect(ref, `${operation.operationId} declares ${status} inline, not as a component`).toBeDefined();
+        if (ref === undefined) {
+          // An inline response is read through the register above, by its status AND its sentence,
+          // and must still carry the error envelope a screen decodes.
+          const inline = INLINE_FAILURES[status];
+          expect(
+            inline?.sentence,
+            `${operation.operationId} declares ${status} inline, and not with a sentence INLINE_FAILURES knows`,
+          ).toBe(response.description);
+          expect(
+            response.content?.['application/json']?.schema?.$ref,
+            `${operation.operationId} declares ${status} inline without the error envelope`,
+          ).toBe('#/components/schemas/ErrorEnvelope');
+          found.push({ operationId: operation.operationId, status, component: (inline as { component: string }).component });
+          continue;
+        }
         found.push({
           operationId: operation.operationId,
           status,
-          component: (ref as string).slice((ref as string).lastIndexOf('/') + 1),
+          component: ref.slice(ref.lastIndexOf('/') + 1),
         });
       }
     }
@@ -175,7 +233,19 @@ const RUNNER_OPERATIONS: readonly string[] = [
   'failExecutorTask',
   'getExecutorTaskImage',
   'submitExecutorTaskAnswer',
+  // `EXEC2-SEAL-1` (ADR-0026 decisions 4 and 5): an agent reports its health with its runner token, and
+  // redeems an enrollment secret -- presented as the bearer -- for that token. Neither holds a role,
+  // so a refused secret or token is the 401 and there is nothing a 403 could deny.
+  'reportRunnerHealth',
+  'redeemExecutorEnrollment',
 ];
+
+/**
+ * `EXEC2-SEAL-1` (ADR-0026 decision 6): the agent package is public code with no secret, served by
+ * version with no authentication. It has no credential to refuse, so it declares no 401 and no 403 --
+ * pinned by name, like the registration submission.
+ */
+const NO_CREDENTIAL_TO_REFUSE: readonly string[] = ['submitRegistration', 'downloadAgentPackage'];
 
 describe('the derivation reads the document and is not vacuous', () => {
   it('finds a component-backed failure response on every operation', () => {
@@ -195,8 +265,9 @@ describe('the derivation reads the document and is not vacuous', () => {
         .filter((entry) => entry.operationId === operationId)
         .map(({ status }) => status);
       // `W49-SEAL-01`: the registration submission takes no credential at all, so it has
-      // none to refuse and declares no 401 -- pinned by name, as the open set below is.
-      if (operationId === 'submitRegistration') {
+      // none to refuse and declares no 401 -- pinned by name, as the open set below is. The agent
+      // package of `EXEC2-SEAL-1` is the same.
+      if (NO_CREDENTIAL_TO_REFUSE.includes(operationId)) {
         expect(statuses, `${operationId} takes no credential to refuse`).not.toContain('401');
         expect(statuses, `${operationId} has no authenticated subject to deny`).not.toContain('403');
         continue;
@@ -224,12 +295,12 @@ describe('the derivation reads the document and is not vacuous', () => {
     // is pinned: an operation that quietly dropped its `security` would otherwise be
     // excused from the 403 rule by the same code that is meant to catch it. One until
     // `W49-SEAL-01`; the two registration operations an applicant with no account uses
-    // joined the exchange.
+    // joined the exchange; `EXEC2-SEAL-1` added the public agent package (ADR-0026 decision 6).
     const open = operationsWithSecurity()
       .filter((entry) => !entry.requiresCredential)
       .map((entry) => entry.operationId)
       .sort();
-    expect(open).toEqual(['issueToken', 'readRegistrationStatus', 'submitRegistration']);
+    expect(open).toEqual(['downloadAgentPackage', 'issueToken', 'readRegistrationStatus', 'submitRegistration']);
   });
 
   it('reads at least one catalog code out of every failure response the document declares', () => {

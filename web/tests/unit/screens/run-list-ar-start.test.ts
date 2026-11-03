@@ -42,7 +42,10 @@ describe('the default АР start', () => {
         expect(markup).toMatch(/<button[^>]*>Оценить стоимость<\/button>/);
         expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить прогон<\/button>/);
         expect(markup).not.toContain('data-cost-approval'); // no estimate, so no agreement yet
-        expect(markup).toContain('Повышенные лимиты ИИ-анализа');
+        // `af581631`: the toggle of the ordinary start is «Временный режим сбора статистики» (it was
+        // «Повышенные лимиты ИИ-анализа», which only the six-check control still says).
+        expect(markup).toContain('Временный режим сбора статистики');
+        expect(markup).not.toContain('Повышенные лимиты ИИ-анализа');
         expect(markup).not.toContain('data-ar-v3-group-start');
         expect(markup).not.toContain('data-ar-start-note');
       });

@@ -26,8 +26,12 @@ import { EXECUTOR_WORK_KIND_VALUES } from '@/shared/api';
 /** The label of the button that opens the proposal. */
 export const CUT_OVER_LABEL = 'Перейти на правила';
 
-/** The label of the button that asks to go back, as the owner worded it. */
-export const ROLLBACK_LABEL = 'Вернуться к Primary/Standby';
+/**
+ * The label of the button that asks to go back to the legacy routes. The task worded it «Вернуться к Primary/Standby»;
+ * the rendered-language guard (R-18) refuses the two English words on a screen, and the routes tab already says the
+ * same pair in Russian («основное» and «резервное» подключение), so the label does too (`EXEC2-FIX-WEB`).
+ */
+export const ROLLBACK_LABEL = 'Вернуться к основному и резервному подключению';
 
 /** The checkbox that makes the confirmation explicit. */
 export const MAPPING_CONFIRMATION_LABEL = 'Я проверил соответствие и подтверждаю переход';

@@ -301,8 +301,13 @@ describe('the comparison reads the server order rather than re-deriving it', () 
 describe('the screen says what is missing without explaining the transport', () => {
   const text = visible(screen(seedRuns([NEWER_RUN, OLDER_RUN])));
 
-  it('tells the reviewer that deeper comparison arrives later', () => {
-    expect(text).toContain('появится позже');
+  // `8eb1f31f` (compare saved run results) brought the deeper comparison: the findings of the two runs are
+  // compared from what the system saved, with no new model call. The screen therefore offers it and no
+  // longer promises it for later -- a promise left on screen beside the feature would say two things.
+  it('offers the comparison of the saved findings, and promises nothing for later', () => {
+    expect(text).toContain('Находки и предварительные наблюдения');
+    expect(text).toContain('без новых обращений к модели');
+    expect(text).not.toContain('появится позже');
   });
 
   it('names no operation, field or schema to the reviewer', () => {

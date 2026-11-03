@@ -190,14 +190,26 @@ describe('the version screen asks the server on a cold load (D-16)', () => {
   const screen = (client: Client, versionUid = VERSION_UID, projectUid = PROJECT_UID) =>
     withRouter(client, createElement(VersionDetailPage, { projectUid, versionUid, roles: ['expert'] }));
 
-  it('files two pending reads: the version itself and its runs', () => {
+  // `CMP-ONLY-RUN-GATE-1030` (`08431d8a`): "the version page does not offer ordinary analysis before the version
+  // kind is known". So the run list is not mounted until the version has answered, and the two reads are
+  // not parallel any more: the version first, then its runs. D-16 still holds -- the page asks the server for
+  // both on a cold load; it asks for the second when the first has answered.
+  it('files the version read first, and asks for its runs only once the version is known', () => {
     const client = newClient();
     const markup = screen(client);
 
     expect(pendingUnder(client, queryKeys.versions.detail(VERSION_UID))).toBe(true);
-    expect(pendingUnder(client, RUNS_KEY)).toBe(true);
+    expect(pendingUnder(client, RUNS_KEY), 'the runs were asked for before the version kind is known').toBe(false);
+    expect(client.getQueryCache().find({ queryKey: [...RUNS_KEY] })).toBeUndefined();
     expect(markup).toContain('Загрузка: эту версию…');
-    expect(markup).toContain('Загрузка: прогоны этой версии…');
+    expect(markup).not.toContain('Загрузка: прогоны этой версии…');
+    expect(markup).not.toContain('Запустить прогон');
+
+    const known = newClient();
+    known.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
+    const afterVersion = screen(known);
+    expect(pendingUnder(known, RUNS_KEY)).toBe(true);
+    expect(afterVersion).toContain('Загрузка: прогоны этой версии…');
   });
 
   it('renders the manifest the server returned, with the version identity', () => {
