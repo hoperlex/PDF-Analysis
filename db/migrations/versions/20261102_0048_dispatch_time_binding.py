@@ -44,14 +44,17 @@ The write-once rule (ADR-0026 decision 12)
   (``connection_revision_id`` still in it, ``executor_group_revision_id`` and ``routing_rule_revision_id`` added) and the
   function keeps the generic loop and message; it adds two rules. ``binding_state`` moves only ``pending`` -> ``bound``.
   A change of a listed column is refused, except ``connection_revision_id`` going from ``NULL`` to a value in a statement
-  that also moves ``binding_state`` from ``pending`` to ``bound``. A second ``NULL`` -> value write (the state is no
-  longer ``pending``), a value -> value write, a value -> ``NULL`` write and a ``NULL`` -> value write that leaves the state
-  at ``pending`` are all refused (``ck_audit_run_binding_shape`` additionally refuses a ``bound`` row with no revision).
-  For a ``frozen_at_start`` row this is exactly the freeze it had.
+  that also moves ``binding_state`` from ``pending`` to ``bound`` **and names a member of the run's group revision** (the
+  value is the ``connection_revision_id`` of a row of ``executor_group_member`` of ``executor_group_revision_id``; any
+  other revision is refused with ``AM001``). A second ``NULL`` -> value write (the state is no longer ``pending``), a
+  value -> value write, a value -> ``NULL`` write and a ``NULL`` -> value write that leaves the state at ``pending`` are
+  all refused (``ck_audit_run_binding_shape`` additionally refuses a ``bound`` row with no revision). For a
+  ``frozen_at_start`` row this is exactly the freeze it had.
 * ``comparison_ai_job``. ``am_guard_comparison_ai_job_consent`` (``0040``) is replaced, keeping its two original rules
   verbatim for a ``frozen_at_start`` job. A move ``pending`` -> ``bound`` must write the connection revision from
-  ``NULL`` and change nothing of the consent (the estimate, its digest and amounts, the ceiling, the model, the provider
-  mode, the consenting user and ``consent_no``). A ``pending`` or ``bound`` job never changes its connection revision or
+  ``NULL``, to the connection revision of a member of the job's group revision (``AM001`` otherwise), and change nothing
+  of the consent (the estimate, its digest and amounts, the ceiling, the model, the provider mode, the consenting user and
+  ``consent_no``). A ``pending`` or ``bound`` job never changes its connection revision or
   its pinned model, with or without a new consent number: the group is homogeneous and there is no re-routing after
   binding (decision 16). ``trg_comparison_ai_job_binding_pin`` freezes the two admission columns.
 
@@ -120,6 +123,19 @@ _RUN_FROZEN_FUNCTION = """
                     IF v_column = 'connection_revision_id'
                        AND v_old IS NULL AND v_new IS NOT NULL
                        AND OLD.binding_state = 'pending' AND NEW.binding_state = 'bound' THEN
+                        -- Dispatch binds a run to a member of the group revision it was admitted on, and to no other
+                        -- connection (members are immutable, so a plain read is exact).
+                        IF NOT EXISTS (
+                            SELECT 1 FROM executor_group_member m
+                             WHERE m.group_revision_id = NEW.executor_group_revision_id
+                               AND m.connection_revision_id = NEW.connection_revision_id
+                        ) THEN
+                            RAISE EXCEPTION
+                                'state_transition_not_allowed: connection revision % is not a member of group revision % that run % was admitted on',
+                                NEW.connection_revision_id, NEW.executor_group_revision_id, OLD.run_id
+                                USING ERRCODE = 'AM001',
+                                      HINT = 'A pending run is bound to a member of its group revision, and to no other connection.';
+                        END IF;
                         CONTINUE;
                     END IF;
                     RAISE EXCEPTION
@@ -181,6 +197,17 @@ _JOB_CONSENT_FUNCTION_AFTER = """
                         OLD.comparison_ai_job_id
                         USING ERRCODE = 'AM003',
                               HINT = 'The connection revision of a pending job goes from NULL to a value in the statement that binds it.';
+                END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM executor_group_member m
+                     WHERE m.group_revision_id = NEW.executor_group_revision_id
+                       AND m.connection_revision_id = NEW.connection_revision_id
+                ) THEN
+                    RAISE EXCEPTION
+                        'state_transition_not_allowed: connection revision % is not a member of group revision % that job % was admitted on',
+                        NEW.connection_revision_id, NEW.executor_group_revision_id, OLD.comparison_ai_job_id
+                        USING ERRCODE = 'AM001',
+                              HINT = 'A pending job is bound to a member of its group revision, and to no other connection.';
                 END IF;
                 IF (NEW.estimate, NEW.estimate_digest, NEW.estimate_micros, NEW.ceiling_micros,
                     NEW.pinned_model, NEW.provider_mode, NEW.consented_by_user_uid, NEW.consent_no)

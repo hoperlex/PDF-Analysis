@@ -7,7 +7,9 @@ Written and **not run** in EXEC-2 (`R-149d`, D-292); each test would pass agains
   provider lock's rates) and the members' revision snapshots are stored and journaled once; a mismatched pin, gateway model
   or billing, a duplicate member, a revision that is not the connection's current one and an archived connection are each
   refused with their typed detail and **leave nothing behind, not even the key**; the database refuses a mixed member again
-  when the application is bypassed;
+  when the application is bypassed, refuses a member added to a revision that already exists (the membership is closed
+  with the revision), refuses to commit a revision that holds fewer members than it declared, never deletes a group row
+  and numbers the routing-mode journal without a gap;
 * item 2 -- rules are set per work kind and append-only; naming the current revision again appends nothing; an archive is
   soft (every revision, member and rule stays, the name is free again), is refused while a rule names the group, and an
   archived group takes no revision and no rule; the database keeps a revision immutable;
@@ -66,7 +68,7 @@ from auditmanager.executors.public import (
 )
 from auditmanager.jobs.public import JobRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import ExecutorRoutingModeEventId
+from auditmanager.shared.identity import ExecutorGroupRevisionId, ExecutorRoutingModeEventId
 from tests.integration.executors.conftest import ADMIN, driver
 
 _SUPPORT_NAME = "exec2_cap_connection_capacity_support"
@@ -329,6 +331,105 @@ def test_the_database_refuses_a_mixed_member_even_when_the_application_is_bypass
                 {"r": created.current_revision.group_revision_id, "c": odd[0], "cr": odd[1]})
     assert "not the pin, model and billing" in str(refused.value)
     assert rows(session)["executor_group_member"] == 1
+
+
+def raw_revision(session, group_id: str, *, revision_no: int, member_count: int) -> str:
+    """A revision row written around the application, declaring ``member_count`` members; the members are the caller's."""
+    revision_id = str(ExecutorGroupRevisionId.new())
+    session.execute(text(
+        "INSERT INTO executor_group_revision (group_revision_id, group_id, revision_no, pin_id, gateway_model, billing, "
+        "input_per_mtok_usd, output_per_mtok_usd, strategy, member_count, created_by) "
+        "VALUES (:id, :g, :no, 'claude-sonnet-5', 'claude-sonnet-5', 'not_metered', 3, 15, 'least_loaded', :n, :a)"),
+        {"id": revision_id, "g": group_id, "no": revision_no, "n": member_count, "a": ADMIN})
+    return revision_id
+
+
+def raw_member(session, revision_id: str, member: tuple[str, str]) -> None:
+    session.execute(text(
+        "INSERT INTO executor_group_member (group_revision_id, connection_id, connection_revision_id) "
+        "VALUES (:r, :c, :cr)"), {"r": revision_id, "c": member[0], "cr": member[1]})
+
+
+def test_a_member_cannot_be_added_to_a_revision_once_it_exists_even_one_that_would_fit(session, admin_account) -> None:
+    """The membership is closed with the revision: row immutability alone would let a later INSERT add a member (or a
+    seventeenth) to a revision that had already admitted work."""
+    ok, extra = pull_connection(session, name="ok"), pull_connection(session, name="extra")
+    created = make(session, "Pool", ok)
+    with pytest.raises(DBAPIError) as refused:
+        with session.begin_nested():
+            raw_member(session, created.current_revision.group_revision_id, extra)    # same pin, model and billing
+    assert getattr(refused.value.orig, "sqlstate", None) == "AM001"
+    assert "takes no other" in str(refused.value)
+    assert rows(session)["executor_group_member"] == 1
+    assert [(m.connection_id, m.connection_revision_id) for m in group_detail(
+        session, created.group.group_id).revisions[0].members] == [ok]
+
+
+def test_a_revision_with_fewer_members_than_it_declares_cannot_commit(session, admin_account) -> None:
+    """The check is deferred to commit; ``SET CONSTRAINTS ... IMMEDIATE`` asks for it now, as the commit would."""
+    one, two = pull_connection(session, name="one"), pull_connection(session, name="two")
+    created = make(session, "Pool", one)
+    group_id = created.group.group_id
+    check = "SET CONSTRAINTS trg_executor_group_revision_has_members IMMEDIATE"
+
+    with pytest.raises(DBAPIError) as refused:
+        with session.begin_nested():
+            short = raw_revision(session, group_id, revision_no=2, member_count=2)
+            raw_member(session, short, one)
+            session.execute(text(check))
+    assert getattr(refused.value.orig, "sqlstate", None) == "AM001"
+    assert "declares 2 members and holds 1" in str(refused.value)
+    assert rows(session)["executor_group_revision"] == 1, "the short revision left nothing behind"
+
+    deferred = "SET CONSTRAINTS trg_executor_group_revision_has_members DEFERRED"
+    with session.begin_nested():                                       # control: the declared members are all there
+        session.execute(text(deferred))
+        full = raw_revision(session, group_id, revision_no=2, member_count=2)
+        raw_member(session, full, one)
+        raw_member(session, full, two)
+        session.execute(text(check))
+        session.execute(text(deferred))
+    assert rows(session)["executor_group_revision"] == 2 and rows(session)["executor_group_member"] == 3
+
+
+@pytest.mark.parametrize("declared", [0, 17])
+def test_a_revision_declares_one_to_sixteen_members(session, admin_account, declared: int) -> None:
+    created = make(session, "Pool", pull_connection(session))
+    with pytest.raises(DBAPIError) as refused:
+        with session.begin_nested():
+            raw_revision(session, created.group.group_id, revision_no=2, member_count=declared)
+    assert getattr(refused.value.orig, "sqlstate", None) == "23514"
+
+
+def test_a_group_row_is_never_deleted_and_the_routing_mode_journal_has_no_gap(session, admin_account) -> None:
+    created = make(session, "Pool", pull_connection(session))
+    with pytest.raises(DBAPIError) as deleted:
+        with session.begin_nested():
+            session.execute(text("DELETE FROM executor_group WHERE group_id = :g"), {"g": created.group.group_id})
+    assert getattr(deleted.value.orig, "sqlstate", None) == "AM003"
+    assert rows(session)["executor_group"] == 1
+
+    def event(number: int, mode: str = "rules") -> None:
+        session.execute(text(
+            "INSERT INTO executor_routing_mode_event (mode_event_id, event_no, mode, preview_digest, mapping, "
+            "changed_by) VALUES (:id, :no, :mode, :digest, CAST(:mapping AS jsonb), :actor)"),
+            {"id": str(ExecutorRoutingModeEventId.new()), "no": number, "mode": mode, "actor": ADMIN,
+             "digest": "a" * 64 if mode == "rules" else None,
+             "mapping": json.dumps([{"work_kind": "text_analysis"}] if mode == "rules" else [])})
+
+    for number in (2, 3):                                            # the journal starts at 1
+        with pytest.raises(DBAPIError) as skipped:
+            with session.begin_nested():
+                event(number)
+        assert getattr(skipped.value.orig, "sqlstate", None) == "AM001"
+    event(1)
+    for number in (1, 3):                                            # a number taken, and one that skips
+        with pytest.raises(DBAPIError) as refused:
+            with session.begin_nested():
+                event(number, "legacy")
+        assert getattr(refused.value.orig, "sqlstate", None) == "AM001"
+    event(2, "legacy")
+    assert list_routing_rules(session).routing_mode.mode == "legacy"
 
 
 def test_an_active_name_is_unique_without_regard_to_case_in_the_command_and_in_the_index(session, admin_account) -> None:

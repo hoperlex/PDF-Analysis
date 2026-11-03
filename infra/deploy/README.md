@@ -518,10 +518,31 @@ needs beyond that is what an `ssh_command` connection already needs: the private
 (`AUDITMANAGER_SECRETS_KEYS`; without it a session fails as `secret_unreadable`) and a route from the worker
 container to the target host's SSH port. With no usable origin a session fails as `enrollment_failed`; the origin
 is never guessed. The target host passes the same destination rules as every executor destination
-(`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows them; a private range is refused as for an `ssh_command`
-connection, so a host on a private network is reached through a name or an address the rules accept). Rollback is
-to stop creating install sessions: nothing else runs, and a session left unfinished ends by itself after 30
-minutes.
+(`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows them; a private range is refused by default, as for an
+`ssh_command` connection, so a host on a private network is reached through a name or an address the rules accept,
+or by the setting below). Rollback is to stop creating install sessions: nothing else runs, and a session left
+unfinished ends by itself after 30 minutes.
+
+**Private-range targets for path A — `AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE`** (`R-149g`). A third setting, read
+by the **worker only** (`compose.server.yml` forwards it to that service as
+`${AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE:-0}`; the `api` does not read it). `1` or `0`; unset or `0` is the
+rule before this setting existed. With `1` the worker asks the destination rules about the `vpn` transport instead
+of `ssh_command`, so the scan and the install of every session accept an address in a private range (RFC 1918,
+unique-local, shared address space) and nothing else changes: loopback, link-local (the cloud metadata address
+included), unspecified, multicast and reserved addresses, the compose network the worker sits on, and
+single-label or local names (`localhost`, a compose service name) are refused whatever the setting says, and
+`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` still narrows. Any other value (`true`, `yes`, `2`, …) is read as `0` and the
+worker logs that the variable is neither `1` nor `0`, naming the variable and never its value; set it in
+`alpha.env` and restart the `worker` for a change to take effect. A refused target fails the session as
+`host_unreachable` and the worker logs only the closed category of the refusal (`loopback`, `private_range`, …),
+never the address.
+
+*The risk, in one sentence:* with `1` the stand can open an SSH connection to any address in the networks its own
+hosting routes to — the hosting's internal networks included — on the word of an administrator who types the
+address and confirms a host key, so turn it on only on a stand whose internal networks hold nothing an SSH login
+from the worker container could reach and should not (set `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` to the one range
+you mean, in `env/provider.env`, to bound it further). The web screens say the same to the administrator: a local
+address is accepted only when this setting allows it; otherwise the «Выполнить команду на Ubuntu» path is the way.
 
 The package route (`GET /api/v1/runner/agent-package/<version>`) needs no credential: it is public code, and
 its integrity is the sha256 the install command carries. The stand re-hashes the archive against the `.sha256`

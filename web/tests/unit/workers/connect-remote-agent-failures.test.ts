@@ -159,11 +159,16 @@ describe('the install over SSH', () => {
     expect(INSTALL_FAILURE_SENTENCES.timed_out).toContain('Повторите');
   });
 
-  it('says a LAN address is refused by the stand’s rules and not merely down (path A refuses private ranges)', () => {
+  it('says a LAN address is refused by the stand’s rules unless its administrator allowed it, and not merely down (R-149g)', () => {
     const sentence = INSTALL_FAILURE_SENTENCES.host_unreachable;
     expect(sentence).toContain('частных сетей');
+    expect(sentence).toContain('только тогда, когда это разрешено в его настройках администратором');
     expect(sentence).toContain('отклоняется, а не просто не отвечает');
-    expect(sentence).toContain('служебные адреса стенда и петлю');
+    // The service addresses and the loopback are closed whatever the setting says.
+    expect(sentence).toContain('служебные адреса стенда и петлю не принимает никогда');
+    expect(sentence).toContain('Если разрешения нет');
+    // It no longer says that path A refuses private ranges outright.
+    expect(sentence).not.toContain('установка по SSH не принимает адреса частных сетей');
     // …and it still says the other cause, and what to do in each case.
     expect(sentence).toContain('Либо сервер недоступен');
     expect(sentence).toContain('«Выполнить команду на Ubuntu»');

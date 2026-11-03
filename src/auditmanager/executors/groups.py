@@ -14,6 +14,10 @@ again (``am_check_executor_group_member``): every member's snapshot revision pin
 lock's, copied once into the group revision), so two members of one pin cannot differ in rate. A mixed group is
 refused, never repaired.
 
+The membership of a revision is closed when the revision is made: the revision declares ``member_count`` (the length
+of the request's member list, one to sixteen -- :func:`refuse_settings` holds the range before any write) and the
+database refuses a member beyond it and a commit that holds fewer. No member is ever added to a revision later.
+
 Refusals reuse the catalogue (ADR-0026 decision 18): ``validation_failed`` with ``field`` and ``constraint``,
 ``conflict`` with ``conflict_reason``, ``not_found`` with ``aggregate_type``. A detail names a field and a
 classifier and never echoes a value.

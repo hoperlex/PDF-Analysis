@@ -18,19 +18,28 @@ What this revision adds
 -----------------------
 ``executor_group`` (``exg``)
     a group of interchangeable executors and its name. Archiving is one-way and not deletion (``archived_at`` and
-    ``archived_by`` are write-once); an active group's name is unique without regard to case. ``rotation_cursor`` is the
-    tie-break rotation of ``least_loaded`` dispatch, persisted in the database (decision 14): the only column of the
-    table that changes freely.
+    ``archived_by`` are write-once, and a row cannot be deleted: ``trg_executor_group_no_delete``); an active group's
+    name is unique without regard to case. ``rotation_cursor`` is the tie-break rotation of ``least_loaded`` dispatch,
+    persisted in the database (decision 14): the only column of the table that changes freely.
 ``executor_group_revision`` (``exgr``)
-    one immutable revision: ``pin_id``, ``gateway_model``, ``billing``, the rate snapshot (USD per million tokens, copied
-    from the provider lock when the revision is made) and ``strategy`` (``least_loaded`` is the only value). Numbered
-    1, 2, 3, ... per group without a gap, and an archived group takes none (``am_check_executor_group_revision``).
+    one immutable revision: ``pin_id``, ``gateway_model``, ``billing``, the rate snapshot (USD per million tokens,
+    copied from the provider lock when the revision is made), ``strategy`` (``least_loaded`` is the only value) and
+    ``member_count`` (1 to 16), the number of members the revision is made with. Numbered 1, 2, 3, ... per group
+    without a gap, and an archived group takes none (``am_check_executor_group_revision``).
 ``executor_group_member``
     the members of a revision: a connection and the **revision** of it the group snapshots, with an optional tie-break
     order (1 to 16, unique inside the revision). Immutable. ``am_check_executor_group_member`` holds the homogeneity of
     decision 10 in the database: the member's revision pins exactly the group revision's ``pin_id`` and
     ``gateway_model`` and shares its ``billing``, and its connection is not archived. A connection appears once per
-    revision. At most 16 members and at least one are the application's to hold (the contract bounds them).
+    revision.
+    **The membership of a revision is closed when the revision is made.** Row immutability alone would let a later
+    ``INSERT`` add a member to a revision that had already admitted work, or a seventeenth to a full one, so the
+    revision declares ``member_count`` (frozen with the row) and the database holds both ends: a member is refused when
+    the revision already has ``member_count`` members, and a deferred constraint trigger
+    (``trg_executor_group_revision_has_members``) requires **exactly** ``member_count`` members when the transaction
+    that made the revision commits. Together: a committed revision always has exactly its declared members, and none can
+    be added afterwards. (The count is read from the rows, never from ``xmin`` or ``txid_current()``, which a savepoint
+    breaks.)
 ``executor_routing_rule_revision`` (``exrr``)
     the rule of a work kind (decision 11): append-only, numbered per work kind, targeting an immutable group revision
     of a group that is not archived (``am_check_executor_routing_rule``). The current rule of a work kind is its highest
@@ -39,8 +48,18 @@ What this revision adds
     the routing mode (decision 17) as an **append-only journal with no singleton row**: the mode in force is the event
     with the highest ``event_no``, and an empty table means ``legacy``. A ``rules`` event carries the digest of the
     preview that was confirmed and the confirmed mapping (one entry per converted work kind: the group, the group
-    revision and the rule revision the change created); a ``legacy`` event (the rollback) carries neither. Two writers
-    racing for the same ``event_no`` collide on its unique key, so the history is linear.
+    revision and the rule revision the change created); a ``legacy`` event (the rollback) carries neither. The number is
+    gap-free and increasing: ``am_check_executor_routing_mode_event`` takes the advisory lock
+    ``executor_routing_mode_event`` and requires ``event_no`` to be the highest number plus one, as the rule numbering
+    does, so two writers are serialised and the history is linear. (A writer that numbers its own event takes the same
+    lock first.)
+
+Archive races
+-------------
+Archiving takes ``FOR UPDATE`` on the group row (``group_repository.get_group(lock=True)``). The three insert triggers
+read the ``archived_at`` they decide on with ``FOR SHARE`` -- the group's in the revision chain and the rule check, the
+connection's in the member check -- so an archive and a concurrent revision, rule or member insert serialise instead of
+both passing a plain read.
 
 The actor columns (``created_by``, ``archived_by``, ``set_by``, ``changed_by``) hold a ``usr`` identity and carry no
 foreign key to ``app_user``, as in ``0030``. The rate columns are ``numeric(12,6)``: the pinned rates are decimal USD per
@@ -51,7 +70,7 @@ Configuration like the executor connections: the product purge keeps these table
 Downgrade
 ---------
 Refused while any row exists in any of the five tables; restore a database backup instead. ``0048`` must be downgraded
-first (its columns reference two of these tables).
+first (its columns reference two of these tables, and its binding guards read ``executor_group_member``).
 """
 
 from __future__ import annotations
@@ -75,6 +94,7 @@ _NEW_TABLES = (
 )
 _NEW_FUNCTIONS = (
     "am_check_executor_group_revision", "am_check_executor_group_member", "am_check_executor_routing_rule",
+    "am_require_executor_group_members", "am_check_executor_routing_mode_event",
 )
 
 #: ``auditmanager.executors.model.WORK_KINDS`` as ``ck_executor_route_work_kind`` has them since ``0042``.
@@ -87,13 +107,14 @@ _REVISION_CHAIN_FUNCTION = """
         CREATE FUNCTION am_check_executor_group_revision() RETURNS trigger
         LANGUAGE plpgsql AS $fn$
         DECLARE
-            last_no integer;
+            last_no    integer;
+            v_archived boolean;
         BEGIN
             PERFORM pg_advisory_xact_lock(hashtextextended('executor_group_revision:' || NEW.group_id, 0));
-            IF EXISTS (
-                SELECT 1 FROM executor_group g
-                 WHERE g.group_id = NEW.group_id AND g.archived_at IS NOT NULL
-            ) THEN
+            -- FOR SHARE: archiving takes the group row FOR UPDATE, so it and this insert serialise.
+            SELECT (g.archived_at IS NOT NULL) INTO v_archived
+              FROM executor_group g WHERE g.group_id = NEW.group_id FOR SHARE;
+            IF v_archived THEN
                 RAISE EXCEPTION
                     'state_transition_not_allowed: group % is archived and takes no revision', NEW.group_id
                     USING ERRCODE = 'AM001',
@@ -117,6 +138,10 @@ _REVISION_CHAIN_FUNCTION = """
 _MEMBER_FUNCTION = """
         CREATE FUNCTION am_check_executor_group_member() RETURNS trigger
         LANGUAGE plpgsql AS $fn$
+        DECLARE
+            v_declared smallint;
+            v_held     bigint;
+            v_archived boolean;
         BEGIN
             IF NOT EXISTS (
                 SELECT 1
@@ -133,10 +158,23 @@ _MEMBER_FUNCTION = """
                     USING ERRCODE = 'AM001',
                           HINT = 'A group is homogeneous: every member pins exactly the same model and is billed the same way.';
             END IF;
-            IF EXISTS (
-                SELECT 1 FROM executor_connection c
-                 WHERE c.connection_id = NEW.connection_id AND c.archived_at IS NOT NULL
-            ) THEN
+            -- The membership is closed when the revision is made: a committed revision holds exactly member_count
+            -- members (trg_executor_group_revision_has_members), so any later insert finds the count reached.
+            SELECT gr.member_count INTO v_declared
+              FROM executor_group_revision gr WHERE gr.group_revision_id = NEW.group_revision_id;
+            SELECT count(*) INTO v_held
+              FROM executor_group_member m WHERE m.group_revision_id = NEW.group_revision_id;
+            IF v_held >= v_declared THEN
+                RAISE EXCEPTION
+                    'state_transition_not_allowed: group revision % already has its % declared members and takes no other',
+                    NEW.group_revision_id, v_declared
+                    USING ERRCODE = 'AM001',
+                          HINT = 'The membership of a group revision is closed when the revision is made; make a new revision.';
+            END IF;
+            -- FOR SHARE: archiving a connection updates its row, so it and this insert serialise.
+            SELECT (c.archived_at IS NOT NULL) INTO v_archived
+              FROM executor_connection c WHERE c.connection_id = NEW.connection_id FOR SHARE;
+            IF v_archived THEN
                 RAISE EXCEPTION
                     'state_transition_not_allowed: connection % is archived and cannot become a member', NEW.connection_id
                     USING ERRCODE = 'AM001',
@@ -147,19 +185,43 @@ _MEMBER_FUNCTION = """
         $fn$;
         """
 
+#: The other half of the closed membership: at commit, the revision has exactly the members it declared. A deferred
+#: constraint trigger on the revision's INSERT, as the AR v3 group's and the optimisation pass's are.
+_MEMBERS_COMPLETE_FUNCTION = """
+        CREATE FUNCTION am_require_executor_group_members() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        DECLARE
+            v_held bigint;
+        BEGIN
+            SELECT count(*) INTO v_held
+              FROM executor_group_member m WHERE m.group_revision_id = NEW.group_revision_id;
+            IF v_held <> NEW.member_count THEN
+                RAISE EXCEPTION
+                    'state_transition_not_allowed: group revision % declares % members and holds %',
+                    NEW.group_revision_id, NEW.member_count, v_held
+                    USING ERRCODE = 'AM001',
+                          HINT = 'A group revision commits together with exactly the members it declares.';
+            END IF;
+            RETURN NULL;
+        END
+        $fn$;
+        """
+
 _RULE_FUNCTION = """
         CREATE FUNCTION am_check_executor_routing_rule() RETURNS trigger
         LANGUAGE plpgsql AS $fn$
         DECLARE
-            last_no integer;
+            last_no    integer;
+            v_archived boolean;
         BEGIN
             PERFORM pg_advisory_xact_lock(hashtextextended('executor_routing_rule:' || NEW.work_kind, 0));
-            IF EXISTS (
-                SELECT 1
-                  FROM executor_group_revision gr
-                  JOIN executor_group g ON g.group_id = gr.group_id
-                 WHERE gr.group_revision_id = NEW.group_revision_id AND g.archived_at IS NOT NULL
-            ) THEN
+            -- FOR SHARE OF g: archiving takes the group row FOR UPDATE, so it and this insert serialise.
+            SELECT (g.archived_at IS NOT NULL) INTO v_archived
+              FROM executor_group_revision gr
+              JOIN executor_group g ON g.group_id = gr.group_id
+             WHERE gr.group_revision_id = NEW.group_revision_id
+               FOR SHARE OF g;
+            IF v_archived THEN
                 RAISE EXCEPTION
                     'state_transition_not_allowed: group revision % belongs to an archived group and takes no rule',
                     NEW.group_revision_id
@@ -173,6 +235,28 @@ _RULE_FUNCTION = """
                     NEW.work_kind, coalesce(last_no, 0), NEW.rule_no
                     USING ERRCODE = 'AM001',
                           HINT = 'Rules are numbered 1, 2, 3, ... per work kind without a gap.';
+            END IF;
+            RETURN NEW;
+        END
+        $fn$;
+        """
+
+
+#: The routing-mode journal is numbered 1, 2, 3, ... without a gap, under one advisory lock, as the rules are.
+_MODE_EVENT_FUNCTION = """
+        CREATE FUNCTION am_check_executor_routing_mode_event() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        DECLARE
+            last_no integer;
+        BEGIN
+            PERFORM pg_advisory_xact_lock(hashtextextended('executor_routing_mode_event', 0));
+            SELECT max(event_no) INTO last_no FROM executor_routing_mode_event;
+            IF NEW.event_no <> coalesce(last_no, 0) + 1 THEN
+                RAISE EXCEPTION
+                    'state_transition_not_allowed: the routing mode journal has event % and cannot take %',
+                    coalesce(last_no, 0), NEW.event_no
+                    USING ERRCODE = 'AM001',
+                          HINT = 'Events are numbered 1, 2, 3, ... without a gap.';
             END IF;
             RETURN NEW;
         END
@@ -219,6 +303,11 @@ def upgrade() -> None:
         "CREATE TRIGGER trg_executor_group_write_once BEFORE UPDATE ON executor_group "
         "FOR EACH ROW EXECUTE FUNCTION am_guard_write_once_columns('archived_at', 'archived_by')"
     )
+    # Archive is not deletion: the row can change (the rotation cursor, the one-way archive) but is never removed.
+    op.execute(
+        "CREATE TRIGGER trg_executor_group_no_delete BEFORE DELETE ON executor_group "
+        "FOR EACH ROW EXECUTE FUNCTION am_immutable_row()"
+    )
 
     # --- the group revision ----------------------------------------------------------------------
     op.execute(_REVISION_CHAIN_FUNCTION)
@@ -234,6 +323,7 @@ def upgrade() -> None:
             input_per_mtok_usd  numeric(12,6) NOT NULL,
             output_per_mtok_usd numeric(12,6) NOT NULL,
             strategy            text NOT NULL DEFAULT 'least_loaded',
+            member_count        smallint NOT NULL,
             created_at          timestamptz NOT NULL DEFAULT clock_timestamp(),
             created_by          text NOT NULL,
             CONSTRAINT uq_executor_group_revision_number UNIQUE (group_id, revision_no),
@@ -250,6 +340,7 @@ def upgrade() -> None:
             CONSTRAINT ck_executor_group_revision_input_rate CHECK (input_per_mtok_usd >= 0),
             CONSTRAINT ck_executor_group_revision_output_rate CHECK (output_per_mtok_usd >= 0),
             CONSTRAINT ck_executor_group_revision_strategy CHECK (strategy IN ('least_loaded')),
+            CONSTRAINT ck_executor_group_revision_member_count CHECK (member_count BETWEEN 1 AND 16),
             CONSTRAINT ck_executor_group_revision_created_by_format
                 CHECK (created_by ~ '^usr_{ULID}$')
         );
@@ -299,6 +390,14 @@ def upgrade() -> None:
     op.execute(
         "CREATE TRIGGER trg_executor_group_member_homogeneous BEFORE INSERT ON executor_group_member "
         "FOR EACH ROW EXECUTE FUNCTION am_check_executor_group_member()"
+    )
+    # The revision commits together with exactly the members it declared (deferred to commit, so the members can be
+    # inserted after the revision in the same transaction).
+    op.execute(_MEMBERS_COMPLETE_FUNCTION)
+    op.execute(
+        "CREATE CONSTRAINT TRIGGER trg_executor_group_revision_has_members "
+        "AFTER INSERT ON executor_group_revision DEFERRABLE INITIALLY DEFERRED "
+        "FOR EACH ROW EXECUTE FUNCTION am_require_executor_group_members()"
     )
 
     # --- the routing rule of a work kind ----------------------------------------------------------
@@ -371,27 +470,33 @@ def upgrade() -> None:
         "BEFORE UPDATE OR DELETE ON executor_routing_mode_event "
         "FOR EACH ROW EXECUTE FUNCTION am_append_only()"
     )
+    op.execute(_MODE_EVENT_FUNCTION)
+    op.execute(
+        "CREATE TRIGGER trg_executor_routing_mode_event_number BEFORE INSERT ON executor_routing_mode_event "
+        "FOR EACH ROW EXECUTE FUNCTION am_check_executor_routing_mode_event()"
+    )
 
     comments = {
         "executor_group": (
             "ADR-0026 decision 10: a group of interchangeable executors. Configuration, kept by the product "
-            "purge like the executor connections. Archive is one-way and is not deletion."
+            "purge like the executor connections. Archive is one-way and is not deletion (a row cannot be deleted)."
         ),
         "executor_group_revision": (
-            "ADR-0026 decision 10: an immutable revision of a group: pin, model, billing, the rate snapshot and "
-            "the strategy. Never updated or deleted (am_immutable_row)."
+            "ADR-0026 decision 10: an immutable revision of a group: pin, model, billing, the rate snapshot, "
+            "the strategy and the number of members it is made with. Never updated or deleted (am_immutable_row)."
         ),
         "executor_group_member": (
             "ADR-0026 decision 10: the members of a group revision, each a connection and the connection "
-            "revision snapshotted into the group. Immutable; homogeneity is checked on insert."
+            "revision snapshotted into the group. Immutable; homogeneity is checked on insert and the "
+            "membership is closed when the revision is made (member_count)."
         ),
         "executor_routing_rule_revision": (
             "ADR-0026 decision 11: the routing rule of a work kind, append-only; the current rule is the "
             "highest rule_no of the work kind."
         ),
         "executor_routing_mode_event": (
-            "ADR-0026 decision 17: the routing mode as an append-only journal; the latest event is the mode "
-            "and an empty table means legacy."
+            "ADR-0026 decision 17: the routing mode as an append-only journal, numbered without a gap; the "
+            "latest event is the mode and an empty table means legacy."
         ),
     }
     for table, comment in comments.items():
