@@ -59,6 +59,18 @@ def at_this(at_previous: tuple[Engine, str], foundation_command: Any) -> tuple[E
     return engine, url
 
 
+@pytest.fixture
+def at_head(empty_database: Any, foundation_command: Any) -> Iterator[tuple[Engine, str]]:
+    """The schema the recovery tooling is written for: ``project_erase`` and ``schema_coverage`` describe head."""
+    url = empty_database.url.render_as_string(hide_password=False)
+    _upgrade(foundation_command, url, "head")
+    engine = create_database_engine(empty_database)
+    try:
+        yield engine, url
+    finally:
+        engine.dispose()
+
+
 def _world(connection: Any) -> tuple[str, str, str, str]:
     first, second = _id("prj"), _id("prj")
     left, outside = _id("doc"), _id("doc")
@@ -110,19 +122,18 @@ def _refused(engine: Engine, statement: str, values: dict[str, str], state: str 
     assert getattr(caught.value.orig, "sqlstate", None) == state, caught.value
 
 
-def test_0041_adds_only_its_fifteen_project_reachable_tables(at_this: tuple[Engine, str]) -> None:
-    engine, _ = at_this
-    assert FACTS.migration_head == THIS
-    with engine.connect() as connection:
-        tables = {row[0] for row in connection.execute(text(
-            "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'"))}
-        links = [(source, parent) for source, parent in connection.execute(text("""
-            SELECT child.relname, parent.relname
-              FROM pg_constraint fk JOIN pg_class child ON child.oid = fk.conrelid
-              JOIN pg_class parent ON parent.oid = fk.confrelid
-             WHERE fk.contype = 'f'
-        """))]
-    assert tables == ALL_TABLES
+def _public_tables(connection: Any) -> set[str]:
+    return {row[0] for row in connection.execute(text(
+        "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'"))}
+
+
+def _reaches_the_project(connection: Any, tables: frozenset[str]) -> bool:
+    links = [(source, parent) for source, parent in connection.execute(text("""
+        SELECT child.relname, parent.relname
+          FROM pg_constraint fk JOIN pg_class child ON child.oid = fk.conrelid
+          JOIN pg_class parent ON parent.oid = fk.confrelid
+         WHERE fk.contype = 'f'
+    """))]
     parents: dict[str, set[str]] = {}
     for source, parent in links:
         parents.setdefault(source, set()).add(parent)
@@ -132,8 +143,31 @@ def test_0041_adds_only_its_fifteen_project_reachable_tables(at_this: tuple[Engi
             return True
         return any(reaches(parent, seen | {table}) for parent in parents.get(table, ()) if parent not in seen)
 
-    assert all(reaches(table) for table in STAGE_TABLES)
-    assert not any(parent in {"job", "attempt", "audit_run"} for source, parent in links if source in STAGE_TABLES)
+    return all(reaches(table) for table in tables)
+
+
+def test_0041_adds_only_its_fifteen_project_reachable_tables(
+    at_previous: tuple[Engine, str], foundation_command: Any,
+) -> None:
+    """The delta of this one revision, taken between ``0040`` and ``0041``; head is no longer ``0041``."""
+    engine, url = at_previous
+    with engine.connect() as connection:
+        before = _public_tables(connection)
+    _upgrade(foundation_command, url, THIS)
+    with engine.connect() as connection:
+        after = _public_tables(connection)
+        assert after - before == STAGE_TABLES and before - after == set()
+        assert _reaches_the_project(connection, STAGE_TABLES)
+    assert after <= ALL_TABLES, "a table the recovery tooling does not declare"
+
+
+def test_every_table_at_head_is_declared_by_the_recovery_tooling(at_head: tuple[Engine, str]) -> None:
+    """The exact-equality half of the 0041 claim, at the revision the tooling describes."""
+    engine, _ = at_head
+    with engine.connect() as connection:
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == FACTS.migration_head
+        assert _public_tables(connection) == ALL_TABLES
+        assert _reaches_the_project(connection, STAGE_TABLES)
 
 
 def test_candidate_cannot_publish_a_document_from_another_project(at_this: tuple[Engine, str]) -> None:
@@ -314,9 +348,9 @@ def test_raw_text_difference_is_immutable_and_its_fragments_follow_pair_sides(
 
 
 def test_project_erase_deletes_a_nonempty_stage_graph_and_keeps_the_other_project(
-    at_this: tuple[Engine, str],
+    at_head: tuple[Engine, str],
 ) -> None:
-    engine, _ = at_this
+    engine, _ = at_head
     with engine.begin() as connection:
         project, other_project, left, outside = _world(connection)
         right = _id("doc")

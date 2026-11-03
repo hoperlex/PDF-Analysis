@@ -823,6 +823,20 @@ def _resolve(document: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[st
     return node
 
 
+#: `CMP-SEAL-C4` and `HOTFIX-PRESENTATION-INT-1030`: the reads that declare a query parameter -- `cursor` and `limit` (the run's
+#: AI answers, graphic evidence, repairs, cards and verdicts), `grouping` (the journal), `query` (a page profile's stage text),
+#: `engine` (the chain estimate) and `format` (the technical report) -- and whose port this suite does not wire. ``shipped_router``
+#: passes no stage-review or comparison-report adapter, so on this surface the operation cannot answer a page at all and a
+#: parameter cannot be shown to change one; the parameters are driven where the port exists (`test_comparison_stage_c4_wiring.py`
+#: and `tests/integration/comparison/**`). Unlike the older entries of the set below, each one is proved to be unserved here by
+#: :func:`test_the_stage_review_query_operations_are_still_unserved_on_this_surface`: a lane that wires the port into this
+#: surface must move the entry out of here and drive it, or this suite goes red.
+STAGE_REVIEW_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
+    "estimateStageChainRun", "getStageChangeJournal", "getStageProfileText", "getStageSynthesis", "listStageAiReviews",
+    "listStageCardVerdicts", "listStageChangeCards", "listStageClassifications", "listStageGraphicEvidence",
+    "listStageLinkRepairs", "streamComparisonTechnicalReport",
+})
+
 #: Operations whose query parameters are declared but whose port is a sealed stub, so the
 #: drive below cannot show a parameter changing the answer (`CONTRACT_PIN_REGISTRY.md`'s
 #: sealed-stub rule). `W55A-SEAL-01` listed the four norms operations here;
@@ -856,7 +870,7 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
     "listStageRawDifferences", "listStageSheetMapHistory", "listStageSheetPassports",
     "listStageSheetSuggestions", "listStageTextExclusions", "listStageTextFragments",
     "listStageTextHints", "listStageUploads", "uploadStageUploadPart",
-})
+}) | STAGE_REVIEW_STUB_QUERY_OPERATIONS
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).
@@ -998,6 +1012,35 @@ class _RecordingQuery(Mapping[str, Sequence[str]]):
 
     def __len__(self) -> int:
         return len(self._values)
+
+
+def test_the_stage_review_query_operations_are_still_unserved_on_this_surface(
+    shipped_router: Surface, contract: dict[str, Any]
+) -> None:
+    """The exemption of :data:`STAGE_REVIEW_STUB_QUERY_OPERATIONS` is only true while no adapter answers the operation here."""
+    import re
+
+    prefixes = {
+        "stage_link_revision_id": "slk", "stage_chain_run_id": "crn", "comparison_page_profile_id": "cpr",
+        "comparison_series_id": "cser", "stage_change_card_id": "ccd", "stage_chain_batch_id": "scb",
+        "stage_assembly_id": "sas",
+    }
+    found: dict[str, tuple[str, str]] = {}
+    for template, operations in contract["paths"].items():
+        for method, operation in operations.items():
+            if isinstance(operation, dict) and operation.get("operationId") in STAGE_REVIEW_STUB_QUERY_OPERATIONS:
+                found[operation["operationId"]] = (method.upper(), template)
+    assert set(found) == STAGE_REVIEW_STUB_QUERY_OPERATIONS
+    served = []
+    for operation_id, (method, template) in sorted(found.items()):
+        path = re.sub(r"\{(\w+)\}", lambda m: f"{prefixes[m.group(1)]}_01M2545JSD15ETSNNV904X991W", template)
+        answer = dispatch(shipped_router, Request.build(method, path))
+        if answer.status < 500:
+            served.append((operation_id, answer.status))
+    assert served == [], (
+        f"these operations now answer on this surface: {served}. A parameter of a served operation has to be driven below, "
+        "not exempted."
+    )
 
 
 def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(

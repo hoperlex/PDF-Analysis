@@ -124,6 +124,11 @@ EXPECTED_TABLES = {
     "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
     "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
     "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
+    # `0042_comparison_stage_review` (`CMP-SEAL-C4`): the stage AI's units and answers, graphic evidence, link
+    # repairs, expert change cards with their evidence and verdicts, and the durable batch of runs with its items.
+    "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
+    "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
+    "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     # `0019_execution_workers`: the worker registry.
     "worker",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
