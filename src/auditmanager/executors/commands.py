@@ -46,6 +46,7 @@ from auditmanager.executors.model import (
     validate_settings,
 )
 from auditmanager.executors.repository import ExecutorRepository
+from auditmanager.executors.routing_mode import ensure_legacy_routing
 from auditmanager.executors.sealing import PublicRing
 from auditmanager.executors.usability import ensure_routable
 from auditmanager.ingest.public import (
@@ -436,8 +437,14 @@ def set_route(
 ) -> RouteRecord:
     """Name the connection that serves a kind of model work, with an optional standby that
     only an administrator configures. Every change is an appended, journaled event; nothing
-    ever falls back implicitly."""
+    ever falls back implicitly.
+
+    `EXEC2-CUTOVER-01` (ADR-0026 decision 17): while the routing mode is ``rules`` the legacy routes are read-only. The
+    refusal -- ``conflict`` / ``routing_mode_rules`` -- comes before the key is claimed and before any row is read or
+    written, so it leaves nothing behind; the check holds the routing-mode journal's lock to the end of the transaction,
+    which serialises a route change with a cut-over (``routing_mode.ensure_legacy_routing``)."""
     _admin(roles)
+    ensure_legacy_routing(session)
     store, ledger = repository or ExecutorRepository(), commands or CommandRepository()
     claimed = _begin(session, ledger, "set_executor_route", idempotency_key,
                      {"work_kind": work_kind, "primary_connection_id": primary_connection_id,

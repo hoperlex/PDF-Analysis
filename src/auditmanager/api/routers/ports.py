@@ -2193,7 +2193,7 @@ class ComparisonStageC4Port(Protocol):
 # EXEC2-GROUP-STORE-01 --------------------------------------------------------------------------------
 # Executor groups and the routing rule of a work kind (ADR-0026 decisions 10, 11 and 14). This section is the
 # lane's own; the ports around it belong to others. `previewExecutorRouting` and `setExecutorRoutingMode` are
-# `EXEC2-CUTOVER-01`'s and are not on this port.
+# `EXEC2-CUTOVER-01`'s and are the last two methods of this port, under their own heading.
 
 
 class ExecutorGroupPort(Protocol):
@@ -2221,6 +2221,15 @@ class ExecutorGroupPort(Protocol):
     def set_rule(
         self, *, work_kind: str, group_revision_id: str, user_uid: str, idempotency_key: str
     ) -> models.ExecutorRoutingRule: ...
+
+    # EXEC2-CUTOVER-01 (ADR-0026 decision 17) -------------------------------------------------------------
+    # Both are an administrator's. `preview_routing` re-reads the actor's role set and writes nothing;
+    # `set_routing_mode` re-reads it in its own transaction, does the cut-over (the groups, the rules and the
+    # mode event) or the rollback in that one transaction, and records the actor in its journal events.
+    def preview_routing(self, *, user_uid: str) -> models.ExecutorRoutingPreview: ...
+    def set_routing_mode(
+        self, *, body: models.SetExecutorRoutingModeRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingModeResult: ...
 
 
 __all__ += ["ExecutorGroupPort"]

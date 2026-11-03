@@ -185,6 +185,16 @@ from auditmanager.executors.group_selection import (
     choose,
     member_issue,
 )
+# EXEC2-CUTOVER-01 (ADR-0026 decision 17): the cut-over preview, the mode change and the guard on the legacy routes.
+from auditmanager.executors.routing_mode import (
+    MappingEntry,
+    ModeChange,
+    PreviewItem,
+    RoutingPreview,
+    ensure_legacy_routing,
+    preview_routing,
+    set_routing_mode,
+)
 from auditmanager.executors.groups import (
     GroupCapacity,
     GroupDetail,
@@ -353,6 +363,14 @@ __all__ = [
     "revise_group",
     "routing_mode",
     "set_routing_rule",
+    # EXEC2-CUTOVER-01
+    "MappingEntry",
+    "ModeChange",
+    "PreviewItem",
+    "RoutingPreview",
+    "ensure_legacy_routing",
+    "preview_routing",
+    "set_routing_mode",
 ]
 
 
