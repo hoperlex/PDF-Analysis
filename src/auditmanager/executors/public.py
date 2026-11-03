@@ -31,6 +31,43 @@ from auditmanager.executors.commands import (
     set_route,
     set_secret,
 )
+# `EXEC2-ENROLL-01` (ADR-0026 decisions 4 to 9): the enrollment grant and the exchange, the agent's health, the
+# package the image holds, the API side of an install over SSH and the integration-authorisation mark.
+from auditmanager.executors.agent_install import (
+    authorized_keys_line,
+    confirm_agent_install_host_key,
+    create_agent_install,
+    get_agent_install,
+    install_destination,
+    observed_fingerprint,
+)
+from auditmanager.executors.agent_install_repository import InstallRecord
+from auditmanager.executors.agent_package import (
+    AgentPackage,
+    available_versions,
+    latest_package,
+    load_package,
+)
+from auditmanager.executors.enrollment import (
+    EnrollmentPrincipal,
+    IssuedEnrollment,
+    RedeemedToken,
+    authenticate_enrollment,
+    enrollments_of,
+    issue_executor_enrollment,
+    redeem_enrollment,
+    report_runner_health,
+    token_health_of,
+)
+from auditmanager.executors.enrollment_repository import (
+    EnrollmentRecord,
+    TokenHealth,
+)
+from auditmanager.executors.integration_mark import (
+    IntegrationMark,
+    integration_marks_of,
+    set_integration_authorisation,
+)
 from auditmanager.executors.destinations import DestinationPolicy
 from auditmanager.executors.image_input import (
     MAX_IMAGE_BYTES,
@@ -112,10 +149,101 @@ from auditmanager.executors.sealing import (
 from auditmanager.shared.errors import DomainError, ErrorCode
 from sqlalchemy.orm import Session
 
+# EXEC2-CAP-01 (ADR-0026 decision 1): the capacity reads of a connection, for the `api` adapters and for
+# `EXEC2-GROUP-RUN-01` / `EXEC2-GROUP-CMP-01`.
+from auditmanager.executors.queries import (
+    Occupancy,
+    capacity_of,
+    occupancies,
+    occupancy_of,
+    run_queue_reason,
+    used_units,
+)
+
+# EXEC2-GROUP-STORE-01 (ADR-0026 decisions 10, 11 and 14): executor groups, the routing rule of a work kind, the
+# routing mode as the journal states it, the capacity of a group and the pure selection among its members. The
+# dispatch lanes (`EXEC2-GROUP-RUN-01`, `EXEC2-GROUP-CMP-01`) call these and never read the group tables.
+from auditmanager.executors.group_commands import (
+    advance_group_rotation,
+    archive_group,
+    create_group,
+    group_capacity,
+    group_detail,
+    group_revision_of,
+    group_summary,
+    list_group_summaries,
+    list_routing_rules,
+    member_facts,
+    resolve_rule,
+    revise_group,
+    routing_mode,
+    set_routing_rule,
+)
+from auditmanager.executors.group_selection import (
+    GroupMember,
+    MemberFacts,
+    choose,
+    member_issue,
+)
+# EXEC2-CUTOVER-01 (ADR-0026 decision 17): the cut-over preview, the mode change and the guard on the legacy routes.
+from auditmanager.executors.routing_mode import (
+    MappingEntry,
+    ModeChange,
+    PreviewItem,
+    RoutingPreview,
+    ensure_legacy_routing,
+    preview_routing,
+    set_routing_mode,
+)
+from auditmanager.executors.groups import (
+    GroupCapacity,
+    GroupDetail,
+    GroupMemberRecord,
+    GroupRecord,
+    GroupRevisionRecord,
+    GroupSettings,
+    GroupSummary,
+    MemberRequest,
+    MemberStatus,
+    ModeState,
+    RuleListing,
+    RuleRecord,
+)
+
 if TYPE_CHECKING:
+    from auditmanager.executors.agent_install_runner import AgentInstallRunner, install_runner_for
     from auditmanager.executors.operations import OperationRefused, import_env
 
 __all__ = [
+    # `EXEC2-ENROLL-SSH-01`: the worker's half of path A, resolved on first use (see `__getattr__`).
+    "AgentInstallRunner",
+    "install_runner_for",
+    # `EXEC2-ENROLL-01`.
+    "AgentPackage",
+    "EnrollmentPrincipal",
+    "EnrollmentRecord",
+    "InstallRecord",
+    "IntegrationMark",
+    "IssuedEnrollment",
+    "RedeemedToken",
+    "TokenHealth",
+    "authenticate_enrollment",
+    "authorized_keys_line",
+    "available_versions",
+    "confirm_agent_install_host_key",
+    "create_agent_install",
+    "enrollments_of",
+    "get_agent_install",
+    "install_destination",
+    "integration_marks_of",
+    "issue_executor_enrollment",
+    "latest_package",
+    "load_package",
+    "observed_fingerprint",
+    "redeem_enrollment",
+    "report_runner_health",
+    "set_integration_authorisation",
+    "token_health_of",
     "CLAIM_LEASE_SECONDS",
     "MAX_IMAGES",
     "MAX_IMAGE_BYTES",
@@ -197,6 +325,52 @@ __all__ = [
     "set_secret",
     "submit_answer",
     "sweep",
+    # EXEC2-CAP-01
+    "Occupancy",
+    "capacity_of",
+    "occupancies",
+    "occupancy_of",
+    "run_queue_reason",
+    "used_units",
+    # EXEC2-GROUP-STORE-01
+    "GroupCapacity",
+    "GroupDetail",
+    "GroupMember",
+    "GroupMemberRecord",
+    "GroupRecord",
+    "GroupRevisionRecord",
+    "GroupSettings",
+    "GroupSummary",
+    "MemberFacts",
+    "MemberRequest",
+    "MemberStatus",
+    "ModeState",
+    "RuleListing",
+    "RuleRecord",
+    "advance_group_rotation",
+    "archive_group",
+    "choose",
+    "create_group",
+    "group_capacity",
+    "group_detail",
+    "group_revision_of",
+    "group_summary",
+    "list_group_summaries",
+    "list_routing_rules",
+    "member_facts",
+    "member_issue",
+    "resolve_rule",
+    "revise_group",
+    "routing_mode",
+    "set_routing_rule",
+    # EXEC2-CUTOVER-01
+    "MappingEntry",
+    "ModeChange",
+    "PreviewItem",
+    "RoutingPreview",
+    "ensure_legacy_routing",
+    "preview_routing",
+    "set_routing_mode",
 ]
 
 
@@ -204,6 +378,9 @@ __all__ = [
 #: ``operations`` imports this module (and so do ``probe_runner`` and ``resolver``): a top-level
 #: import here would break ``import auditmanager.executors.operations`` on the cycle.
 _OPERATIONS_EXPORTS = frozenset({"OperationRefused", "import_env"})
+#: The same for the install runner (`EXEC2-ENROLL-SSH-01`): ``agent_install_runner`` imports ``open_secret`` and
+#: ``SecretUnreadableError`` from this module, so it cannot be imported at the top of it.
+_INSTALL_RUNNER_EXPORTS = frozenset({"AgentInstallRunner", "install_runner_for"})
 
 
 def __getattr__(name: str) -> object:
@@ -211,6 +388,10 @@ def __getattr__(name: str) -> object:
         from auditmanager.executors import operations
 
         return getattr(operations, name)
+    if name in _INSTALL_RUNNER_EXPORTS:
+        from auditmanager.executors import agent_install_runner
+
+        return getattr(agent_install_runner, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

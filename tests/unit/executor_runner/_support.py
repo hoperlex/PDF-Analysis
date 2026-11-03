@@ -275,6 +275,8 @@ class FakeOpenAI:
 def clean_env(**extra: str) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.upper().endswith("_PROXY")}
     env.pop("PDF_ANALYSIS_RUNNER_TOKEN", None)
+    # `EXEC2-AGENT-01`: the agent's health report detects the host's CLIs; a test agent looks nowhere unless it is told to.
+    env.setdefault("PDF_ANALYSIS_CLI_DIRS", "/nonexistent-cli-dir")
     env.update(extra)
     return env
 

@@ -10,6 +10,7 @@ locked by the publishing transaction.
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -44,9 +45,17 @@ _LOCK_JOB_WAIT = text(
 #: definition). ``queued`` is waiting and the other four are terminal. The state machine writes
 #: the Lease and the Job state together, so this set and "has an unreleased Lease" agree.
 _ACTIVE_JOB_STATES = "('leased', 'running', 'retry_wait')"
-#: One connection serves at most one active Run (`EXEC-PAR-DECISION-01`, ruling 3). The
+#: One connection serves at most as many active units as its capacity -- one unless its current revision
+#: says more (`EXEC-PAR-DECISION-01`, ruling 3; `EXEC2-CAP-01`). The
 #: connection of a Run is the one its frozen revision belongs to: ``audit_run.connection_revision_id``
 #: is written once at INSERT, and a Run with none (the ``environment`` source) is never limited.
+#:
+#: **A NULL revision means ``environment`` only when ``binding_state`` is ``frozen_at_start``** (`EXEC2-GROUP-RUN-01`,
+#: ADR-0026 decision 12). A ``pending`` Run -- admitted on a group, no member chosen yet -- has a NULL revision too, and
+#: reading that as "never limited" would run it on no connection at all. The claim therefore decides the binding state
+#: first (:meth:`JobRepository._pending_group_revision`): a ``pending`` Run takes the dispatch path, which locks the
+#: group and its members and writes the revision once; only a ``frozen_at_start`` or ``bound`` Run reaches this
+#: statement, and a ``bound`` one has a revision, so its retry stays on the member it was bound to (decision 16).
 _CONNECTION_OF_RUN = text(
     "SELECT rev.connection_id FROM audit_run r "
     "JOIN executor_connection_revision rev ON rev.revision_id = r.connection_revision_id "
@@ -59,33 +68,123 @@ _LOCK_CONNECTION = text(
     "SELECT pg_advisory_xact_lock("
     "hashtextextended('auditmanager.executor_connection|' || :connection_id, 0))"
 )
-#: Is the connection busy: with another active Run, or -- `CMP-SPEND-01` (ADR-0025 decision 4; the grant
-#: of the PROD-20 owner) -- with an active **comparison model call**: a ``prepared`` or ``sent`` row of
-#: ``comparison_model_call`` whose attempt still holds its work item (a killed worker's call stays active
-#: until the queue's reclaim ends the attempt, the same rule as a Run's expired Lease). The comparison
-#: wrapper takes the same advisory lock (:data:`_LOCK_CONNECTION`) before it prepares a call and asks the
-#: mirror of this question, so a Run's claim and a comparison call never both pass their check. The
-#: comparison table is empty while no comparison module is on, so a plain Run is decided exactly as before.
-_CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
-    "SELECT EXISTS (SELECT 1 FROM job other_job "
+#: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 to 16). What the claim needs to know of a Run's binding before it takes
+#: any lock: the state, and the group revision a ``pending`` Run was admitted on. An unlocked read -- the Run lock comes
+#: later, in the claim's order -- so it is read again under that lock (:data:`_RUN_BINDING`) and compared.
+_CLAIM_BINDING = text(
+    "SELECT binding_state, executor_group_revision_id FROM audit_run WHERE run_id = :run_id"
+)
+_RUN_BINDING = text(
+    "SELECT binding_state, executor_group_revision_id, connection_revision_id FROM audit_run WHERE run_id = :run_id"
+)
+#: The group's row, locked ``FOR UPDATE`` and read for its rotation: the first lock after the worker's intake (ADR-0026
+#: decision 14's order: worker intake, group, member connections ascending, control, Run, Job). It serialises the
+#: dispatches of one group and the persisted tie-break rotation they read and advance. Nothing is written by it.
+_LOCK_GROUP = text(
+    "SELECT rotation_cursor FROM executor_group WHERE group_id = :group_id FOR UPDATE"
+)
+#: The one write that binds a Run: the connection revision goes NULL -> a member of its group revision in the same
+#: statement that moves ``binding_state`` ``pending`` -> ``bound`` (``am_guard_audit_run_frozen`` allows exactly that, once,
+#: and ``ck_audit_run_binding_shape`` refuses any other shape). The wait is over, so it is cleared with it.
+_BIND_RUN = text(
+    "UPDATE audit_run SET connection_revision_id = :revision_id, binding_state = 'bound', "
+    "wait_reason = NULL, waiting_since = NULL, updated_at = statement_timestamp() "
+    "WHERE run_id = :run_id AND binding_state = 'pending' AND connection_revision_id IS NULL"
+)
+#: Durable waiting (decision 15). ``wait_reason`` is written only when it changes -- ``waiting_since`` is when the Run began
+#: waiting for *this* reason, so an unchanged reason keeps its clock -- and is cleared (NULL, NULL) when nothing holds the
+#: Run back. Only a Run still ``pending`` and ``queued``; the pair CHECK holds the two columns together.
+_WRITE_WAIT = text(
+    "UPDATE audit_run SET wait_reason = CAST(:reason AS text), "
+    "waiting_since = CASE WHEN CAST(:reason AS text) IS NULL THEN NULL ELSE statement_timestamp() END "
+    "WHERE run_id = :run_id AND binding_state = 'pending' AND state = 'queued' "
+    "AND wait_reason IS DISTINCT FROM CAST(:reason AS text)"
+)
+#: The pending Runs the sweep looks at, oldest first, one page at a time. The page is a **keyset** over ``(created_at, run_id)``
+#: -- the order and the columns of ``ix_audit_run_pending`` -- so the sweep can walk every pending Run in one pass, however many
+#: there are, and no Run stays hidden behind the first ``batch_size``. ``wait_reason`` here is the reading that picks the
+#: candidates; what a write or an end decides on is read again under the Run's lock (:data:`_LOCK_PENDING_RUN`).
+_PENDING_RUNS = text(
+    "SELECT r.run_id, r.executor_group_revision_id AS group_revision_id, r.created_at, r.wait_reason "
+    "FROM audit_run r JOIN job j ON j.run_id = r.run_id "
+    "WHERE r.binding_state = 'pending' AND r.state = 'queued' AND j.state = 'queued' "
+    "AND (CAST(:after_run_id AS text) IS NULL "
+    "OR (r.created_at, r.run_id) > (CAST(:after_created_at AS timestamptz), CAST(:after_run_id AS text))) "
+    "ORDER BY r.created_at, r.run_id LIMIT :batch_size"
+)
+#: The Run's lock, taken ``SKIP LOCKED`` so a claim in flight is not waited for, answers what the Run holds **now**:
+#: its reason, since when, and -- computed on database time from those two locked values -- whether it has waited for
+#: that reason longer than ``:offline_seconds``. The offline expiry is decided from this row and from nothing read before
+#: the lock: a claim or an earlier sweep may have changed the wait in between.
+_LOCK_PENDING_RUN = text(
+    "SELECT run_id, wait_reason, waiting_since, "
+    "(waiting_since IS NOT NULL "
+    "AND waiting_since <= statement_timestamp() - make_interval(secs => :offline_seconds)) AS wait_expired "
+    "FROM audit_run WHERE run_id = :run_id AND binding_state = 'pending' AND state = 'queued' "
+    "FOR UPDATE SKIP LOCKED"
+)
+#: `EXEC2-CAP-01` (ADR-0026 decision 1). How many **units** of the connection are in use, and how many it
+#: has. A unit is an active Run other than the one being claimed (the Job states of
+#: :data:`_ACTIVE_JOB_STATES`) or -- `CMP-SPEND-01` (ADR-0025 decision 4; the grant of the PROD-20 owner) --
+#: an active **comparison model call**: a ``prepared`` or ``sent`` row of ``comparison_model_call`` whose
+#: attempt still holds its work item (a killed worker's call stays active until the queue's reclaim ends the
+#: attempt, the same rule as a Run's expired Lease). Each counts one. The capacity is ``max_active_runs`` of
+#: the connection's **current** revision (the highest ``revision_no``), and one when that is NULL (a revision
+#: written before the setting) or the connection has no revision, so a connection nobody configured is
+#: decided exactly as it was: busy with one unit. The comparison wrapper takes the same advisory lock
+#: (:data:`_LOCK_CONNECTION`) before it prepares a call and asks the mirror of this question, so a Run's claim
+#: and a comparison call never both pass their check on the last unit. The comparison table is empty while no
+#: comparison module is on, so a plain Run is decided by the first count alone.
+_CONNECTION_UNITS = text(
+    "SELECT ((SELECT count(*) FROM job other_job "
     "JOIN audit_run other ON other.run_id = other_job.run_id "
     "JOIN executor_connection_revision peer ON peer.revision_id = other.connection_revision_id "
     "WHERE peer.connection_id = :connection_id AND other.run_id <> :run_id "
     f"AND other_job.state IN {_ACTIVE_JOB_STATES}) "
-    "OR EXISTS (SELECT 1 FROM comparison_model_call active_call "
+    "+ (SELECT count(*) FROM comparison_model_call active_call "
     "JOIN comparison_work_attempt active_attempt "
     "ON active_attempt.comparison_work_attempt_id = active_call.comparison_work_attempt_id "
     "JOIN executor_connection_revision call_peer "
     "ON call_peer.revision_id = active_call.connection_revision_id "
     "WHERE call_peer.connection_id = :connection_id "
     "AND active_call.state IN ('prepared', 'sent') "
-    "AND active_attempt.state IN ('created', 'leased', 'running'))"
+    "AND active_attempt.state IN ('created', 'leased', 'running'))) AS units_in_use, "
+    "COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
+    "WHERE current_revision.connection_id = :connection_id "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1) AS capacity"
 )
 #: The dispatcher's hint. ``:submitted`` is the Runs this process has already handed to a slot:
-#: they are not offered again, and their connections count as held, because a slot that has not
-#: claimed yet has not written its Job state. The hint is advisory -- the claim re-checks under the
-#: lock -- but it is what keeps a slot from being spent on a Run whose connection is busy: the next
-#: Job for a free connection is the one returned.
+#: they are not offered again, and they count as held units of their connections, because a slot that has
+#: not claimed yet has not written its Job state. The hint is advisory -- the claim re-checks under the
+#: lock -- but it is what keeps a slot from being spent on a Run whose connection is full: the next Job for
+#: a connection with a free unit is the one returned.
+#:
+#: `EXEC2-CAP-01`: the test is "units held < capacity" (``max_active_runs`` of the connection's current
+#: revision, one when absent), where it was "nothing held". ``held`` names each held *Run* (an active Job, or
+#: a submitted Run), once -- ``UNION`` removes a submitted Run whose Job is already active -- and ``loaded``
+#: counts them per connection. The hint counts Runs only, as it always did; the claim also counts the
+#: connection's active comparison calls, so at worst the hint offers a Run the claim then refuses.
+#:
+#: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 14 and 15). A **pending** Run (admitted on a group, no connection yet: its revision is
+#: NULL, which for the old test below would read "never limited") is offered only when **nothing holds it back** -- its
+#: ``wait_reason`` is NULL -- and its group revision has a member with a free unit, the same "units held < capacity" test, per
+#: member, over the same ``loaded`` count. That second clause is coarse on purpose: it looks at units only, not at whether the
+#: member is online, current, served or probed, which is the claim's business under the locks.
+#:
+#: The first clause is what keeps a Run the claim will refuse from being offered again and again. A group whose only member
+#: with a free unit is offline passes the unit test every poll; offering such a Run on every poll, with the claim refusing it
+#: every time, would hold the head of the queue and starve every other Run and every comparison item behind it. So a Run is
+#: offered **once**: a freshly admitted Run has no reason yet, the claim that refuses it stores one (``executor_at_capacity``,
+#: ``runner_offline`` or ``needs_reconsent``; the carrier writes it in a transaction of its own after the refusal), and from
+#: then on the Run is not offered until the sweep (:meth:`JobRepository.refresh_group_waits`) has seen a member that can take
+#: it -- eligible in every respect *and* with a free unit -- and cleared the reason. The cost is at most one sweep interval
+#: of delay between a unit freeing and the Run being offered. The test is advisory like the rest: the claim decides under
+#: the group and member locks, and Runs this process has submitted but not yet claimed do not count against a group (they
+#: have no connection until they bind), so a hint may offer two Runs for one free unit and the second claim loses cleanly.
+#:
+#: ``:dispatch_groups`` is false for a process whose provider source is not ``database`` (`ADR-0026` decision 12: the
+#: ``environment`` source never runs a ``pending`` Run, because it has no connection to bind one to). It is then offered
+#: no pending Run at all. Every other Run keeps the old shape, to the clause.
 #:
 #: ``held`` is built from the few active Jobs (the ``ix_job_dispatch`` prefix on ``state``) and the
 #: few submitted Runs, never from the history of a connection's Runs: written as a correlated
@@ -93,22 +192,41 @@ _CONNECTION_HAS_OTHER_ACTIVE_RUN = text(
 #: (5703 buffers against 10, 13.9 ms against 0.1 ms on 20 000 Runs), and that grows with the history.
 _NEXT_JOB = text(
     "WITH held AS ("
-    "SELECT rev.connection_id FROM job active_job "
+    "SELECT rev.connection_id, active_job.run_id FROM job active_job "
     "JOIN audit_run active_run ON active_run.run_id = active_job.run_id "
     "JOIN executor_connection_revision rev ON rev.revision_id = active_run.connection_revision_id "
     f"WHERE active_job.state IN {_ACTIVE_JOB_STATES} "
     "UNION "
-    "SELECT rev.connection_id FROM audit_run submitted_run "
+    "SELECT rev.connection_id, submitted_run.run_id FROM audit_run submitted_run "
     "JOIN executor_connection_revision rev ON rev.revision_id = submitted_run.connection_revision_id "
-    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[]))) "
+    "WHERE submitted_run.run_id = ANY (CAST(:submitted AS text[]))), "
+    "loaded AS (SELECT connection_id, count(*) AS units FROM held GROUP BY connection_id) "
     "SELECT j.run_id FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "WHERE j.state = 'queued' AND r.state IN ('queued', 'running') "
     "AND j.available_at <= statement_timestamp() "
     "AND NOT EXISTS (SELECT 1 FROM execution_control WHERE singleton AND paused) "
     "AND j.run_id <> ALL (CAST(:submitted AS text[])) "
-    "AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
-    "JOIN held ON held.connection_id = mine.connection_id "
-    "WHERE mine.revision_id = r.connection_revision_id) "
+    "AND ("
+    # frozen_at_start and bound: the connection test, exactly as it was (a NULL revision is the environment source).
+    "(r.binding_state <> 'pending' AND NOT EXISTS (SELECT 1 FROM executor_connection_revision mine "
+    "JOIN loaded ON loaded.connection_id = mine.connection_id "
+    "WHERE mine.revision_id = r.connection_revision_id "
+    "AND loaded.units >= COALESCE((SELECT current_revision.max_active_runs "
+    "FROM executor_connection_revision current_revision "
+    "WHERE current_revision.connection_id = mine.connection_id "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1))) "
+    # pending: only when this process dispatches groups, nothing holds the Run back (no stored reason: a Run the claim
+    # refused has one, and the sweep clears it when a member could take the Run) and some member of its group revision has
+    # a free unit; the claim decides everything else under its locks.
+    "OR (r.binding_state = 'pending' "
+    "AND CAST(:dispatch_groups AS boolean) "
+    "AND r.wait_reason IS NULL "
+    "AND EXISTS (SELECT 1 FROM executor_group_member group_member "
+    "WHERE group_member.group_revision_id = r.executor_group_revision_id "
+    "AND COALESCE((SELECT loaded.units FROM loaded WHERE loaded.connection_id = group_member.connection_id), 0) "
+    "< COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
+    "WHERE current_revision.connection_id = group_member.connection_id "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1)))) "
     "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1 "
     "FOR UPDATE OF r SKIP LOCKED"
 )
@@ -478,6 +596,91 @@ class ExecutionNotClaimed(DomainError):
     __slots__ = ()
 
 
+class GroupDispatchWaiting(ExecutionNotClaimed):
+    """The claim of a Run admitted on a group found no member to bind it to, and says why (`EXEC2-GROUP-RUN-01`).
+
+    It is an :class:`ExecutionNotClaimed`: nothing was written, no Attempt, Lease or binding exists, and the Run and its
+    Job stay as the claim found them. ``wait_reason`` is the controlled word (``executor_at_capacity``,
+    ``runner_offline`` or ``needs_reconsent``) a carrier hands to :meth:`JobRepository.record_group_wait` **in a
+    transaction of its own**, so the wait is durable although this claim's transaction is rolled back (ADR-0026
+    decision 15). Its code and details are those of any other lost claim.
+    """
+
+    __slots__ = ("wait_reason",)
+
+    def __init__(self, wait_reason: str) -> None:
+        super().__init__(
+            ErrorCode.CONFLICT,
+            message="the run's executor group has no member that can take it now",
+            aggregate_type="ExecutorGroup",
+        )
+        self.wait_reason = wait_reason
+
+
+@dataclass(frozen=True, slots=True)
+class _Dispatch:
+    """The member a pending Run is bound to: decided under the group and connection locks, written once."""
+
+    group_id: str
+    connection_id: str
+    connection_revision_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class GroupWaits:
+    """What one pass of :meth:`JobRepository.refresh_group_waits` did: waits written or cleared, Runs ended.
+
+    ``expired`` is the Runs ended ``no_executor_online`` (every member offline for too long); ``consent_lapsed`` is the Runs ended
+    because the cost consent they were accepted under no longer holds (``cost_estimate_binding_changed``)."""
+
+    updated: int = 0
+    expired: int = 0
+    consent_lapsed: int = 0
+
+
+#: The words of ``RunQueueReason`` the dispatcher stores. ``executor_at_capacity`` and ``runner_offline`` are the two
+#: ``RUN_QUEUE_REASONS`` of ``EXEC2-CAP-01``; ``needs_reconsent`` is the third.
+WAIT_AT_CAPACITY = "executor_at_capacity"
+WAIT_RUNNER_OFFLINE = "runner_offline"
+WAIT_NEEDS_RECONSENT = "needs_reconsent"
+#: The first reason ``member_issue`` gives for a member that passed every test but has no free unit (the words of
+#: ``ExecutorGroupMemberIssue``; ``executors.group_selection`` holds them).
+_ISSUE_AT_CAPACITY = "at_capacity"
+
+#: `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS` (ADR-0026 decision 15, `R-149c`): how long a pending Run whose members are
+#: all offline waits before it ends ``no_executor_online``. Thirty minutes unless set. A whole number of seconds, written
+#: plainly; anything else is refused, never clamped.
+GROUP_OFFLINE_WAIT_ENV = "AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS"
+DEFAULT_GROUP_OFFLINE_WAIT_SECONDS = 1800
+MAX_GROUP_OFFLINE_WAIT_SECONDS = 7 * 24 * 3600
+#: How many pending Runs the sweep reads per page. A pass walks every pending Run, page after page (keyset on
+#: ``(created_at, run_id)``), so this bounds one read and never the number of Runs a pass looks at.
+GROUP_WAIT_BATCH = 200
+#: Why a Run whose cost consent no longer holds ends, in the words of the catalogue that already carries it: the Run path's own
+#: refusal for an approved estimate whose binding has changed (``analysis.text.cost.require_approved_model``,
+#: ``runs.cost_policy``) -- ``analysis_input_invalid`` with ``stage_id: text_analysis`` and this ``reason``. No code is added.
+CONSENT_LAPSED_REASON = "cost_estimate_binding_changed"
+
+
+def _group_wait_reason(issues: Sequence[str | None]) -> str | None:
+    """Why a pending Run cannot be dispatched now, from the first issue of each member of its group revision.
+
+    ``None`` when some member has no issue at all: it can take the Run. ``at_capacity`` is the last test of
+    ``member_issue``, so a member with no issue is eligible in every respect (current, not archived, served, probed, a
+    runner online) **and** has a free unit; a member that is only free (offline, say) or only eligible (full) does not
+    clear a Run's wait. Otherwise a member whose only issue is
+    ``at_capacity`` has passed every other test -- it is current, served, probed and online -- so the Run waits for
+    **capacity**, which is unbounded (decision 15). When no member got that far, no member is online and serving: the Run
+    waits for a **runner** (``runner_offline``), the reason the offline expiry applies to. That includes a group whose
+    members were all revised, archived or un-probed since admission -- none of them can take the Run, which for the
+    waiting Run is the same as having no executor online."""
+    if any(issue is None for issue in issues):
+        return None
+    if any(issue == _ISSUE_AT_CAPACITY for issue in issues):
+        return WAIT_AT_CAPACITY
+    return WAIT_RUNNER_OFFLINE
+
+
 @dataclass(frozen=True, slots=True)
 class AttemptAuthority:
     run_id: str
@@ -592,12 +795,20 @@ class JobRepository:
     #: extension together without a second code path.
     lease_seconds: float = 60.0
 
-    def __init__(self, *, worker_id: str | None = None) -> None:
+    def __init__(self, *, worker_id: str | None = None, dispatch_groups: bool = True) -> None:
         self._worker_id = worker_id
+        #: `EXEC2-GROUP-RUN-01` (ADR-0026 decision 12): ``True`` when this process serves the ``database`` provider source, the
+        #: only one that can bind a Run admitted on a group to a connection. The composition root sets it; ``False`` makes the
+        #: hint offer no ``pending`` Run and the claim refuse one before it writes anything.
+        self._dispatch_groups = dispatch_groups
 
     @property
     def worker_id(self) -> str | None:
         return self._worker_id
+
+    @property
+    def dispatch_groups(self) -> bool:
+        return self._dispatch_groups
 
     def enqueue(self, session: Session, *, run_id: str) -> str:
         """Create the durable Job in the accepting transaction and wake the workers."""
@@ -639,8 +850,15 @@ class JobRepository:
         returned instead. ``submitted`` names Runs the caller has handed to a slot and that may
         not have claimed yet: they are neither offered again nor ignored as busy connections.
         Without a connection, or with the default single slot, the order is today's.
+
+        `EXEC2-GROUP-RUN-01`. A Run admitted on a group (``pending``) is offered only while nothing holds it back -- no stored
+        wait reason -- and its group has a member with a free unit, and never by a repository built with
+        ``dispatch_groups=False`` (:data:`_NEXT_JOB` explains why). A Run the claim refused carries a reason from then on, so
+        one Run that no member can take is offered once and does not hold the queue.
         """
-        return session.execute(_NEXT_JOB, {"submitted": list(submitted)}).scalar_one_or_none()
+        return session.execute(
+            _NEXT_JOB, {"submitted": list(submitted), "dispatch_groups": self._dispatch_groups},
+        ).scalar_one_or_none()
 
     def heartbeat(self, session: Session, authority: AttemptAuthority) -> bool:
         """Extend only a live lease, with database time and a bounded lock wait."""
@@ -858,6 +1076,21 @@ class JobRepository:
             ) from refusal
 
     def _claim(self, session: Session, *, run_id: str) -> AttemptAuthority:
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 14). Whether the Run's executor was frozen at start decides which
+        # lock path is taken, so it is read first -- a plain read, no lock. A Run admitted on a group and not yet bound
+        # (`pending`) takes the dispatch path below; every other Run takes the connection path it always took.
+        pending_revision = self._pending_group_revision(session, run_id=run_id)
+        if pending_revision is not None and not self._dispatch_groups:
+            # A process that does not serve the `database` provider source cannot bind a member (decision 12): the
+            # `environment` source would run the Run on its own adapter, or fail it `executor_route_missing` after the claim
+            # had bound it. Refused before any lock and any write, so the Run and its Job stay exactly as they are for a
+            # worker that can dispatch it. An ordinary refusal: it carries no wait reason, because the Run waits for nothing
+            # the dispatcher could name and no one's sweep would ever clear.
+            raise DomainError(
+                ErrorCode.CONFLICT,
+                message="this process does not dispatch runs admitted on an executor group",
+                aggregate_type="ExecutorGroup",
+            )
         if self._worker_id is not None:
             # R-105. A registered worker claims only while its intake is on. FOR SHARE
             # serialises the claim with `setWorkerIntake`'s row lock, so a switch that
@@ -875,7 +1108,15 @@ class JobRepository:
                     ErrorCode.CONFLICT, message="the worker's intake is switched off",
                     aggregate_type="Worker",
                 )
-        self._hold_connection_limit(session, run_id=run_id)
+        # The dispatch path takes the group row, then every member connection, ascending, and chooses a member under those
+        # locks; the connection path takes the connection's lock. Both precede the control row.
+        dispatch: _Dispatch | None = None
+        if pending_revision is None:
+            self._hold_connection_limit(session, run_id=run_id)
+        else:
+            dispatch = self._select_member(
+                session, run_id=run_id, group_revision_id=pending_revision,
+            )
         # The singleton must exist before it can be locked. Its insert races with
         # an administrator's upsert safely: whichever transaction commits first
         # is observed by the other before a new Attempt can be created.
@@ -889,6 +1130,10 @@ class JobRepository:
         run_state = session.execute(_LOCK_RUN, {"run_id": run_id}).scalar_one_or_none()
         if run_state not in ("queued", "running"):
             raise self._transition_error("audit_run", str(run_state), "running")
+        if pending_revision is not None:
+            # Read under the Run lock: a concurrent claim of this very Run that bound it first leaves it `bound`, and
+            # this one must lose -- a Run is bound once.
+            self._require_still_pending(session, run_id=run_id, group_revision_id=pending_revision)
         job = session.execute(_LOCK_JOB, {"run_id": run_id}).mappings().first()
         if job is None:
             # Direct execute_run callers can enqueue a queued Run without the
@@ -905,6 +1150,10 @@ class JobRepository:
             job_id = str(job["job_id"])
             if job["state"] != "queued":
                 raise self._transition_error("job", str(job["state"]), "leased")
+        if dispatch is not None:
+            # Every lock is held and every check has passed: write the binding (once), advance the group's rotation and
+            # journal the dispatch. Model I/O starts only after the caller commits this transaction.
+            self._bind(session, run_id=run_id, dispatch=dispatch)
         attempt_id = str(AttemptId.new())
         lease_id = str(LeaseId.new())
         try:
@@ -953,20 +1202,29 @@ class JobRepository:
 
     @staticmethod
     def _hold_connection_limit(session: Session, *, run_id: str) -> None:
-        """One active Run per connection, decided under a lock the claim keeps to its commit.
+        """No more units in use per connection than its capacity, decided under a lock the claim keeps.
 
-        `EXEC-PAR-QUEUE-01`. Take the connection's advisory lock, then ask whether another Run
-        of that connection is active (:data:`_ACTIVE_JOB_STATES`). Two claims of one connection
-        queue on the lock, and the second reads the first's committed Job state; a claim that
-        finds the connection busy raises before it has written anything, so its Run and Job
-        stay as the caller found them (:class:`ExecutionNotClaimed`).
+        `EXEC-PAR-QUEUE-01`, widened by `EXEC2-CAP-01` (ADR-0026 decision 1). Take the connection's advisory
+        lock, then count the units in use other than this Run (:data:`_CONNECTION_UNITS`) and compare them
+        with the capacity of the connection's current revision. Two claims of one connection queue on the
+        lock, and the second reads the first's committed Job state, so with one unit left exactly one of them
+        wins; a claim that finds the connection full raises before it has written anything, so its Run and
+        Job stay as the caller found them (:class:`ExecutionNotClaimed`). With the default capacity of one
+        this is the old "another Run or call is active" check, to the row.
+
+        A lowered capacity governs new claims only: a Run already active keeps its unit and is never
+        stopped, and the count simply stays at or above the new capacity until enough of them end.
 
         This is taken and decided **before** the dispatch-control row is locked. That row's lock
         also happens to serialise every claim, but the connection limit must not depend on a
         lock taken for another purpose: ahead of it the limit is decided by its own lock alone,
         and removing that lock lets two claims both pass the check. Every claim takes the locks
         in one order (worker intake, connection, control, Run, Job), so none waits in a cycle.
-        A Run without a connection takes no lock and is never limited.
+        A Run without a connection takes no lock and no unit and is never limited. That is the ``environment``
+        source -- a Run whose ``binding_state`` is ``frozen_at_start`` and whose connection revision is NULL
+        (`EXEC2-GROUP-RUN-01`, premise P-02). A NULL revision is *also* what a ``pending`` Run has, and that Run must
+        never be read as unlimited: :meth:`_claim` sends it down the dispatch path (:meth:`_select_member`) before this
+        method is reached, so only a ``frozen_at_start`` or a ``bound`` Run (whose revision is set) arrives here.
         """
         connection_id = session.execute(
             _CONNECTION_OF_RUN, {"run_id": run_id}
@@ -974,15 +1232,264 @@ class JobRepository:
         if connection_id is None:
             return
         session.execute(_LOCK_CONNECTION, {"connection_id": connection_id})
-        if session.execute(
-            _CONNECTION_HAS_OTHER_ACTIVE_RUN,
-            {"connection_id": connection_id, "run_id": run_id},
-        ).scalar_one():
+        units_in_use, capacity = session.execute(
+            _CONNECTION_UNITS, {"connection_id": connection_id, "run_id": run_id},
+        ).one()
+        if units_in_use >= capacity:
             raise DomainError(
                 ErrorCode.CONFLICT,
-                message="the run's executor connection already has an active run",
+                message="the run's executor connection has no free capacity unit",
                 aggregate_type="ExecutorConnection",
             )
+
+    # --- dispatch of a Run admitted on a group (`EXEC2-GROUP-RUN-01`, ADR-0026 decisions 12 to 16) ---------------------
+
+    @staticmethod
+    def _pending_group_revision(session: Session, *, run_id: str) -> str | None:
+        """The group revision a ``pending`` Run was admitted on, or ``None`` for any other Run.
+
+        ``None`` is what a Run whose executor was frozen at start (an explicit connection, a preset, the route, the
+        ``environment`` source) answers, and what a ``bound`` Run answers: both go on to the connection path, and a bound
+        Run's retry therefore stays on the member it was bound to (decision 16). An unlocked read; the claim reads it
+        again under the Run lock."""
+        row = session.execute(_CLAIM_BINDING, {"run_id": run_id}).first()
+        if row is None or row[0] != "pending":
+            return None
+        if row[1] is None:  # the database's shape check forbids it; a Run that says otherwise is not dispatched
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="a pending run has no group revision")
+        return str(row[1])
+
+    @staticmethod
+    def _require_still_pending(session: Session, *, run_id: str, group_revision_id: str) -> None:
+        row = session.execute(_RUN_BINDING, {"run_id": run_id}).first()
+        if row is None or row[0] != "pending" or row[1] != group_revision_id or row[2] is not None:
+            raise JobRepository._transition_error(
+                "binding_state", "bound" if row is not None and row[0] == "bound" else "unknown", "bound",
+            )
+
+    def _select_member(
+        self, session: Session, *, run_id: str, group_revision_id: str,
+    ) -> _Dispatch:
+        """Choose the member a pending Run is bound to, under the locks of decision 14, or say why none can take it.
+
+        **Lock order** (the order of every claim, so none waits in a cycle): worker intake (taken by the caller), the
+        group's row, the member connections' advisory locks in ascending ``connection_id`` -- the very lock the connection
+        path and the comparison call preparation take, so a Run bound here and a Run or call counted there never both
+        take the last unit -- then, back in :meth:`_claim`, the control row, the Run and the Job. Nothing is written
+        until the caller binds: a claim that finds no member raises :class:`GroupDispatchWaiting` having written nothing.
+
+        **Eligibility** is what ``executors.public.member_facts`` and ``member_issue`` say, read *after* the locks: the
+        member's current revision is the one the group revision snapshots (a member revised since is ineligible and is
+        never adopted), it is not archived, this release serves it, its current key has an ``ok`` probe, a ``pull``
+        runner is online, and it has a free unit under decision 1. **Selection** is ``choose``: the lowest
+        ``used / capacity``, ties broken by the group's persisted rotation, which the bind advances.
+
+        **Consent** is re-checked under those locks, before any member is read
+        (:func:`~auditmanager.runs.cost_policy.group_consent_holds`): the rates of a group revision are an immutable
+        snapshot, so what can have changed is whether the approved estimate still holds. If it does not, nothing is bound
+        and nothing is called -- ``needs_reconsent``.
+        """
+        from auditmanager.executors.public import choose, group_revision_of, member_facts, member_issue
+        from auditmanager.runs.public import group_consent_holds
+
+        revision = group_revision_of(session, group_revision_id)
+        if revision is None:
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="the run's group revision is missing")
+        rotation = session.execute(_LOCK_GROUP, {"group_id": revision.group_id}).scalar_one_or_none()
+        if rotation is None:
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="the run's group is missing")
+        for connection_id in sorted({member.connection_id for member in revision.members}):
+            session.execute(_LOCK_CONNECTION, {"connection_id": connection_id})
+        if not group_consent_holds(
+            session, run_id=run_id, group_revision_id=group_revision_id, pin_id=revision.pin_id,
+            billing="unmetered" if revision.billing == "not_metered" else "metered",
+        ):
+            raise GroupDispatchWaiting(WAIT_NEEDS_RECONSENT)
+        facts = member_facts(session, revision)
+        issues = [member_issue(fact) for fact in facts]
+        candidates = [fact for fact, issue in zip(facts, issues, strict=True)
+                      if issue is None or issue == _ISSUE_AT_CAPACITY]
+        chosen = choose(
+            [fact.as_member() for fact in candidates],
+            {fact.connection_id: fact.used for fact in candidates},
+            {fact.connection_id: fact.capacity for fact in candidates},
+            int(rotation),
+        )
+        if chosen is None:
+            reason = _group_wait_reason(issues)
+            if reason is None:  # a member with no issue has a free unit, so `choose` cannot have declined it
+                raise DomainError(ErrorCode.INTERNAL_ERROR, message="no member chosen though one is eligible")
+            raise GroupDispatchWaiting(reason)
+        member = next(item for item in revision.members if item.connection_id == chosen)
+        return _Dispatch(revision.group_id, chosen, member.connection_revision_id)
+
+    def _bind(self, session: Session, *, run_id: str, dispatch: _Dispatch) -> None:
+        """Write the binding, once, and journal it. The caller holds the Run, the Job, the group and the member locks.
+
+        ``connection_revision_id`` goes NULL -> the member's revision together with ``binding_state`` ``pending`` ->
+        ``bound`` in one statement; the database allows exactly that and only to a member of the Run's group revision, so
+        a second write, a write to another connection and a write that leaves the Run ``pending`` are all refused by it.
+        One ``executor.``-prefixed event carries identities and controlled words only (`jobs.events`'s allowlist)."""
+        from auditmanager.executors.public import advance_group_rotation
+
+        changed = session.execute(
+            _BIND_RUN, {"run_id": run_id, "revision_id": dispatch.connection_revision_id},
+        ).rowcount
+        if changed != 1:
+            raise self._transition_error("binding_state", "pending", "bound")
+        advance_group_rotation(session, dispatch.group_id)
+        append_execution_event(
+            session, event_type="executor.run_dispatched", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={
+                "connection_id": dispatch.connection_id, "revision_id": dispatch.connection_revision_id,
+                "work_kind": "text_analysis", "from_state": "pending", "to_state": "bound",
+                "reason": "least_loaded",
+            },
+        )
+
+    # --- waiting is durable and visible (ADR-0026 decision 15) ----------------------------------------------------
+
+    @staticmethod
+    def group_offline_wait_seconds(environ: Mapping[str, str] | None = None) -> int:
+        """:data:`GROUP_OFFLINE_WAIT_ENV`: unset is :data:`DEFAULT_GROUP_OFFLINE_WAIT_SECONDS`; anything else must be a
+        whole number of seconds, written plainly (blank included, no sign, no fraction, no exponent), from one second to
+        a week. A bad value raises ``ValueError`` -- it is never clamped to the default, which would make the wait
+        something nobody wrote."""
+        source = os.environ if environ is None else environ
+        if GROUP_OFFLINE_WAIT_ENV not in source:
+            return DEFAULT_GROUP_OFFLINE_WAIT_SECONDS
+        raw = source[GROUP_OFFLINE_WAIT_ENV].strip()
+        if not raw.isascii() or not raw.isdigit():
+            raise ValueError(
+                f"{GROUP_OFFLINE_WAIT_ENV} is {raw!r}; it is a whole number of seconds, written plainly")
+        value = int(raw)
+        if not 1 <= value <= MAX_GROUP_OFFLINE_WAIT_SECONDS:
+            raise ValueError(
+                f"{GROUP_OFFLINE_WAIT_ENV} is {value}; it must be between 1 and {MAX_GROUP_OFFLINE_WAIT_SECONDS}")
+        return value
+
+    def record_group_wait(self, session: Session, *, run_id: str, reason: str | None) -> bool:
+        """Store why a ``pending`` Run is not dispatched, or clear it (``reason=None``). ``True`` when a row changed.
+
+        Idempotent: the same reason again writes nothing and keeps ``waiting_since``, which is when the Run began waiting
+        for *this* reason; another reason restarts that clock. Called by a carrier **after** a
+        :class:`GroupDispatchWaiting` refusal, in a transaction of its own, and by the sweep. A Run that is no longer
+        ``pending`` and ``queued`` is left alone."""
+        if reason is not None and reason not in (WAIT_AT_CAPACITY, WAIT_RUNNER_OFFLINE, WAIT_NEEDS_RECONSENT):
+            raise ValueError("a wait reason is one of the words of RunQueueReason")
+        return session.execute(_WRITE_WAIT, {"run_id": run_id, "reason": reason}).rowcount == 1
+
+    def refresh_group_waits(
+        self, session: Session, *, offline_wait_seconds: float | None = None, batch_size: int = GROUP_WAIT_BATCH,
+    ) -> GroupWaits:
+        """Keep the wait of every ``pending`` Run true, and end the ones nobody can serve any more.
+
+        One pass walks **every** pending, queued Run, oldest first, ``batch_size`` of them per read (a keyset on
+        ``(created_at, run_id)``, so no Run stays hidden behind the first page). For each, the group revision's members are
+        read now and the reason the Run waits is stored:
+
+        * ``needs_reconsent`` is not stored: a Run has no way to renew its consent, so a Run whose consent no longer holds
+          **ends** (:meth:`_end_consent_lapsed`) -- ``analysis_input_invalid``, ``cost_estimate_binding_changed`` -- and the
+          user starts again with a fresh consent;
+        * otherwise the reason is ``executor_at_capacity`` or ``runner_offline``, or **none**: the reason is cleared only when
+          some member has no issue at all, that is, is eligible in every respect *and* has a free unit
+          (:func:`_group_wait_reason`). A Run any member could take is then offered by the hint; every other Run keeps or gets
+          a reason and is not.
+
+        A Run that has waited for ``runner_offline`` for longer than ``offline_wait_seconds`` (default:
+        :meth:`group_offline_wait_seconds`) **ends** too: ``no_executor_online``, through the terminal path of the existing
+        recovery (the Job is closed, the Run fails). Waiting for capacity never expires.
+
+        A Run is locked (``SKIP LOCKED``, so a claim in flight is not waited for) only when there is something to write or to
+        end, and what is decided is decided on the **locked** row: its reason and the time it has waited for it are read
+        again under the lock, never taken from the page that named the Run. Read-only toward connections: no group or
+        connection lock is taken, because nothing is bound here. The caller commits. Runs in the same group revision share one
+        reading of its members."""
+        from auditmanager.executors.public import group_revision_of, member_facts, member_issue
+        from auditmanager.runs.public import group_consent_holds
+
+        limit = float(self.group_offline_wait_seconds() if offline_wait_seconds is None else offline_wait_seconds)
+        if batch_size < 1:
+            raise ValueError("a page of pending runs holds at least one")
+        readings: dict[str, tuple[Any, list[str | None]]] = {}
+        updated = expired = lapsed = 0
+        after_created_at: Any = None
+        after_run_id: str | None = None
+        while True:
+            page = session.execute(_PENDING_RUNS, {
+                "batch_size": batch_size, "after_created_at": after_created_at, "after_run_id": after_run_id,
+            }).mappings().all()
+            for row in page:
+                run_id = str(row["run_id"])
+                after_created_at, after_run_id = row["created_at"], run_id
+                group_revision_id = str(row["group_revision_id"])
+                if group_revision_id not in readings:
+                    revision = group_revision_of(session, group_revision_id)
+                    if revision is None:
+                        continue
+                    readings[group_revision_id] = (
+                        revision, [member_issue(fact) for fact in member_facts(session, revision)])
+                revision, issues = readings[group_revision_id]
+                consent_holds = group_consent_holds(
+                    session, run_id=run_id, group_revision_id=group_revision_id, pin_id=revision.pin_id,
+                    billing="unmetered" if revision.billing == "not_metered" else "metered",
+                )
+                reason = _group_wait_reason(issues) if consent_holds else None
+                if consent_holds and reason == row["wait_reason"] and reason != WAIT_RUNNER_OFFLINE:
+                    continue  # nothing to write and nothing that can end: no lock is held for it
+                locked = session.execute(
+                    _LOCK_PENDING_RUN, {"run_id": run_id, "offline_seconds": limit},
+                ).mappings().first()
+                if locked is None:
+                    continue
+                if not consent_holds:
+                    self._end_consent_lapsed(session, run_id=run_id)
+                    lapsed += 1
+                    continue
+                if reason == WAIT_RUNNER_OFFLINE and locked["wait_reason"] == WAIT_RUNNER_OFFLINE and locked["wait_expired"]:
+                    self._end_without_executor(session, run_id=run_id)
+                    expired += 1
+                    continue
+                if self.record_group_wait(session, run_id=run_id, reason=reason):
+                    updated += 1
+            if len(page) < batch_size:
+                return GroupWaits(updated=updated, expired=expired, consent_lapsed=lapsed)
+
+    def _end_without_executor(self, session: Session, *, run_id: str) -> None:
+        """End a ``pending`` Run that waited for a runner longer than allowed: ``no_executor_online``.
+
+        The existing terminal path, in lock order (Run, then Job): the queued Job is closed exactly as a failed Run's
+        is, and the Run fails with ``dependency_unavailable`` and ``dependency: no_executor_online`` -- the controlled
+        word a pull task nobody claimed already carries. No model was called and nothing was charged."""
+        from auditmanager.runs.public import fail_run_without_executor
+
+        self._close_for_run(session, run_id=run_id, target="failed")
+        fail_run_without_executor(session, run_id=run_id, from_state="queued")
+        append_execution_event(
+            session, event_type="executor.group_wait_expired", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={"work_kind": "text_analysis", "reason": "no_executor_online"},
+        )
+
+    def _end_consent_lapsed(self, session: Session, *, run_id: str) -> None:
+        """End a ``pending`` Run whose cost consent no longer holds: ``analysis_input_invalid``, ``cost_estimate_binding_changed``.
+
+        A Run has no operation that renews its consent (a comparison job has one), so a Run left in ``needs_reconsent`` would
+        stay queued for ever with nothing to tell its owner why. It ends instead, through the same terminal path as the
+        offline expiry (the queued Job is closed, the Run fails, the wait is cleared) and with the refusal the Run path already
+        raises for an approved estimate whose binding has changed (:data:`CONSENT_LAPSED_REASON`): the consent was given for a
+        group revision, model, billing and rate that are no longer the ones the Run would be dispatched with. No model was
+        called and nothing was charged; the user starts the work again and consents afresh."""
+        from auditmanager.runs.public import fail_run_consent_lapsed
+
+        self._close_for_run(session, run_id=run_id, target="failed")
+        fail_run_consent_lapsed(session, run_id=run_id, from_state="queued")
+        append_execution_event(
+            session, event_type="executor.group_consent_lapsed", aggregate_type="AuditRun",
+            aggregate_id=run_id, run_id=run_id,
+            payload={"work_kind": "text_analysis", "reason": CONSENT_LAPSED_REASON},
+        )
 
     def check_current_unlocked(
         self, session: Session, authority: AttemptAuthority,
@@ -1751,6 +2258,10 @@ class JobRepository:
 
 __all__ = [
     "JOB_WAKEUP_CHANNEL",
+    "GROUP_OFFLINE_WAIT_ENV",
+    "DEFAULT_GROUP_OFFLINE_WAIT_SECONDS",
+    "GroupDispatchWaiting",
+    "GroupWaits",
     "AttemptAuthority",
     "CompletedWindowCall",
     "ExecutionNotClaimed",

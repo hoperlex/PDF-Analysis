@@ -506,6 +506,17 @@
   font-size: var(--am-text-xs);
 }
 
+/* The embedded PDF page of the specification panel. */
+.specificationPdf {
+  width: 100%;
+  min-height: 520px;
+}
+
+/* An AI hint that is stale for the current pair: the matrix cell combines it with `.flag`. */
+.hintStale {
+  font-style: italic;
+}
+
 .cellMenu {
   position: absolute;
   top: 0;

@@ -95,6 +95,20 @@ fallback, and the served path never takes it
 (``tests/integration/composition/test_the_served_application_routes_by_section.py``).
 Passing both, or neither, is a wiring fault and raises ``ValueError``.
 
+Admission on a group or by a rule (`EXEC2-GROUP-RUN-01`; ADR-0026 decisions 12 and 13)
+---------------------------------------------------------------------------------------
+A start that names ``executor_group_id`` -- or that names nothing while the routing mode is ``rules`` -- is **admitted**,
+not frozen: the run records the immutable group revision (and the rule revision when a rule routed it) and
+``binding_state = 'pending'``, and **no connection revision**. The claim binds a member, once, at dispatch. The
+estimate, the budget and the consent follow the group revision's pin; ``RunCostConsent`` works as for any start, against
+an estimate that carries the group and no connection, and the consent snapshot stays in this command's outcome.
+
+Exclusivity and the refusals precede the key's claim, so nothing is written: a group together with an executor
+connection or a preset is ``validation_failed`` on ``executor_group_id``; the ``environment`` source (no admitter) refuses a
+group; an unknown group, an archived group and a work kind with no rule are the admitter's typed refusals. An
+explicit connection and a preset are untouched by the routing mode: they stay ``frozen_at_start`` exactly as before, and a
+start that names nothing while the mode is ``legacy`` follows the route exactly as before.
+
 Why the command succeeds at creation
 ------------------------------------
 The command's outcome is *the run identity*, and that identity exists the moment the row
@@ -128,7 +142,14 @@ from auditmanager.ingest.public import (
     CommandStarted,
     payload_fingerprint,
 )
-from auditmanager.runs.provider import ChosenPreset, FrozenRoute, PresetResolver, RouteFreezer
+from auditmanager.runs.provider import (
+    AdmittedGroup,
+    ChosenPreset,
+    FrozenRoute,
+    GroupAdmitter,
+    PresetResolver,
+    RouteFreezer,
+)
 from auditmanager.runs.repository import EXECUTOR_CHOSEN_EVENT, RunRepository, RunRow
 from auditmanager.sections.public import route_classified_version
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -299,6 +320,7 @@ def start_run_fingerprint(
     preset_id: str | None = None,
     relaxed_limits: bool = False,
     cost_consent: Mapping[str, Any] | None = None,
+    executor_group_id: str | None = None,
 ) -> PayloadFingerprint:
     """The comparison value that distinguishes a repeat from a same-key conflict.
 
@@ -327,6 +349,11 @@ def start_run_fingerprint(
     "this preset", so a retry after an administrator revised the preset is the same payload and
     replays the run that exists, while the same key with a hand-chosen executor, or with another
     preset, is ``idempotency_key_reuse``.
+
+    ``executor_group_id`` (`EXEC2-GROUP-RUN-01`) is the group the caller **named**, added to the document only when
+    named. The group, not the member the claim will choose, is the request: a retry after the group was revised
+    replays the run that exists. A start that names nothing -- routed by a rule or by the route -- adds nothing, so
+    every key accepted before this field existed still replays.
     """
     document: dict[str, Any] = {
         "analysis_profile_id": analysis_profile_id,
@@ -339,6 +366,8 @@ def start_run_fingerprint(
         document["executor_connection_id"] = executor_connection_id
     if preset_id is not None:
         document["preset_id"] = preset_id
+    if executor_group_id is not None:
+        document["executor_group_id"] = executor_group_id
     if relaxed_limits:
         document["relaxed_limits"] = True
     if cost_consent is not None:
@@ -525,6 +554,56 @@ def _freeze_for(
     return frozen
 
 
+def refuse_group_conflicts(
+    executor_group_id: str | None, executor_connection_id: str | None, preset_id: str | None,
+) -> None:
+    """A group is a third way to choose the same thing: exclusive with a connection and with a preset
+    (`EXEC2-GROUP-RUN-01`; ``validation_failed`` on ``executor_group_id`` with ``conflicts_with_executor_connection_id``
+    or ``conflicts_with_preset_id``). Precedes everything that reads a row or claims a key."""
+    if executor_group_id is None:
+        return
+    if executor_connection_id is not None:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="a group and an executor connection are two ways to choose the same thing",
+            field="executor_group_id", constraint="conflicts_with_executor_connection_id",
+        )
+    if preset_id is not None:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="a group and a preset are two ways to choose the same thing",
+            field="executor_group_id", constraint="conflicts_with_preset_id",
+        )
+
+
+def admit_group_for_start(
+    session: Session, group_admitter: GroupAdmitter | None, *, executor_group_id: str | None,
+    executor_connection_id: str | None, preset_id: str | None,
+) -> AdmittedGroup | None:
+    """The group a start is admitted on, or ``None`` when the executor is frozen at start as it always was.
+
+    Decision 13 and the rollback rule in one place, shared by the estimate and the start:
+
+    * a named connection or preset is never admitted by a group, whatever the routing mode says;
+    * a named group is admitted in either mode, and needs an admitter -- the ``environment`` source has none and
+      refuses (``validation_failed``, ``environment_source``), because it runs no group work;
+    * a start that names nothing is admitted by the rule only while the mode is ``rules``; the admitter answers
+      ``None`` while it is ``legacy``, and a deployment with no admitter has no rules to apply.
+    """
+    refuse_group_conflicts(executor_group_id, executor_connection_id, preset_id)
+    if executor_connection_id is not None or preset_id is not None:
+        return None
+    if group_admitter is None:
+        if executor_group_id is not None:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED,
+                message="the environment provider source runs no executor group work",
+                field="executor_group_id", constraint="environment_source",
+            )
+        return None
+    return group_admitter(session, group_id=executor_group_id)
+
+
 def start_audit_run(
     session: Session,
     *,
@@ -549,6 +628,8 @@ def start_audit_run(
     cost_preflight: Any = None,
     cost_consent: Mapping[str, Any] | None = None,
     cost_actor_uid: str | None = None,
+    executor_group_id: str | None = None,
+    group_admitter: GroupAdmitter | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -600,6 +681,12 @@ def start_audit_run(
     together with ``executor_connection_id`` is ``validation_failed`` on ``preset_id``: a person
     either takes a preset or names an executor. A known key is answered before the preset is read
     (the replay of a run that exists), as for the executor. See :func:`start_run_fingerprint`.
+
+    ``executor_group_id`` and ``group_admitter`` (`EXEC2-GROUP-RUN-01`): the group the caller **named**, and the seam
+    that admits a start on a group or by the routing rules (see the module docstring). For a new key the run is
+    admitted -- ``binding_state = 'pending'``, the group revision and, when a rule routed it, the rule revision -- and
+    freezes **no connection**; the budget and the estimate follow the group revision's pin. A group together with a
+    connection or a preset is ``validation_failed`` on ``executor_group_id``, and every refusal precedes the key's claim.
     """
     if type(relaxed_limits) is not bool:
         raise ValueError("relaxed_limits must be a boolean")
@@ -611,6 +698,7 @@ def start_audit_run(
             message="a preset and an executor connection are two ways to choose the same thing",
             field="preset_id", constraint="conflicts_with_executor_connection_id",
         )
+    refuse_group_conflicts(executor_group_id, executor_connection_id, preset_id)
     _explicit_or_routed(analysis_profile_id, prompt_bundle_id, section_profiles)
     command_repo = commands or CommandRepository()
     run_repo = runs or RunRepository()
@@ -634,6 +722,7 @@ def start_audit_run(
         command_repo.find(session, command_type=COMMAND_TYPE_START_RUN, idempotency_key=key)
         if budget is not None or section_profiles is not None or connection_route is not None
         or executor_connection_id is not None or preset_id is not None or cost_preflight is not None or cost_consent is not None
+        or executor_group_id is not None or group_admitter is not None
         else None
     )
     if section_profiles is not None:
@@ -668,16 +757,29 @@ def start_audit_run(
     # as a replay, whatever today's budget is.
     frozen: FrozenRoute | None = None
     chosen_preset: ChosenPreset | None = None
+    admitted: AdmittedGroup | None = None
     approved_cost = None
     if known is None and cost_preflight is not None:
         estimate = cost_preflight.estimate_run(session, version_uid=str(resolved_version),
             executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
-            version_record=version_record)
+            version_record=version_record, parse_native_text=False,
+            **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}))
         approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
         frozen, chosen_preset = estimate.frozen_route, estimate.chosen_preset
+        admitted = getattr(estimate, "admitted_group", None)
         budget = approved_cost["window_characters"]
     elif known is None and cost_consent is not None:
         raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+    elif known is None:
+        # `EXEC2-GROUP-RUN-01`: with no cost preflight the start asks the admitter itself. A named group, or the
+        # rule of the work kind while the mode is `rules`, admits the run and freezes no connection; the budget follows
+        # the group revision's pin. `None` (a connection, a preset, mode `legacy`) leaves the start as it always was.
+        admitted = admit_group_for_start(
+            session, group_admitter, executor_group_id=executor_group_id,
+            executor_connection_id=executor_connection_id, preset_id=preset_id,
+        )
+        if admitted is not None:
+            budget = admitted.input_budget_characters
     if preset_id is not None and known is None and approved_cost is None:
         # `ANALYSIS-PRESETS-01`. Before the freezer: the preset only fills the field a person could
         # fill by hand, and everything after this line is the hand-chosen executor's start.
@@ -689,11 +791,14 @@ def start_audit_run(
         executor_connection_id = chosen_preset.executor_connection_id
     if executor_connection_id is not None and connection_route is None and known is None:
         raise _chosen_executor_unserved()
-    if connection_route is not None and known is None and approved_cost is None:
+    if connection_route is not None and known is None and approved_cost is None and admitted is None:
         frozen = _freeze_for(session, connection_route, executor_connection_id)
         budget = frozen.input_budget_characters
     if relaxed_limits and known is None and approved_cost is None:
-        model_id = frozen.model_id if frozen is not None else operational_model_id
+        model_id = (
+            admitted.pin_id if admitted is not None
+            else frozen.model_id if frozen is not None else operational_model_id
+        )
         if model_id is None or text_profiles is None:
             raise ValueError("relaxed section start needs a pinned model and profile resolver")
         resolve = text_profiles.resolve if hasattr(text_profiles, "resolve") else text_profiles
@@ -726,6 +831,7 @@ def start_audit_run(
         preset_id=preset_id,
         relaxed_limits=relaxed_limits,
         cost_consent=cost_consent,
+        executor_group_id=executor_group_id,
     )
 
     claimed = command_repo.begin(
@@ -770,15 +876,42 @@ def start_audit_run(
         norms_snapshot_id=snapshot,
         connection_revision_id=None if frozen is None else frozen.revision_id,
         preset_revision_id=None if chosen_preset is None else chosen_preset.revision_id,
+        **_admission_columns(admitted),
     )
     _journal_standby(session, run_id, frozen)
     _journal_executor_choice(session, run_id, frozen)
+    _journal_admission(session, run_id, admitted)
     command_repo.succeed(session, claimed.command_id, {
         "run_id": run_id, **({"relaxed_limits": True} if relaxed_limits else {}),
         **({"cost_consent": approved_cost} if approved_cost is not None else {}),
     })
     return StartedRun(
         run_id=run_id, command_id=str(claimed.command_id), replayed=False
+    )
+
+
+def _admission_columns(admitted: AdmittedGroup | None) -> dict[str, Any]:
+    """What ``RunRepository.create`` is told of an admission: nothing for a run whose executor is frozen at start."""
+    if admitted is None:
+        return {}
+    return {
+        "binding_state": "pending",
+        "executor_group_revision_id": admitted.group_revision_id,
+        "routing_rule_revision_id": admitted.rule_revision_id,
+    }
+
+
+def _journal_admission(session: Session, run_id: str, admitted: AdmittedGroup | None) -> None:
+    """A run admitted on a group is an event of the run beside its row (`EXEC2-GROUP-RUN-01`): ``reason`` is
+    ``rule`` when the routing rule chose the group and ``group`` when the caller named it. The group's identity is on
+    the run row; the journal carries classifiers only."""
+    if admitted is None:
+        return
+    append_execution_event(
+        session, event_type="audit_run.group_admitted", aggregate_type="AuditRun",
+        aggregate_id=run_id, run_id=run_id,
+        payload={"work_kind": "text_analysis", "state": "pending",
+                 "reason": "group" if admitted.rule_revision_id is None else "rule"},
     )
 
 
@@ -884,6 +1017,35 @@ def cancel_audit_run(
     return run_id
 
 
+def _named_group_of(
+    session: Session, source: RunRow, chosen_connection_id: str | None, group_admitter: GroupAdmitter | None,
+) -> str | None:
+    """The group a source run's start **named**, or ``None`` when it named none (`EXEC2-GROUP-RUN-01`).
+
+    A run admitted by a group carries its group revision; one of them carries a rule revision too exactly when the rule
+    chose the group, and that start named nothing. A source admitted on a named group with no admitter to read the
+    group back through is a wiring fault and refuses (``environment_source``) rather than re-auditing on another
+    executor."""
+    group_revision_id = getattr(source, "executor_group_revision_id", None)
+    if (getattr(source, "binding_state", "frozen_at_start") == "frozen_at_start"
+            or getattr(source, "routing_rule_revision_id", None) is not None
+            or chosen_connection_id is not None or group_revision_id is None):
+        return None
+    if group_admitter is None:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="the environment provider source runs no executor group work",
+            field="executor_group_id", constraint="environment_source",
+        )
+    group_id = group_admitter.group_of(session, group_revision_id)
+    if group_id is None:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, message="the executor group is not acceptable",
+            field="executor_group_id", constraint="unknown_executor_group",
+        )
+    return group_id
+
+
 def reaudit_run(
     session: Session, *, source_run_id: str, roles: frozenset[str],
     idempotency_key: str, analysis_profile_id: str | None = None,
@@ -898,6 +1060,7 @@ def reaudit_run(
     cost_preflight: Any = None,
     cost_consent: Mapping[str, Any] | None = None,
     cost_actor_uid: str | None = None,
+    group_admitter: GroupAdmitter | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
 
@@ -919,6 +1082,13 @@ def reaudit_run(
     `W55A-PIN-01` (R-82, R-113, CD-6): the new run pins the **current** norms snapshot,
     read in this transaction exactly as ``start_audit_run`` reads it, never the source's.
     It is NULL while none is current, whatever the source pinned.
+
+    `EXEC2-GROUP-RUN-01`: a re-audit keeps the **kind** of selector the original start used. A named connection stays
+    that connection (above). A source that was admitted on a **named group** (``pending`` or ``bound``, no rule
+    revision) is admitted again on that group's *current* revision; a source routed by a **rule** names nothing, so the
+    re-audit follows today's configuration exactly as a start that names nothing does -- the current rule while the
+    mode is ``rules``, the route while it is ``legacy``. Never a silent fallback: a group that was archived since
+    refuses the re-audit (``group_archived``) and the new run is not written.
 
     The idempotency fingerprint is still the request -- the source run and its stored
     digest -- because the configuration and the snapshot are the server's, not the
@@ -947,9 +1117,11 @@ def reaudit_run(
     source = repository.get(session, source_run_id)
     source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
     frozen: FrozenRoute | None = None
+    admitted: AdmittedGroup | None = None
     approved_cost = None
     if (section_profiles is not None or budget is not None or connection_route is not None
-            or cost_preflight is not None or cost_consent is not None) and ledger.find(
+            or cost_preflight is not None or cost_consent is not None
+            or group_admitter is not None) and ledger.find(
         session, command_type="reaudit_run", idempotency_key=IdempotencyKey(idempotency_key)
     ) is None:
         if section_profiles is not None:
@@ -960,15 +1132,26 @@ def reaudit_run(
         if chosen_connection_id is not None and connection_route is None:
             raise _chosen_executor_unserved()
         if cost_preflight is not None:
-            estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version)
+            estimate = cost_preflight.estimate_reaudit(session, run_id=source_run_id, version_record=source_version,
+                parse_native_text=False)
             approved_cost = estimate.approve(None if cost_consent is None else dict(cost_consent), actor_user_uid=cost_actor_uid)
             frozen = estimate.frozen_route
+            admitted = getattr(estimate, "admitted_group", None)
             budget = approved_cost["window_characters"]
         elif cost_consent is not None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
-        elif connection_route is not None:
-            frozen = _freeze_for(session, connection_route, chosen_connection_id)
-            budget = frozen.input_budget_characters
+        else:
+            admitted = admit_group_for_start(
+                session, group_admitter,
+                # The group the original start named, if it named one (admitted by a group, no rule routed it).
+                executor_group_id=_named_group_of(session, source, chosen_connection_id, group_admitter),
+                executor_connection_id=chosen_connection_id, preset_id=None,
+            )
+            if admitted is not None:
+                budget = admitted.input_budget_characters
+            elif connection_route is not None:
+                frozen = _freeze_for(session, connection_route, chosen_connection_id)
+                budget = frozen.input_budget_characters
         if budget is not None and approved_cost is None:
             _refuse_over_window_budget(source_version.text_character_count, budget)
     claimed = ledger.begin(
@@ -1035,9 +1218,11 @@ def reaudit_run(
         command_id=str(claimed.command_id), reaudit_of_run_id=source_run_id,
         norms_snapshot_id=snapshot,
         connection_revision_id=None if frozen is None else frozen.revision_id,
+        **_admission_columns(admitted),
     )
     _journal_standby(session, new_id, frozen)
     _journal_executor_choice(session, new_id, frozen)
+    _journal_admission(session, new_id, admitted)
     repository.advance(session, run_id=new_id, from_state="created", to_state="queued")
     (jobs or JobRepository()).enqueue(session, run_id=new_id)
     ledger.succeed(session, claimed.command_id, {"run_id": new_id,
@@ -1058,7 +1243,9 @@ __all__ = [
     "run_of_command",
     "cancel_audit_run",
     "reaudit_run",
+    "admit_group_for_start",
     "refuse_comparison_only_version",
+    "refuse_group_conflicts",
     "start_audit_run",
     "start_run_fingerprint",
 ]

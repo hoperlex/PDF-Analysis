@@ -13,6 +13,11 @@ export {
   useExecutorRoutes,
 } from './api/use-executor-connections';
 export {
+  CAPACITY_COUPLING_HINTS, CAPACITY_FIELD_LABEL, CAPACITY_HINT, CLIENT_DOCUMENTS_NOTICE,
+  occupancyReading, occupancySentence,
+} from './model/capacity';
+export type { OccupancyReading, OccupancyState } from './model/capacity';
+export {
   CHANGE_LABELS, CHANGE_WINDOW_DAYS, recentChanges,
 } from './model/changes';
 export type { ChangeKind, ConnectionChange } from './model/changes';

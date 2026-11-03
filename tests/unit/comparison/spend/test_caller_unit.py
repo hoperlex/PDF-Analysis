@@ -79,13 +79,13 @@ class FakeRepository(ComparisonSpendRepository):
     def lock_day(self, session: Any) -> None:
         self.log.append("lock_day")
 
-    def connection_has_active_run(self, session: Any, connection_id: str) -> bool:
+    def connection_has_free_unit(self, session: Any, connection_id: str) -> bool:
+        """`EXEC2-CAP-01`: one question, which the real statement answers with a single count. The stand-in
+        records the two things it weighs, in the order the earlier two questions were asked, and says no unit
+        is left when either is active (a capacity of one)."""
         self.log.append("active_run?")
-        return self.active_run
-
-    def connection_has_active_call(self, session: Any, connection_id: str) -> bool:
         self.log.append("active_call?")
-        return self.active_call
+        return not (self.active_run or self.active_call)
 
     def job_spend(self, session: Any, **kw: Any) -> Spend:
         self.log.append(("job_spend", kw["job_id"]))

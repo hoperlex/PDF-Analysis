@@ -16,6 +16,10 @@ state and task. The context index is a locator only: check its links and line ra
 the current tree, and read the cited contract, decision or evidence before acting on it.
 Do not load historical task/review directories wholesale to infer current status.
 
+How to reach a deployable result with the least time and tokens — fast path, checks by risk,
+selective use of helpers — is in `docs/context/DEVELOPMENT_VELOCITY.md`, shared by Codex and
+Claude (`CLAUDE.md` imports this file).
+
 A session started from a handoff file reads that file and its card in `.local/tasks.md` before
 anything else, and checks their claims at their links instead of re-researching (§7).
 

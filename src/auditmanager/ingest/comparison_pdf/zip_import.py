@@ -1,4 +1,8 @@
-"""Bounded ZIP admission for version comparison (HOTFIX-VERSIONS-1030).
+"""Bounded ZIP admission for version comparison (HOTFIX-VERSIONS-1030, REVIEW-FIX-BOUNDS-1102).
+
+The archive's raw size and the PDF count are intake quotas (16 MiB, 100 PDFs; the relaxed intake
+mode lifts them). What the archive may expand to, and the free disk it needs for that, are a
+sandbox that stays finite in both modes.
 
 Reuse the reviewed ZIP reader, including rejection of __MACOSX, unsafe names and
 non-PDF entries. Validate every PDF before declaring any durable upload. Files
@@ -8,14 +12,16 @@ and the member's stable ordinal. Retry resumes the same upload and file rows.
 """
 from __future__ import annotations
 
-import hashlib
 import contextlib
+import hashlib
+import shutil
 import tempfile
 from typing import TYPE_CHECKING, BinaryIO
 
 from sqlalchemy import text
 
 from auditmanager.ingest.comparison_zip import SetPolicy, extract_pdf_set
+from auditmanager.ingest.intake_mode import quota
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -23,9 +29,10 @@ if TYPE_CHECKING:
     from .service import ComparisonUploadService
     from .views import UploadView
 
-MAX_ARCHIVE_BYTES = 2**63 - 1
-MAX_EXPANDED_BYTES = 2**63 - 1
-MAX_PDFS = 2**31 - 1
+MAX_ARCHIVE_BYTES = quota(16 * 1024 * 1024, 2**63 - 1)
+#: What the archive may expand to, and (twice over) the free disk it must find: a sandbox figure.
+MAX_EXPANDED_BYTES = 256 * 1024 * 1024
+MAX_PDFS = quota(100, 2**31 - 1)
 ZIP_POLICY = SetPolicy(total_bytes=MAX_EXPANDED_BYTES)
 
 
@@ -47,6 +54,8 @@ def import_zip(
     # the nested PDF service uses a different creation lock and owns its own commits.
     with session_scope(service._factory) as admission:
         admission.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'), {'key': 'comparison_zip_import:v1'})
+        if shutil.disk_usage(tempfile.gettempdir()).free < MAX_EXPANDED_BYTES * 2:
+            raise _refuse('comparison_zip_temporary_space')
         seekable = bool(getattr(source, 'seekable', lambda: False)())
         archive_context = contextlib.nullcontext(source) if seekable else tempfile.TemporaryFile()
         with archive_context as archive:

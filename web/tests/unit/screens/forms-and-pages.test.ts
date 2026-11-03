@@ -107,7 +107,10 @@ describe('the start-run control', () => {
     for (const mode of ['live', 'recorded', 'proxy']) {
       expect(markup, mode).not.toContain(`value="${mode}"`);
     }
-    expect(markup).not.toContain('type="radio"');
+    // `EXEC2-WEB-GROUPS-01`: the only radios are the three ways to choose an executor; none is a provider mode.
+    const radioValues = [...markup.matchAll(/<input[^>]*type="radio"[^>]*>/g)]
+      .map((tag) => /value="([^"]*)"/.exec(tag[0])?.[1]);
+    expect(radioValues.every((value) => ['auto', 'group', 'connection'].includes(value ?? ''))).toBe(true);
     expect(markup).not.toContain('recorded mode instead');
   });
 

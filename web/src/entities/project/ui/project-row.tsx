@@ -18,7 +18,7 @@ export interface ProjectRowProps {
 
 export function ProjectRow({ project }: ProjectRowProps) {
   return (
-    <li className="am-state" style={{ marginBottom: '0.5rem' }}>
+    <li className="am-state">
       <p className="am-state__title">
         <Link href={`/projects/${project.project_uid}`}>{project.name}</Link>
       </p>

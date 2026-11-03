@@ -97,9 +97,19 @@ KEEP_NORM_TABLES = EXEMPT_FROM_FINGERPRINT
 #: `ANALYSIS-PRESETS-01` (`0037_analysis_presets`): a preset is a named choice of one of those
 #: connections, kept with them. ``audit_run.preset_revision_id`` (PRODUCT) references it, never the
 #: other way round.
+#: `EXEC2-SEAL-1` (`0046_executor_capacity_enroll`): an enrollment grant (the hash of its secret and
+#: the token it produced) and an install session (a host, a user, a fingerprint and a sealed key) are
+#: the stand's configuration of its own runners, like the tokens: they reference a connection, a runner
+#: token and a secret, never a run, a document or a call, and hold no document text.
+#: `EXEC2-SEAL-2` (`0047_executor_groups_rules`): an executor group, its revisions and members, the routing rules and the
+#: routing-mode journal are the stand's configuration of where model work goes, like the connections and the legacy
+#: routes they name: they reference connections and connection revisions, never a run, a document or a call. A Run and
+#: a comparison job reference a group revision and a rule revision (`0048`), PRODUCT to KEEP and never the other way.
 KEEP_EXECUTOR_TABLES = frozenset((
-    "analysis_preset_revision", "executor_connection", "executor_connection_revision",
-    "executor_probe", "executor_route_event", "executor_runner_token", "executor_secret",
+    "analysis_preset_revision", "executor_agent_install", "executor_connection",
+    "executor_connection_revision", "executor_enrollment", "executor_group", "executor_group_member",
+    "executor_group_revision", "executor_probe", "executor_route_event", "executor_routing_mode_event",
+    "executor_routing_rule_revision", "executor_runner_token", "executor_secret",
 ))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
@@ -161,6 +171,14 @@ KEEP_COMMAND_TYPES = frozenset((
     "set_executor_secret",
     # `EXEC-PULL-01`: a runner token is issued and revoked as configuration.
     "issue_runner_token", "revoke_runner_token",
+    # `EXEC2-SEAL-1`: the operationId of each keyed administrator write of the enrollment and install
+    # operations, as the snake case the other executor commands use.
+    "confirm_executor_agent_install_host_key", "create_executor_agent_install",
+    "issue_executor_enrollment", "set_executor_integration_authorisation",
+    # `EXEC2-SEAL-2`: the operationId of each keyed administrator write of the group, rule and routing-mode
+    # operations, as the snake case the other executor commands use.
+    "archive_executor_group", "create_executor_group", "revise_executor_group", "set_executor_routing_mode",
+    "set_executor_routing_rule",
     # `ANALYSIS-PRESETS-01`: a preset is administered and kept like the connections it names.
     "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
 ))
@@ -230,6 +248,10 @@ RUNNING_STATES = {
     "stage_upload_candidate": ("confirmed", "admitting"),
     "stage_chain_run": ("queued", "running", "paused"),
     "stage_chain_step": ("queued", "running", "paused"),
+    # `D-215` (`EXEC2-PULL-01`): a task a runner holds. A run-call task is covered through its running
+    # Attempt; a standalone probe task (`origin='probe'`, no Attempt) is covered only by this entry. An
+    # `open` task is not running work: no runner has it, and the purge truncates it with the rest.
+    "executor_task": ("claimed",),
 }
 
 TEMPORARY_KEY_PREFIX = "temporary/"

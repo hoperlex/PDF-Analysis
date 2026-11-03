@@ -27,8 +27,14 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 from auditmanager.comparison.spend.model import (
+    BINDING_BOUND,
+    BINDING_FROZEN,
+    BINDING_PENDING,
     DAY_CEILING_MICROS,
     JOB_CEILING_MICROS,
+    WAIT_AT_CAPACITY,
+    WAIT_NEEDS_RECONSENT,
+    WAIT_RUNNER_OFFLINE,
 )
 
 if TYPE_CHECKING:  # the types only: this module never imports another context at run time
@@ -79,6 +85,15 @@ __all__ = [
     "AiTotals",
     "AiWaitingJobs",
     "AiWorkItemSpec",
+    "BINDING_BOUND",
+    "BINDING_FROZEN",
+    "BINDING_PENDING",
+    "BINDING_STATES",
+    "FAILURE_NO_EXECUTOR_ONLINE",
+    "WAIT_AT_CAPACITY",
+    "WAIT_NEEDS_RECONSENT",
+    "WAIT_REASONS",
+    "WAIT_RUNNER_OFFLINE",
     "digest_of",
     "work_kind_of",
 ]
@@ -106,6 +121,14 @@ PAUSE_REASONS: Final[tuple[str, ...]] = (
 )
 #: A resume after one of these carries a new consent (the contract's ``ComparisonAiPauseReason``).
 CONSENT_PAUSES: Final[frozenset[str]] = frozenset({PAUSE_OVERRUN, PAUSE_ROUTE_CHANGED})
+
+#: `EXEC2-GROUP-CMP-01` (ADR-0026 decision 12; migration ``0048``): whether the executor of a job was fixed when it started
+#: (:data:`~auditmanager.comparison.spend.model.BINDING_FROZEN`, ``pending``, ``bound``) and why a ``pending`` job waits
+#: (``executor_at_capacity``, ``runner_offline``, ``needs_reconsent``). The words are the spend wrapper's, which owns the binding.
+BINDING_STATES: Final[tuple[str, ...]] = (BINDING_FROZEN, BINDING_PENDING, BINDING_BOUND)
+WAIT_REASONS: Final[tuple[str, ...]] = (WAIT_AT_CAPACITY, WAIT_RUNNER_OFFLINE, WAIT_NEEDS_RECONSENT)
+#: The ``failure_reason`` of a job whose group stayed without an eligible member for longer than the offline wait.
+FAILURE_NO_EXECUTOR_ONLINE: Final[str] = "no_executor_online"
 
 #: The registered reasons of ``409 conflict`` (``CMP-SEAL-C2`` section 3).
 CONFLICT_ESTIMATE_STALE: Final[str] = "comparison_estimate_stale"
@@ -314,22 +337,60 @@ class AiCounts:
 @dataclass(frozen=True, slots=True)
 class AiRoute:
     """The connection that would serve a method's calls: the revision of the routed connection of the work kind, the model it
-    pins, how it is billed, and the process's provider mode (``recorded`` means every answer is a recorded test answer)."""
+    pins, how it is billed, and the process's provider mode (``recorded`` means every answer is a recorded test answer).
+
+    `EXEC2-GROUP-CMP-01` (ADR-0026 decisions 12 and 13): while the routing mode is ``rules`` the route of a work kind is the
+    group revision its current rule names. Such a route has **no connection and no connection revision** -- the job's first
+    dispatched call chooses a member -- and carries instead ``executor_group_id``, ``executor_group_revision_id`` and, when a
+    rule routed it, ``routing_rule_revision_id``; ``pinned_model``, ``gateway_model`` and ``billing`` are the group revision's
+    and ``pin`` carries its rate snapshot. Exactly one of the two shapes is valid.
+    """
 
     work_kind: str
-    connection_id: str
-    revision_id: str
+    connection_id: str | None
+    revision_id: str | None
     pinned_model: str
     gateway_model: str
     billing: str
     provider_mode: str
     pin: "ModelPin | None" = None
+    executor_group_id: str | None = None
+    executor_group_revision_id: str | None = None
+    routing_rule_revision_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.executor_group_revision_id is not None:
+            if self.connection_id is not None or self.revision_id is not None:
+                raise ValueError("a route admitted by a group names no connection until its first call binds it")
+            if self.executor_group_id is None:
+                raise ValueError("a group route names its group")
+        else:
+            if self.connection_id is None or self.revision_id is None:
+                raise ValueError("a route names a connection and its revision, or a group revision")
+            if self.executor_group_id is not None or self.routing_rule_revision_id is not None:
+                raise ValueError("a group or a rule is named with the group revision they froze")
 
     @property
     def metered(self) -> bool:
         return self.billing != "not_metered"
 
+    @property
+    def grouped(self) -> bool:
+        """Whether this route was admitted by a rule or a group (the job it opens starts ``pending``)."""
+        return self.executor_group_revision_id is not None
+
     def as_document(self) -> dict[str, Any]:
+        """The contract's ``ComparisonAiRoute``. The estimate digest binds every field that is present; a route with no group
+        has the document it always had."""
+        if self.grouped:
+            document: dict[str, Any] = {
+                "pinned_model": self.pinned_model, "billing": self.billing, "provider_mode": self.provider_mode,
+                "executor_group_id": self.executor_group_id,
+                "executor_group_revision_id": self.executor_group_revision_id,
+            }
+            if self.routing_rule_revision_id is not None:
+                document["routing_rule_revision_id"] = self.routing_rule_revision_id
+            return document
         return {
             "connection_id": self.connection_id, "revision_id": self.revision_id,
             "pinned_model": self.pinned_model, "billing": self.billing, "provider_mode": self.provider_mode,
@@ -475,7 +536,8 @@ class AiJobRecord:
     transition_id: str | None
     sheet_pair_id: str | None
     restart: bool
-    connection_revision_id: str
+    #: ``None`` exactly while the job is ``pending`` (admitted by a rule or a group, not yet bound to a member).
+    connection_revision_id: str | None
     pinned_model: str
     provider_mode: str
     estimate: Mapping[str, Any]
@@ -491,6 +553,13 @@ class AiJobRecord:
     finished_at: datetime | None
     stage_chain_run_id: str | None = None
     stage_link_revision_id: str | None = None
+    #: `EXEC2-GROUP-CMP-01`: see :data:`BINDING_FROZEN`. The group revision and the rule revision are what admission froze;
+    #: ``wait_reason`` and ``waiting_since`` are set together, only while the job is ``pending``.
+    binding_state: str = BINDING_FROZEN
+    executor_group_revision_id: str | None = None
+    routing_rule_revision_id: str | None = None
+    wait_reason: str | None = None
+    waiting_since: datetime | None = None
 
     @property
     def scope(self) -> AiScope:
@@ -504,6 +573,11 @@ class AiJobRecord:
     @property
     def live(self) -> bool:
         return self.state in JOB_LIVE_STATES
+
+    @property
+    def grouped(self) -> bool:
+        """Admitted by a rule or a group: ``pending`` or ``bound``, never ``frozen_at_start``."""
+        return self.binding_state != BINDING_FROZEN
 
 
 @dataclass(frozen=True, slots=True)
@@ -542,9 +616,14 @@ class AiJobView:
     progress: AiProgress
     spend: AiJobSpend
     queue_position: int | None = None
+    #: `EXEC2-GROUP-CMP-01`: the contract's ``ExecutorGroupPlan`` of a job admitted by a rule or a group, and its
+    #: ``ExecutorBinding`` once bound. Read from the executors' public reads by the service (this module reads nothing).
+    planned: Mapping[str, Any] | None = None
+    binding: Mapping[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        """The contract's ``ComparisonAiJob``."""
+        """The contract's ``ComparisonAiJob``. ``binding_state`` is left out for ``frozen_at_start`` (an absent one is read as
+        that), so the document of a job made before the cut-over is the document it always was."""
         record = self.record
         document: dict[str, Any] = {
             "job_id": record.job_id, "method": record.method, "project_uid": record.project_uid,
@@ -569,6 +648,15 @@ class AiJobView:
         ):
             if value is not None:
                 document[name] = value
+        if record.binding_state != BINDING_FROZEN:
+            document["binding_state"] = record.binding_state
+        for name, value in (
+            ("planned", None if self.planned is None else dict(self.planned)),
+            ("binding", None if self.binding is None else dict(self.binding)),
+            ("wait_reason", record.wait_reason), ("waiting_since", record.waiting_since),
+        ):
+            if value is not None:
+                document[name] = value
         return document
 
     def as_queue_item(self) -> dict[str, Any]:
@@ -587,6 +675,10 @@ class AiJobView:
             document["series_id"] = record.series_id
         if self.queue_position is not None:
             document["queue_position"] = self.queue_position
+        if record.binding_state != BINDING_FROZEN:
+            document["binding_state"] = record.binding_state
+        if record.wait_reason is not None:
+            document["wait_reason"] = record.wait_reason
         return document
 
 

@@ -36,7 +36,10 @@ import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { DocumentList } from '@/widgets/document-list';
-import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
+import { PageViewerView } from '@/features/open-evidence';
+import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
+import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
@@ -56,7 +59,7 @@ import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
-import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
+import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
 import { ExportPanel } from '@/widgets/export-panel';
 import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, reduce, viewerGeometry } from '@/widgets/comparison-viewer';
@@ -90,7 +93,7 @@ import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, queryKeys } from '@/shared/api';
-import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, Menu, avatarColourIndex } from '@/shared/ui';
+import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -152,7 +155,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.14.0',
+    contract_version: '1.16.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1009,6 +1012,17 @@ export function screens(): Screen[] {
       normDocumentId: NORM_DOCUMENT_ID, items: NORM_PARAGRAPHS, onFirst: null, onNext: noop,
     }),
   )));
+  /*
+   * The norm's source PDF, opened at a page. It is the one surface still drawn by the browser's own
+   * reader -- an `<object>` addressed by `#page=N` -- and the rule for that element used to be
+   * reached by the evidence viewer's screen, which now draws with the page viewer. Without this
+   * screen `.am-evidence__object` is a colour rule no screen reaches.
+   */
+  add('NormPdf opened at a page', withRouter(createElement(NormPdf, {
+    document: normDocument(), page: 12,
+    documentUrl: 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100',
+    isLoading: false, error: null,
+  })));
   add('NormSnapshotList loaded, administrator', withRouter(createElement(NormSnapshotList, {
     items: NORM_SNAPSHOTS, current: { kind: 'current', snapshot: NORM_SNAPSHOTS[0]! },
     canDesignate: true, busy: false, onDesignate: noop,
@@ -1061,6 +1075,91 @@ export function screens(): Screen[] {
         onPageChange: noop,
         documentUrl: 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100',
       }),
+    ),
+  );
+  /*
+   * The states of the page viewer that only exist after pdf.js has drawn a page in a browser,
+   * which a server render pass never reaches. `PageViewerView` is the viewer as markup (no hook,
+   * no effect), so each state is rendered here with fixed props: the page ready with two framed
+   * targets, one active and one quiet, and the pill with its way to the target; the same page
+   * dragged and gliding; the old page dimmed while the next is read; and the two states that
+   * stand in for a page. Without these the colours of the frames, the badges, the fill, the pill
+   * and the focus ring are rules no screen reaches.
+   */
+  const viewerStage = makeStage({ width: 595, height: 842 }, { width: 900, height: 700 });
+  const viewerPlaced = (id: string, badge: string, top: number, quote: string): Placement => ({
+    target: { id, badge, quote },
+    resolution: { status: 'found', method: 'lines', occurrences: 1 },
+    groups: [{
+      highlights: [{ left: 60, top, width: 300, height: 12 }, { left: 60, top: top + 14, width: 180, height: 12 }],
+      hull: { left: 60, top, width: 300, height: 26 },
+    }],
+  });
+  const viewerProps = (overrides: Partial<PageViewerViewProps> = {}): PageViewerViewProps => ({
+    label: 'Страница 7 проверяемого документа',
+    state: 'ready',
+    documentUrl: 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100',
+    pageNumber: 7,
+    pageCount: 31,
+    stage: viewerStage,
+    view: viewerStage === null ? null : fitView(viewerStage),
+    placements: [viewerPlaced('q1', '1', 200, 'первая цитата'), viewerPlaced('q2', '2', 420, 'вторая цитата')],
+    activeTargetId: 'q1',
+    pulse: 1,
+    animate: false,
+    dragging: false,
+    overlay: null,
+    onTargetSelect: noop,
+    onZoomOut: noop, onZoomIn: noop, onFit: noop, onFocus: noop,
+    ...overrides,
+  });
+  add('PageViewer ready, one target active', render(createElement(PageViewerView, viewerProps({
+    view: viewerStage === null ? null : focusView({ left: 60, top: 200, width: 300, height: 26 }, viewerStage),
+  }))));
+  add('PageViewer dragged and gliding', render(createElement(PageViewerView, viewerProps({ dragging: true, animate: true }))));
+  add('PageViewer next page being read', render(createElement(PageViewerView, viewerProps({ state: 'rendering' }))));
+  add('PageViewer loading', render(createElement(PageViewerView, viewerProps({
+    state: 'loading', stage: null, view: null, placements: [],
+    overlay: createElement(LoadingState, { what: 'страницу документа' }),
+  }))));
+  add('PageViewer failed', render(createElement(PageViewerView, viewerProps({
+    state: 'failed',
+    overlay: createElement(ErrorState, {
+      title: 'Страницу не удалось показать',
+      detail: createElement('p', null, 'В документе нет страницы 7.'),
+    }),
+  }))));
+  add(
+    'EvidenceViewer quotations placed, repeated, not found and unread',
+    render(
+      createElement(
+        'ul',
+        { className: 'am-quotation-list' },
+        createElement(QuotationCard, {
+          item: evidence({ evidence_ordinal: 1, page_number: 7, quote: 'найденная по разметке цитата' }),
+          badge: '1', active: true, onSelect: noop,
+          placement: { status: 'found', method: 'lines', occurrences: 1 },
+        }),
+        createElement(QuotationCard, {
+          item: evidence({ evidence_ordinal: 2, page_number: 7, quote: 'повторяющаяся цитата' }),
+          badge: '2', active: false, onSelect: noop,
+          placement: { status: 'found', method: 'text', occurrences: 2 },
+        }),
+        createElement(QuotationCard, {
+          item: evidence({ evidence_ordinal: 3, page_number: 7, quote: 'отсутствующая цитата' }),
+          badge: '3', active: false, onSelect: noop,
+          placement: { status: 'not-found', method: null, occurrences: 0 },
+        }),
+        createElement(QuotationCard, {
+          item: evidence({ evidence_ordinal: 4, page_number: 7, quote: 'цитата на скане' }),
+          badge: '4', active: false, onSelect: noop,
+          placement: { status: 'no-text-layer', method: null, occurrences: 0 },
+        }),
+        createElement(QuotationCard, {
+          item: evidence({ evidence_ordinal: 5, page_number: 7, quote: 'ещё не прочитанная цитата' }),
+          badge: '5', active: false, onSelect: noop, placement: null,
+        }),
+      ),
     ),
   );
   add(

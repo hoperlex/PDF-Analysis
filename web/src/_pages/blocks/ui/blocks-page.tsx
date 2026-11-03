@@ -151,7 +151,7 @@ function VersionChooser({ projectUid, onChooseProject, onChooseVersion }: Versio
     return (
       <ul>
         {projects.data.items.map((project: Project) => (
-          <li key={project.project_uid} className="am-state" style={{ marginBottom: '0.5rem' }}>
+          <li key={project.project_uid} className="am-state">
             <p className="am-state__title">{project.name}</p>
             <div className="am-state__action">
               <button
@@ -210,7 +210,7 @@ export function DocumentChooser({ projectUid, onChooseVersion }: DocumentChooser
         {documents.data.items.map((doc: DocumentVersion) => {
           const comparisonOnly = isComparisonOnly(doc);
           return (
-            <li key={doc.version_uid} className="am-state" style={{ marginBottom: '0.5rem' }}>
+            <li key={doc.version_uid} className="am-state">
               <p className="am-state__title">
                 {doc.display_title ?? doc.source_filename ?? doc.version_uid}
               </p>

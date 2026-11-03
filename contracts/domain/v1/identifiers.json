@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.identifiers",
-  "contract_version": "1.14.0",
-  "supersedes": "1.13.0",
-  "candidate_revision": 32,
-  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README. Candidate revision 31 by HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030: the shared 1.14.0 seal enables ordinary text-profile starts for АР; no domain identity, error code or state machine changes. Candidate revision32 HOTFIX-PRESENTATION-INT-1030: additive extended analysis review, ZIP/technical exports and explicitly experimental stage V3; existing identities and machines preserved.",
+  "contract_version": "1.16.0",
+  "supersedes": "1.15.0",
+  "candidate_revision": 34,
+  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README. Candidate revision 31 by HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030: the shared 1.14.0 seal enables ordinary text-profile starts for АР; no domain identity, error code or state machine changes. Candidate revision32 HOTFIX-PRESENTATION-INT-1030: additive extended analysis review, ZIP/technical exports and explicitly experimental stage V3; existing identities and machines preserved. Candidate revision 33 by EXEC2-SEAL-1 (ADR-0026, rulings R-149a to R-149f): the shared 1.15.0 seal adds the stage-1 executor capacity and universal-agent surface to the API and migration 0046_executor_capacity_enroll to the schema; it adds two identities, executor_enrollment_id (exen) and executor_agent_install_id (exai); no error code and no state machine changes. Candidate revision 34 by EXEC2-SEAL-2 (ADR-0026 decisions 10 to 17, rulings R-149a to R-149f): the shared 1.16.0 seal adds the stage-2 and stage-3 executor group, routing rule, routing mode and dispatch-time binding surface to the API and migrations 0047_executor_groups_rules and 0048_dispatch_time_binding to the schema; it adds four identities, executor_group_id (exg), executor_group_revision_id (exgr), executor_routing_rule_revision_id (exrr) and executor_routing_mode_event_id (exrm); no error code and no state machine changes.",
   "status": "frozen",
   "frozen": true,
   "format": "<prefix>_<ULID>",
@@ -77,6 +77,12 @@
     "executor_route_event_id": "ert",
     "executor_runner_token_id": "ern",
     "executor_task_id": "ext",
+    "executor_enrollment_id": "exen",
+    "executor_agent_install_id": "exai",
+    "executor_group_id": "exg",
+    "executor_group_revision_id": "exgr",
+    "executor_routing_rule_revision_id": "exrr",
+    "executor_routing_mode_event_id": "exrm",
     "comparison_upload_id": "cbt",
     "comparison_upload_set_id": "cus",
     "comparison_upload_file_id": "cuf",
@@ -193,6 +199,12 @@
     "ExecutorRouteEvent": "executor_route_event_id",
     "ExecutorRunnerToken": "executor_runner_token_id",
     "ExecutorTask": "executor_task_id",
+    "ExecutorEnrollment": "executor_enrollment_id",
+    "ExecutorAgentInstall": "executor_agent_install_id",
+    "ExecutorGroup": "executor_group_id",
+    "ExecutorGroupRevision": "executor_group_revision_id",
+    "ExecutorRoutingRuleRevision": "executor_routing_rule_revision_id",
+    "ExecutorRoutingModeEvent": "executor_routing_mode_event_id",
     "ComparisonUpload": "comparison_upload_id",
     "ComparisonUploadSet": "comparison_upload_set_id",
     "ComparisonUploadFile": "comparison_upload_file_id",
@@ -412,6 +424,35 @@
       "evidence": [
         "EXEC-PULL-01",
         "0031_executor_pull_channel"
+      ]
+    },
+    {
+      "name": "executor_enrollment_identity",
+      "identifiers": [
+        "executor_enrollment_id",
+        "executor_agent_install_id"
+      ],
+      "rule": "ExecutorEnrollment identifies one single-use grant by which a universal agent obtains a runner token for exactly one pull connection, for its whole life; ExecutorAgentInstall one install session of that agent over SSH. Each is allocated independently. The grant's secret, its shown prefix and its hash, a host name, a user name and a host-key fingerprint are attributes and never identities: the secret is shown once and only its one-way hash is stored, so the identity is what the journal and the exchange refer to.",
+      "authority": "EXEC2-SEAL-1; ADR-0026; R-149b",
+      "evidence": [
+        "EXEC2-SEAL-1",
+        "0046_executor_capacity_enroll"
+      ]
+    },
+    {
+      "name": "executor_group_identity",
+      "identifiers": [
+        "executor_group_id",
+        "executor_group_revision_id",
+        "executor_routing_rule_revision_id",
+        "executor_routing_mode_event_id"
+      ],
+      "rule": "ExecutorGroup identifies one group of interchangeable executors for its whole life; ExecutorGroupRevision one immutable revision of it, which snapshots the members' connection revisions; ExecutorRoutingRuleRevision one append-only revision of the rule of a work kind, which targets a group revision; ExecutorRoutingModeEvent one change of the routing mode. Each is allocated independently. A display name, a work kind, a rule number, a revision number and a connection are attributes and never identities. A Run or a comparison AI job admitted by a rule or a group freezes the group revision and the rule revision; the connection it is bound to at dispatch is a connection revision identity that already exists.",
+      "authority": "EXEC2-SEAL-2; ADR-0026 decisions 10, 11, 13 and 17; R-149f",
+      "evidence": [
+        "EXEC2-SEAL-2",
+        "0047_executor_groups_rules",
+        "0048_dispatch_time_binding"
       ]
     },
     {

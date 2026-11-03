@@ -15,6 +15,14 @@ CONTEXT_LINES=12
 CONTEXT_CHARACTERS=8_000
 MAX_BATCHES=512
 MAX_REPLY_CHARACTERS=1_000_000
+#: The only keys a progress write puts on the comparison row (REVIEW-FIX-CMP-SPEC-1102, S2-04-06): counters and the two pins
+#: ``work_items`` compares on a resume. Never the batch list or the candidate positions, which grow with every batch.
+PROGRESS_KEYS=('planning_revision','source_key','comparison_algorithm','blocks_total','blocks_covered','rows_total',
+    'rows_unresolved','batches_total','batches_covered','lines_total','lines_covered','table_headers')
+
+
+def counters(coverage):
+    return {key:coverage[key] for key in PROGRESS_KEYS if key in coverage}
 
 
 def digest(value):
@@ -85,7 +93,7 @@ def aggregate(source, batches, records):
     from . import check
     full_map={line['line']:(block,line['text']) for block in source['blocks'] for line in block['lines']}
     issues=[]
-    data,_,_=check._table_lines(full_map,issues)
+    data,headers,_=check._table_lines(full_map,issues)
     data_lines=set(data)
     all_lines=set(full_map);covered=set();rows_by_owner={};claimed={};batch_rows=[]
     for batch,record in zip(batches,records):
@@ -94,7 +102,8 @@ def aggregate(source, batches, records):
         else:issues.extend(record.coverage.get('issues',[]) or ['Batch extraction incomplete'])
         batch_rows.append({'batch_id':batch['batch_id'],'index':batch['index'],
             'owned_line_ids':batch['owned_line_ids'],'context_line_ids':batch['context_line_ids'],
-            'source_sha256':batch['source_sha256'],'state':record.state,'extraction_id':record.extraction_id})
+            'source_sha256':batch['source_sha256'],'state':record.state,'extraction_id':record.extraction_id,
+            'attempt':batch.get('attempt',1)})
         for row in record.positions:
             refs={ref['line_start'] for ref in row['sources']}
             real=refs & data_lines
@@ -122,13 +131,16 @@ def aggregate(source, batches, records):
     missing_data=set(data)-set(claimed)
     if missing_data:issues.append(f'Unresolved source data lines: {len(missing_data)}')
     if covered!=all_lines:issues.append(f'Uncovered owned source lines: {len(all_lines-covered)}')
+    # A side with no position is complete only as an explicit empty table: a recognised header and no data line. A source in which no
+    # table was recognised and no issue raised is not an empty specification (S2-11).
+    if not rows_by_owner and not headers:issues.append('No specification position and no recognised table header')
     complete=bool(batches) and len(records)==len(batches) and not issues
     coverage={'blocks_total':len(source['blocks']),
         'blocks_covered':sum(all(line['line'] in covered for line in block['lines']) for block in source['blocks']),
         'rows_total':len(data),'rows_unresolved':len(missing_data),
         'planning_revision':REVISION,'comparison_algorithm':'whole-spec-batched-v1-linear-metre1',
         'batches_total':len(batches),'batches_covered':sum(record.state=='complete' for record in records),
-        'lines_total':len(all_lines),'lines_covered':len(covered),'batches':batch_rows,
+        'lines_total':len(all_lines),'lines_covered':len(covered),'table_headers':len(headers),'batches':batch_rows,
         'issues':list(dict.fromkeys(issues)),'reason':None if complete else check.REASON_ANSWER,
         'candidate_positions':[] if complete else list(rows_by_owner.values())}
     return complete,[rows_by_owner[key] for key in sorted(rows_by_owner)] if complete else [],coverage

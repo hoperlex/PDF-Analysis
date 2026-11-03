@@ -180,9 +180,12 @@ REVIEW_BUNDLE_VERSION = "section-review-source-bound/1"
 # Full-document v3 authority is frozen by the preflight/runtime owners. The
 # admitted 1,000-image ceiling requires ceil(1,000 / 16) durable windows;
 # individual comprehensive/review requests retain their existing window bounds.
-MAX_WORKFLOW_WINDOWS = 2**31 - 1
+MAX_WORKFLOW_WINDOWS = 63
 MAX_GLOBAL_OBSERVATIONS = MAX_WORKFLOW_WINDOWS * MAX_MERGED_INPUTS
-MAX_V3_REQUEST_BYTES = 2**63 - 1
+MAX_V3_REQUEST_BYTES = 900_000
+#: What a run that asked for ``relaxed_limits`` may use instead (`REVIEW-FIX-BOUNDS-1102`).
+LIFTED_WORKFLOW_WINDOWS = 2**31 - 1
+LIFTED_V3_REQUEST_BYTES = 2**63 - 1
 
 
 def workflow_procedures_v3():
@@ -208,8 +211,16 @@ def review_bundle_digest(section):
                    "section": section, "section_rules": rules_digest(section), "assets": assets})
 
 
-def _v3_request(request, *, run_id, section, phase, window_id=None):
+def v3_request_ceiling(relaxed_limits=False):
+    """The body size a v3 request may reach: the builders' check and every context decorator's re-check."""
+    if type(relaxed_limits) is not bool:
+        raise ValueError("extended_relaxed_limits_invalid")
+    return LIFTED_V3_REQUEST_BYTES if relaxed_limits else MAX_V3_REQUEST_BYTES
+
+
+def _v3_request(request, *, run_id, section, phase, window_id=None, relaxed_limits=False):
     from .section_rules import section_instructions
+    ceiling = v3_request_ceiling(relaxed_limits)
     body = deepcopy(request.body)
     payload = json.loads(body["messages"][0]["content"])
     window = window_id or payload.get("window_id") or "window-1"
@@ -221,13 +232,13 @@ def _v3_request(request, *, run_id, section, phase, window_id=None):
         payload.setdefault("context_coverage", {})["truncated"] = True
     body["messages"][0]["content"] = canonical(payload)
     body["system"] += "\n\n" + section_instructions(section, phase)
-    if len(canonical(body).encode("utf-8")) > MAX_V3_REQUEST_BYTES:
+    if len(canonical(body).encode("utf-8")) > ceiling:
         raise ValueError("extended_v3_request_window_too_large")
     return ModelRequest(request.model_id, body,
         idempotency_scope=f"{run_id}:v3:{window}:{phase}:{digest(body)}")
 
 
-def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window_id=None):
+def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
     summarized = deepcopy(payload)
     truncated_items, truncated_sources = [], []
     for field in ("visual_observations", "text_observations"):
@@ -257,29 +268,32 @@ def build_comprehensive_request_v3(*, model_id, run_id, section, payload, window
         "truncated_source_quotes": truncated_sources, "originals_retained_by_runtime": True}
     return _v3_request(build_comprehensive_request(model_id=model_id, run_id=run_id,
         section=section, payload=summarized), run_id=run_id, section=section,
-        phase="comprehensive_analysis", window_id=window_id)
+        phase="comprehensive_analysis", window_id=window_id, relaxed_limits=relaxed_limits)
 
 
-def build_norm_review_request_v3(*, model_id, run_id, section, payload, window_id=None):
+def build_norm_review_request_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
     return _v3_request(build_norm_review_request(model_id=model_id, run_id=run_id,
         section=section, payload=payload), run_id=run_id, section=section,
-        phase="norm_verification", window_id=window_id)
+        phase="norm_verification", window_id=window_id, relaxed_limits=relaxed_limits)
 
 
-def build_comprehensive_request_batched_v3(*, model_id, run_id, section, payload, window_id=None):
+def build_comprehensive_request_batched_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
     """Fresh batched authority keeps complete observations and every supplied text piece."""
     if payload.get("coverage_version") != "batched-v1":
         raise ValueError("extended_batched_authority_required")
     return _v3_request(build_comprehensive_request(model_id=model_id, run_id=run_id,
         section=section, payload=payload), run_id=run_id, section=section,
-        phase="comprehensive_analysis", window_id=window_id)
+        phase="comprehensive_analysis", window_id=window_id, relaxed_limits=relaxed_limits)
 
 
-def deterministic_lossless_merge_v3(items, *, max_windows=MAX_WORKFLOW_WINDOWS):
+def deterministic_lossless_merge_v3(items, *, max_windows=MAX_WORKFLOW_WINDOWS, relaxed_limits=False):
     """Bounded global collection; no v2 overflow cap or hidden item dropping."""
-    if type(max_windows) is not int or not 1 <= max_windows <= MAX_WORKFLOW_WINDOWS:
+    if type(relaxed_limits) is not bool:
+        raise ValueError("extended_relaxed_limits_invalid")
+    window_ceiling = LIFTED_WORKFLOW_WINDOWS if relaxed_limits else MAX_WORKFLOW_WINDOWS
+    if type(max_windows) is not int or not 1 <= max_windows <= window_ceiling:
         raise ValueError("extended_global_window_limit_invalid")
-    if not isinstance(items, list):
+    if not isinstance(items, list) or (not relaxed_limits and len(items) > max_windows * MAX_MERGED_INPUTS):
         raise ValueError("extended_global_observation_limit_exceeded")
     ignored = {"source_ids", "norm_queries", "norm_candidates", "observation_id", "source_kind",
                "input_ids", "provenance", "merged_observations"}
@@ -318,12 +332,12 @@ def _batched_norm_schema():
                 'norm_assessment': assessment}}}}}
 
 
-def build_norm_review_request_batched_v3(*, model_id, run_id, section, payload, window_id=None):
+def build_norm_review_request_batched_v3(*, model_id, run_id, section, payload, window_id=None, relaxed_limits=False):
     """Fresh compact annotations avoid repeating the full original finding in every reply."""
     if payload.get('coverage_version') != 'batched-v1' or len(payload.get('observations', [])) > 20:
         raise ValueError('extended_batched_norm_authority_invalid')
     request = build_norm_review_request_v3(model_id=model_id, run_id=run_id, section=section,
-        payload=payload, window_id=window_id)
+        payload=payload, window_id=window_id, relaxed_limits=relaxed_limits)
     body = deepcopy(request.body)
     body['system'] += ('\nДля этой новой версии формат ответа заменён: объект assessments, ровно одна '
         'запись {input_id,norm_assessment} для каждого входа. Не возвращай title, description, source_ids '

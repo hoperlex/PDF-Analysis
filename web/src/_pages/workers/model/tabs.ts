@@ -1,5 +1,6 @@
 /**
- * The three tabs of «Исполнители» (`EXEC-HTTP-01`), and how the keyboard moves between them.
+ * The tabs of «Исполнители» (`EXEC-HTTP-01`, widened by `EXEC2-WEB-GROUPS-01`), and how the keyboard
+ * moves between them.
  *
  * Pure, as `_pages/blocks/model/tabs.ts` is: the static render this suite has cannot fire a key
  * event, and the WAI-ARIA tabs pattern (automatic activation) is small enough to state as a
@@ -10,7 +11,12 @@
  *   anything else           no change (the key is left to the browser).
  */
 
-export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
+/**
+ * `EXEC2-WEB-GROUPS-01` adds «Группы» and «Правила» between «Процессы» and «Назначения». «Назначения» stays
+ * last: it is the legacy Primary/Standby routing, the live editor while the routing mode is `legacy`
+ * and the history of the routes once rules are in force (ADR-0026 decision 17).
+ */
+export const WORKERS_TABS = ['connections', 'processes', 'groups', 'rules', 'routes'] as const;
 
 export type WorkersTab = (typeof WORKERS_TABS)[number];
 
@@ -23,6 +29,8 @@ export const DEFAULT_WORKERS_TAB: WorkersTab = 'processes';
 export const WORKERS_TAB_LABELS: Readonly<Record<WorkersTab, string>> = {
   connections: 'Подключения',
   processes: 'Процессы',
+  groups: 'Группы',
+  rules: 'Правила',
   routes: 'Назначения',
 };
 

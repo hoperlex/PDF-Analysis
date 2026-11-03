@@ -18,6 +18,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.model import (
+    DEFAULT_MAX_ACTIVE_RUNS,
+    GENERIC_PURPOSES,
     PROBE_RUNNING_MARGIN_SECONDS,
     PROBE_UNTAKEN_SECONDS,
     PULL_PROBE_WINDOW_SECONDS,
@@ -44,7 +46,7 @@ _REVISION_COLUMNS: Final = (
     "revision_id, connection_id, revision_no, created_at, created_by, pin_id, gateway_model, "
     "billing, allow_client_documents, timeout_seconds, api_flavour, base_url, transport, "
     "max_parallel_calls, ssh_host, ssh_port, ssh_user, host_key, ssh_profile, pull_client, "
-    "answer_deadline_seconds, max_claimed_tasks"
+    "answer_deadline_seconds, max_claimed_tasks, max_active_runs"
 )
 _SECRET_COLUMNS: Final = (
     "secret_id, connection_id, purpose, kid, destination, last4, public_material, set_at, "
@@ -63,12 +65,12 @@ _SETTING_NAMES: Final = (
     "pin_id", "gateway_model", "billing", "allow_client_documents", "timeout_seconds",
     "api_flavour", "base_url", "transport", "max_parallel_calls", "ssh_host", "ssh_port",
     "ssh_user", "host_key", "ssh_profile", "pull_client", "answer_deadline_seconds",
-    "max_claimed_tasks",
+    "max_claimed_tasks", "max_active_runs",
 )
 
 _INTEGER_SETTINGS: Final = frozenset((
     "timeout_seconds", "max_parallel_calls", "ssh_port", "answer_deadline_seconds",
-    "max_claimed_tasks",
+    "max_claimed_tasks", "max_active_runs",
 ))
 
 def _typed_parameter(name: str) -> str:
@@ -82,6 +84,72 @@ def _typed_parameter(name: str) -> str:
 
 #: A probe row may be listed for a connection at most this many times.
 PROBE_HISTORY: Final[int] = 10
+#: «Online» is the freshness of a runner token's ``last_seen_at`` (ADR-0026 decision 5): a usable token seen
+#: within this many seconds belongs to an agent that is there. One figure for every reader of it -- the
+#: connection's runner tokens (`EXEC2-ENROLL-01`), the dispatcher's «a runner is online» (`EXEC2-CAP-01`) and the
+#: move of an agent. ``touch_token`` writes ``last_seen_at`` at most every 5 s and an idle runner's long poll
+#: lasts at most 25 s, so an agent that is waiting for work is seen far more often than this; 120 s is also a
+#: claim's lease, after which an agent that has not been seen has lost any claim it held.
+RUNNER_ONLINE_SECONDS: Final[int] = 120
+
+# --- capacity units (`EXEC2-CAP-01`, ADR-0026 decision 1) -------------------------------------------------
+#
+# The same three facts three other statements decide on, restated here for the reads (the occupancy of
+# a connection, the reason a queued Run waits): the Job states in which a Run holds a unit
+# (``jobs.repository._ACTIVE_JOB_STATES``), the call and attempt states in which a comparison model call
+# holds one (``comparison.spend.repository._CONNECTION_HAS_ACTIVE_CALL``) and the default of one. This
+# context may not import either; ``tests/unit/executors/test_capacity_pins.py`` holds the copies equal.
+_ACTIVE_RUN_JOB_STATES: Final = "('leased', 'running', 'retry_wait')"
+_ACTIVE_CALL_STATES: Final = "('prepared', 'sent')"
+_LIVE_CALL_ATTEMPT_STATES: Final = "('created', 'leased', 'running')"
+#: A pull runner is *online* while its token is usable and was seen within :data:`RUNNER_ONLINE_SECONDS`
+#: (defined above, one figure for every reader).
+#: The capacity of one connection: ``max_active_runs`` of its current (highest-numbered) revision, one
+#: when that is absent or the connection has no revision.
+_CAPACITY_OF = (
+    "COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision "
+    "current_revision WHERE current_revision.connection_id = {connection} "
+    f"ORDER BY current_revision.revision_no DESC LIMIT 1), {DEFAULT_MAX_ACTIVE_RUNS})"
+)
+#: The units in use and the capacity of each named connection. The two counts are grouped from the few
+#: active rows (never correlated per connection: a correlated join would enumerate every Run ever frozen
+#: to the connection, the shape ``jobs.repository._NEXT_JOB`` documents).
+_UNIT_COUNTS = text(
+    "WITH active_runs AS ("
+    "SELECT rev.connection_id, count(*) AS n FROM job j "
+    "JOIN audit_run r ON r.run_id = j.run_id "
+    "JOIN executor_connection_revision rev ON rev.revision_id = r.connection_revision_id "
+    f"WHERE j.state IN {_ACTIVE_RUN_JOB_STATES} GROUP BY rev.connection_id), "
+    "active_calls AS ("
+    "SELECT rev.connection_id, count(*) AS n FROM comparison_model_call c "
+    "JOIN comparison_work_attempt a ON a.comparison_work_attempt_id = c.comparison_work_attempt_id "
+    "JOIN executor_connection_revision rev ON rev.revision_id = c.connection_revision_id "
+    f"WHERE c.state IN {_ACTIVE_CALL_STATES} AND a.state IN {_LIVE_CALL_ATTEMPT_STATES} "
+    "GROUP BY rev.connection_id) "
+    "SELECT k.connection_id, "
+    + _CAPACITY_OF.format(connection="k.connection_id") + " AS capacity, "
+    "COALESCE(ar.n, 0) AS active_runs, COALESCE(ac.n, 0) AS active_calls "
+    "FROM executor_connection k "
+    "LEFT JOIN active_runs ar ON ar.connection_id = k.connection_id "
+    "LEFT JOIN active_calls ac ON ac.connection_id = k.connection_id "
+    "WHERE k.connection_id = ANY(:ids)"
+)
+#: The connection and kind of a Run that is waiting for its executor: its Job is queued and the Run is
+#: one the dispatcher would offer (``jobs.repository._NEXT_JOB``), and it froze a revision. A Run of
+#: the ``environment`` source (no revision) and a Run that is not waiting answer no row.
+_QUEUED_RUN_CONNECTION = text(
+    "SELECT rev.connection_id, c.kind FROM audit_run r "
+    "JOIN job j ON j.run_id = r.run_id "
+    "JOIN executor_connection_revision rev ON rev.revision_id = r.connection_revision_id "
+    "JOIN executor_connection c ON c.connection_id = rev.connection_id "
+    "WHERE r.run_id = :run_id AND r.state IN ('queued', 'running') AND j.state = 'queued'"
+)
+_RUNNER_ONLINE = text(
+    "SELECT EXISTS (SELECT 1 FROM executor_runner_token t "
+    "WHERE t.connection_id = :connection_id AND t.revoked_at IS NULL "
+    "AND t.expires_at > clock_timestamp() AND t.last_seen_at IS NOT NULL "
+    "AND t.last_seen_at > clock_timestamp() - make_interval(secs => :seconds))"
+)
 
 
 def _connection(row: Mapping[str, Any]) -> ConnectionRecord:
@@ -149,6 +217,20 @@ class ExecutorRepository:
             "ORDER BY archived_at IS NOT NULL, created_at DESC, connection_id DESC LIMIT :limit"
         ), {"limit": limit}).mappings().all()
         return [_connection(row) for row in rows]
+
+    def integration_marks(
+        self, session: Session, connection_ids: Sequence[str]
+    ) -> dict[str, tuple[Any, str]]:
+        """``(authorised_at, authorised_by)`` of each connection whose integration-authorisation mark is set
+        (`EXEC2-ENROLL-01`, `R-149b`): the connection summaries carry it, so it is read here with them."""
+        if not connection_ids:
+            return {}
+        rows = session.execute(text(
+            "SELECT connection_id, integration_authorised_at, integration_authorised_by "
+            "FROM executor_connection WHERE connection_id = ANY(:ids) "
+            "AND integration_authorised_at IS NOT NULL"
+        ), {"ids": list(connection_ids)}).all()
+        return {str(row[0]): (row[1], str(row[2])) for row in rows}
 
     def archive_connection(
         self, session: Session, connection_id: str, *, actor_uid: str
@@ -232,13 +314,18 @@ class ExecutorRepository:
     def current_secrets(
         self, session: Session, connection_ids: Sequence[str]
     ) -> dict[str, list[SecretRecord]]:
+        """The connection's own current secrets: only the purposes a connection can hold
+        (:data:`~auditmanager.executors.model.GENERIC_PURPOSES`). The sealed key of an agent install session
+        (``agent_install_key``, `EXEC2-ENROLL-01`) is a current secret of the *session*, not of the
+        connection: it is never listed beside the connection's key, and ``ExecutorSecretMetadata`` could not
+        carry its purpose."""
         if not connection_ids:
             return {}
         rows = session.execute(text(
             f"SELECT {_SECRET_COLUMNS} FROM executor_secret "
-            "WHERE connection_id = ANY(:ids) AND replaced_at IS NULL "
+            "WHERE connection_id = ANY(:ids) AND replaced_at IS NULL AND purpose = ANY(:purposes) "
             "ORDER BY connection_id, purpose"
-        ), {"ids": list(connection_ids)}).mappings().all()
+        ), {"ids": list(connection_ids), "purposes": list(GENERIC_PURPOSES)}).mappings().all()
         found: dict[str, list[SecretRecord]] = {}
         for row in rows:
             found.setdefault(row["connection_id"], []).append(_secret(row))
@@ -371,6 +458,34 @@ class ExecutorRepository:
         ), {"id": probe_id, "outcome": outcome, "model": reported_model,
             "basis": identity_basis, "latency": latency_ms, "status": http_status,
             "rate": rate_check, "host_key": observed_host_key, "detail": detail}).rowcount)
+
+    # -- capacity units (`EXEC2-CAP-01`) ----------------------------------------------------
+
+    def unit_counts(
+        self, session: Session, connection_ids: Sequence[str]
+    ) -> dict[str, tuple[int, int, int]]:
+        """``connection_id -> (capacity, active_runs, active_calls)``, read from the database now.
+
+        Nothing is stored: a unit is a Run in ``leased``, ``running`` or ``retry_wait`` or a comparison
+        model call in ``prepared`` or ``sent`` whose attempt is live, and each counts one. A connection
+        that does not exist is absent from the answer. The read takes no lock; a decision that depends on
+        it (a claim) makes it again under the connection's advisory lock."""
+        if not connection_ids:
+            return {}
+        rows = session.execute(_UNIT_COUNTS, {"ids": list(connection_ids)}).all()
+        return {str(row[0]): (int(row[1]), int(row[2]), int(row[3])) for row in rows}
+
+    def queued_run_connection(self, session: Session, run_id: str) -> tuple[str, str] | None:
+        """``(connection_id, kind)`` of the connection a *waiting* Run froze, or ``None`` when the Run
+        is not waiting for an executor or froze none."""
+        row = session.execute(_QUEUED_RUN_CONNECTION, {"run_id": run_id}).first()
+        return None if row is None else (str(row[0]), str(row[1]))
+
+    def runner_online(self, session: Session, connection_id: str) -> bool:
+        """Does any usable runner token of the connection show a fresh ``last_seen_at``?"""
+        return bool(session.execute(
+            _RUNNER_ONLINE, {"connection_id": connection_id, "seconds": RUNNER_ONLINE_SECONDS}
+        ).scalar_one())
 
     # -- routes ----------------------------------------------------------------------------
 

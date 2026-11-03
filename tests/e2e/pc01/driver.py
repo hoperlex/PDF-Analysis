@@ -266,16 +266,45 @@ class Client:
         )
 
     def start_run(
-        self, *, version_uid: str, key: str, provider_mode: str | None = None
+        self,
+        *,
+        version_uid: str,
+        key: str,
+        provider_mode: str | None = None,
+        consent: bool = False,
     ) -> Answer:
+        """``startRun``. ``consent=True`` starts as the web client does (`REVIEW-FIX-TESTS-1102`).
+
+        The composed application refuses a start without a confirmed priced consent, so a criterion
+        that needs the run to *start* asks for the estimate of this version and sends the consent
+        built from it; a criterion about a refusal leaves it off and sends the bare body. The
+        plain recorded analysis is priced (`plain_analysis_pricing`): the extended review has no
+        recording to replay. An exact replay repeats the same consent, because the estimate of an
+        unchanged version is the same digest.
+        """
         payload: dict[str, Any] = {"version_uid": version_uid}
         if provider_mode is not None:
             payload["provider_mode"] = provider_mode
+        if not consent:
+            return self._post_run(payload, key)
+        from tests.support.run_consent import plain_analysis_pricing, run_consent
+
+        with plain_analysis_pricing():
+            estimate = self.request(
+                "POST",
+                "/runs/cost-estimate",
+                headers={"Content-Type": "application/json"},
+                body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+            )
+            assert estimate.status == 200, estimate.body
+            return self._post_run({**payload, "cost_consent": run_consent(estimate.json)}, key)
+
+    def _post_run(self, payload: Mapping[str, Any], key: str) -> Answer:
         return self.request(
             "POST",
             "/runs",
             headers={"Idempotency-Key": key, "Content-Type": "application/json"},
-            body=json.dumps(payload).encode("utf-8"),
+            body=json.dumps(dict(payload)).encode("utf-8"),
         )
 
     def await_runs(self, timeout: float = 300.0) -> None:

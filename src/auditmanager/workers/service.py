@@ -21,12 +21,24 @@ What it does, in five threads
   the poll carries on alone until the connection is re-established -- the stated
   fallback, never a silent one.
 * **reclaim** -- inside the dispatch loop, every :data:`RECLAIM_SECONDS`.
+* **group waits** -- inside the dispatch loop, every :data:`GROUP_WAIT_SECONDS` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision
+  15). A Run admitted on an executor group is bound to a member at the claim, not at start; until then it waits, and the
+  reason (`executor_at_capacity`, `runner_offline`, `needs_reconsent`) and since when are stored on the Run. This pass
+  keeps them true, and a Run whose members have all been offline for longer than
+  ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`` (default 1800) ends `no_executor_online`, and a Run whose cost consent no
+  longer holds ends `cost_estimate_binding_changed` (a Run has no way to consent again). The value is read once, by the
+  service, where it reads its other settings; a malformed one stops the worker at construction. Waiting for a busy member
+  never expires. The hint offers a group Run **once**: the claim that refuses it stores why, and until the sweep clears the
+  reason the Run is not offered again, so one Run no member can take never holds this worker's slot or its comparison
+  claim (see :meth:`WorkerService._run_one` for the short local hold that covers the moment before the reason is stored).
+  A worker whose provider source is not ``database`` (``dispatch_groups=False``) is offered no group Run at all.
 * **slots** -- a pool of ``slots`` threads, each running one claimed run to a terminal.
   ``slots`` is ``AUDITMANAGER_WORKER_SLOTS`` (`EXEC-PAR-QUEUE-01`; one by default). With more
   than one, the dispatch loop fills a free slot straight after it filled the last one rather
   than waiting for the next poll, never offers a run it has already handed to a slot, and
-  asks for a Job whose executor connection is free: a connection has one active run, so a run
-  for a busy connection waits in the queue and does not hold a slot (see ``jobs``).
+  asks for a Job whose executor connection has a free unit: a connection serves as many runs at
+  once as its capacity (one unless its current revision says more; `EXEC2-CAP-01`), so a run for
+  a full connection waits in the queue and does not hold a slot (see ``jobs``).
 * **probes** -- when a probe runner is given (`EXEC-HTTP-01`), a thread that takes the
   ``requested`` connection probes and runs them on this worker's network path. A draining worker
   takes no new probe.
@@ -84,6 +96,16 @@ from auditmanager.jobs.public import (
 from auditmanager.workers.registry import HEARTBEAT_SECONDS, WorkerRegistry
 
 _log = logging.getLogger(__name__)
+
+#: `EXEC2-GROUP-RUN-01`. How often the dispatch loop keeps the waits of the Runs admitted on a group true; the same cadence
+#: as the in-process carrier's (``runs.carrier.GROUP_WAIT_SECONDS``, held equal by a unit test).
+GROUP_WAIT_SECONDS: Final[float] = 5.0
+
+#: `EXEC2-GROUP-RUN-01`. How long the dispatch loop keeps a group Run out of the hint after the claim refused it because no
+#: member could take it: one sweep interval, by which time the reason the refusal stored (or the sweep, if storing failed) is in
+#: the database and the hint's own test excludes the Run. The hold is a convenience in front of that durable reason, never a
+#: substitute for it, and it is local to this process.
+GROUP_REFUSAL_HOLD_SECONDS: Final[float] = GROUP_WAIT_SECONDS
 
 #: The stated fallback when no notification arrives (R-105).
 POLL_SECONDS: Final[float] = 5.0
@@ -251,11 +273,21 @@ class WorkerService:
         temporaries_sweep: Callable[[], SweepReport] = sweep_running_temporaries,
         temporaries_sweep_seconds: float = TEMPORARIES_SWEEP_SECONDS,
         comparison_work: ComparisonWork | None = None,
+        group_offline_wait_seconds: float | None = None,
+        dispatch_groups: bool = True,
     ) -> None:
         if slots < 1:
             raise ValueError("a worker needs at least one slot")
         if temporaries_sweep_seconds <= 0:
             raise ValueError("the temporaries sweep needs a positive interval")
+        # `EXEC2-GROUP-RUN-01`: `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`, read here once (default 1800); a value that is
+        # not a whole number of seconds raises `ValueError` now, before the worker registers, and is never replaced.
+        self._group_offline_wait_seconds = float(
+            JobRepository.group_offline_wait_seconds() if group_offline_wait_seconds is None
+            else group_offline_wait_seconds
+        )
+        if self._group_offline_wait_seconds <= 0:
+            raise ValueError("the offline wait of a group is positive")
         self._engine = engine
         self._sessions = session_factory
         self._execute = execute
@@ -271,6 +303,9 @@ class WorkerService:
         self._temporaries_sweep = temporaries_sweep
         self._temporaries_sweep_seconds = temporaries_sweep_seconds
         self._comparison = comparison_work
+        #: `EXEC2-GROUP-RUN-01` (ADR-0026 decision 12): ``True`` only when the provider source is ``database`` -- the composition
+        #: root says so (``WorkerRuntime.dispatch_groups``). ``False`` offers this worker no Run admitted on a group.
+        self._dispatch_groups = dispatch_groups
         self._worker_id: str | None = None
         self._stopped = threading.Event()
         self._draining = threading.Event()
@@ -286,6 +321,10 @@ class WorkerService:
         self._comparison_in_flight: dict[Future[None], str] = {}
         #: Claims lost in a row, bounded by :data:`CLAIM_RETRY_LIMIT` (`EXEC-PAR-QUEUE-01`).
         self._refused_in_a_row = 0
+        #: `EXEC2-GROUP-RUN-01`: the group Runs a claim of this process has just refused because no member could take them,
+        #: by run id, until when (a ``monotonic`` instant). They are kept out of the hint -- offered as ``submitted`` -- so
+        #: the dispatch loop falls through to the next Run and to the comparison claim instead of offering the same Run again.
+        self._group_refused: dict[str, float] = {}
         self._pool = ThreadPoolExecutor(max_workers=slots, thread_name_prefix="auditmanager-worker-run")
         self._threads: list[threading.Thread] = []
         self.wakeup = JobWakeup(engine, poll_seconds=poll_seconds)
@@ -384,6 +423,7 @@ class WorkerService:
     def _dispatch_loop(self) -> None:
         next_poll = 0.0
         next_reclaim = 0.0
+        next_waits = 0.0
         woken = False
         try:
             while not self._stopped.is_set():
@@ -391,6 +431,9 @@ class WorkerService:
                 if now >= next_reclaim:
                     self._reclaim()
                     next_reclaim = monotonic() + self._reclaim_seconds
+                if now >= next_waits:
+                    self._refresh_group_waits()
+                    next_waits = monotonic() + GROUP_WAIT_SECONDS
                 if self._poll_now.is_set():
                     self._poll_now.clear()
                     woken = True
@@ -459,6 +502,26 @@ class WorkerService:
         except Exception:
             _log.exception("worker %s comparison lease reclaim pass failed", self._worker_id)
 
+    def _refresh_group_waits(self) -> None:
+        """Keep the wait of every Run admitted on a group true, and end the ones nobody can serve (decision 15).
+
+        Housekeeping, so the one place a failure is logged and the loop carries on: the next pass repeats it. A worker
+        whose intake is off still does it -- it reads and writes the Runs' waits and claims nothing."""
+        try:
+            with self._sessions() as session:
+                report = JobRepository().refresh_group_waits(
+                    session, offline_wait_seconds=self._group_offline_wait_seconds,
+                )
+                session.commit()
+        except Exception:
+            _log.exception("worker %s group wait pass failed; retried", self._worker_id)
+            return
+        if report.expired:
+            _log.info("worker %s: %d run(s) ended no_executor_online", self._worker_id, report.expired)
+        if report.consent_lapsed:
+            _log.info("worker %s: %d run(s) ended with a cost consent that no longer holds",
+                      self._worker_id, report.consent_lapsed)
+
     def _claim_next(self) -> bool:
         """Hand one runnable Job to a free slot, or, when there is none, one comparison item.
 
@@ -475,12 +538,17 @@ class WorkerService:
     def _offer_next_run(self) -> str:
         """Hand one runnable Job to a free slot. The claim itself happens in the slot."""
         with self._lock:
-            submitted = tuple(self._in_flight.values())
+            # A group Run this process's claim has just refused is offered to nobody for a moment, like a Run already in a
+            # slot: it has no connection, so it counts against no connection's units (`_NEXT_JOB`'s `held` joins on one).
+            now = monotonic()
+            self._group_refused = {run: until for run, until in self._group_refused.items() if until > now}
+            submitted = tuple(self._in_flight.values()) + tuple(self._group_refused)
         try:
             with self._sessions() as session:
                 if not self._registry.intake_enabled(session, self.worker_id):
                     return _RUN_UNKNOWN
-                run_id = JobRepository().next_queued_run(session, submitted=submitted)
+                run_id = JobRepository(dispatch_groups=self._dispatch_groups).next_queued_run(
+                    session, submitted=submitted)
         except Exception:
             _log.exception("worker %s could not read the queue", self._worker_id)
             return _RUN_UNKNOWN
@@ -532,6 +600,16 @@ class WorkerService:
         try:
             self._execute(run_id, self.worker_id)
         except ExecutionNotClaimed as refusal:
+            if getattr(refusal, "wait_reason", None) is not None:
+                # `EXEC2-GROUP-RUN-01`: a Run admitted on a group that no member can take now. The carrier has stored why
+                # (`run_to_terminal`), and from then on the hint does not offer the Run; this hold covers the moment before
+                # that and a store that failed. It is not a lost claim to be counted: the Run is not offered again, so the
+                # dispatch loop moves on to the next Run and then to the comparison claim, whatever the hold's length.
+                with self._lock:
+                    self._group_refused[run_id] = monotonic() + GROUP_REFUSAL_HOLD_SECONDS
+                _log.info("worker %s: run %s waits for an executor (%s)", self._worker_id, run_id,
+                          refusal.wait_reason)
+                return
             # The claim was lost (the connection turned busy, dispatch was paused, another
             # process took the Job): nothing was written and the run is still queued. Counted,
             # so a run that keeps losing does not spin the dispatch loop (`CLAIM_RETRY_LIMIT`).
@@ -586,6 +664,8 @@ def healthy(state_dir: Path, *, max_age_seconds: float, now: float) -> bool:
 
 
 __all__ = [
+    "GROUP_REFUSAL_HOLD_SECONDS",
+    "GROUP_WAIT_SECONDS",
     "HEARTBEAT_FILE",
     "IDENTITY_FILE",
     "POLL_SECONDS",

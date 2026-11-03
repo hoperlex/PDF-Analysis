@@ -62,6 +62,8 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
       ['/dispatcher', 'Диспетчер'],
       // `CMP-VC-UI-01` (plan §1.1) adds «Сравнение версий» after it.
       ['/version-comparison', 'Сравнение версий'],
+      // `CMP-ACTIVATE-1030`: the owner activated the stage screen, and the menu offers it beside the version one.
+      ['/stage-comparison', 'Сравнение стадий'],
     ],
   },
   {
@@ -121,9 +123,11 @@ function readMenu(html: string): { readonly groups: string[]; readonly links: [s
   const groups = [...html.matchAll(/<button[^>]*class="am-disclosure__button"[^>]*>([^<]*)<\/button>/g)].map(
     (m) => m[1] as string,
   );
-  const links = [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)].map(
-    (m) => [m[1] as string, m[2] as string] as [string, string],
-  );
+  // Every link starts with its glyph (`<span class="am-disclosure__icon"><svg>…</svg></span>`, DESIGN-REF-01-NAV), so the
+  // label is the text after that span, not the text directly after the opening tag.
+  const links = [
+    ...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>(?:<span class="am-disclosure__icon"[^>]*>[\s\S]*?<\/span>)?([^<]*)<\/a>/g),
+  ].map((m) => [m[1] as string, m[2] as string] as [string, string]);
   return { groups, links };
 }
 
@@ -389,7 +393,11 @@ describe('the frame’s menu per kind of visitor', () => {
   it('R-80: a complete profile with an empty role set: brand and account menu, no duplicate home link', () => {
     const markup = renderFrame(frameSession({ roles: [] }));
     expect(markup).not.toContain('aria-label="Разделы"');
-    expect(markup).toMatch(/<a[^>]*href="\/"[^>]*>AuditManager<\/a>/);
+    // The brand is the one link home: a glyph and the «AuditManager» label, named for assistive technology.
+    expect(markup).toMatch(
+      /<a[^>]*aria-label="AuditManager — главная"[^>]*href="\/"[^>]*>(?:<svg[^>]*>[\s\S]*?<\/svg>)?<span[^>]*>AuditManager<\/span><\/a>/,
+    );
+    expect(markup.match(/<a[^>]*href="\/"/g)).toHaveLength(1);
     expect(markup).toContain('aria-haspopup="menu"');
     expect(markup).toContain('Роли не назначены.');
   });

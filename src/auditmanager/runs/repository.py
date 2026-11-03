@@ -64,7 +64,8 @@ _RUN_COLUMNS = (
     "norms_snapshot_id, provider_mode, frozen_input_digest, command_id, terminal_reason, "
     "terminal_detail, "
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
-    "connection_revision_id, norm_retrieval_set_id, preset_revision_id"
+    "connection_revision_id, norm_retrieval_set_id, preset_revision_id, "
+    "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since"
 )
 
 _INSERT_RUN = text(
@@ -72,11 +73,13 @@ _INSERT_RUN = text(
     INSERT INTO audit_run (
         run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
-        reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id
+        reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id,
+        binding_state, executor_group_revision_id, routing_rule_revision_id
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
-        :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id
+        :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id,
+        :binding_state, :executor_group_revision_id, :routing_rule_revision_id
     )
     """
 )
@@ -93,6 +96,22 @@ _SELECT_CHOSEN_EXECUTOR = text(
     "SELECT payload ->> 'connection_id' FROM audit_event "
     "WHERE aggregate_type = 'AuditRun' AND aggregate_id = :run_id "
     "AND event_type = :event_type ORDER BY sequence_no LIMIT 1"
+)
+
+#: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 15). What the execution queue shows of a Run admitted by a rule
+#: or a group: its binding state and, while it is ``pending`` and not ended, why it waits. A Run whose executor was
+#: frozen at start is not in the answer, so a queue item of an ordinary Run is exactly what it was.
+_SELECT_BINDING_FACTS = text(
+    "SELECT run_id, binding_state, "
+    "CASE WHEN binding_state = 'pending' AND state NOT IN ('published', 'partial', 'failed', 'cancelled') "
+    "THEN wait_reason END AS wait_reason "
+    "FROM audit_run WHERE run_id = ANY(:run_ids) AND binding_state <> 'frozen_at_start'"
+)
+#: The terminal path of a Run that waited for an executor and was given none (``no_executor_online``) clears its
+#: wait: a finished Run waits for nothing. ``wait_reason`` and ``waiting_since`` are not frozen columns.
+_CLEAR_WAIT = text(
+    "UPDATE audit_run SET wait_reason = NULL, waiting_since = NULL "
+    "WHERE run_id = :run_id AND wait_reason IS NOT NULL"
 )
 
 #: `W17VIEW-2`. **`now()` is `transaction_timestamp()`** - one value for the whole
@@ -278,6 +297,21 @@ class RunRow:
     #: for a run started by hand, by the route or by a repeat. Written once by ``create`` and
     #: frozen by the database, which also checks that the run froze that preset's connection.
     preset_revision_id: str | None = None
+    #: `EXEC2-GROUP-RUN-01` (ADR-0026 decision 12). **What a ``None`` connection revision means.** With
+    #: ``frozen_at_start`` it is the ``environment`` provider source: the run froze no connection and is never
+    #: limited. With ``pending`` it is a run admitted by a rule or a group that no member has taken yet: the
+    #: connection is chosen at dispatch, and a reader that treats it as ``environment`` runs the work on the wrong
+    #: source. ``bound`` always has a revision, a member of ``executor_group_revision_id``. The database holds the
+    #: shape (``ck_audit_run_binding_shape``); the default is what every row written before ``0048`` is.
+    binding_state: str = "frozen_at_start"
+    #: The immutable group revision admission froze, and the rule revision when a rule routed the run (``None`` when
+    #: the group was named). Both ``None`` for ``frozen_at_start``; written once at INSERT and frozen.
+    executor_group_revision_id: str | None = None
+    routing_rule_revision_id: str | None = None
+    #: Why a ``pending`` run is not dispatched (``executor_at_capacity``, ``runner_offline``, ``needs_reconsent``)
+    #: and since when; both ``None`` unless it waits. Not frozen: the dispatcher keeps them.
+    wait_reason: str | None = None
+    waiting_since: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,6 +374,11 @@ def _run_row(row: Any) -> RunRow:
         connection_revision_id,
         norm_retrieval_set_id,
         preset_revision_id,
+        binding_state,
+        executor_group_revision_id,
+        routing_rule_revision_id,
+        wait_reason,
+        waiting_since,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -362,6 +401,11 @@ def _run_row(row: Any) -> RunRow:
         connection_revision_id=connection_revision_id,
         norm_retrieval_set_id=norm_retrieval_set_id,
         preset_revision_id=preset_revision_id,
+        binding_state=binding_state,
+        executor_group_revision_id=executor_group_revision_id,
+        routing_rule_revision_id=routing_rule_revision_id,
+        wait_reason=wait_reason,
+        waiting_since=waiting_since,
     )
 
 
@@ -398,6 +442,9 @@ class RunRepository:
         connection_revision_id: str | None = None,
         norm_retrieval_set_id: str | None = None,
         preset_revision_id: str | None = None,
+        binding_state: str = "frozen_at_start",
+        executor_group_revision_id: str | None = None,
+        routing_rule_revision_id: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
 
@@ -411,6 +458,11 @@ class RunRepository:
         requires its row to be verified under the same snapshot. The served
         commands do not supply it until a later v3 runtime integration owns that
         selection and the associated frozen-input digest.
+
+        `EXEC2-GROUP-RUN-01`: a run admitted by a rule or a group is written ``binding_state = 'pending'`` with the
+        group revision (and the rule revision when a rule routed it) and **no** connection revision, which the claim
+        writes once at dispatch (``ck_audit_run_binding_shape`` refuses any other combination). Every other caller
+        leaves the defaults: ``frozen_at_start``, no group, no rule.
         """
         if norm_retrieval_set_id is not None and norms_snapshot_id is None:
             raise ValueError("a retrieval set pin requires a snapshot pin")
@@ -433,6 +485,9 @@ class RunRepository:
                     "connection_revision_id": connection_revision_id,
                     "norm_retrieval_set_id": norm_retrieval_set_id,
                     "preset_revision_id": preset_revision_id,
+                    "binding_state": binding_state,
+                    "executor_group_revision_id": executor_group_revision_id,
+                    "routing_rule_revision_id": routing_rule_revision_id,
                 },
             )
         except DBAPIError as exc:
@@ -454,6 +509,23 @@ class RunRepository:
     def find(self, session: Session, run_id: str) -> RunRow | None:
         row = session.execute(_SELECT_RUN, {"run_id": run_id}).first()
         return None if row is None else _run_row(row)
+
+    def binding_facts(
+        self, session: Session, run_ids: Sequence[str]
+    ) -> dict[str, tuple[str, str | None]]:
+        """``run_id -> (binding_state, wait_reason)`` for the named Runs admitted by a rule or a group.
+
+        A Run whose executor was frozen at start is absent, so a caller that renders only what is present leaves an
+        ordinary Run's reading byte for byte what it was. ``wait_reason`` is ``None`` unless the Run is ``pending``
+        and not ended."""
+        if not run_ids:
+            return {}
+        rows = session.execute(_SELECT_BINDING_FACTS, {"run_ids": list(run_ids)}).all()
+        return {str(row[0]): (str(row[1]), None if row[2] is None else str(row[2])) for row in rows}
+
+    def clear_wait(self, session: Session, *, run_id: str) -> None:
+        """Forget why a Run waited (it ended). Nothing else on the row changes."""
+        session.execute(_CLEAR_WAIT, {"run_id": run_id})
 
     def chosen_executor_connection(self, session: Session, run_id: str) -> str | None:
         """The connection a caller named for this run (`EXEC-PAR-START-01`), or ``None`` when

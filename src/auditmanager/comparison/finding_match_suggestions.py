@@ -21,7 +21,6 @@ from typing import Sequence
 
 from auditmanager.comparison.raw_text import ApprovedSheetPair, MAX_PAIRS
 from auditmanager.comparison.version_reader import (
-    MAX_VERSION_PAGES,
     OrderedVersionPair,
     VersionFacts,
 )
@@ -39,6 +38,11 @@ ALGORITHM = "exact-linked-finding-suggestion-v1"
 SUGGESTED_SHEETS_ALGORITHM = "exact-suggested-sheet-finding-proposal-v1"
 MAX_FINDINGS_PER_RUN = 200
 MAX_EVIDENCE_PER_FINDING = 8
+# Their own explicit limits, not the version reader's page constant: the pages of one version this
+# module reads, and the sheet suggestions it takes (one per page at most). The comparison tables
+# CHECK page numbers BETWEEN 1 AND 500 (REVIEW-FIX-BOUNDS-1102).
+MAX_SUGGESTED_PAGES = 500
+MAX_SUGGESTED_SHEET_PAIRS = 500
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -262,8 +266,8 @@ def _check_versions(version_pair: OrderedVersionPair) -> tuple[VersionFacts, Ver
         or source.version_ordinal >= target.version_ordinal
         or type(source.page_count) is not int
         or type(target.page_count) is not int
-        or not 1 <= source.page_count <= MAX_VERSION_PAGES
-        or not 1 <= target.page_count <= MAX_VERSION_PAGES
+        or not 1 <= source.page_count <= MAX_SUGGESTED_PAGES
+        or not 1 <= target.page_count <= MAX_SUGGESTED_PAGES
     ):
         raise FindingMatchSuggestionRefused("version_pair_invalid")
     return source, target
@@ -344,7 +348,7 @@ def suggest_exact_finding_matches(
 def _suggested_links(
     pairs: Sequence[SuggestedSheetPair], *, source_pages: int, target_pages: int,
 ) -> dict[int, tuple[int, str]]:
-    if not isinstance(pairs, (tuple, list)) or len(pairs) > MAX_VERSION_PAGES:
+    if not isinstance(pairs, (tuple, list)) or len(pairs) > MAX_SUGGESTED_SHEET_PAIRS:
         raise FindingMatchSuggestionRefused("sheet_suggestions_invalid")
     mapped: dict[int, tuple[int, str]] = {}
     target_seen: set[int] = set()

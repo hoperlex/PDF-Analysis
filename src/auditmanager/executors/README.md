@@ -14,7 +14,7 @@ and built from the worker's `KindRuntime`.
 | `sealing.py` | X25519 + HKDF-SHA256 + AES-256-GCM, the associated data, the key rings: public-only for the `api`, private for the worker |
 | `repository.py` | the only reader and writer of the `executor_*` tables (migration `0030`) |
 | `commands.py` | the administrator's commands, idempotent under the command ledger, each with a journal event |
-| `queries.py` | lists, a connection's detail, `resolve_route`, the probe sweep |
+| `queries.py` | lists, a connection's detail, `resolve_route`, the probe sweep, the capacity reads (`used_units`, `capacity_of`, `occupancies`, `run_queue_reason`) |
 | `public.py` | the cross-context surface of the `api` side |
 | `runtime.py` | the run-path and worker surface (`EXEC-HTTP-01`): freeze a route, bind a connection, probes, destination rules, the kind registry |
 | `destinations.py` | where the worker may send a key (plan T-9): the policy, the pinned connection, the allowed-hosts list |
@@ -57,6 +57,28 @@ and built from the worker's `KindRuntime`.
   and hides nothing; the standby is used only when a caller journals it.
 - **Refusals reuse the catalogue**: `validation_failed` (`field`, `constraint`), `conflict`
   (`conflict_reason`), `dependency_unavailable` (`dependency`), `permission_denied`.
+
+## Capacity (`EXEC2-CAP-01`, ADR-0026 decisions 1 and 2)
+
+`max_active_runs` (1 to 16; absent reads as 1) is a setting of every kind. It is the most **units** of the
+connection in use at once: a Run in `leased`, `running` or `retry_wait`, plus a comparison model call in
+`prepared` or `sent` whose attempt is live. The decision is taken under the connection's advisory lock in the
+Run claim (`jobs/repository.py`) and in the comparison call preparation (`comparison/spend/repository.py`); the
+dispatcher hint (`jobs/repository.py`) applies the same count without the lock, as an advisory skip. Nothing
+about it is stored: `queries.used_units`,
+`queries.capacity_of`, `queries.occupancies` (the `occupancy` of the connection read models) and
+`queries.run_queue_reason` count the same rows at read time. A waiting Run's reason is `runner_offline` first
+(a `pull` connection no runner token of which was seen in `RUNNER_ONLINE_SECONDS`), then `executor_at_capacity`.
+
+A revision must keep its other limits at least as large as its capacity (`commands.refuse_uncoupled_capacity`,
+`validation_failed`): a `pull` revision's `max_claimed_tasks`, and an `http_api` revision's `max_parallel_calls`
+when it is set (`below_max_active_runs`, on the smaller field). An `ssh_command` revision may go above one only
+with the `claude_code_headless` profile: `claude_answer.py --ssh-envelope` and `ssh-forced-command.sh` each make
+their own `mkdtemp` working directory, read their task from their own stdin, keep no lock file, fixed path or
+shared state and run the CLI with no saved session, and every invocation is its own process tree under its
+own sshd session, so concurrent invocations do not meet. A `custom_command` is an administrator's own script
+and answers `capacity_not_supported_for_kind`. The CLI's own login directory is shared by design, and the
+provider's quotas are not the stand's to isolate.
 
 ## Settings (`api` and worker)
 

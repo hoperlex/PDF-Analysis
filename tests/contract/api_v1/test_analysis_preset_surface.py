@@ -55,10 +55,15 @@ def test_a_run_start_takes_exactly_these_fields(openapi_document: dict[str, Any]
     """The set that the premise was captured from. A new field here (a per-run cost limit, a
     threshold) means somebody decides whether a preset holds it too, and then edits this literal."""
     start = openapi_document["components"]["schemas"]["StartRunRequest"]
-    assert set(start["properties"]) == {"version_uid", "provider_mode", "executor_connection_id", "preset_id"}
+    # `BETA-COST-PREFLIGHT-1030` added `cost_consent` and `relaxed_limits`: both are acts of one start (a consent is
+    # bound to one estimate digest, the raised output limit is chosen per Run), decided here not to be preset settings.
+    assert set(start["properties"]) == {
+        "version_uid", "provider_mode", "executor_connection_id", "preset_id", "relaxed_limits", "cost_consent"}
     assert start["required"] == ["version_uid"]
     reaudit = openapi_document["paths"]["/runs/{run_id}/reaudit"]["post"]
-    assert "requestBody" not in reaudit  # a re-audit takes nothing, so a preset cannot fill anything there
+    # a re-audit takes only a consent for its own estimate, so a preset still cannot fill anything there
+    reaudit_body = reaudit["requestBody"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1]
+    assert set(openapi_document["components"]["schemas"][reaudit_body]["properties"]) == {"cost_consent"}
 
 
 def test_every_setting_of_a_preset_is_a_field_a_run_start_takes(openapi_document: dict[str, Any]) -> None:
@@ -69,7 +74,8 @@ def test_every_setting_of_a_preset_is_a_field_a_run_start_takes(openapi_document
     # `provider_mode` is a start field a preset deliberately does not hold: the deployment's own mode
     # is the only one a start may name, so there is nothing to choose.
     assert settings <= start_fields
-    assert start_fields - settings == {"provider_mode"}
+    # `relaxed_limits` and `cost_consent` are per-start acts, not settings (see the premise above).
+    assert start_fields - settings == {"provider_mode", "relaxed_limits", "cost_consent"}
     # and the setting a preset names is the same type the start field is
     assert (schemas["SaveAnalysisPresetRequest"]["properties"]["executor_connection_id"]["$ref"]
             == schemas["StartRunRequest"]["properties"]["executor_connection_id"]["$ref"]

@@ -304,6 +304,30 @@ REQUIRED_OPERATIONS = {
     "extendExecutorTaskClaim",
     "submitExecutorTaskAnswer",
     "failExecutorTask",
+    # `EXEC2-SEAL-1` (ADR-0026, contract 1.15.0). The universal agent: an administrator issues an
+    # enrollment grant, the agent exchanges its secret for a runner token, reports its health with it and
+    # downloads the public package; an install over SSH is created, read and its host key confirmed; the
+    # integration-authorisation mark is set.
+    "issueExecutorEnrollment",
+    "redeemExecutorEnrollment",
+    "reportRunnerHealth",
+    "downloadAgentPackage",
+    "createExecutorAgentInstall",
+    "getExecutorAgentInstall",
+    "confirmExecutorAgentInstallHostKey",
+    "setExecutorIntegrationAuthorisation",
+    # `EXEC2-SEAL-2` (ADR-0026 decisions 10 to 17, contract 1.16.0). Executor groups (list, create, read, revise,
+    # archive, capacity), the routing rule of a work kind, and the routing mode with its cut-over preview.
+    "listExecutorGroups",
+    "createExecutorGroup",
+    "getExecutorGroup",
+    "reviseExecutorGroup",
+    "archiveExecutorGroup",
+    "getExecutorGroupCapacity",
+    "listExecutorRoutingRules",
+    "setExecutorRoutingRule",
+    "previewExecutorRouting",
+    "setExecutorRoutingMode",
     # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
     "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
@@ -322,14 +346,19 @@ REQUIRED_OPERATIONS = {
 #: out of the root requirement is reported by `test_every_operation_requires_the_bearer_scheme`.
 #: One until `W49-SEAL-01` -- the exchange, which hands a credential out -- and three since:
 #: an applicant for an account has none, so submitting an application and reading whether
-#: a pair proves a pending one are reached without a credential too (`R-56`).
-UNAUTHENTICATED_OPERATIONS = {"issueToken", "submitRegistration", "readRegistrationStatus"}
+#: a pair proves a pending one are reached without a credential too (`R-56`). Four since
+#: `EXEC2-SEAL-1`: the agent package is public code with no secret, and its integrity is the
+#: sha256 the install command carries (ADR-0026 decision 6).
+UNAUTHENTICATED_OPERATIONS = {
+    "issueToken", "submitRegistration", "readRegistrationStatus", "downloadAgentPackage",
+}
 
-#: The open operation that has **no credential to refuse** at all: `submitRegistration`
-#: takes none and checks none, so it declares neither `401` nor `403`. The other two open
-#: operations answer a refused pair with `401` -- the exchange's and the status read's one
-#: refusal -- and have no subject a `403` could deny.
-OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
+#: The open operations that have **no credential to refuse** at all: `submitRegistration`
+#: takes none and checks none, so it declares neither `401` nor `403`, and neither does
+#: `downloadAgentPackage` (`EXEC2-SEAL-1`). The other two open operations answer a refused
+#: pair with `401` -- the exchange's and the status read's one refusal -- and have no subject
+#: a `403` could deny.
+OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration", "downloadAgentPackage"}
 
 # `EXEC-PULL-01` and `EXEC-IMAGE-DELIVERY-01`. The five runner-token operations. The token is a
 #: principal of its own with no role to lack, so there is no subject a `403` could deny: each
@@ -338,6 +367,9 @@ OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE = {"submitRegistration"}
 RUNNER_OPERATIONS_WITHOUT_A_403 = {
     "claimExecutorTask", "getExecutorTaskImage", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
     "failExecutorTask",
+    # `EXEC2-SEAL-1`. The health report is called with a runner token; the enrollment exchange with an
+    # enrollment secret, a principal of its own with no role to lack either.
+    "reportRunnerHealth", "redeemExecutorEnrollment",
 }
 
 #: The keyed writes: every one requires `Idempotency-Key` and declares the `409` a key
@@ -435,6 +467,19 @@ WRITE_OPERATIONS = {
     # answer is accepted, a different one is a conflict).
     "issueRunnerToken",
     "revokeRunnerToken",
+    # `EXEC2-SEAL-1`. The four administrator writes of the agent are keyed. The exchange and the health
+    # report an agent calls are not: each is idempotent on the agent's own instance identity.
+    "issueExecutorEnrollment",
+    "setExecutorIntegrationAuthorisation",
+    "createExecutorAgentInstall",
+    "confirmExecutorAgentInstallHostKey",
+    # `EXEC2-SEAL-2`. The five administrator writes of groups, rules and the routing mode are keyed; the reads
+    # (list, get, capacity, rules, preview) are not.
+    "createExecutorGroup",
+    "reviseExecutorGroup",
+    "archiveExecutorGroup",
+    "setExecutorRoutingRule",
+    "setExecutorRoutingMode",
     # `CMP-SEAL-C3`: every new stage command is keyed and expert-only.
     "createStageUpload", "uploadStageUploadPart", "completeStageUploadFile",
     "confirmStageUploadCandidate", "rejectStageUploadCandidate", "pauseStageUpload",
@@ -629,7 +674,11 @@ def test_every_path_parameter_is_required_and_pattern_bound(openapi_document: di
 #: the non-identities this guard exists for (a file name, an ordinal, a sheet number, a
 #: checksum), and the second test below holds it to the enum, so a free-text key cannot
 #: borrow the exception.
-VOCABULARY_PATH_PARAMETERS: dict[str, str] = {"section_code": "#/components/schemas/ProjectSection"}
+VOCABULARY_PATH_PARAMETERS: dict[str, str] = {
+    "section_code": "#/components/schemas/ProjectSection",
+    # `EXEC2-SEAL-2`: a routing rule is keyed by its work kind, one of the six of the closed enum, not by an identity.
+    "work_kind": "#/components/schemas/ExecutorWorkKind",
+}
 
 
 def test_no_endpoint_addresses_a_resource_by_a_non_identity(openapi_document: dict) -> None:
@@ -1149,13 +1198,16 @@ def test_the_unauthenticated_operation_is_the_one_that_hands_out_a_credential(
         "issueToken",
         "submitRegistration",
         "readRegistrationStatus",
+        "downloadAgentPackage",
     }
     expected_success = {
         "issueToken": ("200", "IssueTokenResponse"),
         "readRegistrationStatus": ("200", "RegistrationStatusResponse"),
         "submitRegistration": ("201", "RegistrationStatusResponse"),
     }
-    for name in UNAUTHENTICATED_OPERATIONS:
+    # `EXEC2-SEAL-1`: the fourth is not an exchange of a pair at all. It is a read of public code, checked
+    # on its own below.
+    for name in UNAUTHENTICATED_OPERATIONS - {"downloadAgentPackage"}:
         operation = operations[name]
         assert operation["_method"] == "post", name
         body = _resolve(
@@ -1166,6 +1218,9 @@ def test_the_unauthenticated_operation_is_the_one_that_hands_out_a_credential(
         status, schema_name = expected_success[name]
         reference = operation["responses"][status]["content"]["application/json"]["schema"]
         assert reference == {"$ref": f"#/components/schemas/{schema_name}"}, name
+    package = operations["downloadAgentPackage"]
+    assert package["_method"] == "get" and "requestBody" not in package
+    assert set(package["responses"]["200"]["content"]) == {"application/gzip"}
     # The two registration operations read the exchange's own pair, or an application.
     status_body = operations["readRegistrationStatus"]["requestBody"]["content"][
         "application/json"
@@ -1371,6 +1426,10 @@ ADMITTED_SECRET_PROPERTIES = frozenset(
         # and is stored only as a one-way hash: the response could not describe the operation
         # without the name. No other schema may carry it (`RunnerTokenMetadata` has the prefix).
         "IssuedRunnerToken.properties.token",
+        # `EXEC2-SEAL-1`. An enrollment grant's secret is returned exactly once, by
+        # `issueExecutorEnrollment`, and is stored only as a one-way hash, as a runner token is. No other
+        # schema may carry it (`ExecutorEnrollmentMetadata` has the prefix).
+        "IssuedExecutorEnrollment.properties.secret",
     }
 )
 

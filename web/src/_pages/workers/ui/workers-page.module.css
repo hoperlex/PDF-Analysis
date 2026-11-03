@@ -1,5 +1,5 @@
 /*
- * The three tabs of «Исполнители» (`EXEC-HTTP-01`). Token reads only, no token declared here, no
+ * The tabs of «Исполнители» (`EXEC-HTTP-01`, five since `EXEC2-WEB-GROUPS-01`). Token reads only, no token declared here, no
  * `:not()` (the contrast census cannot read it); every rule is reached by a screen in
  * `tests/unit/styles/screens.ts`, the open tab by its `aria-selected` value — the attribute the
  * tab really emits. The same rules as the tabs of «Блоки», collocated because a page does not
@@ -49,10 +49,10 @@
   font-weight: 600;
 }
 
-/* On a phone the three tabs share the row rather than wrapping one under another. */
+/* On a phone the five tabs fill the rows they wrap onto rather than leaving a ragged edge. */
 @media (max-width: 520px) {
   .tab {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     padding-inline: 8px;
     text-align: center;

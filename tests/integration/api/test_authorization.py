@@ -38,6 +38,7 @@ from auditmanager.api.security import (
     API_TOKEN_VARIABLE,
     OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES,
     SCHEME_NAME,
+    ENROLLMENT_OPERATIONS,
     RUNNER_OPERATIONS,
     UNAUTHENTICATED_OPERATIONS,
     Subject,
@@ -431,6 +432,42 @@ GUARDED = (
         "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/runner-tokens/"
         "ern_01M2545JSD15ETSNNV904X991K/revoke",
     ),
+    # `EXEC2-SEAL-1`. The administrator's five operations on the universal agent (enrollment grant,
+    # SSH install session, integration-authorisation mark): behind the seam like the rest.
+    (
+        "issueExecutorEnrollment", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/enrollments",
+    ),
+    (
+        "setExecutorIntegrationAuthorisation", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/integration-authorisation",
+    ),
+    (
+        "createExecutorAgentInstall", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/agent-installs",
+    ),
+    (
+        "getExecutorAgentInstall", "GET",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/agent-installs/"
+        "exai_01M2545JSD15ETSNNV904X991K",
+    ),
+    (
+        "confirmExecutorAgentInstallHostKey", "POST",
+        "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/agent-installs/"
+        "exai_01M2545JSD15ETSNNV904X991K/confirm-host-key",
+    ),
+    # `EXEC2-SEAL-2`. The administrator's ten operations on executor groups, routing rules and the routing mode:
+    # behind the seam like the rest.
+    ("listExecutorGroups", "GET", "/executor-groups"),
+    ("createExecutorGroup", "POST", "/executor-groups"),
+    ("getExecutorGroup", "GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K"),
+    ("reviseExecutorGroup", "POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/revisions"),
+    ("archiveExecutorGroup", "POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/archive"),
+    ("getExecutorGroupCapacity", "GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/capacity"),
+    ("listExecutorRoutingRules", "GET", "/executor-routing-rules"),
+    ("setExecutorRoutingRule", "PUT", "/executor-routing-rules/text_analysis"),
+    ("previewExecutorRouting", "GET", "/executor-routing/preview"),
+    ("setExecutorRoutingMode", "POST", "/executor-routing/mode"),
     # `CMP-SEAL-C3`. Sweep every sealed stage operation through the same authentication
     # seam before body validation, the module flag or an unwired lane can answer.
     ("createStageAssembly", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-assemblies"),
@@ -481,14 +518,27 @@ RUNNER = (
     ("extendExecutorTaskClaim", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/extend"),
     ("submitExecutorTaskAnswer", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/answer"),
     ("failExecutorTask", "POST", "/runner/tasks/ext_01M2545JSD15ETSNNV904X991K/fail"),
+    # `EXEC2-SEAL-1`: the agent's health report, on the token it holds.
+    ("reportRunnerHealth", "POST", "/runner/health"),
+)
+
+#: `EXEC2-SEAL-1`. The operations an agent calls with an **enrollment secret**: a principal of its own
+#: beside a user and a runner token. Like the runner's, they are swept with no credential and kept out
+#: of the sweeps that present a user's -- a user's credential is not an enrollment secret, so it answers
+#: 401 to them whatever the account's state (`EXEC2-ENROLL-01` fills the authentication in; until then
+#: the seam refuses everything it is shown, which is the same answer).
+ENROLLMENT = (
+    ("redeemExecutorEnrollment", "POST", "/runner/enroll"),
 )
 
 #: `W49-SEAL-01`. The operations a caller reaches with no credential, written out: the
-#: exchange, and the two registration operations an applicant with no account uses.
+#: exchange, and the two registration operations an applicant with no account uses -- and, since
+#: `EXEC2-SEAL-1`, the public agent package (a GET with no body).
 OPEN = (
     ("issueToken", "POST", "/auth/token"),
     ("submitRegistration", "POST", "/registrations"),
     ("readRegistrationStatus", "POST", "/registrations/status"),
+    ("downloadAgentPackage", "GET", "/runner/agent-package/1.0.0"),
 )
 
 #: The catalog's own summary for the code, as a literal. `W13-SEAL` section 8.1 requires
@@ -565,22 +615,25 @@ def test_every_operation_but_the_register_is_behind_the_seam(router: Surface) ->
     # `W59-SECTION-SEAL-01`: counted from the two tables rather than restated, so the next
     # reseal moves the tables and not a literal (``getRunNormVerification`` was missing from
     # ``GUARDED`` since `W57A-SEAL-01B`; it is swept now).
-    assert len(GUARDED) + len(RUNNER) + len(OPEN) == len(
-        {operation for operation, _, _ in (*GUARDED, *RUNNER, *OPEN)}
+    assert len(GUARDED) + len(RUNNER) + len(ENROLLMENT) + len(OPEN) == len(
+        {operation for operation, _, _ in (*GUARDED, *RUNNER, *ENROLLMENT, *OPEN)}
     )
     assert {operation for operation, _, _ in RUNNER} == RUNNER_OPERATIONS
+    assert {operation for operation, _, _ in ENROLLMENT} == ENROLLMENT_OPERATIONS
     assert UNAUTHENTICATED_OPERATIONS == {
         "issueToken",
         "submitRegistration",
         "readRegistrationStatus",
+        "downloadAgentPackage",
     }
     assert (
         {operation for operation, _, _ in GUARDED}
         | {operation for operation, _, _ in RUNNER}
+        | {operation for operation, _, _ in ENROLLMENT}
         | UNAUTHENTICATED_OPERATIONS
     ) == router.operation_ids
     open_surface = []
-    for operation, method, path in (*GUARDED, *RUNNER):
+    for operation, method, path in (*GUARDED, *RUNNER, *ENROLLMENT):
         answer = dispatch(router, Request.build(method, path), credential=None)
         if answer.status != 401:
             open_surface.append((operation, answer.status))
@@ -784,7 +837,8 @@ def test_the_open_surface_is_exactly_the_register(router: Surface) -> None:
     open operations that ambiguity would have hidden the two new ones.
     """
     samples = {
-        operation: (method, path) for operation, method, path in (*GUARDED, *RUNNER, *OPEN)
+        operation: (method, path)
+        for operation, method, path in (*GUARDED, *RUNNER, *ENROLLMENT, *OPEN)
     }
     assert set(samples) == router.operation_ids
 
@@ -1070,6 +1124,15 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # do is the role register's and the dispatch context's own re-read of the role set.
         "dispatch.py",
         "execution.py",
+        # `EXEC2-ENROLL-01`: issuing a grant, the integration-authorisation mark and an install session record WHO did
+        # it (the actor of the journal event and of the row); that only an administrator may is the role register's and
+        # the command's own re-read of the role set. The agent's own operations read the enrollment or runner principal,
+        # never the subject.
+        "executor_enrollment.py",
+        # `EXEC2-GROUP-STORE-01`: creating, revising and archiving a group and setting a routing rule record WHO did it
+        # (the actor of the journal event and of the row); that only an administrator may is the role register's and the
+        # command's own re-read of the role set. The four reads of the group store take no subject.
+        "executor_groups.py",
         # `EXEC-SEAL-01`: an executor command records WHO configured it (the actor of its
         # journal event and of its rows); that only an administrator may is the role register's
         # and the command's own re-read of the role set.
@@ -1397,6 +1460,7 @@ def test_a_default_credential_reaches_exactly_the_register(router: Surface) -> N
         - OPERATIONS_A_DEFAULT_CREDENTIAL_REACHES
         - UNAUTHENTICATED_OPERATIONS
         - RUNNER_OPERATIONS
+        - ENROLLMENT_OPERATIONS
     )
     refused: set[str] = set()
     served: list[tuple[str, int]] = []

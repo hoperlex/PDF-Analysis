@@ -23,6 +23,12 @@ A worker that dies anywhere after step 2 leaves a ``prepared`` or ``sent`` row; 
 settles it ``unknown`` in its own transaction (:mod:`.settler`) and ends the item ``spend_unknown``, so
 the call is never sent a second time by itself.
 
+Group-admitted jobs (`EXEC2-GROUP-CMP-01`, ADR-0026 decisions 12 to 16). A route that carries a
+:class:`~auditmanager.comparison.spend.model.GroupDispatch` belongs to a job that is still ``pending``: step 2 then also takes the
+group's and its members' locks, chooses a member, re-checks the consent, applies the ceilings against it and binds the job to it
+-- see :mod:`auditmanager.comparison.spend.dispatch` -- all in the one transaction that inserts the ``prepared`` row, and the call
+goes over the member's own route. The job's later calls are made over the bound member's route and stay on it.
+
 Money. A live metered call is priced from the pinned rates (``CallEstimate`` is a size in tokens, never a
 USD figure the caller chose). A ``not_metered`` connection, and every recorded reply, is journalled as
 ``unmetered``, has an estimate of zero, and is limited by nothing in money (decision 19).
@@ -39,6 +45,7 @@ from typing import TYPE_CHECKING, Any, Final
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.spend.ceilings import check_after_call, check_before_call
+from auditmanager.comparison.spend.dispatch import group_offline_wait_seconds, select_member, write_binding
 from auditmanager.comparison.spend.errors import (
     REASON_CONNECTION_BUSY,
     REASON_CONSENT_REQUIRED,
@@ -104,14 +111,17 @@ def _code(value: object) -> str:
 class ComparisonModelCaller:
     """Makes the model calls of comparison work. Holds no state of a call: every call is its own."""
 
-    __slots__ = ("_sessions", "_repository")
+    __slots__ = ("_sessions", "_repository", "_offline_wait")
 
     def __init__(
         self, session_factory: "sessionmaker[Session]", *,
-        repository: ComparisonSpendRepository | None = None,
+        repository: ComparisonSpendRepository | None = None, offline_wait_seconds: int | None = None,
     ) -> None:
         self._sessions = session_factory
         self._repository = repository or ComparisonSpendRepository()
+        #: `EXEC2-GROUP-CMP-01`: how long a group job waits with no eligible member before it ends (read from
+        #: ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`` on first use when not given).
+        self._offline_wait = offline_wait_seconds
 
     @property
     def repository(self) -> ComparisonSpendRepository:
@@ -140,7 +150,9 @@ class ComparisonModelCaller:
         model_identity = _RECORDED_IDENTITY if recorded else route.model_identity
         job_key = _job_key_of(item)
 
-        call_id = self._prepare(
+        # `EXEC2-GROUP-CMP-01`: the route the call is made over. For a job that was ``pending`` it is the chosen member's, opened in
+        # the transaction that bound the job; for every other job it is the route in hand.
+        call_id, route = self._prepare(
             item, route, mode=mode, model_identity=model_identity, unmetered=unmetered,
             request_sha256=request.request_sha256, estimate_micros=estimate_micros,
             consent=consent, job_key=job_key,
@@ -176,8 +188,15 @@ class ComparisonModelCaller:
             return  # a replay spends nothing, binds no route and names no model
         if consent is None:
             raise CallRefused(REASON_CONSENT_REQUIRED, pauses_job=True)
-        if (consent.connection_revision_id != route.connection_revision_id
-                or consent.pinned_model != route.model_identity):
+        if route.dispatch is not None:
+            # A job admitted by a group, not yet bound: its consent names the group revision (and the member too, if another item
+            # of the job bound it since the route was opened). The member is chosen, and the consent re-checked against it, later.
+            stale = consent.executor_group_revision_id != route.dispatch.group_revision_id
+        elif consent.connection_revision_id is None:
+            stale = True  # a consent with no connection belongs to the dispatch of its own job, and this route has none
+        else:
+            stale = consent.connection_revision_id != route.connection_revision_id
+        if stale or consent.pinned_model != route.model_identity:
             raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
         if route.check_identity:
             expected = (route.expected_model or "").strip()
@@ -188,7 +207,9 @@ class ComparisonModelCaller:
     def _prepare(
         self, item: WorkItem, route: CallRoute, *, mode: str, model_identity: str, unmetered: bool,
         request_sha256: str, estimate_micros: int, consent: Consent | None, job_key: str | None,
-    ) -> str:
+    ) -> tuple[str, CallRoute]:
+        """Step 2: the call's ``prepared`` row, committed. Answers its identity and the route the call goes over (the route
+        in hand, or the member's for a job that this call bound)."""
         repository = self._repository
         with self._sessions() as session:
             self._require_current(item, session, call_id=None)
@@ -196,14 +217,22 @@ class ComparisonModelCaller:
                 session, work_id=item.work_id, attempt_id=item.attempt_id,
             ):
                 raise CallRefused(REASON_UNSETTLED_CALL, pauses_job=False)
+            if route.dispatch is not None:
+                call_id, over = self._prepare_group(
+                    session, item, route, model_identity=model_identity, unmetered=unmetered,
+                    request_sha256=request_sha256, estimate_micros=estimate_micros, consent=consent, job_key=job_key,
+                )
+                session.commit()
+                return call_id, over
             if route.connection_revision_id is not None:
                 connection_id = repository.connection_of(session, route.connection_revision_id)
                 if connection_id is None:
                     raise ValueError("the route names a connection revision that does not exist")
-                # The Run claim's own lock: this and a Run's claim cannot both pass their check.
+                # The Run claim's own lock: this and a Run's claim cannot both pass their check on the last
+                # unit. `EXEC2-CAP-01`: a call takes one unit of the connection's capacity, the way a Run
+                # does; with the default capacity of one that is "no Run and no other call is active".
                 repository.lock_connection(session, connection_id)
-                if (repository.connection_has_active_run(session, connection_id)
-                        or repository.connection_has_active_call(session, connection_id)):
+                if not repository.connection_has_free_unit(session, connection_id):
                     raise CallRefused(REASON_CONNECTION_BUSY, pauses_job=False)
             if not unmetered:
                 assert consent is not None  # a live call without one was refused before the database
@@ -223,7 +252,55 @@ class ComparisonModelCaller:
                 estimate_micros=estimate_micros,
             )
             session.commit()
-        return call_id
+        return call_id, route
+
+    def _prepare_group(
+        self, session: Session, item: WorkItem, route: CallRoute, *, model_identity: str, unmetered: bool,
+        request_sha256: str, estimate_micros: int, consent: Consent | None, job_key: str | None,
+    ) -> tuple[str, CallRoute]:
+        """`EXEC2-GROUP-CMP-01` (ADR-0026 decisions 14 to 16). The first-call binding, in the caller's transaction.
+
+        Lock order: the group's row, the members' connections in ascending ``connection_id``, then the day. The member is chosen
+        and the consent re-checked against it before anything is written; the rotation, the ceilings' lock, the binding with its
+        journal event and the ``prepared`` row then stand or fall together (a savepoint), and the caller commits. A call of a job
+        that is already bound takes the same path and stays on its member: nothing is chosen, nothing is bound again."""
+        repository = self._repository
+        dispatch = route.dispatch
+        assert dispatch is not None
+        selection = select_member(session, repository, dispatch, offline_wait_seconds=self._wait_seconds())
+        if selection.route.unmetered != route.unmetered or selection.route.model_identity != route.model_identity:
+            # The member's route is not the route the group revision was consented on: the consent does not hold for it.
+            raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
+        with session.begin_nested():
+            if selection.binds:
+                from auditmanager.executors.public import advance_group_rotation
+
+                advance_group_rotation(session, dispatch.group_id)
+            if not unmetered:
+                assert consent is not None  # a live call without one was refused before the database
+                repository.lock_day(session)
+                check_before_call(
+                    estimate_micros=estimate_micros, consent=consent,
+                    job=repository.job_spend(
+                        session, project_uid=item.project_uid, work_id=item.work_id, job_id=job_key,
+                    ),
+                    day=repository.day_spend(session),
+                )
+            repository.settle_abandoned(session)
+            if selection.binds:
+                write_binding(session, dispatch, selection)
+            call_id = repository.prepare(
+                session, work_id=item.work_id, attempt_id=item.attempt_id, work_kind=item.kind,
+                provider_mode=PROVIDER_LIVE, model_identity=model_identity,
+                connection_revision_id=selection.revision_id, request_sha256=request_sha256,
+                estimate_micros=estimate_micros,
+            )
+        return call_id, selection.route
+
+    def _wait_seconds(self) -> int:
+        if self._offline_wait is None:
+            self._offline_wait = group_offline_wait_seconds()
+        return self._offline_wait
 
     # -- 3. sent ------------------------------------------------------------------------------------
     def _mark_sent(self, item: WorkItem, call_id: str) -> None:

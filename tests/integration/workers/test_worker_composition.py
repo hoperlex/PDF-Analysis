@@ -33,6 +33,10 @@ from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier
 from auditmanager.workers.__main__ import HEALTH_MAX_AGE_SECONDS, health, serve
 from auditmanager.workers.service import HEARTBEAT_FILE, IDENTITY_FILE, JobWakeup, healthy
 
+#: `R-149g`: read by the worker's path-A install runner only (`executors.agent_install_runner`).
+AGENT_INSTALL_ALLOW_PRIVATE_ENV = "AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE"
+#: `ADR-0026` decision 15: the worker ends offline group work after this long; the `api` never reads it.
+GROUP_OFFLINE_WAIT_ENV = "AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS"
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "infra/deploy/compose.server.yml"
 
@@ -98,6 +102,26 @@ class TestTheCompositionRootWiresTheRole:
         with pytest.raises(ConfigurationError, match="worker service's role"):
             build_application(environ=_ENV | {EXECUTION_ROLE_ENV: "worker"})
 
+    def test_the_in_process_claimant_dispatches_groups_only_for_the_database_source(self) -> None:
+        """`EXEC2-GROUP-RUN-01` (ADR-0026 decision 12): the default `environment` source has no connection to bind a group Run to."""
+        application = build_application(environ=_ENV | _TOKEN)
+        assert isinstance(application.carrier, DurableCarrier)
+        assert application.carrier.dispatch_groups is False
+
+    def test_a_bad_group_offline_wait_stops_the_in_process_application_at_construction_and_the_api_never_reads_it(self) -> None:
+        bad = {GROUP_OFFLINE_WAIT_ENV: "soon"}
+        with pytest.raises(ConfigurationError, match=GROUP_OFFLINE_WAIT_ENV):
+            build_application(environ=_ENV | _TOKEN | bad)
+        api = build_application(environ=_ENV | _TOKEN | {EXECUTION_ROLE_ENV: "api"} | bad)
+        assert isinstance(api.carrier, ReclaimingCarrier)
+
+    def test_the_worker_runtime_dispatches_groups_only_for_the_database_source(self, tmp_path: Path) -> None:
+        runtime = build_worker_runtime(environ=_ENV | {
+            EXECUTION_ROLE_ENV: "worker", WORKER_STATE_DIR_ENV: str(tmp_path),
+        })
+        assert runtime.settings.provider_source == "environment"
+        assert runtime.dispatch_groups is False
+
     def test_the_worker_runtime_refuses_any_other_role(self) -> None:
         with pytest.raises(ConfigurationError, match="EXECUTION_ROLE=worker"):
             build_worker_runtime(environ=_ENV | _TOKEN | {EXECUTION_ROLE_ENV: "api"})
@@ -150,6 +174,45 @@ class TestTheEntryPoint:
     ) -> None:
         assert serve(_ENV | _TOKEN | {EXECUTION_ROLE_ENV: "api"}) == 2
         assert "EXECUTION_ROLE=worker" in capsys.readouterr().err
+
+    def test_serve_hands_the_runtimes_dispatch_flag_to_the_worker_service(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        import auditmanager.bootstrap.public as bootstrap_public
+        import auditmanager.jobs.public as jobs_public
+        import auditmanager.workers.__main__ as entry
+        import auditmanager.workers.service as service_module
+
+        runtime = SimpleNamespace(
+            engine=None, session_factory=None, execute=None, version="v", slots=1, state_dir=None,
+            probe_runner=None, comparison_work=None, dispatch_groups=False,
+            settings=SimpleNamespace(provider_source="environment"),
+        )
+        captured: dict[str, object] = {}
+
+        class FakeService:
+            failed = True
+            worker_id = "wrk_test"
+            busy = 0
+
+            def __init__(self, **kwargs: object) -> None:
+                captured.update(kwargs)
+
+            def start(self) -> None: ...
+
+            def drain(self, timeout: float | None = None) -> bool:
+                return True
+
+            def stop(self) -> None: ...
+
+        monkeypatch.setattr(bootstrap_public, "build_worker_runtime", lambda environ: runtime)
+        monkeypatch.setattr(jobs_public, "sweep_stale_temporaries", lambda: None)
+        monkeypatch.setattr(service_module, "WorkerService", FakeService)
+        monkeypatch.setattr(entry.signal, "signal", lambda *args: None)
+        assert entry.serve({}) == 1
+        assert captured["dispatch_groups"] is False
 
     def test_health_reads_the_identity_and_a_recent_heartbeat(self, tmp_path: Path) -> None:
         (tmp_path / IDENTITY_FILE).write_text("wrk_01M2545JSD15ETSNNV904X991K\n")
@@ -247,10 +310,12 @@ class TestTheComposeService:
         assert API_TOKEN_ENV in api
         assert API_TOKEN_ENV not in worker
         assert API_TOKEN_ENV not in self.blocks["worker"]
-        # The two worker-only names: where the worker writes its identity, and how many runs it
-        # executes at once (`EXEC-PAR-QUEUE-01`; the `api` never reads it).
-        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV} == api - {API_TOKEN_ENV}
+        # The worker-only names: where the worker writes its identity, how many runs it executes at
+        # once (`EXEC-PAR-QUEUE-01`), and whether path A may reach private ranges (`R-149g`); the
+        # `api` reads none of them.
+        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV, GROUP_OFFLINE_WAIT_ENV} == api - {API_TOKEN_ENV}
         assert WORKER_SLOTS_ENV in worker and WORKER_SLOTS_ENV not in api
+        assert AGENT_INSTALL_ALLOW_PRIVATE_ENV in worker and AGENT_INSTALL_ALLOW_PRIVATE_ENV not in api
 
     def test_the_worker_runs_the_api_image_as_the_worker_command(self) -> None:
         worker = self.blocks["worker"]

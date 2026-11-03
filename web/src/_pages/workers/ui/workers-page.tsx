@@ -3,13 +3,19 @@
 /**
  * `/workers` — «Исполнители» (`W54-WORKERS-WEB`, plan §3.7; the tabs `EXEC-HTTP-01`).
  *
- * Three tabs. «Процессы» is the screen as `W54-WORKERS-WEB` graduated it from the W43
+ * Five tabs. «Процессы» is the screen as `W54-WORKERS-WEB` graduated it from the W43
  * placeholder: since `W54-WORKER-01` runs execute in a separate worker service and
  * `listWorkers` answers its registry. Any account holding a role reads it (`R-80`); an
  * administrator may stop a worker taking new runs, or allow it again, after a confirmation
  * step whose idempotency key is minted once per intent and reused on an explicit repeat.
  * «Подключения» lists where the stand sends model work and lets an administrator manage it;
  * «Назначения» names the connection that serves each kind of model work.
+ *
+ * `EXEC2-WEB-GROUPS-01` (ADR-0026 decisions 10, 11 and 17): «Группы» holds the homogeneous groups of
+ * interchangeable executors, with their capacity; «Правила» holds the six rules that point a kind of
+ * model work at a group, the routing mode, and the cut-over from the legacy routes. The legacy routes
+ * of «Назначения» are drawn read-only inside «Правила» while the mode is `legacy` (the slot below), and
+ * become history on their own tab once rules are in force.
  *
  * The screen opens on «Процессы», as it always has, unless the address names a tab (`?tab=`):
  * the redirect from the key form names «Подключения». Refreshed on tab return, after a command,
@@ -30,7 +36,9 @@ import { executionFailure, useWorkers } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useSetWorkerIntake } from '@/features/set-worker-intake';
 import { ExecutorConnections } from '@/widgets/executor-connections';
+import { ExecutorGroups } from '@/widgets/executor-groups';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
+import { ExecutorRules } from '@/widgets/executor-rules';
 import { WorkerList } from '@/widgets/worker-list';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 
@@ -124,13 +132,15 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   return (
     <PageShell
       title="Исполнители"
-      subtitle="Подключения к моделям, процессы, которые выполняют прогоны, и назначения. Данные обновляются при возврате на вкладку, после команды и по запросу."
+      subtitle="Подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения. Данные обновляются при возврате на вкладку, после команды и по запросу."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.execution.all() })}>Обновить</button>}
     >
       <WorkersTabs active={tab} onSelect={openTab}>
         {tab === 'connections' ? (
           <ExecutorConnections roles={roles} secretConnectionId={secretConnectionId} secretForm={secretForm} />
         ) : null}
+        {tab === 'groups' ? <ExecutorGroups roles={roles} /> : null}
+        {tab === 'rules' ? <ExecutorRules roles={roles} legacyRoutes={<ExecutorRoutes roles={roles} history />} /> : null}
         {tab === 'routes' ? <ExecutorRoutes roles={roles} /> : null}
         {tab === 'processes' ? (<>
         {account.isPending ? <LoadingState what="права на управление исполнителями" /> : null}

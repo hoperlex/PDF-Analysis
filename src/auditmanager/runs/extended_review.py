@@ -8,13 +8,13 @@ from copy import deepcopy
 from typing import Any
 
 from auditmanager.analysis.public import (ModelCallRecord, ModelRequest, ModelResponse, ProviderMode,
-    build_extended_request, extended_digest, finalize_extended_items,
+    build_extended_request, extended_canonical, extended_digest, finalize_extended_items,
     parse_extended_reply, plan_extended_inputs, EXTENDED_REVIEW_ROLE, EXTENDED_REPLY_ROLE,
     pinned_models, request_cost_upper_usd, require_approved_model, extended_block_payload)
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.executors.public import CropImage, attach_images
 from auditmanager.jobs.public import extended_unit
-from auditmanager.norms.public import search_norms
+from auditmanager.norms.public import SEARCH_WINDOW, search_norms
 from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import ModelCallId
@@ -143,46 +143,94 @@ def _call(session, *, run_id, authority, jobs, journal, binding, request, phase,
 
 
 def _norms(session, observations: list[dict], snapshot_id: str | None,
-           *, full_document: bool = False, checkpoint=None) -> list[str]:
+           *, full_document: bool = False, checkpoint=None, lookup_receipts=None) -> list[str]:
     # Candidate retrieval is deterministic corpus lookup, never edition validation.
     available = snapshot_id is not None
     cache: dict[str, list[dict]] = {}
+    cache_receipts: dict[str, dict] = {}
+    lookup_pass = 1 + max((row.get("lookup_pass_ordinal", 0) for row in (lookup_receipts or [])), default=0)
     calls = 0
     warnings = []
-    for item in observations:
+    for ordinal, item in enumerate(observations):
         queries = item.pop("norm_queries", [])
+        receipt = None
+        if lookup_receipts is not None:
+            receipt = {"version": "norm-search-receipt-v1", "observation_id": item.get("observation_id"),
+                "lookup_pass_ordinal": lookup_pass,
+                "observation_ordinal": ordinal, "title": item.get("title"), "source_ids": deepcopy(item.get("source_ids", [])),
+                "requested_snapshot_id": snapshot_id, "proposed_queries": deepcopy(queries), "queries": [],
+                "status": "running", "search_page_limit": 3, "additional_search_performed": False,
+                "search_result_window_limit": SEARCH_WINDOW, "exhaustive_search_claimed": False,
+                "edition_applicability_verified": False, "document_absence_proved": False}
+            lookup_receipts.append(receipt)
+        def finish_receipt():
+            if receipt is None:
+                return
+            answered = [query for query in receipt["queries"] if query.get("status") == "completed"]
+            receipt.update(status=item.get("norm_status"), reason=item.get("norm_reason"),
+                selected_candidate_ids=[candidate["paragraph_id"] for candidate in item.get("norm_candidates", [])],
+                selected_candidate_count=len(item.get("norm_candidates", [])),
+                queries_answered=len(answered), queries_without_answer=max(0, len(queries) - len(answered)),
+                search_calls_started=sum(query.get("search_started") is True for query in receipt["queries"]),
+                reused_query_answers=sum(query.get("cache_reused") is True for query in answered),
+                search_tail_not_read=any(query.get("has_more") is True for query in answered))
         if not available or not queries:
             item["norm_status"] = "unavailable"
             item["norm_reason"] = "corpus_unavailable" if not available else "query_not_proposed"
+            finish_receipt()
             continue
         candidates = []
+        active_query = None
         try:
             for query in (queries if full_document else queries[:2]):
                 key = " ".join(query.casefold().split())
+                if receipt is not None:
+                    active_query = {"query": query, "normalized_query": key, "status": "not_searched",
+                        "search_started": False, "cache_reused": key in cache}
+                    receipt["queries"].append(active_query)
                 if key not in cache:
                     if not full_document and calls >= 12:
                         item["norm_reason"] = "lookup_window_exhausted"
                         warnings.append("norm_lookup_window_exhausted")
+                        if active_query is not None:
+                            active_query["reason"] = "lookup_window_exhausted"
                         break
                     if checkpoint is not None:
                         checkpoint("extended_norm_lookup")
                     calls += 1
+                    if active_query is not None:
+                        active_query["search_started"] = True
                     page = search_norms(session, q=query, norms_snapshot_id=snapshot_id,
                         cursor=None, limit=3, timeout_ms=1200)
                     cache[key] = [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
                         "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
                         "clause_number": hit.clause_number, "quote": hit.fragment.text[:2000],
                         "page_label": hit.page_label, "status": "candidate_not_verified"} for hit in page.items]
+                    if receipt is not None:
+                        cache_receipts[key] = {"has_more": page.next_cursor is not None, "received_hits": len(page.items),
+                            "hits": [{"snapshot_id": hit.norms_snapshot_id, "document_id": hit.norm_document_id,
+                                "paragraph_id": hit.norm_paragraph_id, "designation": hit.designation,
+                                "clause_number": hit.clause_number, "page_label": hit.page_label,
+                                "received_fragment_characters": len(hit.fragment.text),
+                                "candidate_quote_characters": min(2000, len(hit.fragment.text)),
+                                "candidate_quote_truncated": len(hit.fragment.text) > 2000,
+                                "candidate_quote_sha256": hashlib.sha256(hit.fragment.text[:2000].encode("utf-8")).hexdigest()}
+                                for hit in page.items]}
+                if active_query is not None:
+                    active_query.update(deepcopy(cache_receipts[key]), status="completed")
                 for candidate in cache[key]:
                     if any(c["paragraph_id"] == candidate["paragraph_id"] for c in candidates):
                         continue
                     candidates.append(candidate)
             item["norm_status"] = "candidates" if candidates else "unavailable" if item.get("norm_reason") == "lookup_window_exhausted" else "not_found"
             item["norm_candidates"] = candidates if full_document else candidates[:6]
-        except DomainError:
+        except DomainError as error:
             session.rollback()
             item["norm_status"] = "unavailable"
             item["norm_reason"] = "lookup_unavailable"
+            if active_query is not None:
+                active_query.update(status="failed", error_code=error.code.value, reason="lookup_unavailable")
+        finish_receipt()
     return sorted(set(warnings))
 
 
@@ -439,6 +487,10 @@ def planned_workflow_result(*, reason=None, terminal=False, policy=None):
         parameter_result = {"project_parameters": planned_parameters(policy["project_parameters_policy"], reason=reason, terminal=terminal)}
     return {"format":version,"workflow_version":version,"preliminary":True,
         **parameter_result,
+        **({"project_parameter_context_policy": deepcopy(policy["project_parameter_context_policy"])}
+           if v3 and "project_parameter_context_policy" in policy else {}),
+        **({"norm_paragraph_context_policy": deepcopy(policy["norm_paragraph_context_policy"]), "normative_context_receipts": []}
+           if v3 and "norm_paragraph_context_policy" in policy else {}),
         **({"global_cross_window": _planned_global_cross_window(policy["global_cross_window_policy"], reason=reason, terminal=terminal)}
            if v3 and "global_cross_window_policy" in policy else {}),
         **({"windows":[],"window_progress":{"completed":0,"total":policy["max_windows"],"current":None,"window_size":16},
@@ -564,6 +616,33 @@ def _full_norm_verification(*, session, run, model_id, section, state, snapshot_
     phase("norm_verification", "partial" if len(candidates) < len(items) else "completed")
 
 
+def _bounds_lifted(policy):
+    """Whether the frozen policy belongs to a ``relaxed_limits`` run (`REVIEW-FIX-BOUNDS-1102`).
+
+    Preflight stamps ``unbounded_stats`` on the policy of such a run and of no other; the
+    section-run bounds (1000 sources, 63 windows, 500 text pages, 900 000 request bytes) hold
+    for every other run.
+    """
+    return policy.get("unbounded_stats") is True
+
+
+#: The body size the section builders allow a norm request (`analysis/extended/workflow.py`
+#: MAX_V3_REQUEST_BYTES; a ``relaxed_limits`` run lifts it). The norm paragraph context is attached
+#: after that check, so the final body is measured again. A unit test pins the figure to the builders'.
+_NORM_REQUEST_BODY_BYTES = 900_000
+
+
+def _norm_request_within_bounds(request, *, policy):
+    if not _bounds_lifted(policy) and len(extended_canonical(request.body).encode("utf-8")) > _NORM_REQUEST_BODY_BYTES:
+        raise ValueError("norm_paragraph_context_request_window_too_large")
+
+
+def _reply_refusal_code(error):
+    """What a parser said about a refused reply, when that is a plain code; a decoder message is not kept."""
+    code = str(error)
+    return code if code.isidentifier() and code.islower() else "reply_unreadable"
+
+
 def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs, store, meter,
         publish, progress, checkpoint, observations_document, snapshot_id, profile_sha256, bind_native=None,
         window_context=None, full_document=False):
@@ -576,6 +655,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     # The separately accepted global budget belongs only to the parent Run;
     # a local 16-source window must never advertise or acquire its own copy.
     state.pop("global_cross_window", None)
+    if v3 and "project_parameter_context_policy" in window_context["policy"]:
+        state.pop("project_parameters", None)
     if v3:
         state["window_id"]=window_context["window_id"]
         state["primary_text_status"]=window_context.get("primary_text_status","pending")
@@ -594,6 +675,34 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         save("running")
     def call(request, identity):
         receipt=None
+        parameter_context_receipt=None
+        parameter_review_receipt=None
+        # Only the batched builders take ``relaxed_limits``; a decorator holds the ceiling of the builder
+        # that made the request.
+        if (v3 and identity.startswith("blocks:")
+                and "project_parameter_context_policy" in window_context["policy"]):
+            from auditmanager.analysis.public import attach_project_parameter_context
+            request, provided_context = attach_project_parameter_context(request,
+                parameters=window_context["project_parameters"],
+                accepted=window_context["policy"]["project_parameter_context_policy"],
+                parameters_policy=window_context["policy"]["project_parameters_policy"],
+                relaxed_limits=batched and _bounds_lifted(window_context["policy"]))
+            parameter_context_receipt = {**provided_context, "request_sha256": request.request_sha256,
+                "request_prepared": True, "response_received": False}
+            state.setdefault("project_parameter_context_receipts", {})[identity] = parameter_context_receipt
+            save("running")
+        review_kind = identity.split(":", 1)[0]
+        review_context = window_context["policy"].get("project_parameter_review_context_policy") if v3 else None
+        if review_context is not None and review_kind in review_context["scopes"]:
+            from auditmanager.analysis.public import attach_project_parameter_review_context
+            request, parameter_review_receipt = attach_project_parameter_review_context(request,
+                parameters=window_context["project_parameters"], accepted=review_context,
+                parameters_policy=window_context["policy"]["project_parameters_policy"], procedure=review_kind,
+                relaxed_limits=batched and _bounds_lifted(window_context["policy"]))
+            parameter_review_receipt.update(request_sha256=request.request_sha256,
+                request_prepared=True, response_received=False)
+            state.setdefault("project_parameter_review_context_receipts", {})[identity] = parameter_review_receipt
+            save("running")
         if batched:
             raw_kind, raw_index=identity.split(":",1)
             kind={"blocks":"block_analysis"}.get(raw_kind,raw_kind)
@@ -624,6 +733,12 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
             source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
             global_unknown_fence=v3)
+        if parameter_context_receipt is not None:
+            parameter_context_receipt.update(response_received=True, replayed=replayed,
+                response_sha256=response.response_sha256)
+        if parameter_review_receipt is not None:
+            parameter_review_receipt.update(response_received=True, replayed=replayed,
+                response_sha256=response.response_sha256)
         if receipt is not None:
             receipt.update(response_received=True,replayed=replayed)
             counts=state.setdefault("phase_call_counts",{}).setdefault(kind,{"completed_calls":0,"replayed":0})
@@ -683,7 +798,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             else:
                 native = prepare_native_page_sources(version_uid=run.version_uid,source_ref=source,
                     blob_store=store,max_pages=16 if v3 else version.page_count if full_document else 16,checkpoint=checkpoint,
-                    **({"window_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
+                    **({"window_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"],
+                        "relaxed_limits":_bounds_lifted(window_context["policy"])} if v3 else {}))
             if text_only_portal:
                 native["warnings"].append("portal_text_only_native_page_visuals")
             if bind_native is not None: bind_native(native["artifacts"])
@@ -693,7 +809,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
             observations=observations_document,recognised=data.get("prepared.recognised_text"),
             native_sources=native,plan_version="extended-review-v3" if v3 else "extended-review-v2",full_document=full_document,
             **({"coverage_version":"batched-v1"} if batched else {}),
-            **({"source_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"]} if v3 else {}))
+            **({"source_offset":window_context["offset"],"max_sources":window_context["policy"]["max_blocks"],
+                "relaxed_limits":_bounds_lifted(window_context["policy"])} if v3 else {}))
         if v3:
             window_total=(native["source_window"]["slots"] if native is not None else len([s for s in planned["sources"] if s["kind"]=="image"]))
             planned["source_window_total"]=planned["coverage"]["blocks_total"]
@@ -897,6 +1014,8 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
         return state
     except (DomainError,ValueError,TypeError,KeyError) as error:
         reason=(error.detail_fields.get("reason") or (error.code.value if v3 else None)) if isinstance(error,DomainError) else "extended_reply_or_source_invalid"
+        if isinstance(error,ValueError) and str(error).endswith("_window_too_large"):
+            reason=str(error)  # a request over the size bound is not an invalid reply or source
         reason=str(reason or "extended_workflow_failed")
         for procedure in state["procedures"]:
             if procedure["status"]=="running": procedure.update(status="failed",reason=reason)
@@ -1058,6 +1177,21 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
     def save(status):
         state["status"]=status
         progress(status,state)
+    def parameter_work():
+        if "project_parameters_policy" not in policy:
+            return
+        from .project_parameters import run_project_parameters
+        accepted_parameters = policy["project_parameters_policy"]
+        def parameter_call(request, index):
+            if type(index) is not int or not 0 <= index < accepted_parameters["max_calls"]:
+                raise _refuse("project_parameters_approved_call_limit")
+            return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
+                binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
+                source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
+                checkpoint=checkpoint, global_unknown_fence=True)
+        run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
+            state=state, accepted=accepted_parameters, durable_call=parameter_call,
+            checkpoint=checkpoint, aggregate=aggregate, save=save)
     def aggregate():
         records=state["windows"]
         source_index={}
@@ -1080,8 +1214,33 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             if previous is not None and previous != source:
                 raise _refuse("project_parameters_source_identity_conflict")
             source_index[source["source_id"]] = source
+        parameters = state.get("project_parameters")
+        if isinstance(parameters, dict) and "project_parameter_context_policy" in policy:
+            parameters["visual_context_policy"] = deepcopy(policy["project_parameter_context_policy"])
+            parameters["visual_context_receipts"] = [{"window_id": record["window_id"], "phase_key": identity, **receipt}
+                for record in records for identity, receipt in record.get("project_parameter_context_receipts", {}).items()]
+        if isinstance(parameters, dict) and "project_parameter_review_context_policy" in policy:
+            parameters["review_context_policy"] = deepcopy(policy["project_parameter_review_context_policy"])
+            parameters["review_context_receipts"] = [{"window_id": record["window_id"], "phase_key": identity, **receipt}
+                for record in records for identity, receipt in record.get("project_parameter_review_context_receipts", {}).items()]
+            if isinstance(global_review, dict):
+                parameters["review_context_receipts"].extend({"window_id": "global-cross-window", "phase_key": identity, **receipt}
+                    for identity, receipt in global_review.get("project_parameter_review_context_receipts", {}).items())
         state["sources"]=list(source_index.values())
         state["observations"]=observations
+        if policy.get("coverage_version") == "batched-v1":
+            state["norm_lookup_receipts"] = [{"window_id": record["window_id"], **receipt}
+                for record in records for receipt in record.get("norm_lookup_receipts", [])]
+            if isinstance(global_review, dict):
+                state["norm_lookup_receipts"].extend({"window_id": "global-cross-window", **receipt}
+                    for receipt in global_review.get("norm_lookup_receipts", []))
+        if "norm_paragraph_context_policy" in policy:
+            state["norm_paragraph_context_policy"] = deepcopy(policy["norm_paragraph_context_policy"])
+            state["normative_context_receipts"] = [{"window_id": record["window_id"], "batch_index": identity, **receipt}
+                for record in records for identity, receipt in record.get("normative_context_receipts", {}).items()]
+            if isinstance(global_review, dict):
+                state["normative_context_receipts"].extend({"window_id": "global-cross-window", "batch_index": identity, **receipt}
+                    for identity, receipt in global_review.get("normative_context_receipts", {}).items())
         if policy.get("coverage_version")=="batched-v1":
             state["batches"]=[dict(batch,window_id=record["window_id"])
                 for record in records for batch in record.get("batches",[])]
@@ -1190,6 +1349,42 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
             "procedures":extended_workflow_procedures_v3(),"observations":[],"sources":[]}
             for index in range(count)]
         aggregate();save("running")
+        if "project_parameter_review_context_policy" in policy:
+            from auditmanager.analysis.public import validate_project_parameter_review_context_policy
+            try:
+                if not validate_project_parameter_review_context_policy(policy["project_parameter_review_context_policy"],
+                        parameters_policy=policy["project_parameters_policy"]):
+                    raise ValueError()
+            except ValueError:
+                raise _refuse("project_parameter_review_context_changed_requires_consent") from None
+        if "norm_paragraph_context_policy" in policy:
+            from .norm_context import validate_policy as validate_norm_context_policy
+            try:
+                if not validate_norm_context_policy(policy["norm_paragraph_context_policy"]):
+                    raise ValueError("norm_paragraph_context_policy_required")
+            except ValueError:
+                raise _refuse("norm_paragraph_context_changed_requires_consent") from None
+        if "project_parameter_context_policy" in policy:
+            from auditmanager.analysis.public import (validate_project_parameter_context_policy,
+                validate_project_parameters_policy)
+            try:
+                if not validate_project_parameters_policy(policy["project_parameters_policy"], section=section):
+                    raise ValueError("project_parameters_policy_required")
+                if not validate_project_parameter_context_policy(policy["project_parameter_context_policy"],
+                        parameters_policy=policy["project_parameters_policy"]):
+                    raise ValueError("project_parameter_context_policy_required")
+            except ValueError as error:
+                reason = str(error)
+                if reason not in {"project_parameters_changed_requires_consent", "project_parameters_policy_required",
+                        "project_parameter_context_changed_requires_consent", "project_parameter_context_policy_required"}:
+                    reason = "project_parameter_context_policy_required"
+                raise _refuse(reason) from None
+            if (state["project_parameters"].get("status") == "failed"
+                    and state["project_parameters"].get("source_sha256") == global_sha):
+                state["project_parameters"]["failed_context_retained_without_retry"] = True
+                aggregate(); save("running")
+            else:
+                parameter_work()
         for index,record in enumerate(state["windows"]):
             checkpoint("extended_v3_window")
             window_id=record["window_id"]
@@ -1217,6 +1412,7 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 checkpoint=checkpoint,observations_document=window_observations,snapshot_id=snapshot_id,
                 profile_sha256=profile_sha256,bind_native=bind_native,window_context={"window_id":window_id,
                     "offset":index*16,"policy":policy,"global_sha256":global_sha,"visual_only":visual_only,
+                    "project_parameters": state.get("project_parameters"),
                     "primary_text_status":state["primary_text_status"],"saved_visual":visual_windows.get(window_id),
                     "page_count":version.page_count,"known_visual_refusals":known_visual_refusals})
             budget_exhausted=any("cost_budget_exceeded" in str(warning) for warning in record.get("warnings",[]))
@@ -1247,19 +1443,8 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                 checkpoint=checkpoint, snapshot_id=snapshot_id, state=state, policy=policy,
                 aggregate=aggregate, save=save)
             aggregate()
-        if "project_parameters_policy" in policy:
-            from .project_parameters import run_project_parameters
-            accepted_parameters = policy["project_parameters_policy"]
-            def parameter_call(request, index):
-                if type(index) is not int or not 0 <= index < accepted_parameters["max_calls"]:
-                    raise _refuse("project_parameters_approved_call_limit")
-                return _call(session, run_id=run.run_id, authority=authority, jobs=jobs, journal=journal,
-                    binding=binding, request=request, phase=f"v3:project-parameters:b{index:03d}",
-                    source_sha256=state["source_sha256"], meter=meter, store=store, publish=publish,
-                    checkpoint=checkpoint, global_unknown_fence=True)
-            run_project_parameters(run=run, model_id=binding.config.model_id, outputs=outputs, store=store,
-                state=state, accepted=accepted_parameters, durable_call=parameter_call,
-                checkpoint=checkpoint, aggregate=aggregate, save=save)
+        if "project_parameter_context_policy" not in policy:
+            parameter_work()
         _retain_primary_observations_v3(state,observations_document=observations_document)
         state.update(_attach_consolidation(state, version_uid=run.version_uid))
         for procedure in state["procedures"]:
@@ -1368,6 +1553,15 @@ def _coverage_complete(state, *, kind, index, partial=False, reason=None):
         characters_processed=sum(batch.get('input_characters', 0) for batch in completed))
 
 
+def _coverage_failed(state, *, kind, index, error):
+    """A batch whose paid reply the parser refused: the receipt says so, the batches after it still run.
+
+    ``response_received`` stays as the call left it, so the receipt shows that the reply was paid for.
+    """
+    row = next(row for row in state['batches'] if row['procedure'] == kind and row['index'] == index)
+    row.update(status='failed', reason=f'{kind}_reply_refused', error_code=_reply_refusal_code(error))
+
+
 def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, phase, call, window_context):
     from auditmanager.analysis.public import plan_extended_coverage, build_comprehensive_request_batched_v3
     kind = 'comprehensive_analysis'
@@ -1393,7 +1587,8 @@ def _comprehensive_batched_v3(*, run, binding, state, contexts, block_items, pha
             'batch_index': batch['index'], 'batch_sha256': batch['batch_sha256']}
         request = build_comprehensive_request_batched_v3(model_id=binding.config.model_id,
             run_id=run.run_id, section=state['section'], payload=payload,
-            window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}')
+            window_id=window_context['window_id'] + f':comp:b{batch["index"]:03d}',
+            relaxed_limits=_bounds_lifted(window_context['policy']))
         parsed = parse_extended_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
             allowed_sources=set(batch['source_ids']))
         output.extend(parsed)
@@ -1415,13 +1610,19 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
     from auditmanager.analysis.public import (plan_extended_coverage,
         build_norm_review_request_batched_v3, parse_norm_review_batched_v3)
     kind = 'norm_verification'
+    accepted_context = window_context['policy'].get('norm_paragraph_context_policy')
     # Retrieval is local corpus work. Every observation remains present even if
     # its quote assessment is outside the separately accepted model-call limit.
     state['warnings'].extend(_norms(session, state['observations'], snapshot_id,
-        full_document=True, checkpoint=checkpoint))
+        full_document=True, checkpoint=checkpoint, lookup_receipts=state.setdefault('norm_lookup_receipts', [])))
     registry={}
     quote_variants=False
+    context_incomplete=False
     for item in state['observations']:
+        if accepted_context is not None:
+            # The fresh request supplies an exact candidate list per input, so
+            # another observation's search excerpt must not replace this one.
+            continue
         canonical_candidates=[]
         for candidate in item.get('norm_candidates',[]):
             canonical=registry.setdefault(candidate['paragraph_id'],candidate)
@@ -1444,29 +1645,64 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
             phase(kind, 'unavailable', 'corpus_unavailable' if snapshot_id is None else 'candidate_context_unavailable')
         return
     phase(kind, 'running')
+    refused_replies = 0
     for batch in plan['batches']:
         indexed = {row['input_id']: row['item'] for row in batch['items']}
         registry = {candidate['paragraph_id']: candidate for item in indexed.values()
             for candidate in item['norm_candidates']}
         request = build_norm_review_request_batched_v3(model_id=binding.config.model_id,
             run_id=run.run_id, section=state['section'], window_id=window_context['window_id'] +
-                f':norm:b{batch["index"]:03d}', payload={'coverage_version': 'batched-v1',
+                f':norm:b{batch["index"]:03d}', relaxed_limits=_bounds_lifted(window_context['policy']), payload={'coverage_version': 'batched-v1',
                     'observations': [{'input_id': key, 'title': item['title'], 'description': item['description'],
                         'source_ids': item['source_ids'], 'norm_candidate_ids':
                             [candidate['paragraph_id'] for candidate in item['norm_candidates']]}
                         for key, item in indexed.items()], 'norm_context': list(registry.values()),
                     'source_sha256': state['source_sha256'], 'batch_sha256': batch['batch_sha256']})
-        parsed = parse_norm_review_batched_v3(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
-            observations=indexed, allowed_sources={source['source_id'] for source in state['sources']})
+        context_receipt = None
+        if accepted_context is not None:
+            from .norm_context import attach as attach_norm_context
+            request, context_receipt = attach_norm_context(session, request, observations=indexed,
+                snapshot_id=snapshot_id, accepted=accepted_context, checkpoint=checkpoint)
+            _norm_request_within_bounds(request, policy=window_context['policy'])
+            context_incomplete = context_incomplete or context_receipt['contexts_not_provided'] > 0 or any(
+                row.get('search_quote_literal_in_paragraph') is not True
+                for row in context_receipt['context']['paragraphs'])
+            context_receipt.update(request_sha256=request.request_sha256, request_prepared=True, response_received=False)
+            state.setdefault('normative_context_receipts', {})[str(batch['index'])] = context_receipt
+            phase(kind, 'running')
+        try:
+            response = call(request, f'{kind}:b{batch["index"]:03d}')
+            if context_receipt is not None:
+                context_receipt.update(response_received=True, response_sha256=response.response_sha256)
+        finally:
+            if context_receipt is not None:
+                paid_receipt = next((row for row in state.get('batches', [])
+                    if row.get('procedure') == kind and row.get('index') == batch['index']), {})
+                if paid_receipt.get('response_received'):
+                    context_receipt.update(response_received=True, replayed=paid_receipt.get('replayed', False))
+        try:
+            parsed = parse_norm_review_batched_v3(response.output_text,
+                observations=indexed, allowed_sources={source['source_id'] for source in state['sources']})
+        except ValueError as error:
+            # The reply is paid for and saved; one refused reply costs its own batch, not the window.
+            _coverage_failed(state, kind=kind, index=batch['index'], error=error)
+            for item in indexed.values():
+                item.update(norm_review_status='not_reviewed', norm_review_reason=f'{kind}_reply_refused')
+            refused_replies += 1
+            phase(kind, 'running')
+            continue
         for row in parsed:
             indexed[row['input_id']].update(norm_assessment=row['norm_assessment'],
                 norm_review_status='reviewed', norm_review_reason=None)
         _coverage_complete(state, kind=kind, index=batch['index'])
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
-    incomplete = deferred or quote_variants or len(candidates) < len(state['observations'])
+    incomplete = (deferred or refused_replies or quote_variants or context_incomplete
+        or len(candidates) < len(state['observations']))
     phase(kind, 'partial' if incomplete else 'completed', 'approved_phase_call_limit' if deferred
-        else 'norm_quote_variants_retained' if quote_variants else None)
+        else f'{kind}_reply_refused' if refused_replies
+        else 'norm_quote_variants_retained' if quote_variants
+        else 'norm_paragraph_context_incomplete' if context_incomplete else None)
 
 
 def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts):
@@ -1482,6 +1718,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         limit=None if window_context['policy'].get('unbounded_stats') else limits[kind])
     _coverage_plan_receipts(state, kind=kind, plan=plan, window_id=window_id)
     critic_cut = False
+    refused_replies = 0
     correction_targets = []
     if not state['observations']:
         phase(kind, 'completed', 'no_observations')
@@ -1501,8 +1738,18 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
         critic_cut |= cut
-        reviews = parse_critic_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
-            observations=indexed, sources=sources, allowed_sources=references, context=context)
+        response = call(request, f'{kind}:b{batch["index"]:03d}')
+        try:
+            reviews = parse_critic_reply(response.output_text,
+                observations=indexed, sources=sources, allowed_sources=references, context=context)
+        except ValueError as error:
+            # The reply is paid for and saved; one refused reply costs its own batch, not the window.
+            _coverage_failed(state, kind=kind, index=batch['index'], error=error)
+            for item in indexed.values():
+                item.update(review_status='not_reviewed', review_reason=f'{kind}_reply_refused')
+            refused_replies += 1
+            phase(kind, 'running')
+            continue
         state['reviews'].extend(reviews); state['critiques'].extend(reviews)
         for review in reviews:
             item = indexed[review['input_id']]
@@ -1514,8 +1761,9 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
     if state['observations']:
-        phase(kind, 'partial' if deferred or critic_cut else 'completed',
-            'approved_phase_call_limit' if deferred else 'context_window_truncated' if critic_cut else None)
+        phase(kind, 'partial' if deferred or critic_cut or refused_replies else 'completed',
+            'approved_phase_call_limit' if deferred else f'{kind}_reply_refused' if refused_replies
+            else 'context_window_truncated' if critic_cut else None)
     kind = 'finding_correction'
     plan = plan_extended_coverage(kind=kind, items=correction_targets,
         limit=None if window_context['policy'].get('unbounded_stats') else limits[kind])
@@ -1525,6 +1773,7 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
     else:
         phase(kind, 'running')
     any_partial = False
+    refused_replies = 0
     for batch in plan['batches']:
         indexed = {row['input_id']: row['item'] for row in batch['items']}
         # Re-key only the immutable critic input identity for this disjoint
@@ -1544,8 +1793,16 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         payload = json.loads(request.body['messages'][0]['content'])
         cut = any(payload.get(key, {}).get('truncated', False) for key in
             ('context_coverage', 'norm_context_coverage'))
-        corrections = parse_corrector_reply(call(request, f'{kind}:b{batch["index"]:03d}').output_text,
-            observations=indexed, critiques=critiques, sources=sources, allowed_sources=references, context=context)
+        response = call(request, f'{kind}:b{batch["index"]:03d}')
+        try:
+            corrections = parse_corrector_reply(response.output_text,
+                observations=indexed, critiques=critiques, sources=sources, allowed_sources=references, context=context)
+        except ValueError as error:
+            # The critic rows of this batch stay without a proposal; the batches after it still run.
+            _coverage_failed(state, kind=kind, index=batch['index'], error=error)
+            refused_replies += 1
+            phase(kind, 'running')
+            continue
         state['corrections'].extend(corrections)
         for row in corrections:
             indexed[row['input_id']]['correction'] = row
@@ -1556,8 +1813,9 @@ def _review_batched_v3(*, run, binding, state, phase, call, window_context, cont
         phase(kind, 'running')
     deferred = bool(plan['pending_batches'] or plan['oversized'])
     if correction_targets:
-        phase(kind, 'partial' if deferred or any_partial else 'completed',
-            'approved_phase_call_limit' if deferred else 'context_window_truncated' if any_partial else None)
+        phase(kind, 'partial' if deferred or any_partial or refused_replies else 'completed',
+            'approved_phase_call_limit' if deferred else f'{kind}_reply_refused' if refused_replies
+            else 'context_window_truncated' if any_partial else None)
     phase('report_generation', 'running')
     state['report'] = _section_report_v3(state, window_id=window_id)
     phase('report_generation', 'completed')
@@ -1652,6 +1910,16 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         if identity not in visited and len(visited) >= accepted["call_limits"][kind]:
             raise _refuse("global_cross_window_approved_phase_call_limit")
         visited.add(identity)
+        parameter_review_receipt = None
+        review_context = policy.get("project_parameter_review_context_policy")
+        if review_context is not None and kind in review_context["scopes"]:
+            from auditmanager.analysis.public import attach_project_parameter_review_context
+            request, parameter_review_receipt = attach_project_parameter_review_context(request,
+                parameters=state["project_parameters"], accepted=review_context,
+                parameters_policy=policy["project_parameters_policy"], procedure=kind)
+            parameter_review_receipt.update(request_sha256=request.request_sha256,
+                request_prepared=True, response_received=False)
+            global_state.setdefault("project_parameter_review_context_receipts", {})[identity] = parameter_review_receipt
         receipt = next(row for row in global_state["batches"] if row["procedure"] == kind and row["index"] == index)
         receipt.update(status="running", request_sha256=request.request_sha256)
         persist()
@@ -1660,6 +1928,9 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
             phase="v3:global-cross-window:" + identity, source_sha256=source_sha,
             meter=meter, store=store, publish=publish, checkpoint=checkpoint, global_unknown_fence=True)
         receipt.update(response_received=True, replayed=replayed, response_sha256=response.response_sha256)
+        if parameter_review_receipt is not None:
+            parameter_review_receipt.update(response_received=True, replayed=replayed,
+                response_sha256=response.response_sha256)
         counts = global_state.setdefault("phase_call_counts", {}).setdefault(kind, {"completed_calls": 0, "replayed": 0})
         counts["replayed" if replayed else "completed_calls"] += 1
         if response.truncated: raise _refuse("extended_response_truncated")
@@ -1737,7 +2008,9 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         deferred = bool(plan.get("pending_batches") or plan.get("omitted") or plan["coverage"].get("truncated"))
         phase("comprehensive_analysis", "partial" if deferred else "completed",
               "approved_global_phase_call_limit_or_source_selection" if deferred else None)
-        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"]}}
+        virtual_context = {"window_id": "global-cross-window", "policy": {"phase_call_limits": accepted["call_limits"],
+            **({"norm_paragraph_context_policy": policy["norm_paragraph_context_policy"]}
+                if "norm_paragraph_context_policy" in policy else {})}}
         contexts = [{"source_id": source["source_id"], "page_number": source["page_number"],
             "text": source["quote"] if source["character_field"] == "text" else "",
             "recognised_context": source["quote"] if source["character_field"] == "recognised_context" else ""}

@@ -22,7 +22,9 @@ from auditmanager.api.schemas.common import timestamp
 from auditmanager.shared.errors import ErrorCode, screen_details
 
 __all__ = [
+    "RunBindingView",
     "RunExecutorView",
+    "RunGroupPlanView",
     "RunPresetView",
     "RunStatusView",
     "StageStateView",
@@ -58,6 +60,30 @@ class RunPresetView:
     preset_id: str
     revision_no: int
     name: str
+
+
+@dataclass(frozen=True, slots=True)
+class RunGroupPlanView:
+    """Exactly the frozen ``ExecutorGroupPlan`` (`EXEC2-GROUP-RUN-01`): what admission froze for a Run admitted by a rule
+    or a group. No connection: it is chosen at dispatch (see :class:`RunBindingView`)."""
+
+    group_id: str
+    group_revision_id: str
+    pin_id: str
+    gateway_model: str
+    billing: str
+    rule_revision_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RunBindingView:
+    """Exactly the frozen ``ExecutorBinding`` (`EXEC2-GROUP-RUN-01`): the connection revision dispatch bound the Run to."""
+
+    connection_id: str
+    connection_revision_id: str
+    display_name: str
+    pin_id: str
+    gateway_model: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +136,21 @@ class RunStatusView:
     #: `ANALYSIS-PRESETS-01`. The preset revision the run was started with; ``None`` for a run
     #: started without one, rendered only when present.
     preset: RunPresetView | None = None
+    #: `EXEC2-CAP-01` (``RunQueueReason`` of contract 1.15.0). Why a queued run is waiting for its
+    #: executor, derived from the database at read time: ``runner_offline`` or
+    #: ``executor_at_capacity``. ``None`` for a run that is not waiting for one, rendered only when
+    #: present.
+    queue_reason: str | None = None
+    #: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 to 15; contract 1.16.0). Set only for a Run admitted by a rule or a group:
+    #: its ``binding_state`` (``pending`` or ``bound``; "absent is read as ``frozen_at_start``"), the ``planned`` group and
+    #: model admission froze, the ``binding`` dispatch wrote (``bound`` only) and, while a ``pending`` Run waits, the stored
+    #: ``wait_reason`` with ``waiting_since``. Each is rendered only when present, so every Run whose executor was frozen at
+    #: start reads byte for byte as it did.
+    binding_state: str | None = None
+    planned: RunGroupPlanView | None = None
+    binding: RunBindingView | None = None
+    wait_reason: str | None = None
+    waiting_since: datetime | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -202,4 +243,30 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
             "revision_no": view.preset.revision_no,
             "name": view.preset.name,
         }
+    if view.queue_reason is not None:
+        body["queue_reason"] = view.queue_reason
+    if view.binding_state is not None:
+        body["binding_state"] = view.binding_state
+    if view.planned is not None:
+        body["planned"] = {
+            "executor_group_id": view.planned.group_id,
+            "executor_group_revision_id": view.planned.group_revision_id,
+            **({"routing_rule_revision_id": view.planned.rule_revision_id}
+               if view.planned.rule_revision_id is not None else {}),
+            "pin_id": view.planned.pin_id,
+            "gateway_model": view.planned.gateway_model,
+            "billing": view.planned.billing,
+        }
+    if view.binding is not None:
+        body["binding"] = {
+            "connection_id": view.binding.connection_id,
+            "connection_revision_id": view.binding.connection_revision_id,
+            "display_name": view.binding.display_name,
+            "pin_id": view.binding.pin_id,
+            "gateway_model": view.binding.gateway_model,
+        }
+    if view.wait_reason is not None:
+        body["wait_reason"] = view.wait_reason
+        if view.waiting_since is not None:
+            body["waiting_since"] = timestamp(view.waiting_since)
     return body

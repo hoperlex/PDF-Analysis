@@ -180,11 +180,13 @@ class ExecutionAdapter(_SessionHolder):
                 ))
             else:
                 next_cursor = None
+            facts = _queue_binding_facts(session, [row.run_id for row in items])  # EXEC2-GROUP-RUN-01
             return models.ExecutionQueuePage(
                 items=[models.ExecutionQueueItem(**{
                     "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
                     "priority": row.priority, "created_at": row.created_at,
                     "available_at": row.available_at,
+                    **facts.get(row.run_id, {}),
                 }) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
@@ -254,6 +256,10 @@ class ExecutionAdapter(_SessionHolder):
                                  connection_route=self._runs.route_freezer,
                                  cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
                                  cost_consent=cost_consent, cost_actor_uid=user_uid,
+                                 # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used.
+                                 # A run adapter always has the attribute (``None`` is the `environment` source); the
+                                 # default is for the stand-ins older suites hand this port, which have no group seam.
+                                 group_admitter=getattr(self._runs, "group_admitter", None),
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -278,6 +284,7 @@ class ExecutionAdapter(_SessionHolder):
                 "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
                 "priority": row.priority, "created_at": row.created_at,
                 "available_at": row.available_at,
+                **_queue_binding_facts(session, [row.run_id]).get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
             })
         return self._write(write)
 
@@ -871,12 +878,19 @@ class RunAdapter(_SessionHolder):
         providers: Any = None,
         route_freezer: Any = None,
         ar_v3_pack_registry: Any = None,
+        dispatch_groups: bool = True,
         ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
         cost_preflight: Any = None,
         require_cost_consent: bool = False,
+        group_admitter: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing rules
+        # while the mode is `rules`, in the start's own transaction; ``None`` is the `environment` source (and the many
+        # tests that build a bare adapter): a start that names a group is then refused, and one that names nothing is
+        # what it always was.
+        self._group_admitter = group_admitter
         # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
         # transaction (:func:`resolve_analysis_preset`); ``None`` keeps the many tests that build a
         # bare adapter as they are, and a start that names a preset then answers
@@ -889,6 +903,8 @@ class RunAdapter(_SessionHolder):
         self._providers = providers
         self._route_freezer = route_freezer
         self._ar_v3_pack_registry = ar_v3_pack_registry
+        # `EXEC2-INT-3`: the in-process claim refuses pending group Runs unless the source is `database`.
+        self._dispatch_groups = dispatch_groups
         # `AR-V3-BETA-PACK-STATUS-API-01`. The parsed manifest the registry above was built from
         # (``ParsedPackManifest``), or ``None`` while none is installed. Only the status read uses
         # it; group start and the executor still decide from the registry.
@@ -927,25 +943,29 @@ class RunAdapter(_SessionHolder):
             from auditmanager.runs.preflight import RunCostPreflight
             self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
                 provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
-                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store)
+                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store,
+                group_admitter=group_admitter)
         if require_cost_consent and self._cost_preflight is None:
             raise ValueError("served analysis starts require a cost preflight policy")
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
-                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate:
+                          preset_id: str | None = None, relaxed_limits: bool = False,
+                          executor_group_id: str | None = None) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
         def estimate(session):
             if reaudit_of_run_id is not None:
-                if executor_connection_id is not None or preset_id is not None or relaxed_limits:
+                if (executor_connection_id is not None or preset_id is not None or relaxed_limits
+                        or executor_group_id is not None):
                     raise DomainError(ErrorCode.VALIDATION_FAILED, field="reaudit_of_run_id", constraint="server_selected_route")
                 value = self._cost_preflight.estimate_reaudit(session, run_id=reaudit_of_run_id)
                 if value.as_dict()["version_uid"] != version_uid:
                     raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
                 return value
             return self._cost_preflight.estimate_run(session, version_uid=version_uid,
-                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits)
+                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
+                **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}))
         value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
 
@@ -1056,6 +1076,7 @@ class RunAdapter(_SessionHolder):
         relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        executor_group_id: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1071,6 +1092,10 @@ class RunAdapter(_SessionHolder):
         `ANALYSIS-PRESETS-01`: ``preset_id`` is a saved preset. The command resolves its current
         revision in this transaction and starts as if the caller had named that preset's executor;
         the run records the preset revision. Together with ``executor_connection_id`` it is refused.
+
+        `EXEC2-GROUP-RUN-01`: ``executor_group_id`` names an executor group instead. The run is admitted on the group's
+        current revision, ``pending``, and the connection is chosen at dispatch; it is exclusive with the connection and
+        the preset. With nothing named, a deployment whose routing mode is `rules` admits the run by the current rule.
         """
         from auditmanager.runs import start_audit_run
 
@@ -1118,6 +1143,8 @@ class RunAdapter(_SessionHolder):
                 cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
                 cost_consent=cost_consent,
                 cost_actor_uid=cost_actor_uid,
+                executor_group_id=executor_group_id,
+                group_admitter=self._group_admitter,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1195,6 +1222,7 @@ class RunAdapter(_SessionHolder):
                 text_profiles=self._text_profiles,
                 providers=self._providers,
                 ar_v3_pack_registry=self._ar_v3_pack_registry,
+                dispatch_groups=self._dispatch_groups,
             )
 
         return job
@@ -1213,6 +1241,12 @@ class RunAdapter(_SessionHolder):
         """`EXEC-HTTP-01`: the run-start freezer of the ``database`` source, or ``None``.
         ``ExecutionAdapter.reaudit_run`` passes it so a re-audit freezes today's route."""
         return self._route_freezer
+
+    @property
+    def group_admitter(self) -> Any:
+        """`EXEC2-GROUP-RUN-01`: the seam that admits a start on a group, or ``None`` (the `environment` source).
+        ``ExecutionAdapter.reaudit_run`` passes it so a re-audit keeps the kind of selector the original start used."""
+        return self._group_admitter
 
     @property
     def cost_preflight(self) -> Any:
@@ -1412,7 +1446,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     `RunStatus.stages` was permanently empty and nothing said so - a `getattr` default is a
     silent answer to a question the object cannot answer.
     """
-    from auditmanager.executors.public import executor_of_revision, preset_of_revision
+    from auditmanager.executors.public import (
+        executor_of_revision,
+        preset_of_revision,
+        run_queue_reason,
+    )
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
@@ -1478,6 +1516,15 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             preset_id=used_preset.preset_id, revision_no=used_preset.revision_no,
             name=used_preset.name,
         ),
+        # `EXEC2-CAP-01`. Why a waiting run waits, from the database now. Asked only of a run that
+        # froze a revision and may still be waiting (a run of the `environment` source has no
+        # executor to wait for, and a terminal run costs no query).
+        queue_reason=(
+            run_queue_reason(session, run_id)
+            if run.connection_revision_id is not None and run.state in ("queued", "running")
+            else None
+        ),
+        **_group_status_fields(session, run, chosen),  # EXEC2-GROUP-RUN-01
         stages=tuple(
             StageStateView(
                 stage_id=stage.stage_id,
@@ -1503,6 +1550,64 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             for stage in stages
         ),
     )
+
+
+# EXEC2-GROUP-RUN-01 ----------------------------------------------------------------------------------------
+# What a Run admitted by a rule or a group adds to its status and to the execution queue (ADR-0026 decisions 12 to 15,
+# contract 1.16.0). A Run whose executor was frozen at start adds nothing: its reading is byte for byte what it was.
+
+
+def _group_status_fields(session: Session, run: Any, executor: Any) -> dict[str, Any]:
+    """``binding_state``, ``planned``, ``binding``, ``wait_reason`` and ``waiting_since`` of a Run's status.
+
+    * ``frozen_at_start`` (every Run written before, an explicit connection, a preset, the route, the ``environment``
+      source): nothing -- "absent is read as ``frozen_at_start``" (``RunStatus.binding_state``). A row object without the
+      attribute is such a Run;
+    * ``pending``: the plan admission froze (the group, its revision, the rule revision when a rule routed it, the pin, the
+      model and the billing), no ``binding``, and -- while the Run is still waiting -- the stored ``wait_reason`` with
+      ``waiting_since``. The derived ``queue_reason`` is not reported for it;
+    * ``bound``: the same plan and the ``binding`` dispatch wrote; ``executor`` (the caller's own mapping from the frozen
+      revision) names the same connection.
+    """
+    from auditmanager.api.schemas.runs import RunBindingView, RunGroupPlanView
+    from auditmanager.executors.public import group_revision_of
+
+    state = getattr(run, "binding_state", "frozen_at_start")
+    if state == "frozen_at_start":
+        return {}
+    revision = group_revision_of(session, run.executor_group_revision_id)
+    if revision is None:  # a foreign key forbids it; a stored fact that contradicts its own constraint is not hidden
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="a run's group revision is missing")
+    fields: dict[str, Any] = {
+        "binding_state": state,
+        "planned": RunGroupPlanView(
+            group_id=revision.group_id, group_revision_id=revision.group_revision_id,
+            rule_revision_id=run.routing_rule_revision_id, pin_id=revision.pin_id,
+            gateway_model=revision.gateway_model, billing=revision.billing,
+        ),
+    }
+    if state == "bound" and executor is not None:
+        fields["binding"] = RunBindingView(
+            connection_id=executor.connection_id, connection_revision_id=run.connection_revision_id,
+            display_name=executor.display_name, pin_id=executor.pin_id, gateway_model=revision.gateway_model,
+        )
+    if state == "pending" and run.state == "queued" and run.wait_reason is not None:
+        fields["wait_reason"] = run.wait_reason
+        fields["waiting_since"] = run.waiting_since
+    return fields
+
+
+def _queue_binding_facts(session: Session, run_ids: Sequence[str]) -> dict[str, dict[str, Any]]:
+    """``binding_state`` (and ``wait_reason`` while it waits) of the queue items whose Run was admitted by a rule or a
+    group, keyed by Run. An ordinary Run has no entry, so its queue item is exactly what it was."""
+    from auditmanager.runs import RunRepository
+
+    found: dict[str, dict[str, Any]] = {}
+    for run_id, (binding_state, wait_reason) in RunRepository().binding_facts(session, run_ids).items():
+        found[run_id] = {"binding_state": binding_state}
+        if wait_reason is not None:
+            found[run_id]["wait_reason"] = wait_reason
+    return found
 
 
 def _observation_view(
@@ -5066,6 +5171,7 @@ class ExecutorAdapter(_SessionHolder):
             }
             if detail.summary.connection.kind == "pull":
                 body.update(_pull_channel_facts(session, connection_id))
+                _compose_enrollment_facts(session, connection_id, body)  # EXEC2-ENROLL-01
             return models.ExecutorConnectionDetail.model_validate(body)
         return self._write(work)
 
@@ -5322,7 +5428,23 @@ def _executor_connection_view(summary: Any) -> dict[str, Any]:
         archived_at=connection.archived_at,
         current_revision_id=None if revision is None else revision.revision_id,
         current_revision_no=None if revision is None else revision.revision_no,
+        occupancy=None if revision is None else _occupancy_view(summary.occupancy),
+        # `EXEC2-ENROLL-01`: the administrator's mark, read with the summary (`OccupiedConnectionSummary`).
+        integration_authorisation=_integration_mark_view(getattr(summary, "integration_mark", None)),
     )
+
+
+# --- EXEC2-CAP-01 (ADR-0026 decision 1) -------------------------------------------------------------------
+
+
+def _occupancy_view(occupancy: Any) -> dict[str, int]:
+    """`ExecutorOccupancy`: the capacity of the connection's current revision and the units in use now,
+    read from the database by ``executors.queries`` when the summary was built and stored nowhere. The
+    contract has it present once the connection has a current revision, so the caller omits it before."""
+    return {
+        "capacity": occupancy.capacity, "active_runs": occupancy.active_runs,
+        "active_calls": occupancy.active_calls,
+    }
 
 
 def _analysis_preset_view(record: Any) -> dict[str, Any]:
@@ -5356,6 +5478,519 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
             runner_token_view(record) for record in runner_tokens_of(session, connection_id)
         ],
         "open_task_count": open_task_count(session, connection_id),
+    }
+
+
+# EXEC2-ENROLL-01 ------------------------------------------------------------------------------------
+#
+# The universal agent (ADR-0026 decisions 4 to 9): the enrollment grant and its exchange, the agent's health,
+# the package route, the API side of an install over SSH and the integration-authorisation mark. Thin, like
+# every adapter here: the rules live in ``auditmanager.executors`` (``enrollment``, ``agent_install``,
+# ``integration_mark``, ``agent_package``). This section is the lane's own.
+
+
+def _enrollment_view(record: Any) -> dict[str, Any]:
+    """A grant's metadata. Neither the secret nor its hash is a field of the record."""
+    return _present(
+        enrollment_id=record.enrollment_id, connection_id=record.connection_id,
+        secret_prefix=record.secret_prefix, state=record.state, created_at=record.created_at,
+        created_by=record.created_by, expires_at=record.expires_at,
+        redeemed_at=record.redeemed_at, runner_token_id=record.runner_token_id,
+        revoked_at=record.revoked_at, revoked_by=record.revoked_by,
+    )
+
+
+def _runner_health_fields(health: Any) -> dict[str, Any]:
+    """What an agent last reported on a token, and whether it is online now: closed enumerations only."""
+    return {
+        "agent_version": health.agent_version, "clis": [dict(item) for item in health.clis],
+        "concurrency": health.concurrency, "execution_profile": health.execution_profile,
+        "features": list(health.features), "health_reported_at": health.reported_at,
+        "online": health.online,
+    }
+
+
+def _with_runner_health(session: Session, views: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The token views with the health of each token that has reported; the others are unchanged."""
+    from auditmanager.executors.public import token_health_of
+
+    health = token_health_of(session, [view["token_id"] for view in views])
+    return [
+        {**view, **(_runner_health_fields(health[view["token_id"]]) if view["token_id"] in health else {})}
+        for view in views
+    ]
+
+
+def _integration_mark_view(mark: Any) -> dict[str, Any] | None:
+    """`ExecutorIntegrationAuthorisation`, or ``None`` (the property is then absent) while no mark is set."""
+    if mark is None:
+        return None
+    return {"authorised_at": mark.authorised_at, "authorised_by": mark.authorised_by}
+
+
+def _compose_enrollment_facts(session: Session, connection_id: str, body: dict[str, Any]) -> None:
+    """Add to a ``pull`` connection's detail what this lane owns: its last grants (metadata only) and the
+    agents' health on the runner tokens that ``_pull_channel_facts`` listed. (The administrator's
+    integration-authorisation mark rides on the connection summary: ``_executor_connection_view``.) The one
+    call the shared mapping makes into this section."""
+    from auditmanager.executors.public import enrollments_of
+
+    body["enrollments"] = [_enrollment_view(record) for record in enrollments_of(session, connection_id)]
+    if body.get("runner_tokens"):
+        body["runner_tokens"] = _with_runner_health(session, body["runner_tokens"])
+
+
+def _agent_install_view(record: Any) -> dict[str, Any]:
+    """An install session. A generated key shows its public half and the ``authorized_keys`` line (public by
+    nature); the sealed private half is not a field of the record, and a pasted key shows nothing."""
+    from auditmanager.executors.public import authorized_keys_line, observed_fingerprint
+
+    return _present(
+        install_id=record.install_id, connection_id=record.connection_id, state=record.state,
+        access=record.access, ssh_host=record.ssh_host, ssh_port=record.ssh_port,
+        ssh_user=record.ssh_user, public_key=record.public_key,
+        authorized_keys_line=(None if record.public_key is None
+                              else authorized_keys_line(record.public_key, record.install_id)),
+        observed_host_key_fingerprint=observed_fingerprint(record),
+        host_key_confirmed_at=record.host_key_confirmed_at,
+        host_key_confirmed_by=record.host_key_confirmed_by,
+        package_version=record.package_version, package_sha256=record.package_sha256,
+        failure_reason=record.failure_reason, key_removed_at=record.key_removed_at,
+        created_at=record.created_at, created_by=record.created_by, updated_at=record.updated_at,
+        finished_at=record.finished_at,
+    )
+
+
+class ExecutorEnrollmentAdapter(_SessionHolder):
+    """The universal agent (`EXEC2-ENROLL-01`): the port of ``api.routers.executor_enrollment``.
+
+    ``ring`` is the **public** ring the ``api`` seals an install session's key to (``None`` without a
+    configured key, which makes ``createExecutorAgentInstall`` a typed refusal); the ``api`` holds no private
+    key, so no method here opens a secret. ``public_origin`` is the stand's configured public origin
+    (``AUDITMANAGER_PUBLIC_ORIGIN``), the **only** source of the origin the install command is built from: an
+    absent or malformed value is a typed refusal (``dependency_unavailable`` / ``public_origin``), never the
+    origin the administrator's request arrived on. It also authenticates an enrollment secret for the seam
+    (``api.security.EnrollmentSecrets``).
+
+    No method returns a secret but ``issue_enrollment`` (the grant's, once) and ``redeem_enrollment`` (the
+    runner token's, once); no view built here carries a hash, a private key or a sealed byte."""
+
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, ring: Any = None,
+        public_origin: str | None = None,
+    ) -> None:
+        super().__init__(session_factory)
+        self._ring = ring
+        self._public_origin = public_origin
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> Any:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    # -- the seam ---------------------------------------------------------------------------
+
+    def authenticate_enrollment(self, presented: str) -> Any:
+        from auditmanager.api.security import EnrollmentIdentity
+        from auditmanager.executors.public import authenticate_enrollment
+
+        def work(session: Session) -> Any:
+            principal = authenticate_enrollment(session, presented)
+            if principal is None:
+                return None
+            return EnrollmentIdentity(
+                enrollment_id=principal.enrollment_id, connection_id=principal.connection_id,
+                exchange_key=principal.exchange_key)
+        return self._read(work)
+
+    # -- the administrator's -----------------------------------------------------------------
+
+    def issue_enrollment(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.IssuedExecutorEnrollment:
+        from auditmanager.executors.public import issue_executor_enrollment
+
+        def work(session: Session) -> models.IssuedExecutorEnrollment:
+            issued = issue_executor_enrollment(
+                session, connection_id=connection_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+                configured_origin=self._public_origin,
+            )
+            return models.IssuedExecutorEnrollment.model_validate({
+                "secret": issued.secret, "package_version": issued.package.version,
+                "package_sha256": issued.package.sha256, "command": issued.command,
+                "enrollment": _enrollment_view(issued.record),
+            })
+        return self._write(work)
+
+    def set_integration_authorisation(
+        self, *, connection_id: str, authorised: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection:
+        from auditmanager.executors.public import connection_detail, set_integration_authorisation
+
+        def work(session: Session) -> models.ExecutorConnection:
+            set_integration_authorisation(
+                session, connection_id=connection_id, authorised=authorised,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            # The summary is read after the write, in the same transaction, so it carries the mark as it stands.
+            summary = connection_detail(session, connection_id).summary
+            return models.ExecutorConnection.model_validate(_executor_connection_view(summary))
+        return self._write(work)
+
+    def create_agent_install(
+        self, *, connection_id: str, body: models.CreateExecutorAgentInstallRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorAgentInstall:
+        from auditmanager.executors.public import create_agent_install
+
+        def work(session: Session) -> models.ExecutorAgentInstall:
+            record = create_agent_install(
+                session, connection_id=connection_id, access=body.access.value,
+                ssh_host=body.ssh_host, ssh_port=body.ssh_port, ssh_user=body.ssh_user,
+                private_key=body.private_key, ring=self._ring,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
+        return self._write(work)
+
+    def get_agent_install(
+        self, *, connection_id: str, install_id: str
+    ) -> models.ExecutorAgentInstall:
+        from auditmanager.executors.public import get_agent_install
+
+        def work(session: Session) -> models.ExecutorAgentInstall:
+            record = get_agent_install(session, connection_id=connection_id, install_id=install_id)
+            return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
+        # `EXEC2-INT-1`: a read may end an overdue session and replace its key, so it commits.
+        return self._write(work)
+
+    def confirm_agent_install_host_key(
+        self, *, connection_id: str, install_id: str, host_key_fingerprint: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorAgentInstall:
+        from auditmanager.executors.public import confirm_agent_install_host_key
+
+        def work(session: Session) -> models.ExecutorAgentInstall:
+            record = confirm_agent_install_host_key(
+                session, connection_id=connection_id, install_id=install_id,
+                fingerprint=host_key_fingerprint, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorAgentInstall.model_validate(_agent_install_view(record))
+        return self._write(work)
+
+    # -- the agent's -------------------------------------------------------------------------
+
+    def redeem_enrollment(
+        self, *, enrollment: Any, runner_instance_id: str
+    ) -> models.IssuedRunnerToken:
+        from auditmanager.bootstrap.runner import runner_token_view
+        from auditmanager.executors.public import EnrollmentPrincipal, redeem_enrollment
+
+        def work(session: Session) -> models.IssuedRunnerToken:
+            redeemed = redeem_enrollment(
+                session,
+                EnrollmentPrincipal(
+                    enrollment_id=enrollment.enrollment_id, connection_id=enrollment.connection_id,
+                    exchange_key=enrollment.exchange_key),
+                runner_instance_id=runner_instance_id,
+            )
+            (view,) = _with_runner_health(session, [runner_token_view(redeemed.record)])
+            return models.IssuedRunnerToken.model_validate(
+                {"token": redeemed.value, "runner_token": view})
+        return self._write(work)
+
+    def report_health(
+        self, *, runner: Any, body: models.ReportRunnerHealthRequest
+    ) -> models.RunnerHealthAck:
+        from auditmanager.executors.public import report_runner_health
+
+        def work(session: Session) -> models.RunnerHealthAck:
+            recorded = report_runner_health(
+                session, runner.token_id, agent_version=body.agent_version,
+                clis=[
+                    {"cli": item.cli.value, "installed": item.installed,
+                     "auth_state": item.auth_state.value,
+                     **({} if item.version is None else {"version": item.version})}
+                    for item in body.clis
+                ],
+                concurrency=body.concurrency, execution_profile=body.execution_profile.value,
+                features=[feature.value for feature in body.features],
+            )
+            return models.RunnerHealthAck.model_validate({"recorded_at": recorded})
+        return self._write(work)
+
+    def read_package(self, *, version: str) -> tuple[str, bytes]:
+        from auditmanager.executors.public import load_package
+
+        package, content = load_package(version)
+        return package.file_name, content
+
+
+# EXEC2-GROUP-STORE-01 ---------------------------------------------------------------------------------
+#
+# Executor groups and the routing rule of a work kind (ADR-0026 decisions 10, 11 and 14). Thin, like every adapter
+# here: the rules live in ``auditmanager.executors`` (``groups``, ``group_commands``, ``group_selection``). This
+# section is the lane's own.
+
+
+def _group_member_view(member: Any) -> dict[str, Any]:
+    return _present(
+        connection_id=member.connection_id, connection_revision_id=member.connection_revision_id,
+        tie_break_order=member.tie_break_order,
+    )
+
+
+def _group_revision_view(revision: Any) -> dict[str, Any]:
+    """One immutable revision. The rates are USD per million tokens, snapshotted from the provider lock when the
+    revision was made; a member is named by identity only (no setting, address or key of its connection)."""
+    return {
+        "group_revision_id": revision.group_revision_id, "group_id": revision.group_id,
+        "revision_no": revision.revision_no, "pin_id": revision.pin_id,
+        "gateway_model": revision.gateway_model, "billing": revision.billing,
+        "input_per_mtok_usd": float(revision.input_per_mtok_usd),
+        "output_per_mtok_usd": float(revision.output_per_mtok_usd), "strategy": revision.strategy,
+        "members": [_group_member_view(member) for member in revision.members],
+        "created_at": revision.created_at, "created_by": revision.created_by,
+    }
+
+
+def _group_view(summary: Any) -> dict[str, Any]:
+    group = summary.group
+    return _present(
+        group_id=group.group_id, display_name=group.display_name, created_at=group.created_at,
+        created_by=group.created_by, current_revision=_group_revision_view(summary.current_revision),
+        routed_work_kinds=list(summary.routed_work_kinds), archived_at=group.archived_at,
+    )
+
+
+def _routing_rule_view(rule: Any) -> dict[str, Any]:
+    return {
+        "work_kind": rule.work_kind, "rule_revision_id": rule.rule_revision_id,
+        "group_id": rule.group_id, "group_revision_id": rule.group_revision_id,
+        "set_at": rule.set_at, "set_by": rule.set_by,
+    }
+
+
+def _routing_mode_view(state: Any) -> dict[str, Any]:
+    """``ExecutorRoutingModeState``: before the first change the mode is ``legacy`` and the rest is absent."""
+    return _present(
+        mode=state.mode, mode_event_id=state.mode_event_id, changed_at=state.changed_at,
+        changed_by=state.changed_by,
+    )
+
+
+def _group_capacity_view(capacity: Any) -> dict[str, Any]:
+    return {
+        "group_id": capacity.group_id, "group_revision_id": capacity.group_revision_id,
+        "members": [
+            _present(
+                connection_id=status.connection_id, snapshot_revision_id=status.snapshot_revision_id,
+                current_revision_id=status.current_revision_id,
+                occupancy=None if status.occupancy is None else _occupancy_view(status.occupancy),
+                eligible=status.eligible, ineligible_reason=status.issue,
+            )
+            for status in capacity.members
+        ],
+        "capacity": capacity.capacity, "used": capacity.used, "waiting": capacity.waiting,
+    }
+
+
+class ExecutorGroupAdapter(_SessionHolder):
+    """The port of ``api.routers.executor_groups`` (`EXEC2-GROUP-STORE-01`).
+
+    The four reads take no actor (any role reads, as the connections' reads do) and the four writes re-read the actor's
+    role set inside their own transaction. The rates a group snapshots come from the provider lock
+    (``pinned_models``), read here and handed to the command. No method returns a secret or a setting of a connection."""
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> Any:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    @staticmethod
+    def _settings(body: Any) -> Any:
+        from auditmanager.executors.public import GroupSettings
+
+        return GroupSettings(
+            pin_id=body.pin_id, gateway_model=body.gateway_model, billing=body.billing.value,
+            strategy="least_loaded" if body.strategy is None else body.strategy.value,
+        )
+
+    @staticmethod
+    def _members(body: Any) -> list[Any]:
+        from auditmanager.executors.public import MemberRequest
+
+        return [
+            MemberRequest(
+                connection_id=member.connection_id, connection_revision_id=member.connection_revision_id,
+                tie_break_order=member.tie_break_order,
+            )
+            for member in body.members
+        ]
+
+    # -- reads ----------------------------------------------------------------------------------
+
+    def list_groups(self) -> models.ExecutorGroupList:
+        from auditmanager.executors.public import list_group_summaries
+
+        def work(session: Session) -> models.ExecutorGroupList:
+            return models.ExecutorGroupList.model_validate(
+                {"items": [_group_view(summary) for summary in list_group_summaries(session)]})
+        return self._read(work)
+
+    def get_group(self, *, group_id: str) -> models.ExecutorGroupDetail:
+        from auditmanager.executors.public import group_detail
+
+        def work(session: Session) -> models.ExecutorGroupDetail:
+            detail = group_detail(session, group_id)
+            return models.ExecutorGroupDetail.model_validate({
+                "group": _group_view(detail.summary),
+                "revisions": [_group_revision_view(revision) for revision in detail.revisions],
+            })
+        return self._read(work)
+
+    def get_capacity(self, *, group_id: str) -> models.ExecutorGroupCapacity:
+        from auditmanager.executors.public import group_capacity
+
+        def work(session: Session) -> models.ExecutorGroupCapacity:
+            return models.ExecutorGroupCapacity.model_validate(
+                _group_capacity_view(group_capacity(session, group_id)))
+        # A write transaction: the read ends the probes nobody can still be running, as the connection detail does.
+        return self._write(work)
+
+    def list_rules(self) -> models.ExecutorRoutingRuleList:
+        from auditmanager.executors.public import list_routing_rules
+
+        def work(session: Session) -> models.ExecutorRoutingRuleList:
+            listing = list_routing_rules(session)
+            return models.ExecutorRoutingRuleList.model_validate({
+                "routing_mode": _routing_mode_view(listing.routing_mode),
+                "items": [_routing_rule_view(rule) for rule in listing.rules],
+            })
+        return self._read(work)
+
+    # -- writes ---------------------------------------------------------------------------------
+
+    def create_group(
+        self, *, body: models.CreateExecutorGroupRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup:
+        from auditmanager.executors.public import create_group, pinned_models
+
+        def work(session: Session) -> models.ExecutorGroup:
+            summary = create_group(
+                session, display_name=body.display_name, settings=self._settings(body),
+                members=self._members(body), pins=pinned_models(),
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorGroup.model_validate(_group_view(summary))
+        return self._write(work)
+
+    def revise_group(
+        self, *, group_id: str, body: models.ReviseExecutorGroupRequest, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorGroup:
+        from auditmanager.executors.public import pinned_models, revise_group
+
+        def work(session: Session) -> models.ExecutorGroup:
+            summary = revise_group(
+                session, group_id=group_id, settings=self._settings(body),
+                members=self._members(body), pins=pinned_models(),
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorGroup.model_validate(_group_view(summary))
+        return self._write(work)
+
+    def archive_group(
+        self, *, group_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup:
+        from auditmanager.executors.public import archive_group
+
+        def work(session: Session) -> models.ExecutorGroup:
+            summary = archive_group(
+                session, group_id=group_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorGroup.model_validate(_group_view(summary))
+        return self._write(work)
+
+    def set_rule(
+        self, *, work_kind: str, group_revision_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingRule:
+        from auditmanager.executors.public import set_routing_rule
+
+        def work(session: Session) -> models.ExecutorRoutingRule:
+            rule = set_routing_rule(
+                session, work_kind=work_kind, group_revision_id=group_revision_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorRoutingRule.model_validate(_routing_rule_view(rule))
+        return self._write(work)
+
+    # EXEC2-CUTOVER-01 (ADR-0026 decision 17). Thin, like the rest: the preview, the cut-over and the rollback live in
+    # ``auditmanager.executors.routing_mode``; this re-reads the actor's role set inside the transaction and maps
+    # the records into the frozen shapes. The cut-over and the rollback commit as one transaction (``_write``); the
+    # preview is a read.
+    def preview_routing(self, *, user_uid: str) -> models.ExecutorRoutingPreview:
+        from auditmanager.executors.public import preview_routing
+
+        def work(session: Session) -> models.ExecutorRoutingPreview:
+            preview = preview_routing(session, roles=self._roles(session, user_uid))
+            return models.ExecutorRoutingPreview.model_validate(_routing_preview_view(preview))
+        return self._read(work)
+
+    def set_routing_mode(
+        self, *, body: models.SetExecutorRoutingModeRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingModeResult:
+        from auditmanager.executors.public import MappingEntry, pinned_models, set_routing_mode
+
+        def work(session: Session) -> models.ExecutorRoutingModeResult:
+            change = set_routing_mode(
+                session, mode=body.mode.value, preview_digest=body.preview_digest,
+                mapping=None if body.mapping is None else [
+                    MappingEntry(work_kind=entry.work_kind.value, group_display_name=entry.group_display_name)
+                    for entry in body.mapping],
+                pins=pinned_models(), roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorRoutingModeResult.model_validate({
+                "routing_mode": _routing_mode_view(change.routing_mode),
+                "groups": [_group_view(summary) for summary in change.groups],
+                "rules": [_routing_rule_view(rule) for rule in change.rules],
+            })
+        return self._write(work)
+
+
+# EXEC2-CUTOVER-01 ---------------------------------------------------------------------------------------
+#
+# The cut-over preview as the contract shapes it (``ExecutorRoutingPreview``). An optional property is absent,
+# never null; the items are the six work kinds in the order the enumeration names them.
+
+
+def _routing_preview_view(preview: Any) -> dict[str, Any]:
+    return {
+        "routing_mode": _routing_mode_view(preview.routing_mode),
+        "preview_digest": preview.preview_digest,
+        "items": [
+            _present(
+                work_kind=item.work_kind, status=item.status,
+                primary_connection_id=item.primary_connection_id,
+                connection_revision_id=item.connection_revision_id,
+                standby_connection_id=item.standby_connection_id, pin_id=item.pin_id,
+                gateway_model=item.gateway_model, billing=item.billing,
+                proposed_group_name=item.proposed_group_name,
+                incompatible_reason=item.incompatible_reason,
+            )
+            for item in preview.items
+        ],
     }
 
 

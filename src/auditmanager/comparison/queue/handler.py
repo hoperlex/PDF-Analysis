@@ -169,10 +169,14 @@ class ComparisonLaunchHandler:
 
     def _deterministic(self, item: WorkItem, entry: Mapping[str, Any]) -> str:
         step = entry["step"]
+        # ``entry`` is the row as ``_run`` read it: still ``waiting`` on the call that launches the step,
+        # ``running`` on every later poll. Only the launching call may decide that the step is already
+        # done and skip it; a poll that finds the step done has watched the launched work finish.
+        starting = entry["state"] == "waiting"
         initial_state = self._overview_state(entry)
         if initial_state == "not_applicable":
             return "skipped"
-        if initial_state in ("done", "attention") and not entry["restart"]:
+        if starting and initial_state in ("done", "attention") and not entry["restart"]:
             return "skipped"
         key = f"launch-{entry['comparison_launch_entry_id']}"
         if step == "profile":

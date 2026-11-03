@@ -480,6 +480,38 @@ def extended_coverage_policy(**kwargs):
     return coverage_policy(**kwargs)
 
 
+def native_page_piece_policy():
+    from .text.page_pieces import policy
+    return policy()
+
+
+def validate_native_page_piece_policy(value, **kwargs):
+    from .text.page_pieces import validate_policy
+    return validate_policy(value, **kwargs)
+
+
+__all__ += ["native_page_piece_policy", "validate_native_page_piece_policy"]
+
+
+def project_parameter_review_context_policy(parameters_policy):
+    from .extended.parameter_review_context import policy
+    return policy(parameters_policy)
+
+
+def validate_project_parameter_review_context_policy(value, **kwargs):
+    from .extended.parameter_review_context import validate_policy
+    return validate_policy(value, **kwargs)
+
+
+def attach_project_parameter_review_context(request, **kwargs):
+    from .extended.parameter_review_context import attach
+    return attach(request, **kwargs)
+
+
+__all__ += ["project_parameter_review_context_policy", "validate_project_parameter_review_context_policy",
+    "attach_project_parameter_review_context"]
+
+
 def validate_extended_coverage_policy(policy):
     from auditmanager.analysis.extended.coverage import validate_coverage_policy
     return validate_coverage_policy(policy)
@@ -580,3 +612,21 @@ def parse_project_parameters_reply(text, **kwargs):
 
 __all__.extend(["project_parameters_policy", "validate_project_parameters_policy", "plan_project_parameters",
     "build_project_parameters_request", "parse_project_parameters_reply"])
+
+
+def project_parameter_context_policy(parameters_policy):
+    from auditmanager.analysis.extended.parameter_context import policy
+    return policy(parameters_policy)
+
+
+def validate_project_parameter_context_policy(value, *, parameters_policy, compare_bundle=True):
+    from auditmanager.analysis.extended.parameter_context import validate_policy
+    return validate_policy(value, parameters_policy=parameters_policy, compare_bundle=compare_bundle)
+
+
+def attach_project_parameter_context(request, **kwargs):
+    from auditmanager.analysis.extended.parameter_context import attach
+    return attach(request, **kwargs)
+
+
+__all__.extend(["project_parameter_context_policy", "validate_project_parameter_context_policy", "attach_project_parameter_context"])

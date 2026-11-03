@@ -34,6 +34,8 @@ import type { ExecutorChoice } from '@/entities/executor-connection';
 import { ArchivePresetControl, PresetForm } from '@/features/manage-analysis-preset';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 
+import styles from './analysis-presets.module.css';
+
 export interface AnalysisPresetsProps {
   readonly roles: readonly Role[];
 }
@@ -50,7 +52,7 @@ function PresetCard({
   const blocker = presetBlocker(preset, choices);
   const archived = preset.state === 'archived';
   return (
-    <li className="am-state" style={{ marginBottom: '0.5rem' }} data-preset-state={preset.state}>
+    <li className="am-state" data-preset-state={preset.state}>
       <p className="am-state__title">
         <strong data-preset-name>{preset.name}</strong> · {PRESET_STATE_LABELS[preset.state]} · версия{' '}
         {preset.revision_no}
@@ -119,7 +121,7 @@ export function AnalysisPresets({ roles }: AnalysisPresetsProps) {
             }
           />
         ) : (
-          <ol aria-label="Пресеты" style={{ listStyle: 'none', margin: 0, padding: 0 }} data-preset-list>
+          <ol aria-label="Пресеты" className={styles.presetList} data-preset-list>
             {active.map((preset) => (
               <PresetCard key={preset.preset_id} preset={preset} choices={choices} canManage={canManage} />
             ))}
@@ -128,7 +130,7 @@ export function AnalysisPresets({ roles }: AnalysisPresetsProps) {
         {archived.length === 0 ? null : (
           <details data-preset-archive-list>
             <summary>Архив пресетов ({archived.length})</summary>
-            <ol aria-label="Пресеты в архиве" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            <ol aria-label="Пресеты в архиве" className={styles.presetList}>
               {archived.map((preset) => (
                 <PresetCard key={preset.preset_id} preset={preset} choices={choices} canManage={false} />
               ))}

@@ -1,8 +1,8 @@
 """The portal bundle's archive rules, applied while the members are taken out of the ZIP.
 
-Temporary statistics intake raises numeric byte and compression-ratio ceilings
-to storage representation limits. The historical measurements below explain
-the previous policy and remain useful for rollback.
+The byte, ratio and entry bounds below are a sandbox: they are finite in every deployment and
+the relaxed intake mode (:mod:`auditmanager.ingest.intake_mode`) does not move them
+(`REVIEW-FIX-BOUNDS-1102`).
 
 `W55B-INGEST-01` (plan section B3.1, owner ruling R-116). An upload is one ZIP holding the
 portal's files for one PDF: exactly one ``<stem>.pdf``, ``<stem>_blocks.json`` and
@@ -71,7 +71,7 @@ from typing import BinaryIO, Final
 
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-from .envelope import MAX_BYTES
+from .envelope import PDF_MEMBER_BYTES
 
 __all__ = [
     "ACCEPTED_METHODS",
@@ -108,10 +108,12 @@ ZIP_MAGICS: Final[tuple[bytes, ...]] = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x
 # -- the bounds -------------------------------------------------------------------------
 
 #: Any one member's uncompressed size. The PDF is the largest member and its own bound is
-#: the upload's (250 MiB, ``MAX_BYTES``): a smaller figure here would refuse a valid
+#: the upload's (250 MiB, ``PDF_MEMBER_BYTES``): a smaller figure here would refuse a valid
 #: maximal PDF. The other members are held far lower below, so this figure only governs the
 #: PDF and the HTML (which is hashed and dropped, so its size costs time and no memory).
-MEMBER_BYTES: Final[int] = MAX_BYTES
+#: It is the sandbox figure, not the envelope's quota ``MAX_BYTES``, which a relaxed
+#: deployment lifts.
+MEMBER_BYTES: Final[int] = PDF_MEMBER_BYTES
 
 #: The members that are read into memory to be parsed -- ``_blocks.json`` and
 #: ``_results.md``. Measured on the 674 portal documents of the norms corpus (the largest
@@ -119,7 +121,7 @@ MEMBER_BYTES: Final[int] = MAX_BYTES
 #: ``_blocks.json`` 1.1 KB per page, 0.55 MB for 500 pages. 16 MiB is more than four times
 #: the worst markdown and thirty times the worst block list. It is also what bounds memory:
 #: ``json.loads`` of a block list holds roughly ten times its size in Python objects.
-TEXT_MEMBER_BYTES: Final[int] = 2**63 - 1
+TEXT_MEMBER_BYTES: Final[int] = 16 * MiB
 
 #: ``_blocks.json`` on its own (`W55B-FIX`, X-6): parsing JSON costs a multiple of its size
 #: before a single block is judged, up to about 25 times for a list of empty objects
@@ -129,16 +131,16 @@ TEXT_MEMBER_BYTES: Final[int] = 2**63 - 1
 #: 4 MiB is fourteen times the largest real list, and holds the bundle's block ceiling
 #: (``bundle_envelope.MAX_BLOCKS``, 3 000) at 1.1 KB a block, the corpus' pretty-printed
 #: density, with room to spare.
-BLOCKS_MEMBER_BYTES: Final[int] = 2**63 - 1
+BLOCKS_MEMBER_BYTES: Final[int] = 4 * MiB
 
 #: ``_stamp_audit.json`` is stored and parsed as JSON, never analysed. The corpus' largest is
 #: 62 KB (547 bytes per page, 274 KB for 500 pages): 4 MiB is fifteen times that.
-STAMP_AUDIT_BYTES: Final[int] = 2**63 - 1
+STAMP_AUDIT_BYTES: Final[int] = 4 * MiB
 
 #: Plan section B3.1 and ``W55B-FREEZE-01``: the members' uncompressed bytes together, the
 #: compression ratio of a member and of the archive, and the number of entries.
-TOTAL_BYTES: Final[int] = 2**63 - 1
-MAX_RATIO: Final[int] = 2**63 - 1
+TOTAL_BYTES: Final[int] = 300 * MiB
+MAX_RATIO: Final[int] = 100
 MAX_ENTRIES: Final[int] = 8
 
 

@@ -32,11 +32,13 @@ __all__ = [
     "REASON_CONSENT_REQUIRED",
     "REASON_CONSENT_STALE",
     "REASON_DAY_CEILING",
+    "REASON_EXECUTOR_ROUTE_MISSING",
     "REASON_IMAGES_UNSUPPORTED",
     "REASON_JOB_CEILING",
     "REASON_LEASE_LOST",
     "REASON_MODEL_IDENTITY",
     "REASON_MODEL_NOT_SELECTED",
+    "REASON_NO_EXECUTOR_ONLINE",
     "REASON_OVERRUN",
     "REASON_SPEND_UNKNOWN",
     "REASON_UNSETTLED_CALL",
@@ -55,7 +57,17 @@ REASON_DAY_CEILING: Final[str] = "day_ceiling"
 #: The actual spend of the job is above 1.2 x the estimate the consent was given for.
 REASON_OVERRUN: Final[str] = "overrun"
 #: A Run, or another comparison call, is using the connection (one active user per connection).
+#: `EXEC2-GROUP-CMP-01`: also the refusal of a call of a job admitted by a group while no member can take it -- a wait,
+#: never a failure. Which wait it is (``executor_at_capacity``, ``runner_offline``) is stored on the job
+#: (``comparison_ai_job.wait_reason``), so every handler's existing answer to a busy connection serves the group too.
 REASON_CONNECTION_BUSY: Final[str] = "connection_busy"
+#: `EXEC2-GROUP-CMP-01` (ADR-0026 decision 15): every member of the job's group stayed without an eligible runner for
+#: longer than ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS``. The job ends ``failed`` with this reason
+#: (``ComparisonAiJobService.pause_for_spend`` is the one place a refusal reaches the job, and it ends the job here).
+REASON_NO_EXECUTOR_ONLINE: Final[str] = "no_executor_online"
+#: The adapter of the member dispatch chose cannot be built (the revision, its kind's factory or its key is gone):
+#: nothing was written and nothing was sent; the item ends with this reason.
+REASON_EXECUTOR_ROUTE_MISSING: Final[str] = "executor_route_missing"
 #: An earlier attempt of the item left a call that is neither settled nor re-queued; the item is
 #: never sent again by itself.
 REASON_UNSETTLED_CALL: Final[str] = "unsettled_call"

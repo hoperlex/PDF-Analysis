@@ -194,8 +194,11 @@ class RunnerPort(Protocol):
     def revoke_token(
         self, *, connection_id: str, token_id: str, user_uid: str, idempotency_key: str
     ) -> models.RunnerTokenMetadata: ...
+    # EXEC2-PULL-01 (ADR-0026 decision 3): ``runner_instance_id`` is the agent process making the claim;
+    # the router passes it only when the request carries one.
     def claim_task(
-        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None
+        self, *, runner: RunnerIdentity, wait_seconds: int, max_images: int | None = None,
+        runner_instance_id: str | None = None,
     ) -> models.ClaimedExecutorTask | None: ...
     def read_image(
         self, *, runner: RunnerIdentity, task_id: str, blob_id: str
@@ -209,6 +212,53 @@ class RunnerPort(Protocol):
     def fail_task(
         self, *, runner: RunnerIdentity, task_id: str, reason: str
     ) -> models.ExecutorTaskAck: ...
+
+
+# EXEC2-ENROLL-01 -------------------------------------------------------------------------------------
+# The universal agent: the enrollment grant and its exchange, the agent's health, the package route, the
+# API side of an install over SSH and the integration-authorisation mark (ADR-0026 decisions 4 to 9).
+# This section is the lane's own; the ports around it belong to others.
+from auditmanager.api.security import EnrollmentIdentity  # noqa: E402
+
+
+class EnrollmentPort(Protocol):
+    """The universal agent (`EXEC2-ENROLL-01`): five administrator operations, and the three an agent calls.
+
+    ``authenticate_enrollment`` is the seam's (it satisfies ``api.security.EnrollmentSecrets``). The
+    administrator's methods re-read the actor's role in their own transaction. No method returns a secret
+    but ``issue_enrollment`` (the grant's, once) and ``redeem_enrollment`` (the runner token's, once); an
+    install session returns the public half of a generated key and never a private one."""
+
+    def authenticate_enrollment(self, presented: str) -> EnrollmentIdentity | None: ...
+    def issue_enrollment(
+        self, *, connection_id: str, user_uid: str, idempotency_key: str
+    ) -> models.IssuedExecutorEnrollment: ...
+    def set_integration_authorisation(
+        self, *, connection_id: str, authorised: bool, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorConnection: ...
+    def create_agent_install(
+        self, *, connection_id: str, body: models.CreateExecutorAgentInstallRequest,
+        user_uid: str, idempotency_key: str,
+    ) -> models.ExecutorAgentInstall: ...
+    def get_agent_install(
+        self, *, connection_id: str, install_id: str
+    ) -> models.ExecutorAgentInstall: ...
+    def confirm_agent_install_host_key(
+        self, *, connection_id: str, install_id: str, host_key_fingerprint: str, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorAgentInstall: ...
+    def redeem_enrollment(
+        self, *, enrollment: EnrollmentIdentity, runner_instance_id: str
+    ) -> models.IssuedRunnerToken: ...
+    def report_health(
+        self, *, runner: RunnerIdentity, body: models.ReportRunnerHealthRequest
+    ) -> models.RunnerHealthAck: ...
+    def read_package(self, *, version: str) -> tuple[str, bytes]:
+        """``(file name, bytes)`` of the package of exactly this version, verified against its digest."""
+        ...
+
+
+__all__ += ["EnrollmentPort"]
 
 
 class UploadedDocument(Protocol):
@@ -549,7 +599,8 @@ class RunPort(Protocol):
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
-                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate: ...
+                          preset_id: str | None = None, relaxed_limits: bool = False,
+                          executor_group_id: str | None = None) -> models.RunCostEstimate: ...  # EXEC2-GROUP-RUN-01
 
     def start_run(
         self,
@@ -562,6 +613,7 @@ class RunPort(Protocol):
         relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
@@ -577,6 +629,11 @@ class RunPort(Protocol):
         ``preset_id`` (`ANALYSIS-PRESETS-01`) names a saved preset instead: its executor
         connection is applied exactly as if the caller had named it, and the run records the
         preset revision. A preset together with ``executor_connection_id`` is refused.
+
+        ``executor_group_id`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decisions 12 and 13) names an executor
+        group instead of a connection or a preset: the run is admitted on the group's current
+        revision with ``binding_state`` ``pending``, and the connection is chosen at dispatch. It is
+        exclusive with both other selectors and is part of the payload the key is compared by.
         """
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
@@ -2131,3 +2188,48 @@ class ComparisonStageC4Port(Protocol):
     def get_profile_text(self, *, profile_id: str, query: str | None) -> models.StageProfileText: ...
 
     def get_assembly(self, *, assembly_id: str) -> models.StageAssembly: ...
+
+
+# EXEC2-GROUP-STORE-01 --------------------------------------------------------------------------------
+# Executor groups and the routing rule of a work kind (ADR-0026 decisions 10, 11 and 14). This section is the
+# lane's own; the ports around it belong to others. `previewExecutorRouting` and `setExecutorRoutingMode` are
+# `EXEC2-CUTOVER-01`'s and are the last two methods of this port, under their own heading.
+
+
+class ExecutorGroupPort(Protocol):
+    """The eight group and rule operations this lane serves.
+
+    The four reads (`list_groups`, `get_group`, `get_capacity`, `list_rules`) are for any role, like the executor
+    connections' reads; they take no actor. Every write re-reads the actor's role set in its own transaction and
+    records the actor in its journal event. No method returns a secret, a setting of a connection or an address: a
+    group names connections and their revisions by identity only."""
+
+    def list_groups(self) -> models.ExecutorGroupList: ...
+    def get_group(self, *, group_id: str) -> models.ExecutorGroupDetail: ...
+    def get_capacity(self, *, group_id: str) -> models.ExecutorGroupCapacity: ...
+    def list_rules(self) -> models.ExecutorRoutingRuleList: ...
+    def create_group(
+        self, *, body: models.CreateExecutorGroupRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup: ...
+    def revise_group(
+        self, *, group_id: str, body: models.ReviseExecutorGroupRequest, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorGroup: ...
+    def archive_group(
+        self, *, group_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup: ...
+    def set_rule(
+        self, *, work_kind: str, group_revision_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingRule: ...
+
+    # EXEC2-CUTOVER-01 (ADR-0026 decision 17) -------------------------------------------------------------
+    # Both are an administrator's. `preview_routing` re-reads the actor's role set and writes nothing;
+    # `set_routing_mode` re-reads it in its own transaction, does the cut-over (the groups, the rules and the
+    # mode event) or the rollback in that one transaction, and records the actor in its journal events.
+    def preview_routing(self, *, user_uid: str) -> models.ExecutorRoutingPreview: ...
+    def set_routing_mode(
+        self, *, body: models.SetExecutorRoutingModeRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingModeResult: ...
+
+
+__all__ += ["ExecutorGroupPort"]

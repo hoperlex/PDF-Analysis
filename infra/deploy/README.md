@@ -23,7 +23,7 @@ down`. This is the deployed stack.
 
 | Path | What it is |
 |---|---|
-| `Dockerfile.api` | the 259 operations under uvicorn, plus `T-3`'s health plane |
+| `Dockerfile.api` | the 277 operations under uvicorn, plus `T-3`'s health plane |
 | `Dockerfile.web` | `npm run build`, then `next start` |
 | `serve.py` | the entry point: **one built application, two ports** |
 | `compose.server.yml` | the stack: PostgreSQL, MinIO, migrate, release-notes, api, worker, web, one proxy. Two database urls (`PROD-04`): `DATABASE_URL`, the application role's, reaches `api` and `worker`; `MIGRATOR_DATABASE_URL`, the owner's, reaches `migrate` and `release-notes` only |
@@ -249,7 +249,7 @@ work without deleting its stored evidence. An unknown value stops startup.
 Two ports on the API container, from **one built application**:
 
 ```
-:8000   the 259 operations, mounted by the proxy at /api/v1
+:8000   the 277 operations, mounted by the proxy at /api/v1
 :8001   /healthz and /readyz — no credential, no product meaning, no contract
 ```
 
@@ -496,6 +496,72 @@ Between those two states the plain port keeps serving, and there is deliberately
 `deploy.sh`'s `proxy-answers` guard requires **401** on `/api/v1/openapi.json` there, and a `301` is not 401, so
 it would turn a successful deploy into a refusal. The redirect lives on the challenge listener (port 80), which
 is a different listener (`Y3`: the number in that guard was once 200 here and was wrong).
+
+## The universal agent — `EXEC2-ENROLL-01` (ADR-0026 decisions 4 to 9)
+
+An administrator installs the agent on a host with one copied command (path B) or over SSH (path A). The stand
+serves the package, exchanges a one-time enrollment secret for a runner token, and takes the agent's health.
+Two optional settings reach the `api` **and the `worker`** (`compose.server.yml` names them, with the same
+defaults on both services: path A is executed by the worker, see below):
+
+| Variable | What it does | Unset or blank means |
+|---|---|---|
+| `AUDITMANAGER_PUBLIC_ORIGIN` | the stand's public origin, `https://host[:port]`, that the generated install command downloads the package from and the agent calls. It is the **only** source of that origin: the request's own `Host` is never used, because the web tier drops it and the guess would be the API's internal name | derived from the certificate name, `https://${ALPHA_CERT_NAME}`, unless it is set; set it for a stand reached through an SSH tunnel, a private name or a non-default port. With neither of the two set, or with a malformed value, issuing a grant is refused (`503 dependency_unavailable`, dependency `public_origin`) before anything is written |
+| `AUDITMANAGER_AGENT_PACKAGE_DIR` | the directory in the image that holds `auditmanager-agent-<version>.tar.gz` and its `.sha256` | `/app/agent-package`, where `infra/deploy/Dockerfile.api` puts the package `EXEC2-AGENT-01` builds |
+
+**Path A is run by the worker** (`EXEC2-ENROLL-SSH-01`, `src/auditmanager/executors/agent_install_runner.py`). The
+`worker` service, not the `api`, scans the host, opens the sealed SSH key, issues the enrollment grant and runs the
+package's own `install.sh` over SSH with `sudo -n`; so it needs the same two settings as the `api`
+(`AUDITMANAGER_PUBLIC_ORIGIN` tells `install.sh` where the stand is, `AUDITMANAGER_AGENT_PACKAGE_DIR` where the
+image keeps the package; the worker is built from the same image, so the default directory is there). What it
+needs beyond that is what an `ssh_command` connection already needs: the private key ring in `env/provider.env`
+(`AUDITMANAGER_SECRETS_KEYS`; without it a session fails as `secret_unreadable`) and a route from the worker
+container to the target host's SSH port. With no usable origin a session fails as `enrollment_failed`; the origin
+is never guessed. The target host passes the same destination rules as every executor destination
+(`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` narrows them; a private range is refused by default, as for an
+`ssh_command` connection, so a host on a private network is reached through a name or an address the rules accept,
+or by the setting below). Rollback is to stop creating install sessions: nothing else runs, and a session left
+unfinished ends by itself after 30 minutes.
+
+**Private-range targets for path A — `AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE`** (`R-149g`). A third setting, read
+by the **worker only** (`compose.server.yml` forwards it to that service as
+`${AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE:-0}`; the `api` does not read it). `1` or `0`; unset or `0` is the
+rule before this setting existed. With `1` the worker asks the destination rules about the `vpn` transport instead
+of `ssh_command`, so the scan and the install of every session accept an address in a private range (RFC 1918,
+unique-local, shared address space) and nothing else changes: loopback, link-local (the cloud metadata address
+included), unspecified, multicast and reserved addresses, the compose network the worker sits on, and
+single-label or local names (`localhost`, a compose service name) are refused whatever the setting says, and
+`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` still narrows. Any other value (`true`, `yes`, `2`, …) is read as `0` and the
+worker logs that the variable is neither `1` nor `0`, naming the variable and never its value; set it in
+`alpha.env` and restart the `worker` for a change to take effect. A refused target fails the session as
+`host_unreachable` and the worker logs only the closed category of the refusal (`loopback`, `private_range`, …),
+never the address.
+
+**Offline wait of group work — `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`** (ADR-0026 decision 15, `R-149c`). Read by the worker only (compose forwards `${AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS:-1800}`). A Run or comparison job routed to an executor group waits without limit while its members are busy, and while every member is offline it ends `no_executor_online` after this many seconds. Whole seconds from 1 to 604800; any other value, a blank one included, stops the worker before it registers.
+
+*The risk, in one sentence:* with `1` the stand can open an SSH connection to any address in the networks its own
+hosting routes to — the hosting's internal networks included — on the word of an administrator who types the
+address and confirms a host key, so turn it on only on a stand whose internal networks hold nothing an SSH login
+from the worker container could reach and should not (set `AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS` to the one range
+you mean, in `env/provider.env`, to bound it further). The web screens say the same to the administrator: a local
+address is accepted only when this setting allows it; otherwise the «Выполнить команду на Ubuntu» path is the way.
+
+The package route (`GET /api/v1/runner/agent-package/<version>`) needs no credential: it is public code, and
+its integrity is the sha256 the install command carries. The stand re-hashes the archive against the `.sha256`
+file on every issue and every download, and refuses (`503`, `agent_package`) a package whose digest, checksum
+file or size is wrong rather than serve an older one.
+
+The proxy throttles the two unauthenticated calls per client address, in zones of their own
+(`infra/deploy/proxy/nginx.conf`; the key is `$binary_remote_addr`, see the next section for what it follows):
+
+| Zone | Counts | Rate, burst |
+|---|---|---|
+| `enrollment_exchange` | `POST /api/v1/runner/enroll` | 6 r/m, 10 |
+| `agent_package` | `GET /api/v1/runner/agent-package/<version>` | 30 r/m, 20 |
+
+The agent's health report (`POST /api/v1/runner/health`) is counted by the runner-channel zones
+(`runner_channel` per token, `runner_address` per address), which now match `/api/v1/runner/tasks/` and
+`/api/v1/runner/health`. `tests/contract/test_proxy_rate_limits.py` holds all of it.
 
 ## The client address — `REAL-IP-EDGE-01`, and what a host nginx in front must send
 

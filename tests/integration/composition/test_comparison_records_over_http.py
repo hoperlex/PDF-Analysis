@@ -28,6 +28,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.run_consent import consented_body, plain_analysis_pricing
 
 DEPLOYMENT_SECRET = "comparison-records-over-http-token"
 EXPERT, ADMIN = "comparison-records", "comparison-records-admin"
@@ -162,10 +163,13 @@ def world() -> dict[str, Any]:
             content=json.dumps({"project_stage": "P", "section_code": "PB"}).encode("utf-8"),
         )
         assert classified.status_code == 200, classified.content
-        started = client.post(
-            "/runs", headers=_json(world, key=_key(world, version_uid[-6:])),
-            content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
-        )
+        # `REVIEW-FIX-TESTS-1102`: the composed application starts a run only with a priced consent.
+        with plain_analysis_pricing():
+            body = consented_body(client, world["expert"], {"version_uid": version_uid})
+            started = client.post(
+                "/runs", headers=_json(world, key=_key(world, version_uid[-6:])),
+                content=json.dumps(body).encode("utf-8"),
+            )
         assert started.status_code == 202, started.content
     assert app.state.run_carrier.drain(timeout=300), "the runs never finished"
     return world

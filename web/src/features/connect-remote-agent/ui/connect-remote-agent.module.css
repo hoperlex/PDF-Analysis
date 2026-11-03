@@ -1,0 +1,81 @@
+/*
+ * «Добавить подключение» and the agent lifecycle (`EXEC2-WEB-WIZARD-01`). Layout only: no colour,
+ * border, background or length literal is declared here, so no rule of this file is a colour-bearing
+ * rule for the contrast census to reach and none adds to the length-literal ceiling. Spacing is the
+ * `--am-gap*` tokens. The panels are the global `am-note`, the fields `am-form`, the badges
+ * `am-badge`; this file only arranges them, and every class below is read by a component.
+ */
+
+.wizard {
+  min-width: 0;
+  display: grid;
+  gap: var(--am-gap);
+  overflow-wrap: anywhere;
+}
+
+.group {
+  min-width: 0;
+  display: grid;
+  gap: var(--am-gap-sm);
+}
+
+/* The two choices of a pair are stacked and identical, so neither reads as the first-class one. */
+.choices {
+  display: grid;
+  gap: var(--am-gap);
+}
+
+.choice {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-sm);
+}
+
+.choice p {
+  margin: 0;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--am-gap);
+}
+
+.step {
+  min-width: 0;
+  display: grid;
+  gap: var(--am-gap-xs);
+  overflow-wrap: anywhere;
+}
+
+.stepHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  align-items: baseline;
+}
+
+.clis {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  align-items: center;
+}
+
+.copy {
+  min-width: 0;
+  font-family: var(--am-font-mono);
+}

@@ -32,7 +32,8 @@ documents. A search result or crop never replaces those sources.
 
 Current process rules are in [AGENTS.md](../../AGENTS.md), the
 [integration policy](../program/INTEGRATION_POLICY.md) and the
-[main deployment policy](../program/MAIN_AUTODEPLOY_POLICY.md). Routine work uses focused
+[main deployment policy](../program/MAIN_AUTODEPLOY_POLICY.md); how to work fast with the
+least tokens is in the [development velocity guidance](DEVELOPMENT_VELOCITY.md). Routine work uses focused
 checks. An isolated branch is created when concurrent work or a dirty checkout makes it
 useful; a delegated release integrator owns promotion and verification of `main`.
 

@@ -13,8 +13,13 @@ Two moments, each a small callable the composition root supplies and ``runs`` on
   adapter of the run's frozen revision with the connection's *current* key, and say how the call
   must be recorded and held to its model (:class:`ProviderBinding`).
 
+* **admit** (:data:`GroupAdmitter`, `EXEC2-GROUP-RUN-01`) -- at run start, for a start that names an executor
+  group or that the routing rules route: read the group revision in the start's transaction and return what
+  admission freezes (:class:`AdmittedGroup`). **No connection is chosen here**: the run is written
+  ``binding_state = 'pending'`` and the claim binds a member, once, at dispatch (ADR-0026 decisions 12 to 14).
+
 The ``environment`` source needs neither: its adapter is built once at start-up and passed to
-``execute_run`` as before. ``runs`` imports nothing from ``executors``; the composition root
+``execute_run`` as before, and it has no admitter, so it refuses a group and never serves a pending run. ``runs`` imports nothing from ``executors``; the composition root
 (``bootstrap/providers.py``) is where the two meet.
 """
 
@@ -29,8 +34,8 @@ from sqlalchemy.orm import Session
 from auditmanager.jobs.public import AttemptContext
 
 __all__ = [
-    "ChosenPreset", "FrozenRoute", "PresetResolver", "ProviderBinding", "ProviderResolver",
-    "RouteFreezer",
+    "AdmittedGroup", "ChosenPreset", "FrozenRoute", "GroupAdmitter", "PresetResolver", "ProviderBinding",
+    "ProviderResolver", "RouteFreezer",
 ]
 
 
@@ -88,6 +93,40 @@ class PresetResolver(Protocol):
     route freezer."""
 
     def __call__(self, session: Session, preset_id: str) -> ChosenPreset: ...
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedGroup:
+    """What admission freezes of a group (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 13): the group and its immutable
+    revision, the rule revision when a rule routed the start (``None`` when the group was named), and the planned
+    model with its billing and the input budget that follows its pin. **Not a connection**: a member is chosen at
+    dispatch, and every member of a homogeneous group serves this pin, model and billing.
+
+    ``billing`` is spelled as the cost estimate spells it (``metered`` or ``unmetered``)."""
+
+    group_id: str
+    group_revision_id: str
+    pin_id: str
+    gateway_model: str
+    billing: str
+    input_budget_characters: int
+    rule_revision_id: str | None = None
+
+
+class GroupAdmitter(Protocol):
+    """``admit(session, group_id=...)`` admits a start on the current revision of the named group; without a
+    ``group_id`` it follows the routing rules: ``None`` while the mode is ``legacy`` (the start is what it always was),
+    the rule of ``text_analysis`` while the mode is ``rules``.
+
+    Refusals are typed and precede the idempotency key's claim, so nothing is written: ``validation_failed`` on
+    ``executor_group_id`` for an unknown group, ``conflict`` (``group_archived``) for an archived one and
+    ``dependency_unavailable`` (``no_rule_for_work_kind``) for a work kind with no rule. ``group_of`` is the group a
+    group revision belongs to, for a repeat of a start that named a group. The ``runs`` context never reads the
+    group tables: the composition root hands it this seam, as it hands it the route freezer."""
+
+    def __call__(self, session: Session, *, group_id: str | None = None) -> AdmittedGroup | None: ...
+
+    def group_of(self, session: Session, group_revision_id: str) -> str | None: ...
 
 
 ProviderResolver = Callable[[Session, Any, AttemptContext], ProviderBinding]

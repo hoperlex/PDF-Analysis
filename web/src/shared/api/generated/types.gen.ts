@@ -6,23 +6,24 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.14.0 (OpenAPI 3.1.0)
- *   sha256 11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466
+ *   AuditManager PC-01 API 1.16.0 (OpenAPI 3.1.0)
+ *   sha256 0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.14.0';
+export const CONTRACT_VERSION = '1.16.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466';
+export const CONTRACT_DIGEST = '0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
   'Account',
   'AccountPage',
+  'AgentPackageVersion',
   'AnalysisPreset',
   'AnalysisPresetList',
   'AnalysisPresetState',
@@ -259,6 +260,7 @@ export const SCHEMA_NAMES = [
   'ComparisonVersionOrderList',
   'ComparisonVersionOrderSource',
   'ConfirmComparisonUploadSetRequest',
+  'ConfirmExecutorAgentInstallHostKeyRequest',
   'ConfirmStagePairRequest',
   'ConfirmStageUploadCandidateRequest',
   'ConfirmedComparisonFile',
@@ -268,7 +270,9 @@ export const SCHEMA_NAMES = [
   'CreateAssignmentRequest',
   'CreateComparisonReportRequest',
   'CreateComparisonUploadRequest',
+  'CreateExecutorAgentInstallRequest',
   'CreateExecutorConnectionRequest',
+  'CreateExecutorGroupRequest',
   'CreateProjectRequest',
   'CreateStageAssemblyRequest',
   'CreateStageReviewCardRequest',
@@ -298,14 +302,38 @@ export const SCHEMA_NAMES = [
   'ExecutionQueuePage',
   'ExecutionWorker',
   'ExecutionWorkerPage',
+  'ExecutorAgentInstall',
+  'ExecutorAgentInstallAccess',
+  'ExecutorAgentInstallFailure',
+  'ExecutorAgentInstallId',
+  'ExecutorAgentInstallState',
   'ExecutorApiFlavour',
   'ExecutorBilling',
+  'ExecutorBinding',
+  'ExecutorBindingState',
   'ExecutorConnection',
   'ExecutorConnectionDetail',
   'ExecutorConnectionId',
   'ExecutorConnectionList',
+  'ExecutorEnrollmentId',
+  'ExecutorEnrollmentMetadata',
+  'ExecutorEnrollmentState',
+  'ExecutorGroup',
+  'ExecutorGroupCapacity',
+  'ExecutorGroupDetail',
+  'ExecutorGroupId',
+  'ExecutorGroupList',
+  'ExecutorGroupMember',
+  'ExecutorGroupMemberIssue',
+  'ExecutorGroupMemberStatus',
+  'ExecutorGroupPlan',
+  'ExecutorGroupRevision',
+  'ExecutorGroupRevisionId',
+  'ExecutorGroupStrategy',
   'ExecutorIdentityBasis',
+  'ExecutorIntegrationAuthorisation',
   'ExecutorKind',
+  'ExecutorOccupancy',
   'ExecutorPinnedModel',
   'ExecutorProbe',
   'ExecutorProbeId',
@@ -317,6 +345,18 @@ export const SCHEMA_NAMES = [
   'ExecutorRevisionId',
   'ExecutorRoute',
   'ExecutorRouteList',
+  'ExecutorRoutingMappingEntry',
+  'ExecutorRoutingMode',
+  'ExecutorRoutingModeEventId',
+  'ExecutorRoutingModeResult',
+  'ExecutorRoutingModeState',
+  'ExecutorRoutingPreview',
+  'ExecutorRoutingPreviewIssue',
+  'ExecutorRoutingPreviewItem',
+  'ExecutorRoutingPreviewStatus',
+  'ExecutorRoutingRule',
+  'ExecutorRoutingRuleList',
+  'ExecutorRoutingRuleRevisionId',
   'ExecutorRunnerTokenId',
   'ExecutorSecretId',
   'ExecutorSecretMetadata',
@@ -348,6 +388,7 @@ export const SCHEMA_NAMES = [
   'IssueRunnerTokenRequest',
   'IssueTokenRequest',
   'IssueTokenResponse',
+  'IssuedExecutorEnrollment',
   'IssuedRunnerToken',
   'JobId',
   'MarkReleaseNotesReadRequest',
@@ -442,6 +483,7 @@ export const SCHEMA_NAMES = [
   'ProposalVerdict',
   'ProviderMode',
   'ReauditRunRequest',
+  'RedeemExecutorEnrollmentRequest',
   'RegistrationRequest',
   'RegistrationRequestId',
   'RegistrationRequestPage',
@@ -452,10 +494,12 @@ export const SCHEMA_NAMES = [
   'ReleaseList',
   'ReleaseNoteItem',
   'ReleaseNoteKind',
+  'ReportRunnerHealthRequest',
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
   'ResumeStageChainRunRequest',
   'ReviseExecutorConnectionRequest',
+  'ReviseExecutorGroupRequest',
   'ReviseStageAssemblyRequest',
   'Role',
   'RunActivity',
@@ -467,10 +511,17 @@ export const SCHEMA_NAMES = [
   'RunId',
   'RunNormReferences',
   'RunPreset',
+  'RunQueueReason',
   'RunState',
   'RunStateCount',
   'RunStatus',
   'RunStatusPage',
+  'RunnerCliAuthState',
+  'RunnerCliHealth',
+  'RunnerCliName',
+  'RunnerExecutionProfile',
+  'RunnerFeature',
+  'RunnerHealthAck',
   'RunnerImage',
   'RunnerImageBlobId',
   'RunnerTokenMetadata',
@@ -488,7 +539,10 @@ export const SCHEMA_NAMES = [
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetExecutionPausedRequest',
+  'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
+  'SetExecutorRoutingModeRequest',
+  'SetExecutorRoutingRuleRequest',
   'SetExecutorSecretRequest',
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
@@ -670,6 +724,11 @@ export type AccountPage = {
   items: Array<Account>;
   page: PageInfo;
 };
+
+export type AgentPackageVersion = string;
+
+/** The contract pattern for `AgentPackageVersion`. Anchored; use with `new RegExp()`. */
+export const AGENT_PACKAGE_VERSION_PATTERN = "^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}$";
 
 /** The current revision of one preset. `preset_id` is the preset for its whole life; `revision_id` and `revision_no` name this revision. The name is a label, never an identity. */
 export type AnalysisPreset = {
@@ -1165,9 +1224,14 @@ export type ChangePasswordRequest = {
   new_password: string;
 };
 
-/** The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25). */
+/**
+ * The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25).
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decision 3): the optional `runner_instance_id` names the agent process making the claim. A task already held by a token is redelivered only to the instance that claimed it; a claim without the field behaves as before. One token is served by one agent process.
+ */
 export type ClaimExecutorTaskRequest = {
   max_images?: number;
+  runner_instance_id?: string;
   wait_seconds?: number;
 };
 
@@ -1258,7 +1322,7 @@ export type ComparisonAiConfidence = (typeof COMPARISON_AI_CONFIDENCE_VALUES)[nu
 /**
  * The user's consent to one estimate: the digest of the estimate that was shown and the explicit
  * confirmation of the line «Подтверждаю передачу материалов исполнителю». ``confirmed`` false is
- * ``422 validation_failed`` (``comparison_consent_required``).
+ * ``422 validation_failed`` (``comparison_consent_required``). `EXEC2-SEAL-2`: when the estimate's route is a group's, the digest also binds the group revision, the rule revision and the planned model, and dispatch re-checks them against the consent before any call; a mismatch sets `wait_reason` `needs_reconsent` and calls nothing.
  */
 export type ComparisonAiConsent = {
   confirmed: boolean;
@@ -1348,8 +1412,11 @@ export type ComparisonAiExcluded = {
  * one document set; ``series_id``, ``transition_id`` and ``sheet_pair_id`` name its scope when it has
  * one. ``queue_position`` is present while the job waits in the installation's AI queue.
  * Every AI text a job produces is model output not confirmed by an engineer.
+ * `EXEC2-SEAL-2` (ADR-0026 decisions 12 to 15): `binding_state` (absent is read as `frozen_at_start`) says whether the job's connection was frozen at consent, is still to be chosen (`pending`) or was bound at the job's first dispatched call (`bound`, with `binding`); its later calls stay on that connection. `planned` repeats what the consented route froze for a job admitted by a rule or a group. `wait_reason` and `waiting_since` are present while a `pending` job waits for an executor.
  */
 export type ComparisonAiJob = {
+  binding?: ExecutorBinding;
+  binding_state?: ExecutorBindingState;
   consented_at: string;
   consented_by: UserUid;
   counts: ComparisonAiJobCounts;
@@ -1361,6 +1428,7 @@ export type ComparisonAiJob = {
   job_id: ComparisonAiJobId;
   method: ComparisonAiMethod;
   pause_reason?: ComparisonAiPauseReason;
+  planned?: ExecutorGroupPlan;
   project_uid: ProjectUid;
   queue_position?: number;
   series_id?: ComparisonSeriesId;
@@ -1369,6 +1437,8 @@ export type ComparisonAiJob = {
   state: ComparisonAiJobState;
   transition_id?: ComparisonTransitionId;
   updated_at: string;
+  wait_reason?: RunQueueReason;
+  waiting_since?: string;
 };
 
 /**
@@ -1606,6 +1676,7 @@ export type ComparisonAiQueue = {
 
 /** One job in the installation's AI queue «Очередь «ИИ-описание изменений»». */
 export type ComparisonAiQueueItem = {
+  binding_state?: ExecutorBindingState;
   counts: ComparisonAiJobCounts;
   created_at: string;
   document_uid: DocumentUid;
@@ -1615,19 +1686,25 @@ export type ComparisonAiQueueItem = {
   queue_position?: number;
   series_id?: ComparisonSeriesId;
   state: ComparisonAiJobState;
+  wait_reason?: RunQueueReason;
 };
 
 /**
  * What serves the calls of an estimate or a job: the connection and its revision, the model the
  * revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
  * process is in recorded mode, in which case every answer is a recorded test answer.
+ *
+ * `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13): for work admitted by a rule or a group, `executor_group_id`, `executor_group_revision_id` and (when a rule routed it) `routing_rule_revision_id` name what admission froze, `pinned_model` and `billing` follow the group revision, and `connection_id` and `revision_id` are absent until dispatch binds the work to a member. The estimate digest binds every field that is present.
  */
 export type ComparisonAiRoute = {
   billing: ExecutorBilling;
-  connection_id: ExecutorConnectionId;
+  connection_id?: ExecutorConnectionId;
+  executor_group_id?: ExecutorGroupId;
+  executor_group_revision_id?: ExecutorGroupRevisionId;
   pinned_model: string;
   provider_mode: ProviderMode;
-  revision_id: ExecutorRevisionId;
+  revision_id?: ExecutorRevisionId;
+  routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
 };
 
 /**
@@ -3433,6 +3510,11 @@ export type ConfirmComparisonUploadSetRequest = {
   section_code?: ProjectSection;
 };
 
+/** The fingerprint the administrator read and confirms. It must equal the one the worker observed; there is no trust on first use. */
+export type ConfirmExecutorAgentInstallHostKeyRequest = {
+  host_key_fingerprint: string;
+};
+
 export type ConfirmStagePairRequest = {
   assembly_id?: StageAssemblyId;
   left_document_uid: DocumentUid;
@@ -3508,9 +3590,28 @@ export type CreateComparisonUploadRequest = {
   files: Array<ComparisonUploadFileDeclaration>;
 };
 
+/** Write-only where it carries a key. `private_key` is required for `pasted_key` and refused for `generated_key`; the API seals it to the stand's public key and never returns it. */
+export type CreateExecutorAgentInstallRequest = {
+  access: ExecutorAgentInstallAccess;
+  private_key?: string;
+  ssh_host: string;
+  ssh_port: number;
+  ssh_user: string;
+};
+
 export type CreateExecutorConnectionRequest = {
   display_name: string;
   kind: ExecutorKind;
+};
+
+/** A new group and its first revision (`EXEC2-SEAL-2`, ADR-0026 decision 10). The pinned rates are not sent: the server takes them from the provider lock for `pin_id`. `strategy` absent means `least_loaded`. A member names a connection and the revision of it the group should snapshot; every member must match `pin_id`, `gateway_model` and `billing` exactly. */
+export type CreateExecutorGroupRequest = {
+  billing: ExecutorBilling;
+  display_name: string;
+  gateway_model: string;
+  members: Array<ExecutorGroupMember>;
+  pin_id: string;
+  strategy?: ExecutorGroupStrategy;
 };
 
 export type CreateProjectRequest = {
@@ -3710,7 +3811,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.14.0";
+  contract_version: "1.16.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3753,13 +3854,16 @@ export type ExecutionJournalPage = {
   page: PageInfo;
 };
 
+/** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). */
 export type ExecutionQueueItem = {
   available_at: string;
+  binding_state?: ExecutorBindingState;
   created_at: string;
   job_id: JobId;
   priority: number;
   run_id: RunId;
   state: string;
+  wait_reason?: RunQueueReason;
 };
 
 export type ExecutionQueuePage = {
@@ -3785,6 +3889,76 @@ export type ExecutionWorkerPage = {
   page: PageInfo;
 };
 
+/** One install session of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7). For `generated_key` access it carries the public half and its `authorized_keys` line, which the administrator adds to the host; the private half is sealed and never returned. `observed_host_key_fingerprint` is what the worker saw (derived from the stored key line, as `ExecutorRevision.host_key_fingerprint` is); the install does not proceed until the administrator confirms exactly that fingerprint. `key_removed_at` is when the stand's key was removed from the host and its sealed secret destroyed. */
+export type ExecutorAgentInstall = {
+  access: ExecutorAgentInstallAccess;
+  authorized_keys_line?: string;
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  failure_reason?: ExecutorAgentInstallFailure;
+  finished_at?: string;
+  host_key_confirmed_at?: string;
+  host_key_confirmed_by?: UserUid;
+  install_id: ExecutorAgentInstallId;
+  key_removed_at?: string;
+  observed_host_key_fingerprint?: string;
+  package_sha256?: string;
+  package_version?: AgentPackageVersion;
+  public_key?: string;
+  ssh_host: string;
+  ssh_port: number;
+  ssh_user: string;
+  state: ExecutorAgentInstallState;
+  updated_at: string;
+};
+
+/** How the administrator gives the stand SSH access to the host: a key the stand generates (the administrator adds its public half to the host) or a pasted private key, which is sealed. Passwords are not accepted. */
+export const EXECUTOR_AGENT_INSTALL_ACCESS_VALUES = [
+  'generated_key',
+  'pasted_key',
+] as const;
+
+/** ExecutorAgentInstallAccess - the closed value set above. */
+export type ExecutorAgentInstallAccess = (typeof EXECUTOR_AGENT_INSTALL_ACCESS_VALUES)[number];
+
+/** The sanitised reason a failed install failed; never a host output, a path or a credential. */
+export const EXECUTOR_AGENT_INSTALL_FAILURE_VALUES = [
+  'host_unreachable',
+  'ssh_refused',
+  'host_key_changed',
+  'host_key_not_confirmed',
+  'sudo_password_required',
+  'unsupported_platform',
+  'package_unavailable',
+  'install_failed',
+  'enrollment_failed',
+  'secret_unreadable',
+  'no_worker',
+  'timed_out',
+] as const;
+
+/** ExecutorAgentInstallFailure - the closed value set above. */
+export type ExecutorAgentInstallFailure = (typeof EXECUTOR_AGENT_INSTALL_FAILURE_VALUES)[number];
+
+export type ExecutorAgentInstallId = string;
+
+/** The contract pattern for `ExecutorAgentInstallId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_AGENT_INSTALL_ID_PATTERN = "^exai_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** `requested -> scanning -> awaiting_host_key -> installing -> succeeded | failed`. */
+export const EXECUTOR_AGENT_INSTALL_STATE_VALUES = [
+  'requested',
+  'scanning',
+  'awaiting_host_key',
+  'installing',
+  'succeeded',
+  'failed',
+] as const;
+
+/** ExecutorAgentInstallState - the closed value set above. */
+export type ExecutorAgentInstallState = (typeof EXECUTOR_AGENT_INSTALL_STATE_VALUES)[number];
+
 /** ExecutorApiFlavour. */
 export const EXECUTOR_API_FLAVOUR_VALUES = [
   'openai_chat',
@@ -3803,7 +3977,26 @@ export const EXECUTOR_BILLING_VALUES = [
 /** ExecutorBilling - the closed value set above. */
 export type ExecutorBilling = (typeof EXECUTOR_BILLING_VALUES)[number];
 
-/** A connection: where a process sends model work. Its secrets are metadata only. */
+/** The connection and model work was bound to at dispatch (`EXEC2-SEAL-2`, ADR-0026 decision 14). Present exactly when `binding_state` is `bound`. It never changes afterwards: an Attempt retry stays on this connection revision. */
+export type ExecutorBinding = {
+  connection_id: ExecutorConnectionId;
+  connection_revision_id: ExecutorRevisionId;
+  display_name: string;
+  gateway_model: string;
+  pin_id: string;
+};
+
+/** `EXEC2-SEAL-2` (ADR-0026 decision 12): whether the executor of a Run or a comparison AI job was fixed when the work started. `frozen_at_start`: the connection revision was frozen at start (every existing row, an explicit connection and a preset), behaviour unchanged. `pending`: the work was admitted by a rule or a group and no connection is chosen yet. `bound`: dispatch chose a member and wrote the connection revision. The only move is `pending` to `bound`, once; `frozen_at_start` and `bound` are terminal. */
+export const EXECUTOR_BINDING_STATE_VALUES = [
+  'frozen_at_start',
+  'pending',
+  'bound',
+] as const;
+
+/** ExecutorBindingState - the closed value set above. */
+export type ExecutorBindingState = (typeof EXECUTOR_BINDING_STATE_VALUES)[number];
+
+/** A connection: where a process sends model work. Its secrets are metadata only. `occupancy` (`EXEC2-SEAL-1`) is present once the connection has a current revision; `integration_authorisation` is present while the administrator's mark is set (`pull` connections only). */
 export type ExecutorConnection = {
   archived_at?: string;
   connection_id: ExecutorConnectionId;
@@ -3812,7 +4005,9 @@ export type ExecutorConnection = {
   current_revision_id?: ExecutorRevisionId;
   current_revision_no?: number;
   display_name: string;
+  integration_authorisation?: ExecutorIntegrationAuthorisation;
   kind: ExecutorKind;
+  occupancy?: ExecutorOccupancy;
   routed_work_kinds: Array<ExecutorWorkKind>;
   secrets: Array<ExecutorSecretMetadata>;
 };
@@ -3823,9 +4018,12 @@ export type ExecutorConnection = {
  * For a ``pull`` connection (`EXEC-PULL-01`) it also carries the runner tokens' metadata and
  * the number of tasks waiting for, or held by, a runner right now. Both are absent for the
  * other kinds. A token's value is never here: it was shown once, when it was issued.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decision 4): for a ``pull`` connection it also carries its last 10 enrollment grants, newest first, as metadata only (state, expiry, redemption time): the grant's secret and its hash are never here, since the secret was shown once, when it was issued. Absent for the other kinds.
  */
 export type ExecutorConnectionDetail = {
   connection: ExecutorConnection;
+  enrollments?: Array<ExecutorEnrollmentMetadata>;
   open_task_count?: number;
   probes: Array<ExecutorProbe>;
   revisions: Array<ExecutorRevision>;
@@ -3842,6 +4040,143 @@ export type ExecutorConnectionList = {
   pinned_models: Array<ExecutorPinnedModel>;
 };
 
+export type ExecutorEnrollmentId = string;
+
+/** The contract pattern for `ExecutorEnrollmentId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_ENROLLMENT_ID_PATTERN = "^exen_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** What the API ever says about an enrollment grant after it was issued (`EXEC2-SEAL-1`, ADR-0026 decision 4): that it exists, its non-secret prefix, its derived state and its dates. The secret and its hash are never returned. */
+export type ExecutorEnrollmentMetadata = {
+  connection_id: ExecutorConnectionId;
+  created_at: string;
+  created_by: UserUid;
+  enrollment_id: ExecutorEnrollmentId;
+  expires_at: string;
+  redeemed_at?: string;
+  revoked_at?: string;
+  revoked_by?: UserUid;
+  runner_token_id?: ExecutorRunnerTokenId;
+  secret_prefix: string;
+  state: ExecutorEnrollmentState;
+};
+
+/** Derived at read time: `pending` until redeemed, revoked or past `expires_at`. */
+export const EXECUTOR_ENROLLMENT_STATE_VALUES = [
+  'pending',
+  'redeemed',
+  'expired',
+  'revoked',
+] as const;
+
+/** ExecutorEnrollmentState - the closed value set above. */
+export type ExecutorEnrollmentState = (typeof EXECUTOR_ENROLLMENT_STATE_VALUES)[number];
+
+/** A group of interchangeable executors for one model (`EXEC2-SEAL-2`, ADR-0026 decision 10), with its current revision. `routed_work_kinds` are the work kinds whose rule currently targets a revision of this group; a group a rule still names cannot be archived. Archiving is one-way and is not deletion. */
+export type ExecutorGroup = {
+  archived_at?: string;
+  created_at: string;
+  created_by: UserUid;
+  current_revision: ExecutorGroupRevision;
+  display_name: string;
+  group_id: ExecutorGroupId;
+  routed_work_kinds: Array<ExecutorWorkKind>;
+};
+
+/** The capacity of the current revision of a group, derived from the database at read time and stored nowhere (`EXEC2-SEAL-2`). `capacity` sums the capacity of the members still in service (not archived, current revision equal to the snapshot); `used` sums their active Runs and calls; `waiting` counts the Runs and comparison jobs admitted on any revision of this group that are still `pending`. */
+export type ExecutorGroupCapacity = {
+  capacity: number;
+  group_id: ExecutorGroupId;
+  group_revision_id: ExecutorGroupRevisionId;
+  members: Array<ExecutorGroupMemberStatus>;
+  used: number;
+  waiting: number;
+};
+
+/** One group and every revision of it, newest first. */
+export type ExecutorGroupDetail = {
+  group: ExecutorGroup;
+  revisions: Array<ExecutorGroupRevision>;
+};
+
+export type ExecutorGroupId = string;
+
+/** The contract pattern for `ExecutorGroupId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_GROUP_ID_PATTERN = "^exg_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Every executor group with its current revision, archived ones included. */
+export type ExecutorGroupList = {
+  items: Array<ExecutorGroup>;
+};
+
+/** One member of a group revision (`EXEC2-SEAL-2`, ADR-0026 decision 10): a connection and the connection **revision** snapshotted into the group revision. Dispatch considers the member only while the connection's current revision is still this snapshot. `tie_break_order` (1 to 16, unique inside the revision) orders members that tie on load before the persisted rotation does. */
+export type ExecutorGroupMember = {
+  connection_id: ExecutorConnectionId;
+  connection_revision_id: ExecutorRevisionId;
+  tie_break_order?: number;
+};
+
+/** `EXEC2-SEAL-2` (ADR-0026 decision 14): why a group member would not be chosen by dispatch right now. `revision_changed`: the connection's current revision is not the snapshot the group revision holds. `connection_archived`: the connection is archived. `not_served`: this release does not serve the connection. `probe_not_ok`: the probe of the current key is not `ok`. `runner_offline`: a `pull` connection has no runner online. `at_capacity`: every unit of the connection is in use. */
+export const EXECUTOR_GROUP_MEMBER_ISSUE_VALUES = [
+  'revision_changed',
+  'connection_archived',
+  'not_served',
+  'probe_not_ok',
+  'runner_offline',
+  'at_capacity',
+] as const;
+
+/** ExecutorGroupMemberIssue - the closed value set above. */
+export type ExecutorGroupMemberIssue = (typeof EXECUTOR_GROUP_MEMBER_ISSUE_VALUES)[number];
+
+/** One member as dispatch sees it right now (`EXEC2-SEAL-2`, ADR-0026 decision 14), derived at read time: the snapshot, the connection's current revision, its occupancy, and whether it would be chosen. `ineligible_reason` is present exactly when `eligible` is false; when several apply the first of the enumeration's order is reported. */
+export type ExecutorGroupMemberStatus = {
+  connection_id: ExecutorConnectionId;
+  current_revision_id?: ExecutorRevisionId;
+  eligible: boolean;
+  ineligible_reason?: ExecutorGroupMemberIssue;
+  occupancy?: ExecutorOccupancy;
+  snapshot_revision_id: ExecutorRevisionId;
+};
+
+/** What admission froze for a Run or a comparison AI job admitted by a rule or a group (`EXEC2-SEAL-2`, ADR-0026 decision 13): the group and its revision, the rule revision when a rule routed it (absent when the group was named explicitly), and the planned model with its billing. The connection is not here: it is chosen at dispatch (see `ExecutorBinding`). */
+export type ExecutorGroupPlan = {
+  billing: ExecutorBilling;
+  executor_group_id: ExecutorGroupId;
+  executor_group_revision_id: ExecutorGroupRevisionId;
+  gateway_model: string;
+  pin_id: string;
+  routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
+};
+
+/** One immutable revision of an executor group (`EXEC2-SEAL-2`, ADR-0026 decision 10). A group is homogeneous: every member revision pins exactly `pin_id` and `gateway_model` and shares `billing` and the pinned rates, which are snapshotted here as USD per million tokens. `strategy` is `least_loaded`. Mixed groups are refused. */
+export type ExecutorGroupRevision = {
+  billing: ExecutorBilling;
+  created_at: string;
+  created_by: UserUid;
+  gateway_model: string;
+  group_id: ExecutorGroupId;
+  group_revision_id: ExecutorGroupRevisionId;
+  input_per_mtok_usd: number;
+  members: Array<ExecutorGroupMember>;
+  output_per_mtok_usd: number;
+  pin_id: string;
+  revision_no: number;
+  strategy: ExecutorGroupStrategy;
+};
+
+export type ExecutorGroupRevisionId = string;
+
+/** The contract pattern for `ExecutorGroupRevisionId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_GROUP_REVISION_ID_PATTERN = "^exgr_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** `EXEC2-SEAL-2` (ADR-0026 decision 10): how dispatch picks among the eligible members of a group. `least_loaded`: the lowest used/capacity ratio, ties broken by a rotation kept in the database. */
+export const EXECUTOR_GROUP_STRATEGY_VALUES = [
+  'least_loaded',
+] as const;
+
+/** ExecutorGroupStrategy - the closed value set above. */
+export type ExecutorGroupStrategy = (typeof EXECUTOR_GROUP_STRATEGY_VALUES)[number];
+
 /** ``reported``: the response named the model. ``declared``: the executor asserted it. */
 export const EXECUTOR_IDENTITY_BASIS_VALUES = [
   'reported',
@@ -3850,6 +4185,12 @@ export const EXECUTOR_IDENTITY_BASIS_VALUES = [
 
 /** ExecutorIdentityBasis - the closed value set above. */
 export type ExecutorIdentityBasis = (typeof EXECUTOR_IDENTITY_BASIS_VALUES)[number];
+
+/** The administrator's mark that the command-line clients behind a `pull` connection are authorised for this integration (`R-149b`, ADR-0026 decision 8): when it was set and by whom. It is one of four distinct statuses (installed, authentication valid, authorised for this integration, model probe passed) and implies none of the other three. */
+export type ExecutorIntegrationAuthorisation = {
+  authorised_at: string;
+  authorised_by: UserUid;
+};
 
 /**
  * How a connection reaches the model: the stand calls an HTTP API, the stand runs a
@@ -3863,6 +4204,13 @@ export const EXECUTOR_KIND_VALUES = [
 
 /** ExecutorKind - the closed value set above. */
 export type ExecutorKind = (typeof EXECUTOR_KIND_VALUES)[number];
+
+/** Used and total capacity of a connection (`EXEC2-SEAL-1`, ADR-0026 decision 1), derived from the database at read time and stored nowhere. `capacity` is `max_active_runs` of the current revision (1 when absent); `active_runs` counts the connection's Runs in `leased`, `running` or `retry_wait`; `active_calls` counts its comparison model calls in `prepared` or `sent` whose attempt is live. Each counts one unit, so the connection is full when their sum reaches `capacity`. */
+export type ExecutorOccupancy = {
+  active_calls: number;
+  active_runs: number;
+  capacity: number;
+};
 
 /**
  * One model of the provider lock a revision may name, with its pinned rates (USD per
@@ -3956,7 +4304,11 @@ export const EXECUTOR_RATE_CHECK_VALUES = [
 /** ExecutorRateCheck - the closed value set above. */
 export type ExecutorRateCheck = (typeof EXECUTOR_RATE_CHECK_VALUES)[number];
 
-/** One immutable revision of a connection, with its latest probe. */
+/**
+ * One immutable revision of a connection, with its latest probe.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 2): `max_active_runs` (1 to 16, absent means 1) is the most units of this connection that may be in use at once, where a Run in `leased`, `running` or `retry_wait` and a comparison model call in `prepared` or `sent` each count one. A lowered value governs new claims only and never stops work in flight. The coupled limits are validated on the revision and refused as `422 validation_failed`: `max_claimed_tasks` of a `pull` connection and a set `max_parallel_calls` of an `http_api` connection must each be at least `max_active_runs` (field `max_claimed_tasks` or `max_parallel_calls`, constraint `below_max_active_runs`), and an `ssh_command` connection takes a value above one only once its wrappers isolate concurrent invocations (field `max_active_runs`, constraint `capacity_not_supported_for_kind`).
+ */
 export type ExecutorRevision = {
   allow_client_documents: boolean;
   answer_deadline_seconds?: number;
@@ -3970,6 +4322,7 @@ export type ExecutorRevision = {
   host_key?: string;
   host_key_fingerprint?: string;
   latest_probe?: ExecutorProbe;
+  max_active_runs?: number;
   max_claimed_tasks?: number;
   max_parallel_calls?: number;
   pin_id: string;
@@ -4004,6 +4357,103 @@ export type ExecutorRoute = {
 export type ExecutorRouteList = {
   items: Array<ExecutorRoute>;
 };
+
+/** One confirmed line of a cut-over: the work kind and the name of the one-member group to create for it. */
+export type ExecutorRoutingMappingEntry = {
+  group_display_name: string;
+  work_kind: ExecutorWorkKind;
+};
+
+/** `EXEC2-SEAL-2` (ADR-0026 decision 17): which store decides where new model work goes. `legacy` (the default): the Primary/Standby route of `setExecutorRoute`. `rules`: the rule of the work kind, targeting an executor group. Each change is journalled; work already admitted keeps its own routing. */
+export const EXECUTOR_ROUTING_MODE_VALUES = [
+  'legacy',
+  'rules',
+] as const;
+
+/** ExecutorRoutingMode - the closed value set above. */
+export type ExecutorRoutingMode = (typeof EXECUTOR_ROUTING_MODE_VALUES)[number];
+
+export type ExecutorRoutingModeEventId = string;
+
+/** The contract pattern for `ExecutorRoutingModeEventId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_ROUTING_MODE_EVENT_ID_PATTERN = "^exrm_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** The routing mode after a change, the groups the change created (a cut-over's one-member groups; none for a rollback) and the rules now current. */
+export type ExecutorRoutingModeResult = {
+  groups: Array<ExecutorGroup>;
+  routing_mode: ExecutorRoutingModeState;
+  rules: Array<ExecutorRoutingRule>;
+};
+
+/** The routing mode and its last change (`EXEC2-SEAL-2`, ADR-0026 decision 17). Before the first change the mode is `legacy` and the other fields are absent. */
+export type ExecutorRoutingModeState = {
+  changed_at?: string;
+  changed_by?: UserUid;
+  mode: ExecutorRoutingMode;
+  mode_event_id?: ExecutorRoutingModeEventId;
+};
+
+/** The proposed cut-over, computed from the legacy routes without writing anything (`EXEC2-SEAL-2`, ADR-0026 decision 17). `preview_digest` binds every item below; the confirmation carries it, and a confirmation whose digest is not the one now computed is `409 conflict` (`preview_stale`). */
+export type ExecutorRoutingPreview = {
+  items: Array<ExecutorRoutingPreviewItem>;
+  preview_digest: Sha256;
+  routing_mode: ExecutorRoutingModeState;
+};
+
+/** `EXEC2-SEAL-2`: why a legacy route cannot become a one-member group. `connection_archived`: the primary is archived. `no_revision`: it has no revision. `kind_not_served`: this release does not serve its kind. */
+export const EXECUTOR_ROUTING_PREVIEW_ISSUE_VALUES = [
+  'connection_archived',
+  'no_revision',
+  'kind_not_served',
+] as const;
+
+/** ExecutorRoutingPreviewIssue - the closed value set above. */
+export type ExecutorRoutingPreviewIssue = (typeof EXECUTOR_ROUTING_PREVIEW_ISSUE_VALUES)[number];
+
+/** What the cut-over would do with one work kind (`EXEC2-SEAL-2`, ADR-0026 decision 17): a one-member group made from the primary of the legacy route, named `proposed_group_name`. A standby is shown and never converted into a member. */
+export type ExecutorRoutingPreviewItem = {
+  billing?: ExecutorBilling;
+  connection_revision_id?: ExecutorRevisionId;
+  gateway_model?: string;
+  incompatible_reason?: ExecutorRoutingPreviewIssue;
+  pin_id?: string;
+  primary_connection_id?: ExecutorConnectionId;
+  proposed_group_name?: string;
+  standby_connection_id?: ExecutorConnectionId;
+  status: ExecutorRoutingPreviewStatus;
+  work_kind: ExecutorWorkKind;
+};
+
+/** `EXEC2-SEAL-2` (ADR-0026 decision 17): what the cut-over would do with one work kind. `ready`: a one-member group can be made from the primary of the legacy route. `no_route`: the work kind has no legacy route, so it gets no rule. `incompatible`: the route exists but cannot become a group (see the reason). */
+export const EXECUTOR_ROUTING_PREVIEW_STATUS_VALUES = [
+  'ready',
+  'no_route',
+  'incompatible',
+] as const;
+
+/** ExecutorRoutingPreviewStatus - the closed value set above. */
+export type ExecutorRoutingPreviewStatus = (typeof EXECUTOR_ROUTING_PREVIEW_STATUS_VALUES)[number];
+
+/** The current rule of one work kind (`EXEC2-SEAL-2`, ADR-0026 decision 11): the group revision new work of that kind is admitted on while the routing mode is `rules`. Rules are append-only; `rule_revision_id` identifies this one. */
+export type ExecutorRoutingRule = {
+  group_id: ExecutorGroupId;
+  group_revision_id: ExecutorGroupRevisionId;
+  rule_revision_id: ExecutorRoutingRuleRevisionId;
+  set_at: string;
+  set_by: UserUid;
+  work_kind: ExecutorWorkKind;
+};
+
+/** The current rule of each work kind that has one, and the current routing mode. */
+export type ExecutorRoutingRuleList = {
+  items: Array<ExecutorRoutingRule>;
+  routing_mode: ExecutorRoutingModeState;
+};
+
+export type ExecutorRoutingRuleRevisionId = string;
+
+/** The contract pattern for `ExecutorRoutingRuleRevisionId`. Anchored; use with `new RegExp()`. */
+export const EXECUTOR_ROUTING_RULE_REVISION_ID_PATTERN = "^exrr_[0-9A-HJKMNP-TV-Z]{26}$";
 
 export type ExecutorRunnerTokenId = string;
 
@@ -4306,6 +4756,15 @@ export type IssueTokenResponse = {
   is_default_credential: boolean;
   /** The credential, presented on the authorized operations as `Authorization: Bearer <token>`. Opaque: this document states no format for it, and a caller that reads anything out of it has taken a dependency this contract does not offer. */
   token: string;
+};
+
+/** The grant, **shown once**: it is stored only as a one-way hash, so no operation can return the `secret` or the `command` that carries it again. `package_version` and `package_sha256` name the agent package the command downloads and verifies. Copy the command now; a lost one is replaced by a new grant, which revokes this one. */
+export type IssuedExecutorEnrollment = {
+  command: string;
+  enrollment: ExecutorEnrollmentMetadata;
+  package_sha256: string;
+  package_version: AgentPackageVersion;
+  secret: string;
 };
 
 /**
@@ -5242,6 +5701,12 @@ export type ReauditRunRequest = {
   cost_consent?: RunCostConsent;
 };
 
+/** The exchange of an enrollment secret for a runner token. `runner_instance_id` names the agent process and makes a repeat of the exchange inside its window idempotent. */
+export type RedeemExecutorEnrollmentRequest = {
+  agent_version?: string;
+  runner_instance_id: string;
+};
+
 /** One registration request, as an administrator reads it. No credential material. */
 export type RegistrationRequest = {
   /** The account an approval created. Null while pending, on a rejected request, and after that account was purged. */
@@ -5333,6 +5798,16 @@ export const RELEASE_NOTE_KIND_VALUES = [
 /** ReleaseNoteKind - the closed value set above. */
 export type ReleaseNoteKind = (typeof RELEASE_NOTE_KIND_VALUES)[number];
 
+/** An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded strings only. */
+export type ReportRunnerHealthRequest = {
+  agent_version: string;
+  clis: Array<RunnerCliHealth>;
+  concurrency: number;
+  execution_profile: RunnerExecutionProfile;
+  features: Array<RunnerFeature>;
+  runner_instance_id?: string;
+};
+
 export type ResetUserPasswordRequest = {
   /** The password the account signs in with next and must then change. It is held to the deployment's password policy against the account's login, and it appears in no response body, no error detail and no diagnostic record. */
   temporary_password: string;
@@ -5351,7 +5826,11 @@ export type ResumeStageChainRunRequest = {
   retry_failed?: boolean;
 };
 
-/** A new immutable revision of a connection: the full settings, never a patch. */
+/**
+ * A new immutable revision of a connection: the full settings, never a patch.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 2): `max_active_runs` (1 to 16, absent means 1) is the most units of this connection that may be in use at once, where a Run in `leased`, `running` or `retry_wait` and a comparison model call in `prepared` or `sent` each count one. A lowered value governs new claims only and never stops work in flight. The coupled limits are validated on the revision and refused as `422 validation_failed`: `max_claimed_tasks` of a `pull` connection and a set `max_parallel_calls` of an `http_api` connection must each be at least `max_active_runs` (field `max_claimed_tasks` or `max_parallel_calls`, constraint `below_max_active_runs`), and an `ssh_command` connection takes a value above one only once its wrappers isolate concurrent invocations (field `max_active_runs`, constraint `capacity_not_supported_for_kind`).
+ */
 export type ReviseExecutorConnectionRequest = {
   allow_client_documents: boolean;
   answer_deadline_seconds?: number;
@@ -5360,6 +5839,7 @@ export type ReviseExecutorConnectionRequest = {
   billing: ExecutorBilling;
   gateway_model: string;
   host_key?: string;
+  max_active_runs?: number;
   max_claimed_tasks?: number;
   max_parallel_calls?: number;
   pin_id: string;
@@ -5370,6 +5850,15 @@ export type ReviseExecutorConnectionRequest = {
   ssh_user?: string;
   timeout_seconds: number;
   transport?: ExecutorTransport;
+};
+
+/** A new immutable revision of a group: the full settings, never a patch (`EXEC2-SEAL-2`). Work already admitted on an earlier revision finishes on it. */
+export type ReviseExecutorGroupRequest = {
+  billing: ExecutorBilling;
+  gateway_model: string;
+  members: Array<ExecutorGroupMember>;
+  pin_id: string;
+  strategy?: ExecutorGroupStrategy;
 };
 
 export type ReviseStageAssemblyRequest = {
@@ -5413,14 +5902,18 @@ export type RunCostEstimate = {
   currency: "USD";
   estimate_digest: Sha256;
   estimated_cost_micros: number;
+  executor_group_id?: ExecutorGroupId;
+  executor_group_revision_id?: ExecutorGroupRevisionId;
   input_tokens: number;
   model_id: string;
   output_tokens: number;
   page_count: number;
+  pin_id?: string;
   preset_revision_id?: PresetRevisionId;
   provider_mode: ProviderMode;
   recommended_ceiling_micros: number;
   relaxed_limits: boolean;
+  routing_rule_revision_id?: ExecutorRoutingRuleRevisionId;
   scope: "run" | "ar_v3_group";
   text_characters: number;
   version_uid: VersionUid;
@@ -5429,6 +5922,7 @@ export type RunCostEstimate = {
 
 export type RunCostEstimateRequest = {
   executor_connection_id?: ExecutorConnectionId;
+  executor_group_id?: ExecutorGroupId;
   preset_id?: PresetId;
   reaudit_of_run_id?: RunId;
   relaxed_limits?: boolean;
@@ -5470,6 +5964,16 @@ export type RunPreset = {
   revision_no: number;
 };
 
+/** `EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5), widened by `EXEC2-SEAL-2` (decisions 14 and 15): why work is not running. `executor_at_capacity`: every unit of its executor connection (for a pending group Run or job: of every eligible member) is in use. `runner_offline`: the connection is a `pull` connection and no runner of it is online (for a group: no eligible member has one). `needs_reconsent`: dispatch found the consent envelope no longer holds and called nothing; a new consent is needed. The persisted `wait_reason` of pending work uses the same words. */
+export const RUN_QUEUE_REASON_VALUES = [
+  'executor_at_capacity',
+  'runner_offline',
+  'needs_reconsent',
+] as const;
+
+/** RunQueueReason - the closed value set above. */
+export type RunQueueReason = (typeof RUN_QUEUE_REASON_VALUES)[number];
+
 /** The audit_run states of contracts/domain/v1/state-machines.json. The success terminal is `published`; there is no `succeeded` run state. `created` is transient and rarely observed by a client. `cancelled` is declared by the contract and is unreachable in PC-01, which has no cancel command. */
 export const RUN_STATE_VALUES = [
   'created',
@@ -5493,6 +5997,10 @@ export type RunStateCount = {
 
 export type RunStatus = {
   analysis_profile_id?: AnalysisProfileId;
+  /** `EXEC2-SEAL-2`: the connection revision and model dispatch bound the run to; present exactly when `binding_state` is `bound`. `executor` then names the same connection. */
+  binding?: ExecutorBinding;
+  /** `EXEC2-SEAL-2` (ADR-0026 decision 12): whether the run's executor was frozen at start (`frozen_at_start`), is still to be chosen (`pending`) or was chosen at dispatch (`bound`). Absent is read as `frozen_at_start`. */
+  binding_state?: ExecutorBindingState;
   cost_basis?: CostBasis;
   /** What this run spent at the provider, in millionths of the provider currency unit, as an integer. Never a floating-point money value. It is the sum of `cost_micros` over **every** `model_call` row of this run, including every retry attempt, because the per-run budget ceiling is enforced over the same span. Absent when the run made no provider call at all, which is a different fact from a cost of zero. */
   cost_micros?: number;
@@ -5511,12 +6019,16 @@ export type RunStatus = {
   norm_retrieval_set_id?: NormRetrievalSetId;
   /** W55A-SEAL-01 (R-113, CD-6): the norms snapshot this run pinned when it was created -- the current snapshot at that moment. Absent while no snapshot is current, which until W57 is the expected state of every run. */
   norms_snapshot_id?: NormsSnapshotId;
+  /** `EXEC2-SEAL-2`: the group, rule and model admission froze, for a run admitted by a rule or a group (`binding_state` `pending` or `bound`). Omitted for a run whose executor was frozen at start. */
+  planned?: ExecutorGroupPlan;
   /** ANALYSIS-PRESETS-01: the preset revision the run was started with, read-only: the preset, the revision number and the name it had then. Null (and omitted) for a run started without a preset, which includes every re-audit. */
   preset?: RunPreset | null;
   project_uid: ProjectUid;
   prompt_bundle_id?: PromptBundleId;
   provider_mode: ProviderMode;
   published_finding_count?: number;
+  /** `EXEC2-SEAL-1`: why a `queued` Run is waiting for its executor, derived from the database at read time. Null (and omitted) for a Run that is not waiting for one. A Run admitted by a rule or a group (`binding_state` `pending`) reports its stored `wait_reason` instead and carries no `queue_reason`. */
+  queue_reason?: RunQueueReason | null;
   reaudit_of_run_id?: RunId;
   run_id: RunId;
   stages: Array<StageState>;
@@ -5531,11 +6043,64 @@ export type RunStatus = {
   /** The catalog code a `failed` run terminated with. Null otherwise. */
   terminal_reason?: ErrorCode | null;
   version_uid: VersionUid;
+  /** `EXEC2-SEAL-2` (ADR-0026 decision 15): why a `pending` run is not dispatched, stored with `waiting_since`. Omitted when the run is not waiting for an executor. */
+  wait_reason?: RunQueueReason;
+  /** `EXEC2-SEAL-2`: when the run began waiting for the reason in `wait_reason`; present exactly when it is. */
+  waiting_since?: string;
 };
 
 export type RunStatusPage = {
   items: Array<RunStatus>;
   page: PageInfo;
+};
+
+/** The authentication state of a client, read only through its official mechanism and reported as a closed enumeration: `valid`, `login_required`, or `unknown` (not installed, or the client offers no official way to tell). Never a credential, a path or an account name. */
+export const RUNNER_CLI_AUTH_STATE_VALUES = [
+  'valid',
+  'login_required',
+  'unknown',
+] as const;
+
+/** RunnerCliAuthState - the closed value set above. */
+export type RunnerCliAuthState = (typeof RUNNER_CLI_AUTH_STATE_VALUES)[number];
+
+/** One client's sanitised health as an agent reports it (`EXEC2-SEAL-1`, ADR-0026 decision 5). */
+export type RunnerCliHealth = {
+  auth_state: RunnerCliAuthState;
+  cli: RunnerCliName;
+  installed: boolean;
+  version?: string;
+};
+
+/** The official command-line clients an agent detects (ADR-0026 decision 8). */
+export const RUNNER_CLI_NAME_VALUES = [
+  'claude',
+  'codex',
+] as const;
+
+/** RunnerCliName - the closed value set above. */
+export type RunnerCliName = (typeof RUNNER_CLI_NAME_VALUES)[number];
+
+/** How the agent answers a task: it runs a command (`command`) or calls a local OpenAI-compatible endpoint (`endpoint`). */
+export const RUNNER_EXECUTION_PROFILE_VALUES = [
+  'command',
+  'endpoint',
+] as const;
+
+/** RunnerExecutionProfile - the closed value set above. */
+export type RunnerExecutionProfile = (typeof RUNNER_EXECUTION_PROFILE_VALUES)[number];
+
+/** A capability the agent declares; `images` means it serves tasks that carry images. */
+export const RUNNER_FEATURE_VALUES = [
+  'images',
+] as const;
+
+/** RunnerFeature - the closed value set above. */
+export type RunnerFeature = (typeof RUNNER_FEATURE_VALUES)[number];
+
+/** The report was stored on the calling runner token. */
+export type RunnerHealthAck = {
+  recorded_at: string;
 };
 
 /** One checked saved PNG, retrievable only by the current runner claim. */
@@ -5557,14 +6122,23 @@ export const RUNNER_IMAGE_BLOB_ID_PATTERN = "^blob_[0-9A-HJKMNP-TV-Z]{26}$";
  * What the API ever says about a runner token after it was issued: that it exists, its
  * non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
  * The value and its hash are never returned.
+ *
+ * `EXEC2-SEAL-1` (ADR-0026 decision 5): the health an agent last reported on this token, as closed enumerations and bounded strings (no secret, no path to a credential and no document text), and `online`, the freshness of `last_seen_at` under a bounded threshold, read at the time of the request. All of them are absent for a token whose runner has not reported.
  */
 export type RunnerTokenMetadata = {
+  agent_version?: string;
+  clis?: Array<RunnerCliHealth>;
+  concurrency?: number;
   connection_id: ExecutorConnectionId;
   created_at: string;
   created_by: UserUid;
+  execution_profile?: RunnerExecutionProfile;
   expires_at: string;
+  features?: Array<RunnerFeature>;
+  health_reported_at?: string;
   last_seen_address?: string;
   last_seen_at?: string;
+  online?: boolean;
   revoked_at?: string;
   revoked_by?: UserUid;
   token_id: ExecutorRunnerTokenId;
@@ -5757,10 +6331,27 @@ export type SetExecutionPausedRequest = {
   paused: boolean;
 };
 
+/** `true` sets the mark, `false` clears it. Setting an already set mark or clearing an absent one answers the connection as it stands. */
+export type SetExecutorIntegrationAuthorisationRequest = {
+  authorised: boolean;
+};
+
 export type SetExecutorRouteRequest = {
   primary_connection_id: ExecutorConnectionId;
   standby_connection_id?: ExecutorConnectionId;
   work_kind: ExecutorWorkKind;
+};
+
+/** Change the routing mode (`EXEC2-SEAL-2`, ADR-0026 decision 17). `rules` is the cut-over and needs the `preview_digest` that was shown and a `mapping` that confirms each `ready` work kind to be converted: the groups, the rules and the mode are created in one transaction. `legacy` is the rollback and takes neither field. Work already admitted by rules finishes on its own group revisions. */
+export type SetExecutorRoutingModeRequest = {
+  mapping?: Array<ExecutorRoutingMappingEntry>;
+  mode: ExecutorRoutingMode;
+  preview_digest?: Sha256;
+};
+
+/** Point the rule of a work kind at an immutable group revision (`EXEC2-SEAL-2`). The path names the work kind. A group revision other than the current one of an active group is accepted; an archived group's is refused. */
+export type SetExecutorRoutingRuleRequest = {
+  group_revision_id: ExecutorGroupRevisionId;
 };
 
 /** Write-only. The API seals ``value`` to the stand's public key and never returns it. */
@@ -6807,6 +7398,8 @@ export type StartRunRequest = {
   cost_consent?: RunCostConsent;
   /** EXEC-PAR-START-01: the executor connection this run must be on. Absent: the run follows the global route exactly as before. Present: that connection's current revision is frozen when this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused and no run exists. Never replaced by the route's standby or by another connection. Part of the payload the idempotency key is compared by. */
   executor_connection_id?: ExecutorConnectionId;
+  /** `EXEC2-SEAL-2` (ADR-0026 decisions 12 to 14): an executor group (listExecutorGroups) to admit the run on. Absent: the run is what it was. Present: the group's current revision is read in the start's transaction and the run is admitted with `binding_state` `pending`; the connection is chosen at dispatch. Exclusive with executor_connection_id and preset_id. Part of the payload the idempotency key is compared by. */
+  executor_group_id?: ExecutorGroupId;
   /** ANALYSIS-PRESETS-01: a saved preset (listAnalysisPresets) to start the run with. Absent: the run is what it was. Present: the preset's current revision is read in the start's transaction and its executor connection is applied exactly as if executor_connection_id had named it (same usability test, same refusals, no fallback to the standby or to another connection), and the run records the preset revision. Exclusive with executor_connection_id. Part of the payload the idempotency key is compared by, as the preset and not as the connection it resolved to. */
   preset_id?: PresetId;
   /** Defaults to the configured mode. A new served paid start requires fresh confirmed cost consent; the approved cap applies in both output-limit modes. */

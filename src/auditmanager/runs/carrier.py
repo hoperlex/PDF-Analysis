@@ -105,6 +105,7 @@ from auditmanager.shared.errors import DomainError
 
 __all__ = [
     "CRASHED_REASON",
+    "GROUP_WAIT_SECONDS",
     "RECLAIM_SECONDS",
     "RUN_CONCURRENCY",
     "InlineCarrier",
@@ -132,6 +133,12 @@ CRASHED_REASON: Final[str] = "executor_raised_before_terminal"
 #: How often a serving process fences expired leases. W53's value, now shared by the
 #: in-process carrier, the API's reclaim-only carrier and the worker service.
 RECLAIM_SECONDS: Final[float] = 30.0
+
+#: `EXEC2-GROUP-RUN-01`. How often a dispatching process looks at the Runs admitted on a group and keeps the reason each
+#: waits true (:meth:`~auditmanager.jobs.public.JobRepository.refresh_group_waits`). The look is one indexed read of the
+#: pending Runs (`ix_audit_run_pending`) and nothing when there are none, so it is much shorter than the lease reclaim: a
+#: Run admitted into a full group shows why it waits within one poll.
+GROUP_WAIT_SECONDS: Final[float] = 5.0
 
 
 def _outstanding_jobs(session_factory: sessionmaker[Session]) -> int:
@@ -256,10 +263,24 @@ class DurableCarrier(ThreadCarrier):
 
     __slots__ = (
         "_sessions", "_runner", "_wake", "_stop", "_dispatch_thread",
-        "_active",
+        "_active", "_dispatch_groups", "_group_offline_wait_seconds",
     )
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, dispatch_groups: bool = True,
+        group_offline_wait_seconds: float | None = None,
+    ) -> None:
+        """``dispatch_groups`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 12) is ``True`` only when the provider source is
+        ``database``: with ``False`` the poller is offered no Run admitted on a group. ``group_offline_wait_seconds`` is
+        ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`` as the composition root read it; ``None`` reads the process environment
+        here. It is validated **now** -- a malformed value raises ``ValueError`` at construction, so the process does not
+        start -- and not on every pass of the poller."""
+        offline_wait = float(
+            JobRepository.group_offline_wait_seconds() if group_offline_wait_seconds is None
+            else group_offline_wait_seconds
+        )
+        if offline_wait <= 0:
+            raise ValueError("the offline wait of a group is positive")
         super().__init__(max_workers=RUN_CONCURRENCY)
         self._sessions = session_factory
         self._runner: Callable[[str], Callable[[], None]] | None = None
@@ -267,6 +288,12 @@ class DurableCarrier(ThreadCarrier):
         self._stop = threading.Event()
         self._dispatch_thread: threading.Thread | None = None
         self._active = False
+        self._dispatch_groups = dispatch_groups
+        self._group_offline_wait_seconds = offline_wait
+
+    @property
+    def dispatch_groups(self) -> bool:
+        return self._dispatch_groups
 
     def configure_runner(self, runner: Callable[[str], Callable[[], None]]) -> None:
         self._runner = runner
@@ -288,9 +315,33 @@ class DurableCarrier(ThreadCarrier):
         # already in PostgreSQL; the serving scheduler discovers it there.
         self._wake.set()
 
+    def _refresh_group_waits(self) -> None:
+        """Keep the wait of every Run admitted on a group true, and end the ones nobody can serve (ADR-0026 decision 15).
+
+        Housekeeping in a step of its own, as the worker service's: a pass that fails is logged -- by the category of the
+        failure, never its text, which may quote a row -- and tried again at the next interval, and it never keeps the poller
+        from looking for a Run to claim. The offline wait was validated when the carrier was built."""
+        try:
+            with self._sessions() as session:
+                JobRepository().refresh_group_waits(
+                    session, offline_wait_seconds=self._group_offline_wait_seconds,
+                )
+                session.commit()
+        except Exception as failure:
+            _log.error(
+                "durable dispatch: the group wait pass failed (%s); retried in %g s",
+                type(failure).__name__, GROUP_WAIT_SECONDS,
+            )
+
     def _poll(self) -> None:
         last_reclaim = 0.0
+        last_waits = 0.0
         while not self._stop.is_set():
+            if monotonic() - last_waits >= GROUP_WAIT_SECONDS:
+                # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 15), outside the guard below: a failing wait pass is its own
+                # logged event and must not stop `next_queued_run`.
+                self._refresh_group_waits()
+                last_waits = monotonic()
             try:
                 if monotonic() - last_reclaim >= RECLAIM_SECONDS:
                     with self._sessions() as session:
@@ -301,7 +352,7 @@ class DurableCarrier(ThreadCarrier):
                     busy = bool(self._pending)
                 if not busy:
                     with self._sessions() as session:
-                        run_id = JobRepository().next_queued_run(session)
+                        run_id = JobRepository(dispatch_groups=self._dispatch_groups).next_queued_run(session)
                     if run_id is not None:
                         assert self._runner is not None
                         super().submit(self._runner(run_id))
@@ -396,8 +447,14 @@ def run_to_terminal(
     text_profiles: Any = None,
     providers: Any = None,
     ar_v3_pack_registry: Any = None,
+    dispatch_groups: bool = True,
 ) -> None:
     """Execute one **queued** run to a terminal, in its own sessions.
+
+    ``dispatch_groups`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 12) is ``True`` only for a process that serves the
+    ``database`` provider source: with ``False`` the claim refuses a Run admitted on a group before it writes anything
+    (:class:`~auditmanager.jobs.public.ExecutionNotClaimed`, no wait reason), and the Run stays queued for a worker that can
+    bind it. The composition root passes it; a caller that passes nothing keeps the claim it always had.
 
     ``providers`` (`EXEC-HTTP-01`) is the composition root's provider resolver, handed to
     ``execute_run`` unchanged; ``None`` keeps ``adapter`` and ``provider_config`` for every run.
@@ -437,7 +494,7 @@ def run_to_terminal(
                 adapter=adapter,
                 provider_config=provider_config,
                 runs=run_repo,
-                jobs=JobRepository(worker_id=worker_id),
+                jobs=JobRepository(worker_id=worker_id, dispatch_groups=dispatch_groups),
                 text_profiles=text_profiles,
                 providers=providers,
                 ar_v3_pack_registry=ar_v3_pack_registry,
@@ -453,6 +510,7 @@ def run_to_terminal(
             "run %s was not claimed (%s); left for a later dispatch",
             run_id, refusal.code.value,
         )
+        _record_group_wait(session_factory, run_id, refusal)
         raise
     except DomainError as failure:
         if failure.code in {
@@ -470,6 +528,26 @@ def run_to_terminal(
         _log.exception("run %s did not reach a terminal by itself", run_id)
         _record_crash(session_factory, run_id, failure, runs=run_repo)
         raise
+
+
+def _record_group_wait(
+    session_factory: sessionmaker[Session], run_id: str, refusal: ExecutionNotClaimed,
+) -> None:
+    """Make durable why a Run admitted on a group was not dispatched (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 15).
+
+    A refused claim writes nothing and its transaction is rolled back, so the reason the dispatcher found
+    (``executor_at_capacity``, ``runner_offline`` or ``needs_reconsent``) is stored in a transaction of its own, after the
+    refusal. Any other refusal carries no reason and stores nothing. A failure here is logged and never masks the
+    refusal: the periodic sweep (:meth:`JobRepository.refresh_group_waits`) writes the same reason a moment later."""
+    reason = getattr(refusal, "wait_reason", None)
+    if reason is None:
+        return
+    try:
+        with session_factory() as session:
+            JobRepository().record_group_wait(session, run_id=run_id, reason=str(reason))
+            session.commit()
+    except Exception:
+        _log.exception("run %s: the reason it waits (%s) could not be stored; the sweep stores it", run_id, reason)
 
 
 def _record_crash(

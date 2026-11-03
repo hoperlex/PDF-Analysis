@@ -31,6 +31,9 @@ from cryptography.hazmat.primitives.serialization import (
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.model import (
+    CONSTRAINT_BELOW_MAX_ACTIVE_RUNS,
+    CONSTRAINT_CAPACITY_NOT_SUPPORTED_FOR_KIND,
+    DEFAULT_MAX_ACTIVE_RUNS,
     SERVES,
     ConnectionRecord,
     ProbeRecord,
@@ -43,6 +46,7 @@ from auditmanager.executors.model import (
     validate_settings,
 )
 from auditmanager.executors.repository import ExecutorRepository
+from auditmanager.executors.routing_mode import ensure_legacy_routing
 from auditmanager.executors.sealing import PublicRing
 from auditmanager.executors.usability import ensure_routable
 from auditmanager.ingest.public import (
@@ -60,6 +64,7 @@ __all__ = [
     "archive_connection",
     "create_connection",
     "generate_ssh_key",
+    "refuse_uncoupled_capacity",
     "request_probe",
     "revise_connection",
     "set_route",
@@ -141,6 +146,66 @@ def _begin(
     )
 
 
+# --- EXEC2-CAP-01 -------------------------------------------------------------------------------------------
+#
+# The capacity of a connection and the limits that must agree with it (ADR-0026 decisions 1 and 2).
+
+#: The ``ssh_command`` profiles whose remote command this repository ships and has read for isolation
+#: between concurrent invocations (`EXEC2-CAP-01`). ``tools/executor-runner/claude_answer.py --ssh-envelope``
+#: and ``ssh-forced-command.sh`` each make their own ``mkdtemp`` working directory, read their task from their
+#: own stdin, keep no lock file, fixed path or module state, and run the CLI with no saved session; each
+#: invocation is its own process tree under its own sshd session (``claude_answer.py`` also starts the CLI in
+#: a session of its own and kills only that group). A ``custom_command`` is an administrator's script that
+#: the stand has not seen.
+_ISOLATED_SSH_PROFILES = frozenset({"claude_code_headless"})
+
+
+def _incoherent(field: str, constraint: str) -> DomainError:
+    return DomainError(
+        ErrorCode.VALIDATION_FAILED, message="the executor settings are not acceptable",
+        field=field, constraint=constraint,
+    )
+
+
+def refuse_uncoupled_capacity(kind: str, settings: RevisionSettings) -> None:
+    """Refuse a revision whose limits cannot serve its ``max_active_runs`` (decision 2).
+
+    Pure; called after ``validate_settings`` has accepted the kind's settings and the range of the
+    capacity. A refusal is ``validation_failed`` with a ``field`` and a ``constraint`` and never a value:
+
+    * ``pull``: ``max_claimed_tasks`` below ``max_active_runs`` would leave surplus Runs with no claim
+      slot, so they would end ``not_sent``: ``max_claimed_tasks`` / ``below_max_active_runs``;
+    * ``http_api``: a ``max_parallel_calls`` that is set and below ``max_active_runs`` bounds the
+      concurrent calls under the capacity (a Run makes its calls one at a time, so this is the whole
+      bound): ``max_parallel_calls`` / ``below_max_active_runs``. Unset means no bound;
+    * ``ssh_command``: above one only for a profile whose command isolates concurrent invocations
+      (:data:`_ISOLATED_SSH_PROFILES`): ``max_active_runs`` / ``capacity_not_supported_for_kind``.
+
+    The default capacity of one is never refused.
+    """
+    capacity = settings.max_active_runs
+    if capacity is None or capacity <= DEFAULT_MAX_ACTIVE_RUNS:
+        return
+    if kind == "pull":
+        if settings.max_claimed_tasks is not None and settings.max_claimed_tasks < capacity:
+            raise _incoherent("max_claimed_tasks", CONSTRAINT_BELOW_MAX_ACTIVE_RUNS)
+    elif kind == "http_api":
+        if settings.max_parallel_calls is not None and settings.max_parallel_calls < capacity:
+            raise _incoherent("max_parallel_calls", CONSTRAINT_BELOW_MAX_ACTIVE_RUNS)
+    elif kind == "ssh_command":
+        if settings.ssh_profile not in _ISOLATED_SSH_PROFILES:
+            raise _incoherent("max_active_runs", CONSTRAINT_CAPACITY_NOT_SUPPORTED_FOR_KIND)
+
+
+def _fingerprinted(settings: RevisionSettings) -> dict[str, object]:
+    """The settings as the command ledger compares them. ``max_active_runs`` is part of the payload only
+    when it is set, so an idempotency key issued before the setting existed still replays."""
+    return {
+        name: getattr(settings, name) for name in settings.__slots__
+        if name != "max_active_runs" or settings.max_active_runs is not None
+    }
+
+
 def create_connection(
     session: Session, *, kind: str, display_name: str, roles: Iterable[str],
     idempotency_key: str, actor_uid: str, repository: ExecutorRepository | None = None,
@@ -179,8 +244,7 @@ def revise_connection(
     _admin(roles)
     store, ledger = repository or ExecutorRepository(), commands or CommandRepository()
     claimed = _begin(session, ledger, "revise_executor_connection", idempotency_key,
-                     {"connection_id": connection_id,
-                      "settings": {name: getattr(settings, name) for name in settings.__slots__}})
+                     {"connection_id": connection_id, "settings": _fingerprinted(settings)})
     if isinstance(claimed, CommandReplay):
         found = store.get_revision(session, str(claimed.outcome["revision_id"]))
         if found is None:
@@ -188,6 +252,7 @@ def revise_connection(
         return found
     connection = _live(_locked(session, store, connection_id))
     checked = validate_settings(connection.kind, settings, pinned_model_ids=pinned_model_ids)
+    refuse_uncoupled_capacity(connection.kind, checked)
     revision = store.insert_revision(session, connection_id, checked, actor_uid=actor_uid)
     append_execution_event(
         session, event_type="executor.revision_added", aggregate_type=_AGGREGATE,
@@ -372,8 +437,14 @@ def set_route(
 ) -> RouteRecord:
     """Name the connection that serves a kind of model work, with an optional standby that
     only an administrator configures. Every change is an appended, journaled event; nothing
-    ever falls back implicitly."""
+    ever falls back implicitly.
+
+    `EXEC2-CUTOVER-01` (ADR-0026 decision 17): while the routing mode is ``rules`` the legacy routes are read-only. The
+    refusal -- ``conflict`` / ``routing_mode_rules`` -- comes before the key is claimed and before any row is read or
+    written, so it leaves nothing behind; the check holds the routing-mode journal's lock to the end of the transaction,
+    which serialises a route change with a cut-over (``routing_mode.ensure_legacy_routing``)."""
     _admin(roles)
+    ensure_legacy_routing(session)
     store, ledger = repository or ExecutorRepository(), commands or CommandRepository()
     claimed = _begin(session, ledger, "set_executor_route", idempotency_key,
                      {"work_kind": work_kind, "primary_connection_id": primary_connection_id,

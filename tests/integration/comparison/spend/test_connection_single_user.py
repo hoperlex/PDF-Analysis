@@ -1,8 +1,10 @@
 """One user per executor connection, in both directions (`CMP-SPEND-01`, ADR-0025 decision 4).
 
 * A Run's claim is refused while a comparison model call is active on the Run's connection -- **the one query
-  of ``jobs/repository.py`` this lane was granted** (`_CONNECTION_HAS_OTHER_ACTIVE_RUN`). A mutation that puts
-  the old query back turns the tests of this file that name it red.
+  of ``jobs/repository.py`` this lane was granted** (`_CONNECTION_HAS_OTHER_ACTIVE_RUN`, since `EXEC2-CAP-01`
+  `_CONNECTION_UNITS`, a count against the connection's capacity; with the default capacity of one it answers
+  exactly what the old query did). A mutation that puts the old query back turns the tests of this file that
+  name it red.
 * A comparison call is refused while a Run is active on its connection, and while another comparison call is.
 * Both are decided under the Run claim's own advisory lock, so they cannot both pass.
 * A plain Run serialises per connection exactly as before (the ``EXEC-PAR-QUEUE-01`` suites are not touched and

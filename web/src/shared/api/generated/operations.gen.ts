@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.14.0 (OpenAPI 3.1.0)
- *   sha256 11db634e3a35f9e94c1a5b1d18aa42f675ce0a32327b82f1d2c12d2bb002b466
+ *   AuditManager PC-01 API 1.16.0 (OpenAPI 3.1.0)
+ *   sha256 0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,6 +17,7 @@
 import type {
   Account,
   AccountPage,
+  AgentPackageVersion,
   AnalysisPreset,
   AnalysisPresetList,
   AnalysisProfileList,
@@ -94,6 +95,7 @@ import type {
   ComparisonVersionOrder,
   ComparisonVersionOrderList,
   ConfirmComparisonUploadSetRequest,
+  ConfirmExecutorAgentInstallHostKeyRequest,
   ConfirmStagePairRequest,
   ConfirmStageUploadCandidateRequest,
   CorrectVersionClassificationRequest,
@@ -101,7 +103,9 @@ import type {
   CreateAssignmentRequest,
   CreateComparisonReportRequest,
   CreateComparisonUploadRequest,
+  CreateExecutorAgentInstallRequest,
   CreateExecutorConnectionRequest,
+  CreateExecutorGroupRequest,
   CreateProjectRequest,
   CreateStageAssemblyRequest,
   CreateStageReviewCardRequest,
@@ -122,19 +126,31 @@ import type {
   ExecutionQueuePage,
   ExecutionWorker,
   ExecutionWorkerPage,
+  ExecutorAgentInstall,
+  ExecutorAgentInstallId,
   ExecutorConnection,
   ExecutorConnectionDetail,
   ExecutorConnectionId,
   ExecutorConnectionList,
+  ExecutorGroup,
+  ExecutorGroupCapacity,
+  ExecutorGroupDetail,
+  ExecutorGroupId,
+  ExecutorGroupList,
   ExecutorProbe,
   ExecutorRevision,
   ExecutorRoute,
   ExecutorRouteList,
+  ExecutorRoutingModeResult,
+  ExecutorRoutingPreview,
+  ExecutorRoutingRule,
+  ExecutorRoutingRuleList,
   ExecutorRunnerTokenId,
   ExecutorSecretMetadata,
   ExecutorSshKey,
   ExecutorTaskAck,
   ExecutorTaskId,
+  ExecutorWorkKind,
   ExtendedExecutorTaskClaim,
   ExtendedRunReview,
   FailExecutorTaskRequest,
@@ -148,6 +164,7 @@ import type {
   IssueRunnerTokenRequest,
   IssueTokenRequest,
   IssueTokenResponse,
+  IssuedExecutorEnrollment,
   IssuedRunnerToken,
   JobId,
   MarkReleaseNotesReadRequest,
@@ -183,6 +200,7 @@ import type {
   ProposalDecisionResult,
   ProposalDecisionState,
   ReauditRunRequest,
+  RedeemExecutorEnrollmentRequest,
   RegistrationRequest,
   RegistrationRequestId,
   RegistrationRequestPage,
@@ -190,10 +208,12 @@ import type {
   RegistrationStatusResponse,
   RejectRegistrationRequest,
   ReleaseList,
+  ReportRunnerHealthRequest,
   ResetUserPasswordRequest,
   ResumeComparisonAiJobRequest,
   ResumeStageChainRunRequest,
   ReviseExecutorConnectionRequest,
+  ReviseExecutorGroupRequest,
   ReviseStageAssemblyRequest,
   RunCostEstimate,
   RunCostEstimateRequest,
@@ -201,6 +221,7 @@ import type {
   RunNormReferences,
   RunStatus,
   RunStatusPage,
+  RunnerHealthAck,
   RunnerImageBlobId,
   RunnerTokenMetadata,
   SaveAnalysisPresetRequest,
@@ -209,7 +230,10 @@ import type {
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetExecutionPausedRequest,
+  SetExecutorIntegrationAuthorisationRequest,
   SetExecutorRouteRequest,
+  SetExecutorRoutingModeRequest,
+  SetExecutorRoutingRuleRequest,
   SetExecutorSecretRequest,
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
@@ -301,6 +325,7 @@ export const OPERATION_IDS = [
   'approveSheetPairing',
   'archiveAnalysisPreset',
   'archiveExecutorConnection',
+  'archiveExecutorGroup',
   'archiveUser',
   'cancelComparisonAiPairCheck',
   'cancelComparisonAiSheetChanges',
@@ -321,6 +346,7 @@ export const OPERATION_IDS = [
   'completeComparisonUploadFile',
   'completeStageUploadFile',
   'confirmComparisonUploadSet',
+  'confirmExecutorAgentInstallHostKey',
   'confirmStagePair',
   'confirmStageUploadCandidate',
   'continueComparisonReport',
@@ -329,7 +355,9 @@ export const OPERATION_IDS = [
   'createAssignment',
   'createComparisonReport',
   'createComparisonUpload',
+  'createExecutorAgentInstall',
   'createExecutorConnection',
+  'createExecutorGroup',
   'createProject',
   'createStageAssembly',
   'createStageReviewCard',
@@ -337,6 +365,7 @@ export const OPERATION_IDS = [
   'decideOptimisationProposal',
   'deleteComparisonReport',
   'dequeueComparisonAiSheetChanges',
+  'downloadAgentPackage',
   'enqueueComparisonLaunch',
   'estimateArV3GroupCost',
   'estimateComparisonAiPairCheck',
@@ -377,7 +406,10 @@ export const OPERATION_IDS = [
   'getDashboardSummary',
   'getDocumentVersion',
   'getEffectiveVendorLists',
+  'getExecutorAgentInstall',
   'getExecutorConnection',
+  'getExecutorGroup',
+  'getExecutorGroupCapacity',
   'getExecutorTaskImage',
   'getExtendedRunReview',
   'getFinding',
@@ -406,6 +438,7 @@ export const OPERATION_IDS = [
   'getVersionPageSpecPositions',
   'getVersionSectionReview',
   'importComparisonZip',
+  'issueExecutorEnrollment',
   'issueRunnerToken',
   'issueToken',
   'listAnalysisPresets',
@@ -429,7 +462,9 @@ export const OPERATION_IDS = [
   'listExecutionJournal',
   'listExecutionQueue',
   'listExecutorConnections',
+  'listExecutorGroups',
   'listExecutorRoutes',
+  'listExecutorRoutingRules',
   'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
@@ -476,14 +511,17 @@ export const OPERATION_IDS = [
   'pauseStageUpload',
   'prepareComparisonClientReport',
   'prepareComparisonMatrix',
+  'previewExecutorRouting',
   'purgeUser',
   'readRegistrationStatus',
   'reauditRun',
   'rebuildComparisonReportPdf',
   'recomputeStageTextEvidence',
+  'redeemExecutorEnrollment',
   'rejectRegistration',
   'rejectStageUploadCandidate',
   'removeComparisonLaunchEntry',
+  'reportRunnerHealth',
   'requestExecutorProbe',
   'resetUserPassword',
   'restoreUser',
@@ -499,12 +537,16 @@ export const OPERATION_IDS = [
   'retryComparisonUploadSet',
   'reviseAnalysisPreset',
   'reviseExecutorConnection',
+  'reviseExecutorGroup',
   'reviseStageAssembly',
   'revokeRunnerToken',
   'searchNorms',
   'setCurrentNormSnapshot',
   'setExecutionPaused',
+  'setExecutorIntegrationAuthorisation',
   'setExecutorRoute',
+  'setExecutorRoutingMode',
+  'setExecutorRoutingRule',
   'setExecutorSecret',
   'setGlobalVendorList',
   'setJobPriority',
@@ -815,6 +857,34 @@ export type ArchiveExecutorConnectionInput = {
 
 /** Success body of `archiveExecutorConnection` (`application/json`, HTTP 200). */
 export type ArchiveExecutorConnectionResult = ExecutorConnection;
+
+// ------------------------------------------------------------------------------------
+// archiveExecutorGroup - POST /executor-groups/{group_id}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Archive Executor Group
+ *
+ * Archive a group (`EXEC2-SEAL-2`): one-way, not deletion. An archived group takes no revision, rule or run; work already admitted on it finishes. `409 conflict` with `conflict_reason` `group_routed` while a rule still names it; archiving an archived group answers it as it stands. `404 not_found`; `403 permission_denied` for a caller without `admin`.
+ */
+export type ArchiveExecutorGroupInput = {
+  /** Path parameters, substituted into `/executor-groups/{group_id}/archive`. */
+  path: {
+    group_id: ExecutorGroupId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `archiveExecutorGroup` (`application/json`, HTTP 200). */
+export type ArchiveExecutorGroupResult = ExecutorGroup;
 
 // ------------------------------------------------------------------------------------
 // archiveUser - POST /users/{user_uid}/archive
@@ -1362,6 +1432,37 @@ export type ConfirmComparisonUploadSetInput = {
 export type ConfirmComparisonUploadSetResult = ComparisonProposalSet;
 
 // ------------------------------------------------------------------------------------
+// confirmExecutorAgentInstallHostKey - POST /executor-connections/{connection_id}/agent-installs/{install_id}/confirm-host-key
+// ------------------------------------------------------------------------------------
+
+/**
+ * Confirm Executor Agent Install Host Key
+ *
+ * Confirm the host-key fingerprint the worker observed, explicitly and by value (`EXEC2-SEAL-1`, ADR-0026 decision 7): there is no trust on first use. The install proceeds only with the fingerprint the administrator read. Refusals: `403 permission_denied`; `404 not_found`; `409 conflict` with `conflict_reason` `install_not_awaiting_host_key` (the install is in another state) or `host_key_changed` (the fingerprint named is not the one observed); `422 validation_failed`.
+ */
+export type ConfirmExecutorAgentInstallHostKeyInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/agent-installs/{install_id}/confirm-host-key`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+    install_id: ExecutorAgentInstallId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ConfirmExecutorAgentInstallHostKeyRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `confirmExecutorAgentInstallHostKey` (`application/json`, HTTP 200). */
+export type ConfirmExecutorAgentInstallHostKeyResult = ExecutorAgentInstall;
+
+// ------------------------------------------------------------------------------------
 // confirmStagePair - POST /projects/{project_uid}/stage-pairs
 // ------------------------------------------------------------------------------------
 
@@ -1578,6 +1679,36 @@ export type CreateComparisonUploadInput = {
 export type CreateComparisonUploadResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
+// createExecutorAgentInstall - POST /executor-connections/{connection_id}/agent-installs
+// ------------------------------------------------------------------------------------
+
+/**
+ * Create Executor Agent Install
+ *
+ * Start the install of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7) on a `pull` connection. The administrator supplies host, port and user and either a key the stand generates (`generated_key`: the response carries the public half and its `authorized_keys` line) or a pasted private key (`pasted_key`: sealed, never returned). Passwords are not accepted. The worker scans the host key and the install waits in `awaiting_host_key` for `confirmExecutorAgentInstallHostKey`; no command text comes from the caller. Refusals use existing codes: `403 permission_denied`; `404 not_found`; `409 conflict` with `conflict_reason` `connection_archived`, `no_revision` or `install_in_progress` (an install of this connection has not finished); `422 validation_failed` with field `kind` and constraint `kind_not_pull`, or field `private_key` and constraint `private_key_required` (`pasted_key` without a key) or `private_key_not_accepted` (a key sent with `generated_key`); `503 dependency_unavailable` with dependency `secrets_public_key_missing` or `agent_package`.
+ */
+export type CreateExecutorAgentInstallInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/agent-installs`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CreateExecutorAgentInstallRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createExecutorAgentInstall` (`application/json`, HTTP 201). */
+export type CreateExecutorAgentInstallResult = ExecutorAgentInstall;
+
+// ------------------------------------------------------------------------------------
 // createExecutorConnection - POST /executor-connections
 // ------------------------------------------------------------------------------------
 
@@ -1598,6 +1729,32 @@ export type CreateExecutorConnectionInput = {
 
 /** Success body of `createExecutorConnection` (`application/json`, HTTP 201). */
 export type CreateExecutorConnectionResult = ExecutorConnection;
+
+// ------------------------------------------------------------------------------------
+// createExecutorGroup - POST /executor-groups
+// ------------------------------------------------------------------------------------
+
+/**
+ * Create Executor Group
+ *
+ * Create a group and its first revision (`EXEC2-SEAL-2`, ADR-0026 decision 10). A group is a set of interchangeable executors of one model; the revision is immutable and snapshots each member's connection revision. Every member must be of a connection that exists and is not archived, must name a revision of that connection, and that revision must pin exactly `pin_id` and `gateway_model` and share `billing` (and therefore the pinned rates, which the server snapshots from the provider lock): `422 validation_failed` with `details.field` `members` and constraint `unknown_executor_connection`, `member_revision_not_of_connection`, `member_repeated`, `tie_break_order_repeated` or `member_kind_not_served`, or with field `pin_id`, `gateway_model` or `billing` and constraint `member_pin_mismatch`, `member_model_mismatch` or `member_billing_mismatch`; a `pin_id` the provider lock does not hold is `model_not_pinned`; one to 16 members are accepted (`range`). An archived member connection is `409 conflict` with `conflict_reason` `connection_archived`. Mixed groups are not accepted. `409 conflict` with `conflict_reason` `group_name_in_use` for a name an active group holds. `403 permission_denied` for a caller without `admin`.
+ */
+export type CreateExecutorGroupInput = {
+  /** Request body, sent as `application/json`. */
+  body: CreateExecutorGroupRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `createExecutorGroup` (`application/json`, HTTP 201). */
+export type CreateExecutorGroupResult = ExecutorGroup;
 
 // ------------------------------------------------------------------------------------
 // createProject - POST /projects
@@ -1786,6 +1943,29 @@ export type DequeueComparisonAiSheetChangesInput = {
 export type DequeueComparisonAiSheetChangesResult = ComparisonAiJob;
 
 // ------------------------------------------------------------------------------------
+// downloadAgentPackage - GET /runner/agent-package/{version}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Download Agent Package
+ *
+ * The agent package of exactly this version, as `application/gzip` (`EXEC2-SEAL-1`, ADR-0026 decision 6). It is built deterministically from `tools/executor-runner/` into the image and served by version with no authentication: it is public code with no secret, and its integrity is the sha256 that `issueExecutorEnrollment` writes into the install command. A version the image does not hold is `422 validation_failed` with field `version` and constraint `package_version_unknown`, never a listing of the versions that exist; an image with no package is `503 dependency_unavailable` with dependency `agent_package`. The proxy throttles the route per address.
+ */
+export type DownloadAgentPackageInput = {
+  /** Path parameters, substituted into `/runner/agent-package/{version}`. */
+  path: {
+    version: AgentPackageVersion;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `downloadAgentPackage` (`application/gzip`, HTTP 200). */
+export type DownloadAgentPackageResult = Blob;
+
+// ------------------------------------------------------------------------------------
 // enqueueComparisonLaunch - POST /projects/{project_uid}/comparison-launch-queue/entries
 // ------------------------------------------------------------------------------------
 
@@ -1940,7 +2120,7 @@ export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
 /**
  * Estimate selected section analysis before spend.
  *
- * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest.
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them.
  */
 export type EstimateRunCostInput = {
   /** Request body, sent as `application/json`. */
@@ -2713,6 +2893,30 @@ export type GetEffectiveVendorListsInput = {
 export type GetEffectiveVendorListsResult = EffectiveVendorLists;
 
 // ------------------------------------------------------------------------------------
+// getExecutorAgentInstall - GET /executor-connections/{connection_id}/agent-installs/{install_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Agent Install
+ *
+ * One install session of the universal agent (`EXEC2-SEAL-1`): its state, the host-key fingerprint the worker observed once it has, and the sanitised reason it failed. An administrator reads it; the install names a host and a user. `404 not_found` for an install that does not belong to this connection.
+ */
+export type GetExecutorAgentInstallInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/agent-installs/{install_id}`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+    install_id: ExecutorAgentInstallId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorAgentInstall` (`application/json`, HTTP 200). */
+export type GetExecutorAgentInstallResult = ExecutorAgentInstall;
+
+// ------------------------------------------------------------------------------------
 // getExecutorConnection - GET /executor-connections/{connection_id}
 // ------------------------------------------------------------------------------------
 
@@ -2730,6 +2934,52 @@ export type GetExecutorConnectionInput = {
 
 /** Success body of `getExecutorConnection` (`application/json`, HTTP 200). */
 export type GetExecutorConnectionResult = ExecutorConnectionDetail;
+
+// ------------------------------------------------------------------------------------
+// getExecutorGroup - GET /executor-groups/{group_id}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Group
+ *
+ * Read one group and every revision of it, newest first (`EXEC2-SEAL-2`). `404 not_found` for a group that does not exist. Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
+ */
+export type GetExecutorGroupInput = {
+  /** Path parameters, substituted into `/executor-groups/{group_id}`. */
+  path: {
+    group_id: ExecutorGroupId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorGroup` (`application/json`, HTTP 200). */
+export type GetExecutorGroupResult = ExecutorGroupDetail;
+
+// ------------------------------------------------------------------------------------
+// getExecutorGroupCapacity - GET /executor-groups/{group_id}/capacity
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Executor Group Capacity
+ *
+ * The capacity of a group's current revision as dispatch would see it right now (`EXEC2-SEAL-2`, ADR-0026 decisions 1 and 14): per member its snapshot, its connection's current revision and occupancy and whether it is eligible and, if not, why; and the group's capacity, units in use and pending work. Derived at read time, stored nowhere. `404 not_found`; Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
+ */
+export type GetExecutorGroupCapacityInput = {
+  /** Path parameters, substituted into `/executor-groups/{group_id}/capacity`. */
+  path: {
+    group_id: ExecutorGroupId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutorGroupCapacity` (`application/json`, HTTP 200). */
+export type GetExecutorGroupCapacityResult = ExecutorGroupCapacity;
 
 // ------------------------------------------------------------------------------------
 // getExecutorTaskImage - GET /runner/tasks/{task_id}/images/{blob_id}
@@ -3355,6 +3605,34 @@ export type ImportComparisonZipInput = {
 
 /** Success body of `importComparisonZip` (`application/json`, HTTP 201). */
 export type ImportComparisonZipResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
+// issueExecutorEnrollment - POST /executor-connections/{connection_id}/enrollments
+// ------------------------------------------------------------------------------------
+
+/**
+ * Issue Executor Enrollment
+ *
+ * Issue the one-time enrollment grant of a universal agent for a `pull` connection (`EXEC2-SEAL-1`, ADR-0026 decisions 4, 6 and 9). The grant's secret, the package version and its sha256, and the copyable install command are **shown once**: only a one-way hash of the secret is stored and no operation returns it again. A grant is single-use, expires after 15 minutes and is bound to this connection; issuing a new one revokes the previous unredeemed grant. Issuing one for a connection that already has an online agent is how an agent moves to another host. Refusals use existing codes: `403 permission_denied` for a caller without `admin`; `404 not_found`; `409 conflict` with `conflict_reason` `connection_archived`, `no_revision`, or `enrollment_shown_once` (a repeat of the same Idempotency-Key: the secret was not stored and cannot be shown again); `422 validation_failed` with field `kind` and constraint `kind_not_pull`; `503 dependency_unavailable` with dependency `agent_package` (the image holds no package to install) or `public_origin` (the stand's configured public origin, `AUDITMANAGER_PUBLIC_ORIGIN`, is absent or not a plain `https://host[:port]`; the install command's origin comes from that setting alone and is never guessed from the request).
+ */
+export type IssueExecutorEnrollmentInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/enrollments`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `issueExecutorEnrollment` (`application/json`, HTTP 201). */
+export type IssueExecutorEnrollmentResult = IssuedExecutorEnrollment;
 
 // ------------------------------------------------------------------------------------
 // issueRunnerToken - POST /executor-connections/{connection_id}/runner-tokens
@@ -4003,10 +4281,33 @@ export type ListExecutorConnectionsInput = {
 export type ListExecutorConnectionsResult = ExecutorConnectionList;
 
 // ------------------------------------------------------------------------------------
+// listExecutorGroups - GET /executor-groups
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Executor Groups
+ *
+ * List the executor groups with their current revision, archived ones included (`EXEC2-SEAL-2`, ADR-0026 decision 10). Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
+ */
+export type ListExecutorGroupsInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutorGroups` (`application/json`, HTTP 200). */
+export type ListExecutorGroupsResult = ExecutorGroupList;
+
+// ------------------------------------------------------------------------------------
 // listExecutorRoutes - GET /executor-routes
 // ------------------------------------------------------------------------------------
 
-/** List Executor Routes */
+/**
+ * List Executor Routes
+ *
+ * The legacy Primary/Standby routes (`EXEC-SEAL-01`). `EXEC2-SEAL-2`: they stay readable in every routing mode, but new work is routed by them only while the mode is `legacy`.
+ */
 export type ListExecutorRoutesInput = {
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -4016,6 +4317,25 @@ export type ListExecutorRoutesInput = {
 
 /** Success body of `listExecutorRoutes` (`application/json`, HTTP 200). */
 export type ListExecutorRoutesResult = ExecutorRouteList;
+
+// ------------------------------------------------------------------------------------
+// listExecutorRoutingRules - GET /executor-routing-rules
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Executor Routing Rules
+ *
+ * The current rule of each work kind that has one, and the current routing mode (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17). While the mode is `legacy` the rules exist but are read by nothing. Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
+ */
+export type ListExecutorRoutingRulesInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listExecutorRoutingRules` (`application/json`, HTTP 200). */
+export type ListExecutorRoutingRulesResult = ExecutorRoutingRuleList;
 
 // ------------------------------------------------------------------------------------
 // listNormDocuments - GET /norm-documents
@@ -5225,6 +5545,25 @@ export type PrepareComparisonMatrixInput = {
 export type PrepareComparisonMatrixResult = ComparisonMatrixPreparation;
 
 // ------------------------------------------------------------------------------------
+// previewExecutorRouting - GET /executor-routing/preview
+// ------------------------------------------------------------------------------------
+
+/**
+ * Preview Executor Routing
+ *
+ * Propose the cut-over from the legacy routes to rules, writing nothing (`EXEC2-SEAL-2`, ADR-0026 decision 17): per work kind a one-member group made from the primary of its route. A standby is shown and never converted into a member; a route that cannot become a group is flagged `incompatible` with its reason. `preview_digest` binds the proposal. `403 permission_denied` for a caller without `admin`.
+ */
+export type PreviewExecutorRoutingInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `previewExecutorRouting` (`application/json`, HTTP 200). */
+export type PreviewExecutorRoutingResult = ExecutorRoutingPreview;
+
+// ------------------------------------------------------------------------------------
 // purgeUser - DELETE /users/{user_uid}
 // ------------------------------------------------------------------------------------
 
@@ -5351,6 +5690,27 @@ export type RecomputeStageTextEvidenceInput = {
 export type RecomputeStageTextEvidenceResult = StageChainRun;
 
 // ------------------------------------------------------------------------------------
+// redeemExecutorEnrollment - POST /runner/enroll
+// ------------------------------------------------------------------------------------
+
+/**
+ * Redeem Executor Enrollment
+ *
+ * Exchange an enrollment secret, presented as the bearer credential, for a runner token (`EXEC2-SEAL-1`, ADR-0026 decision 4). The token is returned once, exactly as `issueRunnerToken` returns one. A repeat from the same `runner_instance_id` inside the exchange window is idempotent: an agent that lost the response is not locked out, and the stand never stores the value. A repeat after the window is `409 conflict` with `conflict_reason` `enrollment_redeemed`; `connection_archived` is refused the same way. An unknown, expired or revoked secret is `401 authentication_required`, and the answer does not say which. The secret reaches no other operation: the four task operations refuse it as they refuse any wrong token.
+ */
+export type RedeemExecutorEnrollmentInput = {
+  /** Request body, sent as `application/json`. */
+  body: RedeemExecutorEnrollmentRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `redeemExecutorEnrollment` (`application/json`, HTTP 201). */
+export type RedeemExecutorEnrollmentResult = IssuedRunnerToken;
+
+// ------------------------------------------------------------------------------------
 // rejectRegistration - POST /registrations/{request_id}/reject
 // ------------------------------------------------------------------------------------
 
@@ -5426,6 +5786,27 @@ export type RemoveComparisonLaunchEntryInput = {
 
 /** Success body of `removeComparisonLaunchEntry` (`application/json`, HTTP 200). */
 export type RemoveComparisonLaunchEntryResult = ComparisonLaunchQueue;
+
+// ------------------------------------------------------------------------------------
+// reportRunnerHealth - POST /runner/health
+// ------------------------------------------------------------------------------------
+
+/**
+ * Report Runner Health
+ *
+ * An agent reports its version, its command-line clients with their sanitised authentication state, its concurrency, execution profile and declared features (`EXEC2-SEAL-1`, ADR-0026 decision 5). The report is stored on the calling runner token and returned in `RunnerTokenMetadata`. Only closed enumerations and bounded strings are accepted: no secret, no path to a credential and no document text is stored. A report that violates the schema is `422 validation_failed`.
+ */
+export type ReportRunnerHealthInput = {
+  /** Request body, sent as `application/json`. */
+  body: ReportRunnerHealthRequest;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reportRunnerHealth` (`application/json`, HTTP 200). */
+export type ReportRunnerHealthResult = RunnerHealthAck;
 
 // ------------------------------------------------------------------------------------
 // requestExecutorProbe - POST /executor-connections/{connection_id}/probes
@@ -5833,6 +6214,36 @@ export type ReviseExecutorConnectionInput = {
 export type ReviseExecutorConnectionResult = ExecutorRevision;
 
 // ------------------------------------------------------------------------------------
+// reviseExecutorGroup - POST /executor-groups/{group_id}/revisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * Revise Executor Group
+ *
+ * Add an immutable revision to a group: the full settings, never a patch (`EXEC2-SEAL-2`, ADR-0026 decision 10). Work already admitted on an earlier revision finishes on it; new work and rules that name the group are not moved. Every member must be of a connection that exists and is not archived, must name a revision of that connection, and that revision must pin exactly `pin_id` and `gateway_model` and share `billing` (and therefore the pinned rates, which the server snapshots from the provider lock): `422 validation_failed` with `details.field` `members` and constraint `unknown_executor_connection`, `member_revision_not_of_connection`, `member_repeated`, `tie_break_order_repeated` or `member_kind_not_served`, or with field `pin_id`, `gateway_model` or `billing` and constraint `member_pin_mismatch`, `member_model_mismatch` or `member_billing_mismatch`; a `pin_id` the provider lock does not hold is `model_not_pinned`; one to 16 members are accepted (`range`). An archived member connection is `409 conflict` with `conflict_reason` `connection_archived`. Mixed groups are not accepted. `409 conflict` with `conflict_reason` `group_archived` for an archived group. `404 not_found`; `403 permission_denied` for a caller without `admin`.
+ */
+export type ReviseExecutorGroupInput = {
+  /** Path parameters, substituted into `/executor-groups/{group_id}/revisions`. */
+  path: {
+    group_id: ExecutorGroupId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: ReviseExecutorGroupRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `reviseExecutorGroup` (`application/json`, HTTP 201). */
+export type ReviseExecutorGroupResult = ExecutorGroup;
+
+// ------------------------------------------------------------------------------------
 // reviseStageAssembly - POST /stage-assemblies/{stage_assembly_id}/members
 // ------------------------------------------------------------------------------------
 
@@ -5956,10 +6367,44 @@ export type SetExecutionPausedInput = {
 export type SetExecutionPausedResult = ExecutionDispatchStatus;
 
 // ------------------------------------------------------------------------------------
+// setExecutorIntegrationAuthorisation - POST /executor-connections/{connection_id}/integration-authorisation
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Executor Integration Authorisation
+ *
+ * Set or clear the administrator's mark that the command-line clients behind a `pull` connection are authorised for this integration (`R-149b`, ADR-0026 decision 8). It is one of four distinct statuses and implies none of the other three; the agent reads authentication only through each client's official mechanism. Returns the connection as it stands. Refusals: `403 permission_denied`; `404 not_found`; `409 conflict` with `conflict_reason` `connection_archived`; `422 validation_failed` with field `kind` and constraint `kind_not_pull`.
+ */
+export type SetExecutorIntegrationAuthorisationInput = {
+  /** Path parameters, substituted into `/executor-connections/{connection_id}/integration-authorisation`. */
+  path: {
+    connection_id: ExecutorConnectionId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorIntegrationAuthorisationRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorIntegrationAuthorisation` (`application/json`, HTTP 200). */
+export type SetExecutorIntegrationAuthorisationResult = ExecutorConnection;
+
+// ------------------------------------------------------------------------------------
 // setExecutorRoute - PUT /executor-routes
 // ------------------------------------------------------------------------------------
 
-/** Set Executor Route */
+/**
+ * Set Executor Route
+ *
+ * Set the Primary and optional Standby of one work kind (`EXEC-SEAL-01`). `EXEC2-SEAL-2` (ADR-0026 decision 17): while the routing mode is `rules` this is refused with `409 conflict` and `conflict_reason` `routing_mode_rules`; roll back to `legacy` with `setExecutorRoutingMode` first.
+ */
 export type SetExecutorRouteInput = {
   /** Request body, sent as `application/json`. */
   body: SetExecutorRouteRequest;
@@ -5976,6 +6421,62 @@ export type SetExecutorRouteInput = {
 
 /** Success body of `setExecutorRoute` (`application/json`, HTTP 200). */
 export type SetExecutorRouteResult = ExecutorRoute;
+
+// ------------------------------------------------------------------------------------
+// setExecutorRoutingMode - POST /executor-routing/mode
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Executor Routing Mode
+ *
+ * Change the routing mode (`EXEC2-SEAL-2`, ADR-0026 decision 17). `rules` is the cut-over: it needs the `preview_digest` that was shown and a `mapping` that confirms each `ready` work kind to be converted, and creates the groups, the rules and the mode in one transaction. `legacy` is the rollback: it takes neither field and does not touch the groups or rules, and work already admitted by rules finishes on its own group revisions and is never read through a legacy route. Each change is journalled. Refusals use existing codes: `422 validation_failed` with field `preview_digest` and constraint `preview_digest_required`, or field `mapping` and constraint `mapping_required`, `mapping_not_accepted`, `mapping_entry_not_ready` or `mapping_work_kind_repeated`; `409 conflict` with `conflict_reason` `routing_mode_unchanged` or `preview_stale`, or `group_name_in_use` for a group name an active group holds. While the mode is `rules`, `setExecutorRoute` answers `409 conflict` with `conflict_reason` `routing_mode_rules`, and a start of a work kind with no rule is `503 dependency_unavailable` with `details.dependency` `no_rule_for_work_kind`. `403 permission_denied` for a caller without `admin`.
+ */
+export type SetExecutorRoutingModeInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorRoutingModeRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorRoutingMode` (`application/json`, HTTP 200). */
+export type SetExecutorRoutingModeResult = ExecutorRoutingModeResult;
+
+// ------------------------------------------------------------------------------------
+// setExecutorRoutingRule - PUT /executor-routing-rules/{work_kind}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Executor Routing Rule
+ *
+ * Point the rule of a work kind at an immutable group revision (`EXEC2-SEAL-2`, ADR-0026 decision 11). Rules are append-only: a change adds a rule revision, and naming the revision that is already current answers the rule as it stands. Work already admitted keeps the rule revision it was admitted on. `404 not_found` for a group revision that does not exist; `409 conflict` with `conflict_reason` `group_archived` for an archived group's revision; `422 validation_failed` for a work kind the enumeration does not name. `403 permission_denied` for a caller without `admin`.
+ */
+export type SetExecutorRoutingRuleInput = {
+  /** Path parameters, substituted into `/executor-routing-rules/{work_kind}`. */
+  path: {
+    work_kind: ExecutorWorkKind;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetExecutorRoutingRuleRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setExecutorRoutingRule` (`application/json`, HTTP 200). */
+export type SetExecutorRoutingRuleResult = ExecutorRoutingRule;
 
 // ------------------------------------------------------------------------------------
 // setExecutorSecret - POST /executor-connections/{connection_id}/secrets
@@ -6381,6 +6882,8 @@ export type StartOptimisationPassResult = OptimisationPass;
  * `EXEC-PAR-START-01`: the optional `executor_connection_id` names the connection the run must be on. Absent, the run follows the global route (and its standby rule) exactly as before. Present, the run freezes that connection's current revision if this release serves it, its current key has a passing probe and it is not archived; otherwise the start is refused before the key is claimed, so no run, command record or event exists: `422 validation_failed` with `details.field` `executor_connection_id` for an unknown or malformed id, `503 dependency_unavailable` with `details.dependency` `executor_connection` for a connection that cannot serve now. A named connection never falls back to the route's standby or to another connection. The choice is part of the payload the idempotency key is compared by: the same key with another connection is `idempotency_key_reuse`.
  *
  * `ANALYSIS-PRESETS-01`: the optional `preset_id` names a saved preset instead of a connection. Its current revision is read in the start's transaction and its executor connection is applied exactly as if `executor_connection_id` had named it, so every refusal of that field applies unchanged; the run records the preset revision and `RunStatus.preset` shows it. `422 validation_failed` with `details.field` `preset_id` refuses an unknown preset (`unknown_preset`) and a preset together with `executor_connection_id` (`conflicts_with_executor_connection_id`); `409 conflict` with `details.conflict_reason` `preset_archived` refuses an archived one. All three precede the key's claim, so nothing is written. The preset, not the connection it resolved to, is part of the payload the idempotency key is compared by: a retry after an administrator revised the preset replays the run that exists, and the same key with a hand-chosen connection is `idempotency_key_reuse`. `reauditRun` records no preset.
+ *
+ * `EXEC2-SEAL-2` (ADR-0026 decisions 12 to 17): the optional `executor_group_id` names an executor group instead of a connection or a preset. The group's current revision is read in the start's transaction and the run is admitted with `binding_state` `pending`: admission freezes the group revision, the planned model (`RunStatus.planned`) and the cost consent, and no connection; dispatch chooses a member and writes the connection revision once, in the worker's claim transaction (`RunStatus.binding`). It is exclusive with `executor_connection_id` and `preset_id` (`422 validation_failed` with `details.field` `executor_group_id` and constraint `conflicts_with_executor_connection_id` or `conflicts_with_preset_id`); an unknown group is `unknown_executor_group`; a run in the `environment` provider source refuses a group (`environment_source`); an archived group is `409 conflict` with `conflict_reason` `group_archived`. All precede the key's claim, so nothing is written. While the routing mode is `rules`, a start that names no connection, group or preset is admitted on the rule of the `text_analysis` work kind; a work kind with no rule is `503 dependency_unavailable` with `details.dependency` `no_rule_for_work_kind`. The group, not the connection it will choose, is part of the payload the idempotency key is compared by. While a run waits for an executor it reports `wait_reason` and `waiting_since`.
  */
 export type StartRunInput = {
   /** Request body, sent as `application/json`. */
@@ -7353,6 +7856,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  archiveExecutorGroup: {
+    operationId: 'archiveExecutorGroup',
+    method: 'POST',
+    path: '/executor-groups/{group_id}/archive',
+    pathParams: ['group_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   archiveUser: {
     operationId: 'archiveUser',
     method: 'POST',
@@ -7633,6 +8150,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  confirmExecutorAgentInstallHostKey: {
+    operationId: 'confirmExecutorAgentInstallHostKey',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/agent-installs/{install_id}/confirm-host-key',
+    pathParams: ['connection_id', 'install_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   confirmStagePair: {
     operationId: 'confirmStagePair',
     method: 'POST',
@@ -7745,10 +8276,38 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  createExecutorAgentInstall: {
+    operationId: 'createExecutorAgentInstall',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/agent-installs',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   createExecutorConnection: {
     operationId: 'createExecutorConnection',
     method: 'POST',
     path: '/executor-connections',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  createExecutorGroup: {
+    operationId: 'createExecutorGroup',
+    method: 'POST',
+    path: '/executor-groups',
     pathParams: [],
     queryParams: [],
     headerParams: [],
@@ -7856,6 +8415,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
+  },
+  downloadAgentPackage: {
+    operationId: 'downloadAgentPackage',
+    method: 'GET',
+    path: '/runner/agent-package/{version}',
+    pathParams: ['version'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/gzip',
+    successStatuses: [200],
+    errorStatuses: [422, 500, 503],
+    tags: ['execution'],
   },
   enqueueComparisonLaunch: {
     operationId: 'enqueueComparisonLaunch',
@@ -8417,11 +8990,53 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['optimisation'],
   },
+  getExecutorAgentInstall: {
+    operationId: 'getExecutorAgentInstall',
+    method: 'GET',
+    path: '/executor-connections/{connection_id}/agent-installs/{install_id}',
+    pathParams: ['connection_id', 'install_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
   getExecutorConnection: {
     operationId: 'getExecutorConnection',
     method: 'GET',
     path: '/executor-connections/{connection_id}',
     pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
+  getExecutorGroup: {
+    operationId: 'getExecutorGroup',
+    method: 'GET',
+    path: '/executor-groups/{group_id}',
+    pathParams: ['group_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['execution'],
+  },
+  getExecutorGroupCapacity: {
+    operationId: 'getExecutorGroupCapacity',
+    method: 'GET',
+    path: '/executor-groups/{group_id}/capacity',
+    pathParams: ['group_id'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: false,
@@ -8823,6 +9438,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  issueExecutorEnrollment: {
+    operationId: 'issueExecutorEnrollment',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/enrollments',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   issueRunnerToken: {
     operationId: 'issueRunnerToken',
     method: 'POST',
@@ -9145,10 +9774,38 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 500, 503],
     tags: ['execution'],
   },
+  listExecutorGroups: {
+    operationId: 'listExecutorGroups',
+    method: 'GET',
+    path: '/executor-groups',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   listExecutorRoutes: {
     operationId: 'listExecutorRoutes',
     method: 'GET',
     path: '/executor-routes',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
+  listExecutorRoutingRules: {
+    operationId: 'listExecutorRoutingRules',
+    method: 'GET',
+    path: '/executor-routing-rules',
     pathParams: [],
     queryParams: [],
     headerParams: [],
@@ -9803,6 +10460,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
+  previewExecutorRouting: {
+    operationId: 'previewExecutorRouting',
+    method: 'GET',
+    path: '/executor-routing/preview',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   purgeUser: {
     operationId: 'purgeUser',
     method: 'DELETE',
@@ -9873,6 +10544,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  redeemExecutorEnrollment: {
+    operationId: 'redeemExecutorEnrollment',
+    method: 'POST',
+    path: '/runner/enroll',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   rejectRegistration: {
     operationId: 'rejectRegistration',
     method: 'POST',
@@ -9914,6 +10599,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
+  },
+  reportRunnerHealth: {
+    operationId: 'reportRunnerHealth',
+    method: 'POST',
+    path: '/runner/health',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 422, 500, 503],
+    tags: ['execution'],
   },
   requestExecutorProbe: {
     operationId: 'requestExecutorProbe',
@@ -10125,6 +10824,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  reviseExecutorGroup: {
+    operationId: 'reviseExecutorGroup',
+    method: 'POST',
+    path: '/executor-groups/{group_id}/revisions',
+    pathParams: ['group_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [201],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   reviseStageAssembly: {
     operationId: 'reviseStageAssembly',
     method: 'POST',
@@ -10195,11 +10908,53 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  setExecutorIntegrationAuthorisation: {
+    operationId: 'setExecutorIntegrationAuthorisation',
+    method: 'POST',
+    path: '/executor-connections/{connection_id}/integration-authorisation',
+    pathParams: ['connection_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
   setExecutorRoute: {
     operationId: 'setExecutorRoute',
     method: 'PUT',
     path: '/executor-routes',
     pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setExecutorRoutingMode: {
+    operationId: 'setExecutorRoutingMode',
+    method: 'POST',
+    path: '/executor-routing/mode',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['execution'],
+  },
+  setExecutorRoutingRule: {
+    operationId: 'setExecutorRoutingRule',
+    method: 'PUT',
+    path: '/executor-routing-rules/{work_kind}',
+    pathParams: ['work_kind'],
     queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: true,

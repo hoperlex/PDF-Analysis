@@ -48,7 +48,11 @@ def test_two_clones_of_one_migrated_schema_are_equal(two_clones: list[Engine]) -
     # `EXEC-SEAL-01`: +5 tables, +1 view; `EXEC-PULL-01` (0031): +2 tables; `0032_ar_v3_run_group`: +2 tables;
     # `0035_comparison_records`: +2 tables.
     # `0041_comparison_stage_core`: fifteen stage tables; no new view.
-    assert len(first["tables"]) == 110 and len(first["views"]) == 5
+    # `0042_comparison_stage_review`: twelve more tables; no new view.
+    # `0046_executor_capacity_enrollment`: two more tables (`executor_enrollment`, `executor_agent_install`); no new view.
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): five more tables (the group store and the routing-mode journal);
+    # `0048_dispatch_time_binding` adds none; no new view.
+    assert len(first["tables"]) == 129 and len(first["views"]) == 5
     assert set(first["shape"]) == {
         "columns", "constraints", "indexes", "triggers", "functions", "views", "sequences", "extensions",
     }

@@ -19,6 +19,8 @@ import { EmptyState, ErrorState, LoadingState, NotApplicableState } from '@/shar
 
 import { useVersionBlocks } from '../api/use-version-blocks';
 
+import styles from './blocks-page.module.css';
+
 /*
  * `R-18`, applied when `W55B-WEB-BLOCKS` first rendered this view in the language guard:
  * the coordinates printed the contract's own words — `x0`/`y0`/`x1`/`y1`, `pt`, `top_left` —
@@ -99,13 +101,13 @@ function BlockMarkup({ versionUid }: BlockMarkupProps) {
           (a, b) => a.block_ordinal - b.block_ordinal,
         );
         return (
-          <section key={pageNumber} style={{ marginBottom: '1rem' }}>
+          <section key={pageNumber} className={styles.pageGroup}>
             <h3>
               Страница {pageNumber} · блоков {pageBlocks.length}
             </h3>
             <ul>
               {pageBlocks.map((block) => (
-                <li key={block.block_id} className="am-state" style={{ marginBottom: '0.25rem' }}>
+                <li key={block.block_id} className="am-state">
                   <div className="am-state__detail">
                     <p>
                       <code>{block.block_id}</code>

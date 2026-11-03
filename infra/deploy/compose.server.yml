@@ -253,11 +253,39 @@ services:
       # Presentation comparison exposure is explicit in both API and worker.
       AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
       AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
+      # `REVIEW-FIX-SEAMS-1102`. The rollback switches of the paid analysis plan. The API prices
+      # every fresh estimate (`runs/preflight.py`) and picks the stage plan of every fresh stage
+      # run (`comparison/stage_v3/policy.py`); the worker executes the consent and the policy that
+      # were frozen at the start and never reads them, so they are named here only. Each default
+      # is the code's own default. A `1` switch is turned off by `0`, `false` or `off`; the plan
+      # names take `v2` / `legacy` as in `alpha.env.example`.
+      AUDITMANAGER_EXTENDED_ANALYSIS_PLAN: ${AUDITMANAGER_EXTENDED_ANALYSIS_PLAN:-v3}
+      AUDITMANAGER_EXTENDED_COVERAGE: ${AUDITMANAGER_EXTENDED_COVERAGE:-batched-v1}
+      AUDITMANAGER_EXTENDED_CROSS_WINDOW: ${AUDITMANAGER_EXTENDED_CROSS_WINDOW:-1}
+      AUDITMANAGER_NATIVE_PAGE_PIECES: ${AUDITMANAGER_NATIVE_PAGE_PIECES:-1}
+      AUDITMANAGER_NORM_PARAGRAPH_CONTEXT: ${AUDITMANAGER_NORM_PARAGRAPH_CONTEXT:-1}
+      AUDITMANAGER_PROJECT_PARAMETERS: ${AUDITMANAGER_PROJECT_PARAMETERS:-1}
+      AUDITMANAGER_PROJECT_PARAMETER_CONTEXT: ${AUDITMANAGER_PROJECT_PARAMETER_CONTEXT:-1}
+      AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT: ${AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT:-1}
+      AUDITMANAGER_STAGE_V3_PLAN: ${AUDITMANAGER_STAGE_V3_PLAN:-windowed-global-v1}
+      # Relaxed intake limits (`REVIEW-FIX-BOUNDS-1102`), read on the upload and ingest path; the
+      # worker gets the same value as the API. `0`, the default, keeps the strict limits.
+      AUDITMANAGER_INTAKE_RELAXED: ${AUDITMANAGER_INTAKE_RELAXED:-0}
       # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
       # are sealed to. Public, so they live in alpha.env and reach both services; the private
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
       AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
       AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
+      # `EXEC2-ENROLL-01` (ADR-0026 decisions 4 and 6), read by the `api` only. The stand's public origin
+      # (`https://host[:port]`) that the generated agent install command downloads from. It is the ONLY source
+      # of that origin: the web tier drops the forwarded `Host`, so one guessed from the request would be the
+      # API's internal name. Unset, it is derived from the certificate name (`https://` and `ALPHA_CERT_NAME`);
+      # with neither set it is `https://`, which the API refuses as no origin (`503 dependency_unavailable`,
+      # `public_origin`), never a fallback. Set it for a stand reached through a tunnel or a private name.
+      # And where the image keeps the agent package (`auditmanager-agent-<version>.tar.gz` and its
+      # `.sha256`); blank is the image's own `/app/agent-package`.
+      AUDITMANAGER_PUBLIC_ORIGIN: ${AUDITMANAGER_PUBLIC_ORIGIN:-https://${ALPHA_CERT_NAME:-}}
+      AUDITMANAGER_AGENT_PACKAGE_DIR: ${AUDITMANAGER_AGENT_PACKAGE_DIR:-}
       # `AR-V3-BETA-PACK-INSTALL-01`. Path INSIDE the container of the sealed reviewed-pack
       # manifest (`/run/ar-v3/<file>`, mounted read-only below); blank installs no pack.
       AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}
@@ -335,11 +363,22 @@ services:
       # Presentation comparison exposure is explicit in both API and worker.
       AUDITMANAGER_COMPARISON_MODULES: ${AUDITMANAGER_COMPARISON_MODULES:-versions,stages}
       AUDITMANAGER_EXTENDED_ANALYSIS: ${AUDITMANAGER_EXTENDED_ANALYSIS:-1}
+      # `REVIEW-FIX-BOUNDS-1102`. Relaxed intake limits; the same value the API reads. `0`, the
+      # default, keeps the strict limits.
+      AUDITMANAGER_INTAKE_RELAXED: ${AUDITMANAGER_INTAKE_RELAXED:-0}
       # The PUBLIC half of the key ring that seals a connection's key, and the key id new keys
       # are sealed to. Public, so they live in alpha.env and reach both services; the private
       # ring (`AUDITMANAGER_SECRETS_KEYS`) is in provider.env and only the worker reads it.
       AUDITMANAGER_SECRETS_PUBLIC_KEYS: ${AUDITMANAGER_SECRETS_PUBLIC_KEYS:-}
       AUDITMANAGER_SECRETS_ACTIVE_KID: ${AUDITMANAGER_SECRETS_ACTIVE_KID:-}
+      # `EXEC2-ENROLL-SSH-01` (ADR-0026 decision 7). Path A -- an agent installed over SSH from the UI -- is run
+      # by this service, which issues the enrollment grant and tells `install.sh` where the stand is, so it
+      # reads the SAME two values as the `api` (see the API service above for what each means): the stand's
+      # public origin, with the same default, and where the image keeps the agent package. The origin is never
+      # guessed: with neither it nor `ALPHA_CERT_NAME` set it is `https://`, which the worker refuses as no
+      # origin and the session fails (`enrollment_failed`).
+      AUDITMANAGER_PUBLIC_ORIGIN: ${AUDITMANAGER_PUBLIC_ORIGIN:-https://${ALPHA_CERT_NAME:-}}
+      AUDITMANAGER_AGENT_PACKAGE_DIR: ${AUDITMANAGER_AGENT_PACKAGE_DIR:-}
       # `AR-V3-BETA-PACK-INSTALL-01`. The same manifest the API reads; both services must name
       # the same file or a started group could not be executed.
       AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}
@@ -353,6 +392,16 @@ services:
       # the worker at start. Whatever it is, one executor connection has at most one active run.
       # The `api` never reads it.
       AUDITMANAGER_WORKER_SLOTS: ${AUDITMANAGER_WORKER_SLOTS:-1}
+      # `R-149g`. Whether path A (an agent installed over SSH from the UI) may reach a PRIVATE-range target
+      # (RFC 1918, unique-local, shared address space): `1` or `0`, default `0`, which is the rule before this
+      # setting existed. `1` lets the stand SSH into its hosting's internal networks; loopback, link-local, the
+      # compose network and service names stay refused either way. Anything but `1` or `0` is read as `0` and
+      # logged by name. Only the worker reads it; the `api` does not (see `README.md`, the universal agent).
+      AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE: ${AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE:-0}
+      # `EXEC2-GROUP-RUN-01` / `EXEC2-GROUP-CMP-01` (ADR-0026 decision 15): how long group work waits while every member
+      # is offline before it ends `no_executor_online` (whole seconds, 1..604800; a blank value refuses to start,
+      # so the default is written here).
+      AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS: ${AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS:-1800}
     # The provider credential, the private key ring and the optional destination allowlist
     # (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`): a separate file the owner writes on the host,
     # never passed to --env-file, so it stays out of compose substitution and therefore out

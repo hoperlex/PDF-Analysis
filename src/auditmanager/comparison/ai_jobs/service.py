@@ -20,8 +20,15 @@ service; it writes no row of ``comparison_ai_job`` itself.
 **Refusals** are registered reasons under existing codes (``CMP-SEAL-C2`` section 3): ``409 conflict`` ``comparison_estimate_stale``,
 ``comparison_ceiling_job``, ``comparison_ceiling_day``, ``comparison_ai_job_active``, ``comparison_ai_job_state``,
 ``comparison_ai_nothing_to_do``; ``422 validation_failed`` ``comparison_consent_required`` (field ``consent``);
-``503 dependency_unavailable`` ``comparison_modules`` while the versions module is off and ``executor_route_missing`` for a work
-kind with no route.
+``503 dependency_unavailable`` ``comparison_modules`` while the versions module is off, ``executor_route_missing`` for a work
+kind with no route and (`EXEC2-GROUP-CMP-01`) ``no_rule_for_work_kind`` for a work kind with no rule while the routing mode is ``rules``.
+
+**Admission by a rule or a group** (`EXEC2-GROUP-CMP-01`, ADR-0026 decisions 12, 13 and 15 to 17). Under mode ``rules`` the estimate of a
+start is the group revision the work kind's current rule names, and the job is written ``pending`` with that group revision and rule
+revision and no connection: the consent is to the group's model, billing and rates, and the first dispatched call binds one member
+(:mod:`auditmanager.comparison.spend.dispatch`). A job already admitted by a group is re-estimated on **its own** group revision whatever the
+rule says now; a job made before the cut-over is re-estimated through the legacy route. Mode ``legacy`` is untouched: the primary route, a
+connection revision frozen with the consent, ``route_changed`` when it moves.
 """
 
 from __future__ import annotations
@@ -29,13 +36,22 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.comparison.ai_jobs.estimate import RouteReader, build_estimate, read_route
+from auditmanager.comparison.ai_jobs.estimate import (
+    JOB_ROUTE_KEY,
+    RouteReader,
+    build_estimate,
+    read_job_route,
+    read_legacy_route,
+    read_route,
+)
 from auditmanager.comparison.ai_jobs.model import (
+    BINDING_BOUND,
+    BINDING_FROZEN,
     CONFLICT_AI_JOB_ACTIVE,
     CONFLICT_AI_JOB_STATE,
     CONFLICT_CEILING_DAY,
@@ -49,6 +65,7 @@ from auditmanager.comparison.ai_jobs.model import (
     PAUSE_QUOTA,
     PAUSE_ROUTE_CHANGED,
     PAUSE_USER,
+    FAILURE_NO_EXECUTOR_ONLINE,
     AiEstimate,
     AiMethod,
     AiScope,
@@ -68,6 +85,7 @@ from auditmanager.comparison.spend.errors import (
     REASON_CONSENT_STALE,
     REASON_DAY_CEILING,
     REASON_JOB_CEILING,
+    REASON_NO_EXECUTOR_ONLINE,
     REASON_OVERRUN,
 )
 from auditmanager.comparison.spend.model import JOB_CEILING_USD, JOB_KEY, Consent
@@ -80,6 +98,7 @@ from auditmanager.shared.identity import IdempotencyKey
 
 __all__ = [
     "COMMAND_EDGES",
+    "FAILURE_OF_SPEND_REASON",
     "AiJobCommand",
     "ComparisonAiJobService",
     "MAX_UNIT_KEY_LENGTH",
@@ -119,6 +138,11 @@ PAUSE_OF_SPEND_REASON: Final[Mapping[str, str]] = {
 }
 
 
+#: `EXEC2-GROUP-CMP-01` (ADR-0026 decision 15). The one reason of the spend wrapper that does not pause a job but **ends** it: every member of
+#: the job's group stayed without an eligible runner for longer than the offline wait. It maps to the ``failure_reason`` the job ends with.
+FAILURE_OF_SPEND_REASON: Final[Mapping[str, str]] = {REASON_NO_EXECUTOR_ONLINE: FAILURE_NO_EXECUTOR_ONLINE}
+
+
 def pause_reason_of(spend_reason: str) -> str | None:
     """The job's pause reason for a reason code of the spend wrapper, or ``None`` when that reason does not pause a job."""
     return PAUSE_OF_SPEND_REASON.get(spend_reason)
@@ -145,6 +169,21 @@ def _not_found() -> DomainError:
 
 def _consent_required() -> DomainError:
     return DomainError(ErrorCode.VALIDATION_FAILED, field="consent", constraint=CONSTRAINT_CONSENT_REQUIRED)
+
+
+def _may_run_without_model(method: Any, estimate: AiEstimate) -> bool:
+    """Whether a job whose estimate has no model call may still be consented: only ``report`` and ``spec``, and only when the
+    method says its plan has local work to do.
+
+    The fact belongs to the plan the estimate was made from. ``spec`` carries it on its counts (``estimate.counts``), so another
+    request's estimate on the same method instance can never decide this one (REVIEW-FIX-CMP-SPEC-1102, S2-05). ``report`` builds a
+    method per command and still states it on the method; a method whose counts do not carry the fact is asked directly."""
+    if estimate.scope.method not in {"report", "spec"}:
+        return False
+    carried = getattr(estimate.counts, "can_run_without_model", None)
+    if carried is not None:
+        return carried is True
+    return getattr(method, "can_run_without_model", False) is True
 
 
 def _require_expert(roles: frozenset[str]) -> None:
@@ -215,10 +254,33 @@ class ComparisonAiJobService:
         self, session: Session, scope: AiScope, mode: AiMode = AiMode.START, *, job: AiJobRecord | None = None,
     ) -> AiEstimate:
         """The estimate in the caller's session. ``job`` is the job it is for (a resume, a finish, a retry): what that job has
-        already spent or reserved counts against the USD 10 ceiling."""
+        already spent or reserved counts against the USD 10 ceiling.
+
+        `EXEC2-GROUP-CMP-01`: a start is priced on the route in force (the legacy primary, or under mode ``rules`` the group
+        revision of the work kind's current rule). A ``job`` that was admitted by a group is priced on **its own** group revision, and
+        a job made before the cut-over through the legacy route -- the rule and the mode are not re-read for work already admitted.
+        While the method counts, the same route answers the method's own read of the model (:data:`JOB_ROUTE_KEY`), so the answers
+        it has stored under that model are the ones found."""
         method = self._method_of(scope.method)
-        route = self._route_reader(session, scope.work_kind, self._provider_mode)
-        counts = method.counts(session, AiEstimateRequest(scope=scope, mode=mode))
+        pinned = job is not None and self._route_reader is read_route
+        if pinned:
+            route = (
+                read_job_route(session, job, self._provider_mode) if job.binding_state != BINDING_FROZEN
+                else read_legacy_route(session, scope.work_kind, self._provider_mode)
+            )
+        else:
+            route = self._route_reader(session, scope.work_kind, self._provider_mode)
+        outer = session.info.get(JOB_ROUTE_KEY)
+        if pinned:
+            session.info[JOB_ROUTE_KEY] = route
+        try:
+            counts = method.counts(session, AiEstimateRequest(scope=scope, mode=mode))
+        finally:
+            if pinned:
+                if outer is None:
+                    session.info.pop(JOB_ROUTE_KEY, None)
+                else:
+                    session.info[JOB_ROUTE_KEY] = outer
         spent = 0 if job is None else self._repo.spend(session, job.job_id).committed_micros
         return build_estimate(
             scope=scope, mode=mode, prompt_version=method.prompt_version, counts=counts, route=route,
@@ -287,8 +349,7 @@ class ComparisonAiJobService:
         if self._repo.live_on_scope(session, scope) is not None:
             raise _conflict(CONFLICT_AI_JOB_ACTIVE)
         estimate = self.estimate_in(session, scope, estimate_mode, job=estimate_job)
-        self._require_consentable(estimate, consent,
-            allow_zero_calls=scope.method in {"report", "spec"} and getattr(method, "can_run_without_model", False) is True)
+        self._require_consentable(estimate, consent, allow_zero_calls=_may_run_without_model(method, estimate))
         try:
             job_id = self._repo.insert(
                 session, estimate=estimate, user_uid=command.user_uid, command_id=str(claim.command_id),
@@ -484,8 +545,7 @@ class ComparisonAiJobService:
             raise _consent_required()
         estimate = self.estimate_in(session, job.scope, mode, job=job)
         method = self._method_of(job.scope.method)
-        self._require_consentable(estimate, consent,
-            allow_zero_calls=job.scope.method in {"report", "spec"} and getattr(method, "can_run_without_model", False) is True)
+        self._require_consentable(estimate, consent, allow_zero_calls=_may_run_without_model(method, estimate))
         if not self._repo.renew_consent(
             session, job.job_id, estimate=estimate, user_uid=user_uid, consent_no=job.consent_no,
             from_states=(job.state,),
@@ -587,7 +647,15 @@ class ComparisonAiJobService:
         """The job pauses because the spend wrapper said so (``SpendPause.reason``, or the ``reason`` of a ``CallRefused`` whose
         ``pauses_job`` is set): ``overrun`` and the job ceiling pause ``overrun``, the day ceiling ``quota``, a consent that no
         longer holds ``route_changed`` (:data:`PAUSE_OF_SPEND_REASON`). Its waiting items pause. ``False`` when the reason does
-        not pause a job or the job is not queued or running (already paused or over)."""
+        not pause a job or the job is not queued or running (already paused or over).
+
+        `EXEC2-GROUP-CMP-01` (ADR-0026 decision 15): ``no_executor_online`` -- every member of the job's group stayed without an
+        eligible runner for longer than the offline wait -- is not a pause. It ends the job through :meth:`fail`, the job's own failure
+        path: the job is ``failed`` with that reason, its live items are cancelled and its wait is cleared. Every handler already
+        answers a refusal that touches the job with this call, so none of them needs to know the reason."""
+        failure = FAILURE_OF_SPEND_REASON.get(spend_reason)
+        if failure is not None:
+            return self.fail(session, job_id, failure)
         reason = pause_reason_of(spend_reason)
         if reason is None:
             return False
@@ -615,13 +683,17 @@ class ComparisonAiJobService:
 
         The wrapper judges the overrun on the job's **whole** spend against the consent's estimate. After a new consent (a resume
         or a retry) the estimate is for what was left, so the consent given to the wrapper is the estimate **plus what the job had
-        actually spent before that consent**; otherwise a resumed job would overrun on its first call."""
+        actually spent before that consent**; otherwise a resumed job would overrun on its first call.
+
+        `EXEC2-GROUP-CMP-01`: the consent of a job admitted by a group names the group revision it froze, and no connection revision while
+        the job is ``pending`` (its first call chooses the member and the consent is re-checked against it)."""
         job = self._job(session, job_id)
         baseline = self._repo.spent_before(session, job_id, job.consented_at) if job.consent_no > 1 else 0
         ceiling = job.ceiling_micros / 1_000_000 if job.ceiling_micros > 0 else float(JOB_CEILING_USD)
         return Consent(
             estimate_digest=job.estimate_digest, estimate_usd=(baseline + job.estimate_micros) / 1_000_000,
             ceiling_usd=ceiling, connection_revision_id=job.connection_revision_id, pinned_model=job.pinned_model,
+            executor_group_revision_id=job.executor_group_revision_id,
         )
 
     # -- reads --------------------------------------------------------------------------------------
@@ -636,12 +708,43 @@ class ComparisonAiJobService:
         return self._job(session, job_id)
 
     def view_in(self, session: Session, job_id: str) -> AiJobView:
-        """The job with its progress, its spend so far (from the journal) and its queue place, in the caller's session."""
+        """The job with its progress, its spend so far (from the journal) and its queue place, in the caller's session.
+
+        `EXEC2-GROUP-CMP-01`: a job admitted by a rule or a group also carries the plan its admission froze and, once bound, the
+        member it is on (names read through ``executors.public``; a connection's address, key and probe are not read)."""
         job = self._job(session, job_id)
+        planned, binding = self._group_views(session, job)
         return AiJobView(
             record=job, progress=self._repo.progress(session, job_id), spend=self._repo.spend(session, job_id),
             queue_position=self._repo.queue_position(session, job_id) if job.state == "queued" else None,
+            planned=planned, binding=binding,
         )
+
+    @staticmethod
+    def _group_views(session: Session, job: AiJobRecord) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """The contract's ``ExecutorGroupPlan`` and ``ExecutorBinding`` of ``job``, or ``None`` for each that does not apply."""
+        if not job.grouped or job.executor_group_revision_id is None:
+            return None, None
+        from auditmanager.executors.public import executor_of_revision, group_revision_of
+
+        revision = group_revision_of(session, job.executor_group_revision_id)
+        if revision is None:
+            return None, None
+        planned: dict[str, Any] = {
+            "executor_group_id": revision.group_id, "executor_group_revision_id": revision.group_revision_id,
+            "pin_id": revision.pin_id, "gateway_model": revision.gateway_model, "billing": revision.billing,
+        }
+        if job.routing_rule_revision_id is not None:
+            planned["routing_rule_revision_id"] = job.routing_rule_revision_id
+        if job.binding_state != BINDING_BOUND or job.connection_revision_id is None:
+            return planned, None
+        member = executor_of_revision(session, job.connection_revision_id)
+        if member is None:
+            return planned, None
+        return planned, {
+            "connection_id": member.connection_id, "connection_revision_id": job.connection_revision_id,
+            "display_name": member.display_name, "pin_id": revision.pin_id, "gateway_model": revision.gateway_model,
+        }
 
     def view(self, job_id: str, *, method: str | None = None) -> AiJobView:
         """The job view in a unit of work of its own. ``method`` makes a job of another method ``404``."""

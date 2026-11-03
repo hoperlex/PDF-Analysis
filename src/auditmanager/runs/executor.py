@@ -598,6 +598,7 @@ def _run_text_analysis_stage(
         bundle=profile.prompt_bundle,
         relaxed_limits=relaxed_limits,
         approved_window_characters=provider_config.approved_window_characters,
+        native_page_pieces=provider_config.approved_native_page_pieces is not None,
         max_windows=provider_config.approved_max_windows or MAX_ANALYSIS_WINDOWS,
     )
 
@@ -605,7 +606,8 @@ def _run_text_analysis_stage(
         from auditmanager.analysis.public import WindowPolicy
         # Even a one-window fresh-v3 primary call uses existing saved-reply custody.
         window_policy=WindowPolicy(window_characters=provider_config.approved_window_characters,
-            max_windows=max(2,provider_config.approved_max_windows or MAX_ANALYSIS_WINDOWS))
+            max_windows=max(2,provider_config.approved_max_windows or MAX_ANALYSIS_WINDOWS),
+            native_page_pieces=provider_config.approved_native_page_pieces is not None)
 
     while True:
         attempt = ledger.attempts + 1
@@ -829,6 +831,8 @@ def _bind_provider(
             approved_model_id=config.approved_model_id,
             approved_rate_sha256=config.approved_rate_sha256,
             approved_connection_revision_id=config.approved_connection_revision_id,
+            approved_group_revision_id=config.approved_group_revision_id,
+            approved_native_page_pieces=config.approved_native_page_pieces,
         ))
     return binding
 
@@ -943,6 +947,14 @@ def _execute_run_body(
     )
     meter.enforce_ceiling = cost_policy.enforce_ceiling
     extended_policy = getattr(cost_policy,"extended_review",None)
+    if cost_policy.native_page_piece_policy is not None:
+        from auditmanager.analysis.public import validate_native_page_piece_policy
+        try:
+            if v3_exact or not validate_native_page_piece_policy(cost_policy.native_page_piece_policy):
+                raise ValueError()
+        except ValueError:
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis",
+                reason="native_page_pieces_changed_requires_consent") from None
     v3_workflow = isinstance(extended_policy,dict) and extended_policy.get("plan_version")=="extended-review-v3"
     image_only_v3 = False
     v3_pretext_invoked = False
@@ -956,6 +968,8 @@ def _execute_run_body(
             approved_model_id=cost_policy.model_id,
             approved_rate_sha256=cost_policy.rate_sha256,
             approved_connection_revision_id=cost_policy.connection_revision_id,
+            approved_group_revision_id=cost_policy.executor_group_revision_id,
+            approved_native_page_pieces=cost_policy.native_page_piece_policy,
         )
     if (v3_profile or v3_bundle) and (
         not v3_exact
@@ -1037,6 +1051,20 @@ def _execute_run_body(
             current_state=run.state, requested_state="running",
         )
     authority = job_repo.start_execution(session, run_id=run_id)
+    if getattr(run, "binding_state", "frozen_at_start") == "pending":
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 14). The row read above was admitted on a group and had no
+        # connection; the claim has just bound a member of it, in the claim's own transaction, so the executor is
+        # now a fact of the row and nothing else. Re-read it: the provider is bound to *that* revision, and the
+        # approved cost authority pins the same one for the call-time guard. Everything before this line (the budget,
+        # the ceiling, the profile) was decided from the group revision's pin, which every member serves.
+        run = run_repo.get(session, run_id)
+        if run.binding_state != "bound" or run.connection_revision_id is None:
+            raise DomainError(
+                ErrorCode.STATE_TRANSITION_NOT_ALLOWED, machine="binding_state",
+                current_state=run.binding_state, requested_state="bound",
+            )
+        if config.approved_cost_ceiling:
+            config = replace(config, approved_connection_revision_id=run.connection_revision_id)
     if run.state in {INITIAL_STATE, "queued"}:
         run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
     # `D-20`. The authority boundary that makes what has happened so far durable.

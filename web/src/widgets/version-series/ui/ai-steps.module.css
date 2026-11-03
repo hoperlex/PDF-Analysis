@@ -183,10 +183,6 @@
   overflow-wrap: anywhere;
 }
 
-.hintStale {
-  font-style: italic;
-}
-
 .sourceChoice {
   display: flex;
   flex-wrap: wrap;

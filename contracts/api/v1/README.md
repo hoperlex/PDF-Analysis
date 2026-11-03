@@ -11,7 +11,41 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Combined current contract `1.13.0`
+## Current contract `1.16.0` (`EXEC2-SEAL-2`)
+
+Additive stage-2 and stage-3 surface of executor groups, routing rules, the routing mode and dispatch-time binding
+(ADR-0026 decisions 10 to 17, rulings `R-149a`…`R-149f`). Operations: `listExecutorGroups`, `createExecutorGroup`,
+`getExecutorGroup`, `reviseExecutorGroup`, `archiveExecutorGroup`, `getExecutorGroupCapacity`, `listExecutorRoutingRules`,
+`setExecutorRoutingRule`, `previewExecutorRouting` and `setExecutorRoutingMode` (all administrator). `startRun` and
+`estimateRunCost` take an optional `executor_group_id`, exclusive with `executor_connection_id` and `preset_id`.
+`RunCostEstimate` and `ComparisonAiRoute` carry the planned group, rule revision and model; `ComparisonAiRoute.connection_id`
+and `revision_id` become optional, since a group's connection is chosen at dispatch. `RunStatus` and `ComparisonAiJob` carry
+`binding_state` (`frozen_at_start`, `pending`, `bound`), `planned`, `binding`, `wait_reason` and `waiting_since`; the queue
+items carry `binding_state` and `wait_reason`. `RunQueueReason` gains `needs_reconsent`; the persisted `wait_reason` uses the
+same words. `issueExecutorEnrollment` names the `public_origin` dependency.
+The current API has 250 paths, 277 operations and 674 schemas; migration head `0048`. No error code is added: refusals are
+typed details of existing codes (`contracts/domain/v1/error-codes.json` notes). The domain identifiers gain
+`executor_group_id` (`exg`), `executor_group_revision_id` (`exgr`), `executor_routing_rule_revision_id` (`exrr`) and
+`executor_routing_mode_event_id` (`exrm`), and the state machines gain `binding_state`. Migration
+`0047_executor_groups_rules` creates the group, rule and routing-mode tables and `0048_dispatch_time_binding` the binding
+columns and the write-once exception of the frozen-column guards. The operations are sealed here and implemented by the
+stage-2 and stage-3 lanes; none behaves until its lane lands, the routing mode stays `legacy` and every existing row stays
+`frozen_at_start`.
+
+## Contract `1.15.0` (`EXEC2-SEAL-1`, historical)
+
+Additive stage-1 surface of executor capacity and the universal agent (ADR-0026 decisions 1 to 9, rulings
+`R-149a`…`R-149f`): `max_active_runs` in the revision settings; `occupancy` and `integration_authorisation` on
+`ExecutorConnection`; `enrollments` on `ExecutorConnectionDetail`; `queue_reason` on `RunStatus`; the optional `runner_instance_id` of `claimExecutorTask`; the
+health fields of `RunnerTokenMetadata`; and the operations `issueExecutorEnrollment`, `redeemExecutorEnrollment`,
+`reportRunnerHealth`, `downloadAgentPackage` (no credential), `createExecutorAgentInstall`,
+`getExecutorAgentInstall`, `confirmExecutorAgentInstallHostKey` and `setExecutorIntegrationAuthorisation`.
+The API then had 241 paths, 267 operations and 644 schemas; migration head `0046`. No error code is added:
+refusals are typed details of existing codes (`contracts/domain/v1/error-codes.json` notes). The domain
+identifiers gain `executor_enrollment_id` (`exen`) and `executor_agent_install_id` (`exai`). The operations are
+sealed here and implemented by the stage-1 lanes; none behaves until its lane lands.
+
+## Combined contract `1.13.0` (historical)
 
 The serial CMP integrator reconciles C2–C4 with owner hotfixes06b94745/99b337fb.
 The current API has230paths/256operations/619schemas; migration head0043.

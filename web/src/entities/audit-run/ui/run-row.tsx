@@ -13,6 +13,14 @@
  * `EXEC-PAR-WEB-01`: a run that froze an executor names it, with its pinned model; a run in the
  * queue says it is waiting for that executor. A run with none (the environment source) draws
  * no line at all.
+ *
+ * `EXEC2-WEB-CAP-01`: a queued run whose reading says why names it — «В очереди: исполнитель занят»
+ * or «В очереди: раннер не в сети» — in the executor line, with the machine value in
+ * `data-run-queue-reason`.
+ *
+ * `EXEC2-WEB-GROUPS-01`: a run admitted by a rule or a group says «Плановая модель…» before dispatch
+ * and «Фактическая модель…, подключение…» after it (`data-run-binding` `planned` or `bound`); it never
+ * names a connection before dispatch has chosen one.
  */
 
 import Link from 'next/link';
@@ -34,7 +42,7 @@ export function RunRow({ run, href }: RunRowProps) {
   const executor = runExecutorLine(run);
   const preset = runPresetLine(run);
   return (
-    <li className="am-state" style={{ marginBottom: '0.5rem' }} data-run-id={run.run_id}>
+    <li className="am-state" data-run-id={run.run_id}>
       <p className="am-state__title">
         <Link href={href}>
           <code>{run.run_id}</code>
@@ -48,7 +56,11 @@ export function RunRow({ run, href }: RunRowProps) {
             ? ''
             : ` · завершён ${formatInstant(run.terminal_at)}`}
         </p>
-        {executor === null ? null : <p data-run-executor>{runExecutorSentence(executor)}</p>}
+        {executor === null ? null : (
+          <p data-run-executor data-run-queue-reason={executor.queueReason} data-run-binding={executor.phase}>
+            {runExecutorSentence(executor)}
+          </p>
+        )}
         {preset === null ? null : <p data-run-preset>{runPresetSentence(preset)}</p>}
         <p>
           Находок{' '}

@@ -1,7 +1,7 @@
 """Real source-bound native PDF page crops for fresh v2/v3 review authority."""
 from __future__ import annotations
 from auditmanager.analysis.engine.result import ArtifactRef
-from auditmanager.analysis.extended.core import digest
+from auditmanager.analysis.extended.core import LIFTED_SECTION_BOUND, SECTION_MAX_SOURCES, SECTION_MAX_TEXT_PAGES, digest
 from auditmanager.analysis.geometry.crops import encode_png
 from auditmanager.analysis.geometry.maths import plan_crop
 from auditmanager.analysis.geometry.render import PdfiumDocument, renderer_name
@@ -11,14 +11,26 @@ from auditmanager.storage.public import parse_blob_id, parse_blob_role
 import hashlib
 
 
+#: A page image above this is skipped with a recorded reason, unless the run asked for ``relaxed_limits``.
+MAX_NATIVE_PNG_BYTES = 4 * 1024 * 1024
+
+
 def prepare_native_page_sources(*, version_uid, source_ref, blob_store, max_pages=16, checkpoint=None,
-                                window_offset=None, max_sources=None):
-    """Publish genuine page PNGs, rendering at most16 pages in a v3 window."""
-    if type(max_pages) is not int or max_pages < 1:
+                                window_offset=None, max_sources=None, relaxed_limits=False):
+    """Publish genuine page PNGs, rendering at most16 pages in a v3 window.
+
+    The page, source and image-size bounds are the section run's; a run that asked for
+    ``relaxed_limits`` lifts them.
+    """
+    if type(relaxed_limits) is not bool:
+        raise ValueError("native_page_limit_invalid")
+    page_ceiling = LIFTED_SECTION_BOUND if relaxed_limits else SECTION_MAX_TEXT_PAGES
+    source_ceiling = LIFTED_SECTION_BOUND if relaxed_limits else SECTION_MAX_SOURCES
+    if type(max_pages) is not int or not 1 <= max_pages <= page_ceiling:
         raise ValueError("native_page_limit_invalid")
     windowed=window_offset is not None
-    if windowed and (max_pages > 16 or type(window_offset) is not int or window_offset < 0
-            or type(max_sources) is not int or max_sources < 1 or window_offset >= max_sources):
+    if windowed and (max_pages > 16 or type(window_offset) is not int or not 0 <= window_offset < source_ceiling
+            or type(max_sources) is not int or not 1 <= max_sources <= source_ceiling or window_offset >= max_sources):
         raise ValueError("native_page_window_invalid")
     bid = parse_blob_id(source_ref.blob_id)
     recorded = blob_store.inspect(bid)
@@ -38,6 +50,9 @@ def prepare_native_page_sources(*, version_uid, source_ref, blob_store, max_page
                 plan = plan_crop((0.,0.,1.,1.), geometry.width_pt, geometry.height_pt,
                     1600. / max(geometry.width_pt, geometry.height_pt))
                 png = encode_png(document.render(page, plan))
+                if not relaxed_limits and len(png) > MAX_NATIVE_PNG_BYTES:
+                    skipped.append({"page_number":page,"reason":"native_png_bytes_cap"})
+                    continue
                 sha = hashlib.sha256(png).hexdigest()
                 ref = published_by_sha.get(sha)
                 if ref is None:

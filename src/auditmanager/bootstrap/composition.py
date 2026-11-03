@@ -12,6 +12,7 @@ takes six protocols and constructs none of them, and this is the other half of t
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, replace
 from collections.abc import Callable, Mapping
@@ -39,6 +40,7 @@ from auditmanager.comparison.public import (
     HandlerRegistry,
     TileRenderer,
     WorkDependencies,
+    default_gates,
     WorkQueueError,
     enabled_modules as enabled_comparison_modules,
     parse_modules as parse_comparison_modules,
@@ -56,6 +58,8 @@ from auditmanager.bootstrap.adapters import (
     DocumentAdapter,
     ExecutionAdapter,
     ExecutorAdapter,
+    ExecutorEnrollmentAdapter,
+    ExecutorGroupAdapter,
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
@@ -91,6 +95,7 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
+from auditmanager.jobs.public import JobRepository
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
@@ -107,6 +112,34 @@ from auditmanager.sections.public import SECTION_CODES, section_names
 from auditmanager.releases.public import (
     ReleaseRepository, compute_build_id, read_product_version,
 )
+
+
+#: `EXEC2-ENROLL-01`. The stand's public origin (``https://host[:port]``), which an agent's host calls: the
+#: install command is built from it and from nothing else (the web tier drops the forwarded ``Host``, so a
+#: request-derived origin would be the API's internal name). The deployment compose derives it from the
+#: certificate name unless it is set. An absent or malformed value is a refusal of the command
+#: (``dependency_unavailable`` / ``public_origin``), never a silent fallback.
+PUBLIC_ORIGIN_ENV = "AUDITMANAGER_PUBLIC_ORIGIN"
+
+_log = logging.getLogger(__name__)
+
+
+def _passes(*runners: Callable[[], int]) -> Callable[[], int]:
+    """One pass of several runners, as the worker's probe loop calls it: each runs, in order, and the number of
+    what they handled is the sum. A runner that raises is logged and the next still runs, so a failing install
+    pass never starves the probes (nor the probes the installs). The failure is logged as the probe loop logs
+    its own (`EXEC2-ENROLL-SSH-01`)."""
+
+    def one_pass() -> int:
+        handled = 0
+        for runner in runners:
+            try:
+                handled += runner()
+            except Exception:  # noqa: BLE001 - one runner's failure is not another's
+                _log.exception("worker pass of %s failed; retried", type(runner).__name__)
+        return handled
+
+    return one_pass
 
 
 def summary_model_for(provider_mode: str) -> Any:
@@ -192,13 +225,28 @@ class WorkerRuntime:
     slots: int
     state_dir: Path | None
     #: `EXEC-HTTP-01`: ``probe_runner()`` takes the ``requested`` connection probes and runs them
-    #: on this process's network path; ``None`` when the process holds no private ring.
+    #: on this process's network path. `EXEC2-ENROLL-SSH-01`: the same call also takes the ``requested`` and
+    #: ``installing`` sessions of path A (an agent install over SSH) -- the worker service calls one pass
+    #: and counts what it handled -- see :func:`_passes`.
     probe_runner: Callable[[], int] | None = None
     #: `CMP-WORK-01`: the comparison loop the worker hosts as a second claimant
     #: (:class:`~auditmanager.comparison.public.ComparisonWorkRunner`). Always built by
     #: :func:`build_worker_runtime`; with ``AUDITMANAGER_COMPARISON_MODULES=none`` (the default)
     #: it claims nothing and only reclaims expired leases.
     comparison_work: ComparisonWorkRunner | None = None
+    #: `EXEC2-GROUP-RUN-01` (ADR-0026 decision 12): ``True`` only when the provider source is ``database`` -- the one source that
+    #: can bind a Run admitted on a group to a connection. :func:`build_worker_runtime` always sets it. The worker service takes
+    #: it (``WorkerService(dispatch_groups=runtime.dispatch_groups)``): with ``False`` it is offered no such Run and its claim
+    #: refuses one, as does ``execute`` (which was built with the same value).
+    dispatch_groups: bool = True
+
+
+def _dispatches_groups(settings: AppSettings) -> bool:
+    """Does this process serve the source that dispatches Runs admitted on a group? Only ``database`` does (ADR-0026 decision 12).
+
+    One question, asked in one place: the hint, the claim and the in-process poller all take its answer from here, so the
+    ``environment`` source can never offer, claim or run a ``pending`` Run (its adapter has no connection to bind one to)."""
+    return settings.provider_source == "database"
 
 
 class _ComparisonRoutes:
@@ -216,6 +264,12 @@ class _ComparisonRoutes:
         # Recorded jobs are served only by an explicitly injected recorded route in a test.
         # A worker holding live credentials must never turn their replay into a live call.
         if job.provider_mode != "live":
+            raise route_missing()
+        # `EXEC2-GROUP-RUN-01` (premise P-01, ADR-0026 decision 12). A job admitted on a group has **no connection
+        # revision until its first dispatched call binds one** (`GROUP-CMP-01`); `None` here is a pending job, not a job
+        # that froze none. Binding precedes routing, so reaching this line unbound is a skipped dispatch: nothing is
+        # opened and nothing is called.
+        if job.connection_revision_id is None:
             raise route_missing()
         context = ComparisonCallContext(self._runtime.session_factory)
         try:
@@ -249,7 +303,7 @@ class _ComparisonRoutes:
 
 def build_comparison_work(
     *, sessions: sessionmaker[Session], engine: Any, blob_store: Any, environ: Mapping[str, str],
-    ring: Any = None,
+    ring: Any = None, dispatch_groups: bool = True,
 ) -> ComparisonWorkRunner:
     """`CMP-WORK-01` (ADR-0025 decisions 4, 6, 23): the comparison loop's brain, or a refusal.
 
@@ -285,6 +339,7 @@ def build_comparison_work(
     return ComparisonWorkRunner(
         sessions, registry=registry, modules=modules, repository=work,
         spend_settlers=COMPARISON_SPEND_SETTLERS,
+        gates=default_gates(dispatch_groups=dispatch_groups),
     )
 
 
@@ -337,6 +392,7 @@ def build_worker_runtime(
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
     ar_v3_pack_registry = _ar_v3_pack_registry(env)
+    dispatch_groups = _dispatches_groups(resolved)
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -349,15 +405,23 @@ def build_worker_runtime(
             text_profiles=text_profiles.resolve,
             providers=providers.resolve,
             ar_v3_pack_registry=ar_v3_pack_registry,
+            # `EXEC2-GROUP-RUN-01`: the claim of a Run admitted on a group is refused here, before it writes anything, unless
+            # this worker serves the source that can bind one.
+            dispatch_groups=dispatch_groups,
         )
 
     # `EXEC-PULL-PROBE-INT-01`: pull probes need no secret. Start the probe loop even
     # without a private ring; keyed probes report `secret_unreadable` in that case.
+    from auditmanager.executors.public import install_runner_for
     from auditmanager.executors.runtime import runner_for
 
     probe_runner = runner_for(
         sessions, ring=resolved.secrets_private_ring, environ=env, engine=engine,
     )
+    # `EXEC2-ENROLL-SSH-01`: path A. The worker holds the private ring and the network path, so it is the one
+    # that scans a host, installs the agent over SSH and replaces the install key. It rides the probe loop's
+    # pass (`_passes`); every install runs in a thread of its own, so a slow host never holds a probe.
+    install_runner = install_runner_for(sessions, ring=resolved.secrets_private_ring, environ=env)
 
     return WorkerRuntime(
         settings=resolved,
@@ -370,10 +434,12 @@ def build_worker_runtime(
         # per `PROTOTYPE_PROFILE.md` section 2, which is today's behaviour and the rollback.
         slots=resolved.worker_slots,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
-        probe_runner=probe_runner,
+        probe_runner=_passes(probe_runner, install_runner),
         comparison_work=build_comparison_work(
             sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
+            dispatch_groups=dispatch_groups,
         ),
+        dispatch_groups=dispatch_groups,
     )
 
 
@@ -481,14 +547,27 @@ def build_application(
     #
     # `W54-WORKER-01` (R-105). Under ``EXECUTION_ROLE=api`` the worker service claims and
     # this process only fences expired leases; ``all`` keeps W53's in-process claimant.
-    carrier: Any = (
-        ReclaimingCarrier(sessions) if resolved.execution_role == "api"
-        else DurableCarrier(sessions)
-    )
+    carrier: Any
+    if resolved.execution_role == "api":
+        carrier = ReclaimingCarrier(sessions)
+    else:
+        # `EXEC2-GROUP-RUN-01`. The in-process claimant is offered a Run admitted on a group only when the provider source is
+        # `database`, and ends offline group work after `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS` (ADR-0026 decision 15):
+        # read here, once, from the environment this application was built with, so a malformed value refuses the start
+        # instead of failing the poller on every pass. The `api` role never reads it.
+        try:
+            offline_wait = JobRepository.group_offline_wait_seconds(env)
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
+        carrier = DurableCarrier(
+            sessions, dispatch_groups=_dispatches_groups(resolved), group_offline_wait_seconds=offline_wait,
+        )
 
     ar_v3_installed_pack = _ar_v3_installed_pack(env)
     run_adapter = RunAdapter(
         sessions,
+        # `EXEC2-INT-3` (ADR-0026 decision 12): the in-process claim takes pending group Runs only on `database`.
+        dispatch_groups=_dispatches_groups(resolved),
         blob_store=store,
         adapter=model_adapter,
         provider_config=provider_config,
@@ -511,6 +590,10 @@ def build_application(
         # `ANALYSIS-PRESETS-01`. A named preset is read in the start's own transaction and then
         # started as the executor it names; always passed, so a served start never ignores one.
         preset_resolver=resolve_analysis_preset,
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing
+        # rules while the mode is `rules`: set for the `database` source only. The `environment` source has none, so it
+        # refuses a start that names a group and never holds a `pending` Run.
+        group_admitter=providers.admit_group,
         # No expert-approved six-set pack is installed in the beta candidate.
         # This keeps group start closed while allowing historical group reads.
         ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),
@@ -668,6 +751,17 @@ def build_application(
         # `EXEC-PULL-01`. The pull channel: runner tokens, and the four operations a runner
         # calls with one. It also authenticates the token (the seam asks this port).
         runner=RunnerAdapter(sessions, blob_store=store),
+        # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health,
+        # the package route, the API side of an install over SSH and the integration-authorisation mark. It
+        # seals an install session's key to the same public ring and takes the stand's configured public
+        # origin for the install command; it also authenticates an enrollment secret (the seam asks it).
+        enrollment=ExecutorEnrollmentAdapter(
+            sessions, ring=resolved.secrets_public_ring,
+            public_origin=env.get(PUBLIC_ORIGIN_ENV) or None,
+        ),
+        # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: the four reads for any role
+        # and the four writes, over the same sessions. The rates a group snapshots are the provider lock's.
+        executor_groups=ExecutorGroupAdapter(sessions),
     )
     return Application(
         router=router,

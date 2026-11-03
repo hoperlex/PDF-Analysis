@@ -39,7 +39,6 @@ from auditmanager.api.security import CurrentSubject
 
 __all__ = ["build_run_routes"]
 
-
 def build_run_routes(router: APIRouter, runs: RunPort) -> None:
     @router.get('/runs/{run_id}/extended-review', operation_id='getExtendedRunReview', tags=['runs'], status_code=200, response_model=models.ExtendedRunReview,
         responses={**success(200, 'Source-bound preliminary extended analysis and explicit coverage.'), **envelope_responses(401,403,404,500,503)})
@@ -54,9 +53,12 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
                    **envelope_responses(401, 403, 404, 409, 422, 500, 503)},
     )
     def estimate_run_cost(body: models.RunCostEstimateRequest) -> WireResponse:
+        # `EXEC2-GROUP-RUN-01`: a group is admitted, not refused. The field is passed only when named, as
+        # `reaudit_of_run_id` is, so a port that predates it is called exactly as before.
         estimate = runs.estimate_run_cost(version_uid=body.version_uid,
             executor_connection_id=body.executor_connection_id, preset_id=body.preset_id,
             **({"reaudit_of_run_id": body.reaudit_of_run_id} if body.reaudit_of_run_id is not None else {}),
+            **({"executor_group_id": body.executor_group_id} if body.executor_group_id is not None else {}),
             relaxed_limits=body.relaxed_limits is True)
         return json_response(200, encode_json(estimate.model_dump(mode="json")))
 
@@ -85,6 +87,10 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             relaxed_limits=body.relaxed_limits is True,
             **({"cost_consent": body.cost_consent.model_dump(mode="json"), "cost_actor_uid": subject.user_uid}
                if body.cost_consent is not None else {}),
+            # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13): the group the caller named. The port admits the run on
+            # its current revision, `pending`; exclusivity with a connection and a preset, an unknown or archived group
+            # and the `environment` source are refused there, before the idempotency key is claimed.
+            **({"executor_group_id": body.executor_group_id} if body.executor_group_id is not None else {}),
         )
         # 202, and the same 202 for a replay under the same key and payload: the run
         # exists either way, and the frozen document gives both the one status.

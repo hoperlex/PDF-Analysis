@@ -36,13 +36,13 @@
       "const": "auditmanager.domain.identifiers"
     },
     "contract_version": {
-      "const": "1.14.0"
+      "const": "1.16.0"
     },
     "supersedes": {
-      "const": "1.13.0"
+      "const": "1.15.0"
     },
     "candidate_revision": {
-      "const": 32,
+      "const": 34,
       "description": "Review round of this contract. At the 1.0.0 seal it is the sealed round: it is pinned here so the contract cannot change meaning without a deliberate edit of both the catalog and this schema, exactly as contract_version is pinned, and after the seal such an edit follows the freeze-break and version procedure of VERSIONING_AND_FREEZE_POLICY.md."
     },
     "revision_note": {
@@ -149,6 +149,12 @@
         "executor_route_event_id",
         "executor_runner_token_id",
         "executor_task_id",
+        "executor_enrollment_id",
+        "executor_agent_install_id",
+        "executor_group_id",
+        "executor_group_revision_id",
+        "executor_routing_rule_revision_id",
+        "executor_routing_mode_event_id",
         "comparison_upload_id",
         "comparison_upload_set_id",
         "comparison_upload_file_id",
@@ -315,6 +321,12 @@
         "ExecutorRouteEvent",
         "ExecutorRunnerToken",
         "ExecutorTask",
+        "ExecutorEnrollment",
+        "ExecutorAgentInstall",
+        "ExecutorGroup",
+        "ExecutorGroupRevision",
+        "ExecutorRoutingRuleRevision",
+        "ExecutorRoutingModeEvent",
         "ComparisonUpload",
         "ComparisonUploadSet",
         "ComparisonUploadFile",
@@ -408,6 +420,12 @@
           "executor_route_event_id",
           "executor_runner_token_id",
           "executor_task_id",
+          "executor_enrollment_id",
+          "executor_agent_install_id",
+          "executor_group_id",
+          "executor_group_revision_id",
+          "executor_routing_rule_revision_id",
+          "executor_routing_mode_event_id",
           "comparison_upload_id",
           "comparison_upload_set_id",
           "comparison_upload_file_id",
@@ -537,6 +555,12 @@
                 "executor_route_event_id",
                 "executor_runner_token_id",
                 "executor_task_id",
+                "executor_enrollment_id",
+                "executor_agent_install_id",
+                "executor_group_id",
+                "executor_group_revision_id",
+                "executor_routing_rule_revision_id",
+                "executor_routing_mode_event_id",
                 "comparison_upload_id",
                 "comparison_upload_set_id",
                 "comparison_upload_file_id",

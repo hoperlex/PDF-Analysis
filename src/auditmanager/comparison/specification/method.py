@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Final
 
@@ -39,7 +39,7 @@ from auditmanager.comparison.ai_jobs.model import AiCallGroup, AiCounts, AiEstim
 from auditmanager.comparison.ai_jobs.service import ComparisonAiJobService
 from auditmanager.comparison.specification import prompt, batches
 from auditmanager.comparison.specification.reader import SpecificationReader
-from auditmanager.comparison.specification.repository import SpecificationRepository, TransitionScope
+from auditmanager.comparison.specification.repository import ComparisonRow, SpecificationRepository, TransitionScope
 from auditmanager.comparison.specification.transition import Answer, PreparedSide, TransitionRun, prepare_side
 from auditmanager.comparison.spend.caller import ComparisonModelCaller
 from auditmanager.comparison.spend.errors import CallRefused, SpendError
@@ -52,6 +52,7 @@ __all__ = [
     "Binder",
     "MAX_OUTPUT_TOKENS",
     "SPEC_KIND",
+    "SpecCounts",
     "SpecHandler",
     "SpecMethod",
     "build_request",
@@ -76,6 +77,15 @@ _LEASE_GONE: Final[frozenset[ErrorCode]] = frozenset({ErrorCode.STALE_ATTEMPT, E
 _PAUSED_RETRY_SECONDS: Final[float] = 30.0
 
 Binder = Callable[[Session, AiJobRecord], CallRoute]
+
+
+@dataclass(frozen=True, slots=True)
+class SpecCounts(AiCounts):
+    """The counts of one estimate, with the one fact the core's consent gate needs from the same plan: whether the job has nothing to
+    send but still has local work to do (an assembly of stored answers or the comparison itself). It travels with the counts of the
+    command and is never kept on the shared method (REVIEW-FIX-CMP-SPEC-1102, S2-05)."""
+
+    can_run_without_model: bool = False
 
 
 def build_request(model_identity: str, prompt_text: str, *, idempotency_scope: str | None = None) -> ModelRequest:
@@ -112,11 +122,6 @@ class SpecMethod:
         self._factory = session_factory
         self._reader = reader or SpecificationReader(session_factory, blob_store)
         self._repository = repository or SpecificationRepository()
-        self._zero_ready=False
-
-    @property
-    def can_run_without_model(self)->bool:
-        return self._zero_ready
 
     def _scope(self, session: Session, transition_id: str | None, project_uid: str) -> TransitionScope:
         scope = None if transition_id is None else self._repository.transition(session, transition_id)
@@ -125,54 +130,67 @@ class SpecMethod:
         return scope
 
     def prepared(self, scope: TransitionScope) -> tuple[PreparedSide, PreparedSide]:
+        """Both sides as the next job would find them: a batch whose check failed and whose paid reply is kept is read at its next
+        attempt (a fresh consent asks it again), so the estimate prices it and the job pins it."""
         return (
-            prepare_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.source_version_uid),
-            prepare_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.target_version_uid),
+            prepare_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.source_version_uid,
+                renew_failed=True),
+            prepare_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.target_version_uid,
+                renew_failed=True),
         )
+
+    @staticmethod
+    def _missing_batches(sides: Sequence[PreparedSide]) -> list[dict[str, Any]]:
+        """The batches that need a request: of a side to send, no checked answer and no kept reply."""
+        return [batch for side in sides if side.sendable for batch in side.batches
+            if batch['stored'] is None and batch['raw'] is None]
+
+    def _pending(self, session: Session, scope: TransitionScope, sides: Sequence[PreparedSide]) -> tuple[int, bool, ComparisonRow | None]:
+        """``(sides whose stored batches only wait to be assembled, whether the comparison itself is due, the transition's row)``."""
+        pending_assembly = sum(1 for side in sides if side.sendable and side.batches
+            and all(batch['stored'] is not None or batch['raw'] is not None for batch in side.batches))
+        row = self._repository.whole(session, scope.transition_id)
+        pending_compare = bool((row is None or row.state in {'queued', 'running', 'failed', 'cancelled'})
+            and all(side.source is not None and side.source['complete'] for side in sides))
+        return pending_assembly, pending_compare, row
 
     def counts(self, session: Session, request: AiEstimateRequest) -> AiCounts:
         scope = self._scope(session, request.scope.transition_id, request.scope.project_uid)
-        groups: list[AiCallGroup] = []
-        reused = 0
         sides = self.prepared(scope)
-        pending_assembly=0
-        for side in sides:
-            if side.stored is not None:
-                reused += 1
-            elif side.sendable:
-                assert side.source is not None
-                for batch in side.batches:
-                    if batch['stored'] is None and batch['raw'] is None:
-                        groups.append(AiCallGroup(calls=1,prompt_chars=len(prompt.prompt_for(batch['source'])),
-                            output_tokens=MAX_OUTPUT_TOKENS))
-                if side.batches and all(batch['stored'] is not None or batch['raw'] is not None for batch in side.batches):
-                    pending_assembly+=1
-        row=self._repository.whole(session,scope.transition_id)
-        pending_compare=bool((row is None or row.state in {'queued','running','failed','cancelled'})
-            and all(side.source is not None and side.source['complete'] for side in sides))
-        self._zero_ready=not groups and bool(pending_assembly or pending_compare)
-        units=len(sides) if groups else pending_assembly or (1 if pending_compare else 0)
-        return AiCounts(groups=tuple(groups), units=units, reused=reused, versions=len(sides))
+        groups = [AiCallGroup(calls=1, prompt_chars=len(prompt.prompt_for(batch['source'])), output_tokens=MAX_OUTPUT_TOKENS)
+            for batch in self._missing_batches(sides)]
+        reused = sum(1 for side in sides if side.stored is not None)
+        pending_assembly, pending_compare, _row = self._pending(session, scope, sides)
+        units = len(sides) if groups else pending_assembly or (1 if pending_compare else 0)
+        return SpecCounts(groups=tuple(groups), units=units, reused=reused, versions=len(sides),
+            can_run_without_model=not groups and bool(pending_assembly or pending_compare))
 
     def work_items(self, session: Session, job: AiJobRecord, mode: AiMode) -> Sequence[AiWorkItemSpec]:
         scope = self._scope(session, job.transition_id, job.project_uid)
         sides = self.prepared(scope)
-        previous=self._repository.whole(session,scope.transition_id)
+        pending_assembly, pending_compare, previous = self._pending(session, scope, sides)
         keys=[side.key for side in sides]
         if mode is not AiMode.START and (previous is None or any(
                 (coverage or {}).get('planning_revision')!=batches.REVISION or
                 (coverage or {}).get('source_key')!=key
                 for coverage,key in zip((previous.coverage_a,previous.coverage_b),keys))):
             raise DomainError(ErrorCode.CONFLICT,conflict_reason='comparison_ai_estimate_stale')
-        if not any(side.sendable for side in sides) and not self._zero_ready:
+        zero_ready = not self._missing_batches(sides) and bool(pending_assembly or pending_compare)
+        if not any(side.sendable for side in sides) and not zero_ready:
             return []
         if mode is AiMode.START or previous is not None and previous.state in {'failed','cancelled','incomplete'}:
             # The row of the transition's comparison starts with the job (a terminal one goes back to ``queued``).
             self._repository.open_whole(
                 session, scope, job_id=job.job_id, sheets_a=sides[0].side.sheets, sheets_b=sides[1].side.sheets)
         self._repository.pin_plan(session,scope.transition_id,keys)
-        return [AiWorkItemSpec(unit_key=f"transition:{scope.transition_id}", payload={"transition_id": scope.transition_id,
-            'planning_revision':batches.REVISION,'source_keys':keys})]
+        payload: dict[str, Any] = {"transition_id": scope.transition_id,
+            'planning_revision':batches.REVISION,'source_keys':keys}
+        # The attempts the job was consented for, fixed here: a resume of this job reads the same ones, so a batch is never asked
+        # again beyond what the estimate priced; only a new job, with a new estimate, can move to the next attempt.
+        attempts = {batch['batch_id']: batch['attempt'] for side in sides for batch in side.batches if batch['attempt'] > 1}
+        if attempts:
+            payload['attempts'] = attempts
+        return [AiWorkItemSpec(unit_key=f"transition:{scope.transition_id}", payload=payload)]
 
 
 def _payload(payload: Mapping[str, Any]) -> tuple[str, str]:
@@ -185,6 +203,17 @@ def _payload(payload: Mapping[str, Any]) -> tuple[str, str]:
     ComparisonTransitionId(transition)
     ComparisonAiJobId(job)
     return transition, job
+
+
+def _attempts(payload: Mapping[str, Any]) -> dict[str, int]:
+    """The attempts the item's job was consented for (``{batch id: attempt}``, attempts after the first only), or ``ValueError``."""
+    attempts = payload.get("attempts")
+    if attempts is None:
+        return {}
+    if not isinstance(attempts, dict) or any(
+            not isinstance(batch_id, str) or type(attempt) is not int or attempt < 2 for batch_id, attempt in attempts.items()):
+        raise ValueError("the attempts of a comparison_spec item name batches and attempts after the first")
+    return dict(attempts)
 
 
 def unbound_binder(session: Session, job: AiJobRecord) -> CallRoute:
@@ -234,6 +263,7 @@ class SpecHandler:
     def run(self, item: WorkItem) -> Outcome:
         try:
             transition_id, job_id = _payload(item.payload)
+            attempts = _attempts(item.payload)
         except ValueError:
             _LOG.error("comparison work %s: the comparison_spec payload is not valid", item.work_id)
             return Failed(REASON_PAYLOAD_INVALID)
@@ -267,7 +297,7 @@ class SpecHandler:
         paused = {"now": False}
         expected_keys=dict(zip((scope.source_version_uid,scope.target_version_uid),item.payload.get('source_keys') or []))
 
-        prepared=runner.prepared(scope)
+        prepared=runner.prepared(scope, attempts=attempts)
         if item.payload.get('planning_revision')!=batches.REVISION or item.payload.get('source_keys')!=[side.key for side in prepared]:
             with session_scope(sessions) as session:
                 self._checkpoint(item,session)
@@ -330,7 +360,7 @@ class SpecHandler:
                     self._checkpoint(item,session)
                     self._repository.progress(session,transition_id,
                         'a' if version_uid==scope.source_version_uid else 'b',coverage)
-            old, new = runner.read(scope, ask=None,ask_batch=ask,progress=progress)
+            old, new = runner.read(scope, ask=None,ask_batch=ask,progress=progress,attempts=attempts)
             with session_scope(sessions) as session:
                 self._repository.set_state(session, transition_id, to_state="running", from_states=("running",), phase="comparing")
             outcome = runner.compare(scope, old, new)

@@ -1,9 +1,9 @@
 {
   "contract": "auditmanager.domain.state-machines",
-  "contract_version": "1.14.0",
-  "supersedes": "1.13.0",
-  "candidate_revision": 32,
-  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README. Candidate revision 31 by HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030: the shared 1.14.0 seal enables ordinary text-profile starts for АР; no domain identity, error code or state machine changes. Candidate revision32 HOTFIX-PRESENTATION-INT-1030: additive extended analysis review, ZIP/technical exports and explicitly experimental stage V3; existing identities and machines preserved.",
+  "contract_version": "1.16.0",
+  "supersedes": "1.15.0",
+  "candidate_revision": 34,
+  "revision_note": "CMP C4 combined development seal: stage AI/review/repair/chains, expert escalation and owner raised-limit hotfixes. Historical seals are retained in the API README. Candidate revision 31 by HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030: the shared 1.14.0 seal enables ordinary text-profile starts for АР; no domain identity, error code or state machine changes. Candidate revision32 HOTFIX-PRESENTATION-INT-1030: additive extended analysis review, ZIP/technical exports and explicitly experimental stage V3; existing identities and machines preserved. Candidate revision 33 by EXEC2-SEAL-1 (ADR-0026, rulings R-149a to R-149f): the shared 1.15.0 seal adds the stage-1 executor capacity and universal-agent surface to the API and migration 0046_executor_capacity_enroll to the schema; the enrollment grant and the install session are not declared state machines (their state is derived or held in the row); no identity, error code or state machine changes. Candidate revision 34 by EXEC2-SEAL-2 (ADR-0026 decisions 10 to 17, rulings R-149a to R-149f): the shared 1.16.0 seal adds the stage-2 and stage-3 executor group, routing rule, routing mode and dispatch-time binding surface to the API and migrations 0047_executor_groups_rules and 0048_dispatch_time_binding to the schema; it adds the binding_state machine (pending to bound, once) of a Run and of a comparison AI job; no identity and no error code changes.",
   "status": "frozen",
   "frozen": true,
   "rules": [
@@ -1065,6 +1065,56 @@
       "notes": [
         "createAssignment creates the assignment in assigned, with its assigned event; one open (non-terminal) assignment per scope (the project, or the project and one document): an exact repeat answers it and any other creation there is conflict with conflict_reason assignment_open.",
         "An expert reads only the assignments currently given to them; anything else is not_found. An administrator who is not the assignee is refused the assignee's moves with permission_denied and required_capability assignment:assignee."
+      ]
+    },
+    "binding_state": {
+      "entity": "ExecutorBinding",
+      "identifier": "run_id",
+      "purpose": "Whether the executor of a Run, and of a comparison AI job (`comparison_ai_job_id`), was fixed when the work started or is chosen at dispatch (ADR-0026 decision 12). `frozen_at_start` is every existing row, an explicit connection and a preset: the connection revision is frozen at start and behaviour is unchanged. `pending` is work admitted by a rule or a group: admission froze the group revision, the rule revision, the planned model and the consent envelope, and no connection. `bound` is work whose dispatch chose a group member and wrote its connection revision.",
+      "authoritative_writer": "the claim transaction of the jobs bounded context for a Run (EXEC2-GROUP-RUN-01) and the comparison call preparation for a job (EXEC2-GROUP-CMP-01); the am_guard_audit_run_frozen trigger of audit_run and the am_guard_comparison_ai_job_consent trigger of comparison_ai_job (migration 0048) refuse every other write",
+      "initial": "pending",
+      "transitions": {
+        "pending": [
+          "bound"
+        ]
+      },
+      "terminal": [
+        "frozen_at_start",
+        "bound"
+      ],
+      "terminal_semantics": {
+        "frozen_at_start": {
+          "outcome": "success",
+          "publishes_result": false,
+          "description": "The executor was frozen when the work started and never enters this machine: the row is created in this state and keeps its connection revision (NULL for the environment provider source). No later write changes either."
+        },
+        "bound": {
+          "outcome": "success",
+          "publishes_result": false,
+          "description": "Dispatch chose a member whose connection revision is the group revision's snapshot, wrote the connection revision and the binding state together, once. An Attempt retry stays on that connection revision and outcome_unknown is never sent to another member."
+        }
+      },
+      "guards": [
+        {
+          "from": "pending",
+          "to": "bound",
+          "trigger": "dispatch inside the claim transaction chooses an eligible member of the frozen group revision (ADR-0026 decision 14), or, for a comparison AI job, prepares its first call",
+          "guard": "connection_revision_id goes from NULL to a value in the same statement, exactly once; the consent columns and consent_no do not move; any other change of binding_state or of connection_revision_id is refused by the database",
+          "on_violation": "state_transition_not_allowed"
+        }
+      ],
+      "retry": {
+        "in_place": false,
+        "creates": "nothing: a bound item is never re-bound; a new Run or job is the corrective action",
+        "note": "A pending item that cannot be dispatched waits, durably, with wait_reason and waiting_since; it is not retried into another state."
+      },
+      "evidence": [
+        "EXEC2-SEAL-2",
+        "ADR-0026 decisions 12 to 16",
+        "0048_dispatch_time_binding"
+      ],
+      "notes": [
+        "The same machine governs audit_run.binding_state and comparison_ai_job.binding_state. A pending Run has a NULL connection_revision_id exactly as a Run of the environment provider source does; binding_state, with a database CHECK, is what tells them apart, and the environment source refuses a group start."
       ]
     }
   },

@@ -28,6 +28,7 @@ from starlette.testclient import TestClient
 
 from auditmanager.api.routers.idempotency import IDEMPOTENCY_HEADER
 from auditmanager.api.security import API_TOKEN_VARIABLE
+from tests.support.run_consent import consented_body, plain_analysis_pricing
 
 DEPLOYMENT_SECRET = "w59-version-compare-over-http-token"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -148,14 +149,17 @@ def _classify(world: dict[str, Any], version_uid: str, stage: str = "P") -> None
 
 
 def _run(world: dict[str, Any], version_uid: str) -> str:
-    answer = world["client"].post(
-        "/runs",
-        headers=world["auth"] | {
-            IDEMPOTENCY_HEADER: f"w59cmp-{world['tag']}-{version_uid[-6:]}",
-            "Content-Type": "application/json",
-        },
-        content=json.dumps({"version_uid": version_uid}).encode("utf-8"),
-    )
+    # `REVIEW-FIX-TESTS-1102`: the composed application starts a run only with a priced consent.
+    with plain_analysis_pricing():
+        body = consented_body(world["client"], world["auth"], {"version_uid": version_uid})
+        answer = world["client"].post(
+            "/runs",
+            headers=world["auth"] | {
+                IDEMPOTENCY_HEADER: f"w59cmp-{world['tag']}-{version_uid[-6:]}",
+                "Content-Type": "application/json",
+            },
+            content=json.dumps(body).encode("utf-8"),
+        )
     assert answer.status_code == 202, answer.content
     return answer.json()["run_id"]
 

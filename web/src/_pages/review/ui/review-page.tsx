@@ -50,7 +50,7 @@ import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
-import { useEvidenceDocument } from '@/features/open-evidence';
+import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
 import { useExportRun } from '@/features/export-run';
 import type { DecisionIntent } from '@/widgets/decision-panel';
 import { useRecordVerdict } from '@/features/record-verdict';
@@ -115,6 +115,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const detail = detailQuery.data?.data ?? null;
   const versionUid = detail?.version_uid ?? null;
   const evidence = useEvidenceDocument(versionUid);
+  // The line geometry the viewer frames quotations with. Read here because this page owns the
+  // queries; without it (not produced, failed, in flight) the viewer searches the page text.
+  const blockIndex = useVersionBlockIndex(versionUid);
 
   // These three hooks cannot be called conditionally, so they are bound to the empty
   // identity when nothing is selected. Every control that could fire one of them is
@@ -226,6 +229,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                   setSelection((current) => selectPage(current ?? resolved, page));
                 }}
                 documentUrl={evidence.objectUrl}
+                blockIndex={blockIndex}
                 isLoading={evidence.isLoading}
                 error={presentFailureOrNull(evidence.error, {
                   title: 'Не удалось загрузить страницу документа',

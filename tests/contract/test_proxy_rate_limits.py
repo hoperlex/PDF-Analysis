@@ -88,6 +88,8 @@ EXCHANGE_OPERATIONS = frozenset({"issueToken"})
 RUNNER_OPERATIONS = frozenset({
     "claimExecutorTask", "extendExecutorTaskClaim", "submitExecutorTaskAnswer",
     "failExecutorTask", "getExecutorTaskImage",
+    # `EXEC2-ENROLL-01`. The agent's health report is under the runner channel's throttle.
+    "reportRunnerHealth",
 })
 #: The runner channel's two zones and the exact lines that declare them: the rates are the
 #: decision (`docs/program/EXEC-PULL-01.md` replays a scripted runner against them), so they are
@@ -102,11 +104,26 @@ RUNNER_LIMIT_LINES = (
     "limit_req zone=runner_channel burst=30 nodelay;",
     "limit_req zone=runner_address burst=120 nodelay;",
 )
+#: `EXEC2-ENROLL-01`. The enrollment exchange (a secret for a runner token) has a zone of its own, per address.
+ENROLLMENT_EXCHANGE_OPERATIONS = frozenset({"redeemExecutorEnrollment"})
+#: and so has the public agent package, whose path holds a parameter and is therefore a pattern on ``$uri``
+#: like the runner address map, with the exact lines that declare it written out here.
+PACKAGE_OPERATIONS = frozenset({"downloadAgentPackage"})
+PACKAGE_ZONE_LINES = {
+    "agent_package": "limit_req_zone $agent_package_client zone=agent_package:1m rate=30r/m;",
+}
+PACKAGE_MAP_HEADER = "map $uri $agent_package_client {"
+ENROLLMENT_LIMIT_LINES = (
+    "limit_req zone=enrollment_exchange burst=10 nodelay;",
+    "limit_req zone=agent_package burst=20 nodelay;",
+)
 #: zone name -> the operations whose full served path the zone's map keys on.
 ZONES: dict[str, frozenset[str]] = {
     "guest_registration": THROTTLED_OPERATIONS,
     "token_exchange": EXCHANGE_OPERATIONS,
+    "enrollment_exchange": ENROLLMENT_EXCHANGE_OPERATIONS,
 }
+ALL_ZONES = [*ZONES, *RUNNER_ZONE_LINES, *PACKAGE_ZONE_LINES]
 MAP_HEADER = re.compile(r'^map "\$request_method:\$uri" (\$\w+) \{$')
 ZONE_LINE = re.compile(r"^limit_req_zone (\$\w+) zone=(\w+):\d+[km] rate=\d+r/[sm];$")
 LIMIT_LINE = re.compile(r"^limit_req zone=(\w+) burst=\d+( nodelay)?;$")
@@ -257,8 +274,8 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
     """The maps and the zones: once each, at http level, in the always-loaded file, keyed exactly."""
     problems: list[str] = []
     lines = statements(plain)
-    declared = len(ZONES) + len(RUNNER_ZONE_LINES)
-    runner_headers = {RUNNER_TOKEN_MAP_HEADER, RUNNER_ADDRESS_MAP_HEADER}
+    declared = len(ALL_ZONES)
+    runner_headers = {RUNNER_TOKEN_MAP_HEADER, RUNNER_ADDRESS_MAP_HEADER, PACKAGE_MAP_HEADER}
     maps = [line for line in lines if line.startswith("map ")]
     zones = [line for line in lines if line.startswith("limit_req_zone ")]
     outer = top_level(lines)
@@ -273,9 +290,9 @@ def declaration_problems(plain: str, tls: str) -> list[str]:
             problems.append(f"the limit_req_zone is not the expected shape: {zone_line!r}")
             continue
         by_name[zone.group(2)] = (zone.group(1), zone_line)
-    if sorted(by_name) != sorted([*ZONES, *RUNNER_ZONE_LINES]):
+    if sorted(by_name) != sorted(ALL_ZONES):
         return problems + [
-            f"the zones must be exactly {sorted([*ZONES, *RUNNER_ZONE_LINES])}: {sorted(by_name)}"
+            f"the zones must be exactly {sorted(ALL_ZONES)}: {sorted(by_name)}"
         ]
     for name, operations in ZONES.items():
         variable, _ = by_name[name]
@@ -356,7 +373,9 @@ def runner_problems(plain: str) -> list[str]:
             if pattern.match(f"{uri}|") or pattern.match(f"{uri}|Bearer am2.payload.tag"):
                 problems.append(f"{uri} without a runner token must have no key")
         for uri in (f"{base}/projects", f"{base}/executor-connections", f"{base}/runner/tasks",
-                    f"{base}/runner/other/claim", "/bff/v1/runner/tasks/claim"):
+                    f"{base}/runner/other/claim", "/bff/v1/runner/tasks/claim",
+                    f"{base}/runner/healthz", f"{base}/runner/health/other",
+                    f"{base}/runner/enroll", f"{base}/runner/agent-package/1.0.0"):
             if pattern.match(f"{uri}|Bearer {token}"):
                 problems.append(f"{uri} is not a runner path and must have no key")
     address_map = blocks(lines, RUNNER_ADDRESS_MAP_HEADER)
@@ -377,9 +396,54 @@ def runner_problems(plain: str) -> list[str]:
         for uri in served:
             if pattern.match(uri) is None:
                 problems.append(f"{uri} must be counted per address")
-        for uri in (f"{base}/projects", f"{base}/runner", f"{base}/auth/token", "/healthz"):
+        for uri in (f"{base}/projects", f"{base}/runner", f"{base}/auth/token", "/healthz",
+                    f"{base}/runner/healthz", f"{base}/runner/enroll",
+                    f"{base}/runner/agent-package/1.0.0"):
             if pattern.match(uri):
                 problems.append(f"{uri} is not a runner path and must not be counted per address")
+    return problems
+
+
+def package_problems(plain: str) -> list[str]:
+    """`EXEC2-ENROLL-01`: the public package's zone and map, run against the contract's path."""
+    problems: list[str] = []
+    lines = statements(plain)
+    for name, wanted in PACKAGE_ZONE_LINES.items():
+        if wanted not in [_norm(line) for line in lines]:
+            problems.append(f"nginx.conf lacks the declaration {wanted!r}")
+    document = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    base = document["servers"][0]["url"]
+    paths = [
+        f"{base}{path}"
+        for path, item in document["paths"].items()
+        for operation in item.values()
+        if isinstance(operation, dict) and operation.get("operationId") in PACKAGE_OPERATIONS
+    ]
+    if len(paths) != len(PACKAGE_OPERATIONS):
+        return problems + [f"the frozen document no longer names the package operation: {paths}"]
+    served = [path.replace("{version}", "1.0.0") for path in paths]
+    package_map = blocks(lines, PACKAGE_MAP_HEADER)
+    if len(package_map) != 1:
+        return problems + [f"expected one {PACKAGE_MAP_HEADER!r}, found {len(package_map)}"]
+    entries = _map_entries(package_map[0])
+    regexes = {key: value for key, value in entries.items() if key != "default"}
+    if entries.get("default") != "" or len(regexes) != 1:
+        return problems + [f"the package map must hold a default of \"\" and one pattern: {entries}"]
+    ((key, value),) = regexes.items()
+    if value != CLIENT_ADDRESS:
+        problems.append(f"the package map must yield the client address: {value!r}")
+    try:
+        pattern = _python_regex(key)
+    except (AssertionError, re.error) as error:
+        return problems + [f"the package map key is not a usable pattern: {error}"]
+    for uri in served:
+        if pattern.match(uri) is None:
+            problems.append(f"{uri} must be counted per address")
+    for uri in (f"{base}/runner/agent-package", f"{base}/runner/agent-package/",
+                f"{base}/runner/agent-package/1.0.0/other", f"{base}/runner/tasks/claim",
+                f"{base}/runner/enroll", f"{base}/projects", "/healthz"):
+        if pattern.match(uri):
+            problems.append(f"{uri} is not the package path and must not be counted here")
     return problems
 
 
@@ -392,7 +456,7 @@ def runner_limit_problems(name: str, config: str) -> list[str]:
     inner = [_norm(line) for line in prefixed]
     problems = [
         f"{name}: `location /api/v1/` lacks {needed!r}"
-        for needed in RUNNER_LIMIT_LINES if needed not in inner
+        for needed in (*RUNNER_LIMIT_LINES, *ENROLLMENT_LIMIT_LINES) if needed not in inner
     ]
     if any(line.startswith("auth_request") for line in inner):
         problems.append(f"{name}: `location /api/v1/` must not gate the runner paths on a session")
@@ -657,6 +721,7 @@ def all_problems(texts: dict[str, str]) -> list[str]:
     zones = zone_names(plain)
     problems = declaration_problems(plain, tls)
     problems += runner_problems(plain)
+    problems += package_problems(plain)
     for name in ("nginx.conf", "tls-server.conf"):
         problems += throttle_problems(name, texts[name], zones, status)
         problems += runner_limit_problems(name, texts[name])
@@ -682,7 +747,7 @@ def test_the_map_and_the_zone_are_declared_once_in_the_file_nginx_always_loads()
 def test_the_server_body_throttles_inside_the_one_api_location(name: str) -> None:
     texts = _texts()
     zones = zone_names(texts["nginx.conf"])
-    assert sorted(zones) == sorted([*ZONES, *RUNNER_ZONE_LINES])
+    assert sorted(zones) == sorted(ALL_ZONES)
     status = _catalog()["codes"][CODE]["http"]
     assert throttle_problems(name, texts[name], zones, status) == []
 
@@ -858,6 +923,7 @@ MUTATIONS = [
         "tls-server.conf",
         "        limit_req zone=guest_registration burst=10 nodelay;\n        limit_req zone=token_exchange burst=10 nodelay;\n"
         "        limit_req zone=runner_channel burst=30 nodelay;\n        limit_req zone=runner_address burst=120 nodelay;\n"
+        "        limit_req zone=enrollment_exchange burst=10 nodelay;\n        limit_req zone=agent_package burst=20 nodelay;\n"
         "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
         "        # The credential",
     ),
@@ -865,8 +931,11 @@ MUTATIONS = [
         "the api upload location forgets the exchange throttle",
         "nginx.conf",
         "        limit_req zone=token_exchange burst=10 nodelay;\n        limit_req zone=runner_channel burst=30 nodelay;\n"
-        "        limit_req zone=runner_address burst=120 nodelay;\n        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
+        "        limit_req zone=runner_address burst=120 nodelay;\n"
+        "        limit_req zone=enrollment_exchange burst=10 nodelay;\n        limit_req zone=agent_package burst=20 nodelay;\n"
+        "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
         "        limit_req zone=runner_channel burst=30 nodelay;\n        limit_req zone=runner_address burst=120 nodelay;\n"
+        "        limit_req zone=enrollment_exchange burst=10 nodelay;\n        limit_req zone=agent_package burst=20 nodelay;\n"
         "        limit_req_status 429;\n        error_page 429 = @rate_limited;\n        # The credential",
     ),
     (
@@ -1020,13 +1089,13 @@ MUTATIONS = [
     (
         "the runner token map widened to every API path",
         "nginx.conf",
-        '"~^/api/v1/runner/tasks/[^|]*',
+        '"~^/api/v1/runner/(?:tasks/[^|]*|health)',
         '"~^/api/v1/[^|]*',
     ),
     (
         "the runner address map widened to every API path",
         "nginx.conf",
-        '"~^/api/v1/runner/tasks/" $binary_remote_addr;',
+        '"~^/api/v1/runner/(?:tasks/|health$)" $binary_remote_addr;',
         '"~^/api/v1/" $binary_remote_addr;',
     ),
     (
@@ -1034,6 +1103,72 @@ MUTATIONS = [
         "nginx.conf",
         "        error_page 429 = @rate_limited;\n    }\n\n    # THE TWO UPLOAD LOCATIONS",
         "        error_page 429 = @rate_limited;\n        auth_request /_edge/credential/api;\n    }\n\n    # THE TWO UPLOAD LOCATIONS",
+    ),
+    (
+        "the runner token map no longer counts the health report",
+        "nginx.conf",
+        "(?:tasks/[^|]*|health)",
+        "tasks/[^|]*",
+    ),
+    (
+        "the runner address map no longer counts the health report",
+        "nginx.conf",
+        '"~^/api/v1/runner/(?:tasks/|health$)" $binary_remote_addr;',
+        '"~^/api/v1/runner/tasks/" $binary_remote_addr;',
+    ),
+    (
+        "the enrollment exchange limit removed from nginx.conf",
+        "nginx.conf",
+        "        limit_req zone=enrollment_exchange burst=10 nodelay;\n",
+        "",
+    ),
+    (
+        "the agent package limit removed from tls-server.conf",
+        "tls-server.conf",
+        "        limit_req zone=agent_package burst=20 nodelay;\n",
+        "",
+    ),
+    (
+        "the agent package burst widened in tls-server.conf",
+        "tls-server.conf",
+        "        limit_req zone=agent_package burst=20 nodelay;\n",
+        "        limit_req zone=agent_package burst=2000 nodelay;\n",
+    ),
+    (
+        "the enrollment exchange map widened to every post",
+        "nginx.conf",
+        '    "POST:/api/v1/runner/enroll"    $binary_remote_addr;\n',
+        '    "POST:/api/v1/runner/enroll"    $binary_remote_addr;\n    "~^POST:"                       $binary_remote_addr;\n',
+    ),
+    (
+        "the enrollment exchange map no longer names the exchange",
+        "nginx.conf",
+        '"POST:/api/v1/runner/enroll"    $binary_remote_addr;',
+        '"POST:/api/v1/runner/enrol"     $binary_remote_addr;',
+    ),
+    (
+        "the enrollment exchange zone declared again in tls-server.conf",
+        "tls-server.conf",
+        "server {\n",
+        "limit_req_zone $enrollment_exchange_client zone=enrollment_exchange:1m rate=6r/m;\nserver {\n",
+    ),
+    (
+        "the agent package rate raised",
+        "nginx.conf",
+        "zone=agent_package:1m rate=30r/m;",
+        "zone=agent_package:1m rate=30000r/m;",
+    ),
+    (
+        "the agent package map widened to every API path",
+        "nginx.conf",
+        '"~^/api/v1/runner/agent-package/[^/]+$" $binary_remote_addr;',
+        '"~^/api/v1/" $binary_remote_addr;',
+    ),
+    (
+        "the agent package map no longer names the package",
+        "nginx.conf",
+        '"~^/api/v1/runner/agent-package/[^/]+$"',
+        '"~^/api/v1/runner/agent-packages/[^/]+$"',
     ),
     (
         "the compose flag dropped",

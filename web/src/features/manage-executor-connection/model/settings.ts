@@ -29,7 +29,7 @@ import {
   EXECUTOR_SSH_PROFILE_VALUES,
   EXECUTOR_TRANSPORT_VALUES,
 } from '@/shared/api';
-import { destinationChanged } from '@/entities/executor-connection';
+import { CAPACITY_FIELD_LABEL, destinationChanged } from '@/entities/executor-connection';
 
 export const TIMEOUT_DEFAULT_SECONDS = 120;
 export const TIMEOUT_MAX_SECONDS = 3600;
@@ -40,6 +40,9 @@ export const ANSWER_DEADLINE_DEFAULT_SECONDS = 600;
 export const ANSWER_DEADLINE_MIN_SECONDS = 10;
 export const CLAIMED_TASKS_DEFAULT = 1;
 export const CLAIMED_TASKS_MAX = 16;
+/** `EXEC2-WEB-CAP-01`: the most runs of one connection at once (ADR-0026 decision 1). */
+export const ACTIVE_RUNS_DEFAULT = 1;
+export const ACTIVE_RUNS_MAX = 16;
 
 /** The form's field names, one place. */
 export const FIELD_NAMES = {
@@ -62,6 +65,7 @@ export const FIELD_NAMES = {
   pullClient: 'pull_client',
   answerDeadlineSeconds: 'answer_deadline_seconds',
   maxClaimedTasks: 'max_claimed_tasks',
+  maxActiveRuns: 'max_active_runs',
 } as const;
 
 export type SettingsReading =
@@ -109,12 +113,15 @@ export function readRevision(
   if (!inRange(timeout, 1, TIMEOUT_MAX_SECONDS)) {
     return { ok: false, problem: `Время ожидания: целое число секунд от 1 до ${TIMEOUT_MAX_SECONDS}.` };
   }
+  const capacity = readCapacity(form);
+  if (!capacity.ok) return capacity;
   let body: ReviseExecutorConnectionRequest = {
     pin_id: pinId,
     gateway_model: gatewayModel,
     billing,
     allow_client_documents: form.get(FIELD_NAMES.allowClientDocuments) !== null,
     timeout_seconds: timeout,
+    ...capacity.fields,
   };
 
   if (kind === 'http_api') {
@@ -163,9 +170,35 @@ export function readRevision(
   };
 }
 
+type CapacityFields = Pick<ReviseExecutorConnectionRequest, 'max_active_runs'>;
+
+/**
+ * `max_active_runs`, for every kind (`EXEC2-WEB-CAP-01`). A form that does not carry the field at
+ * all sends none, and the server reads an absent value as one; a form that carries it empty or
+ * out of range is a problem to fix, not a quiet one. The coupled limits of decision 2 are the
+ * server's to judge: they follow the kind and, for a command over SSH, a profile whose support
+ * changes with the stand, so a copy of them here would drift. The form states them in a hint and
+ * the server's refusal is worded in `connectionRefusalSentence`.
+ */
+function readCapacity(
+  form: FormData,
+): { readonly ok: true; readonly fields: CapacityFields } | { readonly ok: false; readonly problem: string } {
+  if (form.get(FIELD_NAMES.maxActiveRuns) === null) return { ok: true, fields: {} };
+  const runs = whole(text(form, FIELD_NAMES.maxActiveRuns));
+  if (!inRange(runs, 1, ACTIVE_RUNS_MAX)) {
+    return { ok: false, problem: `${CAPACITY_FIELD_LABEL}: целое число от 1 до ${ACTIVE_RUNS_MAX}.` };
+  }
+  return { ok: true, fields: { max_active_runs: runs } };
+}
+
 type SshFields = Pick<ReviseExecutorConnectionRequest, 'ssh_host' | 'ssh_port' | 'ssh_user' | 'host_key'>;
 
-function readSshEndpoint(
+/**
+ * The SSH endpoint a form names: host, port, user and, optionally, a pinned host key. Exported for
+ * `features/connect-remote-agent` (`EXEC2-WEB-WIZARD-01`), whose install form takes the same three
+ * fields under the same names and must judge them by the same patterns the revision form does.
+ */
+export function readSshEndpoint(
   form: FormData,
 ): { readonly ok: true; readonly fields: SshFields } | { readonly ok: false; readonly problem: string } {
   const host = text(form, FIELD_NAMES.sshHost);
@@ -209,6 +242,7 @@ export interface SettingsInitial {
   readonly pullClient: ExecutorPullClient;
   readonly answerDeadlineSeconds: number;
   readonly maxClaimedTasks: number;
+  readonly maxActiveRuns: number;
 }
 
 export function initialSettings(
@@ -234,6 +268,7 @@ export function initialSettings(
     pullClient: revision?.pull_client ?? 'claude_code_session',
     answerDeadlineSeconds: revision?.answer_deadline_seconds ?? ANSWER_DEADLINE_DEFAULT_SECONDS,
     maxClaimedTasks: revision?.max_claimed_tasks ?? CLAIMED_TASKS_DEFAULT,
+    maxActiveRuns: revision?.max_active_runs ?? ACTIVE_RUNS_DEFAULT,
   };
 }
 
@@ -263,6 +298,7 @@ export function requestFromRevision(
     ...(revision.pull_client === undefined ? {} : { pull_client: revision.pull_client }),
     ...(revision.answer_deadline_seconds === undefined ? {} : { answer_deadline_seconds: revision.answer_deadline_seconds }),
     ...(revision.max_claimed_tasks === undefined ? {} : { max_claimed_tasks: revision.max_claimed_tasks }),
+    ...(revision.max_active_runs === undefined ? {} : { max_active_runs: revision.max_active_runs }),
   };
   return { ...base, ...changes };
 }

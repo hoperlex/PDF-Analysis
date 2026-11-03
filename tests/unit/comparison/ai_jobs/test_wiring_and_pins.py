@@ -21,13 +21,33 @@ SRC = ROOT / "src/auditmanager"
 PACKAGE = SRC / "comparison/ai_jobs"
 
 
-def _migration():
-    path = next((ROOT / "db/migrations/versions").glob("*_0040_comparison_ai_reports.py"))
-    spec = importlib.util.spec_from_file_location("migration_0040_for_ai_jobs_pins", path)
+def _load_migration(pattern: str, name: str):
+    path = next((ROOT / "db/migrations/versions").glob(pattern))
+    spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module
+    return module, path.read_text(encoding="utf-8")
+
+
+def _migration():
+    return _load_migration("*_0040_comparison_ai_reports.py", "migration_0040_for_ai_jobs_pins")[0]
+
+
+def _stage_review_widening() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The methods and the executor work kinds after ``0042``, read from the statements ``0042`` executes.
+
+    ``0042`` is the one migration that widens both vocabularies (``stage_review``). It keeps the former tuples
+    as ``METHODS_BEFORE`` / ``KINDS_BEFORE`` and writes the added member into its ALTER statements, so the new
+    tuples are read from those statements and not written down a second time here.
+    """
+    module, source = _load_migration("*_0042_comparison_stage_review.py", "migration_0042_for_ai_jobs_pins")
+    check = re.search(r"ck_comparison_ai_job_method CHECK\(method IN \(([^)]*)\)\)", source)
+    added_kind = re.search(r"KINDS_BEFORE \+ \('([a-z_]+)',\)", source)
+    assert check is not None and added_kind is not None
+    methods = tuple(re.findall(r"'([a-z_]+)'", check.group(1)))
+    assert methods[: len(module.METHODS_BEFORE)] == module.METHODS_BEFORE
+    return methods, (*module.KINDS_BEFORE, added_kind.group(1))
 
 
 # -- the names a lane imports ----------------------------------------------------------------------------------------
@@ -63,13 +83,17 @@ def test_a_method_is_a_runtime_checkable_protocol() -> None:
 
 def test_the_methods_states_and_pause_reasons_are_the_migrations() -> None:
     migration = _migration()
-    assert model.METHODS == migration.METHODS
+    methods_after_0042, kinds_after_0042 = _stage_review_widening()
+    # 0040 created the vocabulary; 0042 widened it by exactly one member, and nothing later changes it.
+    assert methods_after_0042 == (*migration.METHODS, "stage_review")
+    assert kinds_after_0042 == (*migration.WORK_KINDS_AFTER, "comparison_stage_review")
+    assert model.METHODS == methods_after_0042
     assert model.JOB_STATES == migration.JOB_STATES
     assert model.JOB_LIVE_STATES == migration.JOB_LIVE
     assert model.PAUSE_REASONS == migration.PAUSE_REASONS
     assert set(model.JOB_LIVE_STATES) | set(model.JOB_TERMINAL_STATES) == set(model.JOB_STATES)
     assert model.CONSENT_PAUSES <= set(model.PAUSE_REASONS)
-    assert {model.work_kind_of(method) for method in model.METHODS} <= set(migration.WORK_KINDS_AFTER)
+    assert {model.work_kind_of(method) for method in model.METHODS} <= set(kinds_after_0042)
 
 
 def test_the_registered_refusals_are_the_ones_the_seal_registered() -> None:
@@ -108,8 +132,13 @@ def _spend_pause_reasons() -> set[str]:
 def test_every_reason_that_pauses_a_job_in_the_spend_wrapper_has_a_pause_reason_of_the_job() -> None:
     pausing = _spend_pause_reasons()
     assert pausing >= {"overrun", "job_ceiling", "day_ceiling", "consent_stale", "consent_required"}
-    assert pausing == set(service.PAUSE_OF_SPEND_REASON), "the spend wrapper pauses for a reason the job layer does not map"
+    # `EXEC2-GROUP-CMP-01`: one refusal of the wrapper ends the job instead of pausing it (`no_executor_online`, decision 15); the job layer
+    # maps it to a failure reason of its own, and a reason it maps nowhere is still a failure of this test.
+    assert pausing == set(service.PAUSE_OF_SPEND_REASON) | set(service.FAILURE_OF_SPEND_REASON), (
+        "the spend wrapper pauses for a reason the job layer does not map")
+    assert set(service.PAUSE_OF_SPEND_REASON).isdisjoint(service.FAILURE_OF_SPEND_REASON)
     assert set(service.PAUSE_OF_SPEND_REASON.values()) <= set(model.PAUSE_REASONS)
+    assert service.pause_reason_of("no_executor_online") is None
     assert service.pause_reason_of("connection_busy") is None and service.pause_reason_of("overrun") == "overrun"
 
 

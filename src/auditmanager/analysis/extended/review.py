@@ -321,6 +321,24 @@ def _quote_refs(values, *, allowed, texts):
         seen.add((key, quote))
 
 
+def _reject_supported(row):
+    """The thresholds a ``reject`` recommendation has to meet (the prompt states the same three)."""
+    return row["confidence"] >= .75 and row["evidence_checked"] and bool(row["source_evidence"])
+
+
+def _downgraded_to_human(row):
+    """The stored mark of a row the program lowered from the model's own recommendation to ``needs_human``.
+
+    The model's decision, its reason and its text stay in the row; ``explanation`` is the line the
+    reviewer reads, so the program's note leads it and the model's text follows unchanged.
+    """
+    note = ("Программа понизила рекомендацию модели до «нужна проверка эксперта»: причина относится к "
+        "отклонению, но для отклонения нужны уверенность не ниже 0,75, проверка источников и дословные "
+        "свидетельства. Текст модели: ")
+    return {"llm_decision": "needs_human", "llm_decision_original": row["llm_decision"],
+        "program_downgrade": "rejection_below_thresholds", "explanation": note + row["explanation"]}
+
+
 def parse_critic_reply(text, *, observations, sources, allowed_sources=None, context=None):
     expected = _input_items(observations)
     indexed, texts = _source_index(sources, context)
@@ -340,10 +358,18 @@ def parse_critic_reply(text, *, observations, sources, allowed_sources=None, con
         decision, dependency = row["llm_decision"], row["source_dependency"]
         if dependency != "enough_source" and decision not in {"borderline", "needs_human"}:
             raise ValueError("critic_insufficient_source_decision")
-        if decision == "reject" and (row["confidence"] < .75 or not row["evidence_checked"] or not row["source_evidence"]):
+        adjustment = {}
+        if (dependency == "enough_source" and row["human_taxonomy_reason"] in _REJECTION_REASONS
+                and not _reject_supported(row)):
+            # A rejection-type reason needs ``reject``, and ``reject`` needs confidence, a source check and
+            # verbatim evidence, so such a row could never satisfy both guards. One unsatisfiable row must not
+            # refuse the whole paid reply: the row stays, as a request for a human, and it says so.
+            adjustment = _downgraded_to_human(row)
+            decision = "needs_human"
+        if decision == "reject" and not _reject_supported(row):
             raise ValueError("critic_rejection_without_evidence")
         if (dependency == "enough_source" and row["human_taxonomy_reason"] in _REJECTION_REASONS
-                and decision != "reject"):
+                and decision != "reject" and not adjustment):
             raise ValueError("critic_reason_decision_inconsistent")
         if row["human_taxonomy_reason"] == "insufficient_source_context" and decision != "needs_human":
             raise ValueError("critic_context_reason_inconsistent")
@@ -357,7 +383,7 @@ def parse_critic_reply(text, *, observations, sources, allowed_sources=None, con
                 or decision == "accept" and row["needs_correction"]
                 or row["needs_correction"] and not row["suggested_fix"].strip()):
             raise ValueError("critic_correction_intent_invalid")
-        result.append(deepcopy(row) | {"observation_id": original.get("observation_id", key),
+        result.append(deepcopy(row) | adjustment | {"observation_id": original.get("observation_id", key),
             "status": "requires_expert_review", "expert_decision": False})
         seen.add(key)
     if seen != set(expected):

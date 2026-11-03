@@ -300,6 +300,9 @@ __all__ = [
     "ExecutorProbeId",
     "ExecutorRunnerTokenId",
     "ExecutorTaskId",
+    "ExecutorEnrollmentId",
+    "ExecutorAgentInstallId",
+    "AgentPackageVersion",
     "ExecutorKind",
     "ExecutorWorkKind",
     "ExecutorApiFlavour",
@@ -327,6 +330,57 @@ __all__ = [
     "ExecutorRoute",
     "ExecutorRouteList",
     "SetExecutorRouteRequest",
+    "ExecutorGroupId",
+    "ExecutorGroupRevisionId",
+    "ExecutorRoutingRuleRevisionId",
+    "ExecutorRoutingModeEventId",
+    "ExecutorBindingState",
+    "ExecutorRoutingMode",
+    "ExecutorGroupStrategy",
+    "ExecutorGroupMemberIssue",
+    "ExecutorRoutingPreviewStatus",
+    "ExecutorRoutingPreviewIssue",
+    "ExecutorGroupMember",
+    "ExecutorGroupRevision",
+    "ExecutorGroup",
+    "ExecutorGroupList",
+    "ExecutorGroupDetail",
+    "CreateExecutorGroupRequest",
+    "ReviseExecutorGroupRequest",
+    "ExecutorGroupMemberStatus",
+    "ExecutorGroupCapacity",
+    "ExecutorRoutingRule",
+    "ExecutorRoutingModeState",
+    "ExecutorRoutingRuleList",
+    "SetExecutorRoutingRuleRequest",
+    "ExecutorRoutingPreviewItem",
+    "ExecutorRoutingPreview",
+    "ExecutorRoutingMappingEntry",
+    "SetExecutorRoutingModeRequest",
+    "ExecutorRoutingModeResult",
+    "ExecutorGroupPlan",
+    "ExecutorBinding",
+    "ExecutorOccupancy",
+    "ExecutorIntegrationAuthorisation",
+    "RunQueueReason",
+    "RunnerCliName",
+    "RunnerCliAuthState",
+    "RunnerExecutionProfile",
+    "RunnerFeature",
+    "RunnerCliHealth",
+    "ExecutorEnrollmentState",
+    "ExecutorAgentInstallAccess",
+    "ExecutorAgentInstallState",
+    "ExecutorAgentInstallFailure",
+    "ExecutorEnrollmentMetadata",
+    "IssuedExecutorEnrollment",
+    "RedeemExecutorEnrollmentRequest",
+    "ReportRunnerHealthRequest",
+    "RunnerHealthAck",
+    "SetExecutorIntegrationAuthorisationRequest",
+    "CreateExecutorAgentInstallRequest",
+    "ExecutorAgentInstall",
+    "ConfirmExecutorAgentInstallHostKeyRequest",
     "PresetId",
     "PresetRevisionId",
     "AnalysisPresetState",
@@ -684,6 +738,32 @@ ExecutorRunnerTokenId = TypeAliasType(
 ExecutorTaskId = TypeAliasType(
     "ExecutorTaskId", Annotated[str, Field(pattern=rf"^ext_{_ULID}$")]
 )
+#: `EXEC2-SEAL-1` (ADR-0026, migration ``0046``). An enrollment grant of the universal agent, an install
+#: session of it over SSH, and the version of the agent package the image holds (``major.minor.patch``).
+ExecutorEnrollmentId = TypeAliasType(
+    "ExecutorEnrollmentId", Annotated[str, Field(pattern=rf"^exen_{_ULID}$")]
+)
+ExecutorAgentInstallId = TypeAliasType(
+    "ExecutorAgentInstallId", Annotated[str, Field(pattern=rf"^exai_{_ULID}$")]
+)
+AgentPackageVersion = TypeAliasType(
+    "AgentPackageVersion",
+    Annotated[str, Field(pattern=r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$")],
+)
+#: `EXEC2-SEAL-2` (ADR-0026 decisions 10 and 11, migration ``0047``). An executor group, one immutable revision of it, one
+#: revision of a work kind's routing rule and one change of the routing mode.
+ExecutorGroupId = TypeAliasType(
+    "ExecutorGroupId", Annotated[str, Field(pattern=rf"^exg_{_ULID}$")]
+)
+ExecutorGroupRevisionId = TypeAliasType(
+    "ExecutorGroupRevisionId", Annotated[str, Field(pattern=rf"^exgr_{_ULID}$")]
+)
+ExecutorRoutingRuleRevisionId = TypeAliasType(
+    "ExecutorRoutingRuleRevisionId", Annotated[str, Field(pattern=rf"^exrr_{_ULID}$")]
+)
+ExecutorRoutingModeEventId = TypeAliasType(
+    "ExecutorRoutingModeEventId", Annotated[str, Field(pattern=rf"^exrm_{_ULID}$")]
+)
 #: `W55A-SEAL-01`. The normative corpus's three public identities (`NORM-Q07`), declared in
 #: ``contracts/domain/v1/identifiers.json`` since `0012_norms_corpus`, cross the wire.
 NormsSnapshotId = TypeAliasType(
@@ -964,7 +1044,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.14.0"]
+    contract_version: Literal["1.16.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1300,6 +1380,8 @@ class RunCostEstimateRequest(_Object):
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     executor_connection_id: ExecutorConnectionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     preset_id: PresetId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `EXEC2-SEAL-2`. Exclusive with ``executor_connection_id`` and ``preset_id``.
+    executor_group_id: ExecutorGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
@@ -1317,6 +1399,11 @@ class RunCostEstimate(_Object):
     model_id: Annotated[str, Field(min_length=1, max_length=200)]
     connection_revision_id: ExecutorRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     preset_revision_id: PresetRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `EXEC2-SEAL-2`. Present for an estimate on an executor group: what admission would freeze. No connection yet.
+    executor_group_id: ExecutorGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    executor_group_revision_id: ExecutorGroupRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    routing_rule_revision_id: ExecutorRoutingRuleRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     text_characters: Annotated[int, Field(ge=0)]
     page_count: Annotated[int, Field(ge=1)]
     windows: Annotated[int, Field(ge=1)]
@@ -1342,6 +1429,11 @@ class StartRunRequest(_Object):
     #: `ANALYSIS-PRESETS-01`. Optional and **not nullable**, like ``executor_connection_id``, and
     #: exclusive with it: a person either takes a preset or names an executor.
     preset_id: PresetId = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    #: `EXEC2-SEAL-2`. Optional and **not nullable**, and exclusive with ``executor_connection_id`` and
+    #: ``preset_id``: the run is admitted on the group's current revision and the connection is chosen at dispatch.
+    executor_group_id: ExecutorGroupId = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
 
@@ -1498,6 +1590,18 @@ class RunPreset(_Object):
     name: Annotated[str, Field(min_length=1, max_length=120)]
 
 
+class RunQueueReason(str, enum.Enum):
+    """`EXEC2-SEAL-1` (ADR-0026 decisions 1 and 5), widened by `EXEC2-SEAL-2` (decisions 14 and 15): why work
+    is not running. `executor_at_capacity`: every unit of its executor connection (of every eligible member of
+    its group) is in use. `runner_offline`: the connection is a `pull` connection and no runner of it is online
+    (no eligible member has one). `needs_reconsent`: dispatch found the consent envelope no longer holds and
+    called nothing. The persisted `wait_reason` of pending work uses the same words."""
+
+    EXECUTOR_AT_CAPACITY = "executor_at_capacity"
+    RUNNER_OFFLINE = "runner_offline"
+    NEEDS_RECONSENT = "needs_reconsent"
+
+
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
@@ -1556,6 +1660,17 @@ class RunStatus(_Object):
     #: `ANALYSIS-PRESETS-01`. The preset the run was started with, read-only; null (and omitted)
     #: for a run started without one.
     preset: RunPreset | None = Field(default=None, json_schema_extra=optional_property)
+    #: `EXEC2-SEAL-1`. Why a ``queued`` Run is waiting for its executor, derived at read time; null (and
+    #: omitted) for a Run that is not waiting for one.
+    queue_reason: RunQueueReason | None = Field(default=None, json_schema_extra=optional_property)
+    #: `EXEC2-SEAL-2` (ADR-0026 decisions 12 to 15). Absent is read as ``frozen_at_start``. ``planned`` and
+    #: ``binding`` are present for a Run admitted by a rule or a group (``binding`` once ``bound``);
+    #: ``wait_reason`` and ``waiting_since`` while a ``pending`` Run waits for an executor.
+    binding_state: ExecutorBindingState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    planned: ExecutorGroupPlan = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    binding: ExecutorBinding = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    waiting_since: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunStatusPage(_Object):
@@ -1564,12 +1679,19 @@ class RunStatusPage(_Object):
 
 
 class ExecutionQueueItem(_Object):
+    __doc__ = (
+        "`EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a "
+        "group (`pending` while it waits for an executor)."
+    )
+
     job_id: JobId
     run_id: RunId
     state: str
     priority: int
     created_at: datetime
     available_at: datetime
+    binding_state: ExecutorBindingState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ExecutionQueuePage(_Object):
@@ -4042,10 +4164,30 @@ class ExecutorRevisionSettings(_Object):
     max_claimed_tasks: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `EXEC2-SEAL-1` (ADR-0026 decision 1). The capacity of the connection, for every kind; absent
+    #: means 1. The coupled limits of decision 2 are validated by the executors context.
+    max_active_runs: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+_CAPACITY_NOTE = (
+    "`EXEC2-SEAL-1` (ADR-0026 decisions 1 and 2): `max_active_runs` (1 to 16, absent means 1) is the most "
+    "units of this connection that may be in use at once, where a Run in `leased`, `running` or `retry_wait` "
+    "and a comparison model call in `prepared` or `sent` each count one. A lowered value governs new claims "
+    "only and never stops work in flight. The coupled limits are validated on the revision and refused as "
+    "`422 validation_failed`: `max_claimed_tasks` of a `pull` connection and a set `max_parallel_calls` of an "
+    "`http_api` connection must each be at least `max_active_runs` (field `max_claimed_tasks` or "
+    "`max_parallel_calls`, constraint `below_max_active_runs`), and an `ssh_command` connection takes a value "
+    "above one only once its wrappers isolate concurrent invocations (field `max_active_runs`, constraint "
+    "`capacity_not_supported_for_kind`)."
+)
 
 
 class ReviseExecutorConnectionRequest(ExecutorRevisionSettings):
-    """A new immutable revision of a connection: the full settings, never a patch."""
+    __doc__ = (
+        "A new immutable revision of a connection: the full settings, never a patch.\n\n" + _CAPACITY_NOTE
+    )
 
 
 class ExecutorProbe(_Object):
@@ -4083,7 +4225,7 @@ class ExecutorProbe(_Object):
 
 
 class ExecutorRevision(ExecutorRevisionSettings):
-    """One immutable revision of a connection, with its latest probe."""
+    __doc__ = "One immutable revision of a connection, with its latest probe.\n\n" + _CAPACITY_NOTE
 
     revision_id: ExecutorRevisionId
     connection_id: ExecutorConnectionId
@@ -4113,8 +4255,34 @@ class ExecutorSecretMetadata(_Object):
     )
 
 
+class ExecutorOccupancy(_Object):
+    """Used and total capacity of a connection (`EXEC2-SEAL-1`, ADR-0026 decision 1), derived from the
+    database at read time and stored nowhere. `capacity` is `max_active_runs` of the current revision
+    (1 when absent); `active_runs` counts the connection's Runs in `leased`, `running` or `retry_wait`;
+    `active_calls` counts its comparison model calls in `prepared` or `sent` whose attempt is live. Each
+    counts one unit, so the connection is full when their sum reaches `capacity`."""
+
+    capacity: Annotated[int, Field(ge=1, le=16)]
+    active_runs: Annotated[int, Field(ge=0)]
+    active_calls: Annotated[int, Field(ge=0)]
+
+
+class ExecutorIntegrationAuthorisation(_Object):
+    """The administrator's mark that the command-line clients behind a `pull` connection are authorised
+    for this integration (`R-149b`, ADR-0026 decision 8): when it was set and by whom. It is one of four
+    distinct statuses (installed, authentication valid, authorised for this integration, model probe
+    passed) and implies none of the other three."""
+
+    authorised_at: datetime
+    authorised_by: UserUid
+
+
 class ExecutorConnection(_Object):
-    """A connection: where a process sends model work. Its secrets are metadata only."""
+    __doc__ = (
+        "A connection: where a process sends model work. Its secrets are metadata only."
+        " `occupancy` (`EXEC2-SEAL-1`) is present once the connection has a current revision;"
+        " `integration_authorisation` is present while the administrator's mark is set (`pull` connections only)."
+    )
 
     connection_id: ExecutorConnectionId
     kind: ExecutorKind
@@ -4126,6 +4294,10 @@ class ExecutorConnection(_Object):
     archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_revision_id: ExecutorRevisionId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_revision_no: Annotated[int, Field(ge=1)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    occupancy: ExecutorOccupancy = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    integration_authorisation: ExecutorIntegrationAuthorisation = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4140,7 +4312,9 @@ class ExecutorConnectionDetail(_Object):
 
     For a ``pull`` connection (`EXEC-PULL-01`) it also carries the runner tokens' metadata and
     the number of tasks waiting for, or held by, a runner right now. Both are absent for the
-    other kinds. A token's value is never here: it was shown once, when it was issued."""
+    other kinds. A token's value is never here: it was shown once, when it was issued.
+
+    `EXEC2-SEAL-1` (ADR-0026 decision 4): for a ``pull`` connection it also carries its last 10 enrollment grants, newest first, as metadata only (state, expiry, redemption time): the grant's secret and its hash are never here, since the secret was shown once, when it was issued. Absent for the other kinds."""
 
     connection: ExecutorConnection
     revisions: list[ExecutorRevision]
@@ -4149,6 +4323,9 @@ class ExecutorConnectionDetail(_Object):
         default=None, json_schema_extra=optional_property
     )
     open_task_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    enrollments: Annotated[list["ExecutorEnrollmentMetadata"], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4199,6 +4376,339 @@ class SetExecutorRouteRequest(_Object):
     standby_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+
+
+# --- executor groups, routing rules, the routing mode and dispatch-time binding (`EXEC2-SEAL-2`) --------
+#
+# ADR-0026 decisions 10 to 17, owner rulings `R-149a` to `R-149f`. Sealed as contract 1.16.0 with the storage of
+# migrations ``0047`` and ``0048``; the operations are implemented by `EXEC2-GROUP-STORE-01` (groups and rules),
+# `EXEC2-GROUP-RUN-01` and `EXEC2-GROUP-CMP-01` (admission and dispatch) and `EXEC2-CUTOVER-01` (preview and mode).
+# A lane that needs a field stops to the integrator and never edits these. Refusals are the catalogue's existing
+# codes with typed details only (``executors.model`` names the values).
+
+class ExecutorBindingState(str, enum.Enum):
+    """`EXEC2-SEAL-2` (ADR-0026 decision 12): whether the executor of a Run or a comparison AI job was fixed
+    when the work started. `frozen_at_start`: the connection revision was frozen at start (every existing
+    row, an explicit connection and a preset), behaviour unchanged. `pending`: the work was admitted by a
+    rule or a group and no connection is chosen yet. `bound`: dispatch chose a member and wrote the
+    connection revision. The only move is `pending` to `bound`, once; `frozen_at_start` and `bound` are
+    terminal."""
+
+    FROZEN_AT_START = "frozen_at_start"
+    PENDING = "pending"
+    BOUND = "bound"
+
+
+class ExecutorRoutingMode(str, enum.Enum):
+    """`EXEC2-SEAL-2` (ADR-0026 decision 17): which store decides where new model work goes. `legacy` (the
+    default): the Primary/Standby route of `setExecutorRoute`. `rules`: the rule of the work kind, targeting
+    an executor group. Each change is journalled; work already admitted keeps its own routing."""
+
+    LEGACY = "legacy"
+    RULES = "rules"
+
+
+class ExecutorGroupStrategy(str, enum.Enum):
+    """`EXEC2-SEAL-2` (ADR-0026 decision 10): how dispatch picks among the eligible members of a group.
+    `least_loaded`: the lowest used/capacity ratio, ties broken by a rotation kept in the database."""
+
+    LEAST_LOADED = "least_loaded"
+
+
+class ExecutorGroupMemberIssue(str, enum.Enum):
+    """`EXEC2-SEAL-2` (ADR-0026 decision 14): why a group member would not be chosen by dispatch right now.
+    `revision_changed`: the connection's current revision is not the snapshot the group revision holds.
+    `connection_archived`: the connection is archived. `not_served`: this release does not serve the
+    connection. `probe_not_ok`: the probe of the current key is not `ok`. `runner_offline`: a `pull`
+    connection has no runner online. `at_capacity`: every unit of the connection is in use."""
+
+    REVISION_CHANGED = "revision_changed"
+    CONNECTION_ARCHIVED = "connection_archived"
+    NOT_SERVED = "not_served"
+    PROBE_NOT_OK = "probe_not_ok"
+    RUNNER_OFFLINE = "runner_offline"
+    AT_CAPACITY = "at_capacity"
+
+
+class ExecutorRoutingPreviewStatus(str, enum.Enum):
+    """`EXEC2-SEAL-2` (ADR-0026 decision 17): what the cut-over would do with one work kind. `ready`: a
+    one-member group can be made from the primary of the legacy route. `no_route`: the work kind has no
+    legacy route, so it gets no rule. `incompatible`: the route exists but cannot become a group (see the
+    reason)."""
+
+    READY = "ready"
+    NO_ROUTE = "no_route"
+    INCOMPATIBLE = "incompatible"
+
+
+class ExecutorRoutingPreviewIssue(str, enum.Enum):
+    """`EXEC2-SEAL-2`: why a legacy route cannot become a one-member group. `connection_archived`: the primary
+    is archived. `no_revision`: it has no revision. `kind_not_served`: this release does not serve its kind."""
+
+    CONNECTION_ARCHIVED = "connection_archived"
+    NO_REVISION = "no_revision"
+    KIND_NOT_SERVED = "kind_not_served"
+
+
+class ExecutorGroupMember(_Object):
+    """One member of a group revision (`EXEC2-SEAL-2`, ADR-0026 decision 10): a connection and the connection
+    **revision** snapshotted into the group revision. Dispatch considers the member only while the
+    connection's current revision is still this snapshot. `tie_break_order` (1 to 16, unique inside the
+    revision) orders members that tie on load before the persisted rotation does."""
+
+    connection_id: ExecutorConnectionId
+    connection_revision_id: ExecutorRevisionId
+    tie_break_order: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorGroupRevision(_Object):
+    """One immutable revision of an executor group (`EXEC2-SEAL-2`, ADR-0026 decision 10). A group is
+    homogeneous: every member revision pins exactly `pin_id` and `gateway_model` and shares `billing` and
+    the pinned rates, which are snapshotted here as USD per million tokens. `strategy` is `least_loaded`.
+    Mixed groups are refused."""
+
+    group_revision_id: ExecutorGroupRevisionId
+    group_id: ExecutorGroupId
+    revision_no: Annotated[int, Field(ge=1)]
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)]
+    billing: ExecutorBilling
+    input_per_mtok_usd: Annotated[float, Field(ge=0)]
+    output_per_mtok_usd: Annotated[float, Field(ge=0)]
+    strategy: ExecutorGroupStrategy
+    members: Annotated[list[ExecutorGroupMember], Field(min_length=1, max_length=16)]
+    created_at: datetime
+    created_by: UserUid
+
+
+class ExecutorGroup(_Object):
+    """A group of interchangeable executors for one model (`EXEC2-SEAL-2`, ADR-0026 decision 10), with its
+    current revision. `routed_work_kinds` are the work kinds whose rule currently targets a revision of this
+    group; a group a rule still names cannot be archived. Archiving is one-way and is not deletion."""
+
+    group_id: ExecutorGroupId
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    created_at: datetime
+    created_by: UserUid
+    current_revision: ExecutorGroupRevision
+    routed_work_kinds: list[ExecutorWorkKind]
+    archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorGroupList(_Object):
+    """Every executor group with its current revision, archived ones included."""
+
+    items: list[ExecutorGroup]
+
+
+class ExecutorGroupDetail(_Object):
+    """One group and every revision of it, newest first."""
+
+    group: ExecutorGroup
+    revisions: list[ExecutorGroupRevision]
+
+
+class CreateExecutorGroupRequest(_Object):
+    """A new group and its first revision (`EXEC2-SEAL-2`, ADR-0026 decision 10). The pinned rates are not
+    sent: the server takes them from the provider lock for `pin_id`. `strategy` absent means `least_loaded`.
+    A member names a connection and the revision of it the group should snapshot; every member must match
+    `pin_id`, `gateway_model` and `billing` exactly."""
+
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)]
+    billing: ExecutorBilling
+    strategy: ExecutorGroupStrategy = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    members: Annotated[list[ExecutorGroupMember], Field(min_length=1, max_length=16)]
+
+
+class ReviseExecutorGroupRequest(_Object):
+    """A new immutable revision of a group: the full settings, never a patch (`EXEC2-SEAL-2`). Work already
+    admitted on an earlier revision finishes on it."""
+
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)]
+    billing: ExecutorBilling
+    strategy: ExecutorGroupStrategy = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    members: Annotated[list[ExecutorGroupMember], Field(min_length=1, max_length=16)]
+
+
+class ExecutorGroupMemberStatus(_Object):
+    """One member as dispatch sees it right now (`EXEC2-SEAL-2`, ADR-0026 decision 14), derived at read time:
+    the snapshot, the connection's current revision, its occupancy, and whether it would be chosen.
+    `ineligible_reason` is present exactly when `eligible` is false; when several apply the first of the
+    enumeration's order is reported."""
+
+    connection_id: ExecutorConnectionId
+    snapshot_revision_id: ExecutorRevisionId
+    current_revision_id: ExecutorRevisionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    occupancy: ExecutorOccupancy = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    eligible: bool
+    ineligible_reason: ExecutorGroupMemberIssue = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorGroupCapacity(_Object):
+    """The capacity of the current revision of a group, derived from the database at read time and stored
+    nowhere (`EXEC2-SEAL-2`). `capacity` sums the capacity of the members still in service (not archived,
+    current revision equal to the snapshot); `used` sums their active Runs and calls; `waiting` counts the
+    Runs and comparison jobs admitted on any revision of this group that are still `pending`."""
+
+    group_id: ExecutorGroupId
+    group_revision_id: ExecutorGroupRevisionId
+    members: Annotated[list[ExecutorGroupMemberStatus], Field(min_length=1, max_length=16)]
+    capacity: Annotated[int, Field(ge=0)]
+    used: Annotated[int, Field(ge=0)]
+    waiting: Annotated[int, Field(ge=0)]
+
+
+class ExecutorRoutingRule(_Object):
+    """The current rule of one work kind (`EXEC2-SEAL-2`, ADR-0026 decision 11): the group revision new work of
+    that kind is admitted on while the routing mode is `rules`. Rules are append-only; `rule_revision_id`
+    identifies this one."""
+
+    work_kind: ExecutorWorkKind
+    rule_revision_id: ExecutorRoutingRuleRevisionId
+    group_id: ExecutorGroupId
+    group_revision_id: ExecutorGroupRevisionId
+    set_at: datetime
+    set_by: UserUid
+
+
+class ExecutorRoutingModeState(_Object):
+    """The routing mode and its last change (`EXEC2-SEAL-2`, ADR-0026 decision 17). Before the first change the
+    mode is `legacy` and the other fields are absent."""
+
+    mode: ExecutorRoutingMode
+    mode_event_id: ExecutorRoutingModeEventId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    changed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    changed_by: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutorRoutingRuleList(_Object):
+    """The current rule of each work kind that has one, and the current routing mode."""
+
+    routing_mode: ExecutorRoutingModeState
+    items: Annotated[list[ExecutorRoutingRule], Field(max_length=6)]
+
+
+class SetExecutorRoutingRuleRequest(_Object):
+    """Point the rule of a work kind at an immutable group revision (`EXEC2-SEAL-2`). The path names the work
+    kind. A group revision other than the current one of an active group is accepted; an archived group's is
+    refused."""
+
+    group_revision_id: ExecutorGroupRevisionId
+
+
+class ExecutorRoutingPreviewItem(_Object):
+    """What the cut-over would do with one work kind (`EXEC2-SEAL-2`, ADR-0026 decision 17): a one-member group
+    made from the primary of the legacy route, named `proposed_group_name`. A standby is shown and never
+    converted into a member."""
+
+    work_kind: ExecutorWorkKind
+    status: ExecutorRoutingPreviewStatus
+    primary_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    connection_revision_id: ExecutorRevisionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    standby_connection_id: ExecutorConnectionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    billing: ExecutorBilling = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    proposed_group_name: Annotated[str, Field(min_length=1, max_length=120)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    incompatible_reason: ExecutorRoutingPreviewIssue = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorRoutingPreview(_Object):
+    """The proposed cut-over, computed from the legacy routes without writing anything (`EXEC2-SEAL-2`,
+    ADR-0026 decision 17). `preview_digest` binds every item below; the confirmation carries it, and a
+    confirmation whose digest is not the one now computed is `409 conflict` (`preview_stale`)."""
+
+    routing_mode: ExecutorRoutingModeState
+    preview_digest: Sha256
+    items: Annotated[list[ExecutorRoutingPreviewItem], Field(max_length=6)]
+
+
+class ExecutorRoutingMappingEntry(_Object):
+    """One confirmed line of a cut-over: the work kind and the name of the one-member group to create for it."""
+
+    work_kind: ExecutorWorkKind
+    group_display_name: Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class SetExecutorRoutingModeRequest(_Object):
+    """Change the routing mode (`EXEC2-SEAL-2`, ADR-0026 decision 17). `rules` is the cut-over and needs the
+    `preview_digest` that was shown and a `mapping` that confirms each `ready` work kind to be converted:
+    the groups, the rules and the mode are created in one transaction. `legacy` is the rollback and takes
+    neither field. Work already admitted by rules finishes on its own group revisions."""
+
+    mode: ExecutorRoutingMode
+    preview_digest: Sha256 = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    mapping: Annotated[list[ExecutorRoutingMappingEntry], Field(max_length=6)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ExecutorRoutingModeResult(_Object):
+    """The routing mode after a change, the groups the change created (a cut-over's one-member groups; none for
+    a rollback) and the rules now current."""
+
+    routing_mode: ExecutorRoutingModeState
+    groups: Annotated[list[ExecutorGroup], Field(max_length=6)]
+    rules: Annotated[list[ExecutorRoutingRule], Field(max_length=6)]
+
+
+class ExecutorGroupPlan(_Object):
+    """What admission froze for a Run or a comparison AI job admitted by a rule or a group (`EXEC2-SEAL-2`,
+    ADR-0026 decision 13): the group and its revision, the rule revision when a rule routed it (absent when
+    the group was named explicitly), and the planned model with its billing. The connection is not here: it
+    is chosen at dispatch (see `ExecutorBinding`)."""
+
+    executor_group_id: ExecutorGroupId
+    executor_group_revision_id: ExecutorGroupRevisionId
+    routing_rule_revision_id: ExecutorRoutingRuleRevisionId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)]
+    billing: ExecutorBilling
+
+
+class ExecutorBinding(_Object):
+    """The connection and model work was bound to at dispatch (`EXEC2-SEAL-2`, ADR-0026 decision 14). Present
+    exactly when `binding_state` is `bound`. It never changes afterwards: an Attempt retry stays on this
+    connection revision."""
+
+    connection_id: ExecutorConnectionId
+    connection_revision_id: ExecutorRevisionId
+    display_name: Annotated[str, Field(min_length=1, max_length=120)]
+    pin_id: Annotated[str, Field(min_length=1, max_length=128)]
+    gateway_model: Annotated[str, Field(min_length=1, max_length=200)]
 
 
 # --- analysis presets (`ANALYSIS-PRESETS-01`, `R-146av`) ----------------------------------
@@ -4265,10 +4775,58 @@ class ExecutorTaskState(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class RunnerCliName(str, enum.Enum):
+    """The official command-line clients an agent detects (ADR-0026 decision 8)."""
+
+    CLAUDE = "claude"
+    CODEX = "codex"
+
+
+class RunnerCliAuthState(str, enum.Enum):
+    """The authentication state of a client, read only through its official mechanism and reported as a
+    closed enumeration: `valid`, `login_required`, or `unknown` (not installed, or the client offers no
+    official way to tell). Never a credential, a path or an account name."""
+
+    VALID = "valid"
+    LOGIN_REQUIRED = "login_required"
+    UNKNOWN = "unknown"
+
+
+class RunnerExecutionProfile(str, enum.Enum):
+    """How the agent answers a task: it runs a command (`command`) or calls a local OpenAI-compatible
+    endpoint (`endpoint`)."""
+
+    COMMAND = "command"
+    ENDPOINT = "endpoint"
+
+
+class RunnerFeature(str, enum.Enum):
+    """A capability the agent declares; `images` means it serves tasks that carry images."""
+
+    IMAGES = "images"
+
+
+class RunnerCliHealth(_Object):
+    """One client's sanitised health as an agent reports it (`EXEC2-SEAL-1`, ADR-0026 decision 5)."""
+
+    cli: RunnerCliName
+    installed: bool
+    version: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    auth_state: RunnerCliAuthState
+
+
 class RunnerTokenMetadata(_Object):
-    """What the API ever says about a runner token after it was issued: that it exists, its
-    non-secret prefix, when it expires or was revoked, and when and from where it was last seen.
-    The value and its hash are never returned."""
+    __doc__ = (
+        "What the API ever says about a runner token after it was issued: that it exists, its\n"
+        "non-secret prefix, when it expires or was revoked, and when and from where it was last seen.\n"
+        "The value and its hash are never returned."
+        "\n\n`EXEC2-SEAL-1` (ADR-0026 decision 5): the health an agent last reported on this token, as closed "
+        "enumerations and bounded strings (no secret, no path to a credential and no document text), and `online`, "
+        "the freshness of `last_seen_at` under a bounded threshold, read at the time of the request. All of them "
+        "are absent for a token whose runner has not reported."
+    )
 
     token_id: ExecutorRunnerTokenId
     connection_id: ExecutorConnectionId
@@ -4282,6 +4840,23 @@ class RunnerTokenMetadata(_Object):
     last_seen_address: Annotated[str, Field(min_length=1, max_length=64)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    clis: Annotated[list[RunnerCliHealth], Field(max_length=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    concurrency: Annotated[int, Field(ge=1, le=16)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    execution_profile: RunnerExecutionProfile = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    features: Annotated[list[RunnerFeature], Field(max_length=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    health_reported_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    online: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class IssueRunnerTokenRequest(_Object):
@@ -4303,7 +4878,12 @@ class IssuedRunnerToken(_Object):
 
 
 class ClaimExecutorTaskRequest(_Object):
-    """The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25)."""
+    __doc__ = (
+        "The long poll holds the request open for up to ``wait_seconds`` (0 to 25, default 25)."
+        "\n\n`EXEC2-SEAL-1` (ADR-0026 decision 3): the optional `runner_instance_id` names the agent process making "
+        "the claim. A task already held by a token is redelivered only to the instance that claimed it; a claim "
+        "without the field behaves as before. One token is served by one agent process."
+    )
 
     wait_seconds: Annotated[int, Field(ge=0, le=25)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
@@ -4312,6 +4892,10 @@ class ClaimExecutorTaskRequest(_Object):
     #: serves; absent means 1, the shape every deployed runner sends today. The server never hands
     #: out a task with more images than declared.
     max_images: Annotated[int, Field(ge=1, le=8)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    #: `EXEC2-SEAL-1`. The agent process making the claim; 8 to 64 characters of ``A-Za-z0-9_-``.
+    runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
 
@@ -4382,6 +4966,202 @@ class FailExecutorTaskRequest(_Object):
 class ExecutorTaskAck(_Object):
     task_id: ExecutorTaskId
     state: ExecutorTaskState
+
+
+# --- the universal agent: enrollment, health and the install over SSH (`EXEC2-SEAL-1`) ------------
+#
+# ADR-0026 decisions 4 to 9, owner ruling `R-149b`. Sealed as contract 1.15.0 with the storage of
+# migration ``0046``; the operations are implemented by `EXEC2-ENROLL-01` (enrollment, health, package),
+# `EXEC2-ENROLL-SSH-01` (the install session) and `EXEC2-CAP-01` (capacity). A lane that needs a field
+# stops to the integrator and never edits these. Refusals are the catalogue's existing codes with typed
+# details only (``executors.model`` names the values).
+
+
+class ExecutorEnrollmentState(str, enum.Enum):
+    """Derived at read time: `pending` until redeemed, revoked or past `expires_at`."""
+
+    PENDING = "pending"
+    REDEEMED = "redeemed"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
+class ExecutorAgentInstallAccess(str, enum.Enum):
+    """How the administrator gives the stand SSH access to the host: a key the stand generates (the
+    administrator adds its public half to the host) or a pasted private key, which is sealed.
+    Passwords are not accepted."""
+
+    GENERATED_KEY = "generated_key"
+    PASTED_KEY = "pasted_key"
+
+
+class ExecutorAgentInstallState(str, enum.Enum):
+    """`requested -> scanning -> awaiting_host_key -> installing -> succeeded | failed`."""
+
+    REQUESTED = "requested"
+    SCANNING = "scanning"
+    AWAITING_HOST_KEY = "awaiting_host_key"
+    INSTALLING = "installing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ExecutorAgentInstallFailure(str, enum.Enum):
+    """The sanitised reason a failed install failed; never a host output, a path or a credential."""
+
+    HOST_UNREACHABLE = "host_unreachable"
+    SSH_REFUSED = "ssh_refused"
+    HOST_KEY_CHANGED = "host_key_changed"
+    HOST_KEY_NOT_CONFIRMED = "host_key_not_confirmed"
+    SUDO_PASSWORD_REQUIRED = "sudo_password_required"
+    UNSUPPORTED_PLATFORM = "unsupported_platform"
+    PACKAGE_UNAVAILABLE = "package_unavailable"
+    INSTALL_FAILED = "install_failed"
+    ENROLLMENT_FAILED = "enrollment_failed"
+    SECRET_UNREADABLE = "secret_unreadable"
+    NO_WORKER = "no_worker"
+    TIMED_OUT = "timed_out"
+
+
+class ExecutorEnrollmentMetadata(_Object):
+    """What the API ever says about an enrollment grant after it was issued (`EXEC2-SEAL-1`, ADR-0026
+    decision 4): that it exists, its non-secret prefix, its derived state and its dates. The secret and
+    its hash are never returned."""
+
+    enrollment_id: ExecutorEnrollmentId
+    connection_id: ExecutorConnectionId
+    secret_prefix: Annotated[str, Field(pattern=r"^ame_[0-9a-z]{8}$")]
+    state: ExecutorEnrollmentState
+    created_at: datetime
+    created_by: UserUid
+    expires_at: datetime
+    redeemed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    runner_token_id: ExecutorRunnerTokenId = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    revoked_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    revoked_by: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class IssuedExecutorEnrollment(_Object):
+    """The grant, **shown once**: it is stored only as a one-way hash, so no operation can return the
+    `secret` or the `command` that carries it again. `package_version` and `package_sha256` name the agent
+    package the command downloads and verifies. Copy the command now; a lost one is replaced by a new
+    grant, which revokes this one."""
+
+    secret: Annotated[str, Field(min_length=56, max_length=56)] = Field(
+        json_schema_extra={"readOnly": True}
+    )
+    package_version: AgentPackageVersion
+    package_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    command: Annotated[str, Field(min_length=1, max_length=4096)] = Field(
+        json_schema_extra={"readOnly": True}
+    )
+    enrollment: ExecutorEnrollmentMetadata
+
+
+class RedeemExecutorEnrollmentRequest(_Object):
+    """The exchange of an enrollment secret for a runner token. `runner_instance_id` names the agent process
+    and makes a repeat of the exchange inside its window idempotent."""
+
+    runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")]
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class ReportRunnerHealthRequest(_Object):
+    """An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded
+    strings only."""
+
+    agent_version: Annotated[str, Field(pattern=r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")]
+    clis: Annotated[list[RunnerCliHealth], Field(max_length=8)]
+    concurrency: Annotated[int, Field(ge=1, le=16)]
+    execution_profile: RunnerExecutionProfile
+    features: Annotated[list[RunnerFeature], Field(max_length=8)]
+    runner_instance_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,64}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+
+
+class RunnerHealthAck(_Object):
+    """The report was stored on the calling runner token."""
+
+    recorded_at: datetime
+
+
+class SetExecutorIntegrationAuthorisationRequest(_Object):
+    """`true` sets the mark, `false` clears it. Setting an already set mark or clearing an absent one
+    answers the connection as it stands."""
+
+    authorised: bool
+
+
+def _optional_write_only(schema: dict[str, Any]) -> None:
+    """``optional_property`` and ``writeOnly`` for one field: absent is allowed, and no response carries it."""
+    optional_property(schema)
+    schema["writeOnly"] = True
+
+
+class CreateExecutorAgentInstallRequest(_Object):
+    """Write-only where it carries a key. `private_key` is required for `pasted_key` and refused for
+    `generated_key`; the API seals it to the stand's public key and never returns it."""
+
+    access: ExecutorAgentInstallAccess
+    ssh_host: Annotated[str, Field(min_length=1, max_length=253)]
+    ssh_port: Annotated[int, Field(ge=1, le=65535)]
+    ssh_user: Annotated[str, Field(min_length=1, max_length=64)]
+    private_key: Annotated[str, Field(min_length=8, max_length=8192)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=_optional_write_only
+    )
+
+
+class ExecutorAgentInstall(_Object):
+    """One install session of the universal agent over SSH (path A, `EXEC2-SEAL-1`, ADR-0026 decision 7).
+    For `generated_key` access it carries the public half and its `authorized_keys` line, which the
+    administrator adds to the host; the private half is sealed and never returned.
+    `observed_host_key_fingerprint` is what the worker saw (derived from the stored key line, as
+    `ExecutorRevision.host_key_fingerprint` is); the install does not proceed until the administrator
+    confirms exactly that fingerprint. `key_removed_at` is when the stand's key was removed from the
+    host and its sealed secret destroyed."""
+
+    install_id: ExecutorAgentInstallId
+    connection_id: ExecutorConnectionId
+    state: ExecutorAgentInstallState
+    access: ExecutorAgentInstallAccess
+    ssh_host: Annotated[str, Field(min_length=1, max_length=253)]
+    ssh_port: Annotated[int, Field(ge=1, le=65535)]
+    ssh_user: Annotated[str, Field(min_length=1, max_length=64)]
+    public_key: Annotated[str, Field(min_length=1, max_length=2048)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    authorized_keys_line: Annotated[str, Field(min_length=1, max_length=2200)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    observed_host_key_fingerprint: Annotated[str, Field(min_length=1, max_length=128)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    host_key_confirmed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    host_key_confirmed_by: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    package_version: AgentPackageVersion = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    package_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    failure_reason: ExecutorAgentInstallFailure = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property
+    )
+    key_removed_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    created_at: datetime
+    created_by: UserUid
+    updated_at: datetime
+    finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ConfirmExecutorAgentInstallHostKeyRequest(_Object):
+    """The fingerprint the administrator read and confirms. It must equal the one the worker observed;
+    there is no trust on first use."""
+
+    host_key_fingerprint: Annotated[str, Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")]
 
 
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------
@@ -5733,11 +6513,17 @@ class ComparisonAiRoute(_Object):
     revision pins (a reply from another model is refused, ``R-133``), how it is billed and whether the
     process is in recorded mode, in which case every answer is a recorded test answer."""
 
-    connection_id: ExecutorConnectionId
-    revision_id: ExecutorRevisionId
+    #: `EXEC2-SEAL-2` (ADR-0026 decisions 12 and 13). For work admitted by a rule or a group the connection and its
+    #: revision are absent until dispatch binds the work, and the group, the rule revision and the planned model
+    #: (``pinned_model``, ``billing``) are what admission froze.
+    connection_id: ExecutorConnectionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    revision_id: ExecutorRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     pinned_model: Annotated[str, Field(min_length=1, max_length=128)]
     billing: ExecutorBilling
     provider_mode: ProviderMode
+    executor_group_id: ExecutorGroupId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    executor_group_revision_id: ExecutorGroupRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    routing_rule_revision_id: ExecutorRoutingRuleRevisionId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 class ComparisonAiEstimate(_Object):
@@ -5851,6 +6637,12 @@ class ComparisonAiJob(_Object):
     failure_reason: Annotated[str, Field(pattern=_REASON_CODE)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     queue_position: Annotated[int, Field(ge=1)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     finished_at: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    #: `EXEC2-SEAL-2` (ADR-0026 decisions 12 to 15). Absent ``binding_state`` is read as ``frozen_at_start``.
+    binding_state: ExecutorBindingState = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    planned: ExecutorGroupPlan = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    binding: ExecutorBinding = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    wait_reason: RunQueueReason = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    waiting_since: datetime = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 # --- AI check of doubtful pairs (CMP-VC-AIPAIR-01) -----------------------------------------
@@ -6183,6 +6975,8 @@ class ComparisonAiQueueItem(_Object):
     created_at: datetime
     series_id: ComparisonSeriesId = Field(**_NOT_GIVEN)  # type: ignore[assignment]
     queue_position: Annotated[int, Field(ge=1)] = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    binding_state: ExecutorBindingState = Field(**_NOT_GIVEN)  # type: ignore[assignment]
+    wait_reason: RunQueueReason = Field(**_NOT_GIVEN)  # type: ignore[assignment]
 
 
 class ComparisonAiQueue(_Object):

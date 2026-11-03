@@ -158,7 +158,7 @@ def _comprehensive_batches(items, contexts, sources):
 
 
 def plan_extended_coverage(*, kind, items, limit, contexts=None, sources=None):
-    if kind not in _PHASE_LIMITS or (limit is not None and (type(limit) is not int or limit < 1)) or not isinstance(items, list):
+    if kind not in _PHASE_LIMITS or (limit is not None and (type(limit) is not int or not 1 <= limit <= 128)) or not isinstance(items, list):
         raise ValueError('extended_coverage_plan_invalid')
     if kind == 'comprehensive_analysis':
         batches, oversized = _comprehensive_batches(items, contexts or [], sources or [])

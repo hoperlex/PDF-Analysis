@@ -10,10 +10,19 @@ Statements only, as ``jobs`` and ``executors.runner_repository`` do: every metho
 session and **never commits**. The wrapper (:mod:`.caller`) owns the transactions, because the
 ``prepared`` row must be committed on its own, before the adapter is called.
 
-The reads that decide a call -- what a job and a day have cost, who else is using a connection --
-live here too, beside the writes they must agree with. Two of them restate a fact of the ``jobs``
-context: the advisory-lock key of a connection and the Job states that make a Run *active*. Both are
+The reads that decide a call -- what a job and a day have cost, whether the connection has a unit left --
+live here too, beside the writes they must agree with. Three of them restate a fact of the ``jobs``
+context: the advisory-lock key of a connection, the Job states that make a Run *active* and the unit
+count against ``max_active_runs`` of the connection's current revision (`EXEC2-CAP-01`). All three are
 pinned to their original by a test (this context may not import ``jobs`` internals).
+
+`EXEC2-GROUP-CMP-01` (ADR-0026 decisions 12 and 14). A job admitted by a rule or a group has no connection until its first
+call binds it, and a Run admitted the same way has none until its claim does. Both counts below join ``audit_run`` and
+``comparison_model_call`` to ``executor_connection_revision`` on the **row's own** revision with an inner join, so a ``pending``
+Run (``connection_revision_id`` NULL) holds no unit of any connection, and a call is journalled with the member's revision in
+the very transaction that binds the job, so it is never counted against a connection it was not sent to. The first-call
+binding takes the group's row lock with :meth:`ComparisonSpendRepository.lock_group`, then the members' connection locks with
+:meth:`~ComparisonSpendRepository.lock_connection` in ascending ``connection_id``, then the day lock -- the order of decision 14.
 """
 
 from __future__ import annotations
@@ -127,21 +136,39 @@ _LOCK_CONNECTION = text(
     f"SELECT pg_advisory_xact_lock(hashtextextended('{CONNECTION_LOCK_KEY}' || :connection_id, 0))"
 )
 _LOCK_DAY = text(f"SELECT pg_advisory_xact_lock(hashtextextended('{DAY_LOCK_KEY}', 0))")
+#: `EXEC2-GROUP-CMP-01`. The group's row lock (the first lock of decision 14's order, the one a Run's claim takes before it
+#: and an administrator's revision takes) and, read under it, the persisted tie-break rotation of ``least_loaded``.
+_LOCK_GROUP = text("SELECT rotation_cursor FROM executor_group WHERE group_id = :group_id FOR UPDATE")
 _ACTIVE_STATES_SQL = "(" + ", ".join(f"'{s}'" for s in ACTIVE_JOB_STATES) + ")"
-_CONNECTION_HAS_ACTIVE_RUN = text(
-    "SELECT EXISTS (SELECT 1 FROM job j JOIN audit_run r ON r.run_id = j.run_id "
+#: The rows of the Runs active on a connection, and of its **active comparison calls**. A call is *active*
+#: while it is open **and** its attempt still holds the item: a killed worker's call stays active until the
+#: reclaim ends its attempt (the Run rule: an expired lease keeps the connection busy), and a row left open
+#: by an attempt that is over blocks nothing. The two ``FROM`` clauses are shared by the existence form
+#: (a capacity of one: "is anyone using it") and the count form (`EXEC2-CAP-01`: "how many units").
+_ACTIVE_RUN_ROWS = (
+    "FROM job j JOIN audit_run r ON r.run_id = j.run_id "
     "JOIN executor_connection_revision rev ON rev.revision_id = r.connection_revision_id "
-    f"WHERE rev.connection_id = :connection_id AND j.state IN {_ACTIVE_STATES_SQL})"
+    f"WHERE rev.connection_id = :connection_id AND j.state IN {_ACTIVE_STATES_SQL}"
 )
-#: A call is *active* on a connection while it is open **and** its attempt still holds the item: a
-#: killed worker's call stays active until the reclaim ends its attempt (the Run rule: an expired
-#: lease keeps the connection busy), and a row left open by an attempt that is over blocks nothing.
-_CONNECTION_HAS_ACTIVE_CALL = text(
-    "SELECT EXISTS (SELECT 1 FROM comparison_model_call c "
+_ACTIVE_CALL_ROWS = (
+    "FROM comparison_model_call c "
     "JOIN comparison_work_attempt a ON a.comparison_work_attempt_id = c.comparison_work_attempt_id "
     "JOIN executor_connection_revision rev ON rev.revision_id = c.connection_revision_id "
     "WHERE rev.connection_id = :connection_id AND c.state IN ('prepared', 'sent') "
-    "AND a.state IN ('created', 'leased', 'running'))"
+    "AND a.state IN ('created', 'leased', 'running')"
+)
+_CONNECTION_HAS_ACTIVE_RUN = text(f"SELECT EXISTS (SELECT 1 {_ACTIVE_RUN_ROWS})")
+_CONNECTION_HAS_ACTIVE_CALL = text(f"SELECT EXISTS (SELECT 1 {_ACTIVE_CALL_ROWS})")
+#: `EXEC2-CAP-01` (ADR-0026 decision 1). Does the connection have a unit left: its active Runs plus its
+#: active comparison calls, each one unit, **below** ``max_active_runs`` of its current (highest-numbered)
+#: revision, one when that is NULL or there is no revision. Decided under the connection's lock, which the
+#: caller takes first, so with one unit left exactly one of a Run's claim and a call passes. The mirror of
+#: ``jobs.repository._CONNECTION_UNITS``; a test holds the two equal.
+_CONNECTION_HAS_FREE_UNIT = text(
+    f"SELECT ((SELECT count(*) {_ACTIVE_RUN_ROWS}) + (SELECT count(*) {_ACTIVE_CALL_ROWS})) < "
+    "COALESCE((SELECT current_revision.max_active_runs FROM executor_connection_revision current_revision "
+    "WHERE current_revision.connection_id = :connection_id "
+    "ORDER BY current_revision.revision_no DESC LIMIT 1), 1)"
 )
 _OPEN_OF_OTHER_ATTEMPTS = text(
     "SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :work_id "
@@ -260,11 +287,25 @@ class ComparisonSpendRepository:
         """Take the installation's spend lock to the end of the transaction."""
         session.execute(_LOCK_DAY)
 
+    def lock_group(self, session: Session, group_id: str) -> int | None:
+        """`EXEC2-GROUP-CMP-01`. Take the group's row lock to the end of the transaction (``FOR UPDATE``: the lock a Run's
+        claim and an administrator's revision take) and answer its rotation cursor as it stands under the lock, or ``None``
+        when there is no such group. Taken **before** any connection lock and the day lock."""
+        found = session.execute(_LOCK_GROUP, {"group_id": group_id}).scalar_one_or_none()
+        return None if found is None else int(found)
+
     def connection_has_active_run(self, session: Session, connection_id: str) -> bool:
         return bool(session.execute(_CONNECTION_HAS_ACTIVE_RUN, {"connection_id": connection_id}).scalar_one())
 
     def connection_has_active_call(self, session: Session, connection_id: str) -> bool:
         return bool(session.execute(_CONNECTION_HAS_ACTIVE_CALL, {"connection_id": connection_id}).scalar_one())
+
+    def connection_has_free_unit(self, session: Session, connection_id: str) -> bool:
+        """`EXEC2-CAP-01`. Is the connection's use (active Runs plus active calls) below its capacity?
+
+        Asked after :meth:`lock_connection`. With the default capacity of one it answers ``False`` exactly
+        when :meth:`connection_has_active_run` or :meth:`connection_has_active_call` answers ``True``."""
+        return bool(session.execute(_CONNECTION_HAS_FREE_UNIT, {"connection_id": connection_id}).scalar_one())
 
     def open_calls_of_other_attempts(self, session: Session, *, work_id: str, attempt_id: str) -> int:
         """Calls of the item's *earlier* attempts that are still ``prepared`` or ``sent``: nothing may be

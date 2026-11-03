@@ -52,6 +52,12 @@ export interface ExecutorSelectViewProps {
    * as `value`, is locked, and says this sentence instead of its own hint.
    */
   readonly lockedBy?: string | undefined;
+  /**
+   * `EXEC2-WEB-GROUPS-01`: set while the control is on «Конкретное подключение». The default option then
+   * means nothing is chosen yet, not «follow the route», and the hint says so; absent, the select is
+   * what it always was.
+   */
+  readonly needsChoice?: boolean | undefined;
 }
 
 export const DEFAULT_EXECUTOR_LABEL = 'По умолчанию (маршрут)';
@@ -61,7 +67,9 @@ function listed(choices: readonly ExecutorChoice[], value: ExecutorConnectionId 
   return choices.filter((choice) => !choice.archived || choice.connectionId === value);
 }
 
-export function ExecutorSelectView({ id, reading, value, disabled, onChange, lockedBy }: ExecutorSelectViewProps) {
+export function ExecutorSelectView({
+  id, reading, value, disabled, onChange, lockedBy, needsChoice,
+}: ExecutorSelectViewProps) {
   const choices = reading.phase === 'ready' ? listed(reading.choices, value) : [];
   // A choice the list no longer holds (the connection vanished from a later read) stays selected
   // and visible, disabled, rather than letting the browser show the first option in its place.
@@ -122,7 +130,9 @@ export function ExecutorSelectView({ id, reading, value, disabled, onChange, loc
           {lockedBy !== undefined
             ? lockedBy
             : value === null
-              ? 'Без выбора прогон идёт на исполнителе по назначению стенда.'
+              ? needsChoice === true
+                ? 'Выберите подключение: в режиме «Конкретное подключение» прогон идёт только на нём.'
+                : 'Без выбора прогон идёт на исполнителе по назначению стенда.'
               : 'Прогон пойдёт только на выбранном исполнителе. Если он не сможет выполнить прогон, другой исполнитель не подставляется.'}
           {lockedBy === undefined && choices.length === 0 ? ' Подключений для выбора пока нет.' : ''}
         </p>

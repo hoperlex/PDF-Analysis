@@ -1,4 +1,4 @@
-"""The 259 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 277 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -50,6 +50,8 @@ from auditmanager.api.routers.errors import (
 )
 from auditmanager.api.routers.export import build_export_routes
 from auditmanager.api.routers.execution import build_execution_routes
+from auditmanager.api.routers.executor_enrollment import build_enrollment_routes
+from auditmanager.api.routers.executor_groups import build_executor_group_routes  # EXEC2-GROUP-STORE-01
 from auditmanager.api.routers.executors import build_executor_routes
 from auditmanager.api.routers.runner import build_runner_routes
 from auditmanager.api.routers.findings import build_finding_routes
@@ -125,8 +127,10 @@ from auditmanager.api.routers.ports import (
     DecisionPort,
     DocumentPort,
     ExecutionPort,
+    ExecutorGroupPort,
     ExecutorPort,
     RunnerPort,
+    EnrollmentPort,
     FindingPort,
     NormContentPort,
     NormsSearchPort,
@@ -167,17 +171,21 @@ class Router(APIRouter):
     :func:`auditmanager.api.security.build_authorization_dependency`.
     """
 
-    __slots__ = ("credentials", "runner_tokens")
+    __slots__ = ("credentials", "runner_tokens", "enrollment")
 
     def __init__(
         self, *, credentials: CredentialPort | None = None,
         runner_tokens: RunnerPort | None = None,
+        enrollment: EnrollmentPort | None = None,
     ) -> None:
         super().__init__()
         self.credentials = credentials
         #: `EXEC-PULL-01`. The pull channel's port, which is also what authenticates a runner
         #: token: the seam reads it from here for the same reason it reads ``credentials``.
         self.runner_tokens = runner_tokens
+        #: `EXEC2-ENROLL-01`. The universal agent's port, which also authenticates an enrollment secret: the
+        #: seam reads it from here, as it reads ``runner_tokens``.
+        self.enrollment = enrollment
 
 __all__ = [
     "BASE_PATH",
@@ -198,8 +206,10 @@ __all__ = [
     "DecisionPort",
     "DocumentPort",
     "ExecutionPort",
+    "ExecutorGroupPort",
     "ExecutorPort",
     "RunnerPort",
+    "EnrollmentPort",
     "FailureEnvelopeMiddleware",
     "FindingPort",
     "NormContentPort",
@@ -255,7 +265,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.14.0"
+CONTRACT_VERSION: Final[str] = "1.16.0"
 
 
 def build_router(
@@ -286,6 +296,8 @@ def build_router(
     section_specifications: SectionSpecificationPort | None = None,
     executors: ExecutorPort | None = None,
     runner: RunnerPort | None = None,
+    enrollment: EnrollmentPort | None = None,
+    executor_groups: ExecutorGroupPort | None = None,
     ar_v3_groups: ArV3GroupPort | None = None,
     comparison_uploads: ComparisonUploadPort | None = None,
     comparison_version_orders: ComparisonVersionOrderPort | None = None,
@@ -306,7 +318,7 @@ def build_router(
     comparison_stage_runs: ComparisonStageRunPort | None = None,
     comparison_stage_c4: ComparisonStageC4Port | None = None,
 ) -> Router:
-    """Assemble the 259 operations, from the router modules -- ``me``,
+    """Assemble the 277 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -343,7 +355,7 @@ def build_router(
     nothing else. See :class:`Router`. Nothing about the six changes, and an application
     built with no credential port refuses every guarded request rather than serving one.
     """
-    router = Router(credentials=credentials, runner_tokens=runner)
+    router = Router(credentials=credentials, runner_tokens=runner, enrollment=enrollment)
     # One router, registered onto directly, rather than six included into a seventh.
     # ``include_router`` wraps each sub-router instead of copying its routes, so
     # ``router.routes`` would carry seven opaque wrappers and the whole-surface
@@ -406,6 +418,14 @@ def build_router(
     # `EXEC-PULL-01`. The pull channel: two administrator operations on runner tokens and the
     # four a runner calls with one. Optional with a default, for the reason `blocks` gives.
     build_runner_routes(router, runner)  # type: ignore[arg-type]
+    # `EXEC2-ENROLL-01`. The universal agent: the enrollment grant and its exchange, the agent's health, the
+    # public package, the API side of an install over SSH and the integration-authorisation mark. Optional
+    # with a default, for the reason `blocks` gives; declared whatever the port, answerable only with one.
+    build_enrollment_routes(router, enrollment)  # type: ignore[arg-type]
+    # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: eight operations of contract 1.16.0
+    # (`previewExecutorRouting` and `setExecutorRoutingMode` are `EXEC2-CUTOVER-01`'s). Optional with a default, for the
+    # reason `blocks` gives; declared whatever the port, answerable only with one.
+    build_executor_group_routes(router, executor_groups)  # type: ignore[arg-type]
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the

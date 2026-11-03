@@ -22,23 +22,31 @@ from typing import Any, Literal
 from auditmanager.analysis.stages.extraction import (
     ExtractedDocument, ExtractedLine, ExtractedPage, normalize,
 )
+from auditmanager.ingest.public import quota
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 
 @dataclass(frozen=True, slots=True)
 class PdfPrecheckLimits:
-    """Finite per-document worker limits; upload's quick envelope is unchanged."""
+    """Finite per-document worker limits; upload's quick envelope is unchanged.
 
-    address_space_bytes: int = 2**63 - 1
-    cpu_seconds: int = 2**31 - 1
-    wall_seconds: float = float(2**31 - 1)
+    The child's memory, clocks and output bounds are a sandbox: finite in every deployment,
+    whatever ``AUDITMANAGER_INTAKE_RELAXED`` says (`REVIEW-FIX-BOUNDS-1102`). The page and
+    character counts mirror the upload envelope's quotas (500 pages, 200 000 characters a page,
+    20 000 000 in a document), so a relaxed deployment, whose envelope admitted a longer
+    document, does not refuse it here for a count the envelope no longer enforces.
+    """
+
+    address_space_bytes: int = 1536 * 1024 * 1024
+    cpu_seconds: int = 1200
+    wall_seconds: float = 1800
     startup_seconds: float = 45
-    page_seconds: float = float(2**31 - 1)
-    max_pages: int = 2**31 - 1
-    max_page_characters: int = 2**31 - 1
-    max_document_characters: int = 2**31 - 1
-    max_line_bytes: int = 2**63 - 1
-    max_output_bytes: int = 2**63 - 1
+    page_seconds: float = 180
+    max_pages: int = quota(500, 2**31 - 1)
+    max_page_characters: int = quota(200_000, 2**31 - 1)
+    max_document_characters: int = quota(20_000_000, 2**31 - 1)
+    max_line_bytes: int = 32 * 1024 * 1024
+    max_output_bytes: int = 256 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)

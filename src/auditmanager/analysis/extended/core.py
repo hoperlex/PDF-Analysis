@@ -21,6 +21,22 @@ MAX_BLOCKS = 16
 FULL_DOCUMENT = "all"
 BATCH_SIZE = 8
 MAX_ITEMS = 40
+#: The section-run bounds of a v3 plan (`SPRINT-SECTION-RUNTIME-1030`): sources, durable windows
+#: and text pages. A run that asked for ``relaxed_limits`` lifts them to the integer ceiling
+#: (`SECTION-STATS-UNCAPPED-1030`); no other run does (`REVIEW-FIX-BOUNDS-1102`).
+SECTION_MAX_SOURCES = 1000
+SECTION_MAX_WINDOWS = 63
+SECTION_MAX_TEXT_PAGES = 500
+LIFTED_SECTION_BOUND = 2**31 - 1
+
+
+def bounds_lifted(policy: object) -> bool:
+    """Whether a v3 policy belongs to a ``relaxed_limits`` run.
+
+    Preflight stamps ``unbounded_stats`` on the frozen policy for such a run and for no other
+    (``coverage_policy``); the cost authority refuses the stamp without ``relaxed_limits``.
+    """
+    return isinstance(policy, dict) and policy.get("unbounded_stats") is True
 
 
 def canonical(value: object) -> str:
@@ -47,9 +63,12 @@ def enabled(policy: object) -> bool:
             return False
         maximum=policy.get("max_blocks");windows=policy.get("max_windows");rules=policy.get("rules_sha256")
         text_pages=policy.get("text_page_limit")
-        return (type(maximum) is int and 1 <= maximum <= 2**31 - 1 and policy.get("window_size") == 16
-            and type(policy.get("window_size")) is int and type(windows) is int and windows >= 1
-            and type(text_pages) is int and 1 <= text_pages <= 2**31 - 1
+        lifted = bounds_lifted(policy)
+        return (type(maximum) is int and 1 <= maximum <= (LIFTED_SECTION_BOUND if lifted else SECTION_MAX_SOURCES)
+            and policy.get("window_size") == 16
+            and type(policy.get("window_size")) is int and type(windows) is int
+            and 1 <= windows <= (LIFTED_SECTION_BOUND if lifted else SECTION_MAX_WINDOWS)
+            and type(text_pages) is int and 1 <= text_pages <= (LIFTED_SECTION_BOUND if lifted else SECTION_MAX_TEXT_PAGES)
             and windows == max((maximum+15)//16,(text_pages+15)//16) and policy.get("review") is True
             and isinstance(policy.get("section_code"),str) and bool(policy["section_code"].strip())
             and isinstance(rules,str) and len(rules)==64 and all(c in "0123456789abcdef" for c in rules))
@@ -67,7 +86,8 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
                 recognised: Mapping[str, Any] | None = None,
                 native_sources: Mapping[str, Any] | None = None, plan_version: str = PLAN_VERSION,
                 source_offset: int = 0, source_limit: int = 16, max_sources: int = 16,
-                full_document: bool = False, coverage_version: str | None = None) -> dict:
+                full_document: bool = False, coverage_version: str | None = None,
+                relaxed_limits: bool = False) -> dict:
     if plan_version not in {PLAN_VERSION, PLAN_VERSION_V2, PLAN_VERSION_V3}:
         raise ValueError("extended_plan_version_invalid")
     if type(full_document) is not bool or full_document and plan_version != PLAN_VERSION_V2:
@@ -75,9 +95,13 @@ def plan_inputs(*, version_uid: str, section: str, portal: Mapping[str, Any], ma
     if coverage_version is not None and (coverage_version != "batched-v1" or plan_version != PLAN_VERSION_V3):
         raise ValueError("extended_coverage_version_invalid")
     complete_text = full_document or coverage_version == "batched-v1"
+    if type(relaxed_limits) is not bool:
+        raise ValueError("extended_relaxed_limits_invalid")
+    sources_ceiling = LIFTED_SECTION_BOUND if relaxed_limits else SECTION_MAX_SOURCES
     if plan_version == PLAN_VERSION_V3 and (type(source_offset) is not int or source_offset < 0
             or type(source_limit) is not int or not 1 <= source_limit <= 16
-            or type(max_sources) is not int or max_sources < 1 or source_offset >= max_sources):
+            or type(max_sources) is not int or not 1 <= max_sources <= sources_ceiling
+            or source_offset >= sources_ceiling):
         raise ValueError("extended_source_window_invalid")
     if native_sources is not None and plan_version not in {PLAN_VERSION_V2, PLAN_VERSION_V3}:
         raise ValueError("native_sources_require_v2")

@@ -15,6 +15,12 @@ The steps, each safe to repeat (the job that runs them is resumed after a pause 
 3. **Record it** (:meth:`TransitionRun.finish`): the contract-shaped changes, the totals, the coverage of each side and the reason go
    into the transition's row in one statement that is refused unless the row is ``running`` -- a cancelled job leaves nothing.
 
+A batch whose answer failed the check is kept (its checked row and its raw reply are immutable), but the side's aggregate is then
+**not** stored: an aggregate stored under the text's key would answer every later read and the side could never be asked again. A later
+job that is consented with a fresh estimate asks that batch again under the next *attempt* (:func:`batch_keys`) and the batches never
+requested; a reply that was paid for and is not kept, or a call still in doubt, is never asked again (the spend fence of
+:meth:`~.repository.SpecificationRepository.paid_dispatch_fence`).
+
 A side that cannot be read at all (a specification page whose table the parser could not read, no specification page, a text over the
 cap) is *not sent*: it is incomplete with its reason before any request, and the sheet-by-sheet description of the AI-sheet lane
 covers those sheets (the method then reads «листовой ИИ»).
@@ -23,7 +29,7 @@ covers those sheets (the method then reads «листовой ИИ»).
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -39,9 +45,11 @@ __all__ = [
     "Ask",
     "PreparedSide",
     "REASON_NOT_PARSED",
+    "REASON_PAGE_COUNT",
     "Side",
     "TransitionOutcome",
     "TransitionRun",
+    "batch_keys",
     "compare_sides",
     "prepare_side",
     "read_side",
@@ -53,6 +61,8 @@ _LOG = logging.getLogger(__name__)
 #: ``SPEC_SOURCE_INCOMPLETE`` and ``SPEC_ANSWER_UNCONFIRMED``.
 REASON_NOT_PARSED: Final[str] = "SPEC_NOT_PARSED"
 REASON_STORED_UNUSABLE: Final[str] = "SPEC_STORED_ANSWER_UNCONFIRMED"
+#: A version whose source document (and so its page count) cannot be established by the read-only paths.
+REASON_PAGE_COUNT: Final[str] = "SPEC_PAGE_COUNT_UNAVAILABLE"
 #: The coverage keys the contract carries (``ComparisonSpecCoverage``).
 COVERAGE_KEYS: Final[tuple[str, ...]] = ("blocks_total", "blocks_covered", "rows_total", "rows_unresolved")
 
@@ -124,11 +134,24 @@ class PreparedSide:
         return self.source is not None and bool(self.source["complete"]) and self.stored is None
 
 
+def batch_keys(project_uid: str, batch_id: str, attempt: int) -> tuple[str, str]:
+    """``(checked key, raw key)`` of one batch at one attempt. Attempt 1 keeps the keys every row stored so far was written under;
+    a later attempt (a new consent after the check failed) has keys of its own, because the stored rows are immutable."""
+    identity = batch_id if attempt == 1 else f"{batch_id}:attempt-{attempt}"
+    return (prompt.content_key(project_uid, identity, batches.CHECKED_VERSION),
+            prompt.content_key(project_uid, identity, batches.RAW_VERSION))
+
+
 def prepare_side(
     session_factory: sessionmaker[Session], reader: SpecificationReader, repository: SpecificationRepository, *,
-    project_uid: str, version_uid: str,
+    project_uid: str, version_uid: str, attempts: Mapping[str, int] | None = None, renew_failed: bool = False,
 ) -> PreparedSide:
-    """Read a version's specification pages and look the text up in the store. Asks nobody and writes nothing."""
+    """Read a version's specification pages and look the text up in the store. Asks nobody and writes nothing.
+
+    ``attempts`` names, per batch id, the attempt to read (default 1: a batch whose check failed stays failed, as it always did).
+    ``renew_failed`` is the estimate's and the job start's: a batch whose check failed *and whose paid reply is kept* is read at the
+    next attempt, which nothing has been asked for yet; the attempts it settled on are each batch's ``attempt``. A failed check whose
+    reply is not kept is never renewed."""
     stream = reader.version_stream(version_uid)
     side = Side(version_uid=version_uid, sheets=len(stream.refs), complete=False, refs=dict(stream.refs))
     if not stream.parsed_pages or stream.unparsed_pages or not stream.catalogue_complete:
@@ -150,11 +173,16 @@ def prepare_side(
     if stored is None:
         with session_scope(session_factory) as session:
             for batch in planned:
-                batch_key=prompt.content_key(project_uid,batch['batch_id'],batches.CHECKED_VERSION)
-                raw_key=prompt.content_key(project_uid,batch['batch_id'],batches.RAW_VERSION)
-                enriched.append({**batch,'key':batch_key,'raw_key':raw_key,
-                    'stored':repository.find_extraction(session,project_uid,batch_key),
-                    'raw':repository.find_extraction(session,project_uid,raw_key)})
+                attempt=max(1,int((attempts or {}).get(batch['batch_id'],1)))
+                while True:
+                    batch_key,raw_key=batch_keys(project_uid,batch['batch_id'],attempt)
+                    checked=repository.find_extraction(session,project_uid,batch_key)
+                    raw=repository.find_extraction(session,project_uid,raw_key)
+                    if renew_failed and checked is not None and checked.state!='complete' and raw is not None:
+                        attempt+=1
+                        continue
+                    break
+                enriched.append({**batch,'key':batch_key,'raw_key':raw_key,'stored':checked,'raw':raw,'attempt':attempt})
     prepared = PreparedSide(side, source, key, stored,tuple(enriched))
     if stored is not None:
         _from_stored(side, stored)
@@ -167,12 +195,13 @@ def prepare_side(
 def read_side(
     session_factory: sessionmaker[Session], reader: SpecificationReader, repository: SpecificationRepository, *,
     project_uid: str, version_uid: str, ask: Ask | None, ask_batch: Callable | None = None, progress: Callable | None = None,
+    attempts: Mapping[str, int] | None = None,
 ) -> Side:
     """One version's specification: from the store if it was read under this text, else by one request (see the module).
 
     ``ask`` is ``None`` for a read that must not request anything (an estimate, a replay): a side the store does not hold is then
     ``sent=False`` and ``complete=False`` with ``reason == "SPEC_NOT_READ"``."""
-    prepared = prepare_side(session_factory, reader, repository, project_uid=project_uid, version_uid=version_uid)
+    prepared = prepare_side(session_factory, reader, repository, project_uid=project_uid, version_uid=version_uid, attempts=attempts)
     side = prepared.side
     if not prepared.sendable:
         return side
@@ -209,7 +238,7 @@ def read_side(
             checked=check.check_extraction(batch['source'],answer.payload)
             detail={**checked['coverage'],'record_kind':'checked_batch','planning_revision':batches.REVISION,
                 'issues':checked['issues'],'reason':checked['reason'],'batch_id':batch['batch_id'],
-                'owned_line_ids':batch['owned_line_ids'],'context_line_ids':batch['context_line_ids']}
+                'owned_line_ids':batch['owned_line_ids'],'context_line_ids':batch['context_line_ids'],'attempt':batch['attempt']}
             if ask is None and ask_batch is None:
                 record=_BatchRecord('complete' if checked['complete'] else 'partial',checked['rows'],detail)
             else:
@@ -222,7 +251,7 @@ def read_side(
         records.append(record)
         if progress is not None:
             _,_,current=batches.aggregate(source,prepared.batches,records)
-            progress(version_uid,{**current,'source_key':prepared.key})
+            progress(version_uid,batches.counters({**current,'source_key':prepared.key}))
         if record.state!='complete':break
     # Every unrequested tail has a real plan entry, never an invented successful row.
     for batch in prepared.batches[len(records):]:
@@ -236,6 +265,12 @@ def read_side(
     if ask is None and ask_batch is None:
         side.coverage=_coverage(coverage);side.rows=positions;side.complete=complete
         side.issues=coverage['issues'];side.reason=coverage['reason'];side.reused=True
+        return side
+    if any(record.state!='complete' for record in records):
+        # A batch failed its check or was never requested. The checked batch rows are kept; the aggregate is not stored, so a later
+        # job, consented with a fresh estimate, can ask the side again (see the module).
+        side.coverage=_coverage(coverage);side.rows=[];side.complete=False
+        side.issues=coverage['issues'];side.reason=coverage['reason'];side.reused=False
         return side
     with session_scope(session_factory) as session:
         row = repository.insert_extraction(
@@ -257,12 +292,19 @@ class _BatchRecord:
     extraction_id: str | None = None
 
 
+def _explicit_empty_table(coverage: dict[str, Any]) -> bool:
+    """A "complete" extraction with no position is an explicit empty table: a recognised header and no data line (S2-11). Rows stored
+    before the aggregate counted headers carry no ``table_headers`` and are not read as empty tables."""
+    return (int(coverage.get("blocks_total") or 0) > 0 and int(coverage.get("table_headers") or 0) > 0
+            and int(coverage.get("rows_total") or 0) == 0)
+
+
 def _from_stored(side: Side, stored: ExtractionRow, *, sent: bool = False) -> Side:
     side.extraction_id = stored.extraction_id
     side.coverage = _coverage(stored.coverage)
     side.issues = list(stored.coverage.get("issues") or [])
     side.reused = not sent
-    if stored.state == "complete":
+    if stored.state == "complete" and (stored.positions or _explicit_empty_table(stored.coverage)):
         side.complete, side.rows = True, list(stored.positions)
     else:
         side.reason = stored.coverage.get("reason") or REASON_STORED_UNUSABLE
@@ -298,13 +340,14 @@ class TransitionRun:
         self._repository = repository or SpecificationRepository()
         self._reader = reader or SpecificationReader(session_factory, blob_store)
 
-    def prepared(self,scope:TransitionScope):
-        return tuple(prepare_side(self._factory,self._reader,self._repository,project_uid=scope.project_uid,version_uid=version)
-            for version in (scope.source_version_uid,scope.target_version_uid))
+    def prepared(self,scope:TransitionScope,*,attempts:Mapping[str,int]|None=None):
+        return tuple(prepare_side(self._factory,self._reader,self._repository,project_uid=scope.project_uid,version_uid=version,
+            attempts=attempts) for version in (scope.source_version_uid,scope.target_version_uid))
 
-    def read(self, scope: TransitionScope, *, ask: Ask | None, ask_batch: Callable | None = None,progress:Callable|None=None) -> tuple[Side, Side]:
-        old = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.source_version_uid, ask=ask,ask_batch=ask_batch,progress=progress)
-        new = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.target_version_uid, ask=ask if old.complete else None,ask_batch=ask_batch if old.complete else None,progress=progress)
+    def read(self, scope: TransitionScope, *, ask: Ask | None, ask_batch: Callable | None = None,progress:Callable|None=None,
+             attempts: Mapping[str, int] | None = None) -> tuple[Side, Side]:
+        old = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.source_version_uid, ask=ask,ask_batch=ask_batch,progress=progress,attempts=attempts)
+        new = read_side(self._factory, self._reader, self._repository, project_uid=scope.project_uid, version_uid=scope.target_version_uid, ask=ask if old.complete else None,ask_batch=ask_batch if old.complete else None,progress=progress,attempts=attempts)
         return old, new
 
     def compare(self, scope: TransitionScope, old: Side, new: Side) -> TransitionOutcome:

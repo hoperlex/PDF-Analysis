@@ -69,8 +69,9 @@ MAX_BODY: Final[int] = 26 * 1024 * 1024
 #: The body cap of ``uploadDocument`` alone: a 250 MiB portal bundle and the multipart
 #: framing around it. It sits below nginx's 260m for that location and above the browser's
 #: pre-check (`D-44`, ``tests/e2e/test_upload_limit_headroom.py``), so that the typed refusal
-#: is the one a caller sees.
-UPLOAD_MAX_BODY: Final[int] = 2**63 - 1  # temporary statistics intake
+#: is the one a caller sees. It is the same for the comparison ZIP import (``_UPLOAD_ROUTE``).
+#: A sandbox figure: the relaxed intake mode (``AUDITMANAGER_INTAKE_RELAXED``) does not move it.
+UPLOAD_MAX_BODY: Final[int] = 251 * 1024 * 1024
 
 #: Uploads in flight in one API process. The freeze states one uvicorn process per stand.
 MAX_CONCURRENT_UPLOADS: Final[int] = 2

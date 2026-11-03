@@ -99,10 +99,55 @@ def fail_reclaimed_run(
     )
 
 
-from .cost_policy import RunCostPolicy, read_run_cost_policy
+def fail_run_without_executor(session: Session, *, run_id: str, from_state: str) -> None:
+    """End a Run admitted on a group that no member could ever take: ``failed``, ``dependency_unavailable``,
+    ``dependency: no_executor_online`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 15).
+
+    The Job boundary decides that the wait is over (every member offline for longer than allowed) and has closed the
+    Job; the Run boundary owns its declared failed edge and its terminal reason, and writes both in the caller's
+    transaction, clearing the wait the Run no longer has. ``no_executor_online`` is the controlled word a pull task nobody
+    claimed already carries, so a reader sees one reason for "no runner took the work". No model was called."""
+    repository = RunRepository()
+    repository.terminate(
+        session,
+        run_id=run_id,
+        from_state=from_state,
+        to_state="failed",
+        terminal_reason=ErrorCode.DEPENDENCY_UNAVAILABLE.value,
+        terminal_detail={"dependency": "no_executor_online"},
+    )
+    repository.clear_wait(session, run_id=run_id)
+
+
+def fail_run_consent_lapsed(session: Session, *, run_id: str, from_state: str) -> None:
+    """End a Run admitted on a group whose cost consent no longer holds: ``failed``, ``analysis_input_invalid``,
+    ``stage_id: text_analysis``, ``reason: cost_estimate_binding_changed`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 14).
+
+    The Run path has one refusal for an approved estimate that no longer binds the work -- the one
+    ``analysis.text.cost.require_approved_model`` and ``runs.cost_policy`` raise before any call -- and this is that refusal
+    written as the terminal of a Run that never reached a call. A Run has no operation that renews its consent, so the
+    Job boundary (which saw the consent lapse and has closed the queued Job) ends it, and the Run boundary writes its
+    declared failed edge, the reason and the detail in the caller's transaction, clearing the wait the Run no longer has.
+    No model was called and nothing was charged; the user starts again and consents afresh."""
+    repository = RunRepository()
+    repository.terminate(
+        session,
+        run_id=run_id,
+        from_state=from_state,
+        to_state="failed",
+        terminal_reason=ErrorCode.ANALYSIS_INPUT_INVALID.value,
+        terminal_detail={"stage_id": "text_analysis", "reason": "cost_estimate_binding_changed"},
+    )
+    repository.clear_wait(session, run_id=run_id)
+
+
+from .cost_policy import RunCostPolicy, group_consent_holds, read_run_cost_policy
 
 __all__ = [
     "RunCostPolicy",
+    "fail_run_consent_lapsed",
+    "fail_run_without_executor",
+    "group_consent_holds",
     "read_run_cost_policy",
     "PACK_MANIFEST_ENV",
     "PackManifestRefused",

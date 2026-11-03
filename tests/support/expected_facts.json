@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 233,
+    "path_count": 250,
     "operations": [
       [
         "DELETE",
@@ -220,8 +220,38 @@
       ],
       [
         "GET",
+        "/executor-connections/{connection_id}/agent-installs/{install_id}",
+        "getExecutorAgentInstall"
+      ],
+      [
+        "GET",
+        "/executor-groups",
+        "listExecutorGroups"
+      ],
+      [
+        "GET",
+        "/executor-groups/{group_id}",
+        "getExecutorGroup"
+      ],
+      [
+        "GET",
+        "/executor-groups/{group_id}/capacity",
+        "getExecutorGroupCapacity"
+      ],
+      [
+        "GET",
         "/executor-routes",
         "listExecutorRoutes"
+      ],
+      [
+        "GET",
+        "/executor-routing-rules",
+        "listExecutorRoutingRules"
+      ],
+      [
+        "GET",
+        "/executor-routing/preview",
+        "previewExecutorRouting"
       ],
       [
         "GET",
@@ -437,6 +467,11 @@
         "GET",
         "/releases",
         "listReleases"
+      ],
+      [
+        "GET",
+        "/runner/agent-package/{version}",
+        "downloadAgentPackage"
       ],
       [
         "GET",
@@ -900,8 +935,28 @@
       ],
       [
         "POST",
+        "/executor-connections/{connection_id}/agent-installs",
+        "createExecutorAgentInstall"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/agent-installs/{install_id}/confirm-host-key",
+        "confirmExecutorAgentInstallHostKey"
+      ],
+      [
+        "POST",
         "/executor-connections/{connection_id}/archive",
         "archiveExecutorConnection"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/enrollments",
+        "issueExecutorEnrollment"
+      ],
+      [
+        "POST",
+        "/executor-connections/{connection_id}/integration-authorisation",
+        "setExecutorIntegrationAuthorisation"
       ],
       [
         "POST",
@@ -932,6 +987,26 @@
         "POST",
         "/executor-connections/{connection_id}/ssh-key",
         "generateExecutorSshKey"
+      ],
+      [
+        "POST",
+        "/executor-groups",
+        "createExecutorGroup"
+      ],
+      [
+        "POST",
+        "/executor-groups/{group_id}/archive",
+        "archiveExecutorGroup"
+      ],
+      [
+        "POST",
+        "/executor-groups/{group_id}/revisions",
+        "reviseExecutorGroup"
+      ],
+      [
+        "POST",
+        "/executor-routing/mode",
+        "setExecutorRoutingMode"
       ],
       [
         "POST",
@@ -1092,6 +1167,16 @@
         "POST",
         "/registrations/{request_id}/reject",
         "rejectRegistration"
+      ],
+      [
+        "POST",
+        "/runner/enroll",
+        "redeemExecutorEnrollment"
+      ],
+      [
+        "POST",
+        "/runner/health",
+        "reportRunnerHealth"
       ],
       [
         "POST",
@@ -1270,6 +1355,11 @@
       ],
       [
         "PUT",
+        "/executor-routing-rules/{work_kind}",
+        "setExecutorRoutingRule"
+      ],
+      [
+        "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
       ],
@@ -1302,6 +1392,7 @@
     "schema_names": [
       "Account",
       "AccountPage",
+      "AgentPackageVersion",
       "AnalysisPreset",
       "AnalysisPresetList",
       "AnalysisPresetState",
@@ -1538,6 +1629,7 @@
       "ComparisonVersionOrderList",
       "ComparisonVersionOrderSource",
       "ConfirmComparisonUploadSetRequest",
+      "ConfirmExecutorAgentInstallHostKeyRequest",
       "ConfirmStagePairRequest",
       "ConfirmStageUploadCandidateRequest",
       "ConfirmedComparisonFile",
@@ -1547,7 +1639,9 @@
       "CreateAssignmentRequest",
       "CreateComparisonReportRequest",
       "CreateComparisonUploadRequest",
+      "CreateExecutorAgentInstallRequest",
       "CreateExecutorConnectionRequest",
+      "CreateExecutorGroupRequest",
       "CreateProjectRequest",
       "CreateStageAssemblyRequest",
       "CreateStageReviewCardRequest",
@@ -1577,14 +1671,38 @@
       "ExecutionQueuePage",
       "ExecutionWorker",
       "ExecutionWorkerPage",
+      "ExecutorAgentInstall",
+      "ExecutorAgentInstallAccess",
+      "ExecutorAgentInstallFailure",
+      "ExecutorAgentInstallId",
+      "ExecutorAgentInstallState",
       "ExecutorApiFlavour",
       "ExecutorBilling",
+      "ExecutorBinding",
+      "ExecutorBindingState",
       "ExecutorConnection",
       "ExecutorConnectionDetail",
       "ExecutorConnectionId",
       "ExecutorConnectionList",
+      "ExecutorEnrollmentId",
+      "ExecutorEnrollmentMetadata",
+      "ExecutorEnrollmentState",
+      "ExecutorGroup",
+      "ExecutorGroupCapacity",
+      "ExecutorGroupDetail",
+      "ExecutorGroupId",
+      "ExecutorGroupList",
+      "ExecutorGroupMember",
+      "ExecutorGroupMemberIssue",
+      "ExecutorGroupMemberStatus",
+      "ExecutorGroupPlan",
+      "ExecutorGroupRevision",
+      "ExecutorGroupRevisionId",
+      "ExecutorGroupStrategy",
       "ExecutorIdentityBasis",
+      "ExecutorIntegrationAuthorisation",
       "ExecutorKind",
+      "ExecutorOccupancy",
       "ExecutorPinnedModel",
       "ExecutorProbe",
       "ExecutorProbeId",
@@ -1596,6 +1714,18 @@
       "ExecutorRevisionId",
       "ExecutorRoute",
       "ExecutorRouteList",
+      "ExecutorRoutingMappingEntry",
+      "ExecutorRoutingMode",
+      "ExecutorRoutingModeEventId",
+      "ExecutorRoutingModeResult",
+      "ExecutorRoutingModeState",
+      "ExecutorRoutingPreview",
+      "ExecutorRoutingPreviewIssue",
+      "ExecutorRoutingPreviewItem",
+      "ExecutorRoutingPreviewStatus",
+      "ExecutorRoutingRule",
+      "ExecutorRoutingRuleList",
+      "ExecutorRoutingRuleRevisionId",
       "ExecutorRunnerTokenId",
       "ExecutorSecretId",
       "ExecutorSecretMetadata",
@@ -1627,6 +1757,7 @@
       "IssueRunnerTokenRequest",
       "IssueTokenRequest",
       "IssueTokenResponse",
+      "IssuedExecutorEnrollment",
       "IssuedRunnerToken",
       "JobId",
       "MarkReleaseNotesReadRequest",
@@ -1721,6 +1852,7 @@
       "ProposalVerdict",
       "ProviderMode",
       "ReauditRunRequest",
+      "RedeemExecutorEnrollmentRequest",
       "RegistrationRequest",
       "RegistrationRequestId",
       "RegistrationRequestPage",
@@ -1731,10 +1863,12 @@
       "ReleaseList",
       "ReleaseNoteItem",
       "ReleaseNoteKind",
+      "ReportRunnerHealthRequest",
       "ResetUserPasswordRequest",
       "ResumeComparisonAiJobRequest",
       "ResumeStageChainRunRequest",
       "ReviseExecutorConnectionRequest",
+      "ReviseExecutorGroupRequest",
       "ReviseStageAssemblyRequest",
       "Role",
       "RunActivity",
@@ -1746,10 +1880,17 @@
       "RunId",
       "RunNormReferences",
       "RunPreset",
+      "RunQueueReason",
       "RunState",
       "RunStateCount",
       "RunStatus",
       "RunStatusPage",
+      "RunnerCliAuthState",
+      "RunnerCliHealth",
+      "RunnerCliName",
+      "RunnerExecutionProfile",
+      "RunnerFeature",
+      "RunnerHealthAck",
       "RunnerImage",
       "RunnerImageBlobId",
       "RunnerTokenMetadata",
@@ -1767,7 +1908,10 @@
       "SectionVendorList",
       "SetCurrentNormSnapshotRequest",
       "SetExecutionPausedRequest",
+      "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
+      "SetExecutorRoutingModeRequest",
+      "SetExecutorRoutingRuleRequest",
       "SetExecutorSecretRequest",
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
@@ -1926,6 +2070,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0043_stage_ai_generations",
-  "contract_version": "1.14.0"
+  "migration_head": "0048_dispatch_time_binding",
+  "contract_version": "1.16.0"
 }

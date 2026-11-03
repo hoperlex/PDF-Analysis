@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from auditmanager.norms.paragraph_context import (
+    norm_paragraph_context_digest,
+    read_norm_paragraph_context,
+)
+
 if TYPE_CHECKING:
     from auditmanager.analysis.public import TextLayer
     from auditmanager.norms.references.observation_plan import ReferencePage
@@ -207,6 +212,8 @@ def reference_pages_from_text_layer(
 
 
 __all__ = [
+    "norm_paragraph_context_digest",
+    "read_norm_paragraph_context",
     "SET_BUILDER_VERSION",
     "SetIdentity",
     "ADMIT_COMMAND_TYPE",
