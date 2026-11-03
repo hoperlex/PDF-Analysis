@@ -35,7 +35,7 @@
   min-width: 24px;
   height: 24px;
   margin: 0;
-  padding: 0 6px;
+  padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-accent);
   border-radius: var(--am-radius-pill);
   background: var(--am-paper);
@@ -67,7 +67,7 @@
 
 /* A fragment the page does not contain, in the same warning tone as a mismatched anchor. */
 .unplaced {
-  padding: var(--am-gap-sm) 10px;
+  padding: var(--am-gap-sm);
   border-radius: var(--am-radius-sm);
   background: var(--am-degraded-light);
   color: var(--am-degraded);
