@@ -13,7 +13,9 @@ it (the integrator re-maps them):
 * **6, 7 -- a Run no member can take is not run:** ``execute_run`` raises the claim's refusal, calls no provider and leaves the Run and
   its Job queued and unchanged;
 * **17 -- the ``environment`` source never runs a pending Run:** it serves neither a Run with no connection nor one bound to a
-  connection, so the stage fails with ``executor_route_missing`` and the adapter is not called;
+  connection, so the stage fails with ``executor_route_missing`` and the adapter is not called; and a process that does not
+  dispatch groups (``dispatch_groups=False``, which the composition root sets for that source) does not even claim one: the
+  claim refuses it before any write, so the Run stays ``pending`` and queued for a worker that can bind it;
 * **18 -- every other Run reads as it did:** the row, the status body and the queue item of a Run whose executor was frozen at start
   carry none of the new fields;
 * **15 -- waiting is visible:** ``wait_reason`` and ``waiting_since`` reach the status and the queue item of a pending Run, and only
@@ -46,7 +48,7 @@ from auditmanager.executors.public import (
     request_probe,
     revise_connection,
 )
-from auditmanager.jobs.public import JobRepository
+from auditmanager.jobs.public import ExecutionNotClaimed, JobRepository
 from auditmanager.jobs.repository import GroupDispatchWaiting
 from auditmanager.runs import ProviderBinding, RunRepository, execute_run
 from auditmanager.shared.errors import ErrorCode
@@ -274,6 +276,32 @@ def test_the_environment_source_never_runs_group_work_even_when_the_claim_bound_
     stage = next(row for row in RunRepository().stage_results(session, run_id) if row.stage_id == "text_analysis")
     assert stage.error["code"] == "dependency_unavailable"
     assert stage.error["details"]["dependency"] == "executor_route_missing"
+
+
+def test_a_claim_of_a_process_that_does_not_dispatch_groups_leaves_a_pending_run_untouched(
+    session, blob_store, seeded, recorded_adapter, provider_config,
+) -> None:  # type: ignore[no-untyped-def]
+    """The ``environment`` source's worker: before, its claim bound a member and then failed the Run ``executor_route_missing``."""
+    member = ready_member(session)
+    run_id = make_run(session, seeded, group_revision_id=make_group(session, member))
+    adapter = Counting(recorded_adapter)
+    resolver = Resolver(adapter, provider_config)
+    before = run_row(session, run_id)
+
+    with pytest.raises(ExecutionNotClaimed) as refused:
+        execute_run(
+            session, run_id, blob_store=blob_store, adapter=adapter, provider_config=provider_config,
+            providers=resolver, text_profiles=resolve_reference_profile, jobs=JobRepository(dispatch_groups=False))
+
+    assert refused.value.code is ErrorCode.CONFLICT and not isinstance(refused.value, GroupDispatchWaiting)
+    assert adapter.calls == 0 and resolver.seen == [], "nothing was called, no provider was resolved"
+    assert run_row(session, run_id) == before, "the Run is still pending, queued, unbound and not waiting"
+    assert job_state(session, run_id) == "queued"
+    assert session.execute(text(
+        "SELECT count(*) FROM attempt a JOIN job j ON j.job_id = a.job_id WHERE j.run_id = :r"), {"r": run_id}).scalar_one() == 0
+    assert session.execute(text(
+        "SELECT count(*) FROM audit_event WHERE event_type = 'executor.run_dispatched' AND aggregate_id = :r"),
+        {"r": run_id}).scalar_one() == 0, "no binding was journalled"
 
 
 # --- 15, 18: the status and the queue ---------------------------------------------------------------------------------------------------

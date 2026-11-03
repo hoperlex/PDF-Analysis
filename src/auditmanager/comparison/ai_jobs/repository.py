@@ -82,13 +82,17 @@ _BIND = text(
     "waiting_since = NULL, updated_at = clock_timestamp() "
     "WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending'"
 )
+#: A job that has not ended: queued, running or paused (a pause keeps the wait it had, ``needs_reconsent`` being exactly a paused job's wait).
+_LIVE = "state IN ('queued', 'running', 'paused')"
 #: Say why a ``pending`` job waits and since when: the clock restarts when the reason changes and runs on while it stays. The answer is the seconds
-#: the job has waited for this reason, which is what the offline wait is measured on.
+#: the job has waited for this reason, which is what the offline wait is measured on. **Only a live job is given a wait**, as a Run is only while it
+#: is ``queued`` (``jobs.repository._WRITE_WAIT``): a job that was cancelled or failed between the caller's read and this write has already had its
+#: wait cleared (:data:`_MOVE`), and writing one now would leave an ended job waiting for an executor it will never get. It answers ``None`` then.
 _SET_WAIT = text(
     "UPDATE comparison_ai_job SET "
     "waiting_since = CASE WHEN wait_reason IS NOT DISTINCT FROM :reason THEN waiting_since ELSE clock_timestamp() END, "
     "wait_reason = :reason "
-    "WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' "
+    f"WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' AND {_LIVE} "
     "RETURNING EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since))"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id")
@@ -101,7 +105,6 @@ _LIVE_ON_SCOPE = {
     METHOD_SPEC: "method = 'spec' AND comparison_transition_id = :transition_id",
     METHOD_STAGE_REVIEW: "method = 'stage_review' AND stage_chain_run_id = :stage_chain_run_id",
 }
-_LIVE = "state IN ('queued', 'running', 'paused')"
 _LATEST_ON_SCOPE = {
     METHOD_PAIR_CHECK: "method = 'pair_check' AND document_uid = :document_uid",
     METHOD_SPEC: "method = 'spec' AND comparison_transition_id = :transition_id",
@@ -265,7 +268,8 @@ class AiJobRepository:
 
     def set_wait(self, session: Session, job_id: str, reason: str) -> float | None:
         """`EXEC2-GROUP-CMP-01`. Record that the ``pending`` job waits for ``reason`` and answer for how many seconds it has waited for
-        that reason (``None`` when the job is not ``pending``). The clock restarts when the reason changes."""
+        that reason (``None`` when the job is not ``pending`` or has ended: a cancelled or failed job is never given a wait). The
+        clock restarts when the reason changes."""
         if reason not in WAIT_REASONS:
             raise ValueError("a wait reason is one of the contract's three")
         found = session.execute(_SET_WAIT, {"job_id": job_id, "reason": reason}).scalar_one_or_none()

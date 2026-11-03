@@ -263,10 +263,24 @@ class DurableCarrier(ThreadCarrier):
 
     __slots__ = (
         "_sessions", "_runner", "_wake", "_stop", "_dispatch_thread",
-        "_active",
+        "_active", "_dispatch_groups", "_group_offline_wait_seconds",
     )
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self, session_factory: sessionmaker[Session], *, dispatch_groups: bool = True,
+        group_offline_wait_seconds: float | None = None,
+    ) -> None:
+        """``dispatch_groups`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 12) is ``True`` only when the provider source is
+        ``database``: with ``False`` the poller is offered no Run admitted on a group. ``group_offline_wait_seconds`` is
+        ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`` as the composition root read it; ``None`` reads the process environment
+        here. It is validated **now** -- a malformed value raises ``ValueError`` at construction, so the process does not
+        start -- and not on every pass of the poller."""
+        offline_wait = float(
+            JobRepository.group_offline_wait_seconds() if group_offline_wait_seconds is None
+            else group_offline_wait_seconds
+        )
+        if offline_wait <= 0:
+            raise ValueError("the offline wait of a group is positive")
         super().__init__(max_workers=RUN_CONCURRENCY)
         self._sessions = session_factory
         self._runner: Callable[[str], Callable[[], None]] | None = None
@@ -274,6 +288,12 @@ class DurableCarrier(ThreadCarrier):
         self._stop = threading.Event()
         self._dispatch_thread: threading.Thread | None = None
         self._active = False
+        self._dispatch_groups = dispatch_groups
+        self._group_offline_wait_seconds = offline_wait
+
+    @property
+    def dispatch_groups(self) -> bool:
+        return self._dispatch_groups
 
     def configure_runner(self, runner: Callable[[str], Callable[[], None]]) -> None:
         self._runner = runner
@@ -295,29 +315,44 @@ class DurableCarrier(ThreadCarrier):
         # already in PostgreSQL; the serving scheduler discovers it there.
         self._wake.set()
 
+    def _refresh_group_waits(self) -> None:
+        """Keep the wait of every Run admitted on a group true, and end the ones nobody can serve (ADR-0026 decision 15).
+
+        Housekeeping in a step of its own, as the worker service's: a pass that fails is logged -- by the category of the
+        failure, never its text, which may quote a row -- and tried again at the next interval, and it never keeps the poller
+        from looking for a Run to claim. The offline wait was validated when the carrier was built."""
+        try:
+            with self._sessions() as session:
+                JobRepository().refresh_group_waits(
+                    session, offline_wait_seconds=self._group_offline_wait_seconds,
+                )
+                session.commit()
+        except Exception as failure:
+            _log.error(
+                "durable dispatch: the group wait pass failed (%s); retried in %g s",
+                type(failure).__name__, GROUP_WAIT_SECONDS,
+            )
+
     def _poll(self) -> None:
         last_reclaim = 0.0
         last_waits = 0.0
         while not self._stop.is_set():
+            if monotonic() - last_waits >= GROUP_WAIT_SECONDS:
+                # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 15), outside the guard below: a failing wait pass is its own
+                # logged event and must not stop `next_queued_run`.
+                self._refresh_group_waits()
+                last_waits = monotonic()
             try:
                 if monotonic() - last_reclaim >= RECLAIM_SECONDS:
                     with self._sessions() as session:
                         JobRepository().reclaim_expired(session)
                         session.commit()
                     last_reclaim = monotonic()
-                if monotonic() - last_waits >= GROUP_WAIT_SECONDS:
-                    # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 15): keep the wait of every Run admitted on a group true
-                    # and end the ones whose members have all been offline for too long. A bad
-                    # AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS is logged by the handler below on every pass.
-                    with self._sessions() as session:
-                        JobRepository().refresh_group_waits(session)
-                        session.commit()
-                    last_waits = monotonic()
                 with self._lock:
                     busy = bool(self._pending)
                 if not busy:
                     with self._sessions() as session:
-                        run_id = JobRepository().next_queued_run(session)
+                        run_id = JobRepository(dispatch_groups=self._dispatch_groups).next_queued_run(session)
                     if run_id is not None:
                         assert self._runner is not None
                         super().submit(self._runner(run_id))
@@ -412,8 +447,14 @@ def run_to_terminal(
     text_profiles: Any = None,
     providers: Any = None,
     ar_v3_pack_registry: Any = None,
+    dispatch_groups: bool = True,
 ) -> None:
     """Execute one **queued** run to a terminal, in its own sessions.
+
+    ``dispatch_groups`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 12) is ``True`` only for a process that serves the
+    ``database`` provider source: with ``False`` the claim refuses a Run admitted on a group before it writes anything
+    (:class:`~auditmanager.jobs.public.ExecutionNotClaimed`, no wait reason), and the Run stays queued for a worker that can
+    bind it. The composition root passes it; a caller that passes nothing keeps the claim it always had.
 
     ``providers`` (`EXEC-HTTP-01`) is the composition root's provider resolver, handed to
     ``execute_run`` unchanged; ``None`` keeps ``adapter`` and ``provider_config`` for every run.
@@ -453,7 +494,7 @@ def run_to_terminal(
                 adapter=adapter,
                 provider_config=provider_config,
                 runs=run_repo,
-                jobs=JobRepository(worker_id=worker_id),
+                jobs=JobRepository(worker_id=worker_id, dispatch_groups=dispatch_groups),
                 text_profiles=text_profiles,
                 providers=providers,
                 ar_v3_pack_registry=ar_v3_pack_registry,

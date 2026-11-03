@@ -13,13 +13,18 @@ written directly. These tests are written and **not run** in EXEC-2 (`R-149d`, D
 * **lock order** -- worker intake, the group's row, the member connections in ascending ``connection_id``, the control row, the Run, the
   Job, read off the statements the claim sends (``test_the_claim_takes_its_locks_in_the_documented_order``);
 * **5 -- least loaded; equal members take turns** by the persisted rotation;
-* **6 -- every member busy: the Run waits** (``executor_at_capacity``), visibly and for ever, and is offered again the moment a unit
-  is free; **7 -- every member offline: ``runner_offline``**; **8 -- and after the configured time it ends ``no_executor_online``**;
+* **6 -- every member busy: the Run waits** (``executor_at_capacity``), visibly and for ever, and is offered again once the sweep has
+  seen a unit free on a member that can take it; **7 -- every member offline: ``runner_offline``**; **8 -- and after the configured
+  time it ends ``no_executor_online``**;
+* **a Run the claim will refuse is offered once** -- a group with one member offline and one full no longer stalls the dispatcher:
+  the refused Run carries its reason, another connection's Run is the next hint, and the sweep (which walks every pending Run in
+  pages) clears the reason only for a member that is eligible *and* free; a process that does not dispatch groups is offered none;
 * **9, 10 -- a member whose current revision is no longer the group's snapshot, or that is archived or not probed, is never chosen
   and never adopted;**
 * **11 -- two claimants for the last unit: one binding** -- between two threads, between two processes queued on the group's lock,
   and two claims of one Run;
-* **12 -- a consent that no longer holds binds nothing** (``needs_reconsent``), and the hint does not keep offering the Run;
+* **12 -- a consent that no longer holds binds nothing** (``needs_reconsent``), and the sweep ends the Run
+  (``analysis_input_invalid`` / ``cost_estimate_binding_changed``): a Run has no way to consent again;
 * **14 -- lease loss after binding: the retry stays on the bound member** even with another member free; **an ``outcome_unknown``
   is never redispatched**;
 * **18 -- a Run whose executor was frozen at start, the ``environment`` source included, claims as before**, and a pending Run's NULL
@@ -428,6 +433,9 @@ def test_a_run_waits_when_every_member_is_full_and_binds_when_a_unit_is_free(ses
         assert row(sessions, run_id)["waiting_since"] == waiting["waiting_since"], "the same reason keeps its clock"
 
         support.finish(sessions, authority_two)                         # one unit of `two` frees
+        assert hint(sessions) is None, "the stored reason holds the Run back until the sweep has seen a member that can take it"
+        sweep(sessions)
+        assert row(sessions, run_id)["wait_reason"] is None
         assert hint(sessions) == run_id, "a Run waiting only for capacity is offered when a member has a free unit"
         support.claim(sessions, run_id)
         bound = row(sessions, run_id)
@@ -731,7 +739,7 @@ def test_a_claim_that_rolls_back_leaves_the_member_to_the_process_waiting_behind
     {"billing": "metered"},
     {"executor_group_revision_id": "exgr_01M2545JSD15ETSNNV904X999R"},
 ])
-def test_a_consent_that_no_longer_holds_binds_nothing_and_the_hint_stops_offering_the_run(
+def test_a_consent_that_no_longer_holds_binds_nothing_and_the_sweep_ends_the_run(
     sessions: sessionmaker[Session], changes: dict[str, str],
 ) -> None:
     one = member(sessions)
@@ -742,13 +750,137 @@ def test_a_consent_that_no_longer_holds_binds_nothing_and_the_hint_stops_offerin
         before = snapshot(sessions, run_id, group_id)
         assert refuse(sessions, run_id).wait_reason == "needs_reconsent"
         assert snapshot(sessions, run_id, group_id) == before, "nothing is bound, nothing is written"
-        sweep(sessions)
-        assert row(sessions, run_id)["wait_reason"] == "needs_reconsent"
-        assert hint(sessions) == other, "the Run that needs a new consent is not offered again and again"
+
+        assert sweep(sessions).consent_lapsed == 1, "a Run cannot consent again, so it does not wait for ever"
+        ended = row(sessions, run_id)
+        assert ended["state"] == "failed" and ended["terminal_reason"] == "analysis_input_invalid"
+        assert dict(ended["terminal_detail"]) == {"stage_id": "text_analysis", "reason": "cost_estimate_binding_changed"}
+        assert ended["wait_reason"] is None and ended["waiting_since"] is None, "a finished Run waits for nothing"
+        assert ended["binding_state"] == "pending" and ended["connection_revision_id"] is None, "no connection was ever chosen"
+        assert support.job_state(sessions, run_id) == "cancelled" and support.attempts(sessions, run_id) == 0
+        (lapsed,) = events(sessions, run_id, "executor.group_consent_lapsed")
+        assert lapsed["reason"] == "cost_estimate_binding_changed" and set(lapsed) - {"run_id"} <= _SAFE_KEYS
+        assert sweep(sessions).consent_lapsed == 0, "ended once"
+        assert row(sessions, other)["state"] == "queued", "a Run whose consent holds is not touched by it"
+
+        assert hint(sessions) == other, "the ended Run is not offered again"
         support.claim(sessions, other)                                  # a Run whose consent holds is not held back by it
         assert row(sessions, other)["binding_state"] == "bound"
     finally:
         end(sessions, run_id, other)
+
+
+# --- a Run the claim will refuse is offered once ----------------------------------------------------------------------------------
+
+
+def test_a_group_run_the_claim_will_refuse_does_not_stall_the_dispatcher_or_hide_another_connections_run(
+    sessions: sessionmaker[Session],
+) -> None:
+    """A is offline and has a free unit, B is online and full. The hint's unit test passes every poll; the claim refuses every time.
+    Before: the same Run was returned for ever and no other Run (nor a comparison item) was claimed until B freed a unit."""
+    from auditmanager.runs.carrier import _record_group_wait
+
+    offline, full = member(sessions, online=False), member(sessions)
+    group_id, group_revision = group(sessions, offline, full)
+    held, _ = busy(sessions, full)
+    _plain_connection, plain_revision = support.new_connection(sessions, capacity=1)
+    pending = pending_run(sessions, group_revision)                     # the oldest queued Run
+    other = support.queue_run(sessions, plain_revision)                 # another connection's Run, behind it
+    try:
+        assert hint(sessions) == pending, "a freshly admitted Run has no reason yet: it is offered once"
+        refused = refuse(sessions, pending)
+        assert refused.wait_reason == "executor_at_capacity", "A is offline, B is full: the Run waits for capacity"
+        _record_group_wait(sessions, pending, refused)                  # the carrier's step after the refusal
+        assert row(sessions, pending)["wait_reason"] == "executor_at_capacity"
+
+        for _ in range(3):
+            assert hint(sessions) == other, "the refused Run is not offered again, however often the dispatcher polls"
+        authority = support.claim(sessions, other)
+        assert support.job_state(sessions, other) == "running", "the other connection's Run is claimed"
+        support.finish(sessions, authority)
+
+        waiting = row(sessions, pending)
+        sweep(sessions)
+        assert row(sessions, pending)["wait_reason"] == "executor_at_capacity", (
+            "a member that is free but offline does not clear the reason")
+        assert row(sessions, pending)["waiting_since"] == waiting["waiting_since"], "and the clock runs on"
+        assert hint(sessions) is None
+
+        end(sessions, held)                                             # B frees its unit
+        assert hint(sessions) is None, "not offered until the sweep has seen a member that can take it"
+        sweep(sessions)
+        assert row(sessions, pending)["wait_reason"] is None
+        assert hint(sessions) == pending
+        support.claim(sessions, pending)
+        assert row(sessions, pending)["connection_revision_id"] == full.revision_id, "A, offline, was never chosen"
+    finally:
+        end(sessions, pending, other, held)
+
+
+def test_a_group_run_with_a_stored_reason_of_any_kind_is_not_offered(sessions: sessionmaker[Session]) -> None:
+    one = member(sessions)
+    _group_id, group_revision = group(sessions, one)
+    pending = pending_run(sessions, group_revision)
+    try:
+        assert hint(sessions) == pending
+        for reason in ("executor_at_capacity", "runner_offline", "needs_reconsent"):
+            with sessions() as session:
+                JobRepository().record_group_wait(session, run_id=pending, reason=reason)
+                session.commit()
+            assert hint(sessions) is None, reason
+        with sessions() as session:
+            JobRepository().record_group_wait(session, run_id=pending, reason=None)
+            session.commit()
+        assert hint(sessions) == pending
+    finally:
+        end(sessions, pending)
+
+
+def test_the_sweep_walks_every_pending_run_and_not_only_the_oldest_page(sessions: sessionmaker[Session]) -> None:
+    one = member(sessions)
+    _group_id, group_revision = group(sessions, one)
+    runs = [pending_run(sessions, group_revision) for _ in range(5)]
+    try:
+        with sessions() as session:
+            for run_id in runs:
+                JobRepository().record_group_wait(session, run_id=run_id, reason="executor_at_capacity")
+            session.commit()
+        with sessions() as session:
+            report = JobRepository().refresh_group_waits(session, batch_size=2)      # 2 + 2 + 1, however many others there are
+            session.commit()
+        assert report.updated >= 5
+        assert [row(sessions, run_id)["wait_reason"] for run_id in runs] == [None] * 5, "the youngest Run was reached too"
+        assert hint(sessions) == runs[0]
+    finally:
+        end(sessions, *runs)
+
+
+def test_a_process_that_does_not_dispatch_groups_is_offered_no_pending_run_and_its_claim_leaves_the_run_alone(
+    sessions: sessionmaker[Session],
+) -> None:
+    """The ``environment`` source has no connection to bind a Run to: it neither hears of a pending Run nor claims one."""
+    one = member(sessions)
+    group_id, group_revision = group(sessions, one)
+    pending = pending_run(sessions, group_revision)                     # the oldest queued Run
+    environment = support.queue_run(sessions, None)
+    try:
+        assert hint(sessions) == pending, "a process that dispatches groups is offered it"
+        with sessions() as session:
+            assert JobRepository(dispatch_groups=False).next_queued_run(session) == environment
+
+        before = snapshot(sessions, pending, group_id)
+        with sessions() as session:
+            with pytest.raises(ExecutionNotClaimed) as refused:
+                JobRepository(dispatch_groups=False).start_execution(session, run_id=pending)
+        assert refused.value.code is ErrorCode.CONFLICT and not isinstance(refused.value, GroupDispatchWaiting)
+        assert snapshot(sessions, pending, group_id) == before, "refused before any write: not even the rotation moved"
+        assert row(sessions, pending)["binding_state"] == "pending" and support.attempts(sessions, pending) == 0
+        assert support.job_state(sessions, pending) == "queued"
+
+        support.claim(sessions, environment)                            # every other Run claims as it did
+        assert row(sessions, environment)["binding_state"] == "frozen_at_start"
+    finally:
+        end(sessions, pending, environment)
 
 
 # --- 14: no re-routing after binding --------------------------------------------------------------------------------------------

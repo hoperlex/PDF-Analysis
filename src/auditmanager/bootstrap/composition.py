@@ -40,6 +40,7 @@ from auditmanager.comparison.public import (
     HandlerRegistry,
     TileRenderer,
     WorkDependencies,
+    default_gates,
     WorkQueueError,
     enabled_modules as enabled_comparison_modules,
     parse_modules as parse_comparison_modules,
@@ -94,6 +95,7 @@ from auditmanager.bootstrap.adapters import (
 )
 from auditmanager.ingest.comparison_batch.public import BATCH_HANDLER_FACTORIES, ComparisonBatchService
 from auditmanager.ingest.comparison_pdf.public import ComparisonUploadService, ComparisonVersionOrderService
+from auditmanager.jobs.public import JobRepository
 from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
@@ -232,6 +234,19 @@ class WorkerRuntime:
     #: :func:`build_worker_runtime`; with ``AUDITMANAGER_COMPARISON_MODULES=none`` (the default)
     #: it claims nothing and only reclaims expired leases.
     comparison_work: ComparisonWorkRunner | None = None
+    #: `EXEC2-GROUP-RUN-01` (ADR-0026 decision 12): ``True`` only when the provider source is ``database`` -- the one source that
+    #: can bind a Run admitted on a group to a connection. :func:`build_worker_runtime` always sets it. The worker service takes
+    #: it (``WorkerService(dispatch_groups=runtime.dispatch_groups)``): with ``False`` it is offered no such Run and its claim
+    #: refuses one, as does ``execute`` (which was built with the same value).
+    dispatch_groups: bool = True
+
+
+def _dispatches_groups(settings: AppSettings) -> bool:
+    """Does this process serve the source that dispatches Runs admitted on a group? Only ``database`` does (ADR-0026 decision 12).
+
+    One question, asked in one place: the hint, the claim and the in-process poller all take its answer from here, so the
+    ``environment`` source can never offer, claim or run a ``pending`` Run (its adapter has no connection to bind one to)."""
+    return settings.provider_source == "database"
 
 
 class _ComparisonRoutes:
@@ -288,7 +303,7 @@ class _ComparisonRoutes:
 
 def build_comparison_work(
     *, sessions: sessionmaker[Session], engine: Any, blob_store: Any, environ: Mapping[str, str],
-    ring: Any = None,
+    ring: Any = None, dispatch_groups: bool = True,
 ) -> ComparisonWorkRunner:
     """`CMP-WORK-01` (ADR-0025 decisions 4, 6, 23): the comparison loop's brain, or a refusal.
 
@@ -324,6 +339,7 @@ def build_comparison_work(
     return ComparisonWorkRunner(
         sessions, registry=registry, modules=modules, repository=work,
         spend_settlers=COMPARISON_SPEND_SETTLERS,
+        gates=default_gates(dispatch_groups=dispatch_groups),
     )
 
 
@@ -376,6 +392,7 @@ def build_worker_runtime(
     # resolved through the same registry the application routes with.
     text_profiles = load_text_profiles()
     ar_v3_pack_registry = _ar_v3_pack_registry(env)
+    dispatch_groups = _dispatches_groups(resolved)
 
     def execute(run_id: str, worker_id: str) -> None:
         run_to_terminal(
@@ -388,6 +405,9 @@ def build_worker_runtime(
             text_profiles=text_profiles.resolve,
             providers=providers.resolve,
             ar_v3_pack_registry=ar_v3_pack_registry,
+            # `EXEC2-GROUP-RUN-01`: the claim of a Run admitted on a group is refused here, before it writes anything, unless
+            # this worker serves the source that can bind one.
+            dispatch_groups=dispatch_groups,
         )
 
     # `EXEC-PULL-PROBE-INT-01`: pull probes need no secret. Start the probe loop even
@@ -417,7 +437,9 @@ def build_worker_runtime(
         probe_runner=_passes(probe_runner, install_runner),
         comparison_work=build_comparison_work(
             sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
+            dispatch_groups=dispatch_groups,
         ),
+        dispatch_groups=dispatch_groups,
     )
 
 
@@ -525,14 +547,27 @@ def build_application(
     #
     # `W54-WORKER-01` (R-105). Under ``EXECUTION_ROLE=api`` the worker service claims and
     # this process only fences expired leases; ``all`` keeps W53's in-process claimant.
-    carrier: Any = (
-        ReclaimingCarrier(sessions) if resolved.execution_role == "api"
-        else DurableCarrier(sessions)
-    )
+    carrier: Any
+    if resolved.execution_role == "api":
+        carrier = ReclaimingCarrier(sessions)
+    else:
+        # `EXEC2-GROUP-RUN-01`. The in-process claimant is offered a Run admitted on a group only when the provider source is
+        # `database`, and ends offline group work after `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS` (ADR-0026 decision 15):
+        # read here, once, from the environment this application was built with, so a malformed value refuses the start
+        # instead of failing the poller on every pass. The `api` role never reads it.
+        try:
+            offline_wait = JobRepository.group_offline_wait_seconds(env)
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
+        carrier = DurableCarrier(
+            sessions, dispatch_groups=_dispatches_groups(resolved), group_offline_wait_seconds=offline_wait,
+        )
 
     ar_v3_installed_pack = _ar_v3_installed_pack(env)
     run_adapter = RunAdapter(
         sessions,
+        # `EXEC2-INT-3` (ADR-0026 decision 12): the in-process claim takes pending group Runs only on `database`.
+        dispatch_groups=_dispatches_groups(resolved),
         blob_store=store,
         adapter=model_adapter,
         provider_config=provider_config,

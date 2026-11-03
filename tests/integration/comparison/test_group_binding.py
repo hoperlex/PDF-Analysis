@@ -526,6 +526,24 @@ def test_a_job_whose_members_are_full_waits_for_capacity_without_end(db: Db) -> 
     assert not db.one("SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :w", w=mine.work_id)
 
 
+def test_a_job_that_ended_is_never_given_a_wait(db: Db) -> None:
+    """A job cancelled between the dispatcher's read and its write of the wait stays clear of it: nothing waits for an executor
+    it will never get, and the answer is ``None`` (the job is not waiting), exactly as for a job that is no longer pending."""
+    s = scene(db, online=False)
+    job_id = s.start().record.job_id
+    repository = AiJobRepository()
+    assert db.seed(lambda session: repository.set_wait(session, job_id, "runner_offline")) is not None, "a live job is given its wait"
+    assert db.job(job_id)["wait_reason"] == "runner_offline"
+
+    assert db.seed(lambda session: repository.move(session, job_id, from_states=["queued", "running"], to_state="cancelled"))
+    ended = db.job(job_id)
+    assert (ended["state"], ended["wait_reason"], ended["waiting_since"]) == ("cancelled", None, None), "a job that ends stops waiting"
+
+    assert db.seed(lambda session: repository.set_wait(session, job_id, "executor_at_capacity")) is None
+    after = db.job(job_id)
+    assert (after["state"], after["wait_reason"], after["waiting_since"]) == ("cancelled", None, None), "and is not given a wait afterwards"
+
+
 # --- 4. a consent that does not hold (decision 14) -----------------------------------------------------------------------------------
 
 

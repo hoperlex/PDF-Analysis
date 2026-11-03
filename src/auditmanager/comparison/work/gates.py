@@ -31,7 +31,7 @@ class ClaimGates:
     run_claimable: Callable[[Session], bool]
 
 
-def default_gates() -> ClaimGates:
+def default_gates(*, dispatch_groups: bool = True) -> ClaimGates:
     # Imported here: the gates are the only thing in this package that reaches those contexts, and
     # `comparison.public` is imported by processes that never claim.
     from auditmanager.execution.public import ExecutionRepository
@@ -41,6 +41,7 @@ def default_gates() -> ClaimGates:
         return ExecutionRepository().dispatch_status(session).paused
 
     def run_claimable(session: Session) -> bool:
-        return JobRepository().next_queued_run(session) is not None
+        # `EXEC2-INT-3`: a non-`database` process never counts a pending group Run as claimable.
+        return JobRepository(dispatch_groups=dispatch_groups).next_queued_run(session) is not None
 
     return ClaimGates(paused=paused, run_claimable=run_claimable)

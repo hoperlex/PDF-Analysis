@@ -78,6 +78,8 @@ def serve(environ: Mapping[str, str]) -> int:
         probe_runner=runtime.probe_runner,
         # `CMP-WORK-01`: the comparison queue's runner, claimed only when no Run is claimable.
         comparison_work=runtime.comparison_work,
+        # `EXEC2-INT-3` (ADR-0026 decision 12): only a `database`-source worker offers or claims pending group Runs.
+        dispatch_groups=runtime.dispatch_groups,
     )
     stop = threading.Event()
 
