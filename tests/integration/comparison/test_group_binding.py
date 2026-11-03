@@ -719,7 +719,12 @@ def test_a_job_stored_at_capacity_whose_group_goes_dark_ends_after_the_limit_fro
 
 def test_the_sweep_walks_every_page_on_real_rows(db: Db) -> None:
     first, second = scene(db, online=False), scene(db, online=False, mode=False)  # the mode is `rules` already
-    ids = [waiting_job(first)[0], waiting_job(second)[0]]
+    ids = [waiting_job(first)[0]]
+    # A job queues three items and the queue hands them out oldest first, whoever asks: the first job's other two are
+    # taken (and refused as waits, as the first one was) so that the second scene's claim reaches its own job's item.
+    for _ in range(2):
+        refuse(first, first.claim(), routes_over(Adapter(reply()))[0])
+    ids.append(waiting_job(second)[0])
     for job_id in ids:
         age_wait(db, job_id, "31 minutes")
     with recorded_sql(db) as statements:

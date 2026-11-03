@@ -19,6 +19,7 @@ from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE, Subject, build_signer
 from tests.integration.ingest.comparison_batch.support import distinct_pdf
 from tests.integration.ingest.comparison_pdf.support import parts_of, sha256
+from tests.support.connection_budget import dispose_application
 
 SECRET = "comparison-batch-http-suite"
 SEEN_PROJECT = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -57,7 +58,11 @@ def api(ingest_database, s3_settings, session_factory):
         API_TOKEN_VARIABLE: SECRET,
     }
     application = create_app(environ=environ)
-    return TestClient(create_asgi_app(environ=environ, application=application), raise_server_exceptions=False)
+    try:
+        yield TestClient(create_asgi_app(environ=environ, application=application), raise_server_exceptions=False)
+    finally:
+        # One application per test, each with an engine of its own: without this each test left a connection open.
+        dispose_application(application)
 
 
 @pytest.fixture

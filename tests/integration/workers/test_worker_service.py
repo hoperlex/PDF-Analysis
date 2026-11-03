@@ -154,9 +154,8 @@ def _cancel(sessions: sessionmaker[Session], run_id: str) -> None:
 @pytest.fixture
 def start_worker(
     engine: Engine, sessions: sessionmaker[Session], blob_store: Any,
-    provider_config: Any, tmp_path: Path,
+    provider_config: Any, tmp_path: Path, started_services: list[WorkerService],
 ) -> Iterator[Callable[..., WorkerService]]:
-    started: list[WorkerService] = []
 
     def start(
         adapter: Any, *, poll_seconds: float = 0.3, heartbeat_seconds: float = 0.5,
@@ -175,16 +174,11 @@ def start_worker(
             heartbeat_seconds=heartbeat_seconds, reclaim_seconds=reclaim_seconds,
             state_dir=state_dir,
         )
+        started_services.append(service)  # before start(): a service that fails half way is stopped too
         service.start()
-        started.append(service)
         return service
 
-    try:
-        yield start
-    finally:
-        for service in started:
-            service.drain(timeout=RUN_SECONDS)
-            service.stop()
+    yield start  # `started_services` drains and stops every service after this fixture, pass or fail
 
 
 # --- only the worker claims -----------------------------------------------------------------

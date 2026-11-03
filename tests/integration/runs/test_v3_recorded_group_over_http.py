@@ -216,6 +216,9 @@ class _SwappedSource:
         self._source = source
         self._adapter = adapter
         self.freeze = source.freeze
+        #: `EXEC2-GROUP-RUN-01`: the composition root hands the run path ``admit_group`` as well; the swapped source
+        #: forwards it as it forwards ``freeze`` (the ``environment`` source has none, and then this is ``None``).
+        self.admit_group = source.admit_group
 
     def resolve(self, session: Session, run: Any, context: Any) -> Any:
         return dataclasses.replace(self._source.resolve(session, run, context), adapter=self._adapter)

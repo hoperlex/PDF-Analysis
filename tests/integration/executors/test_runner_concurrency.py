@@ -21,6 +21,7 @@ item 11) is the design documents', which are not in the repository; each test sa
 
 from __future__ import annotations
 
+import hashlib
 import threading
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -313,8 +314,9 @@ def _commit_stand(sessions: sessionmaker[Session], *, limit: int, tokens: int, t
             s.execute(text(
                 "INSERT INTO executor_runner_token (token_id, connection_id, token_prefix, token_hash, "
                 "created_by, expires_at) VALUES (:t, :c, :p, :h, :a, clock_timestamp() + interval '1 day')"),
-                {"t": token_id, "c": connection_id, "p": "amr_" + token_id[-8:].lower(), "h": b"h" * 32,
-                 "a": ACTOR})
+                {"t": token_id, "c": connection_id, "p": "amr_" + token_id[-8:].lower(),
+                 # one hash per token: `uq_executor_runner_token_hash` refuses two tokens with the same one
+                 "h": hashlib.sha256(token_id.encode()).digest(), "a": ACTOR})
             token_ids.append(token_id)
         attempt = live_attempt(s)
         store = RunnerRepository()

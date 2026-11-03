@@ -172,8 +172,11 @@ class Stand:
 
 # ------------------------------------------------------------------------------------ CLI stand-ins
 
+# The stand-ins run with the PATH the agent gives a client: only the directories it searched. So they use
+# nothing but shell built-ins -- ``${0%/*}`` is the directory, where ``dirname`` is a program that PATH does not
+# hold and whose absence made the log land in ``/calls.log`` at the filesystem root.
 _CODEX = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls.log"
+echo "$@" >> "${{0%/*}}/calls.log"
 case "$1" in
   --version) echo "codex-cli {version}"; exit 0 ;;
   login)
@@ -186,7 +189,7 @@ exit 2
 """
 
 _CLAUDE = """#!/bin/sh
-echo "$@" >> "$(dirname "$0")/calls.log"
+echo "$@" >> "${{0%/*}}/calls.log"
 case "$1" in
   --version) echo "{version} (Claude Code)"; exit 0 ;;
   auth)

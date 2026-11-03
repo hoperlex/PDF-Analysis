@@ -177,7 +177,7 @@ def test_a_client_that_hangs_is_killed_and_reported_unknown_within_the_limit(tmp
     bin_dir, home = tmp_path / "bin", tmp_path / "home"
     home.mkdir()
     codex = A.make_cli(bin_dir, "codex", "0.46.0")
-    codex.write_text('#!/bin/sh\ncase "$1" in --version) echo "codex-cli 0.46.0"; exit 0;; esac\nsleep 30\n')
+    codex.write_text('#!/bin/sh\ncase "$1" in --version) echo "codex-cli 0.46.0"; exit 0;; esac\n/bin/sleep 30\n')
     started = time.monotonic()
     clis = _by_name(detect.detect_all(environ=_env(home, bin_dir), timeout=0.5))
     assert time.monotonic() - started < 10
@@ -188,7 +188,7 @@ def test_the_client_gets_a_reduced_environment_and_a_closed_stdin(tmp_path):
     bin_dir, home = tmp_path / "bin", tmp_path / "home"
     home.mkdir()
     probe = A.make_cli(bin_dir, "codex", "0.46.0")
-    probe.write_text('#!/bin/sh\nenv > "$(dirname "$0")/env.txt"\nread line < /dev/stdin && echo "stdin:$line" >> "$(dirname "$0")/env.txt"\n'
+    probe.write_text('#!/bin/sh\n/usr/bin/env > "${0%/*}/env.txt"\nread line < /dev/stdin && echo "stdin:$line" >> "${0%/*}/env.txt"\n'
                      'case "$1" in --version) echo "codex-cli 0.46.0";; esac\nexit 0\n')
     detect.detect_cli("codex", environ=_env(home, bin_dir, SECRET_THING="x", PDF_ANALYSIS_RUNNER_TOKEN="amr_nope"))
     seen = (bin_dir / "env.txt").read_text()

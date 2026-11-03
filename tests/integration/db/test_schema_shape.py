@@ -39,7 +39,12 @@ BANNED_COLUMN_NAMES = {
 }
 
 # `0030_executor_connections`: the route of each kind of model work is appended, never edited.
-APPEND_ONLY_TABLES = {"expert_decision_event", "audit_event", "executor_route_event"}
+# `0047_executor_groups_rules` (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17): a rule revision and a routing-mode change
+# are appended, never edited; the current rule and the current mode are queries over them.
+APPEND_ONLY_TABLES = {
+    "expert_decision_event", "audit_event", "executor_route_event",
+    "executor_routing_rule_revision", "executor_routing_mode_event",
+}
 
 IMMUTABLE_TABLES = {
     "document_version",
@@ -110,6 +115,10 @@ IMMUTABLE_TABLES = {
     # `0041_comparison_stage_core`: assembly acts, full maps and raw evidence are append-only.
     "stage_assembly", "stage_assembly_member", "stage_link_revision", "stage_link_item",
     "stage_text_fragment", "stage_text_exclusion", "stage_text_difference", "stage_text_hint",
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`, ADR-0026 decision 10): a group revision and its member snapshots are
+    # written once, and a changed group is a new revision. The group row itself is never deleted (``am_immutable_row``
+    # guards DELETE only; its name and creation are frozen, its archive is write-once and its rotation cursor advances).
+    "executor_group", "executor_group_revision", "executor_group_member",
 }
 
 
@@ -278,6 +287,10 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     # ``target_kind`` names, like ``aggregate_id``; ``ck_norm_custody_role_shape`` checks it
     # per kind.
     "target_id",
+    # `0046_executor_capacity_enroll` (ADR-0026 decision 3): the name an agent process gives itself in a claim
+    # (``runner_instance_id``), 8 to 64 characters of ``A-Za-z0-9_-`` -- the agent's own random string, not an
+    # entity this product mints; ``ck_executor_task_claimed_by_instance_id`` checks its shape.
+    "claimed_by_instance_id",
 }
 
 
@@ -479,6 +492,20 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "target_fragment_id": "stf",
         "stage_chain_run_id": "crn",
         "stage_chain_step_id": "cst",
+        # `EXEC2-SEAL-1`, migration 0046 (ADR-0026 decisions 3, 4 and 7): an enrollment grant and the runner token it
+        # produced, an install session and the sealed key it holds.
+        "enrollment_id": "exen",
+        "runner_token_id": "ern",
+        "install_id": "exai",
+        "key_secret_id": "exs",
+        # `EXEC2-SEAL-2`, migrations 0047 and 0048 (ADR-0026 decisions 10 to 12): a group revision (a member row, a rule and a
+        # Run or comparison job name it), a rule revision (a Run or job names the one that admitted it) and a routing-mode
+        # change.
+        "group_revision_id": "exgr",
+        "executor_group_revision_id": "exgr",
+        "rule_revision_id": "exrr",
+        "routing_rule_revision_id": "exrr",
+        "mode_event_id": "exrm",
     }
     assert set(prefix_by_column.values()) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

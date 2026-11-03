@@ -187,6 +187,8 @@ PORT_FOR_ARGUMENT = {
     "comparison_stage_links": "ComparisonStageLinkPort",
     "comparison_stage_text": "ComparisonStageTextPort",
     "comparison_stage_runs": "ComparisonStageRunPort",
+    # `CMP-SEAL-C4`: the chain-run, review and repair operations of the stage.
+    "comparison_stage_c4": "ComparisonStageC4Port",
 }
 
 

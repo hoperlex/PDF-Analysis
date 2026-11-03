@@ -20,6 +20,7 @@ import pytest
 from auditmanager.comparison.public import ComparisonWorkRunner, UnhandledKindError
 from auditmanager.jobs.public import JobRepository
 from auditmanager.workers.public import WorkerService
+from tests.support.worker_services import stop_all
 
 pytestmark = pytest.mark.usefixtures("quiet_runs")
 
@@ -48,14 +49,14 @@ def start_service(engine, sessions) -> Iterator[Callable[..., WorkerService]]:  
             version="cmp-work-01-test", slots=slots, poll_seconds=0.2, heartbeat_seconds=0.5,
             reclaim_seconds=0.5, comparison_work=runner,
         )
+        started.append(service)  # before start(): a service that fails half way is stopped too
         service.start()
-        started.append(service)
         return service
 
-    yield start
-    for service in started:
-        service.drain(timeout=WAIT)
-        service.stop()
+    try:
+        yield start
+    finally:
+        stop_all(started, drain_timeout=WAIT)  # every service, whatever happened to the test or to the one before it
 
 
 @pytest.fixture

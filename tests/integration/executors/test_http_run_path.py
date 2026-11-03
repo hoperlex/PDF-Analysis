@@ -402,7 +402,8 @@ def test_a_new_kind_plugs_in_by_registering_a_factory_and_is_handed_the_attempt_
         return original.factory(revision, api_key, policy, context)
 
     register_adapter_factory("http_api", recording, purpose=original.purpose,
-                             serves=original.serves, provider_label=original.provider_label)
+                             serves=original.serves, provider_label=original.provider_label,
+                             additional_purposes=original.additional_purposes)
     try:
         connection = support.seed_connection(session, rings, fake.vpn_url())
         providers = _providers(rings, fake)
@@ -413,8 +414,11 @@ def test_a_new_kind_plugs_in_by_registering_a_factory_and_is_handed_the_attempt_
         attempt_id = session.execute(text(
             "SELECT attempt_id FROM provider_call_effect WHERE run_id = :r"), {"r": started.run_id}).scalar_one()
     finally:
+        # Every field of the entry that was there: a registry that comes back with one field fewer (it once lost
+        # ``additional_purposes``, so an ``ssh_tunnel`` revision was no longer given its key) changes every test after this.
         register_adapter_factory("http_api", original.factory, purpose=original.purpose,
-                                 serves=original.serves, provider_label=original.provider_label)
+                                 serves=original.serves, provider_label=original.provider_label,
+                                 additional_purposes=original.additional_purposes)
         fake.stop()
     (revision, key, context), = seen
     assert revision.revision_id == connection.revision_id and key == support.KEY

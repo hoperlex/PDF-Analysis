@@ -580,7 +580,9 @@ def test_the_single_portal_block_image_path_is_what_it_was(tmp_path):
         runner.add_image(image["blob_id"], raw)
         proc, code, records = _list_run(tmp_path, runner, [S.make_task("ext_ONE", images=[image])])
         assert code == 0, proc.stderr
-        assert runner.of_kind("claim")[0]["body"] == {"wait_seconds": 1}
+        # `EXEC2-PULL-01`: every claim also names the process (`runner_instance_id`); the rest is as it was.
+        sent = {k: v for k, v in runner.of_kind("claim")[0]["body"].items() if k != "runner_instance_id"}
+        assert sent == {"wait_seconds": 1}, "the wire every agent has always spoken, bar the process name"
         seen = json.loads((records / "ext_ONE.images.json").read_text())
         assert seen[0]["portal_block_id"] == image["portal_block_id"] and seen[0]["crop_id"] is None
         assert runner.of_kind("answer")

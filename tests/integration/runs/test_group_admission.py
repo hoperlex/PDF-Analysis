@@ -332,7 +332,7 @@ def test_an_unknown_group_is_validation_failed_on_the_field(session, world) -> N
 def test_an_archived_group_is_a_conflict_with_its_reason(session, world) -> None:  # type: ignore[no-untyped-def]
     created = make_group(session, pull_member(session))
     archive_group(session, group_id=created.group.group_id, roles=ROLES, idempotency_key=key(), actor_uid=ACTOR)
-    _refused(session, world, ErrorCode.CONFLICT, {"conflict_reason": "group_archived"},
+    _refused(session, world, ErrorCode.CONFLICT, {"conflict_reason": "group_archived", "aggregate_type": "ExecutorGroup"},
              executor_group_id=created.group.group_id)
 
 
@@ -440,5 +440,6 @@ def test_a_repeat_of_a_group_start_whose_group_was_archived_is_refused_and_write
     with pytest.raises(DomainError) as caught:
         with session.begin_nested():
             shown["preflight"].estimate_reaudit(session, run_id=source.run_id)
-    assert caught.value.code is ErrorCode.CONFLICT and dict(caught.value.detail_fields) == {"conflict_reason": "group_archived"}
+    assert caught.value.code is ErrorCode.CONFLICT and dict(caught.value.detail_fields) == {
+        "conflict_reason": "group_archived", "aggregate_type": "ExecutorGroup"}
     assert counters(session) == before

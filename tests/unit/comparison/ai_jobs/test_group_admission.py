@@ -53,8 +53,8 @@ from auditmanager.shared.identity import (
     ExecutorGroupRevisionId,
     ExecutorRoutingRuleRevisionId,
     ProjectUid,
-    UserUid,
 )
+from auditmanager.shared.identity.ids import UserUid
 
 NOW = datetime(2026, 11, 3, 9, 0, tzinfo=timezone.utc)
 SHA = "ab" * 32
@@ -105,8 +105,9 @@ class Executors:
     def _rule(self, session: Any, work_kind: str, groups: Any = None) -> Any:
         if self.rule is None:
             return None
+        named = self.revisions.get(self.rule_revision)  # a rule may name a revision that is gone: then there is no group to read
         return SimpleNamespace(rule_revision_id=self.rule, work_kind=work_kind, rule_no=1, group_revision_id=self.rule_revision,
-                               group_id=self.revisions[self.rule_revision].group_id)
+                               group_id=named.group_id if named is not None else GROUP_NEW)
 
     def _legacy(self, session: Any, work_kind: str, repository: Any = None) -> Any:
         self.legacy_reads += 1

@@ -8,6 +8,7 @@ stand reads.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -97,8 +98,12 @@ def test_the_archive_is_sorted_rootless_and_carries_no_time_owner_or_name(tmp_pa
     raw = archive.read_bytes()
     assert raw[:2] == b"\x1f\x8b" and raw[3] == 0, "gzip header: no file name (FLG = 0)"
     assert raw[4:8] == b"\x00\x00\x00\x00", "gzip header: no time"
-    with tarfile.open(archive, "r:gz") as handle:
-        assert handle.format == tarfile.USTAR_FORMAT
+    # `TarFile.format` of an archive opened for reading is the library's default (PAX since Python 3.8), not what the
+    # archive was written in; the format is in the first header block: the POSIX ustar magic and version at offset 257,
+    # and a regular file (typeflag `0`) first, not a pax extended header (`x`).
+    tar = gzip.decompress(raw)
+    assert tar[257:265] == b"ustar\x0000", "POSIX ustar, not GNU ('ustar  ') and not the old v7 header"
+    assert tar[156:157] == tarfile.REGTYPE, "the first block is a file, not a pax extended header"
 
 
 def test_the_content_is_the_sources_and_the_version_the_argument(tmp_path):
@@ -181,9 +186,12 @@ def test_the_api_image_builds_the_package_where_the_stand_reads_it():
     _, build_stage, final_stage = re.split(r"^FROM ", dockerfile, flags=re.M)
     assert re.search(r"^COPY VERSION \S+$", build_stage, re.M)
     assert re.search(r"^COPY tools/executor-runner/ \S+$", build_stage, re.M)
-    run = re.search(r"^RUN python \S*package\.py\b[^\n]*(?:\\\n[^\n]*)*", build_stage, re.M)
+    # A continued line is one instruction: join the continuations first, then read the instruction to its end. (A
+    # pattern that reads `[^\n]*` and then a continuation cannot work: the first group has already taken the backslash.)
+    instructions = build_stage.replace("\\\n", " ")
+    run = re.search(r"^RUN python \S*package\.py\b[^\n]*", instructions, re.M)
     assert run is not None
-    command = run.group(0).replace("\\\n", " ")
+    command = run.group(0)
     assert '--version "$(cat ' in command and "--out /app/agent-package" in command
     assert "COPY --from=build /app/agent-package/ /app/agent-package/" in final_stage
     from_lines = re.findall(r"^FROM (\S+)", dockerfile, re.M)
