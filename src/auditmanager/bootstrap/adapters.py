@@ -121,16 +121,45 @@ def _execution_cursor(raw: str | None) -> str | None:
     return parts[0]
 
 
-def _queue_cursor(raw: str | None) -> "QueuePosition | None":
-    """Decode only coordinates issued by the queue's versioned page format."""
+def _queue_scope(
+    state: str | None, created_from: datetime | None, created_to: datetime | None,
+) -> tuple[str, str, str] | None:
+    """The filters a queue page was read under, as the three words a cursor carries; ``None`` for no filter.
+
+    An instant is written in UTC, so the same moment sent with two offsets is the same scope."""
+    if state is None and created_from is None and created_to is None:
+        return None
+
+    def instant(value: datetime | None) -> str:
+        return "" if value is None else value.astimezone(timezone.utc).isoformat()
+
+    return (state or "", instant(created_from), instant(created_to))
+
+
+def _queue_cursor(raw: str | None, scope: tuple[str, str, str] | None = None) -> "QueuePosition | None":
+    """Decode only coordinates issued by the queue's versioned page format, under the filters they were issued for.
+
+    ``q1`` is the page of an unfiltered listing, exactly as it always was. A filtered listing issues ``q2``, which
+    carries its filters (`UI-PARITY-QUEUE-A`): the same coordinates mean another page under another filter, so a
+    cursor presented with filters other than its own is refused as ``constraint: scope`` (the refusal the comparison
+    stage listings already give), never read as a position in a different list."""
     from auditmanager.execution.public import QueuePosition
 
     if raw is None:
         return None
     parts = decode_cursor(raw)
-    if len(parts) != 5 or parts[0] != "q1":
+    tag = parts[0] if parts else ""
+    if tag == "q1" and len(parts) == 5:
+        if scope is not None:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="scope")
+        coordinates = parts[1:]
+    elif tag == "q2" and len(parts) == 8:
+        if scope is None or tuple(parts[1:4]) != scope:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="scope")
+        coordinates = parts[4:]
+    else:
         raise DomainError(ErrorCode.VALIDATION_FAILED, field="cursor", constraint="format")
-    _, rank_text, priority_text, created_text, job_id = parts
+    rank_text, priority_text, created_text, job_id = coordinates
     try:
         rank = int(rank_text)
         priority = int(priority_text)
@@ -150,6 +179,25 @@ def _queue_cursor(raw: str | None) -> "QueuePosition | None":
     return QueuePosition(rank, priority, created_at, job_id)
 
 
+def _queue_item_model(row: Any, facts: Mapping[str, Mapping[str, Any]]) -> models.ExecutionQueueItem:
+    """One queue item of the wire from a read row and the binding facts of its run.
+
+    A member the row does not have is **left unset** (never ``None``), so the answer omits it: the contract
+    declares ``started_at``, ``finished_at``, ``error_code`` and ``interrupted_reason`` absent, not null."""
+    return models.ExecutionQueueItem(**{
+        "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
+        "priority": row.priority, "created_at": row.created_at, "available_at": row.available_at,
+        "project_uid": row.project_uid, "project_name": row.project_name,
+        "document_uid": row.document_uid, "document_name": row.document_name,
+        "version_uid": row.version_uid, "version_ordinal": row.version_ordinal,
+        **_unset_none(
+            started_at=row.started_at, finished_at=row.finished_at,
+            error_code=row.error_code, interrupted_reason=row.interrupted_reason,
+        ),
+        **facts.get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
+    })
+
+
 class ExecutionAdapter(_SessionHolder):
     """Map the sealed execution port to the owning run/job commands and read projection."""
 
@@ -163,31 +211,37 @@ class ExecutionAdapter(_SessionHolder):
 
         return AccountRepository().roles_of(session, user_uid)
 
-    def list_queue(self, *, cursor: str | None, limit: int) -> models.ExecutionQueuePage:
+    def list_queue(
+        self, *, cursor: str | None, limit: int, state: str | None = None,
+        created_from: datetime | None = None, created_to: datetime | None = None,
+    ) -> models.ExecutionQueuePage:
         from auditmanager.execution.public import ExecutionRepository
+
+        scope = _queue_scope(state, created_from, created_to)
 
         def read(session: Session) -> models.ExecutionQueuePage:
             repo = ExecutionRepository()
-            after = _queue_cursor(cursor)
-            rows = repo.list_queue(session, cursor=after, limit=limit + 1)
+            after = _queue_cursor(cursor, scope)
+            rows = repo.list_queue(
+                session, cursor=after, limit=limit + 1,
+                state=state, created_from=created_from, created_to=created_to,
+            )
             items = rows[:limit]
             if len(rows) > limit:
                 position = items[-1].position
-                next_cursor = encode_cursor((
-                    "q1", str(position.rank), str(position.priority),
+                coordinates = (
+                    str(position.rank), str(position.priority),
                     position.created_at.astimezone(timezone.utc).isoformat(),
                     position.job_id,
-                ))
+                )
+                next_cursor = encode_cursor(
+                    ("q1", *coordinates) if scope is None else ("q2", *scope, *coordinates)
+                )
             else:
                 next_cursor = None
             facts = _queue_binding_facts(session, [row.run_id for row in items])  # EXEC2-GROUP-RUN-01
             return models.ExecutionQueuePage(
-                items=[models.ExecutionQueueItem(**{
-                    "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
-                    "priority": row.priority, "created_at": row.created_at,
-                    "available_at": row.available_at,
-                    **facts.get(row.run_id, {}),
-                }) for row in items],
+                items=[_queue_item_model(row, facts) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
             )
@@ -280,12 +334,7 @@ class ExecutionAdapter(_SessionHolder):
             row = ExecutionRepository().get_queue_item(session, job_id)
             if row is None:
                 raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Job")
-            return models.ExecutionQueueItem(**{
-                "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
-                "priority": row.priority, "created_at": row.created_at,
-                "available_at": row.available_at,
-                **_queue_binding_facts(session, [row.run_id]).get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
-            })
+            return _queue_item_model(row, _queue_binding_facts(session, [row.run_id]))
         return self._write(write)
 
     def set_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> models.ExecutionDispatchStatus:

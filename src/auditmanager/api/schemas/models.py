@@ -1044,7 +1044,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.17.0"]
+    contract_version: Literal["1.18.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1681,7 +1681,14 @@ class RunStatusPage(_Object):
 class ExecutionQueueItem(_Object):
     __doc__ = (
         "`EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a "
-        "group (`pending` while it waits for an executor)."
+        "group (`pending` while it waits for an executor). `UI-PARITY-QUEUE-A` (contract 1.18.0): the queue names what "
+        "it lists. Every job executes exactly one audit run of one version of one document (`job.run_id` is "
+        "not null and unique), so `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and "
+        "`version_ordinal` are always present; the two names and the ordinal are joined at read time and stored "
+        "nowhere. `started_at` is the creation time of the job's first attempt and is absent while no attempt "
+        "exists; `finished_at` is the time the job reached a terminal state and is absent while it has not; "
+        "`error_code` is the run's `terminal_reason` and `interrupted_reason` the run's own, each absent when the "
+        "run records none. An absent property is omitted, never sent as null."
     )
 
     job_id: JobId
@@ -1690,6 +1697,17 @@ class ExecutionQueueItem(_Object):
     priority: int
     created_at: datetime
     available_at: datetime
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    document_name: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    #: The version's display number (``v1``, ``v2``): the only label a version has, and not an identity.
+    version_ordinal: Annotated[int, Field(ge=1)]
+    started_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    interrupted_reason: str = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     binding_state: ExecutorBindingState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
