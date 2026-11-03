@@ -145,9 +145,14 @@ def journey(client: TestClient, expert: dict[str, str]) -> dict[str, Any]:
     )
     assert classified.status_code == 200, classified.content
 
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): the served startRun routes an АР version to the draft АР
+    # text profile now, and (`REVIEW-FIX-TESTS-1102`) every served start needs a priced consent, so a bare start is
+    # refused on the consent. The published run the journey reads is still made in-process: the oracle carries the
+    # v1 reference profile's run, not a run of the draft АР profile.
     refused = client.post("/runs", headers=expert | _key("run"), json={"version_uid": version})
     assert refused.status_code == 422, refused.content
-    assert refused.json()["error_code"] == "section_profile_unavailable", refused.content
+    assert refused.json()["error_code"] == "validation_failed", refused.content
+    assert refused.json()["details"] == {"field": "cost_consent", "constraint": "confirmation_required"}, refused.content
     run_id = publish_reference_run(version, tag="spec-table")
     run = client.get(f"/runs/{run_id}", headers=expert)
     assert run.status_code == 200, run.content
