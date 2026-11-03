@@ -14,7 +14,10 @@ statements themselves**. B3 section 11 numbers are the task file's reading (the 
 * **9, 10 -- a member whose current revision is no longer the group's snapshot, or that is archived, unserved or not probed
   is never chosen** and never adopted;
 * **12 -- a consent that no longer holds binds nothing and reads no member** (``needs_reconsent``);
-* the hint's SQL keeps the old shape for every other Run and offers a pending one only for a free member.
+* the hint's SQL keeps the old shape for every other Run and offers a pending one only while nothing holds it back (no stored
+  wait reason: a Run the claim refused is offered **once**) and only for a free member, and never to a process that does not
+  dispatch groups; the sweep walks every pending Run, clears a reason only for a member that is eligible *and* free, decides the
+  offline expiry on the locked row and ends a Run whose consent no longer holds.
 
 ``tests/integration/jobs/test_group_dispatch.py`` runs the same rules on PostgreSQL, including the two-process race. Written
 and **not run** in EXEC-2 (`R-149d`).
@@ -379,10 +382,75 @@ def test_the_hint_keeps_the_old_test_for_every_run_that_is_not_pending_and_adds_
     pending = sql[sql.index("r.binding_state = 'pending'"):]
     assert "executor_group_member" in pending and "group_member.group_revision_id = r.executor_group_revision_id" in pending
     assert "loaded.units" in pending and "max_active_runs" in pending, "units held < capacity, per member"
-    assert "r.wait_reason IS DISTINCT FROM 'needs_reconsent'" in pending
-    assert "r.wait_reason IS DISTINCT FROM 'runner_offline'" in pending
     assert sql.rstrip().endswith("FOR UPDATE OF r SKIP LOCKED")
     assert "ORDER BY j.priority DESC, j.created_at, j.job_id LIMIT 1" in sql, "the order is unchanged"
+
+
+def test_the_hint_offers_a_pending_run_only_while_nothing_holds_it_back() -> None:
+    """A Run the claim will refuse is offered once: with any stored reason it is not offered at all (`EXEC2-GROUP-RUN-01`)."""
+    sql = str(jobs._NEXT_JOB)
+    pending = sql[sql.index("r.binding_state = 'pending'"):]
+    assert "AND r.wait_reason IS NULL" in pending, "a stored reason of any kind keeps the Run out of the hint"
+    assert "DISTINCT FROM" not in pending, "no list of reasons that are excluded: every reason is"
+    for reason in ("executor_at_capacity", "runner_offline", "needs_reconsent"):
+        assert reason not in pending
+    assert pending.index("r.wait_reason IS NULL") < pending.index("executor_group_member"), "the reason comes before the unit test"
+    old = sql[:sql.index("r.binding_state = 'pending'")]
+    assert "wait_reason" not in old, "the old branch for every other Run does not read it"
+
+
+def test_the_hint_offers_no_pending_run_to_a_process_that_does_not_dispatch_groups() -> None:
+    sql = str(jobs._NEXT_JOB)
+    pending = sql[sql.index("r.binding_state = 'pending'"):]
+    assert "CAST(:dispatch_groups AS boolean)" in pending
+    assert "dispatch_groups" not in sql[:sql.index("r.binding_state = 'pending'")], "it gates the pending branch only"
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_the_hint_is_asked_with_the_repositorys_dispatch_flag_and_the_submitted_runs(flag: bool) -> None:
+    session = Recorder()
+    JobRepository(dispatch_groups=flag).next_queued_run(session, submitted=("run_a",))  # type: ignore[arg-type]
+    ((sql, parameters),) = session.statements
+    assert sql == str(jobs._NEXT_JOB)
+    assert parameters == {"submitted": ["run_a"], "dispatch_groups": flag}
+
+
+def test_a_repository_dispatches_groups_unless_told_otherwise() -> None:
+    assert JobRepository().dispatch_groups is True and JobRepository(worker_id="wrk_x").dispatch_groups is True
+    assert JobRepository(dispatch_groups=False).dispatch_groups is False
+
+
+class _ClaimView:
+    """A session that answers the claim's first read (the Run's binding) and records every statement it is handed."""
+
+    def __init__(self, row: Any) -> None:
+        self.row, self.statements = row, []
+
+    def execute(self, statement: Any, parameters: Any = None) -> Any:
+        self.statements.append((str(statement), dict(parameters or {})))
+        return _Result(self.row)
+
+
+def test_a_process_that_does_not_dispatch_groups_refuses_a_pending_run_before_any_lock_or_write() -> None:
+    session = _ClaimView(("pending", GROUP_REVISION))
+    with pytest.raises(ExecutionNotClaimed) as caught:
+        JobRepository(worker_id="wrk_x", dispatch_groups=False).start_execution(session, run_id=RUN)  # type: ignore[arg-type]
+    assert caught.value.code is ErrorCode.CONFLICT and not isinstance(caught.value, GroupDispatchWaiting)
+    assert getattr(caught.value, "wait_reason", None) is None, "an ordinary refusal: no reason is stored for it"
+    assert len(session.statements) == 1, "only the binding was read"
+    sql = session.statements[0][0]
+    assert sql == str(jobs._CLAIM_BINDING) and "FOR " not in sql
+    assert "ExecutorGroup" in str(caught.value.detail_fields.get("aggregate_type", ""))
+
+
+def test_a_process_that_does_not_dispatch_groups_still_reads_every_other_run_as_it_did() -> None:
+    """A frozen Run reaches the connection path (and its first statement), exactly as with the flag on."""
+    for row in (("frozen_at_start", None), ("bound", GROUP_REVISION)):
+        session = _ClaimView(row)
+        with pytest.raises(Exception) as caught:
+            JobRepository(dispatch_groups=False).start_execution(session, run_id=RUN)  # type: ignore[arg-type]
+        assert not (isinstance(caught.value, ExecutionNotClaimed) and caught.value.detail_fields.get("aggregate_type") == "ExecutorGroup")
+        assert len(session.statements) > 1, "the claim went on past the binding read"
 
 
 def test_the_binding_write_names_the_pending_state_so_a_second_write_changes_no_row() -> None:
@@ -400,40 +468,68 @@ def test_a_wait_is_rewritten_only_when_its_reason_changes() -> None:
 # --- 6, 7, 8: the sweep keeps the waits true and ends the Runs nobody can serve ----------------------------------------------
 
 
-class _Mapped:
+class _Page:
+    """What ``.mappings()`` of the sweep's reads answers: the rows of a page, or the one locked row."""
+
     def __init__(self, rows: list[dict[str, Any]]) -> None:
         self._rows = rows
 
-    def mappings(self) -> "_Mapped":
+    def mappings(self) -> "_Page":
         return self
 
     def all(self) -> list[dict[str, Any]]:
         return self._rows
 
+    def first(self) -> dict[str, Any] | None:
+        return self._rows[0] if self._rows else None
+
 
 class Sweeper:
-    """A session for ``refresh_group_waits``: it answers the pending Runs and the per-Run lock, and records the rest."""
+    """A session for ``refresh_group_waits``: it answers the pages of pending Runs (keyset, as the statement asks) and the
+    per-Run lock, and records the rest. A page carries what the statement selects; ``wait_expired`` is answered only by the lock,
+    from the row **as locked** -- ``locked`` overrides it per Run, to show the sweep decides on that and not on the page."""
 
-    def __init__(self, rows: list[dict[str, Any]], *, locked: bool = True) -> None:
-        self.rows, self.locked, self.statements = rows, locked, []
+    def __init__(
+        self, rows: list[dict[str, Any]], *, locked: bool = True, as_locked: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        self.rows, self.locked, self.as_locked, self.statements = rows, locked, as_locked or {}, []
 
     def execute(self, statement: Any, parameters: Any = None) -> Any:
-        sql = str(statement)
-        self.statements.append((sql, dict(parameters or {})))
+        sql, params = str(statement), dict(parameters or {})
+        self.statements.append((sql, params))
         if sql.startswith("SELECT r.run_id, r.executor_group_revision_id"):
-            return _Mapped(self.rows)
-        if sql.startswith("SELECT run_id FROM audit_run WHERE run_id"):
-            return _Result(("locked",) if self.locked else None)
+            ordered = sorted(self.rows, key=lambda row: (row["created_at"], row["run_id"]))
+            if params["after_run_id"] is not None:
+                ordered = [row for row in ordered
+                           if (row["created_at"], row["run_id"]) > (params["after_created_at"], params["after_run_id"])]
+            return _Page([{key: value for key, value in row.items() if key != "wait_expired"}
+                          for row in ordered[:params["batch_size"]]])
+        if sql.startswith("SELECT run_id, wait_reason, waiting_since"):
+            if not self.locked:
+                return _Page([])
+            row = next(item for item in self.rows if item["run_id"] == params["run_id"])
+            return _Page([{"run_id": row["run_id"], "wait_reason": row["wait_reason"], "waiting_since": None,
+                           "wait_expired": row["wait_expired"], **self.as_locked.get(row["run_id"], {})}])
         return _Result()
+
+    def locks(self) -> list[str]:
+        return [params["run_id"] for sql, params in self.statements if sql.startswith("SELECT run_id, wait_reason, waiting_since")]
+
+    def pages(self) -> list[dict[str, Any]]:
+        return [params for sql, params in self.statements if sql.startswith("SELECT r.run_id, r.executor_group_revision_id")]
+
+
+_CREATED = iter(range(10_000))
 
 
 def _pending(run_id: str, *, wait: str | None = None, expired: bool = False) -> dict[str, Any]:
-    return {"run_id": run_id, "group_revision_id": GROUP_REVISION, "wait_reason": wait, "wait_expired": expired}
+    return {"run_id": run_id, "group_revision_id": GROUP_REVISION, "created_at": next(_CREATED), "wait_reason": wait,
+            "wait_expired": expired}
 
 
 @pytest.fixture
 def sweep(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    seen = SimpleNamespace(written=[], ended=[], failed=[], events=[])
+    seen = SimpleNamespace(written=[], ended=[], lapsed=[], failed=[], events=[])
 
     def record(self: JobRepository, session: Any, *, run_id: str, reason: str | None) -> bool:
         seen.written.append((run_id, reason))
@@ -442,8 +538,12 @@ def sweep(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> SimpleName
     def end(self: JobRepository, session: Any, *, run_id: str) -> None:
         seen.ended.append(run_id)
 
+    def lapse(self: JobRepository, session: Any, *, run_id: str) -> None:
+        seen.lapsed.append(run_id)
+
     monkeypatch.setattr(JobRepository, "record_group_wait", record)
     monkeypatch.setattr(JobRepository, "_end_without_executor", end)
+    monkeypatch.setattr(JobRepository, "_end_consent_lapsed", lapse)
     return seen
 
 
@@ -460,9 +560,20 @@ def test_a_run_with_every_member_full_waits_for_capacity_and_that_never_expires(
     world: SimpleNamespace, sweep: SimpleNamespace,
 ) -> None:
     world.facts = [_facts(A, used=1), _facts(B, used=1)]
-    report = _refresh([_pending("run_a", wait="executor_at_capacity", expired=True)])
-    assert sweep.written == [("run_a", "executor_at_capacity")] and sweep.ended == []
-    assert report.expired == 0
+    report = _refresh([_pending("old", wait="executor_at_capacity", expired=True), _pending("fresh")])
+    assert sweep.written == [("fresh", "executor_at_capacity")], "a reason that is still true is kept, not rewritten"
+    assert sweep.ended == [] and report.expired == 0 and report.updated == 1
+
+
+def test_a_free_member_that_is_offline_does_not_clear_the_wait_of_a_run_the_online_member_is_too_full_for(
+    world: SimpleNamespace, sweep: SimpleNamespace,
+) -> None:
+    """The stall: A has a free unit and is offline, B is online and full. Only a member with **no issue** clears a reason."""
+    world.facts = [_facts(A, online=False), _facts(B, used=1)]
+    report = _refresh([_pending("kept", wait="executor_at_capacity"), _pending("fresh"), _pending("stale", wait="runner_offline")])
+    assert sweep.written == [("fresh", "executor_at_capacity"), ("stale", "executor_at_capacity")], (
+        "set where there was none, replaced where it was another, kept where it was true -- and never cleared")
+    assert report.updated == 2
 
 
 def test_a_run_whose_members_are_all_offline_starts_its_clock_and_is_not_ended_by_one_look(
@@ -492,12 +603,49 @@ def test_a_member_coming_back_online_resets_the_clock_instead_of_ending_the_run(
     assert sweep.ended == [] and sweep.written == [("old", "executor_at_capacity")]
 
 
-def test_a_consent_that_no_longer_holds_is_stored_as_needs_reconsent_whatever_the_members_are(
+def test_the_offline_expiry_is_decided_on_the_locked_row_and_not_on_the_page_that_named_the_run(
+    world: SimpleNamespace, sweep: SimpleNamespace,
+) -> None:
+    """Between the page and the lock a claim or an earlier pass changed the wait; what is read under the lock decides."""
+    world.facts = [_facts(A, online=False), _facts(B, online=False)]
+    rows = [_pending("page_says_old", wait="runner_offline", expired=True), _pending("page_says_young", wait="runner_offline")]
+    report = _refresh(rows, as_locked={
+        "page_says_old": {"wait_reason": "runner_offline", "wait_expired": False},        # rewritten since: young again
+        "page_says_young": {"wait_reason": "runner_offline", "wait_expired": True},       # actually old under the lock
+    })
+    assert sweep.ended == ["page_says_young"], "the locked values decided, not the page's"
+    assert sweep.written == [("page_says_old", "runner_offline")] and (report.expired, report.updated) == (1, 1)
+    run = _refresh([_pending("changed", wait="runner_offline", expired=True)], as_locked={"changed": {"wait_reason": "executor_at_capacity"}})
+    assert run.expired == 0 and sweep.ended == ["page_says_young"], "an expired clock of another reason is no expiry"
+
+
+def test_the_lock_returns_what_the_expiry_is_decided_on_and_skips_a_run_a_claim_holds() -> None:
+    sql = str(jobs._LOCK_PENDING_RUN)
+    assert sql.startswith("SELECT run_id, wait_reason, waiting_since,")
+    assert "waiting_since <= statement_timestamp() - make_interval(secs => :offline_seconds)) AS wait_expired" in sql
+    assert sql.endswith("FOR UPDATE SKIP LOCKED")
+    assert "binding_state = 'pending' AND state = 'queued'" in sql
+
+
+def test_a_consent_that_no_longer_holds_ends_the_run_whatever_the_members_are(
     world: SimpleNamespace, sweep: SimpleNamespace,
 ) -> None:
     world.consent = False
-    _refresh([_pending("run_a")])
-    assert sweep.written == [("run_a", "needs_reconsent")]
+    for facts in ([_facts(A), _facts(B)], [_facts(A, used=1), _facts(B, used=1)], [_facts(A, online=False), _facts(B, online=False)]):
+        world.facts = facts
+        sweep.lapsed.clear()
+        report = _refresh([_pending("run_a"), _pending("run_b", wait="needs_reconsent"), _pending("run_c", wait="runner_offline")])
+        assert sweep.lapsed == ["run_a", "run_b", "run_c"] and report.consent_lapsed == 3
+    assert sweep.written == [] and sweep.ended == [], "needs_reconsent is not stored by the sweep: the Run ends"
+
+
+def test_a_consent_that_holds_is_not_ended_and_a_run_whose_consent_lapsed_while_a_claim_holds_it_is_left_alone(
+    world: SimpleNamespace, sweep: SimpleNamespace,
+) -> None:
+    assert _refresh([_pending("run_a", wait="executor_at_capacity")]).consent_lapsed == 0
+    world.consent = False
+    report = _refresh([_pending("claiming")], locked=False)
+    assert sweep.lapsed == [] and report == jobs.GroupWaits()
 
 
 def test_runs_of_one_group_revision_share_one_reading_of_its_members(world: SimpleNamespace, sweep: SimpleNamespace) -> None:
@@ -508,17 +656,93 @@ def test_runs_of_one_group_revision_share_one_reading_of_its_members(world: Simp
 
 
 def test_a_run_a_claim_holds_is_skipped_not_waited_for(world: SimpleNamespace, sweep: SimpleNamespace) -> None:
-    session = Sweeper([_pending("claiming")], locked=False)
+    session = Sweeper([_pending("claiming", wait="executor_at_capacity")], locked=False)
     report = JobRepository().refresh_group_waits(session, offline_wait_seconds=1800)  # type: ignore[arg-type]
     assert sweep.written == [] and sweep.ended == [] and report == jobs.GroupWaits()
-    locking = [sql for sql, _ in session.statements if sql.startswith("SELECT run_id FROM audit_run")]
+    locking = [sql for sql, _ in session.statements if sql.startswith("SELECT run_id, wait_reason")]
     assert locking and "SKIP LOCKED" in locking[0]
 
 
-def test_the_pass_reads_the_oldest_pending_runs_in_a_bounded_batch(world: SimpleNamespace, sweep: SimpleNamespace) -> None:
+def test_a_run_whose_wait_is_already_true_is_not_locked_at_all(world: SimpleNamespace, sweep: SimpleNamespace) -> None:
+    """The lock is held to the caller's commit; a pass over many Runs must not hold one for each of them for nothing."""
+    world.facts = [_facts(A), _facts(B)]                                                  # a member is free
+    session = Sweeper([_pending("free"), _pending("full", wait="executor_at_capacity")])
+    JobRepository().refresh_group_waits(session, offline_wait_seconds=1800)  # type: ignore[arg-type]
+    assert session.locks() == ["full"], "a Run with nothing to write is not locked; the one to clear is"
+    assert sweep.written == [("full", None)]
+    world.facts = [_facts(A, used=1), _facts(B, used=1)]                                  # every member is full
+    session = Sweeper([_pending("waiting", wait="executor_at_capacity")])
+    JobRepository().refresh_group_waits(session, offline_wait_seconds=1800)  # type: ignore[arg-type]
+    assert session.locks() == [] and sweep.written == [("full", None)]
+
+
+def test_the_pass_walks_every_pending_run_in_pages_by_keyset_and_none_stays_hidden(
+    world: SimpleNamespace, sweep: SimpleNamespace,
+) -> None:
+    rows = [_pending(f"run_{n}", wait="executor_at_capacity") for n in range(5)]          # all stale: a member is free
+    session = Sweeper(rows)
+    report = JobRepository().refresh_group_waits(session, offline_wait_seconds=60, batch_size=2)  # type: ignore[arg-type]
+    assert [run for run, _ in sweep.written] == [f"run_{n}" for n in range(5)] and report.updated == 5
+    pages = session.pages()
+    assert len(pages) == 3, "2 + 2 + 1: the short page ends the pass"
+    assert pages[0] == {"batch_size": 2, "after_created_at": None, "after_run_id": None}
+    assert (pages[1]["after_created_at"], pages[1]["after_run_id"]) == (rows[1]["created_at"], "run_1")
+    assert (pages[2]["after_created_at"], pages[2]["after_run_id"]) == (rows[3]["created_at"], "run_3")
+
+
+def test_a_full_last_page_is_followed_by_one_more_read_that_finds_nothing(world: SimpleNamespace, sweep: SimpleNamespace) -> None:
+    rows = [_pending(f"run_{n}", wait="executor_at_capacity") for n in range(4)]
+    session = Sweeper(rows)
+    JobRepository().refresh_group_waits(session, offline_wait_seconds=60, batch_size=2)  # type: ignore[arg-type]
+    assert len(session.pages()) == 3 and len(sweep.written) == 4
+
+
+def test_the_pages_are_a_keyset_in_the_order_of_the_pending_index() -> None:
+    sql = str(jobs._PENDING_RUNS)
+    assert "binding_state = 'pending' AND r.state = 'queued' AND j.state = 'queued'" in sql
+    assert "(r.created_at, r.run_id) > (CAST(:after_created_at AS timestamptz), CAST(:after_run_id AS text))" in sql
+    assert "ORDER BY r.created_at, r.run_id LIMIT :batch_size" in sql and "OFFSET" not in sql
+    assert "wait_expired" not in sql, "what the expiry is decided on is read under the lock"
+
+
+def test_a_page_holds_at_least_one_run() -> None:
+    with pytest.raises(ValueError):
+        JobRepository().refresh_group_waits(Sweeper([]), batch_size=0)  # type: ignore[arg-type]
+
+
+def test_the_pass_reads_the_oldest_pending_runs_first_in_a_bounded_page(world: SimpleNamespace, sweep: SimpleNamespace) -> None:
     session = Sweeper([])
     JobRepository().refresh_group_waits(session, offline_wait_seconds=60, batch_size=7)  # type: ignore[arg-type]
     sql, parameters = session.statements[0]
-    assert parameters == {"offline_seconds": 60.0, "batch_size": 7}
+    assert parameters == {"batch_size": 7, "after_created_at": None, "after_run_id": None}
     assert "binding_state = 'pending' AND r.state = 'queued' AND j.state = 'queued'" in sql
     assert "ORDER BY r.created_at, r.run_id" in sql
+
+
+# --- 15: the Run whose consent lapsed ends, visibly, through the terminal path of the offline expiry -----------------------------
+
+
+def test_the_consent_lapse_closes_the_job_fails_the_run_and_journals_one_allowlisted_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    taken: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(JobRepository, "_close_for_run", lambda self, session, *, run_id, target: taken.append(("job", run_id, target)))
+    monkeypatch.setattr(runs_public, "fail_run_consent_lapsed",
+                        lambda session, *, run_id, from_state: taken.append(("run", run_id, from_state)))
+    session = Recorder()
+    JobRepository()._end_consent_lapsed(session, run_id=RUN)  # type: ignore[arg-type]
+    assert taken == [("job", RUN, "failed"), ("run", RUN, "queued")], "the Job first, then the Run, as the offline expiry does"
+    (event,) = [params for sql, params in session.statements if sql.lstrip().startswith("INSERT INTO audit_event")]
+    assert event["event_type"] == "executor.group_consent_lapsed" and event["event_type"].startswith("executor.")
+    payload = json.loads(event["payload"])
+    assert payload == {"run_id": RUN, "work_kind": "text_analysis", "reason": "cost_estimate_binding_changed"}
+    assert set(payload) - {"run_id"} <= _SAFE_KEYS
+
+
+def test_the_reason_a_lapsed_consent_ends_a_run_with_is_the_run_paths_own_refusal() -> None:
+    from auditmanager.analysis.text import cost
+    from auditmanager.runs import cost_policy
+
+    assert jobs.CONSENT_LAPSED_REASON == "cost_estimate_binding_changed"
+    for source in (cost, cost_policy):
+        assert f'reason="{jobs.CONSENT_LAPSED_REASON}"' in open(source.__file__, encoding="utf-8").read(), source.__name__

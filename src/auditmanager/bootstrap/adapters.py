@@ -878,6 +878,7 @@ class RunAdapter(_SessionHolder):
         providers: Any = None,
         route_freezer: Any = None,
         ar_v3_pack_registry: Any = None,
+        dispatch_groups: bool = True,
         ar_v3_installed_pack: Any = None,
         preset_resolver: Any = None,
         cost_preflight: Any = None,
@@ -902,6 +903,8 @@ class RunAdapter(_SessionHolder):
         self._providers = providers
         self._route_freezer = route_freezer
         self._ar_v3_pack_registry = ar_v3_pack_registry
+        # `EXEC2-INT-3`: the in-process claim refuses pending group Runs unless the source is `database`.
+        self._dispatch_groups = dispatch_groups
         # `AR-V3-BETA-PACK-STATUS-API-01`. The parsed manifest the registry above was built from
         # (``ParsedPackManifest``), or ``None`` while none is installed. Only the status read uses
         # it; group start and the executor still decide from the registry.
@@ -1219,6 +1222,7 @@ class RunAdapter(_SessionHolder):
                 text_profiles=self._text_profiles,
                 providers=self._providers,
                 ar_v3_pack_registry=self._ar_v3_pack_registry,
+                dispatch_groups=self._dispatch_groups,
             )
 
         return job

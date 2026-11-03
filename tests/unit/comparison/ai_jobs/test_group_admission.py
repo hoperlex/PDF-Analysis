@@ -520,6 +520,18 @@ def test_the_wait_statement_restarts_the_clock_only_when_the_reason_changes() ->
     assert "binding_state = 'pending'" in sql and "RETURNING" in sql
 
 
+def test_only_a_live_job_is_given_a_wait() -> None:
+    """The twin of the Run's ``_WRITE_WAIT`` (``state = 'queued'``): a cancelled or failed job is never given a wait."""
+    sql = str(_SET_WAIT)
+    assert "AND state IN ('queued', 'running', 'paused')" in sql, "queued, running or paused (a pause keeps its wait)"
+    for ended in ("completed", "failed", "cancelled"):
+        assert ended not in sql
+    assert sql.index("binding_state = 'pending'") < sql.index("state IN ('queued', 'running', 'paused')") < sql.index("RETURNING")
+    # the same three states are what the repository calls live everywhere else
+    from auditmanager.comparison.ai_jobs.model import JOB_STATES, JOB_TERMINAL_STATES
+    assert set(JOB_STATES) - set(JOB_TERMINAL_STATES) == {"queued", "running", "paused"}
+
+
 def test_a_job_that_ends_stops_waiting() -> None:
     sql = str(_MOVE)
     assert "wait_reason = CASE WHEN :terminal THEN NULL ELSE wait_reason END" in sql
