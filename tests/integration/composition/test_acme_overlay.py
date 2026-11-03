@@ -191,8 +191,16 @@ def test_the_base_file_gained_no_acme_service_and_no_tls_term() -> None:
     guard in `test_proxy_tls_path.py` asserts the same for `tls` and `443`; this adds the new service."""
     base = services(BASE.read_text())
     assert "acme" not in base
+    lines = code(BASE.read_text())
+    # `EXEC2-INT-1` (520e7e4d, ADR-0026 decisions 4 and 6): the `api` and the `worker` take the stand's public origin
+    # from `AUDITMANAGER_PUBLIC_ORIGIN`, defaulting to `https://` + the certificate name. That is ONE environment line
+    # in each of those two services, and no acme service, certificate volume or TLS term: it is the only mention of
+    # the name the base may carry, and it must be exactly this line, exactly twice.
+    derived_origin = "AUDITMANAGER_PUBLIC_ORIGIN: ${AUDITMANAGER_PUBLIC_ORIGIN:-https://${ALPHA_CERT_NAME:-}}"
+    assert [line.strip() for line in lines].count(derived_origin) == 2
+    lines = [line for line in lines if line.strip() != derived_origin]
     for forbidden in ("acme", "certs", "ALPHA_CERT_NAME", "letsencrypt"):
-        assert forbidden not in "\n".join(code(BASE.read_text())), forbidden
+        assert forbidden not in "\n".join(lines), forbidden
 
 
 # --- the ACME service's isolation -----------------------------------------------------------------------------------------

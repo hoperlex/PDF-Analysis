@@ -40,6 +40,7 @@ checking: ``OPERATING_CONSTRAINTS.md`` section 12 records three instances of tha
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -595,6 +596,32 @@ ACCOUNT_LABEL = "w13-baseline"
 #: with -- under ``KJ`` for this journey only, so every run record is what it was and only the four
 #: records that carry the classification moved, by the section code and nothing else.
 CLASSIFICATION_REQUEST = {"project_stage": "P", "section_code": "KJ"}
+
+
+#: `BETA-COST-PREFLIGHT-1030` / `REVIEW-FIX-TESTS-1102` (S6-02). The composition root sets
+#: ``require_cost_consent=True``, so the served ``startRun`` answers ``422 validation_failed``
+#: (``cost_consent`` / ``confirmation_required``) to a start that carries no confirmed consent, and the journey
+#: starts its run the way the web client does: it asks ``POST /runs/cost-estimate`` for the price of its own
+#: version and sends that estimate's digest and recommended ceiling back. The shipped default plan is the
+#: extended review, which a recorded run cannot finish (none of its further calls is in the recordings), so the
+#: price asked and accepted is the plain analysis's, the run this corpus was captured with. The switch is read
+#: where the cost is estimated (``runs/preflight.py``), by the estimate and again by the start that recomputes
+#: it; the worker reads what the consent says, never the environment. Written out, not imported.
+PLAIN_ANALYSIS_SWITCH = "AUDITMANAGER_EXTENDED_ANALYSIS"
+ESTIMATE_RUN_TARGET = "/runs/cost-estimate"
+
+
+@contextlib.contextmanager
+def plain_analysis_pricing() -> Iterator[None]:
+    previous = os.environ.get(PLAIN_ANALYSIS_SWITCH)
+    os.environ[PLAIN_ANALYSIS_SWITCH] = "0"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(PLAIN_ANALYSIS_SWITCH, None)
+        else:
+            os.environ[PLAIN_ANALYSIS_SWITCH] = previous
 
 
 _STATIC_TOKEN_CACHE: str | None = None
@@ -1346,24 +1373,74 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     correlation(classified, t)
     content_length(classified, t)
 
+    # 2c -- startRun without a priced consent: asserted here, deliberately not a record --------
+    # `BETA-COST-PREFLIGHT-1030`: the contract behaviour a start without a confirmed consent now has, asserted
+    # rather than re-captured. It is not a record because every error body carries `contract_version`, which
+    # `test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else` pins for sixteen
+    # historical records and asserts whole: a seventeenth error record would put an unexamined literal in the
+    # corpus. A failed assertion here fails the journey itself, so every record's test goes red with this
+    # message. The refusal is raised before the idempotency key is claimed, so it writes nothing and the
+    # start of case 03 is a fresh one.
+    with plain_analysis_pricing():
+        unpriced_status, _unpriced_headers, unpriced_payload = api.send(
+            "POST",
+            "/runs",
+            headers={
+                AUTHORIZATION_HEADER: f"Bearer {static_token()}",
+                "Idempotency-Key": f"w13base-{tag}-unpricedrun",
+                **json_headers,
+            },
+            body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+        )
+    refusal = json.loads(unpriced_payload.decode("utf-8"))
+    assert unpriced_status == 422, (unpriced_status, refusal)
+    assert refusal["error_code"] == "validation_failed", refusal
+    assert refusal["retryable"] is False, refusal
+    assert refusal["details"] == {
+        "field": "cost_consent", "constraint": "confirmation_required",
+    }, refusal
+
+    # The estimate the person confirms is a read: not a record (the corpus covers sixteen operations and a
+    # price is a function of the pins and the prompt, which this corpus does not own), but it is asserted.
+    with plain_analysis_pricing():
+        estimate_status, _estimate_headers, estimate_payload = api.send(
+            "POST",
+            ESTIMATE_RUN_TARGET,
+            headers={AUTHORIZATION_HEADER: f"Bearer {static_token()}", **json_headers},
+            body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+        )
+    assert estimate_status == 200, (estimate_status, estimate_payload)
+    estimate = json.loads(estimate_payload.decode("utf-8"))
+    assert estimate["version_uid"] == version_uid, estimate
+    assert estimate["scope"] == "run" and estimate["provider_mode"] == "recorded", estimate
+    consent = {
+        "estimate_digest": estimate["estimate_digest"],
+        "ceiling_micros": estimate["recommended_ceiling_micros"],
+        "confirmed": True,
+    }
+
     # 3 -- startRun -----------------------------------------------------------------
     # D-5: the operation a browser saw answer 500 twice. Captured as early as its
     # prerequisites allow, and in full -- status, every header, every byte.
     t = Tokens()
-    started = record(
-        "03-startRun.success",
-        "startRun",
-        "D-5's operation, and D-20's. 202, and the shape of a run that has been "
-        "*accepted*: the non-terminal state, the provider mode, no stages yet, the "
-        "pinned profile and bundle identities, the empty degradation set",
-        "POST",
-        "/runs",
-        headers={"Idempotency-Key": f"w13base-{tag}-run", **json_headers},
-        body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
-        body_note="StartRunRequest, version_uid only; provider_mode omitted",
-        tokens=t,
-        exception=EXCEPTION_W20EXEC,
-    )
+    with plain_analysis_pricing():
+        started = record(
+            "03-startRun.success",
+            "startRun",
+            "D-5's operation, and D-20's. 202, and the shape of a run that has been "
+            "*accepted*: the non-terminal state, the provider mode, no stages yet, the "
+            "pinned profile and bundle identities, the empty degradation set",
+            "POST",
+            "/runs",
+            headers={"Idempotency-Key": f"w13base-{tag}-run", **json_headers},
+            body=json.dumps({"version_uid": version_uid, "cost_consent": consent}).encode("utf-8"),
+            body_note=(
+                "StartRunRequest, version_uid and the cost_consent taken from the estimate of "
+                "the same version (BETA-COST-PREFLIGHT-1030); provider_mode omitted"
+            ),
+            tokens=t,
+            exception=EXCEPTION_W20EXEC,
+        )
     run = json_of(started)
     run_id = run["run_id"]
     assert run["analysis_profile_id"] == ANALYSIS_PROFILE_ID, run["analysis_profile_id"]
@@ -1396,7 +1473,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "POST",
         "/runs",
         headers={"Idempotency-Key": f"w13base-{tag}-run", **json_headers},
-        body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+        body=json.dumps({"version_uid": version_uid, "cost_consent": consent}).encode("utf-8"),
         body_note="byte-identical to case 03, under the same Idempotency-Key",
         tokens=t,
         exception=EXCEPTION_W57ASEAL_RUN_STATUS,
@@ -1426,7 +1503,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
         "/runs",
         headers={"Idempotency-Key": f"w13base-{tag}-run", **json_headers},
         body=json.dumps(
-            {"version_uid": version_uid, "provider_mode": "recorded"}
+            {"version_uid": version_uid, "provider_mode": "recorded", "cost_consent": consent}
         ).encode("utf-8"),
         body_note="the key of case 03, with provider_mode stated explicitly",
         tokens=t,

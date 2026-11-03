@@ -8,6 +8,38 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-11-04 by `EXEC2-FIX-BETA-STUBS`, after `BETA-COST-PREFLIGHT-1030`
+
+**Thirty-seven records, none added and none moved in its response: the journey's `startRun` now carries a
+priced consent, and the refusal that replaced it is asserted, not recorded.** Since the beta cost preflight
+(`6ea9459f`, `4972c18a`, `REVIEW-FIX-TESTS-1102`) the composition root closes `require_cost_consent`, so the served
+`startRun` answers `422 validation_failed` (`details`: `cost_consent` / `confirmation_required`) to a start with no
+confirmed consent. Measured on the lane at `ac527550`, the session fixture died at case 03 (`KeyError: 'run_id'`) and
+all 53 tests of this corpus errored.
+
+*Decision.* The refusal is the intended contract behaviour, not a defect to record around, so the journey no longer
+re-states the old request. It (1) sends the start of case 02b's version without a consent and **asserts** the refusal
+(status, `error_code`, `retryable`, the exact `details`); (2) asks `POST /runs/cost-estimate` for the price of that
+version and asserts the answer is that version's, recorded-mode, run-scope estimate; (3) starts with the consent taken
+from that estimate (digest and recommended ceiling, `confirmed: true`), exactly as the web client does. Both the
+estimate and the start are made with the shipped extended review switched off (`AUDITMANAGER_EXTENDED_ANALYSIS=0`,
+`plain_analysis_pricing`), because none of the extended review's further calls is in the recording this corpus replays;
+the price consented to is therefore the plain analysis's, the run this corpus was captured with.
+
+*Why the refusal is not a seventeenth error record.* Every error body carries `contract_version`, and
+`test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else` asserts the set of such records whole:
+a seventeenth would put an unexamined literal into the corpus. The estimate is a read whose figures are a function of the
+price pins and the prompt, which this corpus does not own, so it is asserted, not recorded either. A failed assertion in
+the journey fails the session fixture, so every record test goes red with its message.
+
+*What moved.* Only the **request side** of cases 03, 04 and 05: `body_length` (49 -> 199, 49 -> 199, 78 -> 228) and
+the note of case 03. The request body is not compared, only the response, and every response reproduced byte for byte:
+measured by driving the journey once into a scratch directory and comparing it with the committed records by the
+suite's own comparison (`journey.differences`, without its compatibility projections), the only differences were the
+twenty-one the suite already projects (`_schema_compat_expected`, `_csv_compat_expected`): the sixteen error bodies'
+`contract_version`, the four `upload_kind` version bodies and the CSV `severity` columns. `capture.py` was not run (it
+rewrites every record); the three files were edited by those substitutions.
+
 ## Amended 2026-10-21 by `BETA-CONTRACT-SEAL-01`, the `1.0.0` seal
 
 **Sixteen records: one value.** Every error body carries `contract_version`, and the seal moved

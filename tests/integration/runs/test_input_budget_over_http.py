@@ -30,6 +30,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.testclient import TestClient
 
+from auditmanager.analysis.public import ProviderConfig, ProviderMode
 from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.api.app import create_asgi_app
@@ -42,6 +43,11 @@ from auditmanager.documents.public import DocumentRepository
 from auditmanager.runs import RunRepository
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import DocumentUid, RunId, VersionUid
+
+
+#: 99b337fb: `RunAdapter.start_run` hands its provider configuration's model to the start command as the operational
+#: model, so an adapter that starts a run carries a configuration (recorded mode, the model the recordings were made with).
+RECORDED_CONFIG = ProviderConfig(ProviderMode.RECORDED, "claude-opus-5", 1.0, None, True)
 
 SECRET = "w55b-budget-http-token"
 BUDGET = 50_000
@@ -172,7 +178,7 @@ def _client(sessions: sessionmaker[Session], world: Any, budget: int | None) -> 
     # the variable's name anywhere in the module, and `runs` above this function is a `RunRepository`.
     carrier = _Carrier()
     run_adapter = RunAdapter(
-        sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
+        sessions, blob_store=None, adapter=None, provider_config=RECORDED_CONFIG, provider_mode="recorded",
         analysis_profile_id=world.seeded.analysis_profile_id,
         prompt_bundle_id=world.seeded.prompt_bundle_id, carrier=carrier,
         input_budget_characters=budget,
