@@ -105,12 +105,12 @@
         "quantity_text": "120",
         "quantity": "120",
         "manufacturer": null,
-        "status": "unmatched",
-        "reason": "unit_mismatch",
-        "basis": null,
-        "unit_price": null,
-        "amount": null,
-        "excluded_reason": "unit_mismatch"
+        "status": "matched",
+        "reason": null,
+        "basis": "name",
+        "unit_price": "310",
+        "amount": "37200",
+        "excluded_reason": null
       },
       {
         "position": "5",
@@ -163,29 +163,29 @@
     ]
   },
   "matching": {
-    "algorithm": "price-match-v1",
+    "algorithm": "price-match-v2",
     "counts": {
-      "matched": 5,
+      "matched": 6,
       "ambiguous": 0,
-      "unmatched": 2
+      "unmatched": 1
     },
     "totals": [
       {
         "currency": "RUB",
-        "amount": "464278",
-        "row_count": 4
+        "amount": "501478",
+        "row_count": 5
       }
     ],
     "excluded": {
       "no_position": 1,
-      "unit_mismatch": 1,
+      "unit_mismatch": 0,
       "row_unit_missing": 0,
       "ambiguous": 0,
       "quantity_not_numeric": 1
     }
   },
   "proposals": {
-    "generator": "cheaper-analog-v1",
+    "generator": "cheaper-analog-v2",
     "count": 4,
     "items": [
       {
