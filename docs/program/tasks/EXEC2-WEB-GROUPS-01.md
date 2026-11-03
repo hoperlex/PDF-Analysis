@@ -11,7 +11,7 @@
 - API contract: 1.16.0, frozen by `EXEC2-SEAL-2`
 - analysis/comparison/event contract: unchanged
 - migration head: `0048`, created by `EXEC2-SEAL-2`; this task adds no migration
-- base commit: `integration/exec2` after `EXEC2-INT-2` is on `origin/dev`
+- base commit: `integration/exec2` at `7d141a0d`
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 10–17, 19; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -24,18 +24,18 @@
 - premise: the workers screen enumerates its tabs in one tuple, and the start selector and routes widget exist
 
 ### P-01 — the tab enumerator
-- captured_at: 2026-11-02
-- command: `git grep -n 'WORKERS_TABS = ' 27fb952e -- web/src/_pages/workers/model/tabs.ts`
+- captured_at: 2026-11-03
+- command: `git grep -n 'WORKERS_TABS = ' 7d141a0d -- web/src/_pages/workers/model/tabs.ts`
 - captured_output:
   ```text
-  27fb952e:web/src/_pages/workers/model/tabs.ts:13:export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
+  7d141a0d:web/src/_pages/workers/model/tabs.ts:13:export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
   exit=0
   ```
 - interpretation: this task owns the tab set and adds «Группы» and «Правила».
 
 ### P-02 — the files to change
-- captured_at: 2026-11-02
-- command: `git ls-tree -r --name-only origin/dev web/src/_pages/workers web/src/widgets/executor-routes web/src/features/start-run`
+- captured_at: 2026-11-03
+- command: `git ls-tree -r --name-only 7d141a0d web/src/_pages/workers web/src/widgets/executor-routes web/src/features/start-run`
 - captured_output:
   ```text
   web/src/_pages/workers/index.ts
@@ -59,7 +59,7 @@
   ```
 - interpretation: the routes widget becomes the legacy history view; the start control gains the group selector.
 
-The integrator re-runs every premise command on the actual base before dispatch (`EXEC2-PLAN.md` section 6) and corrects line numbers; a premise that no longer holds stops the dispatch.
+The integrator re-captured these on `7d141a0d` before dispatch.
 
 ## Historical evidence
 - correction_mode: none
@@ -79,6 +79,7 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `web/src/features/start-run/**`
 - `web/src/entities/audit-run/**`
 - `web/src/entities/executor-group/**`
+- `web/tests/unit/**`
 
 ## Forbidden hotspots
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
@@ -94,6 +95,8 @@ The integrator re-runs every premise command on the actual base before dispatch 
 ## Deliverables
 - The screens above, the `R-149a` notice on groups, and Russian refusals.
 - Component tests for the selector exclusivity, the six-row rules table and the planned/actual distinction.
+- The cut-over panel in «Правила»: «Перейти на правила» shows `previewExecutorRouting` (six work kinds, flagged standbys and incompatible routes), requires an explicit confirmation of the mapping and calls `setExecutorRoutingMode` (`rules`); «Вернуться к Primary/Standby» calls it with `legacy` after a confirmation that says admitted work stays on its group. The two operations are served by `EXEC2-CUTOVER-01`; until then the panel shows the server's refusal.
+- New tests are new files under `web/tests/unit/`; no existing test file is edited. New module CSS uses only `--am-*` tokens (the `length-literals` guard) and every declared class is read (`module-class-reads`).
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker
