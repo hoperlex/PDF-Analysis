@@ -4,6 +4,7 @@ import {
   RunWorkerLine, canCancel, canExecute, canReaudit, jobHoldsLease, jobStateLabel, queueAgeLabel,
 } from '@/entities/execution';
 import type { RunWorker } from '@/entities/execution';
+import { QueueItemWaiting } from '@/entities/audit-run';
 import { EmptyState, ErrorState } from '@/shared/ui';
 
 import styles from './execution-queue.module.css';
@@ -46,6 +47,7 @@ export function ExecutionQueue({
             </div>
             <p className={styles.identity}>Прогон <a href={routes.logs(item.run_id)}><code>{item.run_id}</code></a></p>
             <p className={styles.identity}>Задача <code>{item.job_id}</code></p>
+            <QueueItemWaiting item={item} />
             {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
             <p>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></p>
             <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>

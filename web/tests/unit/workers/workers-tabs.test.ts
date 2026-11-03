@@ -14,9 +14,10 @@ import {
 import { WorkersTabs } from '@/_pages/workers/ui/workers-tabs';
 
 describe('the tabs', () => {
-  it('are «Подключения», «Процессы», «Назначения», in that order, and open on «Процессы»', () => {
-    expect([...WORKERS_TABS]).toEqual(['connections', 'processes', 'routes']);
-    expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual(['Подключения', 'Процессы', 'Назначения']);
+  it('are «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order, and open on «Процессы»', () => {
+    // `EXEC2-WEB-GROUPS-01` adds «Группы» and «Правила»; «Назначения» stays last as the legacy editor and history.
+    expect([...WORKERS_TABS]).toEqual(['connections', 'processes', 'groups', 'rules', 'routes']);
+    expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual(['Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения']);
     expect(DEFAULT_WORKERS_TAB).toBe('processes');
     expect(WORKERS_TAB_PARAM).toBe('tab');
   });
@@ -38,10 +39,10 @@ describe('the tabs', () => {
 
   it('render as a tablist with one selected tab, one tab in the tab order, and one labelled panel', () => {
     const markup = renderToStaticMarkup(createElement(WorkersTabs, { active: 'routes', onSelect: () => {}, children: 'содержимое' }));
-    expect(markup.match(/role="tab"/g)).toHaveLength(3);
+    expect(markup.match(/role="tab"/g)).toHaveLength(WORKERS_TABS.length);
     expect(markup.match(/aria-selected="true"/g)).toHaveLength(1);
     expect(markup.match(/tabindex="0"/g)).toHaveLength(2);
-    expect(markup.match(/tabindex="-1"/g)).toHaveLength(2);
+    expect(markup.match(/tabindex="-1"/g)).toHaveLength(WORKERS_TABS.length - 1);
     expect(markup).toContain('role="tabpanel"');
     expect(markup).toContain('data-workers-panel="routes"');
     expect(markup).toContain('содержимое');
