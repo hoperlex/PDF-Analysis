@@ -17,12 +17,12 @@ import { useState } from 'react';
 import { useMe } from '@/entities/account';
 import { VerdictBadge } from '@/entities/expert-decision';
 import {
-  SEVERITY_LABELS, SeverityBadge, admitFindings, normCitationStateLabel,
+  SEVERITY_LABELS, SeverityBadge, admitFindings, normCitationStateLabel, runFindingsQueryOptions,
 } from '@/entities/finding';
 import { commentRefusalMessage, useAppendComment } from '@/features/append-comment';
 import { useRecordVerdict, verdictRefusalMessage } from '@/features/record-verdict';
 import type { Finding, RunId, Severity } from '@/shared/api';
-import { SEVERITY_VALUES, failureMessage, listRunFindings, queryKeys } from '@/shared/api';
+import { SEVERITY_VALUES, failureMessage } from '@/shared/api';
 import { ErrorState, LoadingState } from '@/shared/ui';
 
 import { mayRecordVerdict } from '../model/may-decide';
@@ -142,10 +142,9 @@ function FindingCard({
 
 export function RunFindings({ runId }: { readonly runId: RunId }) {
   const me = useMe();
-  const query = useQuery({
-    queryKey: queryKeys.runs.findings(runId),
-    queryFn: ({ signal }) => listRunFindings({ path: { run_id: runId } }, { signal }),
-  });
+  // The same complete list the review screen reads from the same key: one `queryFn` for
+  // the key (`entities/finding`), so neither screen can file a first page under it.
+  const query = useQuery(runFindingsQueryOptions(runId));
   const mayDecide = me.data !== undefined && mayRecordVerdict(me.data.roles);
 
   return (

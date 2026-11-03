@@ -15,6 +15,9 @@
  * knowledge-base view on the server, and a count assembled in this file would be a second
  * answer to a question the server already answers.
  *
+ * The journal is paged (50 per page, newest first): «Далее» and «Назад» walk the server's
+ * opaque cursors with a stack, and changing either filter returns to the first page.
+ *
  * The two filters are the contract's own `category` and `verdict`, and they mean what the
  * contract says they mean: the **finding's** category, and the verdict that now stands for
  * it. Neither filters the event, so a comment left on a finding that was later accepted is
@@ -111,11 +114,20 @@ function journalFailure(error: unknown, retry: () => void): ErrorStateProps {
 export function KnowledgeBasePage() {
   const [category, setCategory] = useState<CategoryChoice>('all');
   const [verdict, setVerdict] = useState<VerdictChoice>('all');
+  /*
+   * The cursors of the pages walked past, oldest first; the last one is the page on screen
+   * and an empty stack is the first page. The server's cursors are opaque and one-way, so
+   * «Назад» is a pop, not a computation. The same construction as the execution journal.
+   */
+  const [cursors, setCursors] = useState<string[]>([]);
+  const cursor = cursors.at(-1);
 
   const journal = useDecisionJournal({
     ...(category === 'all' ? {} : { category }),
     ...(verdict === 'all' ? {} : { verdict }),
+    ...(cursor === undefined ? {} : { cursor }),
   });
+  const next = journal.data?.page.next_cursor ?? null;
 
   return (
     <PageShell
@@ -124,11 +136,17 @@ export function KnowledgeBasePage() {
       subtitle="Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий."
     >
       <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
-        <label className="am-kb__filter">
-          <span>Категория</span>
+        <div className="am-kb__filter">
+          <label htmlFor="kb-filter-category">Категория</label>
           <select
+            id="kb-filter-category"
             value={category}
-            onChange={(event) => setCategory(event.target.value as CategoryChoice)}
+            onChange={(event) => {
+              // A cursor belongs to the filter it was issued under: a new filter starts at
+              // the first page.
+              setCategory(event.target.value as CategoryChoice);
+              setCursors([]);
+            }}
           >
             {CATEGORY_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
@@ -136,12 +154,16 @@ export function KnowledgeBasePage() {
               </option>
             ))}
           </select>
-        </label>
-        <label className="am-kb__filter">
-          <span>Вердикт</span>
+        </div>
+        <div className="am-kb__filter">
+          <label htmlFor="kb-filter-verdict">Вердикт</label>
           <select
+            id="kb-filter-verdict"
             value={verdict}
-            onChange={(event) => setVerdict(event.target.value as VerdictChoice)}
+            onChange={(event) => {
+              setVerdict(event.target.value as VerdictChoice);
+              setCursors([]);
+            }}
           >
             {VERDICT_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
@@ -149,7 +171,7 @@ export function KnowledgeBasePage() {
               </option>
             ))}
           </select>
-        </label>
+        </div>
       </div>
       <div className={styles.results}>
         <LazyKnowledgeBase
@@ -161,6 +183,28 @@ export function KnowledgeBasePage() {
               : journalFailure(journal.error, () => void journal.refetch())
           }
         />
+        {cursors.length === 0 && next === null ? null : (
+          <nav className="am-pager" aria-label="Страницы решений">
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              disabled={cursors.length === 0}
+              onClick={() => setCursors((current) => current.slice(0, -1))}
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              disabled={next === null}
+              onClick={() => {
+                if (next !== null) setCursors((current) => [...current, next]);
+              }}
+            >
+              Далее
+            </button>
+          </nav>
+        )}
       </div>
     </PageShell>
   );
