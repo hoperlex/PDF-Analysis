@@ -51,6 +51,7 @@ from auditmanager.api.routers.errors import (
 from auditmanager.api.routers.export import build_export_routes
 from auditmanager.api.routers.execution import build_execution_routes
 from auditmanager.api.routers.executor_enrollment import build_enrollment_routes
+from auditmanager.api.routers.executor_groups import build_executor_group_routes  # EXEC2-GROUP-STORE-01
 from auditmanager.api.routers.executors import build_executor_routes
 from auditmanager.api.routers.runner import build_runner_routes
 from auditmanager.api.routers.findings import build_finding_routes
@@ -126,6 +127,7 @@ from auditmanager.api.routers.ports import (
     DecisionPort,
     DocumentPort,
     ExecutionPort,
+    ExecutorGroupPort,
     ExecutorPort,
     RunnerPort,
     EnrollmentPort,
@@ -204,6 +206,7 @@ __all__ = [
     "DecisionPort",
     "DocumentPort",
     "ExecutionPort",
+    "ExecutorGroupPort",
     "ExecutorPort",
     "RunnerPort",
     "EnrollmentPort",
@@ -294,6 +297,7 @@ def build_router(
     executors: ExecutorPort | None = None,
     runner: RunnerPort | None = None,
     enrollment: EnrollmentPort | None = None,
+    executor_groups: ExecutorGroupPort | None = None,
     ar_v3_groups: ArV3GroupPort | None = None,
     comparison_uploads: ComparisonUploadPort | None = None,
     comparison_version_orders: ComparisonVersionOrderPort | None = None,
@@ -418,6 +422,10 @@ def build_router(
     # public package, the API side of an install over SSH and the integration-authorisation mark. Optional
     # with a default, for the reason `blocks` gives; declared whatever the port, answerable only with one.
     build_enrollment_routes(router, enrollment)  # type: ignore[arg-type]
+    # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: eight operations of contract 1.16.0
+    # (`previewExecutorRouting` and `setExecutorRoutingMode` are `EXEC2-CUTOVER-01`'s). Optional with a default, for the
+    # reason `blocks` gives; declared whatever the port, answerable only with one.
+    build_executor_group_routes(router, executor_groups)  # type: ignore[arg-type]
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
     # `CMP-INGEST-02` and `CMP-PROFILE-01` wire their ports. Optional with a default, for the

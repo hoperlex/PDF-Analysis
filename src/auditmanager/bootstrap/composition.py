@@ -58,6 +58,7 @@ from auditmanager.bootstrap.adapters import (
     ExecutionAdapter,
     ExecutorAdapter,
     ExecutorEnrollmentAdapter,
+    ExecutorGroupAdapter,
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
@@ -713,6 +714,9 @@ def build_application(
             sessions, ring=resolved.secrets_public_ring,
             public_origin=env.get(PUBLIC_ORIGIN_ENV) or None,
         ),
+        # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: the four reads for any role
+        # and the four writes, over the same sessions. The rates a group snapshots are the provider lock's.
+        executor_groups=ExecutorGroupAdapter(sessions),
     )
     return Application(
         router=router,

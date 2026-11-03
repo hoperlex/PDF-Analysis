@@ -140,7 +140,7 @@ READ_WRITE = frozenset((
     "executor_connection",
     "executor_enrollment",
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): a group is archived once and its dispatch rotation cursor advances; the
-    # guard triggers pin the rest. No statement exists yet; `EXEC2-GROUP-STORE-01` writes it.
+    # guard triggers pin the rest. `EXEC2-GROUP-STORE-01` writes it (`group_repository.py`).
     "executor_group",
     "executor_probe",
     "executor_runner_token",
@@ -217,11 +217,12 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): `executor_enrollment` and `executor_agent_install` left
     # the set when `EXEC2-ENROLL-01` wrote the grant, the install session's API side (create, read, confirm the
     # host key) and the sealed key's row. `EXEC2-ENROLL-SSH-01` adds the worker's statements to the second.
-    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): the group store is written by `EXEC2-GROUP-STORE-01` (groups,
-    # revisions, members, rules) and `EXEC2-CUTOVER-01` (the routing-mode journal); each lane removes its tables when its
-    # first statement lands. Neither lane's allowed paths name this file, so the integrator removes them at the merge.
-    "executor_group", "executor_group_member", "executor_group_revision", "executor_routing_mode_event",
-    "executor_routing_rule_revision",
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): `executor_group`, `executor_group_revision`, `executor_group_member`
+    # and `executor_routing_rule_revision` left the set when `EXEC2-GROUP-STORE-01` wrote them (`group_repository.py`).
+    # `executor_routing_mode_event` stays: that lane only reads the routing-mode journal (an empty one is `legacy`), and
+    # `EXEC2-CUTOVER-01` removes it when its first statement lands. The scan counts INSERT, UPDATE, DELETE and LOCK
+    # statements, so a table that is only selected is still never written.
+    "executor_routing_mode_event",
 ))
 
 #: ``SELECT``.
