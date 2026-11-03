@@ -577,7 +577,13 @@ class TestN1ComponentReferenceResolution:
         # candidate, pair, assembly, link revision or run by opaque identity.
         # The two source-bound cost estimates also declare an unknown-version
         # refusal, extending the sealed identity-addressed total by two.
-        assert len(report) == 198, report
+        # `EXEC2-SEAL-1` adds five: an enrollment grant, an agent install, its read, its host-key
+        # confirmation and the integration-authorisation mark each address a connection (or an install)
+        # by identity. `EXEC2-SEAL-2` adds five more: reading, revising, archiving and measuring a group
+        # address it by identity, and `setExecutorRoutingRule` names a group revision that may not exist.
+        # The runner-token operations of the agent (`redeemExecutorEnrollment`, `reportRunnerHealth`,
+        # `downloadAgentPackage`) address nothing by identity and declare no `404`.
+        assert len(report) == 208, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]
@@ -909,9 +915,10 @@ class TestN7EffectiveSecurity:
                     overriding += 1
         # `W49-SEAL-01`: three operations declare the empty requirement now -- the
         # exchange and the two registration operations an applicant reaches with no
-        # account.
-        assert hoisted == FROZEN_OPERATION_COUNT - 3, hoisted
-        assert overriding == 3, overriding
+        # account. `EXEC2-SEAL-1` makes it four: `downloadAgentPackage` is public code with no
+        # secret, whose integrity is the sha256 the install command carries (ADR-0026 decision 6).
+        assert hoisted == FROZEN_OPERATION_COUNT - 4, hoisted
+        assert overriding == 4, overriding
         assert_silent(differences(surface(rooted), surface(fastapi_flavoured(sealed))))
 
     def test_dropped_operation_security_is_caught(self, contract: dict[str, Any]) -> None:

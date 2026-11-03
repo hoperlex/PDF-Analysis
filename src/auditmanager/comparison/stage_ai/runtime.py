@@ -22,7 +22,7 @@ from auditmanager.comparison.spend.errors import (
 )
 from auditmanager.comparison.spend.model import CallEstimate, JOB_KEY
 from auditmanager.comparison.work.model import Failed, Yielded
-from auditmanager.ingest.comparison_pdf.public import require_expert
+from auditmanager.ingest.public import require_expert
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 

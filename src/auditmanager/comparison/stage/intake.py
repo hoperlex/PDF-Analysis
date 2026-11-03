@@ -15,9 +15,8 @@ import tempfile
 from collections.abc import Iterable, Iterator
 from typing import BinaryIO, Final
 
-from auditmanager.ingest.comparison_pdf.public import inspect_comparison_pdf
-from auditmanager.ingest.comparison_zip import (
-    DEFAULT_SET_POLICY, SET_TOTAL_BYTES, ExtractedSet, extract_pdf_set,
+from auditmanager.ingest.public import (
+    DEFAULT_SET_POLICY, SET_TOTAL_BYTES, ExtractedSet, extract_pdf_set, inspect_comparison_pdf,
 )
 from auditmanager.shared.errors import DomainError, ErrorCode
 

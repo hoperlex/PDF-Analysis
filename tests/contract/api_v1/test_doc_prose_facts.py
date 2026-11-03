@@ -547,9 +547,14 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # two sentences before the note gives the current one ("so it is 15 paths / 18
         # operations / 51 schemas", which IS checked and currently agrees).
         ("docs/program/ALPHA_ROADMAP.md", "13 paths / 16 operations / 48 schemas"),
-        # CURRENT_STATE.md's C2 paragraph records the prior 1.11.0 seal. The C2 report
-        # (docs/program/CMP-SEAL-C2.md) measured this triple before C3's additive reseal.
-        ("docs/program/CURRENT_STATE.md", "176 paths / 198 operations / 517 schemas"),
+        # CURRENT_STATE.md's `EXEC2-INT-1` entry (2026-11-02) records the stage-1 seal: "Contract 1.15.0
+        # (241 paths / 267 operations / 644 schemas)". `EXEC2-SEAL-2` then resealed the contract as 1.16.0, and the
+        # same file's `EXEC2-INT-2` entry states the current triple. Measured at the `EXEC2-SEAL-1` content commit
+        # (`fce30e1a`) and recorded in `docs/program/EXEC2-INT-1.md`; the entry is a record of its day and is kept as
+        # written. (The earlier registration of the 1.11.0 triple, 176 / 198 / 517, left with the paragraph that
+        # carried it: the live part of CURRENT_STATE.md was cut to its newest entries, and the whole state at
+        # `EXEC2-INT-3` is archived verbatim in docs/program/history/CURRENT_STATE_2026-11-03_51183a75.md.)
+        ("docs/program/CURRENT_STATE.md", "241 paths / 267 operations / 644 schemas"),
     }
 )
 

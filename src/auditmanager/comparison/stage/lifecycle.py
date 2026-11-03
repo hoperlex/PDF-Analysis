@@ -5,8 +5,7 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from auditmanager.ingest import domain_error_from_storage
-from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+from auditmanager.ingest.public import CommandReplay, CommandRepository, domain_error_from_storage, payload_fingerprint
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey

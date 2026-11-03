@@ -12,7 +12,8 @@ holds the parts that are pure functions of the tree:
 * the new error code, its detail keys, and every constraint value the bundle upload can
   report being registered in the domain catalog's notes (a value nobody registered is a value
   nobody can match on);
-* the upload contract: a ZIP, 500 pages, 250 MiB, a bare PDF refused, the D-110 sentence;
+* the upload contract: a ZIP, a bare PDF refused, the D-110 sentence, and the application ceilings
+  (500 pages, 250 MiB) that `SECTION-STATS-UNCAPPED-1030` lifted for the temporary statistics intake;
 * the stage registry names the new roles, and the registry's own roles are the ones the
   seam register's manifest roles come from.
 """
@@ -135,7 +136,11 @@ def test_a_portal_block_requires_what_is_always_known_and_omits_the_rest() -> No
     }
     assert block["properties"]["bbox_norm"]["minItems"] == block["properties"]["bbox_norm"]["maxItems"] == 4
     assert CONTRACT["components"]["schemas"]["PortalRecognisedText"]["properties"]["quote_source"]["const"] == "recognised"
-    assert CONTRACT["components"]["schemas"]["DocumentVersion"]["properties"]["page_count"]["maximum"] == 500
+    # `SECTION-STATS-UNCAPPED-1030` (migration `0044_section_stats_uncapped`) dropped the 500-page ceiling for the
+    # temporary statistics intake and with it `ck_document_version_page_count`; the contract keeps only the lower bound.
+    page_count = CONTRACT["components"]["schemas"]["DocumentVersion"]["properties"]["page_count"]
+    assert "maximum" not in page_count and "exclusiveMaximum" not in page_count
+    assert page_count["minimum"] == 1
 
 
 # --- the wire body ------------------------------------------------------------------------
@@ -189,8 +194,15 @@ def test_portal_block_id_is_an_external_identifier_and_not_one_of_the_identities
     # epb_ and ert_; EXEC-PULL-01 ern_ and ext_; CMP-SEAL-C0 cbt_, cus_, cuf_, cvo_, cpr_, cq_, cqa_
     # and cmc_; CMP-SEAL-C1 cmx_, cme_, cak_, cser_, ctn_, ctp_ and csp_. C2 adds eleven
     # identities; C3 adds the fourteen stage upload, pair, map, text and chain identities; C4 adds the twelve of
-    # its stage review (the 88 above grew to 100 at contract 1.13.0; re-measured by `REVIEW-FIX-TESTS-1102`).
-    assert len(IDENTIFIERS["identifiers"]) == 100
+    # its stage review (the 88 above grew to 100 at contract 1.13.0; re-measured by `REVIEW-FIX-TESTS-1102`);
+    # EXEC2-SEAL-1 adds two (`exen_` the enrollment grant, `exai_` the agent install) and EXEC2-SEAL-2 four
+    # (`exg_`, `exgr_`, `exrr_`, `exrm_`: a group, its revision, a routing rule revision, a routing mode event),
+    # so 106 at contract 1.16.0.
+    assert len(IDENTIFIERS["identifiers"]) == 106
+    assert {
+        "executor_enrollment_id", "executor_agent_install_id", "executor_group_id", "executor_group_revision_id",
+        "executor_routing_rule_revision_id", "executor_routing_mode_event_id",
+    } <= set(IDENTIFIERS["identifiers"])
 
 
 # --- the error catalog --------------------------------------------------------------------
@@ -224,12 +236,18 @@ def test_the_upload_is_declared_as_a_bundle_with_the_new_limits() -> None:
     operation = CONTRACT["paths"]["/projects/{project_uid}/documents"]["post"]
     assert operation["requestBody"]["content"]["multipart/form-data"]["encoding"]["file"]["contentType"] == "application/zip"
     text = operation["description"]
-    for needle in ("portal bundle", "500 pages", "250 MiB", "portal_bundle_required", "_stamp_audit.json",
+    # `SECTION-STATS-UNCAPPED-1030`: "500 pages" and "250 MiB" were the ceilings `W55B-SEAL-01` sealed; the temporary
+    # statistics intake removed them, and the contract says so instead. Both directions are asserted, so a ceiling
+    # that comes back into the prose without this test being edited is red.
+    for needle in ("portal bundle", "temporary statistics intake removes application size and page-count ceilings",
+                   "portal_bundle_required", "_stamp_audit.json",
                    "digest only", "OCR is always marked", "D-110", "upload_capacity", "Retry-After"):
         assert needle in text, needle
     assert "30 pages" not in text and "25 MiB" not in text
+    assert "500 pages" not in text and "250 MiB" not in text, "a ceiling the intake no longer applies is back in the prose"
     file_part = CONTRACT["components"]["schemas"]["UploadDocumentRequest"]["properties"]["file"]["description"]
-    assert "250 MiB" in file_part and "500 pages" in file_part
+    assert "Temporary statistics intake removes application size and page-count ceilings" in file_part
+    assert "250 MiB" not in file_part and "500 pages" not in file_part
 
 
 def test_the_budget_refusal_is_declared_on_both_run_starts() -> None:

@@ -222,6 +222,12 @@ PATH_LOCAL_COUNTS: frozenset[tuple[str, str]] = frozenset(
         ("src/auditmanager/documents/repository.py", "fourteen codes"),
         ("tools/validation/ledger_report.py", "twenty code"),
         ("tools/validation/ledger_report.py", "1 code"),
+        # `EXEC2-SEAL-1` and `EXEC2-SEAL-2`: each count below is the length of the table that follows it in the same
+        # docstring or section, a subset of the surface that the reader can check against that table.
+        ("src/auditmanager/api/routers/executor_enrollment.py", "eight operations"),
+        ("src/auditmanager/api/routers/executor_groups.py", "ten operations"),
+        ("src/auditmanager/executors/agent_install.py", "three operations"),
+        ("tools/executor-runner/RUNNER_API.md", "two operations"),
     }
 )
 
@@ -246,6 +252,17 @@ KNOWN_HISTORICAL_SURFACE_CLAIMS: frozenset[tuple[str, str]] = frozenset(
         ("tasks/W53-REHEARSAL-01.md", "36 paths"),
         ("tasks/W53-REHEARSAL-01.md", "43 operations"),
         ("tasks/W53-REHEARSAL-01.md", "91 schemas"),
+        # The contract's own `info.description` carries the surface at the moment each seal was written, and the
+        # contract is sealed: it is edited only by the contract slot's reseal. The `CMP-SEAL-C3` paragraph there
+        # ends "The surface is 233 paths, 259 operations and 620 schemas; 1.11.0 to 1.12.0 is additive." -- the
+        # triple of contract `1.14.0`, written into that sentence by `af8c69f7` (`HOTFIX-PRESENTATION-INT-1030`; the
+        # `1.12.0` seal itself was 204 / 230 / 570), which `1.15.0` (241 / 267 / 644) and `1.16.0` (`EXEC2-SEAL-1` and
+        # `EXEC2-SEAL-2`) have since moved. A record of an earlier seal, kept as written and registered here by its
+        # exact phrases, not a claim about the current surface; `test_historical_surface_claim_registry_is_exact_and_live`
+        # resolves the `info` source by its name, and fails once the sentence is gone or the phrase matches the surface.
+        ("contracts/api/v1/openapi.json -> info", "233 paths"),
+        ("contracts/api/v1/openapi.json -> info", "259 operations"),
+        ("contracts/api/v1/openapi.json -> info", "620 schemas"),
     }
 )
 
@@ -441,13 +458,17 @@ def _claims(text: str) -> Iterator[tuple[str, str | None, int]]:
         yield match.group(0), dimension, value
 
 
+#: How `_sources()` names the contract's own `info` prose, which is a part of a file and not a file.
+_CONTRACT_INFO_SOURCE = "contracts/api/v1/openapi.json -> info"
+
+
 def _sources() -> list[tuple[str, str]]:
     named = [
         (entry.relative, entry.text)
         for entry in _surface_inventory()
         if entry.text is not None
     ]
-    named.append(("contracts/api/v1/openapi.json -> info", _contract_info_prose()))
+    named.append((_CONTRACT_INFO_SOURCE, _contract_info_prose()))
     return named
 
 
@@ -585,7 +606,12 @@ def test_p02_seam_makes_a_current_claim_the_guard_reads() -> None:
 def test_historical_surface_claim_registry_is_exact_and_live() -> None:
     current = _surface_counts()
     for relative, phrase in KNOWN_HISTORICAL_SURFACE_CLAIMS:
-        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        # a registered source is a tracked file, or the contract's own `info` prose, which `_sources()` names
+        text = (
+            _contract_info_prose()
+            if relative == _CONTRACT_INFO_SOURCE
+            else (REPO_ROOT / relative).read_text(encoding="utf-8")
+        )
         matches = [claim for claim in _claims(text) if claim[0] == phrase]
         assert len(matches) == 1, (relative, phrase, matches)
         _, dimension, value = matches[0]

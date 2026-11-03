@@ -20,7 +20,7 @@ from auditmanager.documents.public import (
     MANIFEST_ROLE_COMPARISON_PDF, ROLE_COMPARISON_PDF, UPLOAD_KIND_COMPARISON_PDF,
     DocumentRepository, ManifestEntry,
 )
-from auditmanager.ingest import domain_error_from_storage
+from auditmanager.ingest.public import domain_error_from_storage
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AuditEventId, DocumentUid, ProjectUid
