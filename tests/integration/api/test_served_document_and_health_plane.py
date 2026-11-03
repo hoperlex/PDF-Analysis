@@ -101,7 +101,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         # literal held 142; the 43 it lacked are the operations of contracts 1.13.0 to 1.16.0 (the stage review, the executor
         # enrollment, install, group and routing operations, the cost estimates, the ZIP import and the technical report).
         # An operation is added here only when its contract declares the `422`; an operation that does not is still refused
-        # FastAPI's own validation schema by the assertions above. Entries for contract 1.17.0 are added by its seal.
+        # FastAPI's own validation schema by the assertions above. Contract 1.17.0 (`UI-PARITY-P0A`) adds one, `getDashboardSummary`,
+        # whose optional `project_uid` query parameter can be refused: 186.
         assert declared_422 == {
             "appendComparisonVersionOrder",
             "appendDecision",
@@ -151,6 +152,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "failExecutorTask",
             "generateComparisonSummary",
             "generateExecutorSshKey",
+            "getDashboardSummary",
             "getEffectiveVendorLists",
             "getExecutorAgentInstall",
             "getExecutorConnection",
