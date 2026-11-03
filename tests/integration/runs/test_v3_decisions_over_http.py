@@ -128,8 +128,14 @@ def _drive(url: str, blob_store: Any, recordings: Path, manifest_dir: Path) -> W
         wire = app.wire
         x = out.x
 
+        # `REVIEW-FIX-TESTS-1102`: the stock composition starts a group only with a priced consent, taken from the
+        # group estimate of this version.
+        priced = wire.call("POST", f"{accept.GROUPS}/cost-estimate", token=tokens["expert"],
+                           body={"version_uid": served.version_uid})
+        assert priced.status == 200, priced.text
         x["start"] = wire.call("POST", accept.GROUPS, token=tokens["expert"], key="decisions-start",
-                               body={"version_uid": served.version_uid})
+                               body={"version_uid": served.version_uid, "cost_consent": accept.run_consent(priced.data)})
+        assert x["start"].status == 202, x["start"].text
         group = x["start"].data
         out.group_id = group["group_id"]
         for member in group["members"]:

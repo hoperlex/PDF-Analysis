@@ -532,9 +532,14 @@ def test_provider_effect_settlement_is_bounded_and_resumable(
         )
         observer.commit()
     assert len(first.settled_provider_effects) == 1
-    assert {item.model_call_id for item in first.unresolved_provider_effects} == (
-        call_ids - {first.settled_provider_effects[0].model_call_id}
-    )
+    settled_first = first.settled_provider_effects[0].model_call_id
+    # The report lists every unresolved effect of the database, and the lane's database is shared and long-lived:
+    # `test_an_ambiguous_live_failure_is_journalled_once_and_not_retried` leaves an `outcome_unknown` effect on purpose
+    # (an operator resolves it), so a second run of this file sees it. The property under test is the settlement of the
+    # effects THIS test made -- one per pass, the other still waiting -- so it is stated over those, and the batch of one
+    # must have taken one of them (an older foreign `prepared` effect taking it would be residue this test cannot judge).
+    assert settled_first in call_ids, settled_first
+    assert {item.model_call_id for item in first.unresolved_provider_effects} & call_ids == call_ids - {settled_first}
 
     with factory() as observer:
         second = reconcile(

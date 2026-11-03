@@ -30,6 +30,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.analysis.public import ProviderConfig, ProviderMode
 from auditmanager.api.schemas.runs import run_status_body
 from auditmanager.bootstrap.adapters import RunAdapter
 from auditmanager.ingest.public import CommandRepository, payload_fingerprint
@@ -50,6 +51,11 @@ from auditmanager.shared.identity import (
     RunId,
 )
 from auditmanager.shared.identity.ids import UserUid
+
+
+#: 99b337fb: `RunAdapter.start_run` hands its provider configuration's model to the start command as the operational
+#: model, so an adapter that starts a run carries a configuration (recorded mode, the model the recordings were made with).
+RECORDED_CONFIG = ProviderConfig(ProviderMode.RECORDED, "claude-opus-5", 1.0, None, True)
 
 
 def _key() -> str:
@@ -225,7 +231,7 @@ def test_start_run_serves_the_pin_through_the_shipped_adapter(
     )
     carrier = _NoCarrier()
     adapter = RunAdapter(
-        factory, blob_store=None, adapter=None, provider_config=None,
+        factory, blob_store=None, adapter=None, provider_config=RECORDED_CONFIG,
         provider_mode="recorded", analysis_profile_id=seeded.analysis_profile_id,
         prompt_bundle_id=seeded.prompt_bundle_id, carrier=carrier,
     )

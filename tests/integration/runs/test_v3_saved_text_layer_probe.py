@@ -68,7 +68,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.analysis.profiles.ar_v3.scope_partition import scope_membership
-from auditmanager.analysis.public import resolve_beta_v3_profile
+from auditmanager.analysis.public import count_native_text_characters, resolve_beta_v3_profile
 from auditmanager.analysis.text import ModelResponse, ProviderMode, RecordedAdapter
 from auditmanager.analysis.text.recorded import recording_document
 from auditmanager.bootstrap import adapters
@@ -245,6 +245,12 @@ def _publish_source(
     document_uid = documents.create_document(
         session, project_uid=project.project_uid, display_title=title, section="AR"
     )
+    # `BETA-COST-PREFLIGHT-1030`: an upload records the text facts of its source, and the cost estimate of a start
+    # reads the saved native text count (a version without one is refused as `cost_text_count_unavailable`). The
+    # count is the pinned extractor's own, over these very bytes, as the intake would have saved it.
+    native_characters = count_native_text_characters(
+        store, published.blob_id, expected_sha256=digest, expected_page_count=8,
+    )
     version_uid = documents.publish_version(
         session, document_uid=document_uid, media_type="application/pdf",
         byte_size=len(payload), sha256=digest, page_count=8, source_filename="ar_baseline.pdf",
@@ -252,6 +258,7 @@ def _publish_source(
             role=MANIFEST_ROLE_SOURCE_DOCUMENT, blob_id=published.blob_id,
             sha256=published.sha256, size_bytes=published.size, media_type=published.media_type,
         ),),
+        text_character_count=native_characters, recognised_character_count=0, textless_pages=(),
     )
     session.execute(text("""
         INSERT INTO document_version_classification

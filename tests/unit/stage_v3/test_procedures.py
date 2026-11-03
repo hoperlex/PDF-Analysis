@@ -16,9 +16,13 @@ def snapshot():
     profiles, fragments = [], []
     for i, (side, value) in enumerate((("left", "100"), ("right", "120")), 1):
         profile = f"cpr_{i}"
-        profiles.append({"profile_id": profile, "version_uid": f"ver_{i}", "page_number": 1, "side": side})
+        # The saved snapshot carries the content key of the page profile and of every fragment (81fb5aca:
+        # the source report cites both); the fixture gives each a distinct, recognisable key.
+        profiles.append({"profile_id": profile, "version_uid": f"ver_{i}", "page_number": 1, "side": side,
+            "content_key": f"page-key-{i}"})
         fragments.append({"stage_text_fragment_id": f"stf_{i}", "page_profile_id": profile,
-            "normalised_text": f"ширина прохода {value} мм", "box_anchor": {"x0": 10, "top": 20, "x1": 180, "bottom": 35}})
+            "normalised_text": f"ширина прохода {value} мм", "box_anchor": {"x0": 10, "top": 20, "x1": 180, "bottom": 35},
+            "content_key": f"fragment-key-{i}"})
     return {"stage_pair_id": "pair-test", "stage_link_revision_id": "revision-test", "all_profiles": profiles,
             "fragments": fragments, "links": [], "differences": []}
 
@@ -53,6 +57,19 @@ def test_real_mapper_miner_dedupe_independent_verification_four_calls():
     assert set(card["evidence_ids"]) == {"stf_1", "stf_2"}
     assert card["experimental"]["coverage"]["complete"] is True
     assert card["experimental"]["norms_status"] == "not_checked"
+
+
+def test_the_source_catalogue_cites_the_saved_fragment_and_page_content_keys():
+    from auditmanager.comparison.stage_v3.report import source_catalogue
+    source = snapshot()
+    results, _ = run_fixture(source)
+    catalogue = source_catalogue(source, p.reviewed(source, results)[4])
+    assert {key: (row["content_key"], row["page_content_key"], row["quote"]) for key, row in catalogue.items()} == {
+        "stf_1": ("fragment-key-1", "page-key-1", "ширина прохода 100 мм"),
+        "stf_2": ("fragment-key-2", "page-key-2", "ширина прохода 120 мм")}
+    source["fragments"][0].pop("content_key")
+    with pytest.raises(KeyError):
+        source_catalogue(source, p.reviewed(source, results)[4])
 
 
 def test_bad_mapper_coverage_refuses_before_mining():
@@ -123,9 +140,9 @@ def test_unmatched_original_supplemental_route_and_source_bound_hints():
     for i, side in ((3, "left"), (4, "right")):
         profile = f"cpr_{i}"
         source["all_profiles"].append(dict(source["all_profiles"][0 if side == "left" else 1],
-            profile_id=profile, page_number=2))
+            profile_id=profile, page_number=2, content_key=f"page-key-{i}"))
         source["fragments"].append(dict(source["fragments"][0 if side == "left" else 1],
-            stage_text_fragment_id=f"stf_{i}", page_profile_id=profile))
+            stage_text_fragment_id=f"stf_{i}", page_profile_id=profile, content_key=f"fragment-key-{i}"))
     mapper = p.plans_for("review", source, {}, "fixture")[0]
     response, _ = synthetic_response(request_for_plan(mapper))
     mapping = json.loads(response.output_text)

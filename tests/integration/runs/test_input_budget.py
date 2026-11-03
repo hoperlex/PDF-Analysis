@@ -32,6 +32,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.analysis.public import ProviderConfig, ProviderMode
 from auditmanager.analysis.public import MAX_ANALYSIS_WINDOWS, windowed_budget_characters
 from auditmanager.api.routers.errors import envelope_response
 from auditmanager.bootstrap.adapters import ExecutionAdapter, RunAdapter
@@ -41,6 +42,11 @@ from auditmanager.runs import COMMAND_TYPE_START_RUN, RunRepository
 from auditmanager.runs.commands import reaudit_run, start_audit_run
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import DocumentUid, IdempotencyKey, VersionUid
+
+
+#: 99b337fb: `RunAdapter.start_run` hands its provider configuration's model to the start command as the operational
+#: model, so an adapter that starts a run carries a configuration (recorded mode, the model the recordings were made with).
+RECORDED_CONFIG = ProviderConfig(ProviderMode.RECORDED, "claude-opus-5", 1.0, None, True)
 
 BUDGET = 50_000
 #: What a run takes: ``MAX_ANALYSIS_WINDOWS`` calls of ``BUDGET`` (`SECTION-CHUNKED-ANALYSIS-01`).
@@ -468,7 +474,7 @@ def _adapters(session: Session, seeded, budget: int | None):
     )
     carrier = _NoCarrier()
     runs = RunAdapter(
-        factory, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
+        factory, blob_store=None, adapter=None, provider_config=RECORDED_CONFIG, provider_mode="recorded",
         analysis_profile_id=seeded.analysis_profile_id,
         prompt_bundle_id=seeded.prompt_bundle_id, carrier=carrier,
         input_budget_characters=budget,

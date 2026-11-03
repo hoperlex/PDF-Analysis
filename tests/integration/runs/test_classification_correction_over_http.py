@@ -31,6 +31,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.testclient import TestClient
 
+from auditmanager.analysis.public import ProviderConfig, ProviderMode
 from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.analysis.text.profile_registry import (
@@ -51,6 +52,11 @@ from auditmanager.documents.public import DocumentRepository
 from auditmanager.runs import RunRepository
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import DocumentUid, ProjectUid, RunId, VersionUid
+
+
+#: 99b337fb: `RunAdapter.start_run` hands its provider configuration's model to the start command as the operational
+#: model, so an adapter that starts a run carries a configuration (recorded mode, the model the recordings were made with).
+RECORDED_CONFIG = ProviderConfig(ProviderMode.RECORDED, "claude-opus-5", 1.0, None, True)
 
 SECRET = "classification-correction-http-token"
 REGISTRY = load_text_profile_registry()
@@ -193,7 +199,7 @@ def _client(
 ) -> tuple[TestClient, _Carrier]:
     carrier = _Carrier()
     run_adapter = RunAdapter(
-        sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
+        sessions, blob_store=None, adapter=None, provider_config=RECORDED_CONFIG, provider_mode="recorded",
         carrier=carrier,
         section_profiles=registry.section_profiles(), text_profiles=registry.resolve,
     )

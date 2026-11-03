@@ -6,9 +6,9 @@ MinIO, driven with a real expert credential. What is held:
 * the answer is the registry the application routes runs through, not a copy: fifteen rows in
   the project-structure order (``PROJECT_STRUCTURE_ORDER``), named from the reviewed section
   catalogue; every registered section carries exactly its registry entry's identities,
-  version, status and content hashes; AR carries ``profile: null`` (`PROD-11-AR-V1-V2-REMOVAL-01`:
-  the АР analysis path is the v3 group, not a text profile, and ``startRun`` refuses an АР
-  version for the same reason); every package carries
+  version, status and content hashes (АР too: the draft original-source text profile 1.0.0,
+  `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`; it had been ``profile: null`` between
+  `PROD-11-AR-V1-V2-REMOVAL-01` and that hotfix); every package carries
   the status and version its line of ``section_profile_expectations.json`` names (`draft` at
   ``1.0.0`` until a section's review moves its line) and the source its ``profile.json``
   declares; ``PB`` (`PB-PROFILE-01`) is an authored profile that declares ``source: null``, and
@@ -39,7 +39,7 @@ from auditmanager.sections.public import section_names
 DEPLOYMENT_SECRET = "w59-analysis-settings-over-http-token"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
-#: One line per non-AR package: the status and version it must be served with
+#: One line per package (АР included): the status and version it must be served with
 #: (`PROD-14-0-EXPECTATIONS-01`). A section lane edits its own line, not this suite.
 EXPECTATIONS = (
     REPOSITORY_ROOT / "tests" / "unit" / "analysis" / "text_profiles" / "section_profile_expectations.json"
@@ -47,7 +47,7 @@ EXPECTATIONS = (
 
 
 def _expected_sections() -> dict[str, tuple[str, str]]:
-    """``code -> (status, profile_version)`` for every non-AR package of this tree."""
+    """``code -> (status, profile_version)`` for every package of this tree (fifteen, АР included)."""
     rows = json.loads(EXPECTATIONS.read_text(encoding="utf-8"))["sections"]
     return {row["code"]: (row["status"], row["profile_version"]) for row in rows}
 
@@ -93,11 +93,13 @@ def test_every_row_is_the_registry_entry_the_application_routes_by(
     registry = load_text_profile_registry()
     expected = _expected_sections()
     by_code = {item["section_code"]: item["profile"] for item in listing["items"]}
-    # `PROD-11-AR-V1-V2-REMOVAL-01`: АР is the one row with no profile.
-    assert {code for code, profile in by_code.items() if profile is None} == {"AR"}
-    assert by_code["AR"] is None
+    # `PROD-11-AR-V1-V2-REMOVAL-01` left АР the one row with no profile; the
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a) serves it again, as the draft original-source text profile
+    # 1.0.0, so every one of the fifteen rows carries its registry entry.
+    assert {code for code, profile in by_code.items() if profile is None} == set()
+    assert by_code["AR"]["analysis_profile_id"] == registry.entries["AR"].analysis_profile_id
     assert set(registry.entries) == {code for code, profile in by_code.items() if profile}
-    assert len(registry.entries) == 14 and len(by_code) == 15
+    assert len(registry.entries) == 15 and len(by_code) == 15
     packages = set(registry.entries)
     assert packages - set(expected) == set(), "a served package has no line in the expectations file"
     assert set(expected) - packages == set(), "a line of the expectations file has no served package"

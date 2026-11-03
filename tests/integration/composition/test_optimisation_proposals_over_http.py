@@ -264,12 +264,16 @@ def world(app_and_client, expert, admin) -> dict[str, Any]:
     _price_list(client, expert, project)
     refused(kj)
     refused(ar)
-    # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the published run the АР reads need is made in-process (tests/support/published_run.py).
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): the served startRun routes an АР version to the draft АР text
+    # profile now, and (`REVIEW-FIX-TESTS-1102`) every served start needs a priced consent, so a bare start is refused
+    # on the consent. The published run the АР reads need is still made in-process (tests/support/published_run.py):
+    # the recordings carry the v1 reference profile's run, not a run of the draft АР profile.
     refused_start = client.post(
         "/runs", headers=expert | _key("run"), json={"version_uid": ar["version_uid"]},
     )
     assert refused_start.status_code == 422, refused_start.content
-    assert refused_start.json()["error_code"] == "section_profile_unavailable"
+    assert refused_start.json()["error_code"] == "validation_failed", refused_start.content
+    assert refused_start.json()["details"] == {"field": "cost_consent", "constraint": "confirmation_required"}, refused_start.content
     run_id = publish_reference_run(ar["version_uid"], tag="opt-proposals")
     assert client.get(f"/runs/{run_id}", headers=expert).json()["state"] == "published"
     # The lane database persists between runs, and a global vendor list cannot be unset: the
@@ -372,7 +376,8 @@ def test_the_pass_is_pinned_to_its_inputs_and_replays_by_key(world, expert, admi
     assert body["project_uid"] == world["project"] and body["document_uid"] == world["ar"]["document_uid"]
     assert body["version_uid"] == world["ar"]["version_uid"] and body["run_id"] == world["run_id"]
     assert body["vendor_list_id"] == world["vendor_list_id"] and body["vendor_list_source"] == "global"
-    assert body["generator_version"] == "cheaper-analog-v1"
+    # d93d245c (owner-approved factor one for running metres): the generator and the matcher moved to v2 together.
+    assert body["generator_version"] == "cheaper-analog-v2"
     assert (body["specification_row_count"], body["matched_row_count"]) == (3, 3)
     assert (body["proposed_row_count"], body["proposal_count"]) == (3, 3)
     assert body["decision_counts"] == {"pending": 3, "accept": 0, "reject": 0, "revise": 0}
