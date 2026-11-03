@@ -12,7 +12,7 @@ An administrator previews the six legacy routes as one-member groups and rules. 
 - API contract: 1.16.0, frozen by `EXEC2-SEAL-2`
 - analysis/comparison/event contract: unchanged
 - migration head: `0048`, created by `EXEC2-SEAL-2`; this task adds no migration
-- base commit: `integration/exec2` after the GROUP-RUN-01 and GROUP-CMP-01 merges
+- base commit: `integration/exec2` at `41514187` (GROUP-RUN-01 and GROUP-CMP-01 merged)
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 17, 18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -25,17 +25,17 @@ An administrator previews the six legacy routes as one-member groups and rules. 
 - premise: the standby is used only at run start, with an event
 
 ### P-01 — standby use today
-- captured_at: 2026-11-02
-- command: `git grep -n 'standby_used' origin/dev -- src/auditmanager`
+- captured_at: 2026-11-03
+- command: `git grep -n 'standby_used' 41514187 -- src/auditmanager`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/executors/README.md:80:`audit_run.standby_used` event. `environment` keeps today's path, with `R-133` enforced.
-  origin/dev:src/auditmanager/runs/commands.py:791:        session, event_type="audit_run.standby_used", aggregate_type="AuditRun",
+  41514187:src/auditmanager/executors/README.md:102:`audit_run.standby_used` event. `environment` keeps today's path, with `R-133` enforced.
+  41514187:src/auditmanager/runs/commands.py:924:        session, event_type="audit_run.standby_used", aggregate_type="AuditRun",
   exit=0
   ```
 - interpretation: the cut-over preview flags every standby; rules never use one.
 
-The integrator re-runs every premise command on the actual base before dispatch (`EXEC2-PLAN.md` section 6) and corrects line numbers; a premise that no longer holds stops the dispatch.
+The integrator re-captured this on `41514187` before dispatch.
 
 ## Historical evidence
 - correction_mode: none
@@ -54,6 +54,15 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `docs/manual-tests/EXEC2-CUTOVER.md`
 - `tests/unit/executors/test_routing_mode.py`
 - `tests/integration/executors/test_cutover.py`
+- `src/auditmanager/executors/public.py`
+- `src/auditmanager/executors/group_repository.py`
+- `src/auditmanager/executors/group_commands.py`
+- `src/auditmanager/api/routers/executor_groups.py`
+- `src/auditmanager/api/routers/ports.py`
+- `src/auditmanager/bootstrap/adapters.py`
+- `scripts/recovery/grant_classification.py`
+- `tests/integration/api/test_role_register.py`
+- `tests/integration/api/test_authorization.py`
 
 ## Forbidden hotspots
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
@@ -69,6 +78,10 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - The preview, the confirmed cut-over and the rollback per decision 17.
 - `docs/manual-tests/EXEC2-CUTOVER.md` (Russian operator steps, rollback, what a pending job does).
 - Tests for B3 §11 items 15, 16 and 22.
+- Serve `previewExecutorRouting` and `setExecutorRoutingMode` (contract 1.16.0) through `api/routers/executor_groups.py`, its port and adapter regions (`# EXEC2-CUTOVER-01`).
+- Mode events are written under the advisory lock `hashtextextended('executor_routing_mode_event', 0)` with `event_no = max + 1` (the 0047 trigger verifies it); `executor_routing_mode_event` leaves `SEALED_NOT_YET_WRITTEN`.
+- The confirmed cut-over creates the one-member groups and the six rules through the existing group commands' internals, in the same transaction as the `rules` event; the preview digest must match the current preview (`conflict` / `preview_stale`).
+- Under `rules`, `setExecutorRoute` is refused with `conflict` / `routing_mode_rules`; `listExecutorRoutes` stays readable.
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker
