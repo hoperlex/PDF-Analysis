@@ -92,7 +92,11 @@ class Executors:
 
         self.mode, self.rule, self.rule_revision = mode, rule, rule_revision
         self.revisions = {REVISION: revision(REVISION, group=GROUP, pin=OPUS), REVISION_NEW: revision(REVISION_NEW, group=GROUP_NEW, pin=SONNET)}
+        #: The provider lock as these scenarios read it: the rates the revisions above snapshotted (a group is made at the lock's rates).
+        #: A test moves a model's rates to show a snapshot that is no longer the lock's.
+        self.lock: dict[str, tuple[float, float]] = {OPUS: (2.0, 10.0), SONNET: (2.0, 10.0)}
         self.legacy_reads = 0
+        monkeypatch.setattr(public, "pinned_models", lambda: tuple(ModelPin(model, *rates) for model, rates in self.lock.items()))
         monkeypatch.setattr(public, "routing_mode", lambda session, groups=None: SimpleNamespace(mode=self.mode))
         monkeypatch.setattr(public, "resolve_rule", self._rule)
         monkeypatch.setattr(public, "group_revision_of", lambda session, identity, groups=None: self.revisions.get(identity))
@@ -197,11 +201,62 @@ def test_under_rules_the_route_is_the_group_revision_of_the_current_rule_with_no
     assert route.metered and route.work_kind == WORK_KIND and route.provider_mode == "live"
 
 
-def test_the_route_prices_at_the_rate_snapshot_of_the_revision_and_not_the_lock_of_today(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_route_prices_at_the_rate_snapshot_of_the_revision(monkeypatch: pytest.MonkeyPatch) -> None:
     executors = Executors(monkeypatch)
     executors.revisions[REVISION_NEW] = revision(REVISION_NEW, group=GROUP_NEW, pin=SONNET, rates=("0.5", "1.5"))
+    executors.lock[SONNET] = (0.5, 1.5)
     route = estimate_module.read_route(session(), WORK_KIND, "live")
     assert (route.pin.model_id, route.pin.input_per_mtok_usd, route.pin.output_per_mtok_usd) == (SONNET, 0.5, 1.5)
+
+
+# --- a snapshot that is not the lock's is refused where the estimate is made (`EXEC2-FOLLOWUP-01`, M2) ---------------------------------
+
+
+def stale_rates(executors: "Executors") -> None:
+    """The lock moved after the group revision was made: the revision still holds 2.0 / 10.0, the lock now prices the model at 2.5 / 10.0."""
+    executors.lock[SONNET] = (2.5, 10.0)
+    executors.lock[OPUS] = (2.5, 10.0)
+
+
+def assert_rates_stale(refused: pytest.ExceptionInfo[DomainError]) -> None:
+    error = refused.value
+    assert error.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert error.detail_fields == {"stage_id": WORK_KIND, "reason": "cost_estimate_binding_changed"}
+    assert error.envelope("corr_01").details == error.detail_fields, "the catalogue lets this code carry exactly these two keys"
+
+
+def test_a_start_under_rules_on_a_group_whose_rates_are_stale_is_refused_before_any_consent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without this the estimate was priced at the snapshot, the consent taken, and the first call refused it -- and a new consent, priced
+    on the same snapshot, was refused again: a re-consent that could never succeed."""
+    executors = Executors(monkeypatch)
+    stale_rates(executors)
+    method = CountingMethod()
+    with pytest.raises(DomainError) as refused:
+        service(method).estimate_in(session(), scope())
+    assert_rates_stale(refused)
+    assert method.models == [], "nothing was counted: the refusal comes with the route"
+
+
+def test_a_resume_of_a_job_on_a_group_whose_rates_are_stale_is_refused_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    executors = Executors(monkeypatch)
+    stale_rates(executors)
+    with pytest.raises(DomainError) as refused:
+        service(CountingMethod()).estimate_in(session(), scope(), AiMode.LEFT, job=record())
+    assert_rates_stale(refused)
+
+
+def test_the_refusal_is_the_registered_cost_binding_reason_the_run_path_raises_too() -> None:
+    from auditmanager.jobs.repository import CONSENT_LAPSED_REASON
+
+    assert estimate_module.REASON_RATES_STALE == CONSENT_LAPSED_REASON == "cost_estimate_binding_changed"
+
+
+def test_a_snapshot_that_is_the_lock_is_not_refused_and_a_legacy_route_never_reads_the_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    executors = Executors(monkeypatch)
+    assert estimate_module.read_route(session(), WORK_KIND, "live").grouped
+    stale_rates(executors)
+    executors.mode = "legacy"
+    assert not estimate_module.read_route(session(), WORK_KIND, "live").grouped, "a job on a connection is priced as it always was"
 
 
 def test_under_legacy_the_route_is_the_primary_exactly_as_before(monkeypatch: pytest.MonkeyPatch) -> None:

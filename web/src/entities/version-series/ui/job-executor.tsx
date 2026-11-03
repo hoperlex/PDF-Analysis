@@ -28,7 +28,12 @@ export function JobExecutor({ job }: JobExecutorProps) {
       <p>{jobExecutorSentence(line)}</p>
       {wait === null ? null : <p role="status">{wait}</p>}
       {line.waitReason === 'runner_offline' && line.groupId !== undefined ? (
-        <GroupWaitDetail groupId={line.groupId} waitReason={line.waitReason} waitingSince={line.waitingSince} />
+        <GroupWaitDetail
+          groupId={line.groupId}
+          revisionId={line.groupRevisionId}
+          waitReason={line.waitReason}
+          ends={line.counting === true}
+        />
       ) : null}
     </div>
   );

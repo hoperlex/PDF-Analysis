@@ -4,8 +4,9 @@
  * Work admitted on a group that waits with `runner_offline` carries one word for every case in which no member of the group can
  * take it. The screen now also reads the group's capacity (`getExecutorGroupCapacity`) and says what is actually wrong with the
  * members — «агент офлайн», «проверка связи не пройдена», «подключение в архиве», «подключение не обслуживается», «ревизия подключения
- * изменилась — группу нужно пересобрать» — and that the wait ends after the 30 minutes the owner kept for every case. No contract
- * changes, and no sentence is invented: a reading that does not explain the wait explains nothing.
+ * изменилась — группу нужно пересобрать» — and that the wait ends after the offline limit (30 minutes unless the stand sets another; the
+ * sentence says «по умолчанию 30 минут» and shows no time). No contract changes, and no sentence is invented: a reading that does not
+ * explain the wait explains nothing. The capacity describes the group's CURRENT revision, so work accepted on an earlier one is told so.
  *
  * Written under `R-149d` and not run in EXEC-2; none of it needs PostgreSQL. Every assertion is one a mutation of the source turns
  * red: the sentences and their order, the count of connections, the rules that return nothing (an eligible member, a member that is
@@ -20,17 +21,17 @@ import { describe, expect, it } from 'vitest';
 import type { ExecutorGroupCapacity, ExecutorGroupMemberIssue, ExecutorGroupMemberStatus, RunQueueReason, RunStatus } from '@/shared/api';
 import { EXECUTOR_GROUP_MEMBER_ISSUE_VALUES, RUN_QUEUE_REASON_VALUES, queryKeys } from '@/shared/api';
 import {
+  CURRENT_STATE_NOTE,
   GroupWaitDetail,
-  OFFLINE_WAIT_LIMIT_MINUTES,
+  OFFLINE_WAIT_DEFAULT_MINUTES,
+  OFFLINE_WAIT_END_SENTENCE,
+  PREVIOUS_REVISION_SENTENCE,
   WAIT_CAUSE_SENTENCES,
   WAIT_DETAIL_UNAVAILABLE,
   executorGroupCapacityKey,
   groupWaitDetail,
-  offlineWaitEnd,
-  offlineWaitEndSentence,
   wantsGroupWaitDetail,
 } from '@/entities/executor-group';
-import { formatInstant } from '@/shared/lib';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { WEB_ROOT, readText } from '../../guards/lib/repo';
@@ -41,7 +42,8 @@ import { groupId, groupRevisionId } from './executor-groups-fixtures';
 
 const GROUP = groupId(1);
 const SINCE = '2026-11-03T09:30:00.000Z';
-const ENDS = '2026-11-03T10:00:00.000Z';
+const REVISION = groupRevisionId(1);
+const NEXT_REVISION = groupRevisionId(2);
 
 function member(n: number, issue?: ExecutorGroupMemberIssue | 'unknown_issue'): ExecutorGroupMemberStatus {
   return {
@@ -54,7 +56,7 @@ function member(n: number, issue?: ExecutorGroupMemberIssue | 'unknown_issue'): 
 }
 
 function capacity(...members: ExecutorGroupMemberStatus[]): ExecutorGroupCapacity {
-  return { group_id: GROUP, group_revision_id: groupRevisionId(1), members, capacity: 0, used: 0, waiting: 1 };
+  return { group_id: GROUP, group_revision_id: REVISION, members, capacity: 0, used: 0, waiting: 1 };
 }
 
 describe('the words', () => {
@@ -71,8 +73,9 @@ describe('the words', () => {
     expect(Object.keys(WAIT_CAUSE_SENTENCES).sort()).toEqual([...EXECUTOR_GROUP_MEMBER_ISSUE_VALUES].sort());
   });
 
-  it('keep the limit the owner kept for every case', () => {
-    expect(OFFLINE_WAIT_LIMIT_MINUTES).toBe(30);
+  it('keep the limit the owner kept for every case, as a default and not as a fact', () => {
+    expect(OFFLINE_WAIT_DEFAULT_MINUTES).toBe(30);
+    expect(OFFLINE_WAIT_END_SENTENCE).toContain('по истечении лимита ожидания (по умолчанию 30 минут)');
   });
 });
 
@@ -80,8 +83,9 @@ describe('what is wrong with the group', () => {
   it.each(EXECUTOR_GROUP_MEMBER_ISSUE_VALUES.filter((issue) => issue !== 'at_capacity'))(
     'says %s for a group of one connection',
     (issue) => {
-      expect(groupWaitDetail(capacity(member(1, issue)))).toEqual({
+      expect(groupWaitDetail(capacity(member(1, issue)), REVISION)).toEqual({
         causes: [{ issue, members: 1 }],
+        revision: 'same',
         sentence: `Подключение группы не может принять работу: ${WAIT_CAUSE_SENTENCES[issue]}.`,
       });
     },
@@ -90,7 +94,7 @@ describe('what is wrong with the group', () => {
   it('says every cause once, in the contract’s order and with how many connections have it, for a group of several', () => {
     const detail = groupWaitDetail(capacity(
       member(1, 'probe_not_ok'), member(2, 'runner_offline'), member(3, 'runner_offline'), member(4, 'revision_changed'),
-    ))!;
+    ), REVISION)!;
     expect(detail.causes).toEqual([
       { issue: 'revision_changed', members: 1 },
       { issue: 'probe_not_ok', members: 1 },
@@ -104,41 +108,51 @@ describe('what is wrong with the group', () => {
   });
 
   it('explains nothing when some member could take the work: the stored wait is out of date', () => {
-    expect(groupWaitDetail(capacity(member(1, 'runner_offline'), member(2)))).toBeNull();
+    expect(groupWaitDetail(capacity(member(1, 'runner_offline'), member(2)), REVISION)).toBeNull();
   });
 
   it('explains nothing when a member only waits for a place: that wait has no end and is not this one', () => {
-    expect(groupWaitDetail(capacity(member(1, 'runner_offline'), member(2, 'at_capacity')))).toBeNull();
-    expect(groupWaitDetail(capacity(member(1, 'at_capacity')))).toBeNull();
+    expect(groupWaitDetail(capacity(member(1, 'runner_offline'), member(2, 'at_capacity')), REVISION)).toBeNull();
+    expect(groupWaitDetail(capacity(member(1, 'at_capacity')), REVISION)).toBeNull();
   });
 
   it('invents no reason: a member with none, or one this screen has no word for, explains nothing', () => {
     const bare: ExecutorGroupMemberStatus = { ...member(1), eligible: false };
-    expect(groupWaitDetail(capacity(bare))).toBeNull();
-    expect(groupWaitDetail(capacity(member(1, 'unknown_issue')))).toBeNull();
-    expect(groupWaitDetail(capacity(member(1, 'runner_offline'), bare))).toBeNull();
+    expect(groupWaitDetail(capacity(bare), REVISION)).toBeNull();
+    expect(groupWaitDetail(capacity(member(1, 'unknown_issue')), REVISION)).toBeNull();
+    expect(groupWaitDetail(capacity(member(1, 'runner_offline'), bare), REVISION)).toBeNull();
   });
 
   it('explains nothing for a group with no members', () => {
-    expect(groupWaitDetail(capacity())).toBeNull();
+    expect(groupWaitDetail(capacity(), REVISION)).toBeNull();
+  });
+});
+
+describe('the revision the work waits on', () => {
+  it('says that the work was accepted on a previous revision when the capacity is of another, whatever its members say', () => {
+    for (const members of [[member(1, 'runner_offline')], [member(1)], [member(1, 'at_capacity')]]) {
+      expect(groupWaitDetail(capacity(...members), NEXT_REVISION)).toEqual({
+        causes: [], revision: 'previous', sentence: PREVIOUS_REVISION_SENTENCE,
+      });
+    }
+    expect(PREVIOUS_REVISION_SENTENCE).toBe('Работа принята на предыдущей ревизии группы — новая ревизия её не обслужит.');
+  });
+
+  it('says that what it shows is the group’s current state when the work names no revision, and does not claim more', () => {
+    const detail = groupWaitDetail(capacity(member(1, 'runner_offline')))!;
+    expect(detail.revision).toBe('unknown');
+    expect(detail.sentence).toBe(`Подключение группы не может принять работу: агент офлайн. ${CURRENT_STATE_NOTE}`);
+    expect(CURRENT_STATE_NOTE).toBe('Показано текущее состояние группы.');
+    expect(groupWaitDetail(capacity(member(1, 'runner_offline')), REVISION)!.sentence).not.toContain(CURRENT_STATE_NOTE);
   });
 });
 
 describe('that the wait ends', () => {
-  it('ends 30 minutes after it began', () => {
-    expect(offlineWaitEnd(SINCE)).toBe(ENDS);
-    expect(offlineWaitEndSentence(SINCE)).toBe(
-      `Если ничего не изменится, ожидание закончится ${formatInstant(ENDS)} (через 30 минут после начала), и работа будет остановлена: исполнитель так и не появился.`,
+  it('says so as a conditional with the limit as a default, and shows no time of its own', () => {
+    expect(OFFLINE_WAIT_END_SENTENCE).toBe(
+      'Если ничего не изменится, по истечении лимита ожидания (по умолчанию 30 минут) работа будет остановлена: исполнитель так и не появился.',
     );
-  });
-
-  it('says «через 30 минут после начала» when it does not know when the wait began, and invents no time', () => {
-    for (const unknown of [undefined, null, 'вчера']) {
-      expect(offlineWaitEnd(unknown)).toBeNull();
-      expect(offlineWaitEndSentence(unknown)).toBe(
-        'Если ничего не изменится, ожидание закончится через 30 минут после начала, и работа будет остановлена: исполнитель так и не появился.',
-      );
-    }
+    expect(OFFLINE_WAIT_END_SENTENCE).not.toMatch(/\d{4}-\d{2}-\d{2}|UTC|\d{2}:\d{2}/);
   });
 });
 
@@ -162,8 +176,10 @@ describe('when the capacity is read at all', () => {
 });
 
 describe('the component', () => {
-  function drawn(client: ReturnType<typeof newClient>, reason: RunQueueReason | null, since: string | undefined = SINCE): string {
-    return renderWith(client, createElement(GroupWaitDetail, { groupId: GROUP, waitReason: reason, waitingSince: since }));
+  function drawn(
+    client: ReturnType<typeof newClient>, reason: RunQueueReason | null, over: { revisionId?: string | undefined; ends?: boolean } = {},
+  ): string {
+    return renderWith(client, createElement(GroupWaitDetail, { groupId: GROUP, revisionId: REVISION, waitReason: reason, ...over }));
   }
 
   it('says what is wrong and that the wait ends, from the capacity of the group', () => {
@@ -173,7 +189,32 @@ describe('the component', () => {
     expect(markup).toContain('data-wait-detail="causes"');
     expect(markup).toContain('data-wait-causes="probe_not_ok"');
     expect(markup).toContain('Подключение группы не может принять работу: проверка связи не пройдена.');
-    expect(markup).toContain(`ожидание закончится ${formatInstant(ENDS)} (через 30 минут после начала)`);
+    expect(markup).toContain(OFFLINE_WAIT_END_SENTENCE);
+  });
+
+  it('says that the work was accepted on a previous revision when the capacity is of the next', () => {
+    const client = newClient();
+    client.setQueryData(executorGroupCapacityKey(GROUP), { ...capacity(member(1, 'runner_offline')), group_revision_id: NEXT_REVISION });
+    const markup = drawn(client, 'runner_offline');
+    expect(markup).toContain('data-wait-detail="previous-revision"');
+    expect(markup).toContain(PREVIOUS_REVISION_SENTENCE);
+    expect(markup).not.toContain('агент офлайн');
+    expect(markup).toContain(OFFLINE_WAIT_END_SENTENCE);
+  });
+
+  it('says that it shows the current state when the work names no revision', () => {
+    const client = newClient();
+    client.setQueryData(executorGroupCapacityKey(GROUP), capacity(member(1, 'runner_offline')));
+    expect(drawn(client, 'runner_offline', { revisionId: undefined })).toContain(CURRENT_STATE_NOTE);
+  });
+
+  it('makes the promise that the wait ends only for work that is counting down, never for paused work', () => {
+    const client = newClient();
+    client.setQueryData(executorGroupCapacityKey(GROUP), capacity(member(1, 'runner_offline')));
+    const paused = drawn(client, 'runner_offline', { ends: false });
+    expect(paused).toContain('Подключение группы не может принять работу: агент офлайн.');
+    expect(paused).not.toContain('по истечении лимита ожидания');
+    expect(drawn(client, 'runner_offline')).toContain('по истечении лимита ожидания');
   });
 
   it('draws nothing for any other reason, even when the capacity is in the cache', () => {
@@ -195,7 +236,7 @@ describe('the component', () => {
     const markup = drawn(client, 'runner_offline');
     expect(markup).toContain('data-wait-detail="unavailable"');
     expect(markup).toContain(WAIT_DETAIL_UNAVAILABLE);
-    expect(markup).toContain('ожидание закончится');
+    expect(markup).toContain(OFFLINE_WAIT_END_SENTENCE);
   });
 
   it('draws nothing for work with no group', () => {
@@ -206,7 +247,7 @@ describe('the component', () => {
 describe('the run page', () => {
   const PLAN = {
     executor_group_id: GROUP,
-    executor_group_revision_id: groupRevisionId(1),
+    executor_group_revision_id: REVISION,
     pin_id: 'модель-основная',
     gateway_model: 'шлюзовая-основная',
     billing: 'metered',
@@ -229,8 +270,14 @@ describe('the run page', () => {
     const markup = page(waiting(), capacity(member(1, 'runner_offline')));
     expect(markup).toContain('В очереди: раннер не в сети.');
     expect(markup).toContain('Подключение группы не может принять работу: агент офлайн.');
-    expect(markup).toContain(`ожидание закончится ${formatInstant(ENDS)}`);
+    expect(markup).toContain(OFFLINE_WAIT_END_SENTENCE);
     expect(markup.indexOf('В очереди: раннер не в сети.')).toBeLessThan(markup.indexOf('Подключение группы не может принять работу'));
+  });
+
+  it('says that the run was accepted on a previous revision when the group has a newer one', () => {
+    const markup = page(waiting(), { ...capacity(member(1, 'runner_offline')), group_revision_id: NEXT_REVISION });
+    expect(markup).toContain(PREVIOUS_REVISION_SENTENCE);
+    expect(markup).not.toContain('Подключение группы не может принять работу');
   });
 
   it('keeps the page as it was when the reason is another, the run is bound or the capacity is not read', () => {

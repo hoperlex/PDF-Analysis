@@ -93,6 +93,13 @@ class World:
         if self.route_error is not None:
             raise self.route_error
 
+    @property
+    def route_log(self) -> list[str]:
+        """What the route step did to the session. One ``FakeSession`` serves every block of ``import_env``, and the create block commits
+        (``log[0]``), so the route step's own commits and rollbacks are what follows it."""
+        assert self.session.log[:1] == ["commit"], "the create block commits before anything else"
+        return self.session.log[1:]
+
     def run(self) -> ImportReport:
         ring = SimpleNamespace(public_ring=lambda: object())
         return operations.import_env(
@@ -117,6 +124,7 @@ def test_under_rules_the_connection_is_imported_and_no_route_is_written(monkeypa
     assert (report.connection_id, report.created, report.probe_outcome) == (NEW, True, "ok")
     assert report.routed is False and report.routing_mode == "rules"
     assert world.routes == [], "the legacy routes are read-only under rules: the route step is skipped, not attempted"
+    assert world.route_log == [], "and it touched the session not at all: the create block's commit is the last"
 
 
 def test_under_rules_a_probe_that_did_not_pass_is_reported_with_the_mode_too(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,7 +141,7 @@ def test_under_legacy_the_route_is_written_once_to_text_analysis_and_committed(m
     assert len(world.routes) == 1
     assert (world.routes[0]["work_kind"], world.routes[0]["primary_connection_id"]) == ("text_analysis", NEW)
     assert world.routes[0]["standby_connection_id"] is None
-    assert world.session.log == ["commit"]
+    assert world.route_log == ["commit"], "the route is committed by the route step, after the create block committed the connection"
 
 
 def test_under_legacy_a_probe_that_did_not_pass_is_not_routed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,7 +158,7 @@ def test_a_cut_over_between_the_read_of_the_mode_and_the_route_is_reported_like_
     report = world.run()
     assert report.routed is False and report.routing_mode == "rules" and report.created is True
     assert len(world.routes) == 1, "the route was attempted once, and refused before it wrote anything"
-    assert world.session.log == ["rollback"], "the refused route's transaction is released, and nothing is committed"
+    assert world.route_log == ["rollback"], "the refused route's transaction is released, and nothing is committed by the route step"
 
 
 def test_any_other_refusal_of_the_route_still_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -158,7 +166,7 @@ def test_any_other_refusal_of_the_route_still_propagates(monkeypatch: pytest.Mon
     world = World(monkeypatch, mode="legacy", route_error=other)
     with pytest.raises(DomainError) as refused:
         world.run()
-    assert refused.value is other and world.session.log == []
+    assert refused.value is other and world.route_log == [], "the route step committed and released nothing"
 
 
 def test_a_repeat_names_the_existing_connection_and_has_no_mode(monkeypatch: pytest.MonkeyPatch) -> None:

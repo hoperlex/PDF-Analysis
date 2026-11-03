@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, NoReturn
 
@@ -81,12 +81,16 @@ __all__ = [
     "group_aware",
     "group_offline_wait_seconds",
     "group_pin",
-    "has_eligible_member",
+    "group_rates_hold",
+    "group_wait_reason",
     "is_eligible",
     "lock_pin",
+    "member_issues",
     "pending_route",
+    "priced_as_consented",
     "same_rates",
     "select_member",
+    "snapshot_pin",
     "write_binding",
 ]
 
@@ -129,11 +133,26 @@ def is_eligible(facts: Any) -> bool:
     return member_issue(facts) in (None, _AT_CAPACITY)
 
 
-def has_eligible_member(session: Session, revision: Any) -> bool:
-    """Is some member of ``revision`` eligible now (:func:`is_eligible`)? Read-only: no lock is taken."""
-    from auditmanager.executors.public import member_facts
+def member_issues(session: Session, revision: Any) -> list[str | None]:
+    """The first issue of each member of ``revision`` now (``executors.group_selection.member_issue``; ``None`` is a member with no
+    issue at all). Read-only: no lock is taken."""
+    from auditmanager.executors.public import member_facts, member_issue
 
-    return any(is_eligible(facts) for facts in member_facts(session, revision))
+    return [member_issue(facts) for facts in member_facts(session, revision)]
+
+
+def group_wait_reason(issues: Sequence[str | None]) -> str | None:
+    """Why work admitted on a group cannot be dispatched now, from the first issue of each member (decision 15).
+
+    The Run side's reading (``jobs.repository._group_wait_reason``, a test holds the two equal) and the first call's own
+    (:func:`_wait`): ``None`` when some member has no issue at all (it can take the work); ``executor_at_capacity`` when none has but
+    some member is only full (a wait for a place, which has no end); ``runner_offline`` otherwise -- every member is revised, archived,
+    not served, not probed or without a runner, which for waiting work is no executor online."""
+    if any(issue is None for issue in issues):
+        return None
+    if any(issue == _AT_CAPACITY for issue in issues):
+        return WAIT_AT_CAPACITY
+    return WAIT_RUNNER_OFFLINE
 
 
 def _route_missing() -> DomainError:
@@ -160,15 +179,41 @@ def same_rates(left: Any | None, right: Any | None) -> bool:
     return left is not None and right is not None and model_rate_sha256(left) == model_rate_sha256(right)
 
 
-def group_pin(revision: Any) -> Any:
-    """The pin a group revision prices at: the provider lock's pin of ``revision.pin_id`` with the **rate snapshot the revision copied**
-    (the rates are a part of what the consent names, and a revision is immutable). An unpinned model is ``executor_route_missing``."""
+def snapshot_pin(revision: Any) -> Any | None:
+    """The provider lock's pin of ``revision.pin_id`` with the **rate snapshot the revision copied** (the rates are a part of what the
+    consent names, and a revision is immutable), or ``None`` when the lock does not pin the model."""
     base = lock_pin(revision.pin_id)
     if base is None:
-        raise _route_missing()
+        return None
     return dataclasses.replace(
         base, input_per_mtok_usd=float(revision.input_per_mtok_usd), output_per_mtok_usd=float(revision.output_per_mtok_usd),
     )
+
+
+def group_pin(revision: Any) -> Any:
+    """The pin a group revision prices at: :func:`snapshot_pin`. An unpinned model is ``executor_route_missing``."""
+    pin = snapshot_pin(revision)
+    if pin is None:
+        raise _route_missing()
+    return pin
+
+
+def group_rates_hold(revision: Any, pin_id: str | None = None) -> bool:
+    """Are the rates the group revision snapshotted -- the ones a consent is given on -- the rates the provider lock prices ``pin_id`` (by
+    default the revision's own model) at **now**? The rule a Run's dispatch holds (``runs.cost_policy.group_consent_holds``), compared by
+    the same digest. ``False`` when the lock has stopped pinning the model."""
+    return same_rates(snapshot_pin(revision), lock_pin(revision.pin_id if pin_id is None else pin_id))
+
+
+def priced_as_consented(session: Session, group_revision_id: str, pin: Any | None) -> bool:
+    """Is a call priced at ``pin`` priced at the rates the consent of a job admitted on ``group_revision_id`` was given on? For the calls of a
+    job that is **already bound**, whose route is opened from the lock as it is now: the same comparison :func:`consent_problem` makes at the
+    first call, repeated at every call as a Run's call-time guard does (``analysis.text.cost.require_approved_model``). A group revision that
+    cannot be read, or a missing pin, is not a consent that holds."""
+    from auditmanager.executors.public import group_revision_of
+
+    revision = group_revision_of(session, group_revision_id)
+    return revision is not None and same_rates(snapshot_pin(revision), pin)
 
 
 # -- the route of a pending job -----------------------------------------------------------------------------------------------
@@ -273,13 +318,7 @@ def consent_problem(job: Any, revision: Any, member: Any, snapshot_revision_id: 
     settings = member.settings
     if (settings.pin_id, settings.gateway_model, settings.billing) != (revision.pin_id, revision.gateway_model, revision.billing):
         return "member_settings"
-    consented_on = lock_pin(revision.pin_id)
-    if consented_on is not None:
-        consented_on = dataclasses.replace(
-            consented_on, input_per_mtok_usd=float(revision.input_per_mtok_usd),
-            output_per_mtok_usd=float(revision.output_per_mtok_usd),
-        )
-    if not same_rates(consented_on, lock_pin(settings.pin_id)):
+    if not group_rates_hold(revision, settings.pin_id):
         return "rates"
     if revision.billing == _NOT_METERED:
         return None if job.estimate_micros == 0 else "estimate"

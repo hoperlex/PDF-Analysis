@@ -34,13 +34,13 @@ from auditmanager.comparison.public import (
     COMPARISON_MODULES_ENV,
     HANDLER_FACTORIES as COMPARISON_HANDLER_FACTORIES,
     SPEND_SETTLERS as COMPARISON_SPEND_SETTLERS,
-    ComparisonGroupWaitSweep,
     ComparisonWorkRepository,
     ComparisonWorkRunner,
     CallRoute,
     HandlerRegistry,
     TileRenderer,
     WorkDependencies,
+    build_group_wait_sweep,
     default_gates,
     WorkQueueError,
     enabled_modules as enabled_comparison_modules,
@@ -241,7 +241,7 @@ class WorkerRuntime:
     #: refuses one, as does ``execute`` (which was built with the same value).
     dispatch_groups: bool = True
     #: `EXEC2-FOLLOWUP-01`: ``comparison_group_waits(offline_wait_seconds)`` ends the comparison AI jobs admitted by a group that have waited
-    #: for a runner longer than the limit (``comparison.public.ComparisonGroupWaitSweep.expire_offline``). Set exactly when
+    #: for a runner longer than the limit (``comparison.public.build_group_wait_sweep(...).sweep``). Set exactly when
     #: ``dispatch_groups`` is: a worker that cannot bind a pending group job has none to expire either.
     comparison_group_waits: Callable[[float], Any] | None = None
 
@@ -445,9 +445,7 @@ def build_worker_runtime(
             dispatch_groups=dispatch_groups,
         ),
         dispatch_groups=dispatch_groups,
-        comparison_group_waits=(
-            ComparisonGroupWaitSweep(sessions).expire_offline if dispatch_groups else None
-        ),
+        comparison_group_waits=build_group_wait_sweep(sessions).sweep if dispatch_groups else None,
     )
 
 

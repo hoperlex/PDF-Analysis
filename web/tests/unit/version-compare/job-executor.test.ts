@@ -18,16 +18,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { ComparisonAiJob, ExecutorBinding, ExecutorGroupCapacity, ExecutorGroupPlan } from '@/shared/api';
-import { COMPARISON_AI_JOB_STATE_VALUES, RUN_QUEUE_REASON_VALUES } from '@/shared/api';
+import { ApiError, RUN_QUEUE_REASON_VALUES } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
-import { executorGroupCapacityKey } from '@/entities/executor-group';
+import { OFFLINE_WAIT_END_SENTENCE, PREVIOUS_REVISION_SENTENCE, executorGroupCapacityKey } from '@/entities/executor-group';
 import type { AiStepFacts } from '@/entities/version-series';
 import {
+  GROUP_RATES_STALE_SENTENCE,
   GROUP_ROUTE_LINE,
   JOB_PLANNED_TAIL,
+  JOB_UNBOUND_TAIL,
+  EstimatePanel,
   JOB_WAIT_LABELS,
   JobExecutor,
   aiStepCell,
+  comparisonFailure,
   estimateLines,
   jobExecutorHint,
   jobExecutorLine,
@@ -83,7 +87,8 @@ describe('before the first call: the plan', () => {
 
   it('is a plan with no connection, the reason it waits, since when, and the group', () => {
     expect(line).toEqual({
-      phase: 'planned', name: '', model: MODEL, groupId: GROUP, waitReason: 'executor_at_capacity', waitingSince: SINCE,
+      phase: 'planned', name: '', model: MODEL, counting: true, groupId: GROUP, groupRevisionId: groupRevisionId(1),
+      waitReason: 'executor_at_capacity', waitingSince: SINCE,
     });
   });
 
@@ -120,13 +125,13 @@ describe('before the first call: the plan', () => {
     expect(jobExecutorLine(pending({ wait_reason: 'future_reason' as never }))!.waitReason).toBeUndefined();
   });
 
-  it('waits while queued, running or paused (a pause keeps its wait), and for nothing once it has ended', () => {
-    for (const state of COMPARISON_AI_JOB_STATE_VALUES) {
-      const waiting = state === 'queued' || state === 'running' || state === 'paused';
+  it('waits while queued, running or paused (a pause keeps its wait), and counts down to an end only while it is queued or running', () => {
+    for (const state of ['queued', 'running', 'paused'] as const) {
       const one = jobExecutorLine(pending({ state }))!;
-      expect(one.phase).toBe('planned');
-      expect(one.waitReason !== undefined, state).toBe(waiting);
-      expect(jobWaitSentence(one) !== null, state).toBe(waiting);
+      expect(one.phase, state).toBe('planned');
+      expect(one.waitReason, state).toBe('executor_at_capacity');
+      expect(jobWaitSentence(one), state).not.toBeNull();
+      expect(one.counting, state).toBe(state !== 'paused');
     }
   });
 
@@ -141,6 +146,28 @@ describe('before the first call: the plan', () => {
     const stale = jobExecutorLine(pending({ binding: BINDING }))!;
     expect(stale.phase).toBe('planned');
     expect(jobExecutorSentence(stale)).not.toContain('Основной шлюз');
+  });
+});
+
+describe('a job that ended without ever being given a connection (L1)', () => {
+  it.each(['completed', 'failed', 'cancelled'] as const)('is the plan in the past tense when it is %s, never the future of «будет выбрано»', (state) => {
+    const line = jobExecutorLine(pending({ state }))!;
+    expect(line).toEqual({ phase: 'unbound', name: '', model: MODEL });
+    const sentence = jobExecutorSentence(line);
+    expect(sentence).toBe(`Плановая модель «${MODEL}», подключение так и не было выбрано`);
+    expect(JOB_UNBOUND_TAIL).toBe('подключение так и не было выбрано');
+    expect(sentence).not.toContain('будет выбрано');
+    expect(jobWaitSentence(line)).toBeNull();
+    expect(jobExecutorHint(pending({ state }))).toBe(`${sentence}.`);
+    expect(sentence).not.toMatch(CLAIMS_A_MODEL_RAN);
+  });
+
+  it('is drawn with its machine value, and without a wait or a promise', () => {
+    const markup = renderToStaticMarkup(createElement(JobExecutor, { job: pending({ state: 'failed' }) }));
+    expect(markup).toContain('data-job-binding="unbound"');
+    expect(markup).not.toContain('data-job-wait-reason');
+    expect(markup).not.toContain('Ждёт исполнителя');
+    expect(markup).not.toContain('будет выбрано');
   });
 });
 
@@ -214,26 +241,40 @@ describe('the screens that show a job', () => {
     expect(block(job())).not.toContain('data-job-executor');
   });
 
+  const capacityOf = (issue: 'connection_archived' | 'runner_offline', revision = groupRevisionId(1)): ExecutorGroupCapacity => ({
+    group_id: GROUP, group_revision_id: revision, capacity: 0, used: 0, waiting: 1,
+    members: [{ connection_id: connectionId(1), snapshot_revision_id: revisionId(1), eligible: false, ineligible_reason: issue }],
+  });
+
   it('say what is wrong with the group of a job that waits for a runner, and that the wait ends', () => {
     const client = newClient();
-    const capacity: ExecutorGroupCapacity = {
-      group_id: GROUP, group_revision_id: groupRevisionId(1), capacity: 0, used: 0, waiting: 1,
-      members: [{ connection_id: connectionId(1), snapshot_revision_id: revisionId(1), eligible: false, ineligible_reason: 'connection_archived' }],
-    };
-    client.setQueryData(executorGroupCapacityKey(GROUP), capacity);
+    client.setQueryData(executorGroupCapacityKey(GROUP), capacityOf('connection_archived'));
     const markup = block(pending({ wait_reason: 'runner_offline' }), client);
     expect(markup).toContain('Ждёт исполнителя: раннер не в сети.');
     expect(markup).toContain('data-wait-causes="connection_archived"');
     expect(markup).toContain('Подключение группы не может принять работу: подключение в архиве.');
-    expect(markup).toContain('ожидание закончится');
+    expect(markup).toContain(OFFLINE_WAIT_END_SENTENCE);
+  });
+
+  it('say that the job was accepted on a previous revision when the group has a newer one (M4)', () => {
+    const client = newClient();
+    client.setQueryData(executorGroupCapacityKey(GROUP), capacityOf('runner_offline', groupRevisionId(2)));
+    const markup = block(pending({ wait_reason: 'runner_offline' }), client);
+    expect(markup).toContain(PREVIOUS_REVISION_SENTENCE);
+    expect(markup).not.toContain('агент офлайн');
+  });
+
+  it('do not promise that the wait ends for a job that is paused (L2)', () => {
+    const client = newClient();
+    client.setQueryData(executorGroupCapacityKey(GROUP), capacityOf('runner_offline'));
+    const markup = block(pending({ wait_reason: 'runner_offline', state: 'paused', pause_reason: 'quota' }), client);
+    expect(markup).toContain('Подключение группы не может принять работу: агент офлайн.');
+    expect(markup).not.toContain('по истечении лимита ожидания');
   });
 
   it('read no capacity for any other wait', () => {
     const client = newClient();
-    client.setQueryData(executorGroupCapacityKey(GROUP), {
-      group_id: GROUP, group_revision_id: groupRevisionId(1), capacity: 0, used: 0, waiting: 1,
-      members: [{ connection_id: connectionId(1), snapshot_revision_id: revisionId(1), eligible: false, ineligible_reason: 'runner_offline' }],
-    } satisfies ExecutorGroupCapacity);
+    client.setQueryData(executorGroupCapacityKey(GROUP), capacityOf('runner_offline'));
     expect(block(pending({ wait_reason: 'needs_reconsent', state: 'paused' }), client)).not.toContain('data-wait-detail');
   });
 });
@@ -253,6 +294,44 @@ describe('the cell of a step', () => {
 
   it('adds nothing for a job that existed before groups', () => {
     expect(aiStepCell(facts(job())).view.title).not.toContain('модель');
+  });
+
+  it('says in the past tense that an ended job never got a connection', () => {
+    const title = aiStepCell(facts(pending({ state: 'failed' }))).view.title;
+    expect(title).toContain(`Плановая модель «${MODEL}», подключение так и не было выбрано.`);
+    expect(title).not.toContain('будет выбрано');
+  });
+});
+
+describe('a group whose rates are stale (M2)', () => {
+  const stale = (reason = 'cost_estimate_binding_changed'): ApiError => new ApiError(
+    422,
+    {
+      contract_version: '1.16.0', error_code: 'analysis_input_invalid', message: 'A caller-safe sentence in English.',
+      correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
+      details: { stage_id: 'comparison_pair_check', reason },
+    },
+    '0f0e9d8c-7b6a-4948-b726-150413021100',
+  );
+
+  it('is refused where the estimate is made, and said in Russian: «тарифы группы устарели — пересоберите группу»', () => {
+    const failure = comparisonFailure(stale());
+    expect(failure.detail).toBe(GROUP_RATES_STALE_SENTENCE);
+    expect(GROUP_RATES_STALE_SENTENCE).toContain('тарифы группы устарели — пересоберите группу');
+    expect(failure.moduleUnavailable).toBe(false);
+    expect(failure.estimateStale).toBe(false);
+  });
+
+  it('is told only by the registered reason: another reason of the same code keeps the code’s own sentence', () => {
+    expect(comparisonFailure(stale('cost_text_count_unavailable')).detail).not.toBe(GROUP_RATES_STALE_SENTENCE);
+  });
+
+  it('is what the estimate panel shows in place of an estimate the reader could not consent to', () => {
+    const markup = renderToStaticMarkup(createElement(EstimatePanel, {
+      title: 'Запуск', consentKind: 'pair_check', confirmLabel: 'Проверить', estimate: undefined, loading: false,
+      failure: comparisonFailure(stale()), agreedDigest: null, busy: false, onAgree: noop, onConfirm: noop, onCancel: noop,
+    }));
+    expect(markup).toContain('тарифы группы устарели — пересоберите группу');
   });
 });
 

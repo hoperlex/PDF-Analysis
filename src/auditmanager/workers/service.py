@@ -32,9 +32,10 @@ What it does, in five threads
   reason the Run is not offered again, so one Run no member can take never holds this worker's slot or its comparison
   claim (see :meth:`WorkerService._run_one` for the short local hold that covers the moment before the reason is stored).
   A worker whose provider source is not ``database`` (``dispatch_groups=False``) is offered no group Run at all.
-  `EXEC2-FOLLOWUP-01`: the same step also ends the **comparison AI jobs** admitted by a group that have waited for a runner longer
-  than that limit (``comparison.public.ComparisonGroupWaitSweep``, handed in as ``comparison_group_waits``). Their offline expiry used to be
-  decided only when one of a job's items was retried. It is a pass of its own -- a failure in one never stops the other -- and, like the
+  `EXEC2-FOLLOWUP-01`: the same step also keeps the wait of the **comparison AI jobs** admitted by a group true and ends the ones whose
+  group has had no eligible member for longer than that limit, each the way its own method ends it
+  (``comparison.public.build_group_wait_sweep``, handed in as ``comparison_group_waits``). Their wait used to be written, and their offline
+  expiry decided, only when one of a job's items was retried. It is a pass of its own -- a failure in one never stops the other -- and, like the
   claim of a pending group Run, it runs only for a worker whose provider source is ``database`` (``dispatch_groups``).
 * **slots** -- a pool of ``slots`` threads, each running one claimed run to a terminal.
   ``slots`` is ``AUDITMANAGER_WORKER_SLOTS`` (`EXEC-PAR-QUEUE-01`; one by default). With more
@@ -532,7 +533,8 @@ class WorkerService:
                       self._worker_id, report.consent_lapsed)
 
     def _expire_comparison_waits(self) -> None:
-        """End the comparison AI jobs admitted by a group that have waited for a runner longer than the offline limit (decision 15).
+        """Keep the wait of the comparison AI jobs admitted by a group true, and end the ones that have waited for a runner longer than the
+        offline limit (decision 15).
 
         A step of its own, after the Runs' and isolated from it: housekeeping, so the one place a failure is logged -- by the category
         of the failure, never its text -- and the loop carries on; the next pass repeats it. Nothing happens for a worker that does not

@@ -6,11 +6,14 @@
  * is merely full: a `pull` connection with no runner on line, but also a connection whose revision changed after the group
  * remembered it, one in the archive, one this release does not serve, one whose probe did not pass. The contract carries that
  * precision on the group's capacity — each `ExecutorGroupMemberStatus` has `eligible` and, when it is false, the first
- * `ineligible_reason` of dispatch — and this module turns it into a sentence. It changes no contract and no limit: the wait
- * ends after the 30 minutes the owner kept for every case, and the sentence says so.
+ * `ineligible_reason` of dispatch — and this module turns it into a sentence. It changes no contract and no limit.
  *
  * Rules that keep the sentence honest:
  *
+ * - **The reading is of the group's CURRENT revision; the work waits on its FROZEN one.** `ExecutorGroupCapacity.group_revision_id` is the
+ *   current revision, and work admitted earlier is dispatched from the revision it froze (`planned.executor_group_revision_id`). When the
+ *   two differ the members read say nothing about this work: the sentence says that it was accepted on a previous revision, which the new
+ *   one will not serve. When the work names no revision, the sentence says that what it shows is the group's current state.
  * - **No reason is invented.** A reading with a member that is eligible (the stored wait is out of date and the next dispatch
  *   will take the work), with a member that is only at capacity (the wait is for a place, which has no end), with a member that
  *   carries no reason, or with a reason this screen has no word for, explains nothing: `null`, and the screen keeps the sentence
@@ -18,16 +21,15 @@
  * - **The words are a `Record` over the contract's own set**, so a reason the contract gains later is a type error here and not
  *   a code on a screen.
  * - **Every cause is said once**, in the contract's order, with how many connections it holds when the group has more than one.
+ * - **The limit is a setting, not a fact.** The wait ends after `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`, 30 minutes unless the stand sets
+ *   another (`R-149c`); the sentence says «по умолчанию 30 минут» and computes no time of its own.
  */
 
 import type { ExecutorGroupCapacity, ExecutorGroupMemberIssue } from '@/shared/api';
 import { EXECUTOR_GROUP_MEMBER_ISSUE_VALUES } from '@/shared/api';
-import { formatInstant } from '@/shared/lib';
 
-/** How long work waits with no member able to take it before it ends (`R-149`: 30 minutes, for every case). */
-export const OFFLINE_WAIT_LIMIT_MINUTES = 30;
-
-const MINUTE_MS = 60_000;
+/** The limit when the stand sets none (`R-149`: 30 minutes, for every case). */
+export const OFFLINE_WAIT_DEFAULT_MINUTES = 30;
 
 /** Why one connection of the group cannot take the work now, in the words of the cases the owner named. */
 export const WAIT_CAUSE_SENTENCES: Readonly<Record<ExecutorGroupMemberIssue, string>> = {
@@ -39,6 +41,12 @@ export const WAIT_CAUSE_SENTENCES: Readonly<Record<ExecutorGroupMemberIssue, str
   at_capacity: 'все места подключения заняты',
 };
 
+/** The work was accepted on an earlier revision of the group than the one the capacity describes. */
+export const PREVIOUS_REVISION_SENTENCE = 'Работа принята на предыдущей ревизии группы — новая ревизия её не обслужит.';
+
+/** The work names no revision, so the reading cannot be tied to the one it waits on. */
+export const CURRENT_STATE_NOTE = 'Показано текущее состояние группы.';
+
 export interface WaitCause {
   readonly issue: ExecutorGroupMemberIssue;
   /** How many connections of the group have this as the first thing wrong. */
@@ -46,9 +54,13 @@ export interface WaitCause {
 }
 
 export interface GroupWaitExplanation {
-  /** The causes, in the contract's order. Never `at_capacity`, never empty. */
+  /** The causes, in the contract's order. Empty only when the work waits on a previous revision. */
   readonly causes: readonly WaitCause[];
-  /** «Подключение группы не может принять работу: агент офлайн.» */
+  /**
+   * How the reading relates to the revision the work waits on. `same`: the members read are the ones that serve it. `previous`: it was
+   * accepted on an earlier revision, and the members read are not its own. `unknown`: it names no revision.
+   */
+  readonly revision: 'same' | 'previous' | 'unknown';
   readonly sentence: string;
 }
 
@@ -57,10 +69,21 @@ const isKnownIssue = (value: unknown): value is ExecutorGroupMemberIssue =>
 
 /**
  * Why no member of the group can take work that waits for a runner, or `null` when the reading does not say (see the rules in
- * the header). One member: «Подключение группы не может принять работу: агент офлайн.» Several:
+ * the header). `workRevisionId` is the group revision the work froze (`planned.executor_group_revision_id`).
+ *
+ * One member: «Подключение группы не может принять работу: агент офлайн.» Several:
  * «Ни одно подключение группы не может принять работу: агент офлайн (подключений: 2); проверка связи не пройдена (подключений: 1).»
+ * A previous revision: «Работа принята на предыдущей ревизии группы — новая ревизия её не обслужит.»
  */
-export function groupWaitDetail(capacity: Pick<ExecutorGroupCapacity, 'members'>): GroupWaitExplanation | null {
+export function groupWaitDetail(
+  capacity: Pick<ExecutorGroupCapacity, 'members' | 'group_revision_id'>,
+  workRevisionId?: string | undefined,
+): GroupWaitExplanation | null {
+  const relation =
+    workRevisionId === undefined ? 'unknown' : workRevisionId === capacity.group_revision_id ? 'same' : 'previous';
+  if (relation === 'previous') {
+    return { causes: [], revision: 'previous', sentence: PREVIOUS_REVISION_SENTENCE };
+  }
   const members = capacity.members;
   if (!Array.isArray(members) || members.length === 0) return null;
   const counts = new Map<ExecutorGroupMemberIssue, number>();
@@ -75,33 +98,19 @@ export function groupWaitDetail(capacity: Pick<ExecutorGroupCapacity, 'members'>
     const held = counts.get(issue);
     if (held !== undefined) causes.push({ issue, members: held });
   }
-  const sentence =
+  const said =
     members.length === 1
       ? `Подключение группы не может принять работу: ${WAIT_CAUSE_SENTENCES[causes[0]!.issue]}.`
       : `Ни одно подключение группы не может принять работу: ${causes
           .map((cause) => `${WAIT_CAUSE_SENTENCES[cause.issue]} (подключений: ${cause.members})`)
           .join('; ')}.`;
-  return { causes, sentence };
-}
-
-/** When the wait that began at `waitingSince` ends if nothing changes: 30 minutes later, or `null` for a time that is not one. */
-export function offlineWaitEnd(waitingSince: string | null | undefined): string | null {
-  if (waitingSince === undefined || waitingSince === null) return null;
-  const began = Date.parse(waitingSince);
-  if (Number.isNaN(began)) return null;
-  return new Date(began + OFFLINE_WAIT_LIMIT_MINUTES * MINUTE_MS).toISOString();
+  return { causes, revision: relation, sentence: relation === 'unknown' ? `${said} ${CURRENT_STATE_NOTE}` : said };
 }
 
 /**
- * That the wait is not for ever: «Если ничего не изменится, ожидание закончится 2026-11-03 10:00:00 UTC (через 30 минут после
- * начала), и работа будет остановлена: исполнитель так и не появился.» Without a start time it says «через 30 минут после начала».
- * The limit restarts when the reason for the wait changes, which is why it is conditional.
+ * That the wait is not for ever: «Если ничего не изменится, по истечении лимита ожидания (по умолчанию 30 минут) работа будет остановлена:
+ * исполнитель так и не появился.» No time is computed: the limit is the stand's setting and the clock restarts when the reason for the wait
+ * changes, which is why the sentence is conditional. Said only of work that is queued or running, never of work that is paused.
  */
-export function offlineWaitEndSentence(waitingSince: string | null | undefined): string {
-  const end = offlineWaitEnd(waitingSince);
-  const when =
-    end === null
-      ? `через ${OFFLINE_WAIT_LIMIT_MINUTES} минут после начала`
-      : `${formatInstant(end)} (через ${OFFLINE_WAIT_LIMIT_MINUTES} минут после начала)`;
-  return `Если ничего не изменится, ожидание закончится ${when}, и работа будет остановлена: исполнитель так и не появился.`;
-}
+export const OFFLINE_WAIT_END_SENTENCE =
+  `Если ничего не изменится, по истечении лимита ожидания (по умолчанию ${OFFLINE_WAIT_DEFAULT_MINUTES} минут) работа будет остановлена: исполнитель так и не появился.`;

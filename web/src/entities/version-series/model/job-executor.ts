@@ -11,6 +11,8 @@
  *   and `waiting_since`: «Ждёт исполнителя: раннер не в сети. Ждёт с …».
  * - `bound`: the job's first call chose a member and wrote the binding (`binding`) once, for good — a retry or a resume stays on it.
  *   The line says «фактическая модель» and the connection it was bound to, from the binding and nowhere else.
+ * - `unbound`: a `pending` job that has **ended** (failed, cancelled, completed) never got a connection and never will. Its line is the
+ *   plan in the past tense — «подключение так и не было выбрано» — and never the future of «будет выбрано».
  *
  * Every other job (`frozen_at_start`, or no `binding_state`: each job that existed before groups) has no such line, and its screens
  * draw exactly what they drew.
@@ -24,14 +26,24 @@ import { formatInstant } from '@/shared/lib';
 import { boundExecutorValue, knownQueueReason, plannedExecutorValue } from '@/entities/audit-run';
 
 export interface JobExecutorLine {
-  /** `planned`: the model is the plan and no connection is chosen. `bound`: the name and the model are the connection the job is on. */
-  readonly phase: 'planned' | 'bound';
+  /**
+   * `planned`: the model is the plan and no connection is chosen yet. `bound`: the name and the model are the connection the job is on.
+   * `unbound`: the job ended before it was given a connection.
+   */
+  readonly phase: 'planned' | 'bound' | 'unbound';
   /** The connection's name; empty while only the plan is known. */
   readonly name: string;
   /** The pinned model, or `null` when the reading carries none. */
   readonly model: string | null;
   /** The group the job was admitted on (`planned` lines only): what the capacity of the wait is read for. */
   readonly groupId?: string;
+  /** The revision of that group the job froze (`planned.executor_group_revision_id`): the one it waits on, which may not be the current. */
+  readonly groupRevisionId?: string;
+  /**
+   * The wait is counting down to its end: the job is queued or running. A paused job keeps its wait but is not counting, so no promise that
+   * it ends is made of it. Present on `planned` lines.
+   */
+  readonly counting?: boolean;
   /** Why the job waits for an executor, when the reading says and this screen knows the word; `planned` lines only. */
   readonly waitReason?: RunQueueReason;
   /** When it began waiting for that reason. */
@@ -44,6 +56,8 @@ const isText = (value: unknown): value is string => typeof value === 'string' &&
 
 /** A job that has ended waits for no executor. */
 const WAITING_STATES: ReadonlySet<string> = new Set(['queued', 'running', 'paused']);
+/** A wait counts down to its end only while the job is queued or running. */
+const COUNTING_STATES: ReadonlySet<string> = new Set(['queued', 'running']);
 
 /** The words of each reason a job waits for an executor (a `Record` over the contract's own set). */
 export const JOB_WAIT_LABELS: Readonly<Record<RunQueueReason, string>> = {
@@ -54,17 +68,25 @@ export const JOB_WAIT_LABELS: Readonly<Record<RunQueueReason, string>> = {
 
 /** A job's connection is chosen at its first call to the model — not when work is sent, as a Run's is. */
 export const JOB_PLANNED_TAIL = 'подключение будет выбрано при первом обращении к модели';
+/** A job that ended before its first call was never given one: said in the past tense. */
+export const JOB_UNBOUND_TAIL = 'подключение так и не было выбрано';
 
 /** The executor of a job, or `null` when the job has none to show (it existed before groups, or it is not admitted by a group). */
 export function jobExecutorLine(job: JobExecutorSource): JobExecutorLine | null {
   if (job.binding_state === 'pending') {
     const planned = job.planned;
-    const reason = WAITING_STATES.has(job.state) ? knownQueueReason(job.wait_reason) : null;
+    const model = planned !== undefined && isText(planned.pin_id) ? planned.pin_id : null;
+    if (!WAITING_STATES.has(job.state)) return { phase: 'unbound', name: '', model };
+    const reason = knownQueueReason(job.wait_reason);
     return {
       phase: 'planned',
       name: '',
-      model: planned !== undefined && isText(planned.pin_id) ? planned.pin_id : null,
+      model,
+      counting: COUNTING_STATES.has(job.state),
       ...(planned !== undefined && isText(planned.executor_group_id) ? { groupId: planned.executor_group_id } : {}),
+      ...(planned !== undefined && isText(planned.executor_group_revision_id)
+        ? { groupRevisionId: planned.executor_group_revision_id }
+        : {}),
       ...(reason === null ? {} : { waitReason: reason }),
       ...(reason === null || job.waiting_since === undefined ? {} : { waitingSince: job.waiting_since }),
     };
@@ -77,11 +99,14 @@ export function jobExecutorLine(job: JobExecutorSource): JobExecutorLine | null 
 }
 
 /**
- * «Плановая модель «…», подключение будет выбрано при первом обращении к модели» before the job's first call and
- * «Фактическая модель «…», подключение «…»» after it — the plan, then the fact, never one in the other's words.
+ * «Плановая модель «…», подключение будет выбрано при первом обращении к модели» before the job's first call,
+ * «Фактическая модель «…», подключение «…»» after it, and «Плановая модель «…», подключение так и не было выбрано» for a job that ended without
+ * one — the plan, then the fact, never one in the other's words, and never a future for a job that has no future.
  */
 export function jobExecutorSentence(line: JobExecutorLine): string {
-  return line.phase === 'planned' ? plannedExecutorValue(line.model, JOB_PLANNED_TAIL) : boundExecutorValue(line.name, line.model);
+  if (line.phase === 'planned') return plannedExecutorValue(line.model, JOB_PLANNED_TAIL);
+  if (line.phase === 'unbound') return plannedExecutorValue(line.model, JOB_UNBOUND_TAIL);
+  return boundExecutorValue(line.name, line.model);
 }
 
 /**

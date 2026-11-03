@@ -31,6 +31,26 @@ class StageAiRepository:
             "AND (CAST(:unit AS text) IS NULL OR stage_ai_unit_id<>:unit)"
         ), {"run": run_id, "job": excluding_job_id, "unit": excluding_unit_id}).rowcount)
 
+    def end_without_executor(self, session: Session, *, run_id: str, job_id: str, reason: str) -> int:
+        """`EXEC2-FOLLOWUP-01`. What ``StageAiRuntime._failed`` writes for the unit it was advancing when a call is refused
+        ``no_executor_online`` -- run from outside a call, for the units of ``job_id`` that are at work (``running``): each ends ``failed`` with
+        ``reason``; the run fails and, for a phase that has a step, so does that step (:meth:`fail_run`); every unit still waiting is cancelled
+        (:meth:`cancel_pending_units`). The caller ends the job. A job none of whose units is at work still fails its run (with no step), as a
+        failure that names no unit does. Answers the number of units it failed."""
+        working = list(session.execute(text(
+            "SELECT stage_ai_unit_id, kind FROM stage_ai_unit WHERE stage_chain_run_id=:run AND comparison_ai_job_id=:job "
+            "AND state='running' ORDER BY created_at, stage_ai_unit_id FOR UPDATE"
+        ), {"run": run_id, "job": job_id}).mappings())
+        for row in working:
+            session.execute(text(
+                "UPDATE stage_ai_unit SET state='failed',failure_reason=:reason,updated_at=clock_timestamp() "
+                "WHERE stage_ai_unit_id=:unit"
+            ), {"unit": row["stage_ai_unit_id"], "reason": reason})
+        phase = next((str(row["kind"]) for row in working if row["kind"] in ANSWER_TABLES), None)
+        self.fail_run(session, run_id=run_id, phase=phase, reason=reason)
+        self.cancel_pending_units(session, run_id)
+        return len(working)
+
     def generation(self, session: Session, run_id: str, job_id: str | None) -> int:
         if job_id is None:
             return 0

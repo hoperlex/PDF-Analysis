@@ -31,7 +31,8 @@ export {
 } from './model/member-candidates';
 export type { GroupWaitExplanation, WaitCause } from './model/wait-detail';
 export {
-  OFFLINE_WAIT_LIMIT_MINUTES, WAIT_CAUSE_SENTENCES, groupWaitDetail, offlineWaitEnd, offlineWaitEndSentence,
+  CURRENT_STATE_NOTE, OFFLINE_WAIT_DEFAULT_MINUTES, OFFLINE_WAIT_END_SENTENCE, PREVIOUS_REVISION_SENTENCE, WAIT_CAUSE_SENTENCES,
+  groupWaitDetail,
 } from './model/wait-detail';
 export type { RuleRow } from './model/rule-rows';
 export { ruleRows, ruleTargets } from './model/rule-rows';

@@ -276,7 +276,7 @@ class World:
         member_facts: list[MemberFacts] | None = None, job: AiJobRecord | None = None, rotation: int = 0,
         free: dict[str, bool] | None = None, waited: float = 0.0, day: Spend = Spend(0, 0), jobspend: Spend = Spend(0, 0),
         member_route_error: BaseException | None = None, adapter_error: BaseException | None = None,
-        wait_seconds: int = 1800, member_pin: ModelPin = PIN,
+        wait_seconds: int = 1800, member_pin: ModelPin = PIN, member_unmetered: bool | None = None,
     ) -> None:
         from auditmanager.executors import public
         from auditmanager.jobs import public as jobs_public
@@ -289,6 +289,7 @@ class World:
         self.repository = FakeRepository(self.log, rotation=rotation, free=free, job=jobspend, day=day)
         self.adapters: list[Adapter] = []
         self.adapter_error, self.member_route_error, self.member_pin = adapter_error, member_route_error, member_pin
+        self.member_unmetered = member_unmetered
         self.events: list[dict[str, Any]] = []
         monkeypatch.setattr(public, "group_revision_of", lambda session, revision_id, groups=None: self.revision)
         monkeypatch.setattr(public, "member_facts", lambda session, revision, repository=None: self.facts)
@@ -315,7 +316,8 @@ class World:
         self.adapters.append(adapter)
         return CallRoute(
             adapter=adapter, model_identity=MODEL, connection_revision_id=bound.connection_revision_id,
-            expected_model=GATEWAY, unmetered=self.revision.billing == "not_metered", pin=self.member_pin,
+            expected_model=GATEWAY, pin=self.member_pin,
+            unmetered=self.revision.billing == "not_metered" if self.member_unmetered is None else self.member_unmetered,
         )
 
     def route(self, record: AiJobRecord | None = None) -> CallRoute:
@@ -609,13 +611,85 @@ def test_a_lock_that_does_not_pin_the_model_any_more_is_a_consent_that_does_not_
     refuse_stale(world, route=route)
 
 
+def assert_needs_reconsent_recorded(world: "World") -> None:
+    """The consent that does not hold is recorded where the first call's own re-check records it, and kept (committed) on the way out."""
+    assert world.log.entry("set_wait")[1] == "needs_reconsent"
+    assert world.log.first("set_wait") < world.log.first("commit")
+
+
 def test_the_member_route_must_carry_the_rates_of_the_route_the_estimate_was_priced_on(monkeypatch: pytest.MonkeyPatch) -> None:
     """The second guard, at the one place the two prices could part: the lock is as consented, but the binder opens the member's route
-    over another pin. The call settles at the member's pin, so it is refused before anything is written."""
+    over another pin. The call settles at the member's pin, so it is refused before anything is written -- and the job is told it needs
+    a new consent, as the first call's own re-check tells it (L5: this path used to refuse without recording the wait)."""
     other = ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=7.0)
     world = World(monkeypatch, member_pin=other)
     refuse_stale(world)
     assert world.log.at("member_route") and not world.log.at("savepoint"), "refused after the member's route was opened, before anything is written"
+    assert_needs_reconsent_recorded(world)
+
+
+def test_a_member_route_that_is_not_metered_when_the_consent_was_refuses_the_same_way_and_records_the_same_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    world = World(monkeypatch, member_unmetered=True)
+    refuse_stale(world)
+    assert_needs_reconsent_recorded(world)
+
+
+# --- the calls AFTER binding: the same rates rule at every call, as a Run's call-time guard (`EXEC2-FOLLOWUP-01`, M2) ---------------
+
+
+def bound_call(world: "World", *, consent: Consent | None = None, route: CallRoute | None = None) -> Any:
+    """A later call of a job that is already bound to member A: a route with no dispatch, opened from the lock as it is now."""
+    over = route or CallRoute(
+        adapter=Adapter(world.log), model_identity=MODEL, connection_revision_id="excr_A", expected_model=GATEWAY, pin=PIN,
+    )
+    return world.call(route=over, consent=consent or world.consent(connection_revision_id="excr_A"))
+
+
+def test_a_later_call_of_a_bound_job_is_priced_at_the_rates_its_consent_was_given_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    world = World(monkeypatch, job=job_record(binding_state="bound", connection_revision_id="excr_A"))
+    result = bound_call(world)
+    assert result.cost_basis == "estimated" and world.log.at("prepare") and world.log.at("adapter")
+
+
+@pytest.mark.parametrize("moved", [
+    ModelPin(model_id=MODEL, input_per_mtok_usd=2.0, output_per_mtok_usd=5.0),
+    ModelPin(model_id=MODEL, input_per_mtok_usd=0.5, output_per_mtok_usd=5.0),
+])
+def test_a_later_call_of_a_bound_job_over_a_route_priced_at_other_rates_is_refused_consent_stale(
+    monkeypatch: pytest.MonkeyPatch, moved: ModelPin,
+) -> None:
+    """The route of a bound job is opened from the lock of the moment, so the lock moving after binding changes the price the call settles at
+    while the consent stands on the snapshot. Without this check every later call went on at the new price."""
+    world = World(monkeypatch, job=job_record(binding_state="bound", connection_revision_id="excr_A"))
+    route = CallRoute(adapter=Adapter(world.log), model_identity=MODEL, connection_revision_id="excr_A", expected_model=GATEWAY, pin=moved)
+    with pytest.raises(errors.CallRefused) as refused:
+        bound_call(world, route=route)
+    assert (refused.value.reason, refused.value.pauses_job) == (errors.REASON_CONSENT_STALE, True)
+    for written in ("prepare", "mark_sent", "adapter", "lock_day", "lock_connection"):
+        assert not world.log.at(written), written
+    assert not world.log.at("set_wait"), "a bound job holds no wait: the database allows one only while the job is pending"
+
+
+def test_a_group_revision_that_cannot_be_read_is_not_a_consent_that_holds_for_a_bound_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    from auditmanager.executors import public
+
+    world = World(monkeypatch, job=job_record(binding_state="bound", connection_revision_id="excr_A"))
+    monkeypatch.setattr(public, "group_revision_of", lambda session, revision_id, groups=None: None)
+    with pytest.raises(errors.CallRefused) as refused:
+        bound_call(world)
+    assert refused.value.reason == errors.REASON_CONSENT_STALE and not world.log.at("adapter")
+
+
+def test_the_check_is_skipped_for_a_job_of_a_connection_a_recorded_replay_and_a_route_that_costs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A consent with no group (every job made before the cut-over) has no snapshot to hold; its call is not asked about one."""
+    world = World(monkeypatch)
+    from auditmanager.executors import public
+
+    monkeypatch.setattr(public, "group_revision_of", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no group is read")))
+    legacy = Consent(estimate_digest=DIGEST, estimate_usd=5.0, ceiling_usd=10.0, connection_revision_id="excr_A", pinned_model=MODEL)
+    assert bound_call(world, consent=legacy).cost_basis == "estimated"
 
 
 def test_the_estimate_the_ceilings_see_and_the_cost_the_call_settles_at_are_one_price(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -850,6 +924,31 @@ def test_the_rates_the_consent_was_given_on_are_read_against_the_lock_of_the_mem
     revision = group_revision()
     revision.output_per_mtok_usd = Decimal("5.5")
     assert _problem(revision=revision) == "rates"
+
+
+def test_the_wait_a_sweep_derives_is_the_run_sides_and_the_first_calls() -> None:
+    """``None`` when some member has no issue; at capacity when none has but some is only full; offline otherwise -- the same function of
+    the same issues as ``jobs.repository._group_wait_reason``, over every combination of three issues."""
+    import itertools
+
+    from auditmanager.jobs.repository import _group_wait_reason
+
+    issues = (None, "at_capacity", "runner_offline", "probe_not_ok")
+    for size in (1, 2, 3):
+        for combination in itertools.product(issues, repeat=size):
+            assert dispatch.group_wait_reason(combination) == _group_wait_reason(combination), combination
+    assert dispatch.group_wait_reason(["runner_offline", "revision_changed"]) == "runner_offline"
+    assert dispatch.group_wait_reason(["at_capacity", "archived"]) == "executor_at_capacity"
+    assert dispatch.group_wait_reason([None, "runner_offline"]) is None
+
+
+def test_the_rates_a_group_holds_are_the_locks_or_they_are_not(provider_lock: list[ModelPin]) -> None:
+    assert dispatch.group_rates_hold(group_revision()) is True
+    provider_lock[:] = [ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=5.5)]
+    assert dispatch.group_rates_hold(group_revision()) is False
+    provider_lock[:] = []
+    assert dispatch.group_rates_hold(group_revision()) is False, "a model the lock no longer pins holds no rates"
+    assert dispatch.snapshot_pin(group_revision()) is None
 
 
 def test_an_unrelated_lock_entry_does_not_decide_the_rates(provider_lock: list[ModelPin]) -> None:

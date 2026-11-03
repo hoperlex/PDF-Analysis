@@ -435,8 +435,8 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           {executor === null || executor.phase !== 'planned' ? null : (
             <GroupWaitDetail
               groupId={status.planned?.executor_group_id}
+              revisionId={status.planned?.executor_group_revision_id}
               waitReason={executor.queueReason ?? null}
-              waitingSince={executor.waitingSince}
             />
           )}
           {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}

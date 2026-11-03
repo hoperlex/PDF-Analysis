@@ -137,6 +137,18 @@ export const EXECUTOR_ROUTE_MISSING = 'executor_route_missing';
 export const EXECUTOR_ROUTE_MISSING_SENTENCE =
   'Для этой работы в «Назначениях» не выбрано подключение исполнителя. Исполнителю ничего не передано. Назначьте подключение и повторите.';
 
+/**
+ * `EXEC2-FOLLOWUP-01`: a group whose snapshot of the model's rates is not the rates the provider lock prices the model at now cannot be
+ * consented to. The refusal is the registered `422 analysis_input_invalid` with `details.reason` `cost_estimate_binding_changed` — an
+ * accepted model, rate or revision authority that no longer holds, the Run path's own word — raised by the estimate, the consent and a
+ * resume, so a consent that the first call would refuse is never taken. `details.stage_id` names the kind of work.
+ */
+export const COST_BINDING_CHANGED = 'cost_estimate_binding_changed';
+export const GROUP_RATES_STALE_SENTENCE =
+  'Нельзя согласиться на эту оценку: тарифы группы устарели — пересоберите группу. Тарифы модели изменились после того, как группа их запомнила, ' +
+  'и первое же обращение к модели отказало бы: прежние тарифы больше не действуют. Исполнителю ничего не передано. ' +
+  'Администратор делает новую ревизию группы («Исполнители» → «Группы»), затем работу запускают заново.';
+
 /** `storage_integrity_error` of a comparison file: the received bytes are not the declared ones. */
 export const COMPARISON_INTEGRITY_SENTENCE =
   'Принятый файл не совпал с заявленным: другая контрольная сумма или другой размер. Файл не опубликован; его нужно отправить заново.';
@@ -188,6 +200,8 @@ export function comparisonReasonSentence(error: ApiError): string | null {
       if (reason === EXECUTOR_ROUTE_MISSING) return EXECUTOR_ROUTE_MISSING_SENTENCE;
       return reason === null ? null : (COMPARISON_DEPENDENCY_SENTENCES[reason] ?? null);
     }
+    case 'analysis_input_invalid':
+      return detail(error, 'reason') === COST_BINDING_CHANGED ? GROUP_RATES_STALE_SENTENCE : null;
     case 'storage_integrity_error':
       return detail(error, 'role') === 'comparison_file_size' || detail(error, 'expected_sha256') !== null
         ? COMPARISON_INTEGRITY_SENTENCE

@@ -39,7 +39,7 @@ from auditmanager.comparison.ai_jobs.model import (
     digest_of,
     work_kind_of,
 )
-from auditmanager.comparison.spend.dispatch import group_pin
+from auditmanager.comparison.spend.dispatch import group_pin, group_rates_hold
 from auditmanager.comparison.spend.model import (
     DAY_CEILING_MICROS,
     JOB_CEILING_MICROS,
@@ -49,8 +49,10 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "JOB_ROUTE_KEY",
+    "REASON_RATES_STALE",
     "RouteReader",
     "build_estimate",
+    "group_rates_stale",
     "no_rule_for_work_kind",
     "read_job_route",
     "read_legacy_route",
@@ -65,6 +67,9 @@ __all__ = [
 RouteReader = Callable[[Session, str, str], AiRoute]
 
 DEPENDENCY_ROUTE_MISSING = "executor_route_missing"
+#: `EXEC2-FOLLOWUP-01`. The registered ``analysis_input_invalid`` reason of an accepted model, rate or revision authority that no longer holds
+#: (``error-codes.json``, «cost preflight reasons»); ``runs.cost_policy`` raises the same word for a Run.
+REASON_RATES_STALE: Final[str] = "cost_estimate_binding_changed"
 #: `EXEC2-GROUP-CMP-01` (ADR-0026 decisions 17 and 18). The ``dependency`` of the refusal of a work kind that has no rule while the
 #: routing mode is ``rules`` (``auditmanager.executors.model.DEPENDENCY_NO_RULE_FOR_WORK_KIND`` is the same word; a test pins the two).
 DEPENDENCY_NO_RULE_FOR_WORK_KIND: Final[str] = "no_rule_for_work_kind"
@@ -81,6 +86,23 @@ def route_missing() -> DomainError:
     return DomainError(
         ErrorCode.DEPENDENCY_UNAVAILABLE, message="no usable executor connection is routed for this kind of work",
         dependency=DEPENDENCY_ROUTE_MISSING,
+    )
+
+
+def group_rates_stale(work_kind: str) -> DomainError:
+    """``422 analysis_input_invalid`` with ``reason: cost_estimate_binding_changed`` (`EXEC2-FOLLOWUP-01`): the rates the group revision
+    snapshotted are not the rates the provider lock prices its model at now, so no estimate on this group can be consented to -- the first
+    call would refuse it, and a new consent would be priced on the same snapshot and refused again. The group must be rebuilt (a new
+    revision copies the lock's rates).
+
+    An existing registered refusal, not a new one: the catalogue's «cost preflight reasons» name ``cost_estimate_binding_changed`` for an
+    accepted model, rate or revision authority that no longer holds, and the Run path raises it for the same fact
+    (``analysis.text.cost.require_approved_model``, ``runs.cost_policy``). ``stage_id`` names the kind of work, as the summary's refusal
+    names its own (``comparison_summary``)."""
+    return DomainError(
+        ErrorCode.ANALYSIS_INPUT_INVALID,
+        message="the rates this group was made on are not the rates its model is priced at now; the group must be rebuilt",
+        stage_id=work_kind, reason=REASON_RATES_STALE,
     )
 
 
@@ -139,6 +161,9 @@ def route_of_group_revision(
     revision = group_revision_of(session, group_revision_id)
     if revision is None:
         raise route_missing()
+    if not group_rates_hold(revision):
+        # The estimate, the consent and a resume all come through here: refuse before a consent that can never be honoured is taken.
+        raise group_rates_stale(work_kind)
     return AiRoute(
         work_kind=work_kind, connection_id=None, revision_id=None, pinned_model=revision.pin_id,
         gateway_model=revision.gateway_model, billing=revision.billing, provider_mode=provider_mode,
