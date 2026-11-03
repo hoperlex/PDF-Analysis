@@ -80,6 +80,9 @@ def serve(environ: Mapping[str, str]) -> int:
         comparison_work=runtime.comparison_work,
         # `EXEC2-INT-3` (ADR-0026 decision 12): only a `database`-source worker offers or claims pending group Runs.
         dispatch_groups=runtime.dispatch_groups,
+        # `EXEC2-FOLLOWUP-01`: the offline expiry of the comparison jobs admitted by a group, swept beside the Runs' (a `database`-source
+        # worker only; the runtime holds none otherwise).
+        comparison_group_waits=runtime.comparison_group_waits,
     )
     stop = threading.Event()
 

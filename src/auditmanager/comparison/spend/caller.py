@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING, Any, Final
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.spend.ceilings import check_after_call, check_before_call
-from auditmanager.comparison.spend.dispatch import group_offline_wait_seconds, select_member, write_binding
+from auditmanager.comparison.spend.dispatch import group_offline_wait_seconds, same_rates, select_member, write_binding
 from auditmanager.comparison.spend.errors import (
     REASON_CONNECTION_BUSY,
     REASON_CONSENT_REQUIRED,
@@ -270,6 +270,11 @@ class ComparisonModelCaller:
         selection = select_member(session, repository, dispatch, offline_wait_seconds=self._wait_seconds())
         if selection.route.unmetered != route.unmetered or selection.route.model_identity != route.model_identity:
             # The member's route is not the route the group revision was consented on: the consent does not hold for it.
+            raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
+        if not unmetered and not same_rates(selection.route.pin, route.pin):
+            # One price (`EXEC2-FOLLOWUP-01`): the estimate and the ceilings below are priced on the route in hand (the group
+            # revision's rate snapshot), and the call settles at the pin of the member's own route. Rates that differ are never
+            # reconciled by re-pricing: the consent was given on the others.
             raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
         with session.begin_nested():
             if selection.binds:

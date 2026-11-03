@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
 
@@ -46,7 +47,7 @@ from auditmanager.comparison.spend.model import JOB_KEY
 from auditmanager.comparison.work.model import KIND_PATTERN
 from auditmanager.shared.identity import ComparisonAiJobId, ComparisonWorkId
 
-__all__ = ["AiJobRepository", "LIVE_SCOPE_INDEXES", "WorkItemRow"]
+__all__ = ["AiJobRepository", "LIVE_SCOPE_INDEXES", "OfflineWait", "WorkItemRow"]
 
 #: The partial unique indexes of the database that hold "one live job per scope" (migration ``0040``). A unique violation of
 #: one of them is the race the service's own look-before-insert lost.
@@ -94,6 +95,35 @@ _SET_WAIT = text(
     "wait_reason = :reason "
     f"WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' AND {_LIVE} "
     "RETURNING EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since))"
+)
+#: `EXEC2-FOLLOWUP-01`, the offline sweep (`comparison/ai_jobs/group_waits.py`). The jobs it looks at, oldest first, one page at a time: a
+#: **keyset** over ``(created_at, comparison_ai_job_id)`` so a pass walks every candidate however many there are. A candidate is a
+#: ``pending`` job that is queued or running -- a paused job is waiting for a person, a terminal one for nobody -- whose wait is
+#: ``runner_offline`` and has lasted longer than ``:offline_seconds`` (strictly, as the in-call expiry reads it). That is the *reading that
+#: picks the page*; what is decided is read again under the job's lock (:data:`_LOCK_OFFLINE_WAIT`).
+_OFFLINE_WAITING = text(
+    "SELECT comparison_ai_job_id AS job_id, created_at FROM comparison_ai_job "
+    "WHERE binding_state = 'pending' AND state IN ('queued', 'running') AND wait_reason = 'runner_offline' "
+    "AND waiting_since IS NOT NULL AND EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since)) > :offline_seconds "
+    "AND (CAST(:after_job_id AS text) IS NULL "
+    "OR (created_at, comparison_ai_job_id) > (CAST(:after_created_at AS timestamptz), CAST(:after_job_id AS text))) "
+    "ORDER BY created_at, comparison_ai_job_id LIMIT :batch_size"
+)
+#: The job's lock, taken ``SKIP LOCKED`` so a command or a handler in flight is not waited for. It answers what the job holds **now**: its
+#: wait and -- on database time, from the two locked values -- whether the job has waited for it longer than ``:offline_seconds``. The
+#: expiry is decided from this row and from nothing read before the lock.
+_LOCK_OFFLINE_WAIT = text(
+    "SELECT comparison_ai_job_id AS job_id, executor_group_revision_id AS group_revision_id, wait_reason, "
+    "(waiting_since IS NOT NULL AND EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since)) > :offline_seconds) AS wait_expired "
+    "FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' "
+    "AND state IN ('queued', 'running') FOR UPDATE SKIP LOCKED"
+)
+#: The job's items that have not ended, locked in the order of their identities and ``SKIP LOCKED``. Locks are taken **items first, then
+#: the job row**, as every handler and command takes them; ending a job cancels its items, and a sweep that took the job first would
+#: deadlock with a handler that holds an item and wants the job.
+_LOCK_LIVE_ITEMS = text(
+    "SELECT comparison_work_id FROM comparison_work WHERE comparison_ai_job_id = :job_id AND terminal_at IS NULL "
+    "ORDER BY comparison_work_id FOR UPDATE SKIP LOCKED"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id")
 _GET_LOCKED = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id FOR UPDATE")
@@ -194,6 +224,16 @@ def _record(row: Any) -> AiJobRecord:
     return AiJobRecord(estimate=dict(row["estimate"]), **values)
 
 
+@dataclass(frozen=True, slots=True)
+class OfflineWait:
+    """A ``pending`` job as it stands under its lock: its group revision, the reason it waits and whether the wait is over the limit."""
+
+    job_id: str
+    group_revision_id: str
+    wait_reason: str | None
+    expired: bool
+
+
 class WorkItemRow:
     """One work item of a job as the steering sees it (plain attributes: ``work_id``, ``state``, ``attempt_count``,
     ``terminal``)."""
@@ -274,6 +314,37 @@ class AiJobRepository:
             raise ValueError("a wait reason is one of the contract's three")
         found = session.execute(_SET_WAIT, {"job_id": job_id, "reason": reason}).scalar_one_or_none()
         return None if found is None else float(found)
+
+    def offline_waiting(
+        self, session: Session, *, offline_seconds: float, batch_size: int, after: tuple[datetime, str] | None = None,
+    ) -> list[tuple[datetime, str]]:
+        """`EXEC2-FOLLOWUP-01`. One page of the ``(created_at, job_id)`` of the live ``pending`` jobs that have waited for ``runner_offline``
+        for longer than ``offline_seconds``, oldest first, after the keyset position ``after``. Read-only: no lock is taken."""
+        rows = session.execute(_OFFLINE_WAITING, {
+            "offline_seconds": float(offline_seconds), "batch_size": batch_size,
+            "after_created_at": None if after is None else after[0], "after_job_id": None if after is None else after[1],
+        }).mappings().all()
+        return [(row["created_at"], str(row["job_id"])) for row in rows]
+
+    def lock_live_items(self, session: Session, job_id: str) -> bool:
+        """`EXEC2-FOLLOWUP-01`. Lock every item of the job that has not ended, ``SKIP LOCKED``. ``True`` when this transaction holds all of them
+        (a job with none is trivially so); ``False`` when another transaction holds one -- a handler is in the middle of it, and the
+        caller leaves the job for a later pass instead of ending it under that handler."""
+        locked = len(session.execute(_LOCK_LIVE_ITEMS, {"job_id": job_id}).all())
+        return locked == self.live_item_count(session, job_id)
+
+    def lock_offline_wait(self, session: Session, job_id: str, *, offline_seconds: float) -> OfflineWait | None:
+        """`EXEC2-FOLLOWUP-01`. Lock the job row ``SKIP LOCKED`` and read its wait. ``None`` when the job is no longer ``pending`` and
+        live, or when another transaction holds it. Take the job's items first (:meth:`lock_live_items`)."""
+        row = session.execute(
+            _LOCK_OFFLINE_WAIT, {"job_id": job_id, "offline_seconds": float(offline_seconds)},
+        ).mappings().first()
+        if row is None:
+            return None
+        return OfflineWait(
+            job_id=str(row["job_id"]), group_revision_id=str(row["group_revision_id"]),
+            wait_reason=None if row["wait_reason"] is None else str(row["wait_reason"]), expired=bool(row["wait_expired"]),
+        )
 
     def insert_item(
         self, session: Session, *, job: JobRecord, kind: str, payload: Mapping[str, Any], dedupe_key: str,

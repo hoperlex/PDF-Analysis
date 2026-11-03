@@ -27,6 +27,7 @@ import type {
 } from '@/shared/api';
 
 import { pauseNeedsConsent } from './ai-words';
+import { jobExecutorHint } from './job-executor';
 import type { AiStepId, SelectableStep, StepView } from './steps';
 import { TONE_ICONS, stepView } from './steps';
 
@@ -303,6 +304,11 @@ export function aiStepCell(facts: AiStepFacts): AiStepCell {
     if (state === 'partial') text = 'неполный результат';
     if (state === 'blocked') text = '—';
   }
+  // `EXEC2-FOLLOWUP-01`: a job on a group says in the hint of its cell which model is planned or which connection it is on, and why it
+  // waits; a job that existed before groups adds nothing.
+  const executorJob = facts.step === 'report' ? facts.report?.job : facts.job;
+  const executorHint = executorJob === undefined ? null : jobExecutorHint(executorJob);
+  if (executorHint !== null) title = lines(title, executorHint);
   if (state === 'paused' && facts.job?.pause_reason !== undefined && facts.step !== 'report') {
     title = lines(title, 'Пауза: причина указана в подсказке кнопки «Продолжить».');
   }

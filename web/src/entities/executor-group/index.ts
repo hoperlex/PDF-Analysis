@@ -13,6 +13,10 @@ export {
   executorRoutingRulesQueryOptions, useExecutorGroupCapacity, useExecutorGroups,
   useExecutorRoutingPreview, useExecutorRoutingRules,
 } from './api/use-executor-groups';
+export type { GroupWaitReading, GroupWaitReadingInput } from './api/use-group-wait-detail';
+export { useGroupWaitDetail, wantsGroupWaitDetail } from './api/use-group-wait-detail';
+export type { GroupWaitDetailProps } from './ui/group-wait-detail';
+export { GroupWaitDetail, WAIT_DETAIL_UNAVAILABLE } from './ui/group-wait-detail';
 export { groupCapacitySentence, memberOccupancySentence, memberStatusSentence } from './model/capacity';
 export {
   CUT_OVER_CONFIRMATION, CUT_OVER_CONFIRM_LABEL, CUT_OVER_LABEL, MAPPING_CONFIRMATION_LABEL, NO_READY_ITEMS,
@@ -25,6 +29,10 @@ export {
   MEMBER_PROBLEM_SENTENCES, createGroupBody, draftFromRevision, groupDraftProblem, groupMembers,
   memberCandidates, memberProblem, memberRevisionIsStale, reviseGroupBody,
 } from './model/member-candidates';
+export type { GroupWaitExplanation, WaitCause } from './model/wait-detail';
+export {
+  OFFLINE_WAIT_LIMIT_MINUTES, WAIT_CAUSE_SENTENCES, groupWaitDetail, offlineWaitEnd, offlineWaitEndSentence,
+} from './model/wait-detail';
 export type { RuleRow } from './model/rule-rows';
 export { ruleRows, ruleTargets } from './model/rule-rows';
 export {

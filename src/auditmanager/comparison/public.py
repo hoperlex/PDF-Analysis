@@ -294,6 +294,8 @@ from auditmanager.comparison.ai_jobs.model import (
 )
 from auditmanager.comparison.ai_jobs.model import digest_of as ai_digest_of
 from auditmanager.comparison.ai_jobs.model import work_kind_of as ai_work_kind_of
+# `EXEC2-FOLLOWUP-01` (ADR-0026 decision 15): the worker's offline sweep of the jobs admitted by a group.
+from auditmanager.comparison.ai_jobs.group_waits import ComparisonGroupWaits, ComparisonGroupWaitSweep
 from auditmanager.comparison.ai_jobs.recorded import RecordedAnswers
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.ai_jobs.service import pause_reason_of as ai_pause_reason_of
@@ -666,6 +668,8 @@ __all__ = [
     "AiWaitingJobs",
     "AiWorkItemSpec",
     "ComparisonAiJobService",
+    "ComparisonGroupWaitSweep",
+    "ComparisonGroupWaits",
     "ComparisonReportService",
     "RecordedAnswers",
     "ReportHandler",

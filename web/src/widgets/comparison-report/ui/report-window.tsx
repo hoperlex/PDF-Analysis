@@ -23,6 +23,7 @@ import type { ComparisonFailure } from '@/entities/version-series';
 import {
   AiLabel,
   CONFIRM_LABELS,
+  JobExecutor,
   RecordedMark,
   isRecordedRoute,
   EstimatePanel,
@@ -229,6 +230,7 @@ export function ReportWindowView({
                     {report.job?.pause_reason !== undefined && pauseNeedsConsent(report.job.pause_reason) ? (
                       <div className={styles.warning} data-ai-pause-reason={report.job.pause_reason}>Продолжить можно только с новой оценкой и новым подтверждением.</div>
                     ) : null}
+                    {report.job === undefined ? null : <JobExecutor job={report.job} />}
                   </td>
                   <td>
                     <div>{reportProgressLine(report)}</div>

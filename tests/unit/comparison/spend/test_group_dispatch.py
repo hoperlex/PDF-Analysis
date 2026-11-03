@@ -11,7 +11,11 @@ the ADR demands is an assertion on a list:
 * the wait (``executor_at_capacity`` is unbounded, ``runner_offline`` ends the job after the offline wait, and exactly at the wait is
   still a wait) and the consent that does not hold (nothing is called, ``needs_reconsent`` is recorded);
 * the ceilings applied against the selected member, ``not_metered`` shown as such, the binding written once, with its event;
-* no re-routing: a bound job stays on its member, whatever the group looks like, and a member that is busy is waited for.
+* no re-routing: a bound job stays on its member, whatever the group looks like, and a member that is busy is waited for;
+* `EXEC2-FOLLOWUP-01` item 1 -- **one price**: the rates the consent was given on (the group revision's snapshot) must be the rates the
+  bound member's pin is priced at now (the provider lock's), the rule a Run's dispatch holds; a lock that has moved since the group
+  revision was made refuses the call ``consent_stale`` and re-prices nothing, and the ceilings, the journal's estimate and the cost the
+  call settles at are one price.
 
 What the real database adds -- the trigger that writes the connection revision once, the locks that really exclude, the two threads that
 really race -- is ``tests/integration/comparison/test_group_binding.py``.
@@ -47,6 +51,17 @@ JOB = "cmj_01"
 PIN = ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=5.0)
 ESTIMATE = CallEstimate(input_tokens=1_000_000, output_tokens=200_000)
 USD = 1_000_000
+
+
+@pytest.fixture(autouse=True)
+def provider_lock(monkeypatch: pytest.MonkeyPatch) -> list[ModelPin]:
+    """The provider lock as this file reads it: one pin, ``PIN``. A test moves the lock by replacing the list's content. (The real
+    lock prices ``claude-opus-5`` at other rates than the group revisions below hold, which the rates rule would refuse.)"""
+    from auditmanager.executors import public
+
+    pins = [PIN]
+    monkeypatch.setattr(public, "pinned_models", lambda: tuple(pins))
+    return pins
 
 
 class Log(list):  # type: ignore[type-arg]
@@ -261,7 +276,7 @@ class World:
         member_facts: list[MemberFacts] | None = None, job: AiJobRecord | None = None, rotation: int = 0,
         free: dict[str, bool] | None = None, waited: float = 0.0, day: Spend = Spend(0, 0), jobspend: Spend = Spend(0, 0),
         member_route_error: BaseException | None = None, adapter_error: BaseException | None = None,
-        wait_seconds: int = 1800,
+        wait_seconds: int = 1800, member_pin: ModelPin = PIN,
     ) -> None:
         from auditmanager.executors import public
         from auditmanager.jobs import public as jobs_public
@@ -273,7 +288,7 @@ class World:
         self.jobs = FakeJobs(self.log, job or job_record(), waited=waited)
         self.repository = FakeRepository(self.log, rotation=rotation, free=free, job=jobspend, day=day)
         self.adapters: list[Adapter] = []
-        self.adapter_error, self.member_route_error = adapter_error, member_route_error
+        self.adapter_error, self.member_route_error, self.member_pin = adapter_error, member_route_error, member_pin
         self.events: list[dict[str, Any]] = []
         monkeypatch.setattr(public, "group_revision_of", lambda session, revision_id, groups=None: self.revision)
         monkeypatch.setattr(public, "member_facts", lambda session, revision, repository=None: self.facts)
@@ -300,7 +315,7 @@ class World:
         self.adapters.append(adapter)
         return CallRoute(
             adapter=adapter, model_identity=MODEL, connection_revision_id=bound.connection_revision_id,
-            expected_model=GATEWAY, unmetered=self.revision.billing == "not_metered", pin=PIN,
+            expected_model=GATEWAY, unmetered=self.revision.billing == "not_metered", pin=self.member_pin,
         )
 
     def route(self, record: AiJobRecord | None = None) -> CallRoute:
@@ -514,6 +529,106 @@ def test_a_consent_with_no_connection_is_not_a_consent_for_a_route_with_no_dispa
     assert refused.value.reason == errors.REASON_CONSENT_STALE and not world.log.at("prepare")
 
 
+# --- one price: the rates the consent was given on are the rates the member is priced at (`EXEC2-FOLLOWUP-01` item 1) ---------
+
+
+def refuse_stale(world: "World", **call: Any) -> errors.CallRefused:
+    with pytest.raises(errors.CallRefused) as refused:
+        world.call(**call)
+    assert (refused.value.reason, refused.value.pauses_job) == (errors.REASON_CONSENT_STALE, True)
+    for written in ("advance", "bind", "event", "prepare", "mark_sent", "adapter", "lock_day"):
+        assert not world.log.at(written), written
+    return refused.value
+
+
+@pytest.mark.parametrize("moved", [
+    ModelPin(model_id=MODEL, input_per_mtok_usd=2.0, output_per_mtok_usd=5.0),    # only the input rate moved
+    ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=10.0),   # only the output rate moved
+    ModelPin(model_id=MODEL, input_per_mtok_usd=0.5, output_per_mtok_usd=2.5),    # the lock got cheaper: still not what was consented to
+])
+def test_a_provider_lock_that_moved_since_the_group_revision_was_made_refuses_the_first_call_and_reprices_nothing(
+    monkeypatch: pytest.MonkeyPatch, provider_lock: list[ModelPin], moved: ModelPin,
+) -> None:
+    """The group revision holds the rates the consent was given on; the member's route is priced at the lock. Without the rule the call
+    went on over the lock's rates while the ceilings and the journal's estimate were the snapshot's: two prices for one call."""
+    provider_lock[:] = [moved]
+    world = World(monkeypatch)
+    route = world.route()
+    assert (route.pin.input_per_mtok_usd, route.pin.output_per_mtok_usd) == (1.0, 5.0), "the estimate is still the consented one"
+    refuse_stale(world, route=route)
+    assert world.log.entry("set_wait")[1] == "needs_reconsent", "the job asks for a new consent, visibly"
+    assert world.log.first("set_wait") < world.log.first("commit"), "and the wait is kept"
+
+
+def test_the_rates_rule_is_read_at_the_member_the_call_is_bound_to_not_at_the_route_in_hand(
+    monkeypatch: pytest.MonkeyPatch, provider_lock: list[ModelPin],
+) -> None:
+    """The route (opened while the lock was as consented) still carries the snapshot; the lock moves before the call is dispatched."""
+    world = World(monkeypatch)
+    route = world.route()
+    provider_lock[:] = [ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=5.5)]
+    refuse_stale(world, route=route)
+
+
+def test_a_group_revision_whose_snapshot_is_not_the_lock_cannot_be_dispatched_even_though_its_route_can_be_opened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision = group_revision()
+    revision.input_per_mtok_usd, revision.output_per_mtok_usd = Decimal("7.5"), Decimal("30.0")
+    # a job consented on that snapshot: 100 000 + 20 000 tokens are USD 1.35 at 7.5 / 30, so the stored figure is consistent with it and
+    # the estimate check alone would let the call through -- only the comparison with the lock refuses it
+    record = job_record(estimate={**ESTIMATE_DOCUMENT, "input_tokens": 100_000, "output_tokens": 20_000}, estimate_micros=1_350_000)
+    world = World(monkeypatch, revision=revision, job=record)
+    assert world.route(record).pin.input_per_mtok_usd == 7.5, "the pending route follows the snapshot"
+    assert _problem(record, revision) == "rates"
+    refuse_stale(world, route=world.route(record))
+
+
+def test_the_rates_rule_holds_for_a_not_metered_group_as_it_does_for_a_run(
+    monkeypatch: pytest.MonkeyPatch, provider_lock: list[ModelPin],
+) -> None:
+    """A Run's dispatch compares the rate digest whatever the billing; this side does the same, so the two cannot disagree."""
+    provider_lock[:] = [ModelPin(model_id=MODEL, input_per_mtok_usd=2.0, output_per_mtok_usd=5.0)]
+    world = World(monkeypatch, revision=group_revision(billing="not_metered"))
+    for name in ("A", "B"):
+        world.currents[f"exc_{name}"] = member_revision(name, billing="not_metered")
+    world.jobs.record = job_record(
+        estimate_micros=0, ceiling_micros=0,
+        estimate={**ESTIMATE_DOCUMENT, "route": {**ESTIMATE_DOCUMENT["route"], "billing": "not_metered"}},
+    )
+    refuse_stale(world, consent=world.consent(estimate_usd=0.0))
+
+
+def test_a_lock_that_does_not_pin_the_model_any_more_is_a_consent_that_does_not_hold(
+    monkeypatch: pytest.MonkeyPatch, provider_lock: list[ModelPin],
+) -> None:
+    world = World(monkeypatch)
+    route = world.route()
+    provider_lock[:] = [ModelPin(model_id="claude-sonnet-5", input_per_mtok_usd=1.0, output_per_mtok_usd=5.0)]
+    assert _problem() == "rates"
+    refuse_stale(world, route=route)
+
+
+def test_the_member_route_must_carry_the_rates_of_the_route_the_estimate_was_priced_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The second guard, at the one place the two prices could part: the lock is as consented, but the binder opens the member's route
+    over another pin. The call settles at the member's pin, so it is refused before anything is written."""
+    other = ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=7.0)
+    world = World(monkeypatch, member_pin=other)
+    refuse_stale(world)
+    assert world.log.at("member_route") and not world.log.at("savepoint"), "refused after the member's route was opened, before anything is written"
+
+
+def test_the_estimate_the_ceilings_see_and_the_cost_the_call_settles_at_are_one_price(monkeypatch: pytest.MonkeyPatch) -> None:
+    world = World(monkeypatch)
+    result = world.call()
+    estimated = int(round(PIN.cost_usd(input_tokens=ESTIMATE.input_tokens, output_tokens=ESTIMATE.output_tokens) * USD))
+    settled = int(round(PIN.cost_usd(input_tokens=500_000, output_tokens=100_000) * USD))
+    assert world.prepared()["estimate_micros"] == estimated == 2 * USD
+    assert (result.cost_basis, result.cost_micros) == ("estimated", settled) and settled == 1 * USD
+    # the day and job ceilings were decided on that same estimate
+    assert world.log.first("lock_day") < world.log.first("prepare")
+
+
 # --- the ceilings, against the selected member (decision 14) and `not_metered` shown as such ---------------------------------
 
 
@@ -724,6 +839,21 @@ def _problem(job: AiJobRecord | None = None, revision: SimpleNamespace | None = 
 
 
 def test_a_consent_that_holds_has_no_problem() -> None:
+    assert _problem() is None
+
+
+def test_the_rates_the_consent_was_given_on_are_read_against_the_lock_of_the_members_pin(provider_lock: list[ModelPin]) -> None:
+    assert _problem() is None
+    provider_lock[:] = [ModelPin(model_id=MODEL, input_per_mtok_usd=1.0, output_per_mtok_usd=5.000001)]
+    assert _problem() == "rates", "a rate that differs in the sixth decimal is another rate: the digest is over the exact figures"
+    provider_lock[:] = [PIN]
+    revision = group_revision()
+    revision.output_per_mtok_usd = Decimal("5.5")
+    assert _problem(revision=revision) == "rates"
+
+
+def test_an_unrelated_lock_entry_does_not_decide_the_rates(provider_lock: list[ModelPin]) -> None:
+    provider_lock[:] = [ModelPin(model_id="claude-sonnet-5", input_per_mtok_usd=9.0, output_per_mtok_usd=9.0), PIN]
     assert _problem() is None
 
 

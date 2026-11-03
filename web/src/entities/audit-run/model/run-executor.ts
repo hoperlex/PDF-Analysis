@@ -105,18 +105,27 @@ const lowerFirst = (text: string): string => `${text.charAt(0).toLowerCase()}${t
 /** What a run on a group says before dispatch: the plan, and that the connection is not chosen yet. */
 const PLANNED_TAIL = 'подключение будет выбрано при отправке в работу';
 
-/** «Плановая модель «…», подключение будет выбрано при отправке в работу» — the plan, never a fact. */
-function plannedValue(line: RunExecutorLine): string {
-  return line.model === null
-    ? `Плановая модель не указана, ${PLANNED_TAIL}`
-    : `Плановая модель «${line.model}», ${PLANNED_TAIL}`;
+/**
+ * «Плановая модель «…», подключение будет выбрано при отправке в работу» — the plan, never a fact.
+ *
+ * `EXEC2-FOLLOWUP-01`: shared with the comparison job's line (`entities/version-series`), which says the same thing with its own
+ * tail — a job's connection is chosen at its first call to the model, not when a run is sent.
+ */
+export function plannedExecutorValue(model: string | null, tail: string = PLANNED_TAIL): string {
+  return model === null ? `Плановая модель не указана, ${tail}` : `Плановая модель «${model}», ${tail}`;
 }
 
-/** «Фактическая модель «…», подключение «…»» — what dispatch bound the run to, from the binding. */
+/** «Фактическая модель «…», подключение «…»» — what dispatch bound the work to, from the binding. Shared with the comparison job. */
+export function boundExecutorValue(name: string, model: string | null): string {
+  return model === null ? `Фактическое подключение «${name}»` : `Фактическая модель «${model}», подключение «${name}»`;
+}
+
+function plannedValue(line: RunExecutorLine): string {
+  return plannedExecutorValue(line.model);
+}
+
 function boundValue(line: RunExecutorLine): string {
-  return line.model === null
-    ? `Фактическое подключение «${line.name}»`
-    : `Фактическая модель «${line.model}», подключение «${line.name}»`;
+  return boundExecutorValue(line.name, line.model);
 }
 
 /**
