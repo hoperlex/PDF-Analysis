@@ -5101,8 +5101,8 @@
         "$comment": [
           "W60-OPT-MATCH-01. «Спецификация и цены» for the specification set, against the oracle",
           "`expected_specification.json`: seven rows read from the run's saved text (one table, continued onto the",
-          "second sheet), five matched, two unmatched (`unit_mismatch`, `no_position`), four counted -- RUB 464278 --",
-          "and three left out of the total with their reasons. The monetary figure is an exact decimal."
+          "second sheet), six matched, one unmatched (`no_position`), five counted -- RUB 501478 --",
+          "and two left out of the total with their reasons. The monetary figure is an exact decimal."
         ],
         "actions": [
           {
@@ -5144,12 +5144,12 @@
           {
             "of": "getSpecificationPrices",
             "json_path": "matching.counts.matched",
-            "equals": 5
+            "equals": 6
           },
           {
             "of": "getSpecificationPrices",
             "json_path": "matching.counts.unmatched",
-            "equals": 2
+            "equals": 1
           },
           {
             "of": "getSpecificationPrices",
@@ -5159,12 +5159,12 @@
           {
             "of": "getSpecificationPrices",
             "json_path": "matching.totals.0.amount",
-            "equals": "464278"
+            "equals": "501478"
           },
           {
             "of": "getSpecificationPrices",
             "json_path": "matching.totals.0.row_count",
-            "equals": 4
+            "equals": 5
           }
         ],
         "expects_present": [
@@ -5180,23 +5180,23 @@
           },
           {
             "selector": "[data-spec-status=\"matched\"]",
-            "min_count": 5
+            "min_count": 6
           },
           {
             "selector": "[data-spec-status=\"unmatched\"]",
-            "min_count": 2
+            "min_count": 1
           },
           {
             "selector": "[data-spec-counted=\"yes\"]",
-            "min_count": 4
+            "min_count": 5
           },
           {
             "selector": "[data-spec-total=\"RUB\"]",
             "text_contains": "строк",
-            "text_matches": "строк: 4$"
+            "text_matches": "строк: 5$"
           },
           {
-            "selector": "[data-spec-excluded=\"3\"]"
+            "selector": "[data-spec-excluded=\"2\"]"
           }
         ],
         "screen": "specification-prices",
@@ -5481,7 +5481,7 @@
         "control_module": "web/src/features/start-optimisation-pass/ui/start-optimisation-pass.tsx",
         "$comment": [
           "W60-OPT-PROPOSALS-01. The expert starts a pass for the specification set, pressing twice: one pass is stored.",
-          "It holds the oracle's four `cheaper_analog` proposals out of seven rows, five of them matched: the door, the",
+          "It holds the oracle's four `cheaper_analog` proposals out of seven rows, six of them matched: the door, the",
           "window, the anchor and the foam, none decided yet. The step captures each proposal's identity by its card."
         ],
         "actions": [
@@ -5537,7 +5537,7 @@
           {
             "of": "startOptimisationPass",
             "json_path": "matched_row_count",
-            "equals": 5
+            "equals": 6
           },
           {
             "of": "startOptimisationPass",
