@@ -155,7 +155,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -309,6 +309,10 @@ const RECORDS: readonly DecisionRecord[] = (
   }),
   project_uid: PROJECT_UID,
   run_id: RUN_ID,
+  document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  project_name: 'Школа',
+  document_name: 'АР-1',
   category: index % 2 === 0 ? 'internal_contradiction' : 'explicit_placeholder',
   finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
   current_verdict: verdict,

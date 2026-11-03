@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.16.0 (OpenAPI 3.1.0)
- *   sha256 0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20
+ *   AuditManager PC-01 API 1.17.0 (OpenAPI 3.1.0)
+ *   sha256 c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2838,9 +2838,14 @@ export type GetComparisonUploadProposalResult = ComparisonUploadProposal;
 /**
  * One aggregate read across the whole deployment: all four dashboard panels.
  *
- * Documents per project, findings by verdict, run activity and spend, and the per-section breakdown -- computed server-side over the whole deployment, never walked client-side (`R-44`). Takes no parameter: it is not a filtered query over the data three narrower operations already answer (`listProjects`, `listDecisions`, `listRuns`), it is the fixed shape of the deployment right now. Absent is not empty throughout: every `Verdict` and `RunState` is present even at zero, every one of the fifteen sections is present even with no documents, and the unclassified documents are their own row.
+ * Documents per project, findings by verdict, run activity and spend, and the per-section breakdown -- computed server-side over the whole deployment, never walked client-side (`R-44`). Without a parameter it is the fixed shape of the deployment right now; it is not a filtered query over the data three narrower operations already answer (`listProjects`, `listDecisions`, `listRuns`). The one filter it takes is `project_uid` (`UI-PARITY-P0A`): the product's header names the project the expert is working in, and with it every one of the four panels is restricted to that project **by exactly the definitions it has without it** -- the same joins, the same grouping and the same spend rule (a Run's model calls and the comparison calls made for that project's work), so a count is the whole-deployment count minus every row of every other project. `documents_by_project` is then the one project's row. A `project_uid` naming no project is `not_found`, never a summary of zeros; a malformed one is `validation_failed`. No counter is redefined. Absent is not empty throughout: every `Verdict` and `RunState` is present even at zero, every one of the fifteen sections is present even with no documents, and the unclassified documents are their own row.
  */
 export type GetDashboardSummaryInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Restrict all four panels to this project. Absent means the whole deployment. */
+    project_uid?: ProjectUid;
+  };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
    */
@@ -4163,7 +4168,7 @@ export type ListDecisionHistoryResult = DecisionEventPage;
  *
  * Ordered by `(recorded_at, decision_id)` **descending** - the newest decision first, as `listProjects` orders projects - and that is a total order, stable across pages. The server's row sequence is never exposed, in a field or inside a cursor.
  *
- * `category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.
+ * `category` and `verdict` filter on the **finding**, exactly as they do on `listRunFindings`: the category of the finding the event was recorded against, and the verdict that now stands for it. Neither filters on the event. `project_uid` (`UI-PARITY-P0A`) filters on the finding in the same way: the finding must belong to that project. It is a filter and not a parent, so a project nothing was decided in -- or one that does not exist -- is an empty page. `total` is the number of entries that match all the filters given, on every page of the listing and not the number on this page. There is no parent identity in the path, so an empty journal is an empty page and never `not_found`.
  */
 export type ListDecisionsInput = {
   /** Query string parameters. */
@@ -4174,6 +4179,8 @@ export type ListDecisionsInput = {
     cursor?: Cursor;
     /** Page size. */
     limit?: number;
+    /** Restrict the page to decisions on findings of this project. Absent means no project filter. */
+    project_uid?: ProjectUid;
     /** Restrict the page to findings whose current projected verdict is this value. */
     verdict?: Verdict;
   };
@@ -8953,13 +8960,13 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/dashboard',
     pathParams: [],
-    queryParams: [],
+    queryParams: ['project_uid'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
     responseMediaType: 'application/json',
     successStatuses: [200],
-    errorStatuses: [401, 403, 500, 503],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['dashboard'],
   },
   getDocumentVersion: {
@@ -9709,7 +9716,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/decisions',
     pathParams: [],
-    queryParams: ['category', 'cursor', 'limit', 'verdict'],
+    queryParams: ['category', 'cursor', 'limit', 'project_uid', 'verdict'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
