@@ -5,6 +5,11 @@ commits**; the service owns the transactions. Each state change names the states
 lost race is an answer of ``False``, never a quiet overwrite; the database's own trigger (``am_guard_comparison_ai_state_edges``)
 refuses an edge it does not declare.
 
+`EXEC2-GROUP-CMP-01` (migration ``0048``). A job admitted by a rule or a group is written ``pending`` with its group revision and rule
+revision and **no** connection revision; :meth:`AiJobRepository.bind` writes the member's revision once, with ``pending -> bound``, and
+:meth:`~AiJobRepository.set_wait` keeps ``wait_reason`` and ``waiting_since`` while it waits. A renewed consent never touches the
+connection revision of such a job (``COALESCE``) and clears its wait; a job that ends clears it too.
+
 Reads of ``comparison_work`` and ``comparison_model_call`` are here because the queue's ``counts`` has no job filter and the
 spend wrapper's ``job_spend`` is keyed by an item's payload: the job's progress and spend are read through
 ``comparison_work.comparison_ai_job_id`` (the column the seal added), so there is one money truth -- the journal.
@@ -28,6 +33,9 @@ from auditmanager.comparison.ai_jobs.model import (
     METHOD_SHEET_CHANGES,
     METHOD_SPEC,
     METHOD_STAGE_REVIEW,
+    BINDING_FROZEN,
+    BINDING_PENDING,
+    WAIT_REASONS,
     AiEstimate,
     AiScope,
     AiJobRecord,
@@ -51,7 +59,8 @@ _COLUMNS = (
     "comparison_matrix_id AS matrix_id, comparison_series_id AS series_id, comparison_transition_id AS transition_id, "
     "comparison_sheet_pair_id AS sheet_pair_id, restart, connection_revision_id, pinned_model, provider_mode, estimate, "
     "estimate_digest, estimate_micros, ceiling_micros, consent_no, consented_by_user_uid, consented_at, command_id, "
-    "created_at, updated_at, finished_at, stage_chain_run_id, "
+    "created_at, updated_at, finished_at, stage_chain_run_id, binding_state, executor_group_revision_id, "
+    "routing_rule_revision_id, wait_reason, waiting_since, "
     "(SELECT coalesce(r.effective_link_revision_id,r.stage_link_revision_id) FROM stage_chain_run r "
     "WHERE r.stage_chain_run_id = comparison_ai_job.stage_chain_run_id) AS stage_link_revision_id"
 )
@@ -59,9 +68,28 @@ _INSERT = text(
     "INSERT INTO comparison_ai_job (comparison_ai_job_id, project_uid, document_uid, method, comparison_matrix_id, "
     "comparison_series_id, comparison_transition_id, comparison_sheet_pair_id, restart, connection_revision_id, "
     "pinned_model, provider_mode, estimate, estimate_digest, estimate_micros, ceiling_micros, consent_no, "
-    "consented_by_user_uid, command_id, stage_chain_run_id) VALUES (:job_id, :project_uid, :document_uid, :method, :matrix_id, :series_id, "
+    "consented_by_user_uid, command_id, stage_chain_run_id, binding_state, executor_group_revision_id, "
+    "routing_rule_revision_id) VALUES (:job_id, :project_uid, :document_uid, :method, :matrix_id, :series_id, "
     ":transition_id, :sheet_pair_id, :restart, :revision_id, :pinned_model, :provider_mode, CAST(:estimate AS jsonb), "
-    ":digest, :estimate_micros, :ceiling_micros, 1, :user_uid, :command_id, :stage_chain_run_id)"
+    ":digest, :estimate_micros, :ceiling_micros, 1, :user_uid, :command_id, :stage_chain_run_id, :binding_state, "
+    ":group_revision_id, :rule_revision_id)"
+)
+#: `EXEC2-GROUP-CMP-01`. The binding of a ``pending`` job: its connection revision goes NULL -> value, once, in the statement that moves
+#: ``binding_state`` to ``bound`` (the trigger of migration ``0048`` refuses any other write of it, and a revision that is not a member of the
+#: job's group revision); the wait ends with it. The consent columns are not in the list: a binding changes nothing of the consent.
+_BIND = text(
+    "UPDATE comparison_ai_job SET binding_state = 'bound', connection_revision_id = :revision_id, wait_reason = NULL, "
+    "waiting_since = NULL, updated_at = clock_timestamp() "
+    "WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending'"
+)
+#: Say why a ``pending`` job waits and since when: the clock restarts when the reason changes and runs on while it stays. The answer is the seconds
+#: the job has waited for this reason, which is what the offline wait is measured on.
+_SET_WAIT = text(
+    "UPDATE comparison_ai_job SET "
+    "waiting_since = CASE WHEN wait_reason IS NOT DISTINCT FROM :reason THEN waiting_since ELSE clock_timestamp() END, "
+    "wait_reason = :reason "
+    "WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' "
+    "RETURNING EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since))"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id")
 _GET_LOCKED = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id FOR UPDATE")
@@ -80,16 +108,22 @@ _LATEST_ON_SCOPE = {
     METHOD_STAGE_REVIEW: "method = 'stage_review' AND stage_chain_run_id = :stage_chain_run_id",
     METHOD_REPORT: "method = 'report' AND comparison_series_id = :series_id",
 }
+#: A job that ends no longer waits for an executor: a terminal state clears ``wait_reason`` and ``waiting_since`` (the pair CHECK of migration
+#: ``0048`` wants both or neither); a pause keeps them -- ``needs_reconsent`` is exactly a paused job's wait.
 _MOVE = text(
     "UPDATE comparison_ai_job SET state = :to_state, pause_reason = :pause_reason, failure_reason = :failure_reason, "
     "updated_at = clock_timestamp(), "
+    "wait_reason = CASE WHEN :terminal THEN NULL ELSE wait_reason END, "
+    "waiting_since = CASE WHEN :terminal THEN NULL ELSE waiting_since END, "
     "finished_at = CASE WHEN :terminal THEN clock_timestamp() ELSE NULL END "
     "WHERE comparison_ai_job_id = :job_id AND state = ANY (CAST(:from_states AS text[]))"
 )
 _RENEW_CONSENT = text(
     "UPDATE comparison_ai_job SET estimate = CAST(:estimate AS jsonb), estimate_digest = :digest, "
-    "estimate_micros = :estimate_micros, ceiling_micros = :ceiling_micros, connection_revision_id = :revision_id, "
+    "estimate_micros = :estimate_micros, ceiling_micros = :ceiling_micros, "
+    "connection_revision_id = COALESCE(:revision_id, connection_revision_id), "
     "pinned_model = :pinned_model, provider_mode = :provider_mode, consented_by_user_uid = :user_uid, "
+    "wait_reason = NULL, waiting_since = NULL, "
     "consented_at = clock_timestamp(), consent_no = consent_no + 1, updated_at = clock_timestamp() "
     "WHERE comparison_ai_job_id = :job_id AND state = ANY (CAST(:from_states AS text[])) AND consent_no = :consent_no"
 )
@@ -177,19 +211,25 @@ class AiJobRepository:
         self, session: Session, *, estimate: AiEstimate, user_uid: str, command_id: str,
     ) -> str:
         """Write the job row ``queued`` with its consented estimate and ``consent_no`` 1. A unique violation of a live-scope
-        index propagates (the service maps it to ``comparison_ai_job_active``)."""
+        index propagates (the service maps it to ``comparison_ai_job_active``).
+
+        `EXEC2-GROUP-CMP-01`: an estimate whose route was admitted by a rule or a group writes the job ``pending`` -- the group
+        revision and the rule revision, and no connection revision (the first dispatched call binds one)."""
         scope = estimate.scope
         job_id = str(ComparisonAiJobId.new())
+        route = estimate.route
         session.execute(_INSERT, {
             "job_id": job_id, "project_uid": scope.project_uid, "document_uid": scope.document_uid,
             "method": scope.method, "matrix_id": scope.matrix_id, "series_id": scope.series_id,
             "transition_id": scope.transition_id, "sheet_pair_id": scope.sheet_pair_id, "restart": scope.restart,
             "stage_chain_run_id": scope.stage_chain_run_id,
-            "revision_id": estimate.route.revision_id, "pinned_model": estimate.route.pinned_model,
-            "provider_mode": estimate.route.provider_mode,
+            "revision_id": route.revision_id, "pinned_model": route.pinned_model,
+            "provider_mode": route.provider_mode,
             "estimate": json.dumps(estimate.as_dict(with_state=False), sort_keys=True),
             "digest": estimate.estimate_digest, "estimate_micros": estimate.estimate_micros,
             "ceiling_micros": estimate.ceiling_micros, "user_uid": user_uid, "command_id": command_id,
+            "binding_state": BINDING_PENDING if route.grouped else BINDING_FROZEN,
+            "group_revision_id": route.executor_group_revision_id, "rule_revision_id": route.routing_rule_revision_id,
         })
         return job_id
 
@@ -217,6 +257,19 @@ class AiJobRepository:
             "pinned_model": estimate.route.pinned_model, "provider_mode": estimate.route.provider_mode,
             "user_uid": user_uid, "consent_no": consent_no, "from_states": list(from_states),
         }).rowcount == 1
+
+    def bind(self, session: Session, job_id: str, *, connection_revision_id: str) -> bool:
+        """`EXEC2-GROUP-CMP-01`. ``pending -> bound`` with the member's connection revision, once. ``False`` when the job is not
+        ``pending``. The database refuses a revision that is not a member of the job's group revision and any second write."""
+        return session.execute(_BIND, {"job_id": job_id, "revision_id": connection_revision_id}).rowcount == 1
+
+    def set_wait(self, session: Session, job_id: str, reason: str) -> float | None:
+        """`EXEC2-GROUP-CMP-01`. Record that the ``pending`` job waits for ``reason`` and answer for how many seconds it has waited for
+        that reason (``None`` when the job is not ``pending``). The clock restarts when the reason changes."""
+        if reason not in WAIT_REASONS:
+            raise ValueError("a wait reason is one of the contract's three")
+        found = session.execute(_SET_WAIT, {"job_id": job_id, "reason": reason}).scalar_one_or_none()
+        return None if found is None else float(found)
 
     def insert_item(
         self, session: Session, *, job: JobRecord, kind: str, payload: Mapping[str, Any], dedupe_key: str,

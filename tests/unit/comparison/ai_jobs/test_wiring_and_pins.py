@@ -132,8 +132,13 @@ def _spend_pause_reasons() -> set[str]:
 def test_every_reason_that_pauses_a_job_in_the_spend_wrapper_has_a_pause_reason_of_the_job() -> None:
     pausing = _spend_pause_reasons()
     assert pausing >= {"overrun", "job_ceiling", "day_ceiling", "consent_stale", "consent_required"}
-    assert pausing == set(service.PAUSE_OF_SPEND_REASON), "the spend wrapper pauses for a reason the job layer does not map"
+    # `EXEC2-GROUP-CMP-01`: one refusal of the wrapper ends the job instead of pausing it (`no_executor_online`, decision 15); the job layer
+    # maps it to a failure reason of its own, and a reason it maps nowhere is still a failure of this test.
+    assert pausing == set(service.PAUSE_OF_SPEND_REASON) | set(service.FAILURE_OF_SPEND_REASON), (
+        "the spend wrapper pauses for a reason the job layer does not map")
+    assert set(service.PAUSE_OF_SPEND_REASON).isdisjoint(service.FAILURE_OF_SPEND_REASON)
     assert set(service.PAUSE_OF_SPEND_REASON.values()) <= set(model.PAUSE_REASONS)
+    assert service.pause_reason_of("no_executor_online") is None
     assert service.pause_reason_of("connection_busy") is None and service.pause_reason_of("overrun") == "overrun"
 
 

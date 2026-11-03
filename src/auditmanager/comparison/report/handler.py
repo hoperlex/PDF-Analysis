@@ -64,7 +64,7 @@ from auditmanager.comparison.report.service import ROLE_PDF, ROLE_TEXT, Comparis
 from auditmanager.comparison.report.sync import sync_report
 from auditmanager.comparison.spend.caller import ComparisonModelCaller
 from auditmanager.comparison.spend.errors import CallFailed, CallLost, CallRefused, OutcomeUnknown
-from auditmanager.comparison.spend.model import CallEstimate, CallResult, CallRoute
+from auditmanager.comparison.spend.model import BINDING_PENDING, CallEstimate, CallResult, CallRoute
 from auditmanager.comparison.work.model import Completed, Failed, Outcome, WorkDependencies, WorkItem, Yielded
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -122,6 +122,10 @@ class StaticModelSource:
         self._adapter, self._pin, self._expected, self._unmetered, self._revision = adapter, pin, expected_model, unmetered, revision_id
 
     def route(self, session: Session, job: AiJobRecord) -> CallRoute:
+        if job.binding_state == BINDING_PENDING:
+            # `EXEC2-GROUP-CMP-01`: a job admitted by a group has no revision to name. Its route comes from the first-call binding
+            # (wrap this source in ``GroupRoutes``, which opens the member's route with this source and the job as it will be bound).
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency=REASON_MODEL_SOURCE)
         return CallRoute(
             adapter=self._adapter, model_identity=job.pinned_model, connection_revision_id=self._revision or job.connection_revision_id,
             expected_model=self._expected, unmetered=self._unmetered, pin=self._pin,

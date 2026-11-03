@@ -17,14 +17,20 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Protocol
 
 if TYPE_CHECKING:  # the types only: this module never imports another context at run time
+    from sqlalchemy.orm import Session
+
     from auditmanager.analysis.public import ModelAdapter, ModelPin, ModelResponse
 
 __all__ = [
+    "BINDING_BOUND",
+    "BINDING_FROZEN",
+    "BINDING_PENDING",
     "CALL_STATES",
     "COST_ESTIMATED",
     "COST_MEASURED",
@@ -36,9 +42,11 @@ __all__ = [
     "Consent",
     "DAY_CEILING_MICROS",
     "DAY_CEILING_USD",
+    "GroupDispatch",
     "JOB_CEILING_MICROS",
     "JOB_CEILING_USD",
     "JOB_KEY",
+    "JobBindings",
     "MICROS_PER_USD",
     "OPEN_STATES",
     "OVERRUN_DENOMINATOR",
@@ -46,6 +54,9 @@ __all__ = [
     "Spend",
     "SpendPause",
     "TERMINAL_STATES",
+    "WAIT_AT_CAPACITY",
+    "WAIT_NEEDS_RECONSENT",
+    "WAIT_RUNNER_OFFLINE",
     "estimate_micros_of",
     "measured_micros_of",
     "overruns",
@@ -70,6 +81,19 @@ DAY_CEILING_MICROS: Final[int] = DAY_CEILING_USD * MICROS_PER_USD
 #: An actual spend above 6/5 of the estimate pauses the job (an integer ratio: no float on the edge).
 OVERRUN_NUMERATOR: Final[int] = 6
 OVERRUN_DENOMINATOR: Final[int] = 5
+
+#: `EXEC2-GROUP-CMP-01` (ADR-0026 decision 12; migration ``0048``): whether the executor of a comparison AI job was fixed when it started.
+#: ``frozen_at_start`` -- every job made before the cut-over and every job made while the routing mode is ``legacy``: the
+#: connection revision is written with the consent and nothing changes. ``pending`` -- admitted by a rule or a group, no connection
+#: yet. ``bound`` -- the job's first dispatched call chose a member and wrote its connection revision, once.
+BINDING_FROZEN: Final[str] = "frozen_at_start"
+BINDING_PENDING: Final[str] = "pending"
+BINDING_BOUND: Final[str] = "bound"
+#: Why a ``pending`` job is not dispatched (decision 15): the contract's ``RunQueueReason`` and the CHECK of migration ``0048`` spell them
+#: so, and ``auditmanager.executors.model.WAIT_REASONS`` holds the same three (a test pins the two equal).
+WAIT_AT_CAPACITY: Final[str] = "executor_at_capacity"
+WAIT_RUNNER_OFFLINE: Final[str] = "runner_offline"
+WAIT_NEEDS_RECONSENT: Final[str] = "needs_reconsent"
 
 #: The key of a work item's payload that names the AI job (the unit the user consented to and that the
 #: job ceiling applies to). An item whose payload has none is a job of its own. ``CMP-SEAL-C2`` owns the
@@ -104,13 +128,19 @@ class Consent:
 
     The ceiling may not exceed the hard ceiling of the job: a consent for more than USD 10 is
     refused when it is built, never quietly lowered.
+
+    `EXEC2-GROUP-CMP-01` (ADR-0026 decisions 12 and 13): a job admitted by a rule or a group is consented to
+    **before** it has a connection. Its consent names the group revision (``executor_group_revision_id``) and, while
+    the job is ``pending``, no connection revision; once the job is bound it names both. A consent names a connection
+    revision or a group revision, and always a pinned model.
     """
 
     estimate_digest: str
     estimate_usd: float
     ceiling_usd: float
-    connection_revision_id: str
+    connection_revision_id: str | None
     pinned_model: str
+    executor_group_revision_id: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.estimate_digest) != 64 or any(c not in "0123456789abcdef" for c in self.estimate_digest):
@@ -119,18 +149,21 @@ class Consent:
             raise ValueError("the estimate is a finite, non-negative USD amount")
         if not (math.isfinite(self.ceiling_usd) and 0 < self.ceiling_usd <= JOB_CEILING_USD):
             raise ValueError(f"the consent ceiling is above zero and at most USD {JOB_CEILING_USD}")
-        if not self.connection_revision_id or not self.pinned_model:
-            raise ValueError("a consent names a connection revision and a pinned model")
+        if not self.pinned_model or not (self.connection_revision_id or self.executor_group_revision_id):
+            raise ValueError("a consent names a connection revision or a group revision, and a pinned model")
 
     @property
     def binding_digest(self) -> str:
-        """One digest over the four things the consent binds, for a job layer that stores it."""
+        """One digest over the four things the consent binds, for a job layer that stores it. A job admitted by a group
+        binds the group revision as a fifth; a job with none keeps the digest it always had."""
         document = {
             "estimate_digest": self.estimate_digest,
             "ceiling_usd": self.ceiling_usd,
             "connection_revision_id": self.connection_revision_id,
             "pinned_model": self.pinned_model,
         }
+        if self.executor_group_revision_id is not None:
+            document["executor_group_revision_id"] = self.executor_group_revision_id
         encoded = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -160,6 +193,52 @@ class CallEstimate:
                 raise ValueError("a token estimate is a non-negative integer")
 
 
+class JobBindings(Protocol):
+    """The job's side of a first-call binding (`EXEC2-GROUP-CMP-01`): read the job, bind it once, record why it waits.
+
+    :class:`~auditmanager.comparison.ai_jobs.repository.AiJobRepository` is the implementation -- the only writer of
+    ``comparison_ai_job`` -- and is handed in by the registry, so this package never imports ``ai_jobs``. Every method
+    takes the caller's session and never commits.
+    """
+
+    def get(self, session: "Session", job_id: str, *, lock: bool = False) -> Any:
+        """The job row (an ``AiJobRecord``), or ``None``."""
+
+    def bind(self, session: "Session", job_id: str, *, connection_revision_id: str) -> bool:
+        """``pending -> bound`` with the connection revision, once; ``False`` when the job is not ``pending``."""
+
+    def set_wait(self, session: "Session", job_id: str, reason: str) -> float | None:
+        """Record that the pending job waits for ``reason`` and answer how many seconds it has waited for that reason."""
+
+
+@dataclass(frozen=True, slots=True)
+class GroupDispatch:
+    """What a call of a job admitted by a rule or a group carries instead of a connection (ADR-0026 decisions 12 to 16).
+
+    The route of such a job has **no adapter of its own** until its first call binds it: the first call, in the
+    transaction that prepares it, takes the group's lock and its members', chooses an eligible member that has a free
+    unit, re-checks the consent, applies the ceilings and writes the binding (``comparison_ai_job.binding_state``
+    ``pending -> bound``, ``connection_revision_id`` NULL -> the member's revision) together with the ``prepared`` row of
+    the journal. ``member_route`` then opens the chosen member's route -- the composition root's own binder, called with
+    the job as it will be once bound. Every later call of the job stays on that member.
+
+    ``group_revision_id`` is what admission froze (the consent names it); ``rule_revision_id`` is the rule that routed the
+    job, ``None`` when a group was named explicitly.
+    """
+
+    job_id: str
+    group_id: str
+    group_revision_id: str
+    work_kind: str
+    member_route: Callable[["Session", str], "CallRoute"]
+    jobs: JobBindings
+    rule_revision_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not (self.job_id and self.group_id and self.group_revision_id and self.work_kind):
+            raise ValueError("a group dispatch names its job, group, group revision and work kind")
+
+
 @dataclass(frozen=True, slots=True)
 class CallRoute:
     """The connection that serves a call, as the wrapper needs to know it.
@@ -171,6 +250,12 @@ class CallRoute:
     model; ``expected_model`` is the gateway name the reply must report (``R-133``). ``unmetered`` is
     the connection's ``not_metered`` billing: such a call is recorded as unmetered and is never
     limited by money. ``pin`` carries the rates and is required for a live metered call.
+
+    `EXEC2-GROUP-CMP-01`: ``dispatch`` marks the route of a job that is still ``pending`` -- admitted by a group and not
+    yet bound to a member. Such a route has no connection revision (the wrapper chooses one in the transaction that
+    prepares the call and answers the member's own route), its ``pin`` and ``unmetered`` follow the group revision and its
+    ``adapter`` is a placeholder that refuses to be called. ``executor_group_revision_id`` is the group revision the route
+    was opened for; the consent names the same one.
     """
 
     adapter: "ModelAdapter"
@@ -182,10 +267,19 @@ class CallRoute:
     pin: "ModelPin | None" = None
     #: Worker-only mutable attempt context, filled after the journal's prepared row exists.
     call_context: Any | None = None
+    executor_group_revision_id: str | None = None
+    dispatch: GroupDispatch | None = None
 
     def __post_init__(self) -> None:
         if not self.model_identity:
             raise ValueError("a route names its pinned model")
+        if self.dispatch is not None:
+            if self.connection_revision_id is not None:
+                raise ValueError("a route that is bound at its first call names no connection revision yet")
+            if self.executor_group_revision_id is None:
+                object.__setattr__(self, "executor_group_revision_id", self.dispatch.group_revision_id)
+            elif self.executor_group_revision_id != self.dispatch.group_revision_id:
+                raise ValueError("the route and its dispatch name the same group revision")
 
     @classmethod
     def from_binding(cls, adapter: "ModelAdapter", call: Any, pin: "ModelPin | None") -> "CallRoute":
