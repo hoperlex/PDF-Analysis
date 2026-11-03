@@ -1852,7 +1852,7 @@ Direct answers received in this integrator session through the seven-question po
 | R-148f | Object storage: «Оставить закреплённый MinIO на beta». | The pinned source build stays for beta; replacing S3 is outside today’s code scope. Existing host inventory/restore actions remain separate. |
 | R-148g | Large graphic comparisons: «Да, оставить окна с новым согласием». | Retain durable windows of at most4 regions/8 images and fresh cost consent for the next window; preserve progress and never silently drop remaining regions. |
 
-## 3.49 — R-149a…R-149n, the EXEC-2 wave: executor capacity, universal agent, executor groups (owner polls of 2026-11-02 and 2026-11-03)
+## 3.49 — R-149a…R-149o, the EXEC-2 wave: executor capacity, universal agent, executor groups (owner polls of 2026-11-02 and 2026-11-03)
 
 The owner handed three design documents to the planning session on 2026-11-02 (Block 1 parallel
 scheduler, Universal Executor Agent, Stage 3 routing groups) and answered two direct polls. The
@@ -1875,3 +1875,4 @@ below are quoted as given; the consequence column is what the plan does with the
 | R-149l | Who promotes EXEC-2 to `origin/main` after a green `D-292` run, 2026-11-03: «Сольёте сами» (the owner merges). | The EXEC-2 integrator prepares the exact verified candidate and its report but does not push to `origin/main`. |
 | R-149m | The stand's Primary/Standby → rules cut-over, 2026-11-03: «Сразу после выпуска». | Right after the owner's release, the integrator runs the preview, shows it to the owner and confirms the switch only on the owner's word (`docs/manual-tests/EXEC2-CUTOVER.md`). |
 | R-149n | The wait reason of a group whose members are ineligible for a reason other than capacity, 2026-11-03: «Точная подпись в UI». | The contract does not change, and the stored reason stays `runner_offline` with the 30-minute limit (`R-149c`) for every such case. The web reads `getExecutorGroupCapacity` and shows each member's actual `ineligible_reason`. |
+| R-149o | The probe in the cut-over preview's `ready`, which needs a contract change (`probe_not_ok` in `ExecutorRoutingPreviewIssue`), 2026-11-03: «Отложить на следующую волну». | Not done in EXEC-2. It is recorded as `D-293`; until then the integrator checks every Primary's probe by hand before confirming the stand's cut-over (`R-149m`). |
