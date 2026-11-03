@@ -741,7 +741,11 @@ class LedgerDecisionAdapter:
         )
 
     def decision_journal(
-        self, *, category: str | None = None, verdict: str | None = None
+        self,
+        *,
+        category: str | None = None,
+        verdict: str | None = None,
+        project_uid: str | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, straight off `W38-KB`'s read. No ordering is applied here.
 
@@ -760,15 +764,20 @@ class LedgerDecisionAdapter:
                 recorded_at=entry.recorded_at,
                 project_uid=entry.project_uid,
                 run_id=entry.run_id,
+                document_uid=entry.document_uid,
+                version_uid=entry.version_uid,
+                project_name=entry.project_name,
+                document_name=entry.document_name,
                 category=entry.category,
                 finding_text=entry.finding_text,
                 current_verdict=entry.current_verdict,
                 decision_event_count=entry.decision_event_count,
                 verdict=entry.verdict,
                 comment=entry.comment,
+                section=entry.section,
             )
             for entry in decision_journal(
-                self._session, category=category, verdict=verdict
+                self._session, category=category, verdict=verdict, project_uid=project_uid
             )
         )
 

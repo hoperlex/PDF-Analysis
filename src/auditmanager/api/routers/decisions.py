@@ -10,6 +10,7 @@ from auditmanager.api.routers.declarations import (
     CategoryFilterParam,
     CursorParam,
     LimitParam,
+    ProjectUidFilterParam,
     VerdictFilterParam,
     envelope_responses,
     success,
@@ -144,12 +145,18 @@ def build_decision_routes(
         status_code=200,
         response_model=models.DecisionRecordPage,
         responses={
-            **success(200, "One page of the decision journal, newest first."),
+            **success(
+                200,
+                "One page of the decision journal, newest first, and the number of "
+                "entries that match the filters.",
+            ),
             # No 404. The path addresses no parent identity, so there is no identity that
             # could be missing: a deployment that has decided nothing has an empty journal,
             # and an empty page is the true answer. The listings that DO declare 404 --
             # `listDocuments`, `listVersions`, `listRuns` -- each hang off a parent whose
-            # absence is a different fact from its emptiness.
+            # absence is a different fact from its emptiness. `project_uid` (`UI-PARITY-P0A`)
+            # is a filter and not a parent, exactly as `category` and `verdict` are: a project
+            # nothing was decided in matches no entry, and that is an empty page.
             **envelope_responses(401, 403, 422, 500, 503),
         },
     )
@@ -158,13 +165,20 @@ def build_decision_routes(
         limit: LimitParam = 50,
         category: CategoryFilterParam = None,  # type: ignore[assignment]
         verdict: VerdictFilterParam = None,  # type: ignore[assignment]
+        project_uid: ProjectUidFilterParam = None,  # type: ignore[assignment]
     ) -> WireResponse:
         rows = decisions.decision_journal(
             category=None if category is None else category.value,
             verdict=None if verdict is None else verdict.value,
+            project_uid=project_uid,
         )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_decision_sort_key)
         body = page_body([decision_record_body(view) for view in page.items], page.next_cursor)
+        # `UI-PARITY-P0A`. `total` is the number of entries the filters match, on every page
+        # of the listing and not the number on this page: the port returns the whole filtered
+        # journal and the edge pages it, so the count is the length of the same sequence the
+        # cursor walks and cannot disagree with it.
+        body["total"] = len(rows)
         return json_response(200, encode_json(body))
 
 

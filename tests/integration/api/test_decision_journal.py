@@ -27,7 +27,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from w13_api_driver import Answer, Request, Surface, dispatch
-from auditmanager.shared.identity import DecisionId
+from auditmanager.documents.public import DocumentRepository
+from auditmanager.shared.identity import DecisionId, ProjectUid, VersionUid
 
 from .test_query_surface import MixedRun, decode, get, json_headers, ok
 
@@ -446,4 +447,161 @@ def test_an_empty_journal_is_an_empty_page_and_never_not_found(
     """
     answer = get(shipped_router, f"{JOURNAL}?verdict=needs_manual_review")
     assert answer.status == 200, answer.body
-    assert json.loads(answer.body) == {"items": [], "page": {"next_cursor": None}}
+    # `UI-PARITY-P0A`: the page now also says how many entries matched, and an empty one matched none.
+    assert json.loads(answer.body) == {"items": [], "page": {"next_cursor": None}, "total": 0}
+
+
+# =====================================================================================
+# `UI-PARITY-P0A`: the project filter, where a decision belongs, and `total`
+# =====================================================================================
+#
+# These assert **absolutely** about projects the test made itself: each `MixedRun` is a new project, so a
+# `?project_uid=` read of it is exact even on the shared lane database the rest of this module reads relatively.
+
+
+class TwoProjects:
+    """Two projects, each decided the same way (four events on three findings), and nothing shared."""
+
+    def __init__(self, router: Surface, session: Session) -> None:
+        self.first = Decided(router, MixedRun(session))
+        self.second = Decided(router, MixedRun(session))
+
+    @property
+    def first_uid(self) -> str:
+        return self.first.run.run.project_uid
+
+    @property
+    def second_uid(self) -> str:
+        return self.second.run.run.project_uid
+
+
+@pytest.fixture
+def two_projects(shipped_router: Surface, session: Session) -> TwoProjects:
+    built = TwoProjects(shipped_router, session)
+    assert built.first_uid != built.second_uid and not built.first.mine & built.second.mine
+    return built
+
+
+def test_the_project_filter_returns_exactly_that_projects_decisions(
+    shipped_router: Surface, two_projects: TwoProjects
+) -> None:
+    for mine, other in ((two_projects.first, two_projects.second), (two_projects.second, two_projects.first)):
+        page = ok(get(shipped_router, f"{JOURNAL}?project_uid={mine.run.run.project_uid}&limit=200"))
+        assert set(_ids(page)) == mine.mine, "exactly this project's four events"
+        assert not set(_ids(page)) & other.mine, "the other project's events leaked in"
+        assert {r["project_uid"] for r in page["items"]} == {mine.run.run.project_uid}
+        assert page["total"] == 4
+
+
+def test_a_project_nothing_was_decided_in_or_that_does_not_exist_is_an_empty_page(
+    shipped_router: Surface, two_projects: TwoProjects, session: Session
+) -> None:
+    """A filter and not a parent, as `category` and `verdict` are: never `not_found`, and `total` says zero."""
+    undecided = MixedRun(session).run.project_uid  # a project with findings and no decision on any of them
+    for project in (undecided, str(ProjectUid.new())):
+        page = ok(get(shipped_router, f"{JOURNAL}?project_uid={project}"))
+        assert page == {"items": [], "page": {"next_cursor": None}, "total": 0}
+
+
+def test_a_malformed_project_identity_is_refused_not_answered_empty(shipped_router: Surface) -> None:
+    for bad in ("not-a-project", "doc_01ARZ3NDEKTSV4RRFFQ69G5FAV"):
+        answer = get(shipped_router, f"{JOURNAL}?project_uid={bad}")
+        assert answer.status == 422, (bad, answer.body)
+        assert json.loads(answer.body)["error_code"] == "validation_failed"
+
+
+def test_an_empty_project_parameter_is_the_absent_one(shipped_router: Surface, two_projects: TwoProjects) -> None:
+    absent = ok(get(shipped_router, f"{JOURNAL}?limit=5"))
+    empty = ok(get(shipped_router, f"{JOURNAL}?limit=5&project_uid="))
+    assert empty == absent
+
+
+def test_total_is_the_count_of_matching_entries_on_every_page_and_with_every_filter(
+    shipped_router: Surface, two_projects: TwoProjects
+) -> None:
+    project = two_projects.first_uid
+    accepted_finding = two_projects.first.accepted.finding_uid
+    # Four entries; one entry per page; the count is the same on all of them and is not the page's length.
+    seen: list[str] = []
+    cursor: str | None = None
+    for _ in range(10):
+        suffix = "" if cursor is None else f"&cursor={cursor}"
+        page = ok(get(shipped_router, f"{JOURNAL}?project_uid={project}&limit=1{suffix}"))
+        assert page["total"] == 4 and len(page["items"]) == 1
+        seen.extend(_ids(page))
+        cursor = page["page"]["next_cursor"]
+        if cursor is None:
+            break
+    assert cursor is None and len(seen) == 4 == len(set(seen)), "the cursor loses nothing and repeats nothing"
+    assert set(seen) == two_projects.first.mine
+    assert seen == [r["decision_id"] for r in ok(get(shipped_router, f"{JOURNAL}?project_uid={project}"))["items"]], (
+        "paging across the filter walks the same newest-first order as the whole page"
+    )
+
+    # Every filter narrows the count together with the rows: the accepted finding carries two of the four events.
+    cases = {
+        "verdict=accepted": 2,
+        "verdict=rejected": 1,
+        "verdict=pending": 1,
+        "category=internal_contradiction&verdict=accepted": None,  # computed below from the finding itself
+    }
+    detail = json.loads(get(shipped_router, f"/findings/{accepted_finding}").body)
+    cases["category=internal_contradiction&verdict=accepted"] = 2 if detail["category"] == "internal_contradiction" else 0
+    for query, expected in cases.items():
+        page = ok(get(shipped_router, f"{JOURNAL}?project_uid={project}&{query}&limit=1"))
+        assert page["total"] == expected, (query, page["total"])
+        assert len(page["items"]) == min(1, expected)
+        whole = ok(get(shipped_router, f"{JOURNAL}?project_uid={project}&{query}&limit=200"))
+        assert len(whole["items"]) == whole["total"] == expected
+
+
+def test_the_unscoped_total_counts_the_whole_journal(shipped_router: Surface, two_projects: TwoProjects) -> None:
+    whole = ok(get(shipped_router, f"{JOURNAL}?limit=200"))
+    assert whole["total"] >= 8, "at least the eight events of the two projects this test made"
+    if whole["page"]["next_cursor"] is None:
+        assert whole["total"] == len(whole["items"])
+    else:
+        assert whole["total"] > len(whole["items"])
+
+
+def test_a_record_says_where_its_decision_belongs(shipped_router: Surface, two_projects: TwoProjects) -> None:
+    """Asserted against the identities and labels the fixture seeded, not against a second read of the same join."""
+    run = two_projects.first.run.run
+    records = ok(get(shipped_router, f"{JOURNAL}?project_uid={run.project_uid}&limit=200"))["items"]
+    assert len(records) == 4
+    for record in records:
+        assert record["project_uid"] == run.project_uid
+        assert record["document_uid"] == run.document_uid
+        assert record["version_uid"] == run.version_uid
+        assert record["run_id"] == run.run_id
+        assert record["project_name"] == "Проект"
+        assert record["document_name"] == "АР"
+        assert "section" not in record, "an unclassified version has no section; the key is absent, never null"
+
+
+def test_the_section_is_the_expert_confirmed_one_of_the_findings_version_and_follows_a_correction(
+    shipped_router: Surface, two_projects: TwoProjects, session: Session, suite_account: str
+) -> None:
+    run = two_projects.first.run.run
+    other = two_projects.second.run.run
+    documents = DocumentRepository()
+
+    def sections(project: str) -> set[str | None]:
+        page = ok(get(shipped_router, f"{JOURNAL}?project_uid={project}&limit=200"))
+        return {r.get("section") for r in page["items"]}
+
+    assert sections(run.project_uid) == {None}
+    documents.insert_classification(
+        session, version_uid=VersionUid(run.version_uid), project_stage="R", section_code="AR",
+        confirmed_by_user_uid=suite_account,
+    )
+    session.flush()
+    assert sections(run.project_uid) == {"AR"}, "one version, one section, on every one of its events"
+    assert sections(other.project_uid) == {None}, "another project's version is not classified by this one's"
+
+    documents.insert_correction(
+        session, version_uid=VersionUid(run.version_uid), revision=2, project_stage="R", section_code="KJ",
+        corrected_by_user_uid=suite_account, reason="Исправлено экспертом после проверки раздела.",
+    )
+    session.flush()
+    assert sections(run.project_uid) == {"KJ"}, "the latest revision stands; the original is not what is reported"
