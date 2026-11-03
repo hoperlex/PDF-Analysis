@@ -10,6 +10,13 @@ a header or an address; their output is identities, counts and outcome words.
     connection. Because only a revision with an ``ok`` probe on its current key can be routed, it
     runs the probe itself, over this worker's network path, and routes only on ``ok``. A refused
     probe leaves the connection in place and un-routed, and says which outcome it was.
+
+    `EXEC2-FOLLOWUP-01` (ADR-0026 decision 17): while the routing mode is ``rules`` the legacy routes are
+    read-only and ``setExecutorRoute`` is refused, so there is no route step to take. The command imports the
+    connection, **skips the route step and says so** (``ImportReport.routing_mode`` is ``rules``; the CLI
+    writes it on stderr): the connection has to be added to a group and a rule by hand. Under ``legacy``
+    nothing differs. The mode is read before the route is written and the route's own refusal is held too, so
+    a cut-over that lands in between is reported the same way and never ends the command midway.
 ``rewrap``
     re-seals every current secret whose key id is not the active one, by inserting new rows
     (``executor_secret`` is immutable). Each new row keeps its destination, so the key still
@@ -38,12 +45,13 @@ from auditmanager.executors.destinations import (
     normalise_target,
 )
 from auditmanager.executors.identity import is_placeholder
-from auditmanager.executors.model import RevisionSettings
+from auditmanager.executors.model import CONFLICT_ROUTING_MODE_RULES, ROUTING_MODE_RULES, RevisionSettings
 from auditmanager.executors.probe_runner import ProbeRunner
 from auditmanager.executors.public import (
     create_connection,
     request_probe,
     revise_connection,
+    routing_mode,
     set_route,
     set_secret,
 )
@@ -81,10 +89,15 @@ class OperationRefused(Exception):
 
 @dataclass(frozen=True, slots=True)
 class ImportReport:
+    """What ``import_env`` did. ``routing_mode`` is the mode the route step met when this run made the connection, ``None``
+    when it did not get that far (a repeat, or the worker's queue-only start). ``ROUTING_MODE_RULES`` there means the route
+    step was skipped on purpose: ``routed`` is ``False`` and the connection still has to be put into a group and a rule."""
+
     connection_id: str
     created: bool
     probe_outcome: str | None
     routed: bool
+    routing_mode: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,15 +198,25 @@ def import_env(
         finished = store.get_probe(session, probe.probe_id)
         outcome = None if finished is None else finished.outcome
         routed = False
-        if outcome == "ok":
-            set_route(
-                session, work_kind="text_analysis",
-                primary_connection_id=connection.connection_id, standby_connection_id=None,
-                roles=_ADMIN, idempotency_key="import-env:route", actor_uid=actor_uid,
-            )
-            session.commit()
-            routed = True
-    return ImportReport(connection.connection_id, True, outcome, routed)
+        mode = routing_mode(session).mode
+        if outcome == "ok" and mode != ROUTING_MODE_RULES:
+            try:
+                set_route(
+                    session, work_kind="text_analysis",
+                    primary_connection_id=connection.connection_id, standby_connection_id=None,
+                    roles=_ADMIN, idempotency_key="import-env:route", actor_uid=actor_uid,
+                )
+            except DomainError as refusal:
+                # A cut-over landed between the read of the mode and the write of the route: the route is refused before it
+                # writes anything. It is the same fact as the mode read above, said the same way -- not a failure.
+                if refusal.detail_fields.get("conflict_reason") != CONFLICT_ROUTING_MODE_RULES:
+                    raise
+                session.rollback()
+                mode = ROUTING_MODE_RULES
+            else:
+                session.commit()
+                routed = True
+    return ImportReport(connection.connection_id, True, outcome, routed, mode)
 
 
 # -- rewrap -------------------------------------------------------------------------------------

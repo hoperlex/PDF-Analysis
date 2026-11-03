@@ -63,6 +63,7 @@ import { isTerminalRunState } from '@/shared/api';
 import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { formatInstant, routes } from '@/shared/lib';
 import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
+import { GroupWaitDetail } from '@/entities/executor-group';
 import { NormReferencesSection } from '@/widgets/norm-references';
 import {
   ErrorState,
@@ -430,6 +431,14 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           </dl>
 
           {waiting === null ? null : <p data-run-executor-waiting>{waiting}</p>}
+          {/* `EXEC2-FOLLOWUP-01`: a group Run that waits for a runner says what is actually wrong, and that the wait ends. */}
+          {executor === null || executor.phase !== 'planned' ? null : (
+            <GroupWaitDetail
+              groupId={status.planned?.executor_group_id}
+              revisionId={status.planned?.executor_group_revision_id}
+              waitReason={executor.queueReason ?? null}
+            />
+          )}
           {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
           <p>
             <Link href={routes.version(status.project_uid, status.version_uid)}>Версия, которую читал прогон</Link>{' '}

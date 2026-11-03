@@ -21,13 +21,18 @@ What the wrapper (:class:`~auditmanager.comparison.spend.caller.ComparisonModelC
    every handler already answers with a retry that spends no attempt). A wait for capacity has no end; a wait with no eligible member
    ends the job ``failed`` / ``no_executor_online`` after ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`` (decision 15).
 4. **Re-check the consent** against the chosen member (:func:`consent_problem`): the group revision the job froze, the model, the
-   billing, the member's own revision and the figure the group's rate snapshot prices the stored estimate at. A consent that does not
-   hold calls nothing: the job records ``wait_reason = needs_reconsent`` and pauses ``route_changed`` -- the reconsent pause a changed
-   route already has.
+   billing, the member's own revision, the figure the group's rate snapshot prices the stored estimate at and -- the rule a Run's
+   dispatch holds (``runs.cost_policy.group_consent_holds``) -- the **rates**: the rates the consent was given on must be the rates
+   the bound member's current revision is priced at now, the provider lock's for its pin, compared by the same digest
+   (``model_rate_sha256``). A consent that does not hold calls nothing and **never re-prices**: the job records
+   ``wait_reason = needs_reconsent`` and pauses ``route_changed`` -- the reconsent pause a changed route already has. (A new consent of a
+   job admitted by a group is priced on that job's own group revision again, so while the lock and the revision's snapshot differ
+   the job cannot go on: an administrator makes a new group revision and the work is started again on it.)
 5. **Open the member's route**, apply the USD 10 job and USD 50 day ceilings, advance the group's rotation, write the binding
    (``pending -> bound``, the member's revision) with a journal event ``executor.comparison_job_bound``, and insert the ``prepared`` row
    of the call journal -- the unit the member now spends -- all or none (a savepoint), then commit. The model is called only after
-   that commit.
+   that commit. The ceilings, the journal's estimate and the cost the call settles at are **one price**: the member's own route must
+   carry the rates of the route the estimate was priced on (:func:`same_rates`), or the call is refused ``consent_stale``.
 
 Nothing here retries a call or sends one to another member: a ``spend_unknown`` item is never sent again by the queue (it ends
 ``spend_unknown``) and a job has one member for good.
@@ -37,7 +42,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, NoReturn
 
@@ -76,8 +81,16 @@ __all__ = [
     "group_aware",
     "group_offline_wait_seconds",
     "group_pin",
+    "group_rates_hold",
+    "group_wait_reason",
+    "is_eligible",
+    "lock_pin",
+    "member_issues",
     "pending_route",
+    "priced_as_consented",
+    "same_rates",
     "select_member",
+    "snapshot_pin",
     "write_binding",
 ]
 
@@ -111,6 +124,37 @@ def group_offline_wait_seconds(environ: Mapping[str, str] | None = None) -> int:
     return value
 
 
+def is_eligible(facts: Any) -> bool:
+    """May dispatch choose this member once it has a free unit? Its first issue is none, or ``at_capacity`` alone
+    (``executors.group_selection.member_issue``). One reading, shared by the first-call choice and the offline sweep, so the call that
+    waits and the sweep that ends the wait cannot disagree about what «nobody can take it» means."""
+    from auditmanager.executors.public import member_issue
+
+    return member_issue(facts) in (None, _AT_CAPACITY)
+
+
+def member_issues(session: Session, revision: Any) -> list[str | None]:
+    """The first issue of each member of ``revision`` now (``executors.group_selection.member_issue``; ``None`` is a member with no
+    issue at all). Read-only: no lock is taken."""
+    from auditmanager.executors.public import member_facts, member_issue
+
+    return [member_issue(facts) for facts in member_facts(session, revision)]
+
+
+def group_wait_reason(issues: Sequence[str | None]) -> str | None:
+    """Why work admitted on a group cannot be dispatched now, from the first issue of each member (decision 15).
+
+    The Run side's reading (``jobs.repository._group_wait_reason``, a test holds the two equal) and the first call's own
+    (:func:`_wait`): ``None`` when some member has no issue at all (it can take the work); ``executor_at_capacity`` when none has but
+    some member is only full (a wait for a place, which has no end); ``runner_offline`` otherwise -- every member is revised, archived,
+    not served, not probed or without a runner, which for waiting work is no executor online."""
+    if any(issue is None for issue in issues):
+        return None
+    if any(issue == _AT_CAPACITY for issue in issues):
+        return WAIT_AT_CAPACITY
+    return WAIT_RUNNER_OFFLINE
+
+
 def _route_missing() -> DomainError:
     return DomainError(
         ErrorCode.DEPENDENCY_UNAVAILABLE, message="no usable executor connection is routed for this kind of work",
@@ -118,17 +162,58 @@ def _route_missing() -> DomainError:
     )
 
 
-def group_pin(revision: Any) -> Any:
-    """The pin a group revision prices at: the provider lock's pin of ``revision.pin_id`` with the **rate snapshot the revision copied**
-    (the rates are a part of what the consent names, and a revision is immutable). An unpinned model is ``executor_route_missing``."""
+def lock_pin(pin_id: str) -> Any | None:
+    """The provider lock's pin for ``pin_id`` with the rates the lock publishes **now**, or ``None`` when the lock does not pin it.
+
+    The rates a Run is priced at and re-checks at dispatch (``runs.cost_policy.group_consent_holds``) are these."""
     from auditmanager.executors.public import pinned_models
 
-    base = next((candidate for candidate in pinned_models() if candidate.model_id == revision.pin_id), None)
+    return next((candidate for candidate in pinned_models() if candidate.model_id == pin_id), None)
+
+
+def same_rates(left: Any | None, right: Any | None) -> bool:
+    """Do two pins name one model at one price? The comparison is the Run side's own: the digest of the model and its exact
+    published rates (``analysis.text.cost.model_rate_sha256``). A missing pin is never the same as a pin."""
+    from auditmanager.analysis.public import model_rate_sha256
+
+    return left is not None and right is not None and model_rate_sha256(left) == model_rate_sha256(right)
+
+
+def snapshot_pin(revision: Any) -> Any | None:
+    """The provider lock's pin of ``revision.pin_id`` with the **rate snapshot the revision copied** (the rates are a part of what the
+    consent names, and a revision is immutable), or ``None`` when the lock does not pin the model."""
+    base = lock_pin(revision.pin_id)
     if base is None:
-        raise _route_missing()
+        return None
     return dataclasses.replace(
         base, input_per_mtok_usd=float(revision.input_per_mtok_usd), output_per_mtok_usd=float(revision.output_per_mtok_usd),
     )
+
+
+def group_pin(revision: Any) -> Any:
+    """The pin a group revision prices at: :func:`snapshot_pin`. An unpinned model is ``executor_route_missing``."""
+    pin = snapshot_pin(revision)
+    if pin is None:
+        raise _route_missing()
+    return pin
+
+
+def group_rates_hold(revision: Any, pin_id: str | None = None) -> bool:
+    """Are the rates the group revision snapshotted -- the ones a consent is given on -- the rates the provider lock prices ``pin_id`` (by
+    default the revision's own model) at **now**? The rule a Run's dispatch holds (``runs.cost_policy.group_consent_holds``), compared by
+    the same digest. ``False`` when the lock has stopped pinning the model."""
+    return same_rates(snapshot_pin(revision), lock_pin(revision.pin_id if pin_id is None else pin_id))
+
+
+def priced_as_consented(session: Session, group_revision_id: str, pin: Any | None) -> bool:
+    """Is a call priced at ``pin`` priced at the rates the consent of a job admitted on ``group_revision_id`` was given on? For the calls of a
+    job that is **already bound**, whose route is opened from the lock as it is now: the same comparison :func:`consent_problem` makes at the
+    first call, repeated at every call as a Run's call-time guard does (``analysis.text.cost.require_approved_model``). A group revision that
+    cannot be read, or a missing pin, is not a consent that holds."""
+    from auditmanager.executors.public import group_revision_of
+
+    revision = group_revision_of(session, group_revision_id)
+    return revision is not None and same_rates(snapshot_pin(revision), pin)
 
 
 # -- the route of a pending job -----------------------------------------------------------------------------------------------
@@ -214,8 +299,10 @@ def consent_problem(job: Any, revision: Any, member: Any, snapshot_revision_id: 
     ceiling. At dispatch each is read again from rows, never trusted from the route in hand: the job still names the group revision
     it was consented on and the estimate it stored names the same; the model and the billing are the group revision's and the member's
     own current revision still pins that model, serves that gateway model and bills that way and is the revision the group
-    snapshotted; and the stored estimate priced at the group's rate snapshot is the stored ``estimate_micros`` (a not-metered group:
-    zero, with no money ceiling). The word returned names the first check that failed; it is for a log line, never for a user."""
+    snapshotted; **the rates the consent was given on** (the group revision's snapshot) **are the rates that member's pin is priced at
+    now** -- the provider lock's, the rule a Run's dispatch holds -- so nothing is silently re-priced; and the stored estimate priced at
+    the group's rate snapshot is the stored ``estimate_micros`` (a not-metered group: zero, with no money ceiling). The word returned
+    names the first check that failed; it is for a log line, never for a user."""
     estimate = job.estimate if isinstance(job.estimate, Mapping) else {}
     document = estimate.get("route") if isinstance(estimate.get("route"), Mapping) else {}
     if job.executor_group_revision_id != revision.group_revision_id:
@@ -231,6 +318,8 @@ def consent_problem(job: Any, revision: Any, member: Any, snapshot_revision_id: 
     settings = member.settings
     if (settings.pin_id, settings.gateway_model, settings.billing) != (revision.pin_id, revision.gateway_model, revision.billing):
         return "member_settings"
+    if not group_rates_hold(revision, settings.pin_id):
+        return "rates"
     if revision.billing == _NOT_METERED:
         return None if job.estimate_micros == 0 else "estimate"
     if not 0 < job.ceiling_micros <= JOB_CEILING_MICROS:
@@ -285,7 +374,7 @@ def select_member(
     module). Writes nothing but the job's wait (committed on its way out through a refusal); the caller applies the ceilings and
     writes the binding. Raises ``CallRefused``: ``connection_busy`` (a wait), ``no_executor_online`` (the wait is over),
     ``consent_stale`` (the consent does not hold; the job pauses for a new one) or ``executor_route_missing``."""
-    from auditmanager.executors.public import choose, current_revision, group_revision_of, member_facts, member_issue
+    from auditmanager.executors.public import choose, current_revision, group_revision_of, member_facts
 
     jobs = dispatch.jobs
     rotation = repository.lock_group(session, dispatch.group_id)
@@ -310,7 +399,7 @@ def select_member(
             _open_member(session, dispatch, job.connection_revision_id), connection_id, job.connection_revision_id, binds=False,
         )
 
-    eligible = [facts for facts in member_facts(session, revision) if member_issue(facts) in (None, _AT_CAPACITY)]
+    eligible = [facts for facts in member_facts(session, revision) if is_eligible(facts)]
     chosen = choose(
         [facts.as_member() for facts in eligible], {facts.connection_id: facts.used for facts in eligible},
         {facts.connection_id: facts.capacity for facts in eligible}, rotation,

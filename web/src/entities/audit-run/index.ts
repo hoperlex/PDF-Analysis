@@ -81,7 +81,7 @@ export { QueueItemWaiting } from './ui/queue-item-waiting';
 
 export type { RunExecutorLine } from './model/run-executor';
 export {
-  runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,
+  boundExecutorValue, plannedExecutorValue, runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,
 } from './model/run-executor';
 
 export type { RoutingRefusal, RoutingRefusalKind } from './model/routing-refusal';

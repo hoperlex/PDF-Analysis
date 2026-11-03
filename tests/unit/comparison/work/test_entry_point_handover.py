@@ -33,7 +33,7 @@ def test_serve_hands_the_runtimes_comparison_runner_to_the_worker_service(monkey
     marker = object()
     runtime = SimpleNamespace(
         engine=None, session_factory=None, execute=None, version="v", slots=1, state_dir=None,
-        probe_runner=None, comparison_work=marker,
+        probe_runner=None, comparison_work=marker, dispatch_groups=False, comparison_group_waits=None,
         settings=SimpleNamespace(provider_source="environment"),
     )
     captured: dict[str, object] = {}
@@ -59,3 +59,42 @@ def test_serve_hands_the_runtimes_comparison_runner_to_the_worker_service(monkey
     monkeypatch.setattr(entry.signal, "signal", lambda *args: None)
     assert entry.serve({}) == 1
     assert captured["comparison_work"] is marker
+
+
+def test_serve_hands_the_runtimes_comparison_group_wait_sweep_to_the_worker_service(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`EXEC2-FOLLOWUP-01` item 3: the sweep the composition root built is the one the service is given -- without this hand-over the
+    offline expiry of a comparison job would stay decided only inside a retried call."""
+    import auditmanager.bootstrap.public as bootstrap_public
+    import auditmanager.jobs.public as jobs_public
+    import auditmanager.workers.__main__ as entry
+    import auditmanager.workers.service as service_module
+
+    sweep = object()
+    runtime = SimpleNamespace(
+        engine=None, session_factory=None, execute=None, version="v", slots=1, state_dir=None,
+        probe_runner=None, comparison_work=None, dispatch_groups=True, comparison_group_waits=sweep,
+        settings=SimpleNamespace(provider_source="database"),
+    )
+    captured: dict[str, object] = {}
+
+    class FakeService:
+        failed = True
+        worker_id = "wrk_test"
+        busy = 0
+
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def start(self) -> None: ...
+
+        def drain(self, timeout: float | None = None) -> bool:
+            return True
+
+        def stop(self) -> None: ...
+
+    monkeypatch.setattr(bootstrap_public, "build_worker_runtime", lambda environ: runtime)
+    monkeypatch.setattr(jobs_public, "sweep_stale_temporaries", lambda: None)
+    monkeypatch.setattr(service_module, "WorkerService", FakeService)
+    monkeypatch.setattr(entry.signal, "signal", lambda *args: None)
+    assert entry.serve({}) == 1
+    assert captured["comparison_group_waits"] is sweep and captured["dispatch_groups"] is True

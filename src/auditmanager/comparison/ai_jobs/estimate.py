@@ -20,6 +20,10 @@ estimate without a model call:
    exactly is allowed, as in :mod:`auditmanager.comparison.spend.ceilings`);
 4. the **digest** -- :func:`~.model.digest_of`.
 
+An estimate is always computed at the snapshot of the route it reads. Whether a group revision's rate snapshot is still the provider
+lock's (`EXEC2-FOLLOWUP-01`) is a separate question, :func:`require_group_rates_hold`, which the services behind the operations that declare
+``422`` ask before a consent is taken or renewed.
+
 :func:`build_estimate` is pure: the route, the counts and the two spend figures are its inputs.
 """
 
@@ -39,7 +43,7 @@ from auditmanager.comparison.ai_jobs.model import (
     digest_of,
     work_kind_of,
 )
-from auditmanager.comparison.spend.dispatch import group_pin
+from auditmanager.comparison.spend.dispatch import group_pin, group_rates_hold, lock_pin
 from auditmanager.comparison.spend.model import (
     DAY_CEILING_MICROS,
     JOB_CEILING_MICROS,
@@ -49,13 +53,16 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "JOB_ROUTE_KEY",
+    "REASON_RATES_STALE",
     "RouteReader",
     "build_estimate",
+    "group_rates_stale",
     "no_rule_for_work_kind",
     "read_job_route",
     "read_legacy_route",
     "read_route",
     "read_rule_route",
+    "require_group_rates_hold",
     "route_missing",
     "route_of_group_revision",
 ]
@@ -65,6 +72,9 @@ __all__ = [
 RouteReader = Callable[[Session, str, str], AiRoute]
 
 DEPENDENCY_ROUTE_MISSING = "executor_route_missing"
+#: `EXEC2-FOLLOWUP-01`. The registered ``analysis_input_invalid`` reason of an accepted model, rate or revision authority that no longer holds
+#: (``error-codes.json``, «cost preflight reasons»); ``runs.cost_policy`` raises the same word for a Run.
+REASON_RATES_STALE: Final[str] = "cost_estimate_binding_changed"
 #: `EXEC2-GROUP-CMP-01` (ADR-0026 decisions 17 and 18). The ``dependency`` of the refusal of a work kind that has no rule while the
 #: routing mode is ``rules`` (``auditmanager.executors.model.DEPENDENCY_NO_RULE_FOR_WORK_KIND`` is the same word; a test pins the two).
 DEPENDENCY_NO_RULE_FOR_WORK_KIND: Final[str] = "no_rule_for_work_kind"
@@ -82,6 +92,50 @@ def route_missing() -> DomainError:
         ErrorCode.DEPENDENCY_UNAVAILABLE, message="no usable executor connection is routed for this kind of work",
         dependency=DEPENDENCY_ROUTE_MISSING,
     )
+
+
+def group_rates_stale(work_kind: str) -> DomainError:
+    """``422 analysis_input_invalid`` with ``reason: cost_estimate_binding_changed`` (`EXEC2-FOLLOWUP-01`): the rates the group revision
+    snapshotted are not the rates the provider lock prices its model at now, so no consent on this group can be honoured -- the first
+    call would refuse it, and a new consent would be priced on the same snapshot and refused again. The group must be rebuilt (a new
+    revision copies the lock's rates).
+
+    An existing registered refusal, not a new one: the catalogue's «cost preflight reasons» name ``cost_estimate_binding_changed`` for an
+    accepted model, rate or revision authority that no longer holds, and the Run path raises it for the same fact
+    (``analysis.text.cost.require_approved_model``, ``runs.cost_policy``). ``stage_id`` names the kind of work, as the summary's refusal
+    names its own (``comparison_summary``).
+
+    **Only operations that declare 422 may raise it** (:func:`require_group_rates_hold` says which, and a contract-driven test holds the
+    list): the contract's 422 is part of an operation's declared answers, and an operation that declares none answers what it declares."""
+    return DomainError(
+        ErrorCode.ANALYSIS_INPUT_INVALID,
+        message="the rates this group was made on are not the rates its model is priced at now; the group must be rebuilt",
+        stage_id=work_kind, reason=REASON_RATES_STALE,
+    )
+
+
+def require_group_rates_hold(session: Session, route: AiRoute) -> None:
+    """Refuse, before a consent is taken or renewed, a group route whose rate snapshot is not the provider lock's now (`EXEC2-FOLLOWUP-01`).
+
+    An **explicit seam**, called by the services behind the operations that declare ``422`` and by nothing else: a start
+    (``ComparisonAiJobService.start_in_session``, which every ``start*`` operation and the stage chain go through), a resume or a retry
+    (``ComparisonAiJobService._renew_consent``), and the estimate of the sheet-changes series (``ComparisonAiSheetService.estimate_series``).
+    ``read_route`` and the estimate itself do **not** refuse: the estimate operations that declare no ``422`` (a pair check's, a sheet
+    description's, a specification's) are computed at the group's snapshot, as they always were, and the start that follows refuses with the
+    clear message; ``finish`` (also without a ``422``) proceeds, and the first call of the job refuses it instead (``consent_stale``, the job
+    pauses). ``tests/unit/comparison/ai_jobs/test_group_rates_seam.py`` reads the contract and holds each of these to its declared answers.
+
+    The pin comes first: a lock that no longer pins the group's model makes the route unusable, ``executor_route_missing``, before any rates
+    are compared. A route that names a connection (every job made before the cut-over) has no snapshot and is not asked."""
+    if route.executor_group_revision_id is None:
+        return
+    from auditmanager.executors.public import group_revision_of
+
+    revision = group_revision_of(session, route.executor_group_revision_id)
+    if revision is None or lock_pin(revision.pin_id) is None:
+        raise route_missing()
+    if not group_rates_hold(revision):
+        raise group_rates_stale(route.work_kind)
 
 
 def no_rule_for_work_kind() -> DomainError:
@@ -133,7 +187,10 @@ def read_legacy_route(session: Session, work_kind: str, provider_mode: str) -> A
 def route_of_group_revision(
     session: Session, group_revision_id: str, *, work_kind: str, provider_mode: str, rule_revision_id: str | None,
 ) -> AiRoute:
-    """The route of one immutable group revision: its model, its billing and its rate snapshot, with no connection."""
+    """The route of one immutable group revision: its model, its billing and its rate snapshot, with no connection.
+
+    It **reads** and refuses nothing about the rates: an estimate is computed at the snapshot the group revision holds. Whether that snapshot
+    is still the provider lock's is asked by :func:`require_group_rates_hold`, and only where the operation declares ``422``."""
     from auditmanager.executors.public import group_revision_of
 
     revision = group_revision_of(session, group_revision_id)

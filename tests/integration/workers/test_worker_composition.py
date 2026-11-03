@@ -187,7 +187,7 @@ class TestTheEntryPoint:
 
         runtime = SimpleNamespace(
             engine=None, session_factory=None, execute=None, version="v", slots=1, state_dir=None,
-            probe_runner=None, comparison_work=None, dispatch_groups=False,
+            probe_runner=None, comparison_work=None, dispatch_groups=False, comparison_group_waits=None,
             settings=SimpleNamespace(provider_source="environment"),
         )
         captured: dict[str, object] = {}
@@ -212,7 +212,7 @@ class TestTheEntryPoint:
         monkeypatch.setattr(service_module, "WorkerService", FakeService)
         monkeypatch.setattr(entry.signal, "signal", lambda *args: None)
         assert entry.serve({}) == 1
-        assert captured["dispatch_groups"] is False
+        assert captured["dispatch_groups"] is False and captured["comparison_group_waits"] is None
 
     def test_health_reads_the_identity_and_a_recent_heartbeat(self, tmp_path: Path) -> None:
         (tmp_path / IDENTITY_FILE).write_text("wrk_01M2545JSD15ETSNNV904X991K\n")

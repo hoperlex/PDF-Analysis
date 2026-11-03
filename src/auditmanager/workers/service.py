@@ -32,6 +32,11 @@ What it does, in five threads
   reason the Run is not offered again, so one Run no member can take never holds this worker's slot or its comparison
   claim (see :meth:`WorkerService._run_one` for the short local hold that covers the moment before the reason is stored).
   A worker whose provider source is not ``database`` (``dispatch_groups=False``) is offered no group Run at all.
+  `EXEC2-FOLLOWUP-01`: the same step also keeps the wait of the **comparison AI jobs** admitted by a group true and ends the ones whose
+  group has had no eligible member for longer than that limit, each the way its own method ends it
+  (``comparison.public.build_group_wait_sweep``, handed in as ``comparison_group_waits``). Their wait used to be written, and their offline
+  expiry decided, only when one of a job's items was retried. It is a pass of its own -- a failure in one never stops the other -- and, like the
+  claim of a pending group Run, it runs only for a worker whose provider source is ``database`` (``dispatch_groups``).
 * **slots** -- a pool of ``slots`` threads, each running one claimed run to a terminal.
   ``slots`` is ``AUDITMANAGER_WORKER_SLOTS`` (`EXEC-PAR-QUEUE-01`; one by default). With more
   than one, the dispatch loop fills a free slot straight after it filled the last one rather
@@ -275,6 +280,7 @@ class WorkerService:
         comparison_work: ComparisonWork | None = None,
         group_offline_wait_seconds: float | None = None,
         dispatch_groups: bool = True,
+        comparison_group_waits: Callable[[float], Any] | None = None,
     ) -> None:
         if slots < 1:
             raise ValueError("a worker needs at least one slot")
@@ -306,6 +312,9 @@ class WorkerService:
         #: `EXEC2-GROUP-RUN-01` (ADR-0026 decision 12): ``True`` only when the provider source is ``database`` -- the composition
         #: root says so (``WorkerRuntime.dispatch_groups``). ``False`` offers this worker no Run admitted on a group.
         self._dispatch_groups = dispatch_groups
+        #: `EXEC2-FOLLOWUP-01`: ``comparison_group_waits(offline_wait_seconds)`` ends the comparison jobs whose group has had no eligible
+        #: member for too long and answers what it did (``expired``, ``skipped``, ``failed`` counts). Gated by ``dispatch_groups`` below.
+        self._comparison_group_waits = comparison_group_waits
         self._worker_id: str | None = None
         self._stopped = threading.Event()
         self._draining = threading.Event()
@@ -433,6 +442,7 @@ class WorkerService:
                     next_reclaim = monotonic() + self._reclaim_seconds
                 if now >= next_waits:
                     self._refresh_group_waits()
+                    self._expire_comparison_waits()
                     next_waits = monotonic() + GROUP_WAIT_SECONDS
                 if self._poll_now.is_set():
                     self._poll_now.clear()
@@ -521,6 +531,31 @@ class WorkerService:
         if report.consent_lapsed:
             _log.info("worker %s: %d run(s) ended with a cost consent that no longer holds",
                       self._worker_id, report.consent_lapsed)
+
+    def _expire_comparison_waits(self) -> None:
+        """Keep the wait of the comparison AI jobs admitted by a group true, and end the ones that have waited for a runner longer than the
+        offline limit (decision 15).
+
+        A step of its own, after the Runs' and isolated from it: housekeeping, so the one place a failure is logged -- by the category
+        of the failure, never its text -- and the loop carries on; the next pass repeats it. Nothing happens for a worker that does not
+        dispatch groups (the provider source is not ``database``) or that was given no sweep."""
+        if not self._dispatch_groups or self._comparison_group_waits is None:
+            return
+        try:
+            report = self._comparison_group_waits(self._group_offline_wait_seconds)
+        except Exception as failure:
+            _log.error(
+                "worker %s: the comparison group wait pass failed (%s); retried",
+                self._worker_id, type(failure).__name__,
+            )
+            return
+        if getattr(report, "expired", 0):
+            _log.info("worker %s: %d comparison job(s) ended no_executor_online", self._worker_id, report.expired)
+        if getattr(report, "failed", 0):
+            _log.error(
+                "worker %s: %d comparison job(s) could not be decided in the group wait pass; retried",
+                self._worker_id, report.failed,
+            )
 
     def _claim_next(self) -> bool:
         """Hand one runnable Job to a free slot, or, when there is none, one comparison item.

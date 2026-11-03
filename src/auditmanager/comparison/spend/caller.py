@@ -40,12 +40,14 @@ import logging
 import math
 import re
 import time
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, NoReturn
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.comparison.spend.ceilings import check_after_call, check_before_call
-from auditmanager.comparison.spend.dispatch import group_offline_wait_seconds, select_member, write_binding
+from auditmanager.comparison.spend.dispatch import (
+    group_offline_wait_seconds, priced_as_consented, same_rates, select_member, write_binding,
+)
 from auditmanager.comparison.spend.errors import (
     REASON_CONNECTION_BUSY,
     REASON_CONSENT_REQUIRED,
@@ -65,6 +67,7 @@ from auditmanager.comparison.spend.model import (
     COST_MEASURED,
     COST_UNMETERED,
     JOB_KEY,
+    WAIT_NEEDS_RECONSENT,
     CallEstimate,
     CallResult,
     CallRoute,
@@ -224,6 +227,13 @@ class ComparisonModelCaller:
                 )
                 session.commit()
                 return call_id, over
+            if not unmetered and consent is not None and consent.executor_group_revision_id is not None:
+                # `EXEC2-FOLLOWUP-01`: a job admitted on a group that is already bound is called over a route opened from the lock as it
+                # is now. The rates its consent was given on are the group revision's snapshot, and a call priced at others is refused at
+                # every call, as a Run's call-time guard does. A bound job holds no wait (the database allows one only while pending), so
+                # the refusal pauses the job (`route_changed`) and nothing more is recorded.
+                if not priced_as_consented(session, consent.executor_group_revision_id, route.pin):
+                    raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
             if route.connection_revision_id is not None:
                 connection_id = repository.connection_of(session, route.connection_revision_id)
                 if connection_id is None:
@@ -270,7 +280,12 @@ class ComparisonModelCaller:
         selection = select_member(session, repository, dispatch, offline_wait_seconds=self._wait_seconds())
         if selection.route.unmetered != route.unmetered or selection.route.model_identity != route.model_identity:
             # The member's route is not the route the group revision was consented on: the consent does not hold for it.
-            raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
+            self._needs_reconsent(session, dispatch)
+        if not unmetered and not same_rates(selection.route.pin, route.pin):
+            # One price (`EXEC2-FOLLOWUP-01`): the estimate and the ceilings below are priced on the route in hand (the group
+            # revision's rate snapshot), and the call settles at the pin of the member's own route. Rates that differ are never
+            # reconciled by re-pricing: the consent was given on the others.
+            self._needs_reconsent(session, dispatch)
         with session.begin_nested():
             if selection.binds:
                 from auditmanager.executors.public import advance_group_rotation
@@ -296,6 +311,14 @@ class ComparisonModelCaller:
                 estimate_micros=estimate_micros,
             )
         return call_id, selection.route
+
+    @staticmethod
+    def _needs_reconsent(session: Session, dispatch: Any) -> NoReturn:
+        """The consent does not hold for the member's route: record why the job waits -- the same ``needs_reconsent`` the first call's own
+        re-check records (:func:`~auditmanager.comparison.spend.dispatch.select_member`) -- keep it, and refuse. Always raises."""
+        dispatch.jobs.set_wait(session, dispatch.job_id, WAIT_NEEDS_RECONSENT)
+        session.commit()
+        raise CallRefused(REASON_CONSENT_STALE, pauses_job=True)
 
     def _wait_seconds(self) -> int:
         if self._offline_wait is None:

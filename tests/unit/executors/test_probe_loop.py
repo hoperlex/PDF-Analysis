@@ -79,7 +79,7 @@ def test_serve_hands_the_runtimes_probe_runner_to_the_worker_service(monkeypatch
     runtime = SimpleNamespace(engine=None, session_factory=None, execute=None, version="v",
                               settings=SimpleNamespace(provider_source="environment"),
                               slots=1, state_dir=None, probe_runner=marker,
-                              comparison_work=None)
+                              comparison_work=None, dispatch_groups=False, comparison_group_waits=None)
     captured: dict[str, object] = {}
 
     class FakeService:
@@ -117,7 +117,7 @@ def test_worker_registers_the_env_baseline_before_accepting_work(monkeypatch) ->
     events: list[str] = []
     runtime = SimpleNamespace(
         engine=None, session_factory=object(), execute=None, version="v", slots=1,
-        state_dir=None, probe_runner=None, comparison_work=None,
+        state_dir=None, probe_runner=None, comparison_work=None, dispatch_groups=True, comparison_group_waits=None,
         settings=SimpleNamespace(provider_source="database", secrets_private_ring=object()),
     )
 

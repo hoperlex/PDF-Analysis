@@ -25,13 +25,16 @@ from auditmanager.executors.operations import (
 )
 from auditmanager.executors.public import (
     ExecutorRepository,
+    MappingEntry,
     RevisionSettings,
     create_connection,
     load_private_ring,
     pinned_models,
+    preview_routing,
     resolve_route,
     revise_connection,
     set_route,
+    set_routing_mode,
     record_probe_started,
     record_probe_result,
 )
@@ -229,6 +232,33 @@ def test_import_env_makes_the_first_connection_probes_routes_and_is_idempotent(
     count = session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one()
     second = import_env(_factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake))
     assert (second.created, second.connection_id) == (False, first.connection_id)
+    assert session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one() == count
+
+
+def test_import_env_under_rules_imports_the_connection_and_sets_no_route(
+    session, fake  # type: ignore[no-untyped-def]
+) -> None:
+    """`EXEC2-FOLLOWUP-01` item 5: while the routing mode is ``rules`` ``setExecutorRoute`` is refused, so the command imports the
+    connection (probed ``ok`` on this worker's path), skips the route step, says so in its report, and a repeat is still a no-op.
+    Without the guard the command failed midway with ``conflict`` / ``routing_mode_rules`` after the connection was made."""
+    rings = support.make_rings()
+    stand = support.seed_connection(session, rings, fake.vpn_url(), name="Gateway before the cut-over")
+    shown = preview_routing(session, roles=support.ADMIN_ROLES)
+    mapping = [MappingEntry(item.work_kind, item.proposed_group_name) for item in shown.items if item.status == "ready"]
+    assert any(entry.work_kind == "text_analysis" for entry in mapping), "the seeded primary is ready"
+    cut_over = set_routing_mode(
+        session, mode="rules", preview_digest=shown.preview_digest, mapping=mapping, pins=pinned_models(),
+        roles=support.ADMIN_ROLES, idempotency_key=support.unique(), actor_uid=support.ACTOR)
+    assert cut_over.routing_mode.mode == "rules"
+
+    report = import_env(_factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake))
+    assert (report.created, report.probe_outcome, report.routed, report.routing_mode) == (True, "ok", False, "rules")
+    store = ExecutorRepository()
+    assert store.get_connection(session, report.connection_id).display_name == IMPORT_DISPLAY_NAME
+    assert resolve_route(session, "text_analysis").route.primary_connection_id == stand.connection_id, "no route was set"
+    count = session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one()
+    again = import_env(_factory(session), _environ(fake), ring=rings.private, policy=_loopback_policy(fake))
+    assert (again.created, again.connection_id) == (False, report.connection_id)
     assert session.execute(text("SELECT count(*) FROM executor_connection")).scalar_one() == count
 
 

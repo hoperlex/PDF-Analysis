@@ -205,6 +205,8 @@ export {
   COMPARISON_CONSTRAINT_SENTENCES,
   COMPARISON_DEPENDENCY_SENTENCES,
   COMPARISON_INTEGRITY_SENTENCE,
+  COST_BINDING_CHANGED,
+  GROUP_RATES_STALE_SENTENCE,
   UNDESCRIBED_FAILURE,
   UPLOAD_FAILURE_REASON_SENTENCES,
   comparisonFailure,
@@ -305,6 +307,7 @@ export {
   CEILINGS_LINE,
   CONFIRM_LABELS,
   CONSENT_LINES,
+  GROUP_ROUTE_LINE,
   NOTHING_TO_SEND_SENTENCE,
   NOT_METERED_LABEL,
   NOT_METERED_TITLE,
@@ -389,6 +392,12 @@ export {
 } from './model/report-view';
 export type { Evidence } from './model/description-view';
 export { copyText, evidenceCounter, evidenceOf, focusIndexOf, leadLine, nowText, stepIndex, wasText } from './model/description-view';
+export type { JobExecutorLine, JobExecutorSource } from './model/job-executor';
+export {
+  JOB_PLANNED_TAIL, JOB_UNBOUND_TAIL, JOB_WAIT_LABELS, jobExecutorHint, jobExecutorLine, jobExecutorSentence, jobWaitSentence,
+} from './model/job-executor';
+export { JobExecutor } from './ui/job-executor';
+export type { JobExecutorProps } from './ui/job-executor';
 export { AiLabel, AiText, RecordedMark } from './ui/ai-text';
 export type { AiTextProps } from './ui/ai-text';
 export { EstimatePanel } from './ui/estimate-panel';
