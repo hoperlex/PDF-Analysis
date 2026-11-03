@@ -203,3 +203,13 @@ and the re-measured `web/FRONTEND_LOCK.json`. No feature flag.
   dev). Typecheck: clean. `next build`: passed, `pdf.worker.min.*.mjs` emitted under `.next/static/media`,
   review route 36.8 kB / 224 kB first load; `.next` removed afterwards (disk).
 - Not run: the live browser journey on a stand and the full gate (disk ~1 GB free; owner decision above).
+- Re-accepted 2026-11-03 on `3bc822a9` (= `origin/dev` `750cdf66`, contract 1.16.0, merged; UI-FIX-1102's
+  ratchets met: 14 raw lengths in the viewer modules now read `--am-gap-*` or drop the radius,
+  `.pdfPage` left `PENDING_UNREACHED`, 86 → 85, in `38d4e950`). Focused web run
+  (`tests/unit/review tests/unit/styles tests/guards tests/unit/review-indication`): 888 tests, 12
+  red — the 5 `rendered-language` and 6 `review-indication-default` reds that `origin/dev` has, plus
+  «administrator tile» timing out at 158 s under load 135, which passes alone in 9 s. Typecheck clean;
+  lint 1 error, in `tests/unit/workers/connect-remote-agent-commands.test.ts`, identical to dev;
+  `git diff --check` clean; wave-governance + journey conformance 157 passed. `next build` not repeated
+  after the 2026-11-02 build (owner, 2026-11-03: one run at a time on this host, by the integrator's
+  consent); the changes since are module CSS and other waves' code.
