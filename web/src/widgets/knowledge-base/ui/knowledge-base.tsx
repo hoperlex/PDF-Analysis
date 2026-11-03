@@ -17,6 +17,12 @@
  * system does not have. They are named in `docs/program/W38-KB.md` and left out rather
  * than invented, because a column that always reads "no" is worse than a missing one.
  *
+ * **Each row says where it belongs** (`UI-PARITY-P0A`): «Проект · Документ · Раздел», from the
+ * record's own `project_name`, `document_name` and `section`. The two names are joined by the
+ * server at read time and stored nowhere. `section` is the expert-confirmed section of the
+ * finding's version and is absent while that version is unclassified; the row then carries the
+ * project and the document and no third part — no label is made up for the absence.
+ *
  * Every row is one **event**, not one finding. A finding the reviewer returned to carries
  * two rows, and `decision_event_count` on each says so — which is the fact a knowledge
  * base is read for: that this question has been asked before.
@@ -35,6 +41,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
 import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
 import { SeverityBadge } from '@/entities/finding';
+import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
 export interface KnowledgeBaseProps {
   readonly records: readonly DecisionRecord[];
@@ -58,8 +65,23 @@ function hasValue(values: readonly string[], value: unknown): boolean {
   return typeof value === 'string' && values.includes(value);
 }
 
+/**
+ * «Проект · Документ · Раздел». The section is its catalogue name, as the dashboard and the
+ * project structure print it; a code the catalogue does not hold never gets here
+ * (`hasInvalidVocabulary`).
+ */
+function placeOf(record: DecisionRecord): string {
+  const parts = [record.project_name, record.document_name];
+  if (record.section !== undefined) {
+    const section = findProjectSection(record.section);
+    if (section !== null) parts.push(projectSectionTitle(section));
+  }
+  return parts.join(' · ');
+}
+
 function hasInvalidVocabulary(record: DecisionRecord): boolean {
   return (
+    (record.section !== undefined && findProjectSection(record.section) === null) ||
     !hasValue(FINDING_CATEGORY_VALUES, record.category) ||
     !hasValue(DECISION_EVENT_TYPE_VALUES, record.event_type) ||
     !hasValue(VERDICT_VALUES, record.current_verdict) ||
@@ -129,6 +151,9 @@ export function KnowledgeBase({ records, isLoading, error }: KnowledgeBaseProps)
                 </span>
               )}
               <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
+            </p>
+            <p className="am-kb__meta" data-record-place="true">
+              {placeOf(record)}
             </p>
             <p className="am-kb__text">{record.finding_text}</p>
             {record.comment !== null && record.comment !== undefined ? (

@@ -20,6 +20,12 @@ import {
 } from '@/shared/api';
 
 export type DashboardFailureKind =
+  /**
+   * The address names a project the server does not know (`?project=`, `404 not_found`,
+   * `UI-PARITY-P0A`). Only ever produced when a project was asked for: without one the
+   * dashboard has no parent to miss, and a `not_found` there is the generic read failure.
+   */
+  | 'project_not_found'
   | 'request_invalid'
   | 'dependency_unavailable'
   | 'not_authenticated'
@@ -40,9 +46,30 @@ export interface DashboardFailure {
   readonly errorCode: ErrorCode | null;
 }
 
-/** Classify anything thrown by `getDashboardSummary`. */
-export function classifyDashboardFailure(error: unknown): DashboardFailure {
+/**
+ * Classify anything thrown by `getDashboardSummary`.
+ *
+ * @param projectUid the project the read asked for, or `null` for «Все проекты». A `not_found`
+ *   is «Проект не найден» only when one was asked for: the unknown project is shown as exactly
+ *   that, never as a summary of zeros and never as «Все проекты».
+ */
+export function classifyDashboardFailure(
+  error: unknown,
+  projectUid: string | null = null,
+): DashboardFailure {
   if (error instanceof ApiError) {
+    if (error.errorCode === 'not_found' && projectUid !== null) {
+      return {
+        kind: 'project_not_found',
+        title: 'Проект не найден',
+        detail:
+          'В адресе указан проект, которого нет в системе или который вам не виден, поэтому сводку ' +
+          'по нему показать нельзя. Сводка по всем проектам доступна по ссылке ниже.',
+        correlationId: error.correlationId,
+        retryable: false,
+        errorCode: error.errorCode,
+      };
+    }
     const base = {
       correlationId: error.correlationId,
       retryable: error.retryable,

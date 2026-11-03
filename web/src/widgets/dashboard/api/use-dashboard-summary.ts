@@ -18,14 +18,23 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DashboardSummary } from '@/shared/api';
+import type { DashboardSummary, ProjectUid } from '@/shared/api';
 import { getDashboardSummary, queryKeys } from '@/shared/api';
 
-export function useDashboardSummary() {
+/**
+ * `projectUid` is the project the address names (`?project=`, `UI-PARITY-P0A`), or `null` for
+ * «Все проекты». With one, the server restricts all four panels to that project and answers
+ * `404 not_found` for a project it does not know; without one it answers the whole deployment,
+ * exactly as before. The project is in the cache key, so two projects are two entries and a
+ * switch never shows the other project's numbers while the new ones load.
+ */
+export function useDashboardSummary(projectUid: ProjectUid | null = null) {
   return useQuery<DashboardSummary>({
-    queryKey: queryKeys.dashboard.summary(),
+    queryKey: queryKeys.dashboard.summary(projectUid),
     queryFn: async () => {
-      const response = await getDashboardSummary({});
+      const response = await getDashboardSummary(
+        projectUid === null ? {} : { query: { project_uid: projectUid } },
+      );
       return response.data;
     },
   });

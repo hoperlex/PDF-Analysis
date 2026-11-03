@@ -17,6 +17,35 @@
   overflow-x: auto;
 }
 
+/* The scope the list is read over: «Все проекты» or one project, and how many entries match. */
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-base);
+}
+
+.scopeKey {
+  font-size: var(--am-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.scopeValue {
+  min-width: 0;
+  color: var(--am-ink);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+}
+
 .results :global(.am-kb__records) {
   gap: 8px;
 }

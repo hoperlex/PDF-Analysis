@@ -1,5 +1,6 @@
 /** Public API of the `dashboard` widget. */
 
+export type { DashboardProps } from './ui/dashboard';
 export { Dashboard } from './ui/dashboard';
 export { HomeSectionsOverview } from './ui/home-sections-overview';
 

@@ -1304,7 +1304,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.journal, {
     items: [
       record(),
-      record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 }),
+      // `UI-PARITY-P0A`: one row of a classified version, so the place line prints a section's name too.
+      record({ decision_id: `dec_${ULID}A`, decision_event_count: 1, section: 'AR' }),
       // One row per remaining `Verdict` and per remaining `FindingCategory`, so the
       // knowledge base puts every badge this contract publishes on a screen. Before this
       // the journal held `accepted`/`internal_contradiction` twice and nothing else.
@@ -1319,6 +1320,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
       ),
     ],
     page,
+    // `UI-PARITY-P0A`: the count over every page of the journal; the knowledge base prints it.
+    total: 7,
   });
   client.setQueryData(KEYS.dashboardSummary, dashboardSummary());
   /*
@@ -1441,7 +1444,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.run, run());
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
-  client.setQueryData(KEYS.journal, { items: [], page });
+  client.setQueryData(KEYS.journal, { items: [], page, total: 0 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [], page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
@@ -1502,7 +1505,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.documents, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
-  client.setQueryData(KEYS.journal, { items: [record()], page });
+  client.setQueryData(KEYS.journal, { items: [record()], page, total: 1 });
   client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
   return client;
 }
