@@ -209,7 +209,7 @@ def test_the_route_prices_at_the_rate_snapshot_of_the_revision(monkeypatch: pyte
     assert (route.pin.model_id, route.pin.input_per_mtok_usd, route.pin.output_per_mtok_usd) == (SONNET, 0.5, 1.5)
 
 
-# --- a snapshot that is not the lock's is refused where the estimate is made (`EXEC2-FOLLOWUP-01`, M2) ---------------------------------
+# --- a snapshot that is not the lock's: refused by an explicit seam, only where the operation declares 422 (`EXEC2-FOLLOWUP-01`, M2, N1) ---
 
 
 def stale_rates(executors: "Executors") -> None:
@@ -225,38 +225,89 @@ def assert_rates_stale(refused: pytest.ExceptionInfo[DomainError]) -> None:
     assert error.envelope("corr_01").details == error.detail_fields, "the catalogue lets this code carry exactly these two keys"
 
 
-def test_a_start_under_rules_on_a_group_whose_rates_are_stale_is_refused_before_any_consent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without this the estimate was priced at the snapshot, the consent taken, and the first call refused it -- and a new consent, priced
-    on the same snapshot, was refused again: a re-consent that could never succeed."""
+def test_the_estimate_is_computed_at_the_groups_snapshot_even_when_the_lock_moved_and_the_start_is_what_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N1: the estimate operations of a pair check, a sheet description and a specification declare no 422, so the estimate they serve is the
+    one it was before the rates check existed -- priced at the snapshot -- and a job that is resumed is estimated the same way."""
     executors = Executors(monkeypatch)
     stale_rates(executors)
     method = CountingMethod()
-    with pytest.raises(DomainError) as refused:
-        service(method).estimate_in(session(), scope())
-    assert_rates_stale(refused)
-    assert method.models == [], "nothing was counted: the refusal comes with the route"
+    estimate = service(method).estimate_in(session(), scope())
+    assert estimate.route.grouped and (estimate.route.pin.input_per_mtok_usd, estimate.route.pin.output_per_mtok_usd) == (2.0, 10.0)
+    assert method.models == [SONNET], "the method counted: nothing refused the estimate"
+    left = service(CountingMethod()).estimate_in(session(), scope(), AiMode.LEFT, job=record())
+    assert left.route.executor_group_revision_id == REVISION
 
 
-def test_a_resume_of_a_job_on_a_group_whose_rates_are_stale_is_refused_too(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_route_readers_never_refuse_for_stale_rates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``read_route`` is read by every method while it counts, queues its items and names its model -- by a ``finish`` among others, which
+    declares no 422. It must answer."""
     executors = Executors(monkeypatch)
     stale_rates(executors)
+    assert estimate_module.read_route(session(), WORK_KIND, "live").grouped
+    assert estimate_module.read_job_route(session(), record(), "live").grouped
+    assert estimate_module.read_rule_route(session(), WORK_KIND, "live").grouped
+
+
+def test_a_lock_that_no_longer_pins_the_model_still_answers_executor_route_missing_from_the_readers(monkeypatch: pytest.MonkeyPatch) -> None:
+    executors = Executors(monkeypatch)
+    del executors.lock[SONNET]
     with pytest.raises(DomainError) as refused:
-        service(CountingMethod()).estimate_in(session(), scope(), AiMode.LEFT, job=record())
+        estimate_module.read_route(session(), WORK_KIND, "live")
+    assert refused.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE and refused.value.detail_fields["dependency"] == "executor_route_missing"
+
+
+def group_route_of(executors: "Executors", identity: str = REVISION_NEW) -> AiRoute:
+    return estimate_module.read_route(session(), WORK_KIND, "live") if identity == REVISION_NEW else estimate_module.read_job_route(
+        session(), record(), "live")
+
+
+def test_the_seam_refuses_a_group_route_whose_snapshot_is_not_the_locks_with_the_registered_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    executors = Executors(monkeypatch)
+    route = group_route_of(executors)
+    estimate_module.require_group_rates_hold(session(), route)  # as made: the rates hold
+    stale_rates(executors)
+    with pytest.raises(DomainError) as refused:
+        estimate_module.require_group_rates_hold(session(), route)
     assert_rates_stale(refused)
+    with pytest.raises(DomainError) as job_refused:
+        estimate_module.require_group_rates_hold(session(), group_route_of(executors, REVISION))
+    assert_rates_stale(job_refused)
+
+
+def test_the_seam_checks_the_pin_first_so_a_lock_that_stopped_pinning_the_model_is_executor_route_missing_not_stale_rates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N2: with no pin there are no rates to compare. The unusable route is what is said, and it is said before the rates are looked at."""
+    executors = Executors(monkeypatch)
+    route = group_route_of(executors)
+    del executors.lock[SONNET]
+    with pytest.raises(DomainError) as refused:
+        estimate_module.require_group_rates_hold(session(), route)
+    assert refused.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE
+    assert refused.value.detail_fields["dependency"] == "executor_route_missing"
+
+
+def test_the_seam_asks_nothing_of_a_route_that_names_a_connection_and_a_revision_that_is_gone_is_a_missing_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executors = Executors(monkeypatch)
+    from auditmanager.executors import public
+
+    stale_rates(executors)
+    monkeypatch.setattr(public, "group_revision_of", lambda *a, **k: (_ for _ in ()).throw(AssertionError("a connection route reads no group")))
+    estimate_module.require_group_rates_hold(session(), legacy_route())
+    monkeypatch.setattr(public, "group_revision_of", lambda session, identity, groups=None: None)
+    with pytest.raises(DomainError) as refused:
+        estimate_module.require_group_rates_hold(session(), grouped_route())
+    assert refused.value.detail_fields["dependency"] == "executor_route_missing"
 
 
 def test_the_refusal_is_the_registered_cost_binding_reason_the_run_path_raises_too() -> None:
     from auditmanager.jobs.repository import CONSENT_LAPSED_REASON
 
     assert estimate_module.REASON_RATES_STALE == CONSENT_LAPSED_REASON == "cost_estimate_binding_changed"
-
-
-def test_a_snapshot_that_is_the_lock_is_not_refused_and_a_legacy_route_never_reads_the_lock(monkeypatch: pytest.MonkeyPatch) -> None:
-    executors = Executors(monkeypatch)
-    assert estimate_module.read_route(session(), WORK_KIND, "live").grouped
-    stale_rates(executors)
-    executors.mode = "legacy"
-    assert not estimate_module.read_route(session(), WORK_KIND, "live").grouped, "a job on a connection is priced as it always was"
 
 
 def test_under_legacy_the_route_is_the_primary_exactly_as_before(monkeypatch: pytest.MonkeyPatch) -> None:

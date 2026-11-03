@@ -140,8 +140,10 @@ export const EXECUTOR_ROUTE_MISSING_SENTENCE =
 /**
  * `EXEC2-FOLLOWUP-01`: a group whose snapshot of the model's rates is not the rates the provider lock prices the model at now cannot be
  * consented to. The refusal is the registered `422 analysis_input_invalid` with `details.reason` `cost_estimate_binding_changed` — an
- * accepted model, rate or revision authority that no longer holds, the Run path's own word — raised by the estimate, the consent and a
- * resume, so a consent that the first call would refuse is never taken. `details.stage_id` names the kind of work.
+ * accepted model, rate or revision authority that no longer holds, the Run path's own word. It is raised only by the operations whose
+ * contract declares 422 and that take a consent (a start, a resume, a retry, the sheet-changes estimate), so a consent that the first call
+ * would refuse is never taken; the estimates and the finish that declare no 422 answer as before and the first call pauses the job
+ * with `route_changed`. `details.stage_id` names the kind of work.
  */
 export const COST_BINDING_CHANGED = 'cost_estimate_binding_changed';
 export const GROUP_RATES_STALE_SENTENCE =

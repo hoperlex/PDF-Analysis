@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 import type { ComparisonAiJob, ExecutorBinding, ExecutorGroupCapacity, ExecutorGroupPlan } from '@/shared/api';
 import { ApiError, RUN_QUEUE_REASON_VALUES } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
-import { OFFLINE_WAIT_END_SENTENCE, PREVIOUS_REVISION_SENTENCE, executorGroupCapacityKey } from '@/entities/executor-group';
+import { OFFLINE_WAIT_END_SENTENCE, PREVIOUS_REVISION_NOTE, executorGroupCapacityKey } from '@/entities/executor-group';
 import type { AiStepFacts } from '@/entities/version-series';
 import {
   GROUP_RATES_STALE_SENTENCE,
@@ -260,8 +260,8 @@ describe('the screens that show a job', () => {
     const client = newClient();
     client.setQueryData(executorGroupCapacityKey(GROUP), capacityOf('runner_offline', groupRevisionId(2)));
     const markup = block(pending({ wait_reason: 'runner_offline' }), client);
-    expect(markup).toContain(PREVIOUS_REVISION_SENTENCE);
-    expect(markup).not.toContain('агент офлайн');
+    expect(markup).toContain(`${PREVIOUS_REVISION_NOTE} Подключение группы не может принять работу: агент офлайн.`);
+    expect(markup).not.toContain('не обслужит');
   });
 
   it('do not promise that the wait ends for a job that is paused (L2)', () => {

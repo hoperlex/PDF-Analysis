@@ -11,8 +11,8 @@
  * the read is `enabled` only for a `runner_offline` wait on a named group.
  *
  * The capacity describes the group's **current** revision, and the work waits on the revision it froze: `revisionId` is that one
- * (`planned.executor_group_revision_id`), and `groupWaitDetail` says so when the two differ instead of describing members that will
- * not serve the work.
+ * (`planned.executor_group_revision_id`), and `groupWaitDetail` says so when the two differ: the work was accepted on a previous revision,
+ * and what follows is the state of the current one.
  *
  * It is a read, not a poll. The work's own status refreshes on the screens that show it, and the capacity is read again on
  * a return to the tab; a stale answer is at worst the sentence that was true a moment ago, and a reading that no longer

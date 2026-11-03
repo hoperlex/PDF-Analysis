@@ -25,7 +25,8 @@ import {
   GroupWaitDetail,
   OFFLINE_WAIT_DEFAULT_MINUTES,
   OFFLINE_WAIT_END_SENTENCE,
-  PREVIOUS_REVISION_SENTENCE,
+  PREVIOUS_REVISION_ALONE,
+  PREVIOUS_REVISION_NOTE,
   WAIT_CAUSE_SENTENCES,
   WAIT_DETAIL_UNAVAILABLE,
   executorGroupCapacityKey,
@@ -129,13 +130,27 @@ describe('what is wrong with the group', () => {
 });
 
 describe('the revision the work waits on', () => {
-  it('says that the work was accepted on a previous revision when the capacity is of another, whatever its members say', () => {
-    for (const members of [[member(1, 'runner_offline')], [member(1)], [member(1, 'at_capacity')]]) {
+  it('says that the work was accepted on a previous revision and shows the current revision’s cause when its members explain one', () => {
+    expect(groupWaitDetail(capacity(member(1, 'runner_offline')), NEXT_REVISION)).toEqual({
+      causes: [{ issue: 'runner_offline', members: 1 }],
+      revision: 'previous',
+      sentence: `${PREVIOUS_REVISION_NOTE} Подключение группы не может принять работу: агент офлайн.`,
+    });
+    expect(PREVIOUS_REVISION_NOTE).toBe('Работа принята на предыдущей ревизии группы; ниже — состояние текущей ревизии.');
+  });
+
+  it('says that the current revision gives no cause when its members are eligible or only full, and promises nothing of what it will serve', () => {
+    for (const members of [[member(1)], [member(1, 'at_capacity')]]) {
       expect(groupWaitDetail(capacity(...members), NEXT_REVISION)).toEqual({
-        causes: [], revision: 'previous', sentence: PREVIOUS_REVISION_SENTENCE,
+        causes: [], revision: 'previous', sentence: PREVIOUS_REVISION_ALONE,
       });
     }
-    expect(PREVIOUS_REVISION_SENTENCE).toBe('Работа принята на предыдущей ревизии группы — новая ревизия её не обслужит.');
+    expect(PREVIOUS_REVISION_ALONE).toBe(
+      'Работа принята на предыдущей ревизии группы; состояние текущей ревизии причины её ожидания не показывает.',
+    );
+    for (const sentence of [PREVIOUS_REVISION_NOTE, PREVIOUS_REVISION_ALONE]) {
+      expect(sentence).not.toContain('не обслужит');
+    }
   });
 
   it('says that what it shows is the group’s current state when the work names no revision, and does not claim more', () => {
@@ -197,8 +212,8 @@ describe('the component', () => {
     client.setQueryData(executorGroupCapacityKey(GROUP), { ...capacity(member(1, 'runner_offline')), group_revision_id: NEXT_REVISION });
     const markup = drawn(client, 'runner_offline');
     expect(markup).toContain('data-wait-detail="previous-revision"');
-    expect(markup).toContain(PREVIOUS_REVISION_SENTENCE);
-    expect(markup).not.toContain('агент офлайн');
+    expect(markup).toContain(`${PREVIOUS_REVISION_NOTE} Подключение группы не может принять работу: агент офлайн.`);
+    expect(markup).not.toContain('не обслужит');
     expect(markup).toContain(OFFLINE_WAIT_END_SENTENCE);
   });
 
@@ -276,8 +291,8 @@ describe('the run page', () => {
 
   it('says that the run was accepted on a previous revision when the group has a newer one', () => {
     const markup = page(waiting(), { ...capacity(member(1, 'runner_offline')), group_revision_id: NEXT_REVISION });
-    expect(markup).toContain(PREVIOUS_REVISION_SENTENCE);
-    expect(markup).not.toContain('Подключение группы не может принять работу');
+    expect(markup).toContain(`${PREVIOUS_REVISION_NOTE} Подключение группы не может принять работу: агент офлайн.`);
+    expect(markup).not.toContain('не обслужит');
   });
 
   it('keeps the page as it was when the reason is another, the run is bound or the capacity is not read', () => {

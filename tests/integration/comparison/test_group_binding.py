@@ -810,26 +810,33 @@ def test_a_provider_lock_that_moved_after_the_group_revision_was_made_pauses_the
     assert not db.one("SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :w", w=item.work_id)
     assert db.one("SELECT rotation_cursor FROM executor_group WHERE group_id = :g", g=s.group_id) == 0, "nothing was dispatched"
 
-    # While the lock stays moved a new consent cannot be taken at all: it would be priced on the same snapshot and refused by the first call
-    # again, for ever. The estimate, the consent and the resume are refused with the registered cost-binding reason instead.
-    with pytest.raises(DomainError) as no_estimate:
-        s.service.estimate(s.scope)
-    assert no_estimate.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
-    assert dict(no_estimate.value.detail_fields) == {"stage_id": WORK_KIND, "reason": "cost_estimate_binding_changed"}
+    # While the lock stays moved a new consent cannot be honoured: it would be priced on the same snapshot and refused by the first call
+    # again, for ever. A client reads the estimate -- an operation that declares no 422, so it is served at the group's snapshot, as before --
+    # and the operation that takes the consent refuses it with the registered cost-binding reason.
+    shown = s.service.estimate(s.scope)
+    assert shown.route.executor_group_revision_id == s.group_revision_id and shown.estimate_digest
+    consent = AiConsentInput(estimate_digest=shown.estimate_digest, confirmed=True)
     with pytest.raises(DomainError) as no_resume:
         s.service.resume(
-            job_id=job_id, method="pair_check", command=s.command("resume_comparison_ai_pair_check"),
-            consent=AiConsentInput(estimate_digest="ab" * 32, confirmed=True))
+            job_id=job_id, method="pair_check", command=s.command("resume_comparison_ai_pair_check"), consent=consent)
     assert no_resume.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert dict(no_resume.value.detail_fields) == {"stage_id": WORK_KIND, "reason": "cost_estimate_binding_changed"}
     assert db.job(job_id)["state"] == "paused" and db.job(job_id)["consent_no"] == 1, "a refused resume writes nothing"
+    cancelled = s.service.cancel(job_id=job_id, method="pair_check", command=s.command("cancel_comparison_ai_pair_check"))
+    assert cancelled.record.state == "cancelled"
+    with pytest.raises(DomainError) as no_start:
+        s.start()
+    assert no_start.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert dict(no_start.value.detail_fields) == {"stage_id": WORK_KIND, "reason": "cost_estimate_binding_changed"}
+    assert not db.one("SELECT count(*) FROM comparison_ai_job WHERE comparison_ai_job_id <> :j AND document_uid = :d", j=job_id, d=s.scope.document_uid), (
+        "a refused start created no job")
 
-    # The lock is as consented again: a new consent goes on, and the job binds at its first call.
+    # The lock is as consented again: a start is taken, and the new job binds at its first call.
     monkeypatch.setattr(public, "pinned_models", lambda: real)
-    resumed = s.service.resume(
-        job_id=job_id, method="pair_check", command=s.command("resume_comparison_ai_pair_check"), consent=s.resume_consent())
-    assert resumed.record.state == "queued"
+    started = s.start()
+    assert started.record.state == "queued"
     first_call(s, s.claim(), routes)
-    assert db.job(job_id)["binding_state"] == "bound"
+    assert db.job(started.record.job_id)["binding_state"] == "bound"
 
 
 def test_a_later_call_of_a_bound_job_is_refused_when_the_lock_moved_after_it_was_bound(db: Db) -> None:

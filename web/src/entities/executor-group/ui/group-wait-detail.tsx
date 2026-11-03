@@ -6,8 +6,8 @@
  * Drawn under the sentence a Run or a comparison job already has for «раннер не в сети». It reads the group's capacity through
  * `useGroupWaitDetail` (the component holds no fetch of its own) and draws nothing unless the work waits for a runner on a
  * group; then it says why no connection can take it — «агент офлайн», «проверка связи не пройдена», «ревизия подключения
- * изменилась — группу нужно пересобрать», … — or that the work was accepted on a previous revision of the group, which the new one will
- * not serve; and that the wait ends after the offline limit (30 minutes unless the stand sets another). When the capacity cannot be read
+ * изменилась — группу нужно пересобрать», … — and, when the work was accepted on a previous revision of the group, says so first and
+ * then shows the state of the current one (it does not claim what the current revision will or will not serve); and that the wait ends after the offline limit (30 minutes unless the stand sets another). When the capacity cannot be read
  * it says only that the reason could not be specified, and still says that the wait ends: that is true whatever the cause.
  *
  * The promise that the wait ends is made only of work that is queued or running (`ends`): work that is paused is not counting down.

@@ -28,6 +28,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from auditmanager.comparison.ai_jobs.estimate import require_group_rates_hold
 from auditmanager.comparison.ai_jobs.model import CONSENT_PAUSES, AiConsentInput, AiJobRecord, AiMode, AiScope
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.ai_sheets.description import sheet_markdown
@@ -112,11 +113,17 @@ class ComparisonAiSheetService:
         latest = self._jobs.latest(scope)
         if latest is not None and latest.record.state == "paused" and latest.record.pause_reason in CONSENT_PAUSES:
             with session_scope(self._factory) as session:
-                return self._jobs.estimate_in(session, latest.record.scope, AiMode.LEFT, job=latest.record).as_dict()
-        if only_failed:
+                estimate = self._jobs.estimate_in(session, latest.record.scope, AiMode.LEFT, job=latest.record)
+        elif only_failed:
             failed_scope = replace(scope, restart=bool(latest and latest.record.restart))
-            return self._jobs.estimate(failed_scope, AiMode.FAILED).as_dict()
-        return self._jobs.estimate(scope, AiMode.START).as_dict()
+            estimate = self._jobs.estimate(failed_scope, AiMode.FAILED)
+        else:
+            estimate = self._jobs.estimate(scope, AiMode.START)
+        # `EXEC2-FOLLOWUP-01`: this operation declares 422 (the estimate of the other methods does not), so it is where a group whose rates
+        # are not the provider lock's is refused before the reader is shown an estimate nobody could consent to.
+        with session_scope(self._factory) as session:
+            require_group_rates_hold(session, estimate.route)
+        return estimate.as_dict()
 
     def start_series(
         self, *, series_id: str, consent: AiConsentInput, restart: bool, command: AiJobCommand,

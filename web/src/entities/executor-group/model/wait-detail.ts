@@ -12,8 +12,9 @@
  *
  * - **The reading is of the group's CURRENT revision; the work waits on its FROZEN one.** `ExecutorGroupCapacity.group_revision_id` is the
  *   current revision, and work admitted earlier is dispatched from the revision it froze (`planned.executor_group_revision_id`). When the
- *   two differ the members read say nothing about this work: the sentence says that it was accepted on a previous revision, which the new
- *   one will not serve. When the work names no revision, the sentence says that what it shows is the group's current state.
+ *   two differ the members read are not the ones the work was accepted on: the sentence says that the work was accepted on a previous
+ *   revision and that what follows is the state of the current one — it claims nothing of what the new revision will or will not serve.
+ *   When the work names no revision, the sentence says that what it shows is the group's current state.
  * - **No reason is invented.** A reading with a member that is eligible (the stored wait is out of date and the next dispatch
  *   will take the work), with a member that is only at capacity (the wait is for a place, which has no end), with a member that
  *   carries no reason, or with a reason this screen has no word for, explains nothing: `null`, and the screen keeps the sentence
@@ -41,8 +42,12 @@ export const WAIT_CAUSE_SENTENCES: Readonly<Record<ExecutorGroupMemberIssue, str
   at_capacity: 'все места подключения заняты',
 };
 
-/** The work was accepted on an earlier revision of the group than the one the capacity describes. */
-export const PREVIOUS_REVISION_SENTENCE = 'Работа принята на предыдущей ревизии группы — новая ревизия её не обслужит.';
+/** The work was accepted on an earlier revision of the group than the one the capacity describes; what follows describes the current one. */
+export const PREVIOUS_REVISION_NOTE = 'Работа принята на предыдущей ревизии группы; ниже — состояние текущей ревизии.';
+
+/** The same, when the current revision explains nothing: the reader is told the revisions differ and that the current one gives no cause. */
+export const PREVIOUS_REVISION_ALONE =
+  'Работа принята на предыдущей ревизии группы; состояние текущей ревизии причины её ожидания не показывает.';
 
 /** The work names no revision, so the reading cannot be tied to the one it waits on. */
 export const CURRENT_STATE_NOTE = 'Показано текущее состояние группы.';
@@ -54,11 +59,11 @@ export interface WaitCause {
 }
 
 export interface GroupWaitExplanation {
-  /** The causes, in the contract's order. Empty only when the work waits on a previous revision. */
+  /** The causes in the capacity read (the current revision's), in the contract's order. Empty only when the work waits on a previous revision and the current one explains nothing. */
   readonly causes: readonly WaitCause[];
   /**
    * How the reading relates to the revision the work waits on. `same`: the members read are the ones that serve it. `previous`: it was
-   * accepted on an earlier revision, and the members read are not its own. `unknown`: it names no revision.
+   * accepted on an earlier revision, and the members read are the current revision's, not its own. `unknown`: it names no revision.
    */
   readonly revision: 'same' | 'previous' | 'unknown';
   readonly sentence: string;
@@ -67,24 +72,13 @@ export interface GroupWaitExplanation {
 const isKnownIssue = (value: unknown): value is ExecutorGroupMemberIssue =>
   (EXECUTOR_GROUP_MEMBER_ISSUE_VALUES as readonly unknown[]).includes(value);
 
-/**
- * Why no member of the group can take work that waits for a runner, or `null` when the reading does not say (see the rules in
- * the header). `workRevisionId` is the group revision the work froze (`planned.executor_group_revision_id`).
- *
- * One member: «Подключение группы не может принять работу: агент офлайн.» Several:
- * «Ни одно подключение группы не может принять работу: агент офлайн (подключений: 2); проверка связи не пройдена (подключений: 1).»
- * A previous revision: «Работа принята на предыдущей ревизии группы — новая ревизия её не обслужит.»
- */
-export function groupWaitDetail(
-  capacity: Pick<ExecutorGroupCapacity, 'members' | 'group_revision_id'>,
-  workRevisionId?: string | undefined,
-): GroupWaitExplanation | null {
-  const relation =
-    workRevisionId === undefined ? 'unknown' : workRevisionId === capacity.group_revision_id ? 'same' : 'previous';
-  if (relation === 'previous') {
-    return { causes: [], revision: 'previous', sentence: PREVIOUS_REVISION_SENTENCE };
-  }
-  const members = capacity.members;
+interface MemberCauses {
+  readonly causes: readonly WaitCause[];
+  readonly said: string;
+}
+
+/** What the members of one reading say is wrong, or `null` when they explain nothing (an eligible member, a member only full, no reason). */
+function explainMembers(members: ExecutorGroupCapacity['members']): MemberCauses | null {
   if (!Array.isArray(members) || members.length === 0) return null;
   const counts = new Map<ExecutorGroupMemberIssue, number>();
   for (const member of members) {
@@ -104,7 +98,36 @@ export function groupWaitDetail(
       : `Ни одно подключение группы не может принять работу: ${causes
           .map((cause) => `${WAIT_CAUSE_SENTENCES[cause.issue]} (подключений: ${cause.members})`)
           .join('; ')}.`;
-  return { causes, revision: relation, sentence: relation === 'unknown' ? `${said} ${CURRENT_STATE_NOTE}` : said };
+  return { causes, said };
+}
+
+/**
+ * Why no member of the group can take work that waits for a runner, or `null` when the reading does not say (see the rules in
+ * the header). `workRevisionId` is the group revision the work froze (`planned.executor_group_revision_id`).
+ *
+ * One member: «Подключение группы не может принять работу: агент офлайн.» Several:
+ * «Ни одно подключение группы не может принять работу: агент офлайн (подключений: 2); проверка связи не пройдена (подключений: 1).»
+ * A previous revision: «Работа принята на предыдущей ревизии группы; ниже — состояние текущей ревизии. …» with the current revision's causes
+ * after it, or, when they explain nothing, «… состояние текущей ревизии причины её ожидания не показывает.»
+ */
+export function groupWaitDetail(
+  capacity: Pick<ExecutorGroupCapacity, 'members' | 'group_revision_id'>,
+  workRevisionId?: string | undefined,
+): GroupWaitExplanation | null {
+  const relation =
+    workRevisionId === undefined ? 'unknown' : workRevisionId === capacity.group_revision_id ? 'same' : 'previous';
+  const explained = explainMembers(capacity.members);
+  if (relation === 'previous') {
+    return explained === null
+      ? { causes: [], revision: 'previous', sentence: PREVIOUS_REVISION_ALONE }
+      : { causes: explained.causes, revision: 'previous', sentence: `${PREVIOUS_REVISION_NOTE} ${explained.said}` };
+  }
+  if (explained === null) return null;
+  return {
+    causes: explained.causes,
+    revision: relation,
+    sentence: relation === 'unknown' ? `${explained.said} ${CURRENT_STATE_NOTE}` : explained.said,
+  };
 }
 
 /**
