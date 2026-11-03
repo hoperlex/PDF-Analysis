@@ -456,6 +456,18 @@ GUARDED = (
         "/executor-connections/exc_01M2545JSD15ETSNNV904X991K/agent-installs/"
         "exai_01M2545JSD15ETSNNV904X991K/confirm-host-key",
     ),
+    # `EXEC2-SEAL-2`. The administrator's ten operations on executor groups, routing rules and the routing mode:
+    # behind the seam like the rest.
+    ("listExecutorGroups", "GET", "/executor-groups"),
+    ("createExecutorGroup", "POST", "/executor-groups"),
+    ("getExecutorGroup", "GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K"),
+    ("reviseExecutorGroup", "POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/revisions"),
+    ("archiveExecutorGroup", "POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/archive"),
+    ("getExecutorGroupCapacity", "GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991K/capacity"),
+    ("listExecutorRoutingRules", "GET", "/executor-routing-rules"),
+    ("setExecutorRoutingRule", "PUT", "/executor-routing-rules/text_analysis"),
+    ("previewExecutorRouting", "GET", "/executor-routing/preview"),
+    ("setExecutorRoutingMode", "POST", "/executor-routing/mode"),
     # `CMP-SEAL-C3`. Sweep every sealed stage operation through the same authentication
     # seam before body validation, the module flag or an unwired lane can answer.
     ("createStageAssembly", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-assemblies"),
@@ -1112,6 +1124,15 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # do is the role register's and the dispatch context's own re-read of the role set.
         "dispatch.py",
         "execution.py",
+        # `EXEC2-ENROLL-01`: issuing a grant, the integration-authorisation mark and an install session record WHO did
+        # it (the actor of the journal event and of the row); that only an administrator may is the role register's and
+        # the command's own re-read of the role set. The agent's own operations read the enrollment or runner principal,
+        # never the subject.
+        "executor_enrollment.py",
+        # `EXEC2-GROUP-STORE-01`: creating, revising and archiving a group and setting a routing rule record WHO did it
+        # (the actor of the journal event and of the row); that only an administrator may is the role register's and the
+        # command's own re-read of the role set. The four reads of the group store take no subject.
+        "executor_groups.py",
         # `EXEC-SEAL-01`: an executor command records WHO configured it (the actor of its
         # journal event and of its rows); that only an administrator may is the role register's
         # and the command's own re-read of the role set.

@@ -1852,7 +1852,7 @@ Direct answers received in this integrator session through the seven-question po
 | R-148f | Object storage: «Оставить закреплённый MinIO на beta». | The pinned source build stays for beta; replacing S3 is outside today’s code scope. Existing host inventory/restore actions remain separate. |
 | R-148g | Large graphic comparisons: «Да, оставить окна с новым согласием». | Retain durable windows of at most4 regions/8 images and fresh cost consent for the next window; preserve progress and never silently drop remaining regions. |
 
-## 3.49 — R-149a…R-149f, the EXEC-2 wave: executor capacity, universal agent, executor groups (owner polls of 2026-11-02)
+## 3.49 — R-149a…R-149g, the EXEC-2 wave: executor capacity, universal agent, executor groups (owner polls of 2026-11-02)
 
 The owner handed three design documents to the planning session on 2026-11-02 (Block 1 parallel
 scheduler, Universal Executor Agent, Stage 3 routing groups) and answered two direct polls. The
@@ -1867,3 +1867,4 @@ below are quoted as given; the consequence column is what the plan does with the
 | R-149d | Checks for this wave: «Без БД-прогонов» (source only, as in the continuous blocks). | The design documents' acceptance tests are written as code and not run; generating the server models and the web client from OpenAPI is code production and is done. Each integration adds a read-only review of the claim, binding and consent diff. Recorded deviation `D-292`. |
 | R-149e | Next step after the Russian plan: «Оформить без судей». | Task files and the dispatch plan are written without a fresh-judge round; allowed paths come from a static literal-pin sweep captured in each task. |
 | R-149f | EXEC-2 integrator: «Эта сессия». | The planning session integrates EXEC-2: it owns the wave's contract and migration slots through its SEAL tasks, merges lanes and publishes to `origin/dev`. Executors never merge or push. It starts after `REVIEW-FIX-INT-1102` is on `origin/dev`. No `origin/main` authority. |
+| R-149g | Path A (agent install over SSH from the UI) and private-range targets (10/8, 172.16/12, 192.168/16, IPv6 ULA), asked 2026-11-03: «Разрешить настройкой». | A stand setting `AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE`, off by default; when on, the install target is checked with the `vpn` transport of the destination policy (private ranges allowed); loopback, link-local and compose service names stay refused. Off, path A refuses private targets and the wizard points to the copied-command path B. |

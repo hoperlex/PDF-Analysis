@@ -257,6 +257,18 @@ SAMPLES: dict[str, tuple[str, str]] = {
         "/executor-connections/exc_01M2545JSD15ETSNNV904X991T/agent-installs/"
         "exai_01M2545JSD15ETSNNV904X991T/confirm-host-key",
     ),
+    # `EXEC2-SEAL-2`, `EXEC2-GROUP-STORE-01`. Executor groups, the routing rule of a work kind and the routing mode: the
+    # four reads of the group store are any role's, the writes, the cut-over preview and the routing mode an administrator's.
+    "listExecutorGroups": ("GET", "/executor-groups"),
+    "createExecutorGroup": ("POST", "/executor-groups"),
+    "getExecutorGroup": ("GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991T"),
+    "reviseExecutorGroup": ("POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991T/revisions"),
+    "archiveExecutorGroup": ("POST", "/executor-groups/exg_01M2545JSD15ETSNNV904X991T/archive"),
+    "getExecutorGroupCapacity": ("GET", "/executor-groups/exg_01M2545JSD15ETSNNV904X991T/capacity"),
+    "listExecutorRoutingRules": ("GET", "/executor-routing-rules"),
+    "setExecutorRoutingRule": ("PUT", "/executor-routing-rules/text_analysis"),
+    "previewExecutorRouting": ("GET", "/executor-routing/preview"),
+    "setExecutorRoutingMode": ("POST", "/executor-routing/mode"),
     # `W55A-SEAL-01`. The norms operations (R-80 any-role reads; R-113 administrator history
     # and designation). `q` is supplied so the role refusal is the only one in play.
     "searchNorms": ("GET", "/norms/search?q=gost"),
@@ -673,6 +685,19 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "createExecutorAgentInstall": _ADMIN,
     "getExecutorAgentInstall": _ADMIN,
     "confirmExecutorAgentInstallHostKey": _ADMIN,
+    # `EXEC2-SEAL-2`, as `EXEC2-GROUP-STORE-01` settles it: creating, revising and archiving a group and pointing a work
+    # kind at a group revision are administrator acts, as are the cut-over preview and the routing mode; the four reads
+    # of the group store (the list, one group, a group's capacity, the rules with the routing mode) are for any role.
+    "listExecutorGroups": _ANY_ROLE,
+    "createExecutorGroup": _ADMIN,
+    "getExecutorGroup": _ANY_ROLE,
+    "reviseExecutorGroup": _ADMIN,
+    "archiveExecutorGroup": _ADMIN,
+    "getExecutorGroupCapacity": _ANY_ROLE,
+    "listExecutorRoutingRules": _ANY_ROLE,
+    "setExecutorRoutingRule": _ADMIN,
+    "previewExecutorRouting": _ADMIN,
+    "setExecutorRoutingMode": _ADMIN,
     # `W55A-SEAL-01` (R-113): who designated which snapshot, and the designation itself.
     "listNormSnapshotEvents": _ADMIN,
     "setCurrentNormSnapshot": _ADMIN,

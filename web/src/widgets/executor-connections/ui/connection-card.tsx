@@ -15,6 +15,12 @@
  * says «Занято N из M» from it — runs and comparison calls together, the calls named only when
  * there is one. A connection without the reading draws no line, and no sentence anywhere says
  * «свободно»: the server counts a unit held by unresolved remote work as in use.
+ *
+ * `EXEC2-WEB-WIZARD-01`: a `pull` connection that is a remote agent carries the lifecycle panel
+ * (`features/connect-remote-agent`) between the probe and the token panel: registration, in the
+ * network, client installed, login valid, the administrator's mark, probe, ready — one lifecycle for
+ * both install paths — and, for an administrator, «Перенести на другой сервер». The panel draws
+ * nothing for a `pull` connection that is not an agent.
  */
 
 import { useState } from 'react';
@@ -62,6 +68,7 @@ import {
   RunnerTokenPanel,
   SshKeyControl,
 } from '@/features/manage-executor-connection';
+import { AgentLifecyclePanel } from '@/features/connect-remote-agent';
 import { executorSecretScreenUrl } from '@/features/set-executor-secret';
 
 import styles from './executor-connections.module.css';
@@ -285,6 +292,7 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
 
       <SecretsSummary connection={connection} revision={revision} />
       {revision !== undefined ? <ProbeSummary probe={probe} connection={connection} revision={revision} /> : null}
+      {pulls && !archived ? <AgentLifecyclePanel connection={connection} detail={detail} canManage={canManage} nowMs={nowMs} /> : null}
       {pulls && !archived ? <RunnerTokenPanel connection={connection} detail={detail} canManage={canManage} nowMs={nowMs} /> : null}
 
       {canManage && !archived ? (

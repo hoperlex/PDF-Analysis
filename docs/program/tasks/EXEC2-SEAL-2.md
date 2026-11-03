@@ -11,7 +11,7 @@ OpenAPI 1.16.0 declares the stage-2 and stage-3 additions of ADR-0026 decisions 
 - API contract: 1.15.0 → 1.16.0, owned by this task
 - analysis/comparison/event contract: version literal 1.15.0 → 1.16.0 only
 - migration head: `0046`; this task owns slots `0047` and `0048`
-- base commit: `integration/exec2` after `EXEC2-INT-1` is on `origin/dev`
+- base commit: `integration/exec2` at `27fb952e` (= `origin/dev` after `EXEC2-INT-1`)
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 10–18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -25,27 +25,27 @@ OpenAPI 1.16.0 declares the stage-2 and stage-3 additions of ADR-0026 decisions 
 
 ### P-01 — the guards to re-create
 - captured_at: 2026-11-02
-- command: `git grep -nE 'CREATE TRIGGER trg_audit_run_frozen_guard|CREATE FUNCTION am_guard_comparison_ai_job_consent|connection_revision_id +text NOT NULL' origin/dev -- db/migrations/versions`
+- command: `git grep -nE 'CREATE TRIGGER trg_audit_run_frozen_guard|CREATE FUNCTION am_guard_comparison_ai_job_consent|connection_revision_id +text NOT NULL' 27fb952e -- db/migrations/versions`
 - captured_output:
   ```text
-  origin/dev:db/migrations/versions/20260910_0002_pc01_schema.py:1289:        CREATE TRIGGER trg_audit_run_frozen_guard
-  origin/dev:db/migrations/versions/20261009_0017_execution_queue.py:35:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
-  origin/dev:db/migrations/versions/20261016_0023_norm_citations.py:126:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
-  origin/dev:db/migrations/versions/20261022_0030_executor_connections.py:92:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
-  origin/dev:db/migrations/versions/20261027_0037_analysis_presets.py:98:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
-  origin/dev:db/migrations/versions/20261029_0040_comparison_ai_reports.py:295:        CREATE FUNCTION am_guard_comparison_ai_job_consent() RETURNS trigger
-  origin/dev:db/migrations/versions/20261029_0040_comparison_ai_reports.py:602:            connection_revision_id    text NOT NULL,
+  27fb952e:db/migrations/versions/20260910_0002_pc01_schema.py:1289:        CREATE TRIGGER trg_audit_run_frozen_guard
+  27fb952e:db/migrations/versions/20261009_0017_execution_queue.py:35:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
+  27fb952e:db/migrations/versions/20261016_0023_norm_citations.py:126:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
+  27fb952e:db/migrations/versions/20261022_0030_executor_connections.py:92:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
+  27fb952e:db/migrations/versions/20261027_0037_analysis_presets.py:98:        "CREATE TRIGGER trg_audit_run_frozen_guard BEFORE UPDATE ON audit_run "
+  27fb952e:db/migrations/versions/20261029_0040_comparison_ai_reports.py:295:        CREATE FUNCTION am_guard_comparison_ai_job_consent() RETURNS trigger
+  27fb952e:db/migrations/versions/20261029_0040_comparison_ai_reports.py:602:            connection_revision_id    text NOT NULL,
   exit=0
   ```
 - interpretation: `trg_audit_run_frozen_guard` is re-created by five migrations, and `am_guard_comparison_ai_job_consent` with `connection_revision_id NOT NULL` lives in 0040; 0048 re-creates both with the write-once exception.
 
 ### P-02 — the name «group» is taken
 - captured_at: 2026-11-02
-- command: `git grep -n 'CREATE TABLE ar_v3_run_group' origin/dev -- db/migrations/versions`
+- command: `git grep -n 'CREATE TABLE ar_v3_run_group' 27fb952e -- db/migrations/versions`
 - captured_output:
   ```text
-  origin/dev:db/migrations/versions/20261023_0032_ar_v3_run_group.py:24:        CREATE TABLE ar_v3_run_group (
-  origin/dev:db/migrations/versions/20261023_0032_ar_v3_run_group.py:44:        CREATE TABLE ar_v3_run_group_member (
+  27fb952e:db/migrations/versions/20261023_0032_ar_v3_run_group.py:24:        CREATE TABLE ar_v3_run_group (
+  27fb952e:db/migrations/versions/20261023_0032_ar_v3_run_group.py:44:        CREATE TABLE ar_v3_run_group_member (
   exit=0
   ```
 - interpretation: the new tables are `executor_group*`, never `*_run_group`.
@@ -95,8 +95,9 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/api/routers/errors.py`
 - `src/auditmanager/api/routers/declarations.py`
 - `src/auditmanager/executors/model.py`
-- `db/migrations/versions/20261104_0047_executor_groups_rules.py`
-- `db/migrations/versions/20261104_0048_dispatch_time_binding.py`
+- `db/migrations/versions/20261102_0047_executor_groups_rules.py`
+- `db/migrations/versions/20261102_0048_dispatch_time_binding.py`
+- `tests/unit/executor_runner/_agent_support.py`
 - `infra/deploy/apply-grants.sh`
 - `scripts/recovery/grant_classification.py`
 - `scripts/recovery/product_purge.py`
@@ -117,7 +118,10 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - no group-targeting presets
 
 ## Deliverables
-- The date prefixes are the dispatch date, as in SEAL-1.
+- Migration files carry the dispatch date `20261102`; revision ids `0047_executor_groups_rules` and `0048_dispatch_time_binding` (32-character limit).
+- Pins: move EVERY literal of the old contract version and the old surface and table counts. Before editing, run `git grep -n 1.15.0` and the counts 241, 267, 644 and 124 over `contracts web tests src infra scripts tools`, and treat every hit that is a pin (an assertion, a constant, a served value, a fixture envelope) as yours. Phrases like «of contract 1.15.0» that name where a thing was introduced are history and stay.
+- Binding columns go on exactly two tables: `audit_run` (run-level freeze) and `comparison_ai_job` (consent-level freeze). The per-call provenance columns of `model_call`, `provider_call_effect` and `comparison_model_call` are written at call time and stay as they are.
+- The `issueExecutorEnrollment` prose gains the `public_origin` dependency (EXEC2-INT-1).
 - OpenAPI 1.16.0 adds:
   - `GET/POST /executor-groups`
   - `GET /executor-groups/{group_id}`

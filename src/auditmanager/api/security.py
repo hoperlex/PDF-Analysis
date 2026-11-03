@@ -690,6 +690,23 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "createExecutorAgentInstall": _ADMIN,
         "getExecutorAgentInstall": _ADMIN,
         "confirmExecutorAgentInstallHostKey": _ADMIN,
+        # `EXEC2-SEAL-2` (ADR-0026 decisions 10 to 17), as `EXEC2-GROUP-STORE-01` settles who reads. Creating, revising and
+        # archiving a group and pointing a work kind at a group revision are administrator acts, and so are the cut-over
+        # preview and the routing mode (`previewExecutorRouting`, `setExecutorRoutingMode`: operator tools). The four
+        # reads of the group store -- the list, one group, a group's capacity and the rules with the routing mode -- are
+        # for any role, as `listExecutorConnections` and `listExecutorRoutes` are: a group names connections and their
+        # revisions by identity only (no setting, address or key), and the expert's start selector needs to read the
+        # groups it may start on. The commands re-read the role set in their own transaction.
+        "listExecutorGroups": _ANY_ROLE,
+        "createExecutorGroup": _ADMIN,
+        "getExecutorGroup": _ANY_ROLE,
+        "reviseExecutorGroup": _ADMIN,
+        "archiveExecutorGroup": _ADMIN,
+        "getExecutorGroupCapacity": _ANY_ROLE,
+        "listExecutorRoutingRules": _ANY_ROLE,
+        "setExecutorRoutingRule": _ADMIN,
+        "previewExecutorRouting": _ADMIN,
+        "setExecutorRoutingMode": _ADMIN,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,

@@ -174,6 +174,14 @@ P02_TABLES = (
     # names those operations), so both counts are expected unchanged across a replay.
     "executor_enrollment",
     "executor_agent_install",
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`). The executor groups, their revisions and members, the routing rules
+    # and the routing-mode journal. The journey creates no group and sets no rule or mode (nothing under this directory
+    # names those operations), so every count is expected unchanged across a replay.
+    "executor_group",
+    "executor_group_revision",
+    "executor_group_member",
+    "executor_routing_rule_revision",
+    "executor_routing_mode_event",
     # `0032_ar_v3_run_group`. A group of six runs of one version and its members. Only
     # `start_ar_v3_group` writes them (behind the reviewed-pack registry, empty here); the
     # journey starts single runs, so both counts are expected unchanged across a replay.

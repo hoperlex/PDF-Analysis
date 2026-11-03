@@ -79,8 +79,10 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     # `0040_comparison_ai_reports`: the twelve tables of the version comparison AI, specifications, reports and launch queue
     # `0041_comparison_stage_core`: fifteen stage tables (95 -> 110). `0042_comparison_stage_review`: twelve more
     # (110 -> 122); `0043` and `0044` add none. `0046_executor_capacity_enrollment` (`EXEC2-SEAL-1`): `executor_enrollment`
-    # and `executor_agent_install` (122 -> 124).
-    assert len(coverage.TABLES) == 124
+    # and `executor_agent_install` (122 -> 124). `0047_executor_groups_rules` (`EXEC2-SEAL-2`): `executor_group`,
+    # `executor_group_revision`, `executor_group_member`, `executor_routing_rule_revision` and
+    # `executor_routing_mode_event` (124 -> 129); `0048_dispatch_time_binding` adds none.
+    assert len(coverage.TABLES) == 129
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:

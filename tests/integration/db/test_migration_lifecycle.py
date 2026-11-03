@@ -68,6 +68,13 @@ EXPECTED_TABLES = {
     # SSH install sessions (`EXEC2-SEAL-1`, ADR-0026).
     "executor_enrollment",
     "executor_agent_install",
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`, ADR-0026): executor groups, their immutable revisions and members, the
+    # append-only routing rules of the work kinds and the append-only journal of the routing mode.
+    "executor_group",
+    "executor_group_revision",
+    "executor_group_member",
+    "executor_routing_rule_revision",
+    "executor_routing_mode_event",
     # `0032_ar_v3_run_group`: a group of six runs of one version, and its six members.
     "ar_v3_run_group",
     "ar_v3_run_group_member",
@@ -353,3 +360,340 @@ def test_check_db_refuses_an_unreachable_database(
     assert result.returncode != 0, result.describe()
     assert SUCCESS_SENTINEL not in result.stdout
     assert expectation in result.stderr
+
+
+# -- `EXEC2-SEAL-2`: migrations 0047 and 0048 (executor groups, rules, routing mode, dispatch-time binding) ---------------
+#
+# Written under `R-149d` and NOT RUN: no database was started for EXEC-2. Every test here needs PostgreSQL, like the
+# rest of this directory (`conftest.py`: no SQLite fallback). They prove the failure cases of `EXEC2-SEAL-2`: a second write
+# of the connection revision of work admitted by a group, and a write that is not the binding, are refused by the
+# database; nothing existing is ever `pending`; a group is homogeneous and its history cannot be rewritten.
+
+_SEAL2_ACTOR = f"usr_{'0' * 26}"
+
+
+def _sqlstate_of(error: pytest.ExceptionInfo) -> str | None:
+    return getattr(error.value.orig, "sqlstate", None)
+
+
+def _group_revision(connection, group: str, *, revision_no: int, member_count: int, gateway_model: str = "anthropic/claude-opus-5") -> str:
+    """A revision of `group` declaring `member_count` members; the members are the caller's to insert in the same transaction."""
+    from auditmanager.shared.identity import ExecutorGroupRevisionId
+
+    revision = str(ExecutorGroupRevisionId.new())
+    connection.execute(text(
+        "INSERT INTO executor_group_revision (group_revision_id, group_id, revision_no, pin_id, gateway_model, "
+        "billing, input_per_mtok_usd, output_per_mtok_usd, member_count, created_by) "
+        "VALUES (:r, :g, :no, 'claude-opus-5', :m, 'metered', 15.000000, 75.000000, :n, :a)"
+    ), {"r": revision, "g": group, "no": revision_no, "m": gateway_model, "n": member_count, "a": _SEAL2_ACTOR})
+    return revision
+
+
+def _executor_group(connection, member_revision: str, member_connection: str, *, gateway_model: str = "anthropic/claude-opus-5") -> tuple[str, str]:
+    """A group and its first revision with one member (declared as one), for a connection revision pinning `claude-opus-5`, metered."""
+    from auditmanager.shared.identity import ExecutorGroupId
+
+    group = str(ExecutorGroupId.new())
+    connection.execute(text(
+        "INSERT INTO executor_group (group_id, display_name, created_by) VALUES (:g, :n, :a)"
+    ), {"g": group, "n": f"group-{group[-6:]}", "a": _SEAL2_ACTOR})
+    revision = _group_revision(connection, group, revision_no=1, member_count=1, gateway_model=gateway_model)
+    connection.execute(text(
+        "INSERT INTO executor_group_member (group_revision_id, connection_id, connection_revision_id, tie_break_order) "
+        "VALUES (:r, :c, :cr, 1)"
+    ), {"r": revision, "c": member_connection, "cr": member_revision})
+    return group, revision
+
+
+def _pending_run(connection, group_revision: str) -> str:
+    """A run admitted on a group revision: `pending`, no connection revision."""
+    from auditmanager.shared.identity import (
+        AnalysisProfileId, DocumentUid, ProjectUid, PromptBundleId, RunId, VersionUid,
+    )
+
+    ids = {"project": str(ProjectUid.new()), "document": str(DocumentUid.new()),
+           "version": str(VersionUid.new()), "run": str(RunId.new())}
+    connection.execute(text("INSERT INTO project (project_uid, name) VALUES (:project, 'seal2')"), ids)
+    connection.execute(text("INSERT INTO document (document_uid, project_uid, display_title) "
+                            "VALUES (:document, :project, 'seal2')"), ids)
+    connection.execute(text("INSERT INTO document_version (version_uid, document_uid, version_ordinal, media_type, "
+                            "byte_size, sha256, page_count) VALUES (:version, :document, 1, 'application/pdf', 1, :sha, 1)"),
+                       {**ids, "sha": "a" * 64})
+    connection.execute(text(
+        "INSERT INTO audit_run (run_id, project_uid, version_uid, analysis_profile_id, prompt_bundle_id, provider_mode, "
+        "frozen_input_digest, binding_state, executor_group_revision_id) "
+        "VALUES (:run, :project, :version, :profile, :bundle, 'recorded', :digest, 'pending', :g)"
+    ), {**ids, "profile": str(AnalysisProfileId.new()), "bundle": str(PromptBundleId.new()),
+        "digest": "b" * 64, "g": group_revision})
+    return ids["run"]
+
+
+def test_the_binding_columns_default_to_frozen_at_start_so_nothing_existing_is_pending(migrated_engine: Engine) -> None:
+    """Every existing row takes the column default, and the default is the only way an old writer's INSERT lands."""
+    with migrated_engine.connect() as connection:
+        for table in ("audit_run", "comparison_ai_job"):
+            row = connection.execute(text(
+                "SELECT column_default, is_nullable FROM information_schema.columns "
+                "WHERE table_schema = 'public' AND table_name = :t AND column_name = 'binding_state'"
+            ), {"t": table}).one()
+            assert row.column_default is not None and "frozen_at_start" in row.column_default, (table, row)
+            assert row.is_nullable == "NO", table
+            for column in ("executor_group_revision_id", "routing_rule_revision_id", "wait_reason", "waiting_since"):
+                nullable = connection.execute(text(
+                    "SELECT is_nullable FROM information_schema.columns "
+                    "WHERE table_schema = 'public' AND table_name = :t AND column_name = :c"
+                ), {"t": table, "c": column}).scalar_one()
+                assert nullable == "YES", (table, column)
+        assert connection.execute(text(
+            "SELECT is_nullable FROM information_schema.columns WHERE table_schema = 'public' "
+            "AND table_name = 'comparison_ai_job' AND column_name = 'connection_revision_id'"
+        )).scalar_one() == "YES"
+        tying = connection.execute(text(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_comparison_ai_job_pending_has_no_revision'"
+        )).scalar_one()
+        assert "connection_revision_id IS NULL" in tying and "pending" in tying, tying
+        assert connection.execute(text("SELECT count(*) FROM audit_run WHERE binding_state <> 'frozen_at_start'")).scalar_one() == 0
+        assert connection.execute(text("SELECT count(*) FROM comparison_ai_job WHERE binding_state <> 'frozen_at_start'")).scalar_one() == 0
+        frozen = connection.execute(text(
+            "SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'trg_audit_run_frozen_guard'"
+        )).scalar_one()
+        for column in ("connection_revision_id", "executor_group_revision_id", "routing_rule_revision_id", "preset_revision_id"):
+            assert f"'{column}'" in frozen, frozen
+
+
+def test_a_pending_run_is_bound_once_and_every_other_write_of_its_connection_is_refused(migrated_engine: Engine) -> None:
+    """ADR-0026 decision 12: NULL -> value exactly once, with `pending` -> `bound`; nothing else moves."""
+    from sqlalchemy.exc import DBAPIError
+    from tests.integration.db.test_executor_connections_migration import _connection, _revision
+
+    with migrated_engine.begin() as connection:
+        first, second = _connection(connection), _connection(connection)
+        first_revision, second_revision = _revision(connection, first), _revision(connection, second)
+        _, group_revision = _executor_group(connection, first_revision, first)
+        pending, other = _pending_run(connection, group_revision), _pending_run(connection, group_revision)
+
+    def refused(statement: str, sqlstate: str, **parameters: str) -> None:
+        with migrated_engine.connect() as connection:
+            transaction = connection.begin()
+            with pytest.raises(DBAPIError) as error:
+                connection.execute(text(statement), parameters)
+            transaction.rollback()
+        assert _sqlstate_of(error) == sqlstate, (statement, _sqlstate_of(error))
+
+    # a connection revision written while the run stays pending is not a binding
+    refused("UPDATE audit_run SET connection_revision_id = :c WHERE run_id = :r", "AM003", c=first_revision, r=pending)
+    # a binding that names no connection violates the shape the row must have
+    with migrated_engine.connect() as connection:
+        transaction = connection.begin()
+        with pytest.raises(DBAPIError):
+            connection.execute(text("UPDATE audit_run SET binding_state = 'bound' WHERE run_id = :r"), {"r": pending})
+        transaction.rollback()
+    # the states move pending -> bound only
+    refused("UPDATE audit_run SET binding_state = 'frozen_at_start' WHERE run_id = :r", "AM001", r=pending)
+    # a binding names a member of the run's group revision: a real connection revision that is no member is refused
+    refused(
+        "UPDATE audit_run SET binding_state = 'bound', connection_revision_id = :c WHERE run_id = :r",
+        "AM001", c=second_revision, r=pending)
+
+    with migrated_engine.begin() as connection:
+        connection.execute(text(
+            "UPDATE audit_run SET binding_state = 'bound', connection_revision_id = :c WHERE run_id = :r"
+        ), {"c": first_revision, "r": pending})
+
+    # a second write, a different value, a return to NULL, and a return to `pending`: all refused
+    refused("UPDATE audit_run SET connection_revision_id = :c WHERE run_id = :r", "AM003", c=second_revision, r=pending)
+    refused("UPDATE audit_run SET connection_revision_id = NULL WHERE run_id = :r", "AM003", r=pending)
+    refused("UPDATE audit_run SET binding_state = 'pending' WHERE run_id = :r", "AM001", r=pending)
+    # the admission columns are frozen with the rest
+    refused("UPDATE audit_run SET executor_group_revision_id = NULL WHERE run_id = :r", "AM003", r=other)
+    with migrated_engine.connect() as connection:
+        row = connection.execute(text(
+            "SELECT binding_state, connection_revision_id FROM audit_run WHERE run_id = :r"
+        ), {"r": pending}).one()
+    assert (row.binding_state, row.connection_revision_id) == ("bound", first_revision)
+
+
+def test_a_group_is_homogeneous_its_history_is_immutable_and_a_rule_names_an_active_group(migrated_engine: Engine) -> None:
+    from sqlalchemy.exc import DBAPIError
+    from auditmanager.shared.identity import (
+        ExecutorConnectionRevisionId, ExecutorGroupRevisionId, ExecutorRoutingRuleRevisionId,
+    )
+    from tests.integration.db.test_executor_connections_migration import _connection, _revision
+
+    with migrated_engine.begin() as connection:
+        member, stranger = _connection(connection), _connection(connection)
+        member_revision = _revision(connection, member)
+        stranger_revision = str(ExecutorConnectionRevisionId.new())
+        connection.execute(text(
+            "INSERT INTO executor_connection_revision (revision_id, connection_id, revision_no, created_by, pin_id, "
+            "gateway_model, billing, allow_client_documents, timeout_seconds, api_flavour, base_url, transport) "
+            "VALUES (:id, :c, 1, :a, 'claude-sonnet-5', 'anthropic/claude-sonnet-5', 'metered', false, 60, "
+            "'openai_chat', 'https://proxy.test', 'direct')"
+        ), {"id": stranger_revision, "c": stranger, "a": _SEAL2_ACTOR})
+        group, revision = _executor_group(connection, member_revision, member)
+
+    def refused(statement: str, **parameters: str) -> str | None:
+        with migrated_engine.connect() as connection:
+            transaction = connection.begin()
+            with pytest.raises(DBAPIError) as error:
+                connection.execute(text(statement), parameters)
+            transaction.rollback()
+        return _sqlstate_of(error)
+
+    # a member that pins another model than the group revision is refused; a revision and a member cannot be rewritten
+    assert refused(
+        "INSERT INTO executor_group_member (group_revision_id, connection_id, connection_revision_id) VALUES (:r, :c, :cr)",
+        r=revision, c=stranger, cr=stranger_revision) == "AM001"
+    assert refused("UPDATE executor_group_revision SET pin_id = 'other' WHERE group_revision_id = :r", r=revision) == "AM003"
+    assert refused("DELETE FROM executor_group_member WHERE group_revision_id = :r", r=revision) == "AM003"
+    # a revision is numbered without a gap
+    assert refused(
+        "INSERT INTO executor_group_revision (group_revision_id, group_id, revision_no, pin_id, gateway_model, billing, "
+        "input_per_mtok_usd, output_per_mtok_usd, member_count, created_by) VALUES (:id, :g, 3, 'claude-opus-5', "
+        "'anthropic/claude-opus-5', 'metered', 15, 75, 1, :a)",
+        id=str(ExecutorGroupRevisionId.new()), g=group, a=_SEAL2_ACTOR) == "AM001"
+
+    rule = str(ExecutorRoutingRuleRevisionId.new())
+    with migrated_engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO executor_routing_rule_revision (rule_revision_id, work_kind, rule_no, group_revision_id, set_by) "
+            "VALUES (:id, 'text_analysis', 1, :r, :a)"
+        ), {"id": rule, "r": revision, "a": _SEAL2_ACTOR})
+    assert refused("UPDATE executor_routing_rule_revision SET rule_no = 2 WHERE rule_revision_id = :id", id=rule) == "AM002"
+
+    # archiving is one-way, and an archived group takes no rule
+    with migrated_engine.begin() as connection:
+        connection.execute(text("UPDATE executor_group SET archived_at = now(), archived_by = :a WHERE group_id = :g"),
+                           {"a": _SEAL2_ACTOR, "g": group})
+    assert refused("UPDATE executor_group SET archived_at = NULL, archived_by = NULL WHERE group_id = :g", g=group) == "AM003"
+    assert refused(
+        "INSERT INTO executor_routing_rule_revision (rule_revision_id, work_kind, rule_no, group_revision_id, set_by) "
+        "VALUES (:id, 'text_analysis', 2, :r, :a)",
+        id=str(ExecutorRoutingRuleRevisionId.new()), r=revision, a=_SEAL2_ACTOR) == "AM001"
+
+
+def _refused(engine: Engine, statement: str, **parameters: object) -> pytest.ExceptionInfo:
+    """Run one statement that the database must refuse, in a transaction that is rolled back."""
+    from sqlalchemy.exc import DBAPIError
+
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with pytest.raises(DBAPIError) as error:
+            connection.execute(text(statement), parameters)
+        transaction.rollback()
+    return error
+
+
+_MEMBER_INSERT = (
+    "INSERT INTO executor_group_member (group_revision_id, connection_id, connection_revision_id) VALUES (:r, :c, :cr)"
+)
+
+
+def test_a_group_revision_commits_with_exactly_the_members_it_declares_and_takes_none_afterwards(
+    migrated_engine: Engine,
+) -> None:
+    """Row immutability alone left INSERT open. The revision declares `member_count`: a member beyond it is refused at
+    once, a revision that holds fewer cannot commit, and one that holds exactly what it declared does."""
+    from sqlalchemy.exc import DBAPIError
+    from tests.integration.db.test_executor_connections_migration import _connection, _revision
+
+    with migrated_engine.begin() as connection:
+        member, extra = _connection(connection), _connection(connection)
+        member_revision, extra_revision = _revision(connection, member), _revision(connection, extra)
+        group, revision = _executor_group(connection, member_revision, member)   # declares one, holds one: commits
+        deferred = connection.execute(text(
+            "SELECT tgdeferrable AND tginitdeferred FROM pg_trigger WHERE tgname = 'trg_executor_group_revision_has_members'"
+        )).scalar_one()
+    assert deferred is True, "the count is checked at commit, so the members can follow the revision in one transaction"
+
+    # a later INSERT into the committed revision is refused although the member would fit the group (same pin, model and
+    # billing): only the closed membership refuses it
+    later = _refused(migrated_engine, _MEMBER_INSERT, r=revision, c=extra, cr=extra_revision)
+    assert _sqlstate_of(later) == "AM001" and "declared members" in str(later.value)
+
+    # inside the creating transaction too: the second member of a revision that declared one is refused
+    with migrated_engine.connect() as connection:
+        transaction = connection.begin()
+        one = _group_revision(connection, group, revision_no=2, member_count=1)
+        connection.execute(text(_MEMBER_INSERT), {"r": one, "c": member, "cr": member_revision})
+        with pytest.raises(DBAPIError) as over:
+            connection.execute(text(_MEMBER_INSERT), {"r": one, "c": extra, "cr": extra_revision})
+        transaction.rollback()
+    assert _sqlstate_of(over) == "AM001"
+
+    # a revision that declares two and brings one cannot commit: the refusal is the COMMIT's and nothing is left behind
+    with pytest.raises(DBAPIError) as short:
+        with migrated_engine.begin() as connection:
+            fewer = _group_revision(connection, group, revision_no=2, member_count=2)
+            connection.execute(text(_MEMBER_INSERT), {"r": fewer, "c": member, "cr": member_revision})
+    assert _sqlstate_of(short) == "AM001" and "declares 2 members and holds 1" in str(short.value)
+    with migrated_engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT count(*) FROM executor_group_revision WHERE group_id = :g"), {"g": group}).scalar_one() == 1
+
+    # control: the same revision with the two members it declares commits
+    with migrated_engine.begin() as connection:
+        full = _group_revision(connection, group, revision_no=2, member_count=2)
+        connection.execute(text(_MEMBER_INSERT), {"r": full, "c": member, "cr": member_revision})
+        connection.execute(text(_MEMBER_INSERT), {"r": full, "c": extra, "cr": extra_revision})
+    with migrated_engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT count(*) FROM executor_group_member WHERE group_revision_id = :r"), {"r": full}).scalar_one() == 2
+
+    # a revision declares one to sixteen members
+    for declared in (0, 17):
+        with migrated_engine.connect() as connection:
+            transaction = connection.begin()
+            with pytest.raises(DBAPIError) as range_error:
+                _group_revision(connection, group, revision_no=3, member_count=declared)
+            transaction.rollback()
+        assert _sqlstate_of(range_error) == "23514", declared
+
+
+def test_a_group_is_never_deleted_and_the_routing_mode_journal_is_numbered_without_a_gap(migrated_engine: Engine) -> None:
+    import json
+
+    from auditmanager.shared.identity import ExecutorGroupId, ExecutorRoutingModeEventId
+
+    group = str(ExecutorGroupId.new())
+    with migrated_engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO executor_group (group_id, display_name, created_by) VALUES (:g, 'never deleted', :a)"
+        ), {"g": group, "a": _SEAL2_ACTOR})
+    assert _sqlstate_of(_refused(migrated_engine, "DELETE FROM executor_group WHERE group_id = :g", g=group)) == "AM003"
+    with migrated_engine.connect() as connection:   # archiving is the way out, and it is not a deletion
+        assert connection.execute(text("SELECT count(*) FROM executor_group WHERE group_id = :g"), {"g": group}).scalar_one() == 1
+
+    event = (
+        "INSERT INTO executor_routing_mode_event (mode_event_id, event_no, mode, preview_digest, mapping, changed_by) "
+        "VALUES (:id, :no, :mode, :digest, CAST(:mapping AS jsonb), :a)"
+    )
+
+    def parameters(number: int, mode: str) -> dict[str, object]:
+        return {"id": str(ExecutorRoutingModeEventId.new()), "no": number, "mode": mode, "a": _SEAL2_ACTOR,
+                "digest": "a" * 64 if mode == "rules" else None,
+                "mapping": json.dumps([{"work_kind": "text_analysis"}] if mode == "rules" else [])}
+
+    # the journal starts at 1, and a number that is taken or that skips one is refused by the trigger (not only by the key)
+    assert _sqlstate_of(_refused(migrated_engine, event, **parameters(2, "rules"))) == "AM001"
+    with migrated_engine.begin() as connection:
+        connection.execute(text(event), parameters(1, "rules"))
+    assert _sqlstate_of(_refused(migrated_engine, event, **parameters(1, "legacy"))) == "AM001"
+    assert _sqlstate_of(_refused(migrated_engine, event, **parameters(3, "legacy"))) == "AM001"
+    with migrated_engine.begin() as connection:
+        connection.execute(text(event), parameters(2, "legacy"))
+    with migrated_engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT array_agg(event_no ORDER BY event_no) FROM executor_routing_mode_event")).scalar_one() == [1, 2]
+
+
+@pytest.mark.parametrize("function", [
+    "am_check_executor_group_revision", "am_check_executor_group_member", "am_check_executor_routing_rule",
+])
+def test_the_insert_triggers_read_the_archive_they_decide_on_with_a_share_lock(migrated_engine: Engine, function: str) -> None:
+    """Archiving locks the group row `FOR UPDATE` (the connection row is updated); a plain SELECT would let an archive and a
+    concurrent revision, rule or member insert both pass, so each trigger reads the row it decides on `FOR SHARE`."""
+    with migrated_engine.connect() as connection:
+        body = connection.execute(text(
+            "SELECT pg_get_functiondef(p.oid) FROM pg_proc p WHERE p.proname = :f"), {"f": function}).scalar_one()
+    assert "FOR SHARE" in body, function

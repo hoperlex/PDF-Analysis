@@ -25,17 +25,17 @@ An administrator creates a two-member group whose revisions have the same `pin_i
 
 ### P-01 — the work kinds
 - captured_at: 2026-11-02
-- command: `git grep -n -A7 '^WORK_KINDS' origin/dev -- src/auditmanager/executors/model.py`
+- command: `git grep -n -A7 '^WORK_KINDS' 27fb952e -- src/auditmanager/executors/model.py`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/executors/model.py:71:WORK_KINDS: Final[tuple[str, ...]] = (
-  origin/dev:src/auditmanager/executors/model.py-72-    "text_analysis",
-  origin/dev:src/auditmanager/executors/model.py-73-    "comparison_pair_check",
-  origin/dev:src/auditmanager/executors/model.py-74-    "comparison_sheet_changes",
-  origin/dev:src/auditmanager/executors/model.py-75-    "comparison_spec",
-  origin/dev:src/auditmanager/executors/model.py-76-    "comparison_report",
-  origin/dev:src/auditmanager/executors/model.py-77-    "comparison_stage_review",
-  origin/dev:src/auditmanager/executors/model.py-78-)
+  27fb952e:src/auditmanager/executors/model.py:98:WORK_KINDS: Final[tuple[str, ...]] = (
+  27fb952e:src/auditmanager/executors/model.py-99-    "text_analysis",
+  27fb952e:src/auditmanager/executors/model.py-100-    "comparison_pair_check",
+  27fb952e:src/auditmanager/executors/model.py-101-    "comparison_sheet_changes",
+  27fb952e:src/auditmanager/executors/model.py-102-    "comparison_spec",
+  27fb952e:src/auditmanager/executors/model.py-103-    "comparison_report",
+  27fb952e:src/auditmanager/executors/model.py-104-    "comparison_stage_review",
+  27fb952e:src/auditmanager/executors/model.py-105-)
   exit=0
   ```
 - interpretation: rules are one per value of this tuple; no new kind is added.
@@ -60,6 +60,15 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/api/routers/executor_groups.py`
 - `src/auditmanager/api/app.py`
 - `src/auditmanager/api/security.py`
+- `src/auditmanager/api/routers/__init__.py`
+- `src/auditmanager/api/routers/ports.py`
+- `src/auditmanager/bootstrap/adapters.py`
+- `src/auditmanager/bootstrap/composition.py`
+- `src/auditmanager/api/routers/runs.py`
+- `scripts/recovery/grant_classification.py`
+- `tests/integration/api/test_role_register.py`
+- `tests/integration/api/test_authorization.py`
+- `tests/unit/runs/test_group_start_refused.py`
 - `tests/unit/executors/test_groups.py`
 - `tests/unit/executors/test_group_selection.py`
 - `tests/integration/executors/test_groups.py`
@@ -75,6 +84,10 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - no dispatch, no admission, no cut-over
 
 ## Deliverables
+- Eight operations served: listExecutorGroups, createExecutorGroup, getExecutorGroup, reviseExecutorGroup, archiveExecutorGroup, getExecutorGroupCapacity, listExecutorRoutingRules (with the current mode, read from the mode events; empty = legacy), setExecutorRoutingRule. previewExecutorRouting and setExecutorRoutingMode stay with EXEC2-CUTOVER-01 (stage 3).
+- Reads (list/get/capacity of groups, list of rules) are any-role, like listExecutorConnections; writes are administrator (security.py, test_role_register.py, test_authorization.py).
+- Until EXEC2-GROUP-RUN-01: startRun and estimateRunCost with executor_group_id are refused explicitly (dependency_unavailable, dependency executor_group_dispatch), never silently started on the default route.
+- Remove the five group/rule/mode tables from SEALED_NOT_YET_WRITTEN as this task writes them.
 - Commands with idempotency keys and journal events, validation per decision 10, and archive semantics.
 - `group_selection.choose(members, used, capacity, rotation)`: pure; minimum `used/capacity`; no division by zero; persisted rotation tie-break.
 - `capacity` read for a group, built on `EXEC2-CAP-01`'s readers.

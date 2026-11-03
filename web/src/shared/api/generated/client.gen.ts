@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.15.0 (OpenAPI 3.1.0)
- *   sha256 0a54238832934bb332250bf169d2f6a824411a36ba24e4481aaaed4e4b97e8a9
+ *   AuditManager PC-01 API 1.16.0 (OpenAPI 3.1.0)
+ *   sha256 0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -36,6 +36,8 @@ import type {
   ArchiveAnalysisPresetResult,
   ArchiveExecutorConnectionInput,
   ArchiveExecutorConnectionResult,
+  ArchiveExecutorGroupInput,
+  ArchiveExecutorGroupResult,
   ArchiveUserInput,
   ArchiveUserResult,
   CancelComparisonAiPairCheckInput,
@@ -98,6 +100,8 @@ import type {
   CreateExecutorAgentInstallResult,
   CreateExecutorConnectionInput,
   CreateExecutorConnectionResult,
+  CreateExecutorGroupInput,
+  CreateExecutorGroupResult,
   CreateProjectInput,
   CreateProjectResult,
   CreateStageAssemblyInput,
@@ -198,6 +202,10 @@ import type {
   GetExecutorAgentInstallResult,
   GetExecutorConnectionInput,
   GetExecutorConnectionResult,
+  GetExecutorGroupInput,
+  GetExecutorGroupResult,
+  GetExecutorGroupCapacityInput,
+  GetExecutorGroupCapacityResult,
   GetExecutorTaskImageInput,
   GetExecutorTaskImageResult,
   GetExtendedRunReviewInput,
@@ -302,8 +310,12 @@ import type {
   ListExecutionQueueResult,
   ListExecutorConnectionsInput,
   ListExecutorConnectionsResult,
+  ListExecutorGroupsInput,
+  ListExecutorGroupsResult,
   ListExecutorRoutesInput,
   ListExecutorRoutesResult,
+  ListExecutorRoutingRulesInput,
+  ListExecutorRoutingRulesResult,
   ListNormDocumentsInput,
   ListNormDocumentsResult,
   ListNormParagraphsInput,
@@ -396,6 +408,8 @@ import type {
   PrepareComparisonClientReportResult,
   PrepareComparisonMatrixInput,
   PrepareComparisonMatrixResult,
+  PreviewExecutorRoutingInput,
+  PreviewExecutorRoutingResult,
   PurgeUserInput,
   PurgeUserResult,
   ReadRegistrationStatusInput,
@@ -446,6 +460,8 @@ import type {
   ReviseAnalysisPresetResult,
   ReviseExecutorConnectionInput,
   ReviseExecutorConnectionResult,
+  ReviseExecutorGroupInput,
+  ReviseExecutorGroupResult,
   ReviseStageAssemblyInput,
   ReviseStageAssemblyResult,
   RevokeRunnerTokenInput,
@@ -460,6 +476,10 @@ import type {
   SetExecutorIntegrationAuthorisationResult,
   SetExecutorRouteInput,
   SetExecutorRouteResult,
+  SetExecutorRoutingModeInput,
+  SetExecutorRoutingModeResult,
+  SetExecutorRoutingRuleInput,
+  SetExecutorRoutingRuleResult,
   SetExecutorSecretInput,
   SetExecutorSecretResult,
   SetGlobalVendorListInput,
@@ -661,6 +681,18 @@ export function archiveExecutorConnection(
   options?: RequestOptions,
 ): Promise<ApiResponse<ArchiveExecutorConnectionResult>> {
   return request<ArchiveExecutorConnectionResult>(OPERATIONS.archiveExecutorConnection, input, options);
+}
+
+/**
+ * Archive Executor Group
+ *
+ * `POST /executor-groups/{group_id}/archive` - a write; carries a required Idempotency-Key.
+ */
+export function archiveExecutorGroup(
+  input: ArchiveExecutorGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ArchiveExecutorGroupResult>> {
+  return request<ArchiveExecutorGroupResult>(OPERATIONS.archiveExecutorGroup, input, options);
 }
 
 /**
@@ -1033,6 +1065,18 @@ export function createExecutorConnection(
   options?: RequestOptions,
 ): Promise<ApiResponse<CreateExecutorConnectionResult>> {
   return request<CreateExecutorConnectionResult>(OPERATIONS.createExecutorConnection, input, options);
+}
+
+/**
+ * Create Executor Group
+ *
+ * `POST /executor-groups` - a write; carries a required Idempotency-Key.
+ */
+export function createExecutorGroup(
+  input: CreateExecutorGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<CreateExecutorGroupResult>> {
+  return request<CreateExecutorGroupResult>(OPERATIONS.createExecutorGroup, input, options);
 }
 
 /**
@@ -1633,6 +1677,30 @@ export function getExecutorConnection(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetExecutorConnectionResult>> {
   return request<GetExecutorConnectionResult>(OPERATIONS.getExecutorConnection, input, options);
+}
+
+/**
+ * Get Executor Group
+ *
+ * `GET /executor-groups/{group_id}`.
+ */
+export function getExecutorGroup(
+  input: GetExecutorGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorGroupResult>> {
+  return request<GetExecutorGroupResult>(OPERATIONS.getExecutorGroup, input, options);
+}
+
+/**
+ * Get Executor Group Capacity
+ *
+ * `GET /executor-groups/{group_id}/capacity`.
+ */
+export function getExecutorGroupCapacity(
+  input: GetExecutorGroupCapacityInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutorGroupCapacityResult>> {
+  return request<GetExecutorGroupCapacityResult>(OPERATIONS.getExecutorGroupCapacity, input, options);
 }
 
 /**
@@ -2260,6 +2328,18 @@ export function listExecutorConnections(
 }
 
 /**
+ * List Executor Groups
+ *
+ * `GET /executor-groups`.
+ */
+export function listExecutorGroups(
+  input: ListExecutorGroupsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutorGroupsResult>> {
+  return request<ListExecutorGroupsResult>(OPERATIONS.listExecutorGroups, input, options);
+}
+
+/**
  * List Executor Routes
  *
  * `GET /executor-routes`.
@@ -2269,6 +2349,18 @@ export function listExecutorRoutes(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListExecutorRoutesResult>> {
   return request<ListExecutorRoutesResult>(OPERATIONS.listExecutorRoutes, input, options);
+}
+
+/**
+ * List Executor Routing Rules
+ *
+ * `GET /executor-routing-rules`.
+ */
+export function listExecutorRoutingRules(
+  input: ListExecutorRoutingRulesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListExecutorRoutingRulesResult>> {
+  return request<ListExecutorRoutingRulesResult>(OPERATIONS.listExecutorRoutingRules, input, options);
 }
 
 /**
@@ -2824,6 +2916,18 @@ export function prepareComparisonMatrix(
 }
 
 /**
+ * Preview Executor Routing
+ *
+ * `GET /executor-routing/preview`.
+ */
+export function previewExecutorRouting(
+  input: PreviewExecutorRoutingInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<PreviewExecutorRoutingResult>> {
+  return request<PreviewExecutorRoutingResult>(OPERATIONS.previewExecutorRouting, input, options);
+}
+
+/**
  * Purge an archived, unreferenced account.
  *
  * `DELETE /users/{user_uid}`.
@@ -3124,6 +3228,18 @@ export function reviseExecutorConnection(
 }
 
 /**
+ * Revise Executor Group
+ *
+ * `POST /executor-groups/{group_id}/revisions` - a write; carries a required Idempotency-Key.
+ */
+export function reviseExecutorGroup(
+  input: ReviseExecutorGroupInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ReviseExecutorGroupResult>> {
+  return request<ReviseExecutorGroupResult>(OPERATIONS.reviseExecutorGroup, input, options);
+}
+
+/**
  * Revise Stage Assembly
  *
  * `POST /stage-assemblies/{stage_assembly_id}/members` - a write; carries a required Idempotency-Key.
@@ -3205,6 +3321,30 @@ export function setExecutorRoute(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetExecutorRouteResult>> {
   return request<SetExecutorRouteResult>(OPERATIONS.setExecutorRoute, input, options);
+}
+
+/**
+ * Set Executor Routing Mode
+ *
+ * `POST /executor-routing/mode` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutorRoutingMode(
+  input: SetExecutorRoutingModeInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutorRoutingModeResult>> {
+  return request<SetExecutorRoutingModeResult>(OPERATIONS.setExecutorRoutingMode, input, options);
+}
+
+/**
+ * Set Executor Routing Rule
+ *
+ * `PUT /executor-routing-rules/{work_kind}` - a write; carries a required Idempotency-Key.
+ */
+export function setExecutorRoutingRule(
+  input: SetExecutorRoutingRuleInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetExecutorRoutingRuleResult>> {
+  return request<SetExecutorRoutingRuleResult>(OPERATIONS.setExecutorRoutingRule, input, options);
 }
 
 /**
@@ -3773,6 +3913,7 @@ export const apiClient = {
   approveSheetPairing,
   archiveAnalysisPreset,
   archiveExecutorConnection,
+  archiveExecutorGroup,
   archiveUser,
   cancelComparisonAiPairCheck,
   cancelComparisonAiSheetChanges,
@@ -3804,6 +3945,7 @@ export const apiClient = {
   createComparisonUpload,
   createExecutorAgentInstall,
   createExecutorConnection,
+  createExecutorGroup,
   createProject,
   createStageAssembly,
   createStageReviewCard,
@@ -3854,6 +3996,8 @@ export const apiClient = {
   getEffectiveVendorLists,
   getExecutorAgentInstall,
   getExecutorConnection,
+  getExecutorGroup,
+  getExecutorGroupCapacity,
   getExecutorTaskImage,
   getExtendedRunReview,
   getFinding,
@@ -3906,7 +4050,9 @@ export const apiClient = {
   listExecutionJournal,
   listExecutionQueue,
   listExecutorConnections,
+  listExecutorGroups,
   listExecutorRoutes,
+  listExecutorRoutingRules,
   listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,
@@ -3953,6 +4099,7 @@ export const apiClient = {
   pauseStageUpload,
   prepareComparisonClientReport,
   prepareComparisonMatrix,
+  previewExecutorRouting,
   purgeUser,
   readRegistrationStatus,
   reauditRun,
@@ -3978,6 +4125,7 @@ export const apiClient = {
   retryComparisonUploadSet,
   reviseAnalysisPreset,
   reviseExecutorConnection,
+  reviseExecutorGroup,
   reviseStageAssembly,
   revokeRunnerToken,
   searchNorms,
@@ -3985,6 +4133,8 @@ export const apiClient = {
   setExecutionPaused,
   setExecutorIntegrationAuthorisation,
   setExecutorRoute,
+  setExecutorRoutingMode,
+  setExecutorRoutingRule,
   setExecutorSecret,
   setGlobalVendorList,
   setJobPriority,

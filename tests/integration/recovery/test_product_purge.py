@@ -617,7 +617,7 @@ def test_the_corpus_is_only_safe_because_two_independent_guards_agree(stand: Sta
 def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
     """`EXEC-SEAL-01`: connections, revisions, secrets, probes and route events are configuration.
 
-    Each of the seven tables, the eleven command types and the ``executor.`` event family is KEEP,
+    Each of the twelve tables, the sixteen command types and the ``executor.`` event family is KEEP,
     and none is PRODUCT: a purge of product data must never delete a sealed secret or a route.
     The event family is declared in the tuple AND must reach the SQL that decides which rows stay
     (``DEV-PURGE-EXECUTOR-EVENTS-01``); the purge of real rows is
@@ -626,15 +626,21 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
     # `EXEC2-SEAL-1` (`0046_executor_capacity_enroll`): an enrollment grant holds the hash of a secret and an
     # install session a host, a user and a sealed key; both are the stand's own configuration, and the four keyed
     # administrator commands that write them are kept with the other executor commands.
+    # `EXEC2-SEAL-2` (`0047_executor_groups_rules`): the executor groups, their revisions and members, the routing rules
+    # and the routing-mode journal are the stand's configuration of where model work goes; the five keyed
+    # administrator commands that write them are kept with the other executor commands.
     tables = {"executor_connection", "executor_connection_revision", "executor_probe",
               "executor_route_event", "executor_secret", "executor_enrollment",
-              "executor_agent_install"}
+              "executor_agent_install", "executor_group", "executor_group_revision",
+              "executor_group_member", "executor_routing_rule_revision", "executor_routing_mode_event"}
     assert tables <= tool.KEEP_TABLES and not tables & tool.PRODUCT_TABLES
     commands = {"create_executor_connection", "revise_executor_connection",
                 "archive_executor_connection", "set_executor_secret",
                 "generate_executor_ssh_key", "request_executor_probe", "set_executor_route",
                 "issue_executor_enrollment", "create_executor_agent_install",
-                "confirm_executor_agent_install_host_key", "set_executor_integration_authorisation"}
+                "confirm_executor_agent_install_host_key", "set_executor_integration_authorisation",
+                "create_executor_group", "revise_executor_group", "archive_executor_group",
+                "set_executor_routing_rule", "set_executor_routing_mode"}
     assert commands <= tool.KEEP_COMMAND_TYPES and not commands & tool.PRODUCT_COMMAND_TYPES
     assert "executor." in tool.KEEP_EVENT_PREFIXES
     assert "starts_with(t.event_type, 'executor.')" in tool._predicates([])["audit_event"][0]

@@ -33,6 +33,8 @@ from auditmanager.runs.public import DurableCarrier, ReclaimingCarrier
 from auditmanager.workers.__main__ import HEALTH_MAX_AGE_SECONDS, health, serve
 from auditmanager.workers.service import HEARTBEAT_FILE, IDENTITY_FILE, JobWakeup, healthy
 
+#: `R-149g`: read by the worker's path-A install runner only (`executors.agent_install_runner`).
+AGENT_INSTALL_ALLOW_PRIVATE_ENV = "AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE"
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "infra/deploy/compose.server.yml"
 
@@ -247,10 +249,12 @@ class TestTheComposeService:
         assert API_TOKEN_ENV in api
         assert API_TOKEN_ENV not in worker
         assert API_TOKEN_ENV not in self.blocks["worker"]
-        # The two worker-only names: where the worker writes its identity, and how many runs it
-        # executes at once (`EXEC-PAR-QUEUE-01`; the `api` never reads it).
-        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV} == api - {API_TOKEN_ENV}
+        # The worker-only names: where the worker writes its identity, how many runs it executes at
+        # once (`EXEC-PAR-QUEUE-01`), and whether path A may reach private ranges (`R-149g`); the
+        # `api` reads none of them.
+        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV} == api - {API_TOKEN_ENV}
         assert WORKER_SLOTS_ENV in worker and WORKER_SLOTS_ENV not in api
+        assert AGENT_INSTALL_ALLOW_PRIVATE_ENV in worker and AGENT_INSTALL_ALLOW_PRIVATE_ENV not in api
 
     def test_the_worker_runs_the_api_image_as_the_worker_command(self) -> None:
         worker = self.blocks["worker"]

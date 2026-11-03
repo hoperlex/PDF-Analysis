@@ -11,18 +11,18 @@ this module (``api``)     :func:`create_agent_install` records the session in ``
                           :func:`confirm_agent_install_host_key` records that the administrator read the
                           host-key fingerprint the worker observed, and moves ``awaiting_host_key`` to
                           ``installing``.
-`EXEC2-ENROLL-SSH-01`     the worker scans the host (``requested -> scanning -> awaiting_host_key``), runs
-(``worker``)              the fixed install script with the package on stdin and ``sudo -n`` once the
-                          fingerprint is confirmed, removes the stand's key line, destroys the sealed key
-                          and ends the session (``succeeded`` or ``failed`` with a sanitised reason). Only
-                          the worker opens a secret.
+`EXEC2-ENROLL-SSH-01`     the worker (``agent_install_runner.py``) scans the host (``requested -> scanning
+(``worker``)              -> awaiting_host_key``), runs the fixed install script with the package on stdin
+                          and ``sudo -n`` once the fingerprint is confirmed, removes the stand's key line,
+                          replaces the sealed key and ends the session (``succeeded`` or ``failed`` with a
+                          sanitised reason). Only the worker opens a secret.
 ========================  ==================================================================================
 
-Until that worker lands a session stays visibly ``requested``; nothing here pretends otherwise.
+A session stays visibly ``requested`` until a worker takes it; nothing here pretends otherwise.
 
-**A session ends.** Nothing but the worker advances a session, and it has not landed, so a session would stay
-``requested`` for ever, block every later create with ``install_in_progress`` (one unfinished session per
-connection) and keep a pasted key sealed indefinitely. A session therefore has a bounded life,
+**A session ends.** Nothing but the worker advances a session, and a worker can be down or can die half way, so a
+session would stay unfinished for ever, block every later create with ``install_in_progress`` (one unfinished
+session per connection) and keep a pasted key sealed indefinitely. A session therefore has a bounded life,
 :data:`INSTALL_SESSION_SECONDS` from its creation. An unfinished session older than that is **finished as
 ``failed``** -- ``no_worker`` when it is still ``requested`` (nobody took it), ``timed_out`` in any other
 unfinished state (somebody did, and went silent) -- and its key is replaced and its reference removed, so no
@@ -91,6 +91,7 @@ from auditmanager.shared.identity import ExecutorAgentInstallId, ExecutorSecretI
 __all__ = [
     "FAILURE_NO_WORKER",
     "FAILURE_TIMED_OUT",
+    "INSTALL_MARKER_PREFIX",
     "INSTALL_PURPOSE",
     "INSTALL_SESSION_SECONDS",
     "InstallLifetimeRepository",
@@ -100,6 +101,7 @@ __all__ = [
     "create_agent_install",
     "get_agent_install",
     "install_destination",
+    "install_marker",
     "observed_fingerprint",
 ]
 
@@ -110,6 +112,9 @@ INSTALL_PURPOSE: Final[str] = "agent_install_key"
 #: How long an install session may stay unfinished, counted from its creation: 30 minutes. A longer one is
 #: finished as ``failed`` (module docstring, "A session ends").
 INSTALL_SESSION_SECONDS: Final[int] = 1800
+#: The comment that names a session on the ``authorized_keys`` line of a generated key: how the worker finds
+#: the line to remove when the install ends (`EXEC2-ENROLL-SSH-01`).
+INSTALL_MARKER_PREFIX: Final[str] = "auditmanager-install:"
 #: The two ``failure_reason`` values (``model.AGENT_INSTALL_FAILURES``) a session ends with when its time is
 #: up: nobody took it, or somebody took it and went silent.
 FAILURE_NO_WORKER: Final[str] = "no_worker"
@@ -135,12 +140,18 @@ def install_destination(*, ssh_host: str, ssh_port: int, ssh_user: str) -> str:
     return f"agent_install|{ssh_user}@{ssh_host}:{ssh_port}|"
 
 
+def install_marker(install_id: str) -> str:
+    """The comment that names a session on its generated key's ``authorized_keys`` line: the last field of the
+    line, and exactly what the worker matches when it removes the line."""
+    return f"{INSTALL_MARKER_PREFIX}{install_id}"
+
+
 def authorized_keys_line(public_key: str, install_id: str) -> str:
     """The line the administrator adds to the host's ``authorized_keys`` for a generated key.
 
-    ``restrict`` turns off forwarding and a terminal; the comment names the session, which is how the
-    worker finds the line to remove when the install ends."""
-    return f"restrict {public_key} auditmanager-install:{install_id}"
+    ``restrict`` turns off forwarding and a terminal; the comment (:func:`install_marker`) names the session,
+    which is how the worker finds the line to remove when the install ends."""
+    return f"restrict {public_key} {install_marker(install_id)}"
 
 
 def observed_fingerprint(record: InstallRecord) -> str | None:

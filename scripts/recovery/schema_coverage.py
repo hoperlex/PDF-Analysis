@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0046_executor_capacity_enroll"
+HEAD = "0048_dispatch_time_binding"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -59,14 +59,17 @@ TABLES = frozenset((
     # `0042_comparison_stage_review`: stage AI units and their immutable results, graphic evidence,
     # link repairs, expert change cards and verdicts, and the durable batch. `0043`, `0044` and `0045`
     # add no table. `0046_executor_capacity_enroll` adds `executor_enrollment` and `executor_agent_install`
-    # (listed beside the other executor tables below).
+    # (listed beside the other executor tables below). `0047_executor_groups_rules` adds `executor_group`,
+    # `executor_group_revision`, `executor_group_member`, `executor_routing_rule_revision` and
+    # `executor_routing_mode_event` (`EXEC2-SEAL-2`, also listed there); `0048_dispatch_time_binding` adds no table.
     "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
     "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     "contract_state_transition", "document",
     "document_version", "document_version_classification", "document_version_classification_correction",
-    "execution_control", "executor_agent_install", "executor_connection", "executor_connection_revision", "executor_enrollment", "executor_probe",
-    "executor_route_event", "executor_runner_token", "executor_secret", "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
+    "execution_control", "executor_agent_install", "executor_connection", "executor_connection_revision", "executor_enrollment", "executor_group",
+    "executor_group_member", "executor_group_revision", "executor_probe",
+    "executor_route_event", "executor_routing_mode_event", "executor_routing_rule_revision", "executor_runner_token", "executor_secret", "executor_task", "expert_decision_event", "finding", "finding_evidence", "finding_observation",
     "finding_observation_norm_citation", "input_manifest_entry", "job", "lease", "model_call", "norm_chunk",
     "norm_chunk_build", "norm_current_snapshot", "norm_current_snapshot_event", "norm_custody_admission",
     "norm_custody_binding", "norm_document", "norm_embedding", "norm_embedding_build",
@@ -98,7 +101,7 @@ FINGERPRINTED_TABLES = TABLES - EXEMPT_FROM_FINGERPRINT
 
 #: ``(table, trigger, function, pg_trigger.tgtype)``. ``tgtype`` bits: 1 row, 2 before,
 #: 4 insert, 8 delete, 16 update, 32 truncate. So 5 and 7 are AFTER and BEFORE INSERT row
-#: triggers, 19 BEFORE UPDATE, 23 BEFORE INSERT OR UPDATE, 27 BEFORE UPDATE OR DELETE (the
+#: triggers, 11 BEFORE DELETE, 19 BEFORE UPDATE, 23 BEFORE INSERT OR UPDATE, 27 BEFORE UPDATE OR DELETE (the
 #: immutable and append-only guards), 31 BEFORE INSERT OR UPDATE OR DELETE, 34 BEFORE TRUNCATE.
 TRIGGERS = (
     ("account_release_mark", "trg_account_release_mark", "am_guard_account_release_mark", 31),
@@ -117,7 +120,9 @@ TRIGGERS = (
     ("attempt", "trg_attempt_frozen_guard", "am_guard_frozen_columns", 19),
     ("attempt", "trg_attempt_state_guard", "am_guard_state_transition", 23),
     ("audit_event", "trg_audit_event_append_only", "am_append_only", 27),
-    ("audit_run", "trg_audit_run_frozen_guard", "am_guard_frozen_columns", 19),
+    # `0048_dispatch_time_binding` (`EXEC2-SEAL-2`): the frozen guard of a run moved to its own function, which lets the
+    # connection revision be written once, with `binding_state` pending -> bound (19 = ROW | BEFORE | UPDATE).
+    ("audit_run", "trg_audit_run_frozen_guard", "am_guard_audit_run_frozen", 19),
     ("audit_run", "trg_audit_run_norm_set", "am_verify_run_norm_set", 23),
     ("audit_run", "trg_audit_run_preset_executor", "am_check_audit_run_preset", 7),
     ("audit_run", "trg_audit_run_state_guard", "am_guard_state_transition", 23),
@@ -184,6 +189,9 @@ TRIGGERS = (
     # `0040_comparison_ai_reports`: the guards of the version comparison AI, specifications, reports and launch queue.
     # 19 = ROW | BEFORE | UPDATE, 7 = ROW | BEFORE | INSERT, 27 = the append-only answers, descriptions, extractions
     # and report files.
+    # `0048_dispatch_time_binding`: the admission columns are frozen; the consent guard was re-created with the
+    # write-once binding exception (same name, function and mask).
+    ("comparison_ai_job", "trg_comparison_ai_job_binding_pin", "am_guard_frozen_columns", 19),
     ("comparison_ai_job", "trg_comparison_ai_job_consent", "am_guard_comparison_ai_job_consent", 19),
     ("comparison_ai_job", "trg_comparison_ai_job_document", "am_check_comparison_core_document", 7),
     ("comparison_ai_job", "trg_comparison_ai_job_frozen_guard", "am_guard_frozen_columns", 19),
@@ -288,8 +296,26 @@ TRIGGERS = (
     ("executor_connection_revision", "trg_executor_connection_revision_immutable", "am_immutable_row", 27),
     ("executor_enrollment", "trg_executor_enrollment_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_enrollment", "trg_executor_enrollment_write_once", "am_guard_write_once_columns", 19),
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): a group's identity and name are frozen, its archive write-once and
+    # the row is never deleted (11 = ROW | BEFORE | DELETE); a revision and a member are immutable, a revision is numbered
+    # without a gap and a member is homogeneous with it and refused once the revision has the members it declared; the
+    # revision commits with exactly those members (a deferred AFTER INSERT constraint trigger, 5); a rule and a
+    # routing-mode event are append-only, a rule names an active group and an event is numbered without a gap
+    # (7 = ROW | BEFORE | INSERT).
+    ("executor_group", "trg_executor_group_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_group", "trg_executor_group_no_delete", "am_immutable_row", 11),
+    ("executor_group", "trg_executor_group_write_once", "am_guard_write_once_columns", 19),
+    ("executor_group_member", "trg_executor_group_member_homogeneous", "am_check_executor_group_member", 7),
+    ("executor_group_member", "trg_executor_group_member_immutable", "am_immutable_row", 27),
+    ("executor_group_revision", "trg_executor_group_revision_chain", "am_check_executor_group_revision", 7),
+    ("executor_group_revision", "trg_executor_group_revision_has_members", "am_require_executor_group_members", 5),
+    ("executor_group_revision", "trg_executor_group_revision_immutable", "am_immutable_row", 27),
     ("executor_probe", "trg_executor_probe_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_route_event", "trg_executor_route_event_append_only", "am_append_only", 27),
+    ("executor_routing_mode_event", "trg_executor_routing_mode_event_append_only", "am_append_only", 27),
+    ("executor_routing_mode_event", "trg_executor_routing_mode_event_number", "am_check_executor_routing_mode_event", 7),
+    ("executor_routing_rule_revision", "trg_executor_routing_rule_revision_append_only", "am_append_only", 27),
+    ("executor_routing_rule_revision", "trg_executor_routing_rule_revision_group", "am_check_executor_routing_rule", 7),
     ("executor_runner_token", "trg_executor_runner_token_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_runner_token", "trg_executor_runner_token_write_once", "am_guard_write_once_columns", 19),
     ("executor_secret", "trg_executor_secret_frozen_guard", "am_guard_frozen_columns", 19),
@@ -356,6 +382,7 @@ TRIGGERS = (
 #: commit together with its children. They fire at commit, never during ``pg_restore``.
 DEFERRED_TRIGGERS = frozenset((
     "trg_ar_v3_group_complete",
+    "trg_executor_group_revision_has_members",
     "trg_finding_observation_partition",
     "trg_norm_citation_partition",
     "trg_norm_current_snapshot_event_designates",
@@ -388,15 +415,24 @@ SEQUENCES = {
 #: redefines in place, 47 checks (revision 1, task 2, runner token 6, connection 3, `executor_enrollment` 12,
 #: `executor_agent_install` 23), four foreign keys (the enrollment's connection and runner token, the install's
 #: connection and sealed key), two primary keys and two unique constraints (the enrollment's prefix and hash):
-#: c 1186, f 348, p 123, u 125 (derived from the DDL, not measured on a database).
-CONSTRAINT_COUNTS = {"c": 1186, "f": 348, "p": 123, "t": 9, "u": 125}
+#: c 1186, f 348, p 123, u 125; `0047_executor_groups_rules` (`EXEC2-SEAL-2`) adds five tables and 33 checks (group 6,
+#: revision 11 -- the declared member count among them --, member 4, rule 5, routing-mode event 7), four foreign keys
+#: (the revision's group, the member's group revision and its connection revision, the rule's group revision), five
+#: primary keys, four unique constraints (revision number, member tie-break order, rule number, event number) and one
+#: constraint trigger (the deferred `trg_executor_group_revision_has_members`, contype `t`); `0048_dispatch_time_binding`
+#: adds, on `audit_run` and on `comparison_ai_job`, 15 checks (7 and 8) and four foreign keys (the group and rule
+#: revisions of each): c 1234, f 356, p 128, t 10, u 129 (derived from the DDL, not measured on a database).
+CONSTRAINT_COUNTS = {"c": 1234, "f": 356, "p": 128, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
 #: index); 0043 swaps one unique index for another; 0044 and 0045 add none; 0046 adds eight (two primary keys,
 #: two unique constraints, the partial unique index of one live grant per connection, the partial unique index of
-#: one unfinished install per connection, and one listing index on each of the two tables).
-INDEX_COUNT = 434
+#: one unfinished install per connection, and one listing index on each of the two tables); 0047 adds twelve (five primary
+#: keys, four unique constraints, the partial unique index of an active group name, and one index each on the member's
+#: connection and the rule's group revision); 0048 adds four (a group-revision index and a pending-work index on each of
+#: `audit_run` and `comparison_ai_job`).
+INDEX_COUNT = 450
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

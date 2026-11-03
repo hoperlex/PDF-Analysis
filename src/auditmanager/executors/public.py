@@ -160,10 +160,54 @@ from auditmanager.executors.queries import (
     used_units,
 )
 
+# EXEC2-GROUP-STORE-01 (ADR-0026 decisions 10, 11 and 14): executor groups, the routing rule of a work kind, the
+# routing mode as the journal states it, the capacity of a group and the pure selection among its members. The
+# dispatch lanes (`EXEC2-GROUP-RUN-01`, `EXEC2-GROUP-CMP-01`) call these and never read the group tables.
+from auditmanager.executors.group_commands import (
+    advance_group_rotation,
+    archive_group,
+    create_group,
+    group_capacity,
+    group_detail,
+    group_revision_of,
+    group_summary,
+    list_group_summaries,
+    list_routing_rules,
+    member_facts,
+    resolve_rule,
+    revise_group,
+    routing_mode,
+    set_routing_rule,
+)
+from auditmanager.executors.group_selection import (
+    GroupMember,
+    MemberFacts,
+    choose,
+    member_issue,
+)
+from auditmanager.executors.groups import (
+    GroupCapacity,
+    GroupDetail,
+    GroupMemberRecord,
+    GroupRecord,
+    GroupRevisionRecord,
+    GroupSettings,
+    GroupSummary,
+    MemberRequest,
+    MemberStatus,
+    ModeState,
+    RuleListing,
+    RuleRecord,
+)
+
 if TYPE_CHECKING:
+    from auditmanager.executors.agent_install_runner import AgentInstallRunner, install_runner_for
     from auditmanager.executors.operations import OperationRefused, import_env
 
 __all__ = [
+    # `EXEC2-ENROLL-SSH-01`: the worker's half of path A, resolved on first use (see `__getattr__`).
+    "AgentInstallRunner",
+    "install_runner_for",
     # `EXEC2-ENROLL-01`.
     "AgentPackage",
     "EnrollmentPrincipal",
@@ -278,6 +322,37 @@ __all__ = [
     "occupancy_of",
     "run_queue_reason",
     "used_units",
+    # EXEC2-GROUP-STORE-01
+    "GroupCapacity",
+    "GroupDetail",
+    "GroupMember",
+    "GroupMemberRecord",
+    "GroupRecord",
+    "GroupRevisionRecord",
+    "GroupSettings",
+    "GroupSummary",
+    "MemberFacts",
+    "MemberRequest",
+    "MemberStatus",
+    "ModeState",
+    "RuleListing",
+    "RuleRecord",
+    "advance_group_rotation",
+    "archive_group",
+    "choose",
+    "create_group",
+    "group_capacity",
+    "group_detail",
+    "group_revision_of",
+    "group_summary",
+    "list_group_summaries",
+    "list_routing_rules",
+    "member_facts",
+    "member_issue",
+    "resolve_rule",
+    "revise_group",
+    "routing_mode",
+    "set_routing_rule",
 ]
 
 
@@ -285,6 +360,9 @@ __all__ = [
 #: ``operations`` imports this module (and so do ``probe_runner`` and ``resolver``): a top-level
 #: import here would break ``import auditmanager.executors.operations`` on the cycle.
 _OPERATIONS_EXPORTS = frozenset({"OperationRefused", "import_env"})
+#: The same for the install runner (`EXEC2-ENROLL-SSH-01`): ``agent_install_runner`` imports ``open_secret`` and
+#: ``SecretUnreadableError`` from this module, so it cannot be imported at the top of it.
+_INSTALL_RUNNER_EXPORTS = frozenset({"AgentInstallRunner", "install_runner_for"})
 
 
 def __getattr__(name: str) -> object:
@@ -292,6 +370,10 @@ def __getattr__(name: str) -> object:
         from auditmanager.executors import operations
 
         return getattr(operations, name)
+    if name in _INSTALL_RUNNER_EXPORTS:
+        from auditmanager.executors import agent_install_runner
+
+        return getattr(agent_install_runner, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

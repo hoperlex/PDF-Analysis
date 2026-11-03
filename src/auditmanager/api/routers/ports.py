@@ -2181,3 +2181,39 @@ class ComparisonStageC4Port(Protocol):
     def get_profile_text(self, *, profile_id: str, query: str | None) -> models.StageProfileText: ...
 
     def get_assembly(self, *, assembly_id: str) -> models.StageAssembly: ...
+
+
+# EXEC2-GROUP-STORE-01 --------------------------------------------------------------------------------
+# Executor groups and the routing rule of a work kind (ADR-0026 decisions 10, 11 and 14). This section is the
+# lane's own; the ports around it belong to others. `previewExecutorRouting` and `setExecutorRoutingMode` are
+# `EXEC2-CUTOVER-01`'s and are not on this port.
+
+
+class ExecutorGroupPort(Protocol):
+    """The eight group and rule operations this lane serves.
+
+    The four reads (`list_groups`, `get_group`, `get_capacity`, `list_rules`) are for any role, like the executor
+    connections' reads; they take no actor. Every write re-reads the actor's role set in its own transaction and
+    records the actor in its journal event. No method returns a secret, a setting of a connection or an address: a
+    group names connections and their revisions by identity only."""
+
+    def list_groups(self) -> models.ExecutorGroupList: ...
+    def get_group(self, *, group_id: str) -> models.ExecutorGroupDetail: ...
+    def get_capacity(self, *, group_id: str) -> models.ExecutorGroupCapacity: ...
+    def list_rules(self) -> models.ExecutorRoutingRuleList: ...
+    def create_group(
+        self, *, body: models.CreateExecutorGroupRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup: ...
+    def revise_group(
+        self, *, group_id: str, body: models.ReviseExecutorGroupRequest, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorGroup: ...
+    def archive_group(
+        self, *, group_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup: ...
+    def set_rule(
+        self, *, work_kind: str, group_revision_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingRule: ...
+
+
+__all__ += ["ExecutorGroupPort"]

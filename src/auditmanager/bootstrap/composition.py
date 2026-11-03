@@ -12,6 +12,7 @@ takes six protocols and constructs none of them, and this is the other half of t
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, replace
 from collections.abc import Callable, Mapping
@@ -57,6 +58,7 @@ from auditmanager.bootstrap.adapters import (
     ExecutionAdapter,
     ExecutorAdapter,
     ExecutorEnrollmentAdapter,
+    ExecutorGroupAdapter,
     FindingAdapter,
     NormContentAdapter,
     NormsSearchAdapter,
@@ -116,6 +118,26 @@ from auditmanager.releases.public import (
 #: certificate name unless it is set. An absent or malformed value is a refusal of the command
 #: (``dependency_unavailable`` / ``public_origin``), never a silent fallback.
 PUBLIC_ORIGIN_ENV = "AUDITMANAGER_PUBLIC_ORIGIN"
+
+_log = logging.getLogger(__name__)
+
+
+def _passes(*runners: Callable[[], int]) -> Callable[[], int]:
+    """One pass of several runners, as the worker's probe loop calls it: each runs, in order, and the number of
+    what they handled is the sum. A runner that raises is logged and the next still runs, so a failing install
+    pass never starves the probes (nor the probes the installs). The failure is logged as the probe loop logs
+    its own (`EXEC2-ENROLL-SSH-01`)."""
+
+    def one_pass() -> int:
+        handled = 0
+        for runner in runners:
+            try:
+                handled += runner()
+            except Exception:  # noqa: BLE001 - one runner's failure is not another's
+                _log.exception("worker pass of %s failed; retried", type(runner).__name__)
+        return handled
+
+    return one_pass
 
 
 def summary_model_for(provider_mode: str) -> Any:
@@ -201,7 +223,9 @@ class WorkerRuntime:
     slots: int
     state_dir: Path | None
     #: `EXEC-HTTP-01`: ``probe_runner()`` takes the ``requested`` connection probes and runs them
-    #: on this process's network path; ``None`` when the process holds no private ring.
+    #: on this process's network path. `EXEC2-ENROLL-SSH-01`: the same call also takes the ``requested`` and
+    #: ``installing`` sessions of path A (an agent install over SSH) -- the worker service calls one pass
+    #: and counts what it handled -- see :func:`_passes`.
     probe_runner: Callable[[], int] | None = None
     #: `CMP-WORK-01`: the comparison loop the worker hosts as a second claimant
     #: (:class:`~auditmanager.comparison.public.ComparisonWorkRunner`). Always built by
@@ -362,11 +386,16 @@ def build_worker_runtime(
 
     # `EXEC-PULL-PROBE-INT-01`: pull probes need no secret. Start the probe loop even
     # without a private ring; keyed probes report `secret_unreadable` in that case.
+    from auditmanager.executors.public import install_runner_for
     from auditmanager.executors.runtime import runner_for
 
     probe_runner = runner_for(
         sessions, ring=resolved.secrets_private_ring, environ=env, engine=engine,
     )
+    # `EXEC2-ENROLL-SSH-01`: path A. The worker holds the private ring and the network path, so it is the one
+    # that scans a host, installs the agent over SSH and replaces the install key. It rides the probe loop's
+    # pass (`_passes`); every install runs in a thread of its own, so a slow host never holds a probe.
+    install_runner = install_runner_for(sessions, ring=resolved.secrets_private_ring, environ=env)
 
     return WorkerRuntime(
         settings=resolved,
@@ -379,7 +408,7 @@ def build_worker_runtime(
         # per `PROTOTYPE_PROFILE.md` section 2, which is today's behaviour and the rollback.
         slots=resolved.worker_slots,
         state_dir=None if resolved.worker_state_dir is None else Path(resolved.worker_state_dir),
-        probe_runner=probe_runner,
+        probe_runner=_passes(probe_runner, install_runner),
         comparison_work=build_comparison_work(
             sessions=sessions, engine=engine, blob_store=store, environ=env, ring=resolved.secrets_private_ring,
         ),
@@ -685,6 +714,9 @@ def build_application(
             sessions, ring=resolved.secrets_public_ring,
             public_origin=env.get(PUBLIC_ORIGIN_ENV) or None,
         ),
+        # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: the four reads for any role
+        # and the four writes, over the same sessions. The rates a group snapshots are the provider lock's.
+        executor_groups=ExecutorGroupAdapter(sessions),
     )
     return Application(
         router=router,

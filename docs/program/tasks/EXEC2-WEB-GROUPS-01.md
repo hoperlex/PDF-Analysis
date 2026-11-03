@@ -25,10 +25,10 @@
 
 ### P-01 — the tab enumerator
 - captured_at: 2026-11-02
-- command: `git grep -n 'WORKERS_TABS = ' origin/dev -- web/src/_pages/workers/model/tabs.ts`
+- command: `git grep -n 'WORKERS_TABS = ' 27fb952e -- web/src/_pages/workers/model/tabs.ts`
 - captured_output:
   ```text
-  origin/dev:web/src/_pages/workers/model/tabs.ts:13:export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
+  27fb952e:web/src/_pages/workers/model/tabs.ts:13:export const WORKERS_TABS = ['connections', 'processes', 'routes'] as const;
   exit=0
   ```
 - interpretation: this task owns the tab set and adds «Группы» and «Правила».

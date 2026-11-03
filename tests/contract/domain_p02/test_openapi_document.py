@@ -316,6 +316,18 @@ REQUIRED_OPERATIONS = {
     "getExecutorAgentInstall",
     "confirmExecutorAgentInstallHostKey",
     "setExecutorIntegrationAuthorisation",
+    # `EXEC2-SEAL-2` (ADR-0026 decisions 10 to 17, contract 1.16.0). Executor groups (list, create, read, revise,
+    # archive, capacity), the routing rule of a work kind, and the routing mode with its cut-over preview.
+    "listExecutorGroups",
+    "createExecutorGroup",
+    "getExecutorGroup",
+    "reviseExecutorGroup",
+    "archiveExecutorGroup",
+    "getExecutorGroupCapacity",
+    "listExecutorRoutingRules",
+    "setExecutorRoutingRule",
+    "previewExecutorRouting",
+    "setExecutorRoutingMode",
     # `CMP-SEAL-C3`: stage intake, pairs, sheet map, raw text and chain runs.
     "listStagePairs", "confirmStagePair", "getStagePair", "listStagePairSuggestions",
     "createStageAssembly", "reviseStageAssembly", "setStagePairCompleteness",
@@ -461,6 +473,13 @@ WRITE_OPERATIONS = {
     "setExecutorIntegrationAuthorisation",
     "createExecutorAgentInstall",
     "confirmExecutorAgentInstallHostKey",
+    # `EXEC2-SEAL-2`. The five administrator writes of groups, rules and the routing mode are keyed; the reads
+    # (list, get, capacity, rules, preview) are not.
+    "createExecutorGroup",
+    "reviseExecutorGroup",
+    "archiveExecutorGroup",
+    "setExecutorRoutingRule",
+    "setExecutorRoutingMode",
     # `CMP-SEAL-C3`: every new stage command is keyed and expert-only.
     "createStageUpload", "uploadStageUploadPart", "completeStageUploadFile",
     "confirmStageUploadCandidate", "rejectStageUploadCandidate", "pauseStageUpload",
@@ -655,7 +674,11 @@ def test_every_path_parameter_is_required_and_pattern_bound(openapi_document: di
 #: the non-identities this guard exists for (a file name, an ordinal, a sheet number, a
 #: checksum), and the second test below holds it to the enum, so a free-text key cannot
 #: borrow the exception.
-VOCABULARY_PATH_PARAMETERS: dict[str, str] = {"section_code": "#/components/schemas/ProjectSection"}
+VOCABULARY_PATH_PARAMETERS: dict[str, str] = {
+    "section_code": "#/components/schemas/ProjectSection",
+    # `EXEC2-SEAL-2`: a routing rule is keyed by its work kind, one of the six of the closed enum, not by an identity.
+    "work_kind": "#/components/schemas/ExecutorWorkKind",
+}
 
 
 def test_no_endpoint_addresses_a_resource_by_a_non_identity(openapi_document: dict) -> None:
