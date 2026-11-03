@@ -17,7 +17,9 @@ from auditmanager.comparison.ai_jobs.model import (
 )
 from auditmanager.comparison.ai_jobs.service import AiJobCommand, ComparisonAiJobService
 from auditmanager.comparison.spend.caller import ComparisonModelCaller
-from auditmanager.comparison.spend.errors import CallFailed, CallLost, CallRefused, OutcomeUnknown
+from auditmanager.comparison.spend.errors import (
+    REASON_NO_EXECUTOR_ONLINE, CallFailed, CallLost, CallRefused, OutcomeUnknown,
+)
 from auditmanager.comparison.spend.model import CallEstimate, JOB_KEY
 from auditmanager.comparison.work.model import Failed, Yielded
 from auditmanager.ingest.comparison_pdf.public import require_expert
@@ -568,6 +570,10 @@ class StageAiRuntime:
                 except OutcomeUnknown:
                     return self._failed(item, run_id, unit, jobs, job_id, "stage_ai_outcome_unknown")
                 except CallRefused as error:
+                    if error.reason == REASON_NO_EXECUTOR_ONLINE:
+                        # `EXEC2-GROUP-CMP-01` (ADR-0026 decision 15): the job's group has had no eligible member for longer than the offline
+                        # wait. The run ends visibly through its own failure path, which ends the job (`jobs.fail`) with this reason.
+                        return self._failed(item, run_id, unit, jobs, job_id, REASON_NO_EXECUTOR_ONLINE)
                     if error.pauses_job:
                         with session_scope(self._sessions) as session:
                             self._checked(session, item, run_id)

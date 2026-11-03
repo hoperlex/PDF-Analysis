@@ -15,6 +15,14 @@ live here too, beside the writes they must agree with. Three of them restate a f
 context: the advisory-lock key of a connection, the Job states that make a Run *active* and the unit
 count against ``max_active_runs`` of the connection's current revision (`EXEC2-CAP-01`). All three are
 pinned to their original by a test (this context may not import ``jobs`` internals).
+
+`EXEC2-GROUP-CMP-01` (ADR-0026 decisions 12 and 14). A job admitted by a rule or a group has no connection until its first
+call binds it, and a Run admitted the same way has none until its claim does. Both counts below join ``audit_run`` and
+``comparison_model_call`` to ``executor_connection_revision`` on the **row's own** revision with an inner join, so a ``pending``
+Run (``connection_revision_id`` NULL) holds no unit of any connection, and a call is journalled with the member's revision in
+the very transaction that binds the job, so it is never counted against a connection it was not sent to. The first-call
+binding takes the group's row lock with :meth:`ComparisonSpendRepository.lock_group`, then the members' connection locks with
+:meth:`~ComparisonSpendRepository.lock_connection` in ascending ``connection_id``, then the day lock -- the order of decision 14.
 """
 
 from __future__ import annotations
@@ -128,6 +136,9 @@ _LOCK_CONNECTION = text(
     f"SELECT pg_advisory_xact_lock(hashtextextended('{CONNECTION_LOCK_KEY}' || :connection_id, 0))"
 )
 _LOCK_DAY = text(f"SELECT pg_advisory_xact_lock(hashtextextended('{DAY_LOCK_KEY}', 0))")
+#: `EXEC2-GROUP-CMP-01`. The group's row lock (the first lock of decision 14's order, the one a Run's claim takes before it
+#: and an administrator's revision takes) and, read under it, the persisted tie-break rotation of ``least_loaded``.
+_LOCK_GROUP = text("SELECT rotation_cursor FROM executor_group WHERE group_id = :group_id FOR UPDATE")
 _ACTIVE_STATES_SQL = "(" + ", ".join(f"'{s}'" for s in ACTIVE_JOB_STATES) + ")"
 #: The rows of the Runs active on a connection, and of its **active comparison calls**. A call is *active*
 #: while it is open **and** its attempt still holds the item: a killed worker's call stays active until the
@@ -275,6 +286,13 @@ class ComparisonSpendRepository:
     def lock_day(self, session: Session) -> None:
         """Take the installation's spend lock to the end of the transaction."""
         session.execute(_LOCK_DAY)
+
+    def lock_group(self, session: Session, group_id: str) -> int | None:
+        """`EXEC2-GROUP-CMP-01`. Take the group's row lock to the end of the transaction (``FOR UPDATE``: the lock a Run's
+        claim and an administrator's revision take) and answer its rotation cursor as it stands under the lock, or ``None``
+        when there is no such group. Taken **before** any connection lock and the day lock."""
+        found = session.execute(_LOCK_GROUP, {"group_id": group_id}).scalar_one_or_none()
+        return None if found is None else int(found)
 
     def connection_has_active_run(self, session: Session, connection_id: str) -> bool:
         return bool(session.execute(_CONNECTION_HAS_ACTIVE_RUN, {"connection_id": connection_id}).scalar_one())

@@ -111,7 +111,15 @@ from auditmanager.comparison.version_reader import VersionFacts
 from auditmanager.comparison.version_section_pair import SuppliedVersionClassification
 from auditmanager.comparison.spend.caller import ComparisonModelCaller
 from auditmanager.comparison.spend.ceilings import job_ceiling_micros
+# `EXEC2-GROUP-CMP-01` (ADR-0026 decisions 12 to 16): the first-call binding of a job admitted by a rule or a group.
+from auditmanager.comparison.spend.dispatch import (
+    GROUP_OFFLINE_WAIT_ENV,
+    GroupRoutes,
+    group_aware,
+    group_offline_wait_seconds,
+)
 from auditmanager.comparison.spend.errors import (
+    REASON_NO_EXECUTOR_ONLINE,
     CallFailed,
     CallLost,
     CallRefused,
@@ -119,6 +127,9 @@ from auditmanager.comparison.spend.errors import (
     SpendError,
 )
 from auditmanager.comparison.spend.model import (
+    BINDING_BOUND,
+    BINDING_FROZEN,
+    BINDING_PENDING,
     DAY_CEILING_USD,
     JOB_CEILING_USD,
     JOB_KEY as SPEND_JOB_KEY,
@@ -127,6 +138,7 @@ from auditmanager.comparison.spend.model import (
     CallResult,
     CallRoute,
     Consent,
+    GroupDispatch,
     SpendPause,
 )
 from auditmanager.comparison.spend.repository import ComparisonSpendRepository
@@ -256,7 +268,10 @@ from auditmanager.comparison.specification.transition import TransitionRun
 # `CMP-AI-JOBS-01`: the shared core of consented AI jobs (estimate, keyed start with consent, the state edges, the spend pause,
 # the reads, recorded mode). The four method lanes build on `ComparisonAiJobService`; none writes `comparison_ai_job` itself.
 from auditmanager.comparison.ai_jobs.estimate import build_estimate as build_ai_estimate
+from auditmanager.comparison.ai_jobs.estimate import read_job_route as read_ai_job_route
+from auditmanager.comparison.ai_jobs.estimate import read_legacy_route as read_ai_legacy_route
 from auditmanager.comparison.ai_jobs.estimate import read_route as read_ai_route
+from auditmanager.comparison.ai_jobs.estimate import read_rule_route as read_ai_rule_route
 from auditmanager.comparison.ai_jobs.estimate import route_missing as ai_route_missing
 from auditmanager.comparison.ai_jobs.model import (
     METHODS as AI_METHODS,
@@ -444,6 +459,15 @@ __all__ = [
     "CallRefused",
     "CallResult",
     "CallRoute",
+    "BINDING_BOUND",
+    "BINDING_FROZEN",
+    "BINDING_PENDING",
+    "GROUP_OFFLINE_WAIT_ENV",
+    "GroupDispatch",
+    "GroupRoutes",
+    "REASON_NO_EXECUTOR_ONLINE",
+    "group_aware",
+    "group_offline_wait_seconds",
     "CancelResult",
     "ClaimGates",
     "ComparisonModelCaller",
@@ -655,7 +679,10 @@ __all__ = [
     "ai_work_kind_of",
     "build_ai_estimate",
     "build_series_summary",
+    "read_ai_job_route",
+    "read_ai_legacy_route",
     "read_ai_route",
+    "read_ai_rule_route",
     "SpecificationReader",
     "SpecMethod",
     "SpecificationService",
