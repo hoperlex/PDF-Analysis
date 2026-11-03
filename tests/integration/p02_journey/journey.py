@@ -245,6 +245,13 @@ P02_TABLES = (
     "stage_assembly", "stage_assembly_member", "stage_pair", "stage_link_revision",
     "stage_link_item", "stage_text_fragment", "stage_text_exclusion",
     "stage_text_difference", "stage_text_hint", "stage_chain_run", "stage_chain_step",
+    # `0042_comparison_stage_review` (`CMP-SEAL-C4`): the stage AI's units and answers, the graphic evidence, the link
+    # repairs, the expert cards with their evidence and verdicts, and the durable batches. The journey runs the AR text
+    # profile and names none of these operations, so each count is expected unchanged across a replay -- counted
+    # rather than skipped.
+    "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
+    "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
+    "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     # `0037_analysis_presets` (`ANALYSIS-PRESETS-01`). Named executor selections for a run start,
     # append-only (archive is a new revision). Written only by the preset commands (create,
     # revise, archive; administrator role); the journey starts runs by hand and never creates a

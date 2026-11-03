@@ -502,6 +502,39 @@ GUARDED = (
     ("uploadStageUploadPart", "PUT", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/files/suf_01M2545JSD15ETSNNV904X991K/parts"),
     ("pauseStageUpload", "POST", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/pause"),
     ("resumeStageUpload", "POST", "/stage-uploads/stu_01M2545JSD15ETSNNV904X991K/resume"),
+    # `CMP-SEAL-C4` (contract 1.13.0): the stage AI review, link repairs, expert cards and journal, the chain's estimate,
+    # resume and durable batches, and `createStageReviewCard`, all behind the same seam. `BETA-COST-PREFLIGHT-1030`
+    # (1.13.0): the two cost estimates. `HOTFIX-PRESENTATION-INT-1030` (1.14.0): the extended run review, the ZIP import
+    # and the technical comparison report.
+    ("estimateStageChainRun", "GET", "/stage-link-revisions/slk_01M2545JSD15ETSNNV904X991K/chain-estimate"),
+    ("getStageChainBatch", "GET", "/stage-chain-batches/scb_01M2545JSD15ETSNNV904X991K"),
+    ("listStageAiReviews", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/ai-reviews"),
+    ("listStageClassifications", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/classifications"),
+    ("getStageSynthesis", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/synthesis"),
+    ("listStageGraphicEvidence", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/graphic-evidence"),
+    ("listStageLinkRepairs", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/sheet-link-repairs"),
+    ("listStageChangeCards", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/cards"),
+    ("getStageChangeCard", "GET", "/stage-change-cards/ccd_01M2545JSD15ETSNNV904X991K"),
+    ("listStageCardVerdicts", "GET", "/stage-change-cards/ccd_01M2545JSD15ETSNNV904X991K/verdicts"),
+    ("getStageChangeJournal", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/journal"),
+    ("streamStageChangeJournalXlsx", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/journal.xlsx"),
+    ("streamStageChangeJournalPdf", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/journal.pdf"),
+    ("streamStageChangeJournalHtml", "GET", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/journal.html"),
+    ("getStageProfileText", "GET", "/comparison-page-profiles/cpr_01M2545JSD15ETSNNV904X991K/stage-text"),
+    ("getStageAssembly", "GET", "/stage-assemblies/sas_01M2545JSD15ETSNNV904X991K"),
+    ("resumeStageChainRun", "POST", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/resume"),
+    ("startStageChainBatch", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/stage-chain-batches"),
+    ("pauseStageChainBatch", "POST", "/stage-chain-batches/scb_01M2545JSD15ETSNNV904X991K/pause"),
+    ("resumeStageChainBatch", "POST", "/stage-chain-batches/scb_01M2545JSD15ETSNNV904X991K/resume"),
+    ("cancelStageChainBatch", "POST", "/stage-chain-batches/scb_01M2545JSD15ETSNNV904X991K/cancellation"),
+    ("undoStageLinkRepair", "POST", "/stage-link-repairs/crp_01M2545JSD15ETSNNV904X991K/undo"),
+    ("applyStageCardVerdicts", "POST", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/card-verdicts"),
+    ("createStageReviewCard", "POST", "/stage-chain-runs/crn_01M2545JSD15ETSNNV904X991K/review-cards"),
+    ("getExtendedRunReview", "GET", "/runs/run_01M2545JSD15ETSNNV904X991K/extended-review"),
+    ("streamComparisonTechnicalReport", "GET", "/comparison-series/cser_01M2545JSD15ETSNNV904X991K/technical-report"),
+    ("estimateRunCost", "POST", "/runs/cost-estimate"),
+    ("estimateArV3GroupCost", "POST", "/ar-v3-beta/groups/cost-estimate"),
+    ("importComparisonZip", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-zip-uploads"),
 )
 
 #: `EXEC-PULL-01`. The four operations a runner calls with a runner token, and the fifth that
@@ -1088,6 +1121,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         if _imports_the_seam_accessor(path)
     )
     assert subject_readers == [
+        # `BETA-COST-PREFLIGHT-1030`: a group start carries the priced consent, and the consent records WHO gave it
+        # (``cost_actor_uid``); that only an expert may start is the role register's, and the consent is bound to a digest
+        # the start re-computes.
+        "ar_v3_groups.py",
         "auth.py",
         # `W59-DECISION-CARRYOVER-01`: the carried decision records WHO confirmed it, as
         # `appendDecision` does; whether they may is the role register's (expert) and the
@@ -1108,6 +1145,12 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         "comparison_specification.py",
         # `CMP-SEAL-C3`: the stage writes pass the verified actor to the eventual expert
         # command; role admission stays in the seam and the command boundary.
+        # `CMP-SEAL-C4`: the chain's resume, the durable batches, a link repair's undo, a review card and the expert's verdicts
+        # pass the verified actor (``user_uid``) to the command, which records it; that only an expert may is the role register's
+        # (``resumeStageChainRun``, ``startStageChainBatch``, ``undoStageLinkRepair``, ``createStageReviewCard``,
+        # ``applyStageCardVerdicts`` and the batch controls are expert writes) and the command's own re-read of the role set.
+        # Of the reads only ``estimateStageChainRun`` hands the caller on (``user_uid``), to its service; the others take no subject.
+        "comparison_stage_c4.py",
         "comparison_stage_links.py",
         "comparison_stage_pairs.py",
         "comparison_stage_runs.py",
@@ -1157,6 +1200,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # the command's own re-read of the role set. The runner's own five operations read the
         # runner principal (`CurrentRunner`), never the subject.
         "runner.py",
+        # `BETA-COST-PREFLIGHT-1030`: a start that carries the priced consent records WHO gave it (``cost_actor_uid``, only
+        # when ``cost_consent`` is present); who may start a Run is the role register's, and the consent is bound to the digest
+        # the start re-computes. Nothing else in the module reads the subject.
+        "runs.py",
         # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
         # same reason as the priced specification below: the read re-reads the role set in its
         # own transaction; whether they may is the role register's (any one role).

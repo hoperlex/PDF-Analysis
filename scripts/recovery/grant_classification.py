@@ -33,9 +33,9 @@ The four classes (``ADR-0021`` section 3 names the first two; the other two are 
 ``none``         nothing. Empty today; the class exists so that a future table the application must
                  not even read (a secret held for the operator) has somewhere to be.
 
-Two ``append-only`` tables carry one more right, on one column: ``UPDATE`` on the first primary-key
+Three ``append-only`` tables carry one more right, on one column: ``UPDATE`` on the first primary-key
 column (:data:`LOCK_ONLY_UPDATE`). ``SELECT ... FOR UPDATE`` and ``FOR NO KEY UPDATE`` need an
-``UPDATE`` privilege on at least one column, and the code locks those two tables' rows. The
+``UPDATE`` privilege on at least one column, and the code locks those three tables' rows. The
 immutability trigger fires on a row *update*, not on a row *lock*, so the lock works and every
 actual ``UPDATE`` is still refused (by the column privilege for any other column, by the trigger
 for the key column).
@@ -224,6 +224,21 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # is only selected is still never written. The set is empty at head.
 ))
 
+#: Writes whose table name is not a literal in the SQL text, so :func:`observed_statements` cannot read it from the string: an f-string
+#: whose ``INSERT INTO`` / ``UPDATE`` / ``DELETE FROM`` is followed by a substituted name. Each entry is a source file (relative to
+#: ``src/auditmanager``), the verb, the tables the substitution can name, and why. :func:`dynamic_write_problems` requires the file to
+#: hold exactly that statement and every such statement in the tree to be declared here, so a new one is red until somebody says which
+#: tables it writes; :func:`observed_statements` then counts the declared tables as written by it.
+DYNAMIC_WRITES: dict[str, tuple[str, frozenset[str], str]] = {
+    "comparison/stage_ai/repository.py": (
+        "INSERT",
+        frozenset(("stage_ai_review", "stage_ai_classification", "stage_ai_synthesis")),
+        "StageAiRepository.record_answer: INSERT INTO {table}({table}_id, stage_chain_run_id, stage_ai_unit_id, content_key, "
+        "group_id, source_sha256, {field}, model_identity) where table is one of the three in ANSWER_TABLES (review, classify, "
+        "synthesize); the tables are immutable (am_immutable_row), so the code only inserts.",
+    ),
+}
+
 #: ``SELECT``.
 READ_ONLY = frozenset((
     "alembic_version",            # only the migrator moves the head
@@ -243,6 +258,11 @@ LOCK_ONLY_UPDATE = {
     "document_version_classification": (
         "documents/repository.py _LOCK_CLASSIFICATION: SELECT version_uid FROM document_version_classification "
         "... FOR NO KEY UPDATE; two corrections of one version serialise on the original row."
+    ),
+    "stage_assembly": (
+        "comparison/stage/assemblies.py StageAssemblyService.revise: SELECT project_uid FROM stage_assembly WHERE "
+        "stage_assembly_id = :assembly FOR UPDATE; two revisions of one assembly serialise on its row, which protects "
+        "base_member_no (`0041_comparison_stage_core`, CMP-SEAL-C3). am_immutable_row fires on UPDATE, not on a lock."
     ),
 }
 
@@ -384,13 +404,57 @@ def _statements(path: Path) -> Iterable[tuple[int, str]]:
             yield node.lineno, " ".join(parts)
 
 
+def _parenthesis_groups(sql: str) -> tuple[list[tuple[int, int]], list[int]]:
+    """The ``(open, close)`` of every closed parenthesis group in ``sql``, and the opening of each group still open at the end.
+
+    A single-quoted literal is skipped, so a bracket inside one is not a group.
+    """
+    closed: list[tuple[int, int]] = []
+    still_open: list[int] = []
+    in_literal = False
+    for index, char in enumerate(sql):
+        if in_literal:
+            in_literal = char != "'"
+        elif char == "'":
+            in_literal = True
+        elif char == "(":
+            still_open.append(index)
+        elif char == ")" and still_open:
+            closed.append((still_open.pop(), index))
+    return closed, still_open
+
+
+def _is_a_from_item(sql: str, open_index: int) -> bool:
+    """Whether the parenthesis of ``sql`` at ``open_index`` opens a derived table (after ``FROM``, ``JOIN``, ``LATERAL`` or a comma).
+
+    Any other opening -- ``IN (``, ``EXISTS (``, ``= (``, ``AS (`` of a ``WITH`` query -- is a sub-query expression or a common
+    table expression, and a locking clause does not reach into those.
+    """
+    before = sql[:open_index].rstrip()
+    return before.endswith(",") or re.search(r"\b(?:FROM|JOIN|LATERAL)$", before, re.IGNORECASE) is not None
+
+
 def _locked_tables(statement: str, tables: frozenset[str]) -> set[str]:
-    """Tables a ``FOR UPDATE`` / ``FOR SHARE`` in the statement locks, aliases resolved."""
+    """Tables a ``FOR UPDATE`` / ``FOR SHARE`` in the statement locks, aliases resolved.
+
+    PostgreSQL applies a locking clause to the ``FROM`` items of the ``SELECT`` that carries it, and to the tables inside
+    a derived table among them; a table read only in a ``WHERE`` sub-query (``IN (SELECT ...)``, ``EXISTS (...)``) or in a
+    ``WITH`` query is read, not locked (measured: ``pg_locks`` shows ``RowShareLock`` on the outer table and
+    ``AccessShareLock`` on the sub-query's). A clause inside a sub-query belongs to that sub-query and reaches nothing
+    outside it. The scan follows the same scope, so it reports what the statement locks and not every table it names.
+    """
     found: set[str] = set()
     for lock in _LOCK.finditer(statement):
+        prefix = statement[: lock.start()] + " "
+        closed, still_open = _parenthesis_groups(prefix)
+        scope = still_open[-1] + 1 if still_open else 0
+        expressions = [
+            (start, end) for start, end in closed if start >= scope and not _is_a_from_item(prefix, start)
+        ]
         relations = [
             (m.group("table").lower(), (m.group("alias") or "").lower())
-            for m in _RELATION.finditer(statement[: lock.start()] + " ")
+            for m in _RELATION.finditer(prefix, scope)
+            if not any(start < m.start() < end for start, end in expressions)
         ]
         relations = [(t, a if a not in _NOT_ALIASES else "") for t, a in relations]
         if lock.group("of"):
@@ -400,6 +464,45 @@ def _locked_tables(statement: str, tables: frozenset[str]) -> set[str]:
         else:
             found |= {t for t, _ in relations} & tables
     return found
+
+
+_DYNAMIC_WRITE = re.compile(r"(\bINSERT\s+INTO|\bDELETE\s+FROM|(?<![A-Za-z_])UPDATE(?:\s+ONLY)?)\s*$", re.IGNORECASE)
+
+
+def _dynamic_writes(path: Path) -> list[tuple[int, str]]:
+    """The ``(line, verb)`` of every f-string in a module whose write verb is followed by a substituted table name."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not isinstance(node, ast.JoinedStr):
+            continue
+        for part, following in zip(node.values, node.values[1:]):
+            if (isinstance(part, ast.Constant) and isinstance(part.value, str)
+                    and isinstance(following, ast.FormattedValue)):
+                match = _DYNAMIC_WRITE.search(part.value)
+                if match:
+                    verb = match.group(1).split()[0].upper()
+                    found.append((node.lineno, verb))
+    return found
+
+
+def dynamic_write_problems(source_root: Path) -> list[str]:
+    """Substituted-name writes that :data:`DYNAMIC_WRITES` does not declare, and declarations the code no longer holds."""
+    problems: list[str] = []
+    seen: dict[str, set[str]] = {}
+    for path in sorted(source_root.rglob("*.py")):
+        for line, verb in _dynamic_writes(path):
+            seen.setdefault(str(path.relative_to(source_root)), set()).add(verb)
+            declared = DYNAMIC_WRITES.get(str(path.relative_to(source_root)))
+            if declared is None or declared[0] != verb:
+                problems.append(f"{path.relative_to(source_root)}:{line} writes ({verb}) a table named by a substitution "
+                                "that DYNAMIC_WRITES does not declare")
+    for relative, (verb, tables, _why) in sorted(DYNAMIC_WRITES.items()):
+        if verb not in seen.get(relative, set()):
+            problems.append(f"DYNAMIC_WRITES declares a {verb} in {relative}, which holds none")
+        unknown = sorted(tables - coverage.TABLES)
+        if unknown:
+            problems.append(f"DYNAMIC_WRITES names {unknown}, which are not tables of the schema")
+    return problems
 
 
 def observed_statements(source_root: Path, tables: frozenset[str] | None = None) -> dict[str, Observed]:
@@ -425,6 +528,12 @@ def observed_statements(source_root: Path, tables: frozenset[str] | None = None)
                 note(match.group(1).lower(), "DELETE", path, line)
             for table in _locked_tables(statement, frozenset(names)):
                 note(table, "LOCK", path, line)
+        declared = DYNAMIC_WRITES.get(str(path.relative_to(source_root)))
+        if declared is not None:
+            for line, verb in _dynamic_writes(path):
+                if verb == declared[0]:
+                    for table in sorted(declared[1]):
+                        note(table, verb, path, line)
     return {t: Observed(frozenset(verbs[t]), tuple(sorted(where[t]))) for t in sorted(verbs)}
 
 
@@ -772,9 +881,9 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "ALL_TABLE_PRIVILEGES", "APPEND_ONLY", "APPEND_ONLY_BY_CODE_EVIDENCE", "CALLABLE_FUNCTIONS", "CLASS_PRIVILEGES", "GrantClassificationRefused",
+    "ALL_TABLE_PRIVILEGES", "APPEND_ONLY", "APPEND_ONLY_BY_CODE_EVIDENCE", "CALLABLE_FUNCTIONS", "CLASS_PRIVILEGES", "DYNAMIC_WRITES", "GrantClassificationRefused",
     "LOCK_ONLY_UPDATE", "NONE", "Observed", "READ_ONLY", "READ_WRITE", "TRIGGER_FUNCTIONS",
-    "audit_grant_classification", "block_markers", "classification_problems", "evidence_problems",
+    "audit_grant_classification", "block_markers", "classification_problems", "dynamic_write_problems", "evidence_problems",
     "extract_block", "immutable_tables", "observed_statements", "render_block", "render_sql",
     "script_drift", "sequence_privileges", "table_class", "table_privileges", "write_blocks",
 ]

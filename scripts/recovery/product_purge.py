@@ -235,6 +235,10 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # Internal raw-multipart checkpoint of CMP-STAGE-PAIR-01. The public
     # complete_stage_upload_file receipt follows PDF/ZIP admission later.
     "stage_raw_completion",
+    # `StageAssemblyService` (``comparison/stage/assemblies.py``): the receipt of each member the create and revise acts
+    # append or reverse. ``stage_assembly_member.command_id`` references it (ON DELETE RESTRICT), so it is deleted only
+    # after the member table is truncated, like every other product receipt.
+    "stage_assembly_member_add", "stage_assembly_member_remove",
 ))
 
 #: Work that may be executing or resumed. The C3 upload and chain rows are kept from a

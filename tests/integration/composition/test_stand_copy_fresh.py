@@ -342,8 +342,11 @@ class TestWhatCountsAsPending:
         )
         assert completed.returncode == 0, completed.stderr
         heads = completed.stdout.split()
+        # The expected side reads the files itself and takes either quote style (`0043_stage_ai_generations` writes its
+        # `revision` in single quotes, which Python and alembic accept): what the migrations name is the truth here, and
+        # `checkout_heads` is the thing under test, so its own pattern must not be what decides the expected head.
         revisions = sorted(
-            re.search(r'^revision(?:: str)? = "([^"]+)"', path.read_text(encoding="utf-8"), re.M).group(1)  # type: ignore[union-attr]
+            re.search(r'^revision(?:: str)? = ["\']([^"\']+)["\']', path.read_text(encoding="utf-8"), re.M).group(1)  # type: ignore[union-attr]
             for path in (ROOT / "db/migrations/versions").glob("*.py")
         )
         assert len(heads) == 1 and heads[0] == revisions[-1], (heads, revisions[-3:])

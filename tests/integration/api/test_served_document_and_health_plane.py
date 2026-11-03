@@ -96,179 +96,116 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             if method in ("get", "post", "put", "patch", "delete")
             and "422" in operation["responses"]
         }
+        # Measured against `contracts/api/v1/openapi.json` 1.16.0 (`EXEC2-FIX-CMP-INVENTORY`): 185 of the 277 operations declare
+        # the `422` envelope. Written out one by one, sorted, and not read back from the document under test. The earlier
+        # literal held 142; the 43 it lacked are the operations of contracts 1.13.0 to 1.16.0 (the stage review, the executor
+        # enrollment, install, group and routing operations, the cost estimates, the ZIP import and the technical report).
+        # An operation is added here only when its contract declares the `422`; an operation that does not is still refused
+        # FastAPI's own validation schema by the assertions above. Entries for contract 1.17.0 are added by its seal.
         assert declared_422 == {
+            "appendComparisonVersionOrder",
             "appendDecision",
-            "createProject",
+            "applyComparisonMatrixEdits",
+            "applyStageCardVerdicts",
+            "applyStageSheetMap",
+            "approveRegistration",
+            "approveSheetPairing",
+            "archiveAnalysisPreset",
+            "archiveExecutorConnection",
+            "archiveExecutorGroup",
+            "cancelRun",
+            "cancelStageChainBatch",
+            "carryOverDecision",
             "changePassword",
+            "claimExecutorTask",
+            "classifyDocumentVersion",
+            "compareDocumentVersions",
+            "completeComparisonUploadFile",
+            "completeStageUploadFile",
+            "confirmComparisonUploadSet",
+            "confirmExecutorAgentInstallHostKey",
+            "confirmStagePair",
+            "confirmStageUploadCandidate",
+            "continueComparisonReport",
+            "correctVersionClassification",
+            "createAnalysisPreset",
+            "createAssignment",
+            "createComparisonReport",
+            "createComparisonUpload",
+            "createExecutorAgentInstall",
+            "createExecutorConnection",
+            "createExecutorGroup",
+            "createProject",
+            "createStageAssembly",
+            "createStageReviewCard",
+            "createStageUpload",
+            "decideOptimisationProposal",
+            "downloadAgentPackage",
+            "enqueueComparisonLaunch",
+            "estimateArV3GroupCost",
+            "estimateComparisonAiSheetChanges",
+            "estimateRunCost",
+            "estimateStageChainRun",
+            "exportRunXlsx",
+            "extendExecutorTaskClaim",
+            "failExecutorTask",
+            "generateComparisonSummary",
+            "generateExecutorSshKey",
+            "getEffectiveVendorLists",
+            "getExecutorAgentInstall",
+            "getExecutorConnection",
+            "getExecutorGroup",
+            "getExecutorGroupCapacity",
+            "getExecutorTaskImage",
+            "getSectionSpecification",
+            "getSpecificationPrices",
+            "getStageAssembly",
+            "getStageChainBatch",
+            "getStageChangeCard",
+            "getStageChangeJournal",
+            "getStageProfileText",
+            "getStageSynthesis",
+            "importComparisonZip",
+            "issueExecutorEnrollment",
+            "issueRunnerToken",
             "issueToken",
+            "listAssignments",
+            "listComparisonAiLinks",
+            "listComparisonAiPairHints",
+            "listComparisonMatrixEdits",
+            "listComparisonReports",
+            "listComparisonReviewSheets",
+            "listComparisonSeries",
+            "listComparisonSheetDescriptionHistory",
+            "listComparisonSheetPairs",
+            "listComparisonSpecificationChanges",
+            "listComparisonSpecifications",
+            "listComparisonUploads",
+            "listComparisonVersionOrders",
             "listDecisionHistory",
             "listDecisions",
             "listDocuments",
-            "listProjects",
-            "listRunFindings",
-            "listRuns",
-            "listVersions",
-            "startRun",
-            "streamDocumentVersionContent",
-            "uploadDocument",
-            # `W49-SEAL-01`: every new GET or POST that takes a query or a body.
-            "approveRegistration",
-            "listRegistrations",
-            "listUsers",
-            "readRegistrationStatus",
-            "rejectRegistration",
-            "resetUserPassword",
-            "submitRegistration",
-            # Previously present PATCH/PUT operations are covered by this exhaustive
-            # method sweep as well as W53's new PUT operations.
-            "updateMyProfile",
-            "updateUser",
-            "markReleaseNotesRead",
-            # `W53-SEAL-01`: query reads and four execution commands.
-            "listExecutionQueue",
             "listExecutionJournal",
-            "cancelRun",
-            "reauditRun",
-            "setJobPriority",
-            "setExecutionPaused",
-            # `W54-SEAL-01`: the worker registry's paged read and intake switch.
-            "listWorkers",
-            "setWorkerIntake",
-            # `W55A-SEAL-01`: every norms operation that takes a query, a range or a body.
-            # `getNormDocument` takes only a path identity and declares none.
-            "searchNorms",
-            "listNormParagraphs",
-            "streamNormDocumentContent",
-            "listNormSnapshots",
-            "listNormSnapshotEvents",
-            "setCurrentNormSnapshot",
-            # `W55B-SEAL-01`: the portal-block listing takes a cursor and a limit. The crop read
-            # takes only path identities and declares none.
-            "listVersionPortalBlocks",
-            # `W59-SECTION-SEAL-01`: the classification takes a body. The section review
-            # takes only path identities and declares none.
-            "classifyDocumentVersion",
-            # `CLASSIFICATION-CORRECTION-01`: the correction takes a body.
-            "correctVersionClassification",
-            # `W59-VERSION-COMPARE-01`: a required target version and bounded paging.
-            "compareDocumentVersions",
-            # `W59-VERSION-UPLOAD-01`: the next version takes a multipart body.
-            "uploadDocumentVersion",
-            # `W59-DECISION-CARRYOVER-01`: the carryover takes a closed body.
-            "carryOverDecision",
-            # `COMPARE-PERSISTED-SUMMARY-01`: approving and withdrawing a sheet pairing take closed bodies.
-            "approveSheetPairing",
-            "withdrawSheetPairing",
-            "generateComparisonSummary",
-            # `W57B-NORMS-CATALOGUE-XLSX-01`: the catalogue's filters and paging, and the
-            # workbook's source refusals (`storage_integrity_error`, `required_norm_unavailable`).
+            "listExecutionQueue",
             "listNormDocuments",
-            "exportRunXlsx",
-            # `W61-DISPATCHER-01`: a creation and a move take bodies, the listing filters and
-            # pages. Reading one assignment takes only its path identity and declares none.
-            "createAssignment",
-            "listAssignments",
-            "transitionAssignment",
-            # `W60-PRICE-LIST-01`: a multipart upload, a paged read, two closed bodies, and
-            # two reads whose project identity is pattern-checked.
-            "uploadPriceList",
-            "listPriceListRevisions",
-            "listPriceListPositions",
-            "getEffectiveVendorLists",
-            "setGlobalVendorList",
-            "setProjectVendorList",
-            # `W60-OPT-MATCH-01`: the priced specification's bounded paging.
-            "getSpecificationPrices",
-            # `W60-OPT-PROPOSALS-01`: a keyed start, a project read with filters, a paged
-            # read and a keyed decision with a closed body. The decision history and the CSV
-            # take a pattern-checked path identity only and declare no 422.
-            "startOptimisationPass",
+            "listNormParagraphs",
+            "listNormSnapshotEvents",
+            "listNormSnapshots",
             "listOptimisationPasses",
             "listOptimisationProposals",
-            "decideOptimisationProposal",
-            # `W63-SECTION-FORM7-01`: a path code, filters and paging.
-            "getSectionSpecification",
-            # `EXEC-SEAL-01`: the executor operations that take a path identity, a body or both.
-            # The two lists take no input and declare no 422.
-            "createExecutorConnection",
-            "getExecutorConnection",
-            "reviseExecutorConnection",
-            "archiveExecutorConnection",
-            "setExecutorSecret",
-            "generateExecutorSshKey",
-            "requestExecutorProbe",
-            "setExecutorRoute",
-            # `ANALYSIS-PRESETS-01`: the three writes take a body, a path identity or both.
-            "createAnalysisPreset",
-            "reviseAnalysisPreset",
-            "archiveAnalysisPreset",
-            # `EXEC-PULL-01`: the pull channel's six operations take a path identity, a body or both.
-            "issueRunnerToken",
-            "revokeRunnerToken",
-            "claimExecutorTask",
-            "extendExecutorTaskClaim",
-            "submitExecutorTaskAnswer",
-            "failExecutorTask",
-            # `EXEC-IMAGE-DELIVERY-01`: the runner's image read takes two pattern-checked path
-            # identities (`task_id`, `blob_id`) and declares the catalog's validation envelope.
-            "getExecutorTaskImage",
-            # `AR-V3-BETA-SIX-RUN-02`: starting a six-Run group takes a keyed closed body.
-            "startArV3BetaGroup",
-            # `CMP-SEAL-C0`: the declared batch, the part and its completion, the confirmed set, the
-            # appended order and the two listings take a body, a number or a bound the request can
-            # break; the tile takes three required bounded query numbers.
-            "createComparisonUpload",
-            "listComparisonUploads",
-            "uploadComparisonUploadPart",
-            "completeComparisonUploadFile",
-            "confirmComparisonUploadSet",
-            "listComparisonVersionOrders",
-            "appendComparisonVersionOrder",
-            "listVersionPageProfiles",
-            "streamVersionPageTile",
-            # `CMP-SEAL-C1`: the batch of edits and the undo take a closed body, the start of a series an
-            # optional closed body, and the three listings and the pair tile a bound or a required query.
-            "listComparisonMatrixEdits",
-            "applyComparisonMatrixEdits",
-            "undoComparisonMatrixEdit",
-            "listComparisonAiLinks",
-            "startComparisonSeries",
-            "listComparisonSeries",
-            "listComparisonSheetPairs",
-            "streamComparisonPairTile",
-            # `CMP-SEAL-C2`: every start takes a closed consent body, a resume an optional consent, the listings
-            # a bound, the specification changes a ``kind``, the estimate of a series description ``only_failed``,
-            # the queue a closed list of items, the creation of a report a closed body, and the upload of a
-            # report's source a ``kind`` and a size bound.
-            "startComparisonAiPairCheck",
-            "resumeComparisonAiPairCheck",
-            "listComparisonAiPairHints",
-            "estimateComparisonAiSheetChanges",
-            "startComparisonAiSheetChanges",
-            "resumeComparisonAiSheetChanges",
-            "retryComparisonAiSheetChanges",
-            "startComparisonSheetDescription",
-            "listComparisonSheetDescriptionHistory",
-            "listComparisonReviewSheets",
-            "listComparisonSpecifications",
-            "startComparisonSpecification",
-            "listComparisonSpecificationChanges",
-            "enqueueComparisonLaunch",
-            "listComparisonReports",
-            "createComparisonReport",
-            "uploadComparisonReportSource",
-            "startComparisonReport",
-            "continueComparisonReport",
-            "prepareComparisonClientReport",
-            # `CMP-SEAL-C3`: twenty-two stage operations accept a body, a query bound or
-            # a part number and declare the catalog's validation envelope.
-            "applyStageSheetMap",
-            "completeStageUploadFile",
-            "confirmStagePair",
-            "confirmStageUploadCandidate",
-            "createStageAssembly",
-            "createStageUpload",
+            "listPriceListPositions",
+            "listPriceListRevisions",
+            "listProjects",
+            "listRegistrations",
+            "listRunFindings",
+            "listRuns",
+            "listStageAiReviews",
+            "listStageCardVerdicts",
             "listStageChainRuns",
+            "listStageChangeCards",
+            "listStageClassifications",
+            "listStageGraphicEvidence",
+            "listStageLinkRepairs",
             "listStagePairSuggestions",
             "listStagePairs",
             "listStageRawDifferences",
@@ -279,35 +216,128 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "listStageTextFragments",
             "listStageTextHints",
             "listStageUploads",
+            "listUsers",
+            "listVersionPageProfiles",
+            "listVersionPortalBlocks",
+            "listVersions",
+            "listWorkers",
+            "markReleaseNotesRead",
+            "pauseStageChainBatch",
+            "prepareComparisonClientReport",
+            "readRegistrationStatus",
+            "reauditRun",
             "recomputeStageTextEvidence",
+            "redeemExecutorEnrollment",
+            "rejectRegistration",
+            "reportRunnerHealth",
+            "requestExecutorProbe",
+            "resetUserPassword",
+            "resumeComparisonAiPairCheck",
+            "resumeComparisonAiSheetChanges",
+            "resumeStageChainBatch",
+            "resumeStageChainRun",
+            "retryComparisonAiSheetChanges",
+            "reviseAnalysisPreset",
+            "reviseExecutorConnection",
+            "reviseExecutorGroup",
             "reviseStageAssembly",
+            "revokeRunnerToken",
+            "searchNorms",
+            "setCurrentNormSnapshot",
+            "setExecutionPaused",
+            "setExecutorIntegrationAuthorisation",
+            "setExecutorRoute",
+            "setExecutorRoutingMode",
+            "setExecutorRoutingRule",
+            "setExecutorSecret",
+            "setGlobalVendorList",
+            "setJobPriority",
+            "setProjectVendorList",
             "setStagePairCompleteness",
+            "setWorkerIntake",
+            "startArV3BetaGroup",
+            "startComparisonAiPairCheck",
+            "startComparisonAiSheetChanges",
+            "startComparisonReport",
+            "startComparisonSeries",
+            "startComparisonSheetDescription",
+            "startComparisonSpecification",
+            "startOptimisationPass",
+            "startRun",
+            "startStageChainBatch",
             "startStageChainRun",
+            "streamComparisonPairTile",
+            "streamComparisonTechnicalReport",
+            "streamDocumentVersionContent",
+            "streamNormDocumentContent",
+            "streamStageChangeJournalHtml",
+            "streamStageChangeJournalPdf",
+            "streamStageChangeJournalXlsx",
+            "streamVersionPageTile",
+            "submitExecutorTaskAnswer",
+            "submitRegistration",
+            "transitionAssignment",
+            "undoComparisonMatrixEdit",
+            "undoStageLinkRepair",
+            "updateMyProfile",
+            "updateUser",
+            "uploadComparisonReportSource",
+            "uploadComparisonUploadPart",
+            "uploadDocument",
+            "uploadDocumentVersion",
+            "uploadPriceList",
             "uploadStageUploadPart",
+            "withdrawSheetPairing",
         }, declared_422
 
+    #: The only properties of the sealed contract (1.16.0) that declare a ``default``, with the value. Written out and not read back
+    #: from the document under test. Each is a real server-side default and none is ``null``: `CMP-SEAL-C4` (commit 558f8cc5)
+    #: gave the chain batch ``with_ai`` (``true``), the resume request ``retry_failed`` and the card evidence ``absence_proven``
+    #: (``false``) and the change card ``carryover`` (``none``); the stage chain's ``engine`` (``classic``, beside
+    #: ``v3_native_text_experimental``) came with the stage-V3 integration (commit af8c69f7, `HOTFIX-STAGE-V3-1030`). A new
+    #: default, or a changed value, is a contract change and fails here until the seal that makes it writes it into this
+    #: register.
+    DECLARED_DEFAULTS = {
+        ("ResumeStageChainRunRequest", "retry_failed"): False,
+        ("StageCardEvidence", "absence_proven"): False,
+        ("StageChainRun", "engine"): "classic",
+        ("StageChangeCard", "carryover"): "none",
+        ("StartStageChainBatchRequest", "engine"): "classic",
+        ("StartStageChainBatchRequest", "with_ai"): True,
+        ("StartStageChainRunRequest", "engine"): "classic",
+    }
+
     def test_no_schema_property_declares_a_default(self) -> None:
-        """The contract declares no ``default`` on any property of any of the 51 schemas.
+        """The contract declares ``default`` on no property but the seven in :data:`DECLARED_DEFAULTS`, and none is ``null``.
 
         ``default: null`` on an optional property says the server substitutes ``null``,
         which is not what an absent property means here -- and the conformance gate
         compares ``default``. ``models.optional_property`` is the declaration of that
         intent; this is the property itself, pinned where a change in how FastAPI chooses
         to generate a schema would be caught whether or not that helper is still there.
+        The register is the exact set the sealed contract carries, so the next default
+        that appears -- in the contract or only in the served document -- is a failure.
         """
-        contract = json.loads(OPENAPI.read_text(encoding="utf-8"))
-        for name, schema in contract["components"]["schemas"].items():
-            for prop, sub in (schema.get("properties") or {}).items():
-                assert "default" not in sub, f"the contract declares one: {name}.{prop}"
+        def defaults(schemas: dict[str, Any]) -> dict[tuple[str, str], Any]:
+            return {
+                (name, prop): sub["default"]
+                for name, schema in schemas.items()
+                for prop, sub in (schema.get("properties") or {}).items()
+                if "default" in sub
+            }
 
-        served = create_documentation_app().openapi()["components"]["schemas"]
-        offenders = [
-            f"{name}.{prop}"
-            for name, schema in served.items()
-            for prop, sub in (schema.get("properties") or {}).items()
-            if "default" in sub
-        ]
-        assert offenders == [], offenders
+        contract = defaults(json.loads(OPENAPI.read_text(encoding="utf-8"))["components"]["schemas"])
+        assert contract == self.DECLARED_DEFAULTS, (
+            f"the contract declares {sorted(set(contract) - set(self.DECLARED_DEFAULTS))} beyond the register, "
+            f"and lacks {sorted(set(self.DECLARED_DEFAULTS) - set(contract))}"
+        )
+        assert None not in contract.values(), "a `default: null` says the server substitutes null"
+
+        served = defaults(create_documentation_app().openapi()["components"]["schemas"])
+        assert served == contract, (
+            f"the served document differs from the contract in its defaults: "
+            f"{sorted(set(served) ^ set(contract))}"
+        )
 
     def test_a_declared_422_is_the_contracts_and_is_never_removed(self) -> None:
         """The removal is narrow, and this is what says so.

@@ -291,6 +291,14 @@ SEALED_STUB_ADDRESSED: frozenset[str] = frozenset({
     "listStageRawDifferences", "listStageSheetMapHistory", "listStageSheetPassports",
     "listStageSheetSuggestions", "listStageTextExclusions", "listStageTextFragments",
     "listStageTextHints", "listStageUploads",
+    # `CMP-SEAL-C4`: the sixteen reads of the stage review, for the same reason. The stage module is off in this app, so
+    # each answers `503 dependency_unavailable` (`test_a_sealed_stub_get_with_a_parent_answers_unavailable` drives every
+    # entry, so a read that is served leaves this set or goes red); with the stage module on each answers `404 not_found`
+    # for an absent identity, which `test_comparison_stage_c4_wiring.py` drives for all twenty-four C4 operations.
+    "estimateStageChainRun", "getStageAssembly", "getStageChainBatch", "getStageChangeCard", "getStageChangeJournal",
+    "getStageProfileText", "getStageSynthesis", "listStageAiReviews", "listStageCardVerdicts", "listStageChangeCards",
+    "listStageClassifications", "listStageGraphicEvidence", "listStageLinkRepairs", "streamStageChangeJournalHtml",
+    "streamStageChangeJournalPdf", "streamStageChangeJournalXlsx",
 })
 
 #: `W55A-SEAL-01`. ``searchNorms`` addresses no parent but is not a listing of everything:
