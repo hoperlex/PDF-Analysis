@@ -4,3 +4,22 @@
   gap: var(--am-gap-sm);
   cursor: pointer;
 }
+
+/* The three ways to start (`EXEC2-WEB-GROUPS-01`): a radio group above the selects. Layout only. */
+.modes {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.modeLabel {
+  margin: 0;
+  font-weight: 600;
+}
+
+.mode {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  cursor: pointer;
+}

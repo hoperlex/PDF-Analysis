@@ -1,0 +1,32 @@
+/*
+ * Layout for the cut-over panel (`EXEC2-WEB-GROUPS-01`). Colour is deliberately absent: the table,
+ * the notes and the buttons take theirs from `globals.css`, where the contrast census measures
+ * them. Every length is a global token.
+ */
+
+.panel {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.previewWrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}

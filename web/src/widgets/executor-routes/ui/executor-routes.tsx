@@ -17,6 +17,13 @@
  * of a run never switches connections. Each use is journaled, and the run's event says
  * «резервное подключение». The editor says so in words, because a standby that someone believes
  * is a retry would hide a failing primary.
+ *
+ * `EXEC2-WEB-GROUPS-01` (ADR-0026 decision 17): this is the **legacy history view** once the routing
+ * mode is `rules`. Under `rules` the server refuses `setExecutorRoute` (`routing_mode_rules`) and new
+ * work is routed by the rule of its kind, so the editors are not drawn: each kind shows the route it
+ * had, as history, with a note that says it no longer decides anything. The mode is read here, and
+ * `history` forces the view: «Правила» draws the routes read-only beside its note while the mode is
+ * still `legacy`. With the mode unread the screen is what it always was; the server enforces the mode.
  */
 
 import { useState } from 'react';
@@ -39,6 +46,7 @@ import {
   useExecutorRoutes,
 } from '@/entities/executor-connection';
 import type { RouteBlocker } from '@/entities/executor-connection';
+import { useExecutorRoutingRules } from '@/entities/executor-group';
 import { CommandFailure, useCommandKey, useSetExecutorRoute } from '@/features/manage-executor-connection';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 
@@ -46,6 +54,11 @@ import styles from './executor-routes.module.css';
 
 export interface ExecutorRoutesProps {
   readonly roles: readonly Role[];
+  /**
+   * Draw the routes as history, without editors. Absent: history exactly when the routing mode is
+   * `rules`; true: always (the read-only copy shown on «Правила»).
+   */
+  readonly history?: boolean | undefined;
 }
 
 /** The kinds of model work that have a route editor: the one run stage that calls a model and, since
@@ -73,10 +86,20 @@ function nameOf(connections: readonly ExecutorConnection[], id: ExecutorConnecti
 }
 
 function RouteSummary({
-  route, connections,
-}: { readonly route: ExecutorRoute | undefined; readonly connections: readonly ExecutorConnection[] }) {
+  route, connections, history,
+}: {
+  readonly route: ExecutorRoute | undefined;
+  readonly connections: readonly ExecutorConnection[];
+  readonly history: boolean;
+}) {
   if (route === undefined) {
-    return <p data-executor-route="none">Подключение не назначено: прогон не начнётся и сообщит об этом.</p>;
+    return (
+      <p data-executor-route="none">
+        {history
+          ? 'Назначения для этого вида работы не было.'
+          : 'Подключение не назначено: прогон не начнётся и сообщит об этом.'}
+      </p>
+    );
   }
   return (
     <dl data-executor-route={route.work_kind}>
@@ -201,9 +224,11 @@ function RouteEditor({
   );
 }
 
-export function ExecutorRoutes({ roles }: ExecutorRoutesProps) {
+export function ExecutorRoutes({ roles, history: forcedHistory }: ExecutorRoutesProps) {
   const list = useExecutorConnections();
   const routes = useExecutorRoutes();
+  const mode = useExecutorRoutingRules();
+  const history = forcedHistory ?? mode.data?.routing_mode.mode === 'rules';
   const items = list.data?.items ?? [];
   const reading = useExecutorConnectionDetails(items.map((item) => item.connection_id));
   const canManage = canExecute(roles, 'connections');
@@ -236,6 +261,12 @@ export function ExecutorRoutes({ roles }: ExecutorRoutesProps) {
 
   return (
     <div className={styles.panel} data-executor-routes>
+      {history && forcedHistory !== true ? (
+        <p className="am-note" role="status" data-executor-routes-history>
+          Включены правила: эти назначения сохранены как история и больше не решают, куда пойдёт работа. Менять их можно
+          только после возврата к основному и резервному подключениям на вкладке «Правила».
+        </p>
+      ) : null}
       {WORK_KINDS.map((workKind) => {
         const route = routes.data.items.find((item) => item.work_kind === workKind);
         return (
@@ -246,8 +277,8 @@ export function ExecutorRoutes({ roles }: ExecutorRoutesProps) {
                 ? `Кто отвечает на запросы к модели на этапе «${WORK_KIND_LABELS[workKind]}».`
                 : `Кто отвечает на запросы к модели в задаче «${WORK_KIND_LABELS[workKind]}».`}
             </p>
-            <RouteSummary route={route} connections={items} />
-            {live.length === 0 ? (
+            <RouteSummary route={route} connections={items} history={history} />
+            {history ? null : live.length === 0 ? (
               <EmptyState
                 title="Нет подключений для назначения"
                 detail="Сначала добавьте подключение на вкладке «Подключения», введите ключ и проверьте его."

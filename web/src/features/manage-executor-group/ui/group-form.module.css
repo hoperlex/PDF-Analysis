@@ -1,0 +1,39 @@
+/*
+ * Layout for the group form (`EXEC2-WEB-GROUPS-01`). Colour is deliberately absent: the hints, the
+ * problem line and the buttons take theirs from `globals.css` (`.am-form__*`, `.am-button`), where
+ * the contrast census measures them. Every length is a global token.
+ */
+
+.members {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.membersLabel {
+  margin: 0;
+  font-weight: 600;
+}
+
+.memberList {
+  display: grid;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.member {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.memberHead {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}

@@ -17,6 +17,10 @@
  * `EXEC2-WEB-CAP-01`: a queued run whose reading says why names it — «В очереди: исполнитель занят»
  * or «В очереди: раннер не в сети» — in the executor line, with the machine value in
  * `data-run-queue-reason`.
+ *
+ * `EXEC2-WEB-GROUPS-01`: a run admitted by a rule or a group says «Плановая модель…» before dispatch
+ * and «Фактическая модель…, подключение…» after it (`data-run-binding` `planned` or `bound`); it never
+ * names a connection before dispatch has chosen one.
  */
 
 import Link from 'next/link';
@@ -53,7 +57,9 @@ export function RunRow({ run, href }: RunRowProps) {
             : ` · завершён ${formatInstant(run.terminal_at)}`}
         </p>
         {executor === null ? null : (
-          <p data-run-executor data-run-queue-reason={executor.queueReason}>{runExecutorSentence(executor)}</p>
+          <p data-run-executor data-run-queue-reason={executor.queueReason} data-run-binding={executor.phase}>
+            {runExecutorSentence(executor)}
+          </p>
         )}
         {preset === null ? null : <p data-run-preset>{runPresetSentence(preset)}</p>}
         <p>

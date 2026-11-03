@@ -1,0 +1,15 @@
+/*
+ * «Правила» (`EXEC2-WEB-GROUPS-01`). Layout only; no colour is declared here. The table and the
+ * notes take their ink and frame from `globals.css`.
+ */
+
+.panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tableWrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}

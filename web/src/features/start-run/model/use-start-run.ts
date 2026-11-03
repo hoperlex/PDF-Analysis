@@ -15,6 +15,10 @@
  * start this command always made; a chosen connection is never replaced by the stand, so a
  * refusal of it is shown as itself and not retried on another.
  *
+ * `EXEC2-WEB-GROUPS-01`: `executor_group_id` is the third selector, exclusive with the other two
+ * (`./start-run-intent.ts`, `./start-mode.ts`). A run admitted on a group answers `binding_state`
+ * `pending` with the planned model and no connection, and the run page words it as a plan.
+ *
  * The 202 body is a full `RunStatus`, so it seeds `queryKeys.runs.detail(run_id)`: the
  * run screen opens on the run's real first state instead of on a loading state for a
  * reading it was already handed.

@@ -25,6 +25,16 @@
  * version with another preset is another request. The server reads the preset's current version when
  * the run starts; the run page says which version it used.
  *
+ * `EXEC2-WEB-GROUPS-01` (ADR-0026 decisions 12 to 14): three ways to start, chosen with a radio
+ * (`../model/start-mode.ts`). «Автоматически (по типу задачи)» sends no selector and is what the control
+ * always did; «Группа исполнителей» shows the group select and sends `executor_group_id`;
+ * «Конкретное подключение» is the preset and the executor selects above, and sends `preset_id` or
+ * `executor_connection_id`. **Exactly one selector is sent**, never two: `startSelectors` is the one place
+ * the choice becomes selectors. A mode whose own choice has not been made («Группа исполнителей» with no
+ * group) would send nothing, which is «Автоматически» under another name, so it keeps both buttons
+ * disabled and says what is missing. Changing a select moves the radio to «Конкретное подключение», and
+ * taking the last choice off returns it to «Автоматически»: the radio always says what will be sent.
+ *
  * There is no provider-mode selector and, on failure, no offer to start the run "in recorded mode
  * instead" — the mode this deployment is configured for is shown on the run and never chosen
  * here. There is no cancel and no re-run carryover: `P3-WEB-01` rules both out for PC-01.
@@ -32,7 +42,7 @@
 
 import { useId, useState } from 'react';
 
-import type { ExecutorConnectionId, PresetId, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
+import type { ExecutorConnectionId, ExecutorGroupId, PresetId, ProjectUid, RunStatus, VersionUid } from '@/shared/api';
 import { ApiError } from '@/shared/api';
 import { CostApproval, ErrorState, LoadingState } from '@/shared/ui';
 import { routes, useIntentKey } from '@/shared/lib';
@@ -51,12 +61,23 @@ import {
   useAnalysisPresets,
 } from '@/entities/analysis-preset';
 
+import type { StartChoice, StartMode } from '../model/start-mode';
+import {
+  START_CHOICE_MISSING,
+  START_MODES,
+  START_MODE_HINTS,
+  START_MODE_LABELS,
+  chooseMode,
+  startChoiceComplete,
+  startSelectors,
+} from '../model/start-mode';
 import { startRunIntent } from '../model/start-run-intent';
 import { useStartRun } from '../model/use-start-run';
 import { useRunCostApproval } from '../model/use-run-cost-approval';
 
 import type { ExecutorListReading } from './executor-select';
 import { ExecutorSelectView } from './executor-select';
+import { GroupSelect } from './group-select';
 import type { PresetListReading } from './preset-select';
 import { PresetSelectView } from './preset-select';
 import { StartRunFailureView } from './start-run-failure';
@@ -118,16 +139,31 @@ function usePresetListReading(executors: ExecutorListReading, chosen: PresetId |
 }
 
 export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunControlProps) {
+  const [mode, setMode] = useState<StartMode>('auto');
   const [chosen, setChosen] = useState<ExecutorConnectionId | null>(null);
   const [chosenPreset, setChosenPreset] = useState<PresetId | null>(null);
+  const [chosenGroup, setChosenGroup] = useState<ExecutorGroupId | null>(null);
   const [relaxedLimits, setRelaxedLimits] = useState(false);
-  const optionsIntent = startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits);
+  // What is sent is decided here and nowhere else: at most one of the three selectors, and none for
+  // «Автоматически». The raw state above can hold leftovers; the selectors cannot.
+  const startChoice: StartChoice = { mode, groupId: chosenGroup, connectionId: chosen, presetId: chosenPreset };
+  const selectors = startSelectors(startChoice);
+  const complete = startChoiceComplete(startChoice);
+  const optionsIntent = startRunIntent(
+    versionUid, selectors.executorConnectionId, selectors.presetId, relaxedLimits, undefined, selectors.executorGroupId,
+  );
   const cost = useRunCostApproval(optionsIntent);
-  const intent = startRunIntent(versionUid, chosen, chosenPreset, relaxedLimits, cost.draftConsent);
+  const intent = startRunIntent(
+    versionUid, selectors.executorConnectionId, selectors.presetId, relaxedLimits, cost.draftConsent,
+    selectors.executorGroupId,
+  );
   const idempotencyKey = useIntentKey(intent.signature);
   const mutation = useStartRun();
   const selectId = useId();
   const presetSelectId = useId();
+  const groupSelectId = useId();
+  const modeLabelId = useId();
+  const modeName = useId();
   const reading = useExecutorListReading();
   const presetReading = usePresetListReading(reading, chosenPreset);
   const presetName =
@@ -136,8 +172,19 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
       : undefined;
   const presetExecutor = presetName?.executorConnectionId ?? null;
 
+  /** The radio: everything that belongs to another mode is dropped, so it cannot be sent from here. */
+  const selectMode = (next: StartMode) => {
+    const after = chooseMode(startChoice, next);
+    setMode(after.mode);
+    setChosenGroup(after.groupId);
+    setChosen(after.connectionId);
+    setChosenPreset(after.presetId);
+    mutation.reset();
+    cost.reset();
+  };
+
   const send = () => {
-    if (cost.consent === undefined || cost.pending || mutation.isPending) return;
+    if (!complete || cost.consent === undefined || cost.pending || mutation.isPending) return;
     mutation.mutate(intent.command(idempotencyKey), {
       onSuccess: (run) => onStarted?.(run),
       onError: (error) => {
@@ -158,35 +205,76 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
 
   return (
     <div className="am-form" data-start-run-control>
-      <PresetSelectView
-        id={presetSelectId}
-        reading={presetReading}
-        value={chosenPreset}
-        disabled={locked}
-        onChange={(next) => {
-          setChosenPreset(next);
-          // A preset fills the executor; a hand choice would be a second way to say the same thing.
-          setChosen(null);
-          mutation.reset();
-          cost.reset();
-        }}
-      />
-      <ExecutorSelectView
-        id={selectId}
-        reading={reading}
-        value={chosenPreset === null ? chosen : presetExecutor}
-        disabled={locked}
-        onChange={(next) => {
-          setChosen(next);
-          mutation.reset();
-          cost.reset();
-        }}
-        lockedBy={
-          chosenPreset === null
-            ? undefined
-            : presetFillsExecutorSentence(presetName?.name ?? 'выбранным')
-        }
-      />
+      <div className={styles.modes} role="radiogroup" aria-labelledby={modeLabelId} data-start-mode={mode}>
+        <p id={modeLabelId} className={styles.modeLabel}>Как выбрать исполнителя</p>
+        {START_MODES.map((value) => (
+          <label key={value} className={styles.mode}>
+            <input
+              type="radio"
+              name={modeName}
+              value={value}
+              checked={mode === value}
+              disabled={locked}
+              data-start-mode-choice={value}
+              onChange={() => selectMode(value)}
+            />
+            {START_MODE_LABELS[value]}
+          </label>
+        ))}
+        <p className="am-form__hint" data-start-mode-hint={mode}>{START_MODE_HINTS[mode]}</p>
+      </div>
+      {mode === 'group' ? (
+        <GroupSelect
+          id={groupSelectId}
+          value={chosenGroup}
+          disabled={locked}
+          onChange={(next) => {
+            setChosenGroup(next);
+            mutation.reset();
+            cost.reset();
+          }}
+        />
+      ) : (
+        <>
+          <PresetSelectView
+            id={presetSelectId}
+            reading={presetReading}
+            value={chosenPreset}
+            disabled={locked}
+            onChange={(next) => {
+              setChosenPreset(next);
+              // A preset fills the executor; a hand choice would be a second way to say the same thing.
+              setChosen(null);
+              // The radio says what will be sent: a preset is «Конкретное подключение», and taking the
+              // last choice off returns to «Автоматически».
+              setMode(next === null ? 'auto' : 'connection');
+              mutation.reset();
+              cost.reset();
+            }}
+          />
+          <ExecutorSelectView
+            id={selectId}
+            reading={reading}
+            value={chosenPreset === null ? chosen : presetExecutor}
+            disabled={locked}
+            needsChoice={mode === 'connection'}
+            onChange={(next) => {
+              setChosen(next);
+              setMode(next === null ? 'auto' : 'connection');
+              mutation.reset();
+              cost.reset();
+            }}
+            lockedBy={
+              chosenPreset === null
+                ? undefined
+                : presetFillsExecutorSentence(presetName?.name ?? 'выбранным')
+            }
+          />
+        </>
+      )}
+      {!complete && mode !== 'auto' ? (
+        <p className="am-note" role="status" data-start-choice-missing={mode}>{START_CHOICE_MISSING[mode]}</p>
+      ) : null}
       <label className={styles.limitToggle}>
         <input
           type="checkbox"
@@ -205,7 +293,7 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
           ? 'Прикладной денежный потолок отключён; фактические вызовы и расход записываются. Ответ до 64 000 токенов за вызов, предел провайдера может быть ниже.'
           : 'Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.'}
       </p>
-      <button type="button" className="am-button" disabled={locked} onClick={() => { mutation.reset(); cost.request(); }}>
+      <button type="button" className="am-button" disabled={locked || !complete} onClick={() => { mutation.reset(); cost.request(); }}>
         Оценить стоимость
       </button>
       {cost.pending ? <LoadingState what="оценка стоимости" /> : null}
@@ -223,7 +311,7 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
       {cost.estimate === null ? null : <CostApproval estimate={cost.estimate} ceiling={cost.ceiling} approved={cost.approved}
         uncapped={relaxedLimits}
         disabled={locked} onCeilingChange={cost.setCeiling} onApprovedChange={cost.setApproved} />}
-      <button type="button" className="am-button" onClick={send} disabled={locked || cost.consent === undefined}>
+      <button type="button" className="am-button" onClick={send} disabled={locked || !complete || cost.consent === undefined}>
         Запустить прогон
       </button>
       <p className="am-note">
