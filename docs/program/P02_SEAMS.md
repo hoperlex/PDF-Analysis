@@ -1018,6 +1018,15 @@ legacy routes to rules, bound to the `preview_digest` that was shown, and its ro
 `wait_reason` and `waiting_since`: with a group the connection is chosen at dispatch. The routing mode stays
 `legacy` until `setExecutorRoutingMode` moves it. The catalogue gains no error code.
 
+`UI-PARITY-P0A` (contract `1.17.0`, no migration) added the read-only filters and fields the dashboard and the knowledge base
+need for the project chosen in the header, and no operation: `getDashboardSummary` takes an optional `project_uid` query
+parameter (every panel is then that project's by the definitions it already has; an unknown project is `not_found`, a
+malformed one `validation_failed`, and the operation stays any one role), and `listDecisions` takes the same optional
+`project_uid` (a filter on the finding, not a parent: no `not_found`). `DecisionRecord` gains `document_uid`, `version_uid`,
+`project_name`, `document_name` (joined at read time, stored nowhere) and the optional confirmed `section` of the finding's
+version, and `DecisionRecordPage` gains `total`, the count of entries matching the filters. Neither operation is keyed, and
+the catalogue gains no error code.
+
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
 identical paragraph, found by `W45-JUDGE-A` on 2026-09-25 and not by the guard. **Both sentences

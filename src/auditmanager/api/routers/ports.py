@@ -487,13 +487,23 @@ class DashboardPort(Protocol):
     ``dashboard: DashboardPort | None = None``, the same optional-with-a-default shape
     ``blocks`` already has.
 
-    **One method and no parameter.** This is deliberate and is the whole of what this
-    port refuses to become: not a project-scoped read, not a date range, not a category
-    filter. See ``docs/program/W46-SEAL.md`` section 3.
+    **One method and one optional filter.** This is deliberate and is the whole of what this
+    port refuses to become: not a date range, not a category filter, not a free-text
+    query. The one filter it carries is a project (`UI-PARITY-P0A`): the header of the product
+    names the project the expert works in, and the four panels are then that project's, with the
+    definitions they have always had. See ``docs/program/W46-SEAL.md`` section 3 for the
+    argument this refines.
     """
 
-    def get_summary(self) -> DashboardSummaryView:
+    def get_summary(self, *, project_uid: str | None) -> DashboardSummaryView:
         """The whole deployment's operational shape, right now: all four panels.
+
+        ``project_uid`` is ``None`` for the whole deployment, and otherwise a value the router
+        has already checked against the identity pattern. Every panel is then restricted to that
+        project, by the same definitions. **A project that does not exist is
+        ``DomainError(NOT_FOUND, aggregate_type="Project")``**, never a summary of zeros; an
+        implementation that accepts the parameter and ignores it is the defect
+        ``test_every_adapter_accepts_every_parameter_its_port_declares`` exists to catch.
 
         **Absent is not empty.** Every member of ``Verdict`` and ``RunState`` appears in
         its panel even at a count of zero, every one of the fifteen current project
@@ -790,6 +800,7 @@ class DecisionPort(Protocol):
         *,
         category: str | None,
         verdict: str | None,
+        project_uid: str | None,
     ) -> Sequence[DecisionRecordView]:
         """Every recorded decision, across findings, **newest first**.
 
@@ -805,6 +816,16 @@ class DecisionPort(Protocol):
         neither narrows the event. **An implementation that accepts these and ignores them
         is the defect this signature exists to prevent**, and it is not hypothetical: the
         shipped finding adapter once took ``**_`` and dropped both.
+
+        ``project_uid`` (`UI-PARITY-P0A`) is ``None`` for no filter, and otherwise narrows the
+        **finding** to the project it belongs to, as the two filters above narrow it by
+        category and verdict. It is a filter and not a parent: a project nothing was decided
+        in -- or one that does not exist -- matches no row and yields an empty sequence.
+
+        Each record also carries where its decision belongs (`document_uid`, `version_uid`,
+        and the display names `project_name` and `document_name`, joined at read time and
+        never stored), and the finding's version's confirmed `section` when an expert has
+        classified it.
 
         There is no parent identity, so there is no ``not_found``: a deployment that has
         decided nothing returns an empty sequence, and that is a true answer rather than a

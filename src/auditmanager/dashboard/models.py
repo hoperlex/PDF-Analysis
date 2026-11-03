@@ -2,7 +2,9 @@
 
 See ``repository.py`` for what each one is computed from and ``docs/program/W46-SEAL.md``
 section 3 for the argument this whole module exists to satisfy: one operation answering a
-fixed, named question about the whole deployment, not a filtered query a caller could steer.
+fixed, named question about the whole deployment -- or, with the one optional ``project_uid``
+(`UI-PARITY-P0A`), about one project by the same definitions -- not a filtered query a caller
+could steer.
 """
 
 from __future__ import annotations

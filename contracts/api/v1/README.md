@@ -11,7 +11,24 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.16.0` (`EXEC2-SEAL-2`)
+## Current contract `1.17.0` (`UI-PARITY-P0A`)
+
+Additive read slice for "the project chosen in the header" on the dashboard and the knowledge base. Optional query
+parameters and response fields only; no migration, no new operation, no new error code.
+`getDashboardSummary` takes an optional `project_uid`: with it every one of the four panels (`documents_by_project`,
+`findings_by_verdict`, `run_activity` with its `spend`, `section_breakdown`) is restricted to that project by exactly the
+definitions it has without it, and no counter is redefined. A `project_uid` naming no project is `404 not_found`, a malformed
+one `422 validation_failed`; both responses are declared on the operation from this version. `listDecisions` takes an
+optional `project_uid` as well, filtering to decisions on findings of that project (a filter and not a parent: a project
+nothing was decided in, or one that does not exist, is an empty page). `DecisionRecord` gains `document_uid`, `version_uid`,
+`project_name` and `document_name` (the two names are joined at read time and stored nowhere) and the optional `section`,
+the expert-confirmed section of the finding's version (absent while the version is unclassified); `DecisionRecordPage`
+gains `total`, the number of entries matching the filters on every page of the listing. A record's type (finding or
+proposal) is deliberately not added.
+The current API still has 250 paths, 277 operations and 674 schemas; migration head `0048`. The domain catalogs are at
+candidate revision 35.
+
+## Contract `1.16.0` (`EXEC2-SEAL-2`, historical)
 
 Additive stage-2 and stage-3 surface of executor groups, routing rules, the routing mode and dispatch-time binding
 (ADR-0026 decisions 10 to 17, rulings `R-149a`…`R-149f`). Operations: `listExecutorGroups`, `createExecutorGroup`,
@@ -23,7 +40,7 @@ and `revision_id` become optional, since a group's connection is chosen at dispa
 `binding_state` (`frozen_at_start`, `pending`, `bound`), `planned`, `binding`, `wait_reason` and `waiting_since`; the queue
 items carry `binding_state` and `wait_reason`. `RunQueueReason` gains `needs_reconsent`; the persisted `wait_reason` uses the
 same words. `issueExecutorEnrollment` names the `public_origin` dependency.
-The current API has 250 paths, 277 operations and 674 schemas; migration head `0048`. No error code is added: refusals are
+The API then had 250 paths, 277 operations and 674 schemas; migration head `0048`. No error code is added: refusals are
 typed details of existing codes (`contracts/domain/v1/error-codes.json` notes). The domain identifiers gain
 `executor_group_id` (`exg`), `executor_group_revision_id` (`exgr`), `executor_routing_rule_revision_id` (`exrr`) and
 `executor_routing_mode_event_id` (`exrm`), and the state machines gain `binding_state`. Migration

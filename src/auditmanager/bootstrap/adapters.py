@@ -2204,7 +2204,11 @@ class DecisionAdapter(_SessionHolder):
         return self._read(lambda s: tuple(_event_view(e) for e in history(s, finding_uid)))
 
     def decision_journal(
-        self, *, category: str | None = None, verdict: str | None = None
+        self,
+        *,
+        category: str | None = None,
+        verdict: str | None = None,
+        project_uid: str | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, filtered in the query rather than here.
 
@@ -2213,7 +2217,8 @@ class DecisionAdapter(_SessionHolder):
         deployment has ever taken. The predicate goes to PostgreSQL, against the same
         columns the record reports.
 
-        Both arguments are named in the signature rather than swallowed by ``**_``. The
+        All three arguments (`UI-PARITY-P0A` added ``project_uid``) are named in the signature
+        rather than swallowed by ``**_``. The
         finding adapter's first version took ``**_`` and dropped its two filters, so a
         filtered request returned everything and looked like it had worked, and
         ``test_every_adapter_accepts_every_parameter_its_port_declares`` exists because of
@@ -2224,7 +2229,9 @@ class DecisionAdapter(_SessionHolder):
         def work(session: Session) -> Sequence[DecisionRecordView]:
             return tuple(
                 _record_view(entry)
-                for entry in decision_journal(session, category=category, verdict=verdict)
+                for entry in decision_journal(
+                    session, category=category, verdict=verdict, project_uid=project_uid
+                )
             )
 
         return self._read(work)
@@ -2240,6 +2247,10 @@ def _record_view(entry: Any) -> DecisionRecordView:
         recorded_at=entry.recorded_at,
         project_uid=entry.project_uid,
         run_id=entry.run_id,
+        document_uid=entry.document_uid,
+        version_uid=entry.version_uid,
+        project_name=entry.project_name,
+        document_name=entry.document_name,
         category=entry.category,
         finding_text=entry.finding_text,
         current_verdict=entry.current_verdict,
@@ -2247,6 +2258,7 @@ def _record_view(entry: Any) -> DecisionRecordView:
         verdict=entry.verdict,
         severity=entry.severity,
         comment=entry.comment,
+        section=entry.section,
     )
 
 
@@ -2369,10 +2381,12 @@ class DashboardAdapter(_SessionHolder):
     """``getDashboardSummary``. `R-44`. Reads the same session factory as everything
     else here; nothing new is opened for it."""
 
-    def get_summary(self) -> DashboardSummaryView:
+    def get_summary(self, *, project_uid: str | None = None) -> DashboardSummaryView:
         from auditmanager.dashboard import DashboardRepository
 
-        record = self._read(lambda s: DashboardRepository().summary(s))
+        record = self._read(
+            lambda s: DashboardRepository().summary(s, project_uid=project_uid)
+        )
         return DashboardSummaryView(
             documents_by_project=tuple(
                 ProjectDocumentCountView(

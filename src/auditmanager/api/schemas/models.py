@@ -1044,7 +1044,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.16.0"]
+    contract_version: Literal["1.17.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2307,6 +2307,14 @@ class DecisionRecord(_Object):
     recorded_at: datetime
     project_uid: ProjectUid
     run_id: RunId
+    #: `UI-PARITY-P0A`. Where the decision belongs. The two names are joined at read time and
+    #: stored nowhere.
+    document_uid: DocumentUid
+    version_uid: VersionUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_name: Annotated[str, Field(min_length=1, max_length=400)]
+    #: The expert-confirmed section of the finding's version; absent while it is unclassified.
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     category: FindingCategory
     finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
     current_verdict: Verdict
@@ -2316,6 +2324,8 @@ class DecisionRecord(_Object):
 class DecisionRecordPage(_Object):
     items: list[DecisionRecord]
     page: PageInfo
+    #: `UI-PARITY-P0A`. The number of entries that match the filters, not the number on this page.
+    total: Annotated[int, Field(ge=0)]
 
 
 # --- dashboard -----------------------------------------------------------------------
@@ -2393,7 +2403,10 @@ class SectionDocumentCount(_Object):
 
 
 class DashboardSummary(_Object):
-    """``getDashboardSummary``'s whole answer. All four panels, one read, no filter."""
+    """``getDashboardSummary``'s whole answer. All four panels, one read, one optional filter.
+
+    The filter is the request's ``project_uid`` (`UI-PARITY-P0A`); the answer carries no echo of it.
+    """
 
     documents_by_project: list[ProjectDocumentCount]
     findings_by_verdict: list[VerdictCount]

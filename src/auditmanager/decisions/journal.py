@@ -50,6 +50,25 @@ __all__ = ["JournalEntry", "decision_journal"]
 #: The filters bind as ``:name IS NULL OR column = :name`` rather than being concatenated
 #: into the statement. The cast is not decoration: without it PostgreSQL cannot infer the
 #: parameter's type on the ``IS NULL`` branch and refuses the whole statement.
+#:
+#: **Where a decision belongs** (`UI-PARITY-P0A`). The knowledge-base table shows, beside each
+#: decision, the project, the document and the version it was taken in. ``document_uid`` and
+#: ``version_uid`` are read through the finding (``finding.version_uid`` ->
+#: ``document_version.document_uid``), ``project_name`` and ``document_name`` (the document's
+#: ``display_title``) are **joined at read time and stored nowhere** -- a renamed project is renamed
+#: in the next listing, and the ledger never holds a second copy of a label. All three joins are
+#: inner and cannot drop a row: ``finding.project_uid`` and ``finding.version_uid`` are NOT NULL
+#: foreign keys, and so are ``document_version.document_uid`` and ``document.project_uid``.
+#:
+#: **The version's section** is ``version_classification_current.section_code``: the latest revision
+#: of the expert's confirmed classification of *that version* (`CLASSIFICATION-CORRECTION-01`) -- the
+#: same view the dashboard's section breakdown counts through. ``LEFT JOIN``, so a version nobody has
+#: classified has no row and ``section`` is NULL; the legacy ``document.section`` is not read at all,
+#: for the reason the dashboard states.
+#:
+#: ``total`` on the wire is the length of what this returns, counted at the edge before it pages: the
+#: listing already pages in Python over this whole result, so the count cannot be a second definition
+#: of "matching" that drifts from the rows.
 _JOURNAL = text(
     """
     SELECT
@@ -65,6 +84,11 @@ _JOURNAL = text(
         e.recorded_at,
         f.project_uid,
         f.allocated_by_run_id,
+        f.version_uid,
+        dv.document_uid,
+        p.name AS project_name,
+        d.display_title AS document_name,
+        c.section_code,
         o.category,
         o.finding_text,
         v.current_verdict,
@@ -73,8 +97,13 @@ _JOURNAL = text(
     JOIN finding f ON f.finding_uid = e.finding_uid
     JOIN finding_observation o ON o.finding_observation_id = e.finding_observation_id
     JOIN finding_current_verdict v ON v.finding_uid = e.finding_uid
+    JOIN project p ON p.project_uid = f.project_uid
+    JOIN document_version dv ON dv.version_uid = f.version_uid
+    JOIN document d ON d.document_uid = dv.document_uid
+    LEFT JOIN version_classification_current c ON c.version_uid = f.version_uid
     WHERE (CAST(:category AS text) IS NULL OR o.category = CAST(:category AS text))
       AND (CAST(:verdict AS text) IS NULL OR v.current_verdict = CAST(:verdict AS text))
+      AND (CAST(:project_uid AS text) IS NULL OR f.project_uid = CAST(:project_uid AS text))
     ORDER BY e.recorded_at DESC, e.decision_id COLLATE "C" DESC
     """
 )
@@ -106,11 +135,19 @@ class JournalEntry:
     recorded_at: datetime
     project_uid: str
     run_id: str
+    #: `UI-PARITY-P0A`. Where the decision belongs: the finding's version, its document, and the
+    #: display names of the project and the document, joined at read time.
+    version_uid: str
+    document_uid: str
+    project_name: str
+    document_name: str
     category: str
     finding_text: str
     current_verdict: str
     decision_event_count: int
     severity: str | None = None
+    #: The version's confirmed section code, or ``None`` for a version no expert has classified.
+    section: str | None = None
 
 
 def decision_journal(
@@ -118,6 +155,7 @@ def decision_journal(
     *,
     category: str | None = None,
     verdict: str | None = None,
+    project_uid: str | None = None,
 ) -> tuple[JournalEntry, ...]:
     """Every recorded decision, newest first, optionally narrowed.
 
@@ -127,7 +165,11 @@ def decision_journal(
     "every event that carried a rejection" would be asking a third question, and this
     signature does not pretend to answer it.
 
-    Both are filtered **in the query**, against the same columns this function reports. A
+    ``project_uid`` (`UI-PARITY-P0A`) narrows by the **finding's** project, the column the record
+    reports as ``project_uid``. It is a filter and not a parent, so a project that does not exist
+    matches nothing and is an empty tuple, not a refusal.
+
+    All three are filtered **in the query**, against the same columns this function reports. A
     filter applied to one column and reported from another is the shape `W12` recorded: a
     query that shares an assumption with its subject cannot see the subject being wrong.
 
@@ -144,7 +186,9 @@ def decision_journal(
     event whose account is unknown (NULL) is listed exactly as one whose account is known;
     an inner join there would silently drop the whole of history.
     """
-    rows = session.execute(_JOURNAL, {"category": category, "verdict": verdict}).mappings()
+    rows = session.execute(
+        _JOURNAL, {"category": category, "verdict": verdict, "project_uid": project_uid}
+    ).mappings()
     return tuple(
         JournalEntry(
             decision_id=row["decision_id"],
@@ -159,6 +203,11 @@ def decision_journal(
             recorded_at=row["recorded_at"],
             project_uid=row["project_uid"],
             run_id=row["allocated_by_run_id"],
+            version_uid=row["version_uid"],
+            document_uid=row["document_uid"],
+            project_name=row["project_name"],
+            document_name=row["document_name"],
+            section=row["section_code"],
             category=row["category"],
             finding_text=row["finding_text"],
             current_verdict=row["current_verdict"],

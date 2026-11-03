@@ -9,7 +9,9 @@ deleted the day a real aggregate read lands. See ``docs/program/W46-SEAL.md`` se
 the full argument, including what this operation refuses to become.
 
 Every count below is computed with ``GROUP BY``, in the database, over the whole
-deployment. Nothing here paginates and nothing here is summed in Python from a page walked
+deployment -- or, when the caller names one project (`UI-PARITY-P0A`, the optional
+``project_uid`` of ``getDashboardSummary``), over that project alone with exactly the same
+definitions. Nothing here paginates and nothing here is summed in Python from a page walked
 one cursor at a time -- that is the shape `R-24` and `R-44` both rule against.
 """
 
@@ -21,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from auditmanager.documents.public import DocumentRepository
+from auditmanager.shared.identity import ProjectUid
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 from .models import (
@@ -84,14 +87,27 @@ PROJECT_SECTIONS: Final[tuple[str, ...]] = (
 #: view already reduces "every verdict-bearing event this finding ever had" to "the one
 #: that stands now", so this is not a second projection -- it is a GROUP BY over the one
 #: PostgreSQL already computes.
+#:
+#: **The project scope** (`UI-PARITY-P0A`) is the one predicate every panel below shares:
+#: ``CAST(:project_uid AS text) IS NULL OR <project column> = CAST(:project_uid AS text)``. Absent
+#: (``NULL``), it is true for every row and the statement is the whole-deployment one it always was;
+#: present, it narrows the rows the same ``GROUP BY`` groups. One statement per panel, not a second
+#: statement per panel, so the two modes cannot come to define a count differently. The cast is the
+#: one ``decisions.journal`` explains: without it PostgreSQL cannot type the parameter on the
+#: ``IS NULL`` branch.
 _FINDINGS_BY_VERDICT = text(
     "SELECT v.current_verdict, count(*) "
     "FROM finding f JOIN finding_current_verdict v ON v.finding_uid = f.finding_uid "
+    "WHERE (CAST(:project_uid AS text) IS NULL OR f.project_uid = CAST(:project_uid AS text)) "
     "GROUP BY v.current_verdict"
 )
 
 #: Runs by their current state, across every project.
-_RUNS_BY_STATE = text("SELECT state, count(*) FROM audit_run GROUP BY state")
+_RUNS_BY_STATE = text(
+    "SELECT state, count(*) FROM audit_run "
+    "WHERE (CAST(:project_uid AS text) IS NULL OR project_uid = CAST(:project_uid AS text)) "
+    "GROUP BY state"
+)
 
 #: What every run, across every project, has spent at the provider -- the same three
 #: values ``runs.repository._COST_SUMMARY`` computes for one run, computed here with no
@@ -113,18 +129,44 @@ _RUNS_BY_STATE = text("SELECT state, count(*) FROM audit_run GROUP BY state")
 #: spent yet and a ``failed`` call without a cost was proven not to have. The comparison rows carry a
 #: ``NULL`` ``run_id`` so that the per-run form of this query, ``... WHERE run_id = :run``, which the
 #: HTTP run-path test builds by appending to this text, still reads the Runs' rows and none of theirs.
-_SPEND = text(
+#: The aggregate half of ``_SPEND`` and of ``_SPEND_IN_PROJECT``, written once: the two statements differ
+#: only in which rows reach it, so they cannot come to count, sum or label a call differently.
+_SPEND_AGGREGATE = (
     "SELECT count(*) AS calls, "
     "       coalesce(sum(cost_micros) FILTER (WHERE cost_basis <> 'unmetered'), 0) AS cost_micros, "
     "       count(*) FILTER (WHERE cost_basis = 'unmetered') AS unmetered, "
     "       count(*) FILTER (WHERE cost_basis <> 'unmetered' "
     "         AND (cost_micros IS NULL OR cost_basis <> 'measured')) AS unmeasured "
-    "FROM (SELECT run_id, cost_micros, cost_basis FROM model_call "
+    "FROM ("
+)
+_SPEND = text(
+    _SPEND_AGGREGATE
+    + "SELECT run_id, cost_micros, cost_basis FROM model_call "
     "      UNION ALL "
     "      SELECT CAST(NULL AS text), cost_micros, coalesce(cost_basis, 'estimated') "
     "      FROM comparison_model_call "
     "      WHERE state IN ('completed', 'unknown') "
     "         OR (state = 'failed' AND cost_micros IS NOT NULL)) AS spend"
+)
+
+#: ``_SPEND`` restricted to one project (`UI-PARITY-P0A`): the same two journals, the same aggregate, the
+#: rows narrowed to the project's own. A Run's calls are the ``model_call`` rows of its ``audit_run``
+#: (``audit_run.project_uid``); a comparison call has no Run but belongs to the project of the
+#: ``comparison_work`` it was made for (``comparison_work.project_uid``). It is a separate statement and
+#: not a parameter of ``_SPEND`` because the Run-path tests build the per-run form of ``_SPEND`` by appending
+#: ``WHERE run_id = :r`` to its text, which a bind parameter inside it would break.
+_SPEND_IN_PROJECT = text(
+    _SPEND_AGGREGATE
+    + "SELECT m.run_id, m.cost_micros, m.cost_basis FROM model_call m "
+    "      JOIN audit_run r ON r.run_id = m.run_id "
+    "      WHERE r.project_uid = :project_uid "
+    "      UNION ALL "
+    "      SELECT CAST(NULL AS text), c.cost_micros, coalesce(c.cost_basis, 'estimated') "
+    "      FROM comparison_model_call c "
+    "      JOIN comparison_work w ON w.comparison_work_id = c.comparison_work_id "
+    "      WHERE w.project_uid = :project_uid "
+    "        AND (c.state IN ('completed', 'unknown') "
+    "             OR (c.state = 'failed' AND c.cost_micros IS NOT NULL))) AS spend"
 )
 
 #: Published documents by the section their **current version** is confirmed in
@@ -144,6 +186,7 @@ _DOCUMENTS_BY_SECTION = text(
     "SELECT c.section_code, count(*) "
     "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
     "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
+    "WHERE (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text)) "
     "GROUP BY c.section_code"
 )
 
@@ -192,20 +235,46 @@ def spend_record(
 
 
 class DashboardRepository:
-    """One method, one read, four panels. No filter parameter exists to add to it.
+    """One method, one read, four panels. One optional filter: a project.
 
-    **Why there is no ``project_uid``, no date range and no free-text filter.** Each
-    would turn this into a second, generic query surface over data three other
-    operations already answer narrowly -- ``AGENTS.md`` section 4's ban on inventing a
-    generic query endpoint. What this answers is fixed: *the operational shape of the
-    whole deployment, right now*. A caller that wants one project's documents already has
-    ``listDocuments``; one that wants one run's findings already has ``listRunFindings``.
+    **The only filter, and why it is this one** (`UI-PARITY-P0A`). The header of the product
+    names the project the expert is working in, and a dashboard that shows the whole deployment
+    beside it answers a question nobody asked. ``project_uid`` restricts every panel to that
+    project **with the definitions it already has** -- the same joins, the same ``GROUP BY``, the
+    same spend rule -- so the numbers of a project are the numbers of the deployment minus every
+    row of every other project, and nothing a metrics dictionary has not yet decided is
+    redefined here.
+
+    There is still no date range and no free-text filter. Each would turn this into a second,
+    generic query surface over data three other operations already answer narrowly --
+    ``AGENTS.md`` section 4's ban on inventing a generic query endpoint. A project is not a
+    query language: it is the unit every other panel of this product is already read in.
     """
 
     __slots__ = ()
 
-    def summary(self, session: Session) -> DashboardSummaryRecord:
-        documents = DocumentRepository().list_projects(session)
+    def summary(
+        self, session: Session, *, project_uid: str | None = None
+    ) -> DashboardSummaryRecord:
+        """The four panels, over the whole deployment or over one project.
+
+        ``project_uid`` of ``None`` is the whole deployment and behaves exactly as it did
+        before the parameter existed. A project that does not exist is
+        ``DomainError(NOT_FOUND, aggregate_type="Project")`` -- the refusal
+        ``DocumentRepository.get_project`` already answers every project-scoped read with,
+        not a second one -- and never an all-zero summary, which would read as "a project with
+        nothing in it".
+        """
+        listing = DocumentRepository()
+        if project_uid is not None:
+            # The existence check first: an unknown project is a refusal, not four empty panels.
+            listing.get_project(session, ProjectUid(project_uid))
+        documents = tuple(
+            record
+            for record in listing.list_projects(session)
+            if project_uid is None or str(record.project_uid) == project_uid
+        )
+        scope = {"project_uid": project_uid}
         projects = tuple(
             ProjectDocumentCountRecord(
                 project_uid=str(record.project_uid),
@@ -217,7 +286,7 @@ class DashboardRepository:
 
         verdict_rows: dict[str | None, int] = {
             row[0]: int(row[1])
-            for row in (tuple(r) for r in session.execute(_FINDINGS_BY_VERDICT).all())
+            for row in (tuple(r) for r in session.execute(_FINDINGS_BY_VERDICT, scope).all())
         }
         verdicts = tuple(
             VerdictCountRecord(verdict=verdict, count=count)
@@ -226,18 +295,24 @@ class DashboardRepository:
 
         state_rows: dict[str | None, int] = {
             row[0]: int(row[1])
-            for row in (tuple(r) for r in session.execute(_RUNS_BY_STATE).all())
+            for row in (tuple(r) for r in session.execute(_RUNS_BY_STATE, scope).all())
         }
         activity = tuple(
             RunStateCountRecord(state=state, count=count)
             for state, count in _filled(state_rows, RUN_STATES)
         )
 
-        spend = spend_record(*tuple(session.execute(_SPEND).one()))
+        spend = spend_record(
+            *tuple(
+                session.execute(_SPEND).one()
+                if project_uid is None
+                else session.execute(_SPEND_IN_PROJECT, scope).one()
+            )
+        )
 
         section_rows: dict[str | None, int] = {
             row[0]: int(row[1])
-            for row in (tuple(r) for r in session.execute(_DOCUMENTS_BY_SECTION).all())
+            for row in (tuple(r) for r in session.execute(_DOCUMENTS_BY_SECTION, scope).all())
         }
         # A code this vocabulary does not list would be dropped by `_filled` and the
         # breakdown would quietly add up to fewer documents than exist. The database admits
