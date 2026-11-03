@@ -1,0 +1,79 @@
+/*
+ * The quotation cards beside the page: the badge that ties a card to its frame, the one-line
+ * statement of how the frame was found, and the state of the card the viewer is on. The card
+ * itself (`am-quotation`) is the global rule; this adds only what the page viewer made new.
+ */
+
+.card {
+  cursor: pointer;
+  transition:
+    border-color var(--am-motion-fast) var(--am-ease),
+    box-shadow var(--am-motion-fast) var(--am-ease);
+}
+
+.card[data-active='true'] {
+  border-color: var(--am-accent);
+  box-shadow: var(--am-ring);
+}
+
+.cardBody {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--am-gap-sm);
+  align-items: start;
+}
+
+.cardContent {
+  min-width: 0;
+}
+
+/* The same numeral as the badge on the frame: quiet until its frame is the one in view. */
+.cardBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-paper);
+  color: var(--am-accent);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cardBadge[aria-pressed='true'] {
+  background: var(--am-accent);
+  color: var(--am-ink-inverse);
+}
+
+.cardBadge:focus-visible {
+  border-radius: var(--am-radius-pill);
+}
+
+.placed,
+.unplaced {
+  margin: var(--am-gap-sm) 0 0;
+  font-size: var(--am-text-xs);
+}
+
+.placed {
+  color: var(--am-ink-soft);
+}
+
+/* A fragment the page does not contain, in the same warning tone as a mismatched anchor. */
+.unplaced {
+  padding: var(--am-gap-sm);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-sm);
+}
+
+.card[data-quote-located='false'] {
+  border-left-color: var(--am-degraded);
+}

@@ -194,7 +194,6 @@ export const PENDING_UNREACHED: readonly PendingUnreached[] = [
   { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.observations > li' },
   { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.packagePanel' },
   { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.panel pre' },
-  { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.pdfPage' },
   { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.procedures > li' },
   { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.sourceInspector' },
   { origin: 'web/src/widgets/extended-review/ui/extended-review.module.css', selector: '.summary' },

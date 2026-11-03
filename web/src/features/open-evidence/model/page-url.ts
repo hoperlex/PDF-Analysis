@@ -1,21 +1,17 @@
 /**
- * The URL the PDF island is pointed at.
+ * The URL the browser's own PDF reader is pointed at, addressed by the PDF Open Parameters
+ * fragment `#page=N`.
  *
- * `OD-09` — the browser PDF rendering approach — is **untaken**. `P3-WEB-00` deferred it
- * (`docs/program/tasks/P3-WEB-00.md`, "Deferred decisions") and the seam says so in
- * `web/docs/PC01_UI_SEAM.md` §10: no rendering approach is pinned there. `B8` may not add
- * a dependency, so `pdfjs-dist` and every other renderer is out of reach for this session.
+ * The review screen does not use this any more: `PageViewer` draws the cited page with pdf.js
+ * (`OD-09`, taken by the owner on 2026-10-22). The norm document and the specification panel
+ * still open their pages this way and are not this feature's to change, so the helpers stay.
  *
- * What is left is the renderer already present in every target browser, addressed through
- * the PDF Open Parameters fragment — `#page=N`. It costs no dependency, keeps the island
- * bounded to one element, and opens the declared page. Its limits are real and are stated
- * in the viewer: no bounding box, no highlight, page-level navigation only. `P3-WEB-02`
- * already lists all three as non-goals, and the acceptance criterion is the quotation
- * beside the page, which does not depend on the renderer at all.
+ * Its limits are the reader's own: no bounding box, no highlight, page-level navigation only, and
+ * a toolbar the product cannot hide.
  *
- * The fragment is **not** a query parameter. `?page=N` would be sent to the server, and
- * the content operation declares no such parameter, so the transport would drop it; a
- * fragment never leaves the browser, which is also why it is safe on an object URL.
+ * The fragment is **not** a query parameter. `?page=N` would be sent to the server, and the
+ * content operation declares no such parameter, so the transport would drop it; a fragment never
+ * leaves the browser, which is also why it is safe on an object URL.
  */
 
 /**

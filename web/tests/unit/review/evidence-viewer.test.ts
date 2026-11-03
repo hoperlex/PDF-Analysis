@@ -75,7 +75,7 @@ describe('the quotation is the API string, unmodified', () => {
 });
 
 describe('the declared page is the page opened', () => {
-  it('addresses the fragment of the declared page', () => {
+  it('asks the viewer for the declared page of the fetched document', () => {
     const item = evidence({ page_number: 11 });
     const markup = render(
       createElement(EvidenceViewer, {
@@ -86,8 +86,12 @@ describe('the declared page is the page opened', () => {
       }),
     );
 
-    expect(markup).toContain(`${OBJECT_URL}#page=11`);
+    // The viewer draws the page itself: it is told the document and the page, and there is no
+    // `#page=` fragment for a browser reader to follow or to ignore.
+    expect(markup).toContain(`data-viewer-src="${OBJECT_URL}"`);
+    expect(markup).toContain('data-viewer-page="11"');
     expect(markup).toContain('data-active-page="11"');
+    expect(markup).not.toContain('#page=');
   });
 
   it('falls back to the first declared page when asked for one that is not declared', () => {
@@ -106,8 +110,8 @@ describe('the declared page is the page opened', () => {
     );
 
     expect(markup).toContain('data-active-page="7"');
-    expect(markup).toContain(`${OBJECT_URL}#page=7`);
-    expect(markup).not.toContain('#page=3');
+    expect(markup).toContain('data-viewer-page="7"');
+    expect(markup).not.toContain('data-viewer-page="3"');
   });
 
   it('offers navigation only to the declared pages', () => {
