@@ -253,6 +253,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
       access: 'session',
       roles: 'any-role',
       inMenu: true,
+      projectScope: 'global',
     });
     const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'norms', 'page.tsx'))) as {
       default: (props: unknown) => Promise<ReactElement>;
@@ -274,6 +275,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
       access: 'session',
       roles: 'any-role',
       inMenu: true,
+      projectScope: 'global',
     });
     const routed = await analysisSettingsRoute({});
     const client = newClient();
@@ -334,6 +336,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
       access: 'session',
       roles: 'any-role',
       inMenu: true,
+      projectScope: 'optional',
     });
     const module = (await import(/* @vite-ignore */ join(WEB_ROOT, 'src', 'app', 'section-optimisation', 'page.tsx'))) as {
       default: (props: unknown) => Promise<ReactElement>;
