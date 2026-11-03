@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.17.0 (OpenAPI 3.1.0)
- *   sha256 c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a
+ *   AuditManager PC-01 API 1.18.0 (OpenAPI 3.1.0)
+ *   sha256 b64fc14b30de32f382e3471f40a6853d0efea0f75f1fb6fedc0c650a8f05041a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -4258,10 +4258,16 @@ export type ListExecutionJournalResult = ExecutionJournalPage;
 export type ListExecutionQueueInput = {
   /** Query string parameters. */
   query?: {
+    /** Only the jobs created at or after this instant (included), an RFC 3339 time with an offset. With `created_to` it bounds the half-open period `[created_from, created_to)` over `created_at`; part of the filters a cursor is bound to. */
+    created_from?: string;
+    /** Only the jobs created before this instant (not included), an RFC 3339 time with an offset; part of the filters a cursor is bound to. */
+    created_to?: string;
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
     /** Page size. */
     limit?: number;
+    /** Only the jobs in this state; every state when absent. A cursor is valid only under the filters it was issued under: presented with other filters it is refused as `validation_failed` with `constraint: scope`. */
+    state?: "queued" | "leased" | "running" | "retry_wait" | "succeeded" | "failed" | "cancelled" | "dead_letter";
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -9758,7 +9764,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/execution/queue',
     pathParams: [],
-    queryParams: ['cursor', 'limit'],
+    queryParams: ['created_from', 'created_to', 'cursor', 'limit', 'state'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

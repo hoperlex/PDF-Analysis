@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a",
-    "content_commit": "76e13471",
-    "content_commit_subject": "Merge agent/exec2-fix-backend (EXEC2-FIX-BACKEND) into integration/exec2",
+    "sha256": "b64fc14b30de32f382e3471f40a6853d0efea0f75f1fb6fedc0c650a8f05041a",
+    "content_commit": "af664502",
+    "content_commit_subject": "docs(state): UI-PARITY-P0A entry (contract 1.17.0)",
     "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
-    "commit_note": "Resealed 2026-11-04 by UI-PARITY-P0A: contract 1.17.0 (the optional project_uid of getDashboardSummary and listDecisions; where a decision belongs and total on the decision journal; no operation, schema or migration added). content_commit names the base commit 76e13471 the seal was made on top of, not a commit that contains the change; the integrator's commit of this seal is the first to carry these bytes. Surface 250/277/674.",
+    "commit_note": "Resealed 2026-11-04 by UI-PARITY-QUEUE-A: contract 1.18.0 (the project, document and version a queue job executes, its start, end and error, and the optional state and created_from / created_to filters of listExecutionQueue; no operation, schema or migration added). content_commit names the base commit af664502 the seal was made on top of, not a commit that contains the change; the integrator's commit of this seal is the first to carry these bytes. Surface 250/277/674.",
     "openapi_version": "3.1.0",
-    "info_version": "1.17.0",
+    "info_version": "1.18.0",
     "paths": 250,
     "operations": 277,
     "component_schemas": 674,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a",
+    "snapshot_sha256": "b64fc14b30de32f382e3471f40a6853d0efea0f75f1fb6fedc0c650a8f05041a",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "7f878e851df8f328c2ae60da10a46867f02b66495935f1d484d54846805aa048",
-      "index.ts": "a873915613b49e4b166eddb4c606de31dde9fb8074fa13991a6a3811f1c3e01b",
-      "operations.gen.ts": "c69e7fab31b3b12f3ec496d6f78784543b81a01d5b928b26a1c796f98e376fa4",
-      "types.gen.ts": "8b61f9753bf204b1d5fab083f9f6abd82a64c0d9326efb20ef046fe668d3f134"
+      "client.gen.ts": "0b8d3d9cbbbc7cc6538ac644d7cb98630c683e244873ebb7acaec1dc976f7df1",
+      "index.ts": "2a11de7310ed3d787b3fa0266a8873802ae30136cb46fbdcee843d1efa6c3eb5",
+      "operations.gen.ts": "8eeeeec20edf41b88eee306f609cae2459d5693020707db5ba8380fbda087e9b",
+      "types.gen.ts": "cf44d6c2be8c3af21948d460e752266e5f72714d9492e61ff8cabb722fd80396"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
