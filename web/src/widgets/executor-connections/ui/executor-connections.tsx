@@ -14,6 +14,12 @@
  * every role and whether or not the list is empty, because it qualifies what the list lets an
  * administrator set, not what one connection holds.
  *
+ * `EXEC2-WEB-WIZARD-01`: below the list, «Добавить подключение» opens the wizard
+ * (`features/connect-remote-agent`) — a remote Ubuntu agent, installed over SSH or by one command, or
+ * an API provider (the OpenRouter preset) — and keeps the older form with every field one button away.
+ * The wizard is closed until the button is pressed, so an empty list shows the button and the
+ * empty-state sentence that points at it.
+ *
  * The key form is a **slot**. It is rendered on the server by the route (a server component,
  * `features/set-executor-secret`) and arrives here as an element, so this client component
  * never touches the key: it only decides where on the page the form sits.
@@ -34,7 +40,7 @@ import {
   useExecutorConnections,
   useExecutorRoutes,
 } from '@/entities/executor-connection';
-import { CreateConnectionForm } from '@/features/manage-executor-connection';
+import { ConnectWizardLauncher } from '@/features/connect-remote-agent';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 
 import { ConnectionCard } from './connection-card';
@@ -125,7 +131,7 @@ export function ExecutorConnections({ roles, secretConnectionId = null, secretFo
         <EmptyState
           title="Подключений нет"
           detail={canManage
-            ? 'Добавьте первое подключение ниже: адрес, модель из закреплённых, затем ключ и проверка.'
+            ? 'Добавьте первое подключение кнопкой ниже: удалённого агента или API-провайдера. Затем модель из закреплённых, вход или ключ и проверка.'
             : 'Администратор ещё не добавил ни одного подключения.'}
         />
       ) : (
@@ -143,12 +149,7 @@ export function ExecutorConnections({ roles, secretConnectionId = null, secretFo
         </ol>
       )}
 
-      {canManage ? (
-        <details className="am-section" open={items.length === 0} data-executor-create>
-          <summary>Добавить подключение</summary>
-          <CreateConnectionForm pinnedModels={pinnedModels} />
-        </details>
-      ) : null}
+      {canManage ? <ConnectWizardLauncher pinnedModels={pinnedModels} /> : null}
     </div>
   );
 }

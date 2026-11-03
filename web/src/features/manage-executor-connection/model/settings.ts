@@ -193,7 +193,12 @@ function readCapacity(
 
 type SshFields = Pick<ReviseExecutorConnectionRequest, 'ssh_host' | 'ssh_port' | 'ssh_user' | 'host_key'>;
 
-function readSshEndpoint(
+/**
+ * The SSH endpoint a form names: host, port, user and, optionally, a pinned host key. Exported for
+ * `features/connect-remote-agent` (`EXEC2-WEB-WIZARD-01`), whose install form takes the same three
+ * fields under the same names and must judge them by the same patterns the revision form does.
+ */
+export function readSshEndpoint(
   form: FormData,
 ): { readonly ok: true; readonly fields: SshFields } | { readonly ok: false; readonly problem: string } {
   const host = text(form, FIELD_NAMES.sshHost);

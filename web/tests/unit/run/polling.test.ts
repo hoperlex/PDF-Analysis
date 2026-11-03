@@ -260,6 +260,8 @@ describe('this slice adds no second polling loop', () => {
     join('entities', 'version-series', 'api', 'use-series.ts'),
     join('entities', 'version-series', 'api', 'use-ai.ts'),
     join('widgets', 'comparison-upload', 'api', 'use-upload.ts'),
+    // `EXEC2-WEB-WIZARD-01`: the agent lifecycle and the path-A session, bounded `_POLL_MS` callbacks.
+    join('features', 'connect-remote-agent', 'model', 'use-agent-polls.ts'),
     join('widgets', 'stage-text-evidence', 'ui', 'stage-text-evidence.tsx'),
     join('widgets', 'stage-changes', 'ui', 'stage-raw-differences.tsx'),
     join('widgets', 'stage-changes', 'ui', 'stage-changes.tsx'),
