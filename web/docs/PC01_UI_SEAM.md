@@ -427,13 +427,39 @@ loop continues at the next interval. No other slice polls the run endpoint.
 There is no wall-clock deadline on purpose: the stop condition is the run's own terminal,
 and inventing a timeout would invent a failure the contract does not define.
 
-**Nothing else polls.** PC-01 has no WebSocket and no server-sent events, and the export
-endpoint is synchronous — no export resource, no export identity, nothing to poll. The
-export panel holds no polling state.
+**Nothing else polls the run endpoint.** PC-01 has no WebSocket and no server-sent events,
+and the export endpoint is synchronous — no export resource, no export identity, nothing to
+poll. The export panel holds no polling state. The one other policy this section freezes is
+the operational-list policy below; every other timed refresh in the application is a
+slice-local constant that is not frozen here.
 
 These numbers are `A5`'s, not an upstream owner decision: no P02 document declares a
 polling interval. Changing them is a change to `shared/config/polling.ts` and to this
 section, in one commit.
+
+### 7.1 Operational lists — «Очередь» and «Журнал выполнения»
+
+The execution queue and the execution journal refresh themselves under
+`OPERATIONAL_LIST_POLLING` (owner-accepted: polling, not WebSocket or SSE).
+
+| Value | Setting |
+|---|---|
+| interval | 10000 ms while the tab is visible |
+| hidden tab | no polling (`refetchIntervalInBackground: false`, and `operationalListInterval` returns `false`) |
+| after a failed read | ×2 per consecutive failure, ceiling 60000 ms: 10, 20, 40, 60, 60 … s |
+| after a success | back to 10000 ms |
+| stale threshold | 3 × interval = 30000 ms |
+
+`operationalListInterval({ failures, visible })` computes the next delay and is pure, so a
+test asserts the schedule without timers. The failure count is not React Query's
+`fetchFailureCount` (it restarts with every read and counts retries inside one read);
+`entities/execution` keeps the streak per query from the settled-success and settled-failure
+counters. The first read after a hidden tab returns is the window-focus refetch.
+
+Both screens show «Обновлено ЧЧ:ММ:СС», the time of the last successful read
+(`dataUpdatedAt`). When that is older than the stale threshold, or the latest read failed,
+the line reads «Данные могли устареть: последнее обновление ЧЧ:ММ:СС» and the last page stays
+on screen under it. «Исполнители» does not use this policy yet.
 
 ## 8. Commands
 

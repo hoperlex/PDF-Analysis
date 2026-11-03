@@ -1,0 +1,21 @@
+/*
+ * The «Обновлено» line. Colour comes from the design system: the fresh line uses the muted
+ * ink, the stale line is an `.am-note` from `globals.css`, where the contrast census measures
+ * both. Nothing here sets a colour of its own.
+ */
+
+.fresh {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.stale {
+  margin-top: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
