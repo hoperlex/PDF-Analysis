@@ -65,10 +65,25 @@ class _Registry:
 
 
 class _Jobs:
+    """The queue's repository as the worker's loops see it: nothing is queued, nothing is waiting.
+
+    ``EXEC2-GROUP-RUN-01`` gave the worker the offline wait of a group (read once, in its constructor) and a
+    housekeeping pass over the Runs admitted on a group; this stand-in answers both as an empty database would."""
+
+    def __init__(self, **_options: object) -> None:
+        return None
+
+    @staticmethod
+    def group_offline_wait_seconds(environ: object = None) -> int:
+        return 1800
+
     def reclaim_expired(self, _session: object) -> None:
         return None
 
-    def next_queued_run(self, _session: object) -> None:
+    def refresh_group_waits(self, _session: object, *, offline_wait_seconds: float) -> SimpleNamespace:
+        return SimpleNamespace(expired=0, consent_lapsed=0)
+
+    def next_queued_run(self, _session: object, **_options: object) -> None:
         return None
 
 

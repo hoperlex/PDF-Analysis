@@ -696,7 +696,9 @@ def test_the_sentinel_token_is_in_no_response_event_log_or_stored_row(
     ):
         rows = [row[0] or "" for row in session.execute(text(table_query)).all()]
         assert not any(sentinel in row for row in rows), table_query
+    # This connection's events only: `audit_event` is append-only and other suites of this lane commit token events of
+    # their own (the concurrency suite does), so "the table holds exactly two" is a claim about the lane's history.
     events = [row[0] for row in session.execute(text(
         "SELECT event_type FROM audit_event WHERE event_type LIKE 'executor.runner_token%' "
-        "ORDER BY occurred_at"))]
+        "AND aggregate_id = :c ORDER BY occurred_at"), {"c": connection_id})]
     assert sorted(events) == ["executor.runner_token_issued", "executor.runner_token_revoked"]

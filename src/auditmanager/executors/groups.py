@@ -96,7 +96,7 @@ TIE_BREAK_MIN: Final[int] = 1
 TIE_BREAK_MAX: Final[int] = 16
 
 # Control characters, line and paragraph separators and surrogates have no place in a label (as for presets).
-_UNPRINTABLE = re.compile(r"[\x00-\x1f\x7f-\x9f  \ud800-\udfff]")
+_UNPRINTABLE = re.compile(r"[\x00-\x1f\x7f-\x9f  \ud800-\udfff]")
 
 
 # --- records --------------------------------------------------------------------------------------------------

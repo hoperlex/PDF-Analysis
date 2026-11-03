@@ -49,6 +49,29 @@ if _ACCOUNTS_NAME not in sys.modules:
     sys.modules[_ACCOUNTS_NAME] = _accounts
     _accounts_spec.loader.exec_module(_accounts)
 
+# ``tests/support/connection_budget.py`` is loaded the same way, for the same reason, under ``am_connection_budget``.
+# It keeps the idle connections of the session-scoped engines from outliving the module that used them -- measured
+# as the cause of ``too many clients already`` in the first full database battery of the EXEC-2 integration; see that
+# module's note. ``install()`` starts remembering engines now, before any conftest below builds one.
+_BUDGET_NAME = "am_connection_budget"
+_BUDGET_PATH = Path(__file__).resolve().parent / "support" / "connection_budget.py"
+if _BUDGET_NAME not in sys.modules:
+    _budget_spec = importlib.util.spec_from_file_location(_BUDGET_NAME, _BUDGET_PATH)
+    assert _budget_spec is not None and _budget_spec.loader is not None
+    _budget = importlib.util.module_from_spec(_budget_spec)
+    sys.modules[_BUDGET_NAME] = _budget
+    _budget_spec.loader.exec_module(_budget)
+connection_budget = sys.modules[_BUDGET_NAME]
+connection_budget.install()
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    """After the last test of a module (and after its fixtures were finalised), close what its engines hold idle."""
+    if connection_budget.is_module_boundary(item, nextitem):
+        connection_budget.trim_idle_connections()
+
+
 #: Everything that selects a provider, a credential or a model. `DATABASE_URL` and the `S3_*`
 #: names are deliberately absent: those address this lane's own disposable services, the
 #: suites genuinely need them, and no test can spend money through them.

@@ -85,7 +85,17 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
             "comparison_launch_entry"} <= tool.PRODUCT_TABLES
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches are
     # product data too (PRODUCT 77 -> 89).
-    assert len(tool.PRODUCT_TABLES) == 89 and len(tool.KEEP_TABLES) == 30 and len(tool.MIXED_TABLES) == 3
+    # `0046_executor_capacity_enroll` and `0047_executor_groups_rules` (`EXEC2-SEAL-1`, `EXEC2-SEAL-2`): the enrollment
+    # grants, the install sessions, the groups with their revisions and members, the routing rules and the
+    # routing-mode journal are the stand's configuration of its own executors, like the connections and tokens they
+    # name, so they join the kept tables (KEEP 30 -> 37); no product table is added, and none of them is mixed.
+    assert {"executor_enrollment", "executor_agent_install", "executor_group", "executor_group_revision",
+            "executor_group_member", "executor_routing_rule_revision",
+            "executor_routing_mode_event"} <= tool.KEEP_TABLES
+    assert not {"executor_enrollment", "executor_agent_install", "executor_group", "executor_group_revision",
+                "executor_group_member", "executor_routing_rule_revision",
+                "executor_routing_mode_event"} & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
+    assert len(tool.PRODUCT_TABLES) == 89 and len(tool.KEEP_TABLES) == 37 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

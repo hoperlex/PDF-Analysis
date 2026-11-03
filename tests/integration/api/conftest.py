@@ -838,6 +838,19 @@ class SeamRunAdapter:
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._view(run_id)
 
+    def estimate_run_cost(
+        self, *, version_uid: str, executor_connection_id: str | None = None,
+        reaudit_of_run_id: str | None = None, preset_id: str | None = None, relaxed_limits: bool = False,
+        executor_group_id: str | None = None,
+    ) -> Any:
+        """`D-74`. The port declares it; this stand-in prices nothing, and says which dependency is missing."""
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_cost_estimator")
+
+    def get_extended_review(self, *, run_id: str) -> Any:
+        """`D-74`. An unknown run is ``404`` as for every run read; this stand-in holds no saved review."""
+        self._view(run_id)
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="extended_review_reader")
+
     def get_norm_verification(self, *, run_id: str) -> Any:
         # `R-146at`: the shipping adapter reads the Run first (an absent one is 404), then
         # answers the report or the declared 503. This stand-in holds no saved review.
@@ -973,6 +986,9 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
     test that drove the router alone would be testing half the edge. See ``driver.py``.
     """
     class MissingBetaGroup:
+        def estimate_ar_v3_group_cost(self, **_: Any) -> Any:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
+
         def start_ar_v3_group(self, **_: Any) -> Any:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
 

@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import re
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -56,6 +57,7 @@ ADMIN = "usr_01M2545JSD15ETSNNV904X991K"
 CONNECTION = "exc_01M2545JSD15ETSNNV904X991K"
 OTHER_CONNECTION = "exc_01M2545JSD15ETSNNV904X991M"
 INSTANCE = "agent-instance-0001"
+GATEWAY_MODEL = "claude-sonnet-5"
 SECRET_SHAPE = re.compile(r"ame_[0-9a-z]{8}_[A-Za-z0-9_-]{43}")
 TOKEN_SHAPE = re.compile(r"amr_[0-9a-z]{8}_[A-Za-z0-9_-]{43}")
 PACKAGE = AgentPackage(version="0.9.0", sha256="a" * 64, size_bytes=1, path=None)  # type: ignore[arg-type]
@@ -117,7 +119,9 @@ class FakeExecutors:
         return self.connection if self.exists and connection_id == CONNECTION else None
 
     def current_revisions(self, session, connection_ids):
-        return {connection_id: object() for connection_id in connection_ids} if self.has_revision else {}
+        # The command carries the connection's pinned model (`b7063d2c`), so a current revision has settings.
+        current = SimpleNamespace(settings=SimpleNamespace(gateway_model=GATEWAY_MODEL))
+        return {connection_id: current for connection_id in connection_ids} if self.has_revision else {}
 
     def archive(self) -> None:
         self.connection = dataclasses.replace(self.connection, archived_at=self.clock.now, archived_by=ADMIN)
@@ -370,6 +374,7 @@ def test_a_grant_is_stored_as_a_hash_for_fifteen_minutes_and_shown_once() -> Non
     assert record.expires_at - record.created_at == timedelta(seconds=ENROLLMENT_LIFETIME_SECONDS) == timedelta(minutes=15)
     assert record.created_by == ADMIN and record.connection_id == CONNECTION
     assert issued.package == PACKAGE and issued.command.count(issued.secret) == 1
+    assert f"AUDITMANAGER_AGENT_MODEL={GATEWAY_MODEL} " in issued.command, "the installer declares the connection's pinned model"
     assert world.ledger.began == [("issue_executor_enrollment", "issue-1")]
     assert world.ledger.succeeded == [{"enrollment_id": record.enrollment_id}]
     assert world.executors.locked == [CONNECTION], "the connection is locked before its grants are touched"
@@ -484,8 +489,10 @@ def test_an_expired_unredeemed_grant_is_closed_for_the_index_but_stays_expired_a
     first = world.issue("issue-1")
     world.clock.advance(minutes=16)
     world.issue("issue-2")
-    closed = world.grants.rows[first.record.enrollment_id]
-    assert closed.revoked_at is not None and closed.state == "expired"
+    # A grant's state is derived from the instant it is read, so it is read as the database reads it (stamped with
+    # "now"), not taken from the stored row, which still carries the instant it was written.
+    closed = world.grants.get_enrollment(None, first.record.enrollment_id)
+    assert closed is not None and closed.revoked_at is not None and closed.state == "expired"
     assert "executor.enrollment_revoked" not in world.journal.types()
 
 
