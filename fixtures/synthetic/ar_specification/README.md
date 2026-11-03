@@ -43,7 +43,7 @@ because that adapter searches the canonical directory and every directory under
 | 3 | start a run | `POST /runs` `{"version_uid": v}` | `202`; the run reaches `published` with one finding (`explicit_placeholder`, page 2) |
 | 4 | upload the price list | `POST /projects/{p}/price-lists` (multipart `file`, `default_currency=RUB`) | `201`, ten positions |
 | 5 | set the AR vendor list | `PUT /projects/{p}/vendor-lists/AR` `{"mode":"list","entries":[{"vendor":"Завод Север"}]}` (an expert may; the global list is an admin's) | `200` |
-| 6 | start a pass | `POST /projects/{p}/documents/{d}/optimisation-passes` | `201`: 7 rows, 5 matched, 4 rows with a proposal, 4 proposals |
+| 6 | start a pass | `POST /projects/{p}/documents/{d}/optimisation-passes` | `201`: 7 rows, 6 matched, 4 rows with a proposal, 4 proposals |
 | 7 | read | `GET /optimisation-passes/{id}/proposals` | four `cheaper_analog` proposals (below) |
 
 After step 3 and before step 4, `GET .../specification-prices` answers `price_list_missing`; after
@@ -70,13 +70,14 @@ the one seeded issue), and the specification over two sheets (pages 3 and 4).
 | 1 | Дверь противопожарная ДПМ-01/60 EI60 ООО «Промет», 4 шт | mark `ДПМ-01/60`, 25000 | matched, amount 100000; proposal: `ДПМ-02/60`, 21000, `Завод Север` (code family), saving **16000** |
 | 2 | Окно ПВХ двухкамерное ОП В2 1460х1460, 12 шт | name, 18500 | matched, 222000; proposal: `…1560х1460`, 17200 (name similarity), saving **15600** |
 | 3 | Анкер химический ООО «Промет», 200 шт | name + vendor `Промет` (legal form optional), 12.75 | matched, 2550; proposal: `Анкер химический усиленный`, 9.5, saving **650** |
-| 4 | Профиль направляющий ПН 50х40, 120 п.м | priced per `м` | unmatched, `unit_mismatch` (no price, no amount) |
+| 4 | Профиль направляющий ПН 50х40, 120 п.м | `м`, 310 | matched, amount 37200 (`п.м` is priced as `м` at factor one, owner decision 2026-10-30, `BETA-UNIT-ALIASES-1030`; under the v1 matcher this row was `unit_mismatch`); no cheaper analog (one position of this name) |
 | 5 | Решётка вентиляционная РВ-200, 6 шт | none | unmatched, `no_position` |
 | 6 | Монтажная пена, quantity `-` | `компл`, 450 | matched, no amount (`quantity_not_numeric`); proposal: `…армированная`, 300, saving **absent** (never 0) |
 | 7 | Гидроизоляционная мембрана Техноэласт ЭПП, 340,8 м² | `м2`, 410 | matched, 139728; no cheaper analog |
 
-Totals: RUB 464278 over 4 rows; excluded: `unit_mismatch` 1, `no_position` 1,
-`quantity_not_numeric` 1. Proposals: four, total computable saving RUB 32250.
+Totals: RUB 501478 over 5 rows; excluded: `no_position` 1, `quantity_not_numeric` 1
+(`unit_mismatch` 0). The oracle names `price-match-v2` and `cheaper-analog-v2`.
+Proposals: four, total computable saving RUB 32250.
 
 ## Regenerating
 
@@ -97,6 +98,10 @@ this file changes it.
 
 ## Known limits
 
+* Since `BETA-UNIT-ALIASES-1030` (the owner equates running metres with metres at factor one) no row of
+  this set is a `unit_mismatch`: row 4 used to be one. The true dimension mismatch (area against length)
+  is held by the matcher's unit tests, not here; a row for it would change the PDF and with it the
+  recording's request key.
 * One document, one discipline, four pages; the unit and the money are as simple as they can be
   while still showing every outcome. It proves the pipeline, not real-world coverage.
 * The figures are computed from the authored numbers in the generator, so a change to a price or a

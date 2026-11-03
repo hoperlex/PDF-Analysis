@@ -22,7 +22,7 @@ credential, over the committed synthetic fixtures and nothing else:
 What is held: before the price list the specification read says so (``price_list_missing``);
 after it the extractor has read exactly the oracle's seven rows (one table continued onto the
 second sheet without a repeated header, a name wrapped above its anchor line, a manufacturer with
-its legal form), the matcher prices exactly the oracle's four rows and counts the other three by
+its legal form), the matcher prices exactly the oracle's five rows and counts the other two by
 their reasons, the totals are the oracle's, and the pass holds exactly the oracle's four
 ``cheaper_analog`` proposals -- each priced from a matched position and a proposed position in the
 same unit and currency, the saving ``(current - proposed) x quantity`` and absent (never ``0``)
@@ -407,5 +407,7 @@ def test_rows_that_are_not_priced_never_become_proposals(journey) -> None:
     proposed = {item["row_position"] for item in journey["proposals"]["items"]}
     unpriced = {row["position"] for row in ORACLE["specification"]["rows"]
                 if row["status"] == "unmatched"}
-    assert unpriced == {"4", "5"}
+    # Row 4 (120 п.м, priced per м) is priced since `BETA-UNIT-ALIASES-1030` (d93d245c, owner decision
+    # 2026-10-30: running metres equal metres at factor one); only row 5 has no price-list position.
+    assert unpriced == {"5"}
     assert not proposed & unpriced
