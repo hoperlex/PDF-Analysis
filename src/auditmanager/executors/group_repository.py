@@ -13,8 +13,9 @@ What is written, and by whom the database holds the rest:
   the database refuses a member beyond the count and refuses to commit a revision that holds fewer, so the membership
   is closed once the revision exists;
 * ``executor_routing_rule_revision`` is inserted and never changed (``am_append_only``);
-* ``executor_routing_mode_event`` is only **read** here (an empty journal is ``legacy``). The cut-over lane
-  (``EXEC2-CUTOVER-01``) writes it.
+* ``executor_routing_mode_event`` is read (an empty journal is ``legacy``) and, since ``EXEC2-CUTOVER-01``, appended
+  to by :meth:`insert_mode_event` under the journal's advisory lock (:meth:`lock_mode_journal`), the same lock
+  ``am_check_executor_routing_mode_event`` takes; the number written is the highest plus one, as the trigger requires.
 
 Numbering is taken under a lock first -- the group row for a group's revisions, the same advisory key the trigger
 takes for a work kind's rules -- so two administrators cannot take one number; the unique keys are the backstop.
@@ -22,6 +23,7 @@ takes for a work kind's rules -- so two administrators cannot take one number; t
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from typing import Any, Final
@@ -41,6 +43,7 @@ from auditmanager.executors.groups import (
 from auditmanager.shared.identity import (
     ExecutorGroupId,
     ExecutorGroupRevisionId,
+    ExecutorRoutingModeEventId,
     ExecutorRoutingRuleRevisionId,
 )
 
@@ -125,6 +128,13 @@ class GroupRepository:
             f"RETURNING {_GROUP_COLUMNS}"
         ), {"id": str(ExecutorGroupId.new()), "name": display_name, "actor": actor_uid}).mappings().one()
         return _group(row)
+
+    def active_group_names(self, session: Session) -> set[str]:
+        """The names of the **active** groups, lower-cased as the unique index compares them (`EXEC2-CUTOVER-01`: the
+        preview proposes a name no active group holds)."""
+        return {str(row[0]) for row in session.execute(text(
+            "SELECT lower(display_name) FROM executor_group WHERE archived_at IS NULL"
+        )).all()}
 
     def get_group(self, session: Session, group_id: str, *, lock: bool = False) -> GroupRecord | None:
         """One group. ``lock`` takes the row lock that serialises its revisions, its archive and a rule that
@@ -303,7 +313,36 @@ class GroupRepository:
         ), {"kind": work_kind}).mappings().first()
         return None if row is None else _rule(row)
 
-    # -- the routing mode (read only here) --------------------------------------------------------------
+    # -- the routing mode ---------------------------------------------------------------------------------
+
+    def lock_mode_journal(self, session: Session) -> None:
+        """The advisory lock ``am_check_executor_routing_mode_event`` takes, taken first by every writer of the journal
+        and by ``setExecutorRoute`` (`EXEC2-CUTOVER-01`), so that a route change and a mode change are serialised and
+        two events cannot take one number. Held until the transaction ends; re-entrant within it."""
+        session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('executor_routing_mode_event', 0))"))
+
+    def insert_mode_event(
+        self, session: Session, *, mode: str, preview_digest: str | None, mapping: Sequence[Mapping[str, str]],
+        actor_uid: str,
+    ) -> tuple[ModeState, int]:
+        """Append one event to the routing-mode journal and return the mode it makes current with its number.
+
+        ``event_no`` is the highest number plus one, read in the same statement as the insert; the caller holds
+        :meth:`lock_mode_journal`, so no other writer can take the number and the trigger's check passes. A ``rules``
+        event carries the confirmed digest and the 1 to 6 entries of the mapping; a ``legacy`` event carries neither."""
+        row = session.execute(text(
+            "INSERT INTO executor_routing_mode_event (mode_event_id, event_no, mode, preview_digest, mapping, "
+            "changed_by) SELECT :id, COALESCE(MAX(event_no), 0) + 1, :mode, CAST(:digest AS text), "
+            "CAST(:mapping AS jsonb), :actor FROM executor_routing_mode_event "
+            "RETURNING mode, mode_event_id, event_no, changed_at, changed_by"
+        ), {"id": str(ExecutorRoutingModeEventId.new()), "mode": mode, "digest": preview_digest,
+            "mapping": json.dumps([dict(entry) for entry in mapping], sort_keys=True), "actor": actor_uid},
+        ).mappings().one()
+        state = ModeState(
+            mode=row["mode"], mode_event_id=row["mode_event_id"], changed_at=row["changed_at"],
+            changed_by=row["changed_by"],
+        )
+        return state, int(row["event_no"])
 
     def current_mode(self, session: Session) -> ModeState:
         """The routing mode in force: the event with the highest ``event_no``; an empty journal is ``legacy``."""

@@ -219,10 +219,9 @@ SEALED_NOT_YET_WRITTEN = frozenset((
     # host key) and the sealed key's row. `EXEC2-ENROLL-SSH-01` adds the worker's statements to the second.
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): `executor_group`, `executor_group_revision`, `executor_group_member`
     # and `executor_routing_rule_revision` left the set when `EXEC2-GROUP-STORE-01` wrote them (`group_repository.py`).
-    # `executor_routing_mode_event` stays: that lane only reads the routing-mode journal (an empty one is `legacy`), and
-    # `EXEC2-CUTOVER-01` removes it when its first statement lands. The scan counts INSERT, UPDATE, DELETE and LOCK
-    # statements, so a table that is only selected is still never written.
-    "executor_routing_mode_event",
+    # `executor_routing_mode_event` left it when `EXEC2-CUTOVER-01` wrote the routing-mode journal
+    # (`GroupRepository.insert_mode_event`). The scan counts INSERT, UPDATE, DELETE and LOCK statements, so a table that
+    # is only selected is still never written. The set is empty at head.
 ))
 
 #: ``SELECT``.

@@ -5931,6 +5931,64 @@ class ExecutorGroupAdapter(_SessionHolder):
             return models.ExecutorRoutingRule.model_validate(_routing_rule_view(rule))
         return self._write(work)
 
+    # EXEC2-CUTOVER-01 (ADR-0026 decision 17). Thin, like the rest: the preview, the cut-over and the rollback live in
+    # ``auditmanager.executors.routing_mode``; this re-reads the actor's role set inside the transaction and maps
+    # the records into the frozen shapes. The cut-over and the rollback commit as one transaction (``_write``); the
+    # preview is a read.
+    def preview_routing(self, *, user_uid: str) -> models.ExecutorRoutingPreview:
+        from auditmanager.executors.public import preview_routing
+
+        def work(session: Session) -> models.ExecutorRoutingPreview:
+            preview = preview_routing(session, roles=self._roles(session, user_uid))
+            return models.ExecutorRoutingPreview.model_validate(_routing_preview_view(preview))
+        return self._read(work)
+
+    def set_routing_mode(
+        self, *, body: models.SetExecutorRoutingModeRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingModeResult:
+        from auditmanager.executors.public import MappingEntry, pinned_models, set_routing_mode
+
+        def work(session: Session) -> models.ExecutorRoutingModeResult:
+            change = set_routing_mode(
+                session, mode=body.mode.value, preview_digest=body.preview_digest,
+                mapping=None if body.mapping is None else [
+                    MappingEntry(work_kind=entry.work_kind.value, group_display_name=entry.group_display_name)
+                    for entry in body.mapping],
+                pins=pinned_models(), roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorRoutingModeResult.model_validate({
+                "routing_mode": _routing_mode_view(change.routing_mode),
+                "groups": [_group_view(summary) for summary in change.groups],
+                "rules": [_routing_rule_view(rule) for rule in change.rules],
+            })
+        return self._write(work)
+
+
+# EXEC2-CUTOVER-01 ---------------------------------------------------------------------------------------
+#
+# The cut-over preview as the contract shapes it (``ExecutorRoutingPreview``). An optional property is absent,
+# never null; the items are the six work kinds in the order the enumeration names them.
+
+
+def _routing_preview_view(preview: Any) -> dict[str, Any]:
+    return {
+        "routing_mode": _routing_mode_view(preview.routing_mode),
+        "preview_digest": preview.preview_digest,
+        "items": [
+            _present(
+                work_kind=item.work_kind, status=item.status,
+                primary_connection_id=item.primary_connection_id,
+                connection_revision_id=item.connection_revision_id,
+                standby_connection_id=item.standby_connection_id, pin_id=item.pin_id,
+                gateway_model=item.gateway_model, billing=item.billing,
+                proposed_group_name=item.proposed_group_name,
+                incompatible_reason=item.incompatible_reason,
+            )
+            for item in preview.items
+        ],
+    }
+
 
 #: `CMP-SEAL-C1`: the stable class name of the withdrawn `0035` operations while the versions module is on.
 _VERSIONS_MODULE_DEPENDENCY = "comparison_versions_module"

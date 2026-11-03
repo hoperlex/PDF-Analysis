@@ -1,6 +1,6 @@
 """Executor groups and the routing rule of a work kind (`EXEC2-GROUP-STORE-01`, ADR-0026 decisions 10, 11 and 14).
 
-Eight operations of contract 1.16.0:
+Ten operations of contract 1.16.0:
 
 ====================================  ======================================================================
 ``listExecutorGroups``                any role; every group with its current revision
@@ -11,11 +11,14 @@ Eight operations of contract 1.16.0:
 ``getExecutorGroupCapacity``          any role; the current revision as dispatch would see it now
 ``listExecutorRoutingRules``          any role; the current rule of each work kind, and the routing mode
 ``setExecutorRoutingRule``            an administrator; point a work kind at a group revision
+``previewExecutorRouting``            an administrator; the cut-over proposal, writing nothing (`EXEC2-CUTOVER-01`)
+``setExecutorRoutingMode``            an administrator; the cut-over to ``rules`` or the rollback to ``legacy``
+                                      (`EXEC2-CUTOVER-01`)
 ====================================  ======================================================================
 
-``previewExecutorRouting`` and ``setExecutorRoutingMode`` of the same contract are `EXEC2-CUTOVER-01`'s and are not
-declared here. Who may call what is decided by the authorization seam (``api/security.py``); a router decides nothing
-about roles. The reads take no subject.
+Who may call what is decided by the authorization seam (``api/security.py``); a router decides nothing about roles. The
+four group-store reads take no subject; the preview and the mode change pass the caller, whose role set the command
+re-reads in its own transaction.
 
 **Declared, and answerable only with a port.** ``build_router`` declares these routes whatever the port, as it does
 for every operation: the served document is a function of the declarations. A router built with no port answers none.
@@ -167,4 +170,34 @@ def build_executor_group_routes(router: APIRouter, groups: ExecutorGroupPort) ->
         view = groups.set_rule(
             work_kind=work_kind, group_revision_id=body.group_revision_id,
             user_uid=subject.user_uid, idempotency_key=idempotency_key)
+        return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
+
+    # EXEC2-CUTOVER-01 (ADR-0026 decision 17) ----------------------------------------------------------------
+
+    @router.get(
+        "/executor-routing/preview", operation_id="previewExecutorRouting", tags=_TAGS,
+        response_model=models.ExecutorRoutingPreview,
+        responses={**success(200, "The proposal: per work kind a one-member group of the primary's current "
+                                  "revision, a standby shown and never converted, an incompatible route "
+                                  "flagged, and the digest that binds them."),
+                   **envelope_responses(401, 403, 500, 503)},
+    )
+    def preview_executor_routing(subject: CurrentSubject) -> WireResponse:
+        view = groups.preview_routing(user_uid=subject.user_uid)
+        return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))
+
+    @router.post(
+        "/executor-routing/mode", operation_id="setExecutorRoutingMode", tags=_TAGS,
+        response_model=models.ExecutorRoutingModeResult,
+        responses={**success(200, "The mode as it now stands, the groups the change created and the rules "
+                                  "now current."),
+                   **envelope_responses(401, 403, 409, 422, 500, 503,
+                                        descriptions={409: STATE_CONFLICT_DESCRIPTION})},
+    )
+    def set_executor_routing_mode(
+        subject: CurrentSubject, body: models.SetExecutorRoutingModeRequest,
+        idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        view = groups.set_routing_mode(
+            body=body, user_uid=subject.user_uid, idempotency_key=idempotency_key)
         return json_response(200, encode_json(view.model_dump(mode="json", exclude_unset=True)))

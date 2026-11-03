@@ -73,6 +73,7 @@ from auditmanager.shared.identity import IdempotencyKey
 
 __all__ = [
     "advance_group_rotation",
+    "append_rule",
     "archive_group",
     "create_group",
     "group_capacity",
@@ -81,6 +82,7 @@ __all__ = [
     "group_summary",
     "list_group_summaries",
     "list_routing_rules",
+    "make_group",
     "member_facts",
     "resolve_rule",
     "revise_group",
@@ -321,6 +323,41 @@ def _refuse_members(
         )
 
 
+def make_group(
+    session: Session, *, name: str, settings: GroupSettings, members: Sequence[MemberRequest],
+    table: dict[str, ModelPin], store: ExecutorRepository, repo: GroupRepository, actor_uid: str,
+    journal: Journal,
+) -> tuple[GroupRecord, GroupRevisionRecord]:
+    """The writes of :func:`create_group` after its key is claimed: hold decision 10 against the rows (the member
+    connections locked ascending, their current revisions read, the first member that does not fit refused), take the
+    name, insert the group and its first revision with its members (``member_count`` is the number of members of the
+    request) and journal ``executor.group_created``.
+
+    ``table`` maps each pinned ``model_id`` to its pin, as :func:`create_group` builds it; the caller has already held the
+    settings and the members against it (:func:`~auditmanager.executors.groups.refuse_settings`). The routing-mode
+    cut-over (`EXEC2-CUTOVER-01`) calls this once per work kind inside its own transaction and its own key, so it has
+    the validation, the database checks and the event of a group made by hand, and no second path that could drift. It
+    claims no key and succeeds no command: that is the caller's."""
+    _refuse_members(session, store, repo, settings, members)
+    repo.lock_name(session, name)
+    if repo.name_in_use(session, name):
+        raise group_name_in_use()
+    record = repo.insert_group(session, display_name=name, actor_uid=actor_uid)
+    rate_in, rate_out = _rates(table, settings.pin_id)
+    revision = repo.insert_revision(
+        session, group_id=record.group_id, revision_no=repo.next_revision_no(session, record.group_id),
+        settings=settings, input_per_mtok_usd=rate_in, output_per_mtok_usd=rate_out, members=members,
+        actor_uid=actor_uid,
+    )
+    journal(
+        session, event_type="executor.group_created", aggregate_type=AGGREGATE_GROUP,
+        aggregate_id=record.group_id,
+        payload={"revision_id": revision.group_revision_id, "revision_no": revision.revision_no,
+                 "actor_uid": actor_uid},
+    )
+    return record, revision
+
+
 def create_group(
     session: Session, *, display_name: str, settings: GroupSettings, members: Sequence[MemberRequest],
     pins: Iterable[ModelPin], roles: Iterable[str], idempotency_key: str, actor_uid: str,
@@ -346,23 +383,9 @@ def create_group(
         "actor_uid": actor_uid})
     if isinstance(claimed, CommandReplay):
         return group_summary(session, str(claimed.outcome["group_id"]), repo)
-    _refuse_members(session, store, repo, settings, members)
-    repo.lock_name(session, name)
-    if repo.name_in_use(session, name):
-        raise group_name_in_use()
-    record = repo.insert_group(session, display_name=name, actor_uid=actor_uid)
-    rate_in, rate_out = _rates(table, settings.pin_id)
-    revision = repo.insert_revision(
-        session, group_id=record.group_id, revision_no=repo.next_revision_no(session, record.group_id),
-        settings=settings, input_per_mtok_usd=rate_in, output_per_mtok_usd=rate_out, members=members,
-        actor_uid=actor_uid,
-    )
-    journal(
-        session, event_type="executor.group_created", aggregate_type=AGGREGATE_GROUP,
-        aggregate_id=record.group_id,
-        payload={"revision_id": revision.group_revision_id, "revision_no": revision.revision_no,
-                 "actor_uid": actor_uid},
-    )
+    record, revision = make_group(
+        session, name=name, settings=settings, members=members, table=table, store=store, repo=repo,
+        actor_uid=actor_uid, journal=journal)
     ledger.succeed(session, claimed.command_id, {
         "group_id": record.group_id, "group_revision_id": revision.group_revision_id})
     return group_summary(session, record.group_id, repo)
@@ -471,10 +494,27 @@ def set_routing_rule(
         raise group_not_found()
     if record.archived_at is not None:
         raise group_archived()
+    rule = append_rule(
+        session, work_kind=work_kind, group_revision_id=group_revision_id, repo=repo, actor_uid=actor_uid,
+        journal=journal)
+    ledger.succeed(session, claimed.command_id, {"rule_revision_id": rule.rule_revision_id})
+    return rule
+
+
+def append_rule(
+    session: Session, *, work_kind: str, group_revision_id: str, repo: GroupRepository, actor_uid: str,
+    journal: Journal,
+) -> RuleRecord:
+    """The write of :func:`set_routing_rule` after its checks: take the work kind's rule lock, answer the rule as it
+    stands when it already names ``group_revision_id`` (nothing is appended and nothing journaled), else append the next
+    rule and journal ``executor.routing_rule_set``.
+
+    The caller holds the row of the group the revision belongs to -- ``FOR UPDATE`` (:func:`set_routing_rule`) or, for a
+    group made in the same transaction (`EXEC2-CUTOVER-01`), the insert itself -- so the group is not being archived,
+    and has checked that the revision exists. A key is claimed and succeeded by the caller."""
     repo.lock_rule(session, work_kind)
     current = repo.current_rule(session, work_kind)
     if current is not None and current.group_revision_id == group_revision_id:
-        ledger.succeed(session, claimed.command_id, {"rule_revision_id": current.rule_revision_id})
         return current
     rule = repo.insert_rule(
         session, work_kind=work_kind, group_revision_id=group_revision_id, actor_uid=actor_uid)
@@ -484,5 +524,4 @@ def set_routing_rule(
         payload={"work_kind": work_kind, "revision_id": group_revision_id, "revision_no": rule.rule_no,
                  "actor_uid": actor_uid},
     )
-    ledger.succeed(session, claimed.command_id, {"rule_revision_id": rule.rule_revision_id})
     return rule
