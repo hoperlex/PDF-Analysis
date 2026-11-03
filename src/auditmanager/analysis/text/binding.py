@@ -12,6 +12,11 @@ call is recorded:
   ``unmetered`` and charges the run's meter nothing, instead of a pin estimate;
 * ``identity_basis`` and ``connection_revision_id`` -- written on the call's journal row.
 
+``connection_revision_id`` is the revision that **served this call**: ``None`` only for the ``environment`` source.
+A run admitted on an executor group (`EXEC2-GROUP-RUN-01`) is *pending* until dispatch binds a member, and a pending run
+has no binding at all -- the source resolver refuses it before any adapter is built -- so a call that has one names the
+member the claim wrote on the run, never a revision chosen here.
+
 Frozen and plain: it is data, not a policy object.
 """
 

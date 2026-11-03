@@ -1,10 +1,20 @@
-"""Read immutable accepted cost authority for a worker; no provider or route choice."""
+"""Read immutable accepted cost authority for a worker; no provider or route choice.
+
+`EXEC2-GROUP-RUN-01` (ADR-0026 decisions 13 and 14). The consent of a Run admitted on a group names the **group
+revision** and no connection: the connection is chosen at dispatch. Two readers hold it:
+
+* :func:`read_run_cost_policy` -- the worker's policy. For a group Run the consent's group revision must be the one the
+  Run froze, and the connection revision it then carries is the one dispatch **bound** (``None`` while the Run is still
+  ``pending``, which no model call may follow: ``analysis.text.cost.require_approved_model`` refuses it);
+* :func:`group_consent_holds` -- the dispatcher's re-check, inside the claim transaction and before anything is bound.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import math
 
+from auditmanager.analysis.public import model_rate_sha256, pinned_models
 from auditmanager.ingest.public import CommandRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import CommandId
@@ -25,6 +35,9 @@ class RunCostPolicy:
     connection_revision_id: str | None = None
     extended_review: dict | None = None
     native_page_piece_policy: dict | None = None
+    #: The group revision the accepted consent names, ``None`` for a Run whose executor was frozen at start. Set, a
+    #: ``None`` ``connection_revision_id`` means *pending* (no member has taken the Run yet), not ``environment``.
+    executor_group_revision_id: str | None = None
 
 
 def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
@@ -51,6 +64,7 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
         window, maximum = consent.get("window_characters"), consent.get("max_windows")
         model, rates = consent["model_id"], consent["rate_sha256"]
         revision = consent.get("connection_revision_id")
+        group_revision = consent.get("executor_group_revision_id")
         extended = consent.get("extended_review")
         page_pieces = consent.get("native_page_piece_policy")
         if page_pieces is not None:
@@ -126,8 +140,50 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
     except (KeyError, TypeError, ValueError):
         raise DomainError(ErrorCode.INTERNAL_ERROR, message="accepted run cost authority is invalid") from None
     # Unmetered still has a positive operational configuration; no monetary halt applies.
-    if revision != getattr(run, "connection_revision_id", None):
+    if group_revision is not None or getattr(run, "binding_state", "frozen_at_start") != "frozen_at_start":
+        # Admitted on a group: the consent names the group revision and the Run froze the same one. The connection
+        # revision is the one dispatch wrote -- ``None`` until then -- and is never compared with the consent, which
+        # holds none (the DB only lets it go NULL -> a member of that group revision, once).
+        if (group_revision is None or revision is not None
+                or group_revision != getattr(run, "executor_group_revision_id", None)):
+            raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
+        revision = getattr(run, "connection_revision_id", None)
+    elif revision != getattr(run, "connection_revision_id", None):
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
     return RunCostPolicy(True, ceiling / 1_000_000 if ceiling else float(default_ceiling_usd),
                          billing == "metered" and not uncapped_stats, window, maximum,
-                         digest, model, rates, revision, extended, page_pieces)
+                         digest, model, rates, revision, extended, page_pieces, group_revision)
+
+
+def group_consent_holds(session, *, run_id: str, group_revision_id: str, pin_id: str, billing: str,
+                        runs: RunRepository | None = None) -> bool:
+    """Does the consent a Run was accepted under still hold for the group revision it froze? (ADR-0026 decision 14.)
+
+    Called by the claim, inside its transaction, before any member is bound. The group revision is immutable and its
+    members share one pin, model and billing, so what can still differ is small and is checked, never assumed:
+
+    * the consent names **this** group revision;
+    * the model and the billing it approved are the group revision's (``billing`` in the estimate's spelling,
+      ``metered`` or ``unmetered``);
+    * the rate it approved is the rate the provider lock publishes for that pin **now** -- the call-time guard
+      (``analysis.text.cost.require_approved_model``) compares the same two digests, so a lock that moved since the
+      consent would refuse every call after the member was bound.
+
+    A Run accepted with no cost consent at all (a deployment that does not ask for it) has no envelope to break and
+    holds. ``False`` means *call nothing*: the dispatcher records ``needs_reconsent`` and binds no member.
+    """
+    run = (runs or RunRepository()).get(session, run_id)
+    outcome = {}
+    if run.command_id is not None:
+        command = CommandRepository().get(session, CommandId.parse(run.command_id))
+        if command.state != "succeeded":
+            return False
+        outcome = command.outcome or {}
+    consent = outcome.get("cost_consent")
+    if consent is None:
+        return True
+    if (consent.get("executor_group_revision_id") != group_revision_id
+            or consent.get("model_id") != pin_id or consent.get("billing") != billing):
+        return False
+    pin = next((row for row in pinned_models() if row.model_id == pin_id), None)
+    return pin is not None and consent.get("rate_sha256") == model_rate_sha256(pin)

@@ -88,8 +88,16 @@ class ProviderConfig:
     approved_cost_ceiling: bool = False
     approved_model_id: str | None = None
     approved_rate_sha256: str | None = None
+    #: The connection revision the accepted run command approved. ``None`` is "no revision is pinned": a run of the
+    #: ``environment`` source froze none. It is **not** what a run admitted on a group has before dispatch -- that run
+    #: carries :attr:`approved_group_revision_id` and refuses every model call until a member is bound
+    #: (`EXEC2-GROUP-RUN-01`, ``analysis.text.cost.require_approved_model``).
     approved_connection_revision_id: str | None = None
     approved_native_page_pieces: dict | None = None
+    #: `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 13 and 14). The group revision the accepted command admitted the run
+    #: on, ``None`` for a run whose executor was frozen at start. Set, :attr:`approved_connection_revision_id` is the
+    #: member dispatch bound, and ``None`` there means the run is still pending, so no call may be made.
+    approved_group_revision_id: str | None = None
 
 
 def _read_ceiling(environ: Mapping[str, str]) -> tuple[float, bool]:

@@ -105,6 +105,7 @@ from auditmanager.shared.errors import DomainError
 
 __all__ = [
     "CRASHED_REASON",
+    "GROUP_WAIT_SECONDS",
     "RECLAIM_SECONDS",
     "RUN_CONCURRENCY",
     "InlineCarrier",
@@ -132,6 +133,12 @@ CRASHED_REASON: Final[str] = "executor_raised_before_terminal"
 #: How often a serving process fences expired leases. W53's value, now shared by the
 #: in-process carrier, the API's reclaim-only carrier and the worker service.
 RECLAIM_SECONDS: Final[float] = 30.0
+
+#: `EXEC2-GROUP-RUN-01`. How often a dispatching process looks at the Runs admitted on a group and keeps the reason each
+#: waits true (:meth:`~auditmanager.jobs.public.JobRepository.refresh_group_waits`). The look is one indexed read of the
+#: pending Runs (`ix_audit_run_pending`) and nothing when there are none, so it is much shorter than the lease reclaim: a
+#: Run admitted into a full group shows why it waits within one poll.
+GROUP_WAIT_SECONDS: Final[float] = 5.0
 
 
 def _outstanding_jobs(session_factory: sessionmaker[Session]) -> int:
@@ -290,6 +297,7 @@ class DurableCarrier(ThreadCarrier):
 
     def _poll(self) -> None:
         last_reclaim = 0.0
+        last_waits = 0.0
         while not self._stop.is_set():
             try:
                 if monotonic() - last_reclaim >= RECLAIM_SECONDS:
@@ -297,6 +305,14 @@ class DurableCarrier(ThreadCarrier):
                         JobRepository().reclaim_expired(session)
                         session.commit()
                     last_reclaim = monotonic()
+                if monotonic() - last_waits >= GROUP_WAIT_SECONDS:
+                    # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 15): keep the wait of every Run admitted on a group true
+                    # and end the ones whose members have all been offline for too long. A bad
+                    # AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS is logged by the handler below on every pass.
+                    with self._sessions() as session:
+                        JobRepository().refresh_group_waits(session)
+                        session.commit()
+                    last_waits = monotonic()
                 with self._lock:
                     busy = bool(self._pending)
                 if not busy:
@@ -453,6 +469,7 @@ def run_to_terminal(
             "run %s was not claimed (%s); left for a later dispatch",
             run_id, refusal.code.value,
         )
+        _record_group_wait(session_factory, run_id, refusal)
         raise
     except DomainError as failure:
         if failure.code in {
@@ -470,6 +487,26 @@ def run_to_terminal(
         _log.exception("run %s did not reach a terminal by itself", run_id)
         _record_crash(session_factory, run_id, failure, runs=run_repo)
         raise
+
+
+def _record_group_wait(
+    session_factory: sessionmaker[Session], run_id: str, refusal: ExecutionNotClaimed,
+) -> None:
+    """Make durable why a Run admitted on a group was not dispatched (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 15).
+
+    A refused claim writes nothing and its transaction is rolled back, so the reason the dispatcher found
+    (``executor_at_capacity``, ``runner_offline`` or ``needs_reconsent``) is stored in a transaction of its own, after the
+    refusal. Any other refusal carries no reason and stores nothing. A failure here is logged and never masks the
+    refusal: the periodic sweep (:meth:`JobRepository.refresh_group_waits`) writes the same reason a moment later."""
+    reason = getattr(refusal, "wait_reason", None)
+    if reason is None:
+        return
+    try:
+        with session_factory() as session:
+            JobRepository().record_group_wait(session, run_id=run_id, reason=str(reason))
+            session.commit()
+    except Exception:
+        _log.exception("run %s: the reason it waits (%s) could not be stored; the sweep stores it", run_id, reason)
 
 
 def _record_crash(

@@ -99,10 +99,32 @@ def fail_reclaimed_run(
     )
 
 
-from .cost_policy import RunCostPolicy, read_run_cost_policy
+def fail_run_without_executor(session: Session, *, run_id: str, from_state: str) -> None:
+    """End a Run admitted on a group that no member could ever take: ``failed``, ``dependency_unavailable``,
+    ``dependency: no_executor_online`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 15).
+
+    The Job boundary decides that the wait is over (every member offline for longer than allowed) and has closed the
+    Job; the Run boundary owns its declared failed edge and its terminal reason, and writes both in the caller's
+    transaction, clearing the wait the Run no longer has. ``no_executor_online`` is the controlled word a pull task nobody
+    claimed already carries, so a reader sees one reason for "no runner took the work". No model was called."""
+    repository = RunRepository()
+    repository.terminate(
+        session,
+        run_id=run_id,
+        from_state=from_state,
+        to_state="failed",
+        terminal_reason=ErrorCode.DEPENDENCY_UNAVAILABLE.value,
+        terminal_detail={"dependency": "no_executor_online"},
+    )
+    repository.clear_wait(session, run_id=run_id)
+
+
+from .cost_policy import RunCostPolicy, group_consent_holds, read_run_cost_policy
 
 __all__ = [
     "RunCostPolicy",
+    "fail_run_without_executor",
+    "group_consent_holds",
     "read_run_cost_policy",
     "PACK_MANIFEST_ENV",
     "PackManifestRefused",

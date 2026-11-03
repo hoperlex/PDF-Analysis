@@ -831,6 +831,7 @@ def _bind_provider(
             approved_model_id=config.approved_model_id,
             approved_rate_sha256=config.approved_rate_sha256,
             approved_connection_revision_id=config.approved_connection_revision_id,
+            approved_group_revision_id=config.approved_group_revision_id,
             approved_native_page_pieces=config.approved_native_page_pieces,
         ))
     return binding
@@ -967,6 +968,7 @@ def _execute_run_body(
             approved_model_id=cost_policy.model_id,
             approved_rate_sha256=cost_policy.rate_sha256,
             approved_connection_revision_id=cost_policy.connection_revision_id,
+            approved_group_revision_id=cost_policy.executor_group_revision_id,
             approved_native_page_pieces=cost_policy.native_page_piece_policy,
         )
     if (v3_profile or v3_bundle) and (
@@ -1049,6 +1051,20 @@ def _execute_run_body(
             current_state=run.state, requested_state="running",
         )
     authority = job_repo.start_execution(session, run_id=run_id)
+    if getattr(run, "binding_state", "frozen_at_start") == "pending":
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 14). The row read above was admitted on a group and had no
+        # connection; the claim has just bound a member of it, in the claim's own transaction, so the executor is
+        # now a fact of the row and nothing else. Re-read it: the provider is bound to *that* revision, and the
+        # approved cost authority pins the same one for the call-time guard. Everything before this line (the budget,
+        # the ceiling, the profile) was decided from the group revision's pin, which every member serves.
+        run = run_repo.get(session, run_id)
+        if run.binding_state != "bound" or run.connection_revision_id is None:
+            raise DomainError(
+                ErrorCode.STATE_TRANSITION_NOT_ALLOWED, machine="binding_state",
+                current_state=run.binding_state, requested_state="bound",
+            )
+        if config.approved_cost_ceiling:
+            config = replace(config, approved_connection_revision_id=run.connection_revision_id)
     if run.state in {INITIAL_STATE, "queued"}:
         run_repo.advance(session, run_id=run_id, from_state="queued", to_state="running")
     # `D-20`. The authority boundary that makes what has happened so far durable.

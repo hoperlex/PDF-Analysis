@@ -18,7 +18,8 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import VersionUid
 from auditmanager.storage.public import parse_blob_id
 
-from .commands import _freeze_for, analysis_source_entry, route_classified_version
+from .commands import _freeze_for, _named_group_of, admit_group_for_start, analysis_source_entry, route_classified_version
+from .provider import AdmittedGroup
 
 
 FORMAT = "analysis-cost-preflight/1"
@@ -73,6 +74,10 @@ class RunCostEstimateValue:
     authority_json: str
     frozen_route: object | None = None
     chosen_preset: object | None = None
+    #: `EXEC2-GROUP-RUN-01`. The group admission this estimate was made on (``None`` for an estimate of a connection,
+    #: a preset or the route). The start admits the run on exactly this revision, so the estimate the person consented to
+    #: and the group revision the run freezes cannot differ.
+    admitted_group: AdmittedGroup | None = None
 
     def as_dict(self):
         return json.loads(self.public_json)
@@ -102,6 +107,13 @@ class RunCostEstimateValue:
             "rate_sha256": authority["rate_sha256"], "connection_revision_id": authority.get("connection_revision_id"),
             "window_characters": authority.get("window_characters"), "max_windows": authority.get("max_windows"),
             "source_sha256": authority["source_sha256"], "format": FORMAT}
+        if authority.get("executor_group_revision_id") is not None:
+            # `EXEC2-GROUP-RUN-01` (ADR-0026 decision 13): the consent envelope of work admitted on a group names the
+            # group revision (and the rule revision that routed it), and **no** connection revision: the claim
+            # re-checks it against the revision the run froze, and binds a member only if it holds.
+            result["executor_group_revision_id"] = authority["executor_group_revision_id"]
+            if authority.get("routing_rule_revision_id") is not None:
+                result["routing_rule_revision_id"] = authority["routing_rule_revision_id"]
         if uncapped_stats:
             result["uncapped_stats"] = True
         if actor_user_uid is not None:
@@ -120,10 +132,11 @@ class RunCostPreflight:
 
     def __init__(self, *, section_profiles, text_profiles, provider_config, provider_mode,
                  connection_route=None, preset_resolver=None, pack_registry=None, prices=None,
-                 blob_store=None):
+                 blob_store=None, group_admitter=None):
         self.sections, self.profiles = section_profiles, text_profiles
         self.config, self.mode = provider_config, provider_mode
         self.route, self.presets, self.packs = connection_route, preset_resolver, pack_registry
+        self.group_admitter = group_admitter
         self.prices = prices or pinned_models
         self.blob_store = blob_store
 
@@ -200,9 +213,27 @@ class RunCostPreflight:
                  "preset_revision_id": None if chosen is None else chosen.revision_id}
         return pin, facts, frozen, chosen
 
+    def _route_group(self, admitted: AdmittedGroup):
+        """The pricing facts of an estimate admitted on a group (`EXEC2-GROUP-RUN-01`, ADR-0026 decision 13).
+
+        A homogeneous group has one pin, one model and one billing, so the estimate follows the group revision's
+        ``pin_id`` and no connection: ``connection_revision_id`` is absent and the group revision (and the rule revision
+        when a rule routed it) are bound into the digest instead. The rates are the provider lock's for that pin, as for
+        every other estimate."""
+        pin = next((row for row in self.prices() if row.model_id == admitted.pin_id), None)
+        if pin is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="model_price_pin")
+        facts = {"model_id": pin.model_id, "rate_sha256": model_rate_sha256(pin), "billing": admitted.billing,
+                 "provider_mode": self.mode, "connection_revision_id": None, "preset_revision_id": None,
+                 "executor_group_id": admitted.group_id, "executor_group_revision_id": admitted.group_revision_id,
+                 "pin_id": admitted.pin_id}
+        if admitted.rule_revision_id is not None:
+            facts["routing_rule_revision_id"] = admitted.rule_revision_id
+        return pin, facts, None, None
+
     def _value(self, *, version, chars, source, pricing, pin, frozen, chosen, relaxed, scope,
                windows, calls, input_tokens, output_tokens, window_characters=None, scope_costs=None,
-               extended_review=None, native_page_piece_policy=None):
+               extended_review=None, native_page_piece_policy=None, admitted=None):
         cost = (sum(scope_costs.values()) if scope_costs is not None else
                 0 if pricing["billing"] == "unmetered" else estimated_micros(pin, input_tokens, output_tokens))
         source_sha = _digest(source)
@@ -224,20 +255,26 @@ class RunCostPreflight:
             "input_tokens": input_tokens, "output_tokens": output_tokens, "estimated_cost_micros": cost,
             "recommended_ceiling_micros": max(1, (cost * 6 + 4) // 5) if pricing["billing"] == "metered" else 0,
             "currency": "USD", "relaxed_limits": relaxed}
-        for key in ("connection_revision_id", "preset_revision_id"):
+        for key in ("connection_revision_id", "preset_revision_id", "executor_group_id", "executor_group_revision_id",
+                    "routing_rule_revision_id", "pin_id"):
             if pricing.get(key) is not None:
                 public[key] = pricing[key]
-        return RunCostEstimateValue(_json(public), _json(authority), frozen, chosen)
+        return RunCostEstimateValue(_json(public), _json(authority), frozen, chosen, admitted)
 
     def estimate_run(self, session, *, version_uid, executor_connection_id=None, preset_id=None, relaxed_limits=False, version_record=None,
-                     allow_native_page_pieces=True, parse_native_text=True):
+                     allow_native_page_pieces=True, parse_native_text=True, executor_group_id=None):
         if type(relaxed_limits) is not bool:
             raise _invalid("relaxed_limits", "boolean")
+        # `EXEC2-GROUP-RUN-01`: exclusivity and the environment refusal come first, before any row is read.
+        admitted = admit_group_for_start(session, self.group_admitter, executor_group_id=executor_group_id,
+            executor_connection_id=executor_connection_id, preset_id=preset_id)
         version, chars, source = self._source(session, version_uid, version_record, parse_native_text=parse_native_text)
         routed = route_classified_version(version, self.sections)
         resolve = self.profiles.resolve if hasattr(self.profiles, "resolve") else self.profiles
         profile = resolve(routed.analysis_profile_id, routed.prompt_bundle_id)
-        pin, pricing, frozen, chosen = self._route(session, executor_connection_id=executor_connection_id, preset_id=preset_id)
+        pin, pricing, frozen, chosen = (
+            self._route(session, executor_connection_id=executor_connection_id, preset_id=preset_id)
+            if admitted is None else self._route_group(admitted))
         source["image_block_count"] = self._image_block_count(version)
         bundle = profile.prompt_bundle
         window = relaxed_window_characters(pin.model_id, bundle)
@@ -379,7 +416,7 @@ class RunCostPreflight:
         return self._value(version=version, chars=chars, source=source, pricing=pricing, pin=pin,
             frozen=frozen, chosen=chosen, relaxed=relaxed_limits, scope="run", windows=windows, calls=windows+extra_calls,
             input_tokens=input_tokens, output_tokens=output_tokens, window_characters=window,
-            extended_review=extended, native_page_piece_policy=page_pieces)
+            extended_review=extended, native_page_piece_policy=page_pieces, admitted=admitted)
 
     def estimate_reaudit(self, session, *, run_id, version_record=None, parse_native_text=True):
         from .repository import RunRepository
@@ -387,16 +424,20 @@ class RunCostPreflight:
         source_run = runs.get(session, run_id)
         executor = runs.chosen_executor_connection(session, run_id)
         from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+        # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used. A named connection stays
+        # that connection, a named group is admitted again on its current revision, and a start that named nothing
+        # (the route, or a rule) names nothing now either: today's mode decides.
         value = self.estimate_run(session, version_uid=source_run.version_uid,
             executor_connection_id=executor, version_record=version_record,
             allow_native_page_pieces=str(source_run.analysis_profile_id) != str(AR_V3_BETA_PROFILE_ID),
-            parse_native_text=parse_native_text)
+            parse_native_text=parse_native_text,
+            executor_group_id=_named_group_of(session, source_run, executor, self.group_admitter))
         authority = json.loads(value.authority_json)
         # A fresh approval is for this new re-audit, never the parent's paid work.
         authority["reaudit_of_run_id"] = run_id
         public = value.as_dict()
         public["estimate_digest"] = _digest(authority)
-        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route)
+        return RunCostEstimateValue(_json(public), _json(authority), value.frozen_route, None, value.admitted_group)
 
     def estimate_group(self, session, *, version_uid, relaxed_limits=False, version_record=None):
         from .v3_group import _validate_pack

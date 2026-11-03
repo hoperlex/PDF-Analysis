@@ -32,9 +32,19 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.destinations import DestinationPolicy
+from auditmanager.executors.group_commands import (
+    group_revision_of,
+    group_summary,
+    resolve_rule,
+    routing_mode,
+)
+from auditmanager.executors.groups import GroupRevisionRecord, group_archived, group_not_found
 from auditmanager.executors.kinds import AdapterSecrets, KindRuntime, adapter_for
 from auditmanager.executors.model import (
+    CONSTRAINT_UNKNOWN_EXECUTOR_GROUP,
+    DEPENDENCY_NO_RULE_FOR_WORK_KIND,
     IDENTITY_BASIS_BY_KIND,
+    ROUTING_MODE_RULES,
     SERVES,
     ConnectionRecord,
     RevisionRecord,
@@ -47,14 +57,17 @@ from auditmanager.executors.sealing import PrivateRing
 from auditmanager.executors.usability import current_secret, is_probed_ok, is_served
 from auditmanager.jobs.public import AttemptContext
 from auditmanager.shared.errors import DomainError, ErrorCode
-from auditmanager.shared.identity import ExecutorConnectionId, IdentityError
+from auditmanager.shared.identity import ExecutorConnectionId, ExecutorGroupId, IdentityError
 
 __all__ = [
+    "AdmittedGroupRevision",
     "BoundConnection",
     "FrozenConnection",
+    "admit_group",
     "bind_connection",
     "chosen_unusable",
     "freeze_connection",
+    "group_of_revision",
 ]
 
 
@@ -246,3 +259,84 @@ def bind_connection(
         connection=connection, identity_basis=IDENTITY_BASIS_BY_KIND[connection.kind],
         provider_label=entry.provider_label(revision),
     )
+
+
+# --- admission on a group (`EXEC2-GROUP-RUN-01`) ---------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedGroupRevision:
+    """What a start admitted on a group freezes (ADR-0026 decision 13). ``billing`` is the revision's spelling
+    (``metered`` or ``not_metered``); ``rule_revision_id`` is ``None`` when the group was named."""
+
+    group_id: str
+    group_revision_id: str
+    pin_id: str
+    gateway_model: str
+    billing: str
+    rule_revision_id: str | None = None
+
+
+def _unknown_group() -> DomainError:
+    return DomainError(
+        ErrorCode.VALIDATION_FAILED, message="the executor group is not acceptable",
+        field="executor_group_id", constraint=CONSTRAINT_UNKNOWN_EXECUTOR_GROUP,
+    )
+
+
+def _admitted(
+    group_id: str, revision: GroupRevisionRecord, rule_revision_id: str | None,
+) -> AdmittedGroupRevision:
+    return AdmittedGroupRevision(
+        group_id=group_id, group_revision_id=revision.group_revision_id, pin_id=revision.pin_id,
+        gateway_model=revision.gateway_model, billing=revision.billing, rule_revision_id=rule_revision_id,
+    )
+
+
+def admit_group(
+    session: Session, work_kind: str, *, group_id: str | None = None,
+) -> AdmittedGroupRevision | None:
+    """The group revision a start of ``work_kind`` is admitted on, or ``None`` when it is not admitted by a group.
+
+    With a ``group_id``: the group's **current** revision, in either routing mode -- an unknown or malformed id is
+    ``validation_failed`` on ``executor_group_id`` (``unknown_executor_group``), an archived group is ``conflict``
+    (``group_archived``). Without one: ``None`` while the routing mode is ``legacy`` (the start follows the route as
+    before), and while it is ``rules`` the **current rule** of the work kind -- its revision and the group revision it
+    names, which is immutable and is what the run freezes -- or ``dependency_unavailable``
+    (``no_rule_for_work_kind``) when the kind has no rule. Nothing falls back to the legacy route.
+
+    Read-only; it locks nothing. A group archived, revised or re-ruled a moment later does not touch the revision
+    this start read: admission freezes the revision, not the group.
+    """
+    if group_id is not None:
+        try:
+            ExecutorGroupId.parse(group_id)
+        except (IdentityError, TypeError):
+            raise _unknown_group() from None
+        try:
+            summary = group_summary(session, group_id)
+        except DomainError as refusal:
+            if refusal.code is ErrorCode.NOT_FOUND:
+                raise _unknown_group() from None
+            raise
+        if summary.group.archived_at is not None:
+            raise group_archived()
+        return _admitted(group_id, summary.current_revision, None)
+    if routing_mode(session).mode != ROUTING_MODE_RULES:
+        return None
+    rule = resolve_rule(session, work_kind)
+    if rule is None:
+        raise DomainError(
+            ErrorCode.DEPENDENCY_UNAVAILABLE, message="no routing rule names a group for this kind of work",
+            dependency=DEPENDENCY_NO_RULE_FOR_WORK_KIND,
+        )
+    revision = group_revision_of(session, rule.group_revision_id)
+    if revision is None:
+        raise group_not_found()
+    return _admitted(rule.group_id, revision, rule.rule_revision_id)
+
+
+def group_of_revision(session: Session, group_revision_id: str) -> str | None:
+    """The group a group revision belongs to, or ``None`` when there is no such revision."""
+    revision = group_revision_of(session, group_revision_id)
+    return None if revision is None else revision.group_id

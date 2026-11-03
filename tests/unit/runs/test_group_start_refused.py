@@ -1,16 +1,18 @@
-"""`EXEC2-GROUP-STORE-01`: until `EXEC2-GROUP-RUN-01`, a start or an estimate that names an executor group is refused.
+"""`EXEC2-GROUP-RUN-01`: a start or an estimate that names an executor group is handed to the port, not refused.
 
-Contract 1.16.0 gave ``startRun`` and ``estimateRunCost`` an optional ``executor_group_id``. Nothing serves it yet, and
-the one wrong thing to do with a field nobody serves is to read it as absent: the run would start on the default route
-(or the estimate would be of it) with the caller believing a group had been used. So the router refuses the request,
-before any work, with ``503 dependency_unavailable`` and ``details.dependency`` ``executor_group_dispatch``:
+Until this task, `EXEC2-GROUP-STORE-01` refused ``executor_group_id`` at the router (``503 dependency_unavailable``,
+``executor_group_dispatch``) because nothing served the field and reading it as absent would have started the run on the
+default route. The Run port now admits the run on the group (``tests/unit/runs/test_group_admission_unit.py`` holds the
+rules), so the router's only job is to pass the field on:
 
-* the port is never reached -- no estimate, no command record, no run, no event;
-* the refusal does not depend on the other fields (a connection, a preset, a consent, a raised limit);
-* a request that does not name a group still reaches the port, so the refusal is the field's and not the route's.
+* a request that names a group reaches the port, with ``executor_group_id`` and nothing else changed;
+* a request that names none reaches it **without** the keyword, so a port that predates the field is called exactly as
+  before (the same rule ``reaudit_of_run_id`` follows);
+* the router makes no decision of its own about exclusivity, the routing mode or the provider source: those refusals are
+  the port's, before the idempotency key is claimed.
 
-The handlers are taken from the router and called as functions: no application, no database. The same refusal through the
-served application is in ``tests/integration/executors/test_groups.py``. Written and **not run** in EXEC-2 (`R-149d`).
+The handlers are taken from the router and called as functions: no application, no database. Written and **not run** in
+EXEC-2 (`R-149d`).
 """
 
 from __future__ import annotations
@@ -23,7 +25,6 @@ from fastapi import APIRouter
 
 from auditmanager.api.routers.runs import build_run_routes
 from auditmanager.api.schemas import models
-from auditmanager.shared.errors import DomainError, ErrorCode
 
 VERSION = "ver_01M2545JSD15ETSNNV904X991J"
 GROUP = "exg_01M2545JSD15ETSNNV904X991K"
@@ -37,17 +38,17 @@ class Reached(Exception):
 
 
 class RecordingRuns:
-    """A ``RunPort`` that records the call and stops there."""
+    """A ``RunPort`` that records the keywords of the call and stops there."""
 
     def __init__(self) -> None:
-        self.calls: list[str] = []
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def estimate_run_cost(self, **kwargs: Any) -> Any:
-        self.calls.append("estimate_run_cost")
+        self.calls.append(("estimate_run_cost", kwargs))
         raise Reached
 
     def start_run(self, **kwargs: Any) -> Any:
-        self.calls.append("start_run")
+        self.calls.append(("start_run", kwargs))
         raise Reached
 
 
@@ -68,57 +69,42 @@ def estimate(endpoint: Callable[..., Any], **body: Any) -> Any:
     return endpoint(body=request)
 
 
-def refused(call: Callable[[], Any]) -> DomainError:
-    with pytest.raises(DomainError) as error:
-        call()
-    return error.value
-
-
 def test_both_operations_are_declared_and_take_the_field() -> None:
     _, endpoints = handlers()
     assert {"startRun", "estimateRunCost"} <= set(endpoints)
     for model in (models.StartRunRequest, models.RunCostEstimateRequest):
-        assert "executor_group_id" in model.model_fields, "the field this refusal is about"
+        assert "executor_group_id" in model.model_fields
 
 
-def test_a_start_that_names_a_group_is_refused_before_the_port_is_reached() -> None:
+def test_a_start_that_names_a_group_reaches_the_port_with_the_group() -> None:
     runs, endpoints = handlers()
-    error = refused(lambda: start(endpoints["startRun"], executor_group_id=GROUP))
-    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-    assert dict(error.detail_fields) == {"dependency": "executor_group_dispatch"}
-    assert runs.calls == [], "no estimate, no command record, no run, no event"
+    with pytest.raises(Reached):
+        start(endpoints["startRun"], executor_group_id=GROUP)
+    ((name, kwargs),) = runs.calls
+    assert name == "start_run" and kwargs["executor_group_id"] == GROUP
+    assert kwargs["executor_connection_id"] is None and kwargs["preset_id"] is None
 
 
-def test_an_estimate_that_names_a_group_is_refused_before_the_port_is_reached() -> None:
+def test_an_estimate_that_names_a_group_reaches_the_port_with_the_group() -> None:
     runs, endpoints = handlers()
-    error = refused(lambda: estimate(endpoints["estimateRunCost"], executor_group_id=GROUP))
-    assert error.code is ErrorCode.DEPENDENCY_UNAVAILABLE
-    assert dict(error.detail_fields) == {"dependency": "executor_group_dispatch"}
-    assert runs.calls == []
+    with pytest.raises(Reached):
+        estimate(endpoints["estimateRunCost"], executor_group_id=GROUP)
+    ((name, kwargs),) = runs.calls
+    assert name == "estimate_run_cost" and kwargs["executor_group_id"] == GROUP
 
 
-def test_the_refusal_does_not_depend_on_what_else_the_request_carries() -> None:
+def test_the_router_does_not_judge_exclusivity_that_is_the_ports_refusal() -> None:
+    """A group together with a connection or a preset is handed to the port as it came: the refusal
+    (``conflicts_with_executor_connection_id`` / ``conflicts_with_preset_id``) is raised there, before the key is claimed."""
     runs, endpoints = handlers()
-    consent = {"estimate_digest": "a" * 64, "ceiling_micros": 1_000_000, "confirmed": True}
-    for extra in (
-        {"relaxed_limits": True},
-        {"cost_consent": consent},
-        {"executor_connection_id": CONNECTION},   # exclusive with a group: the field is still not read as absent
-        {"preset_id": PRESET},
-    ):
-        error = refused(lambda: start(endpoints["startRun"], executor_group_id=GROUP, **extra))
-        assert dict(error.detail_fields) == {"dependency": "executor_group_dispatch"}, extra
-    assert runs.calls == []
+    for extra in ({"executor_connection_id": CONNECTION}, {"preset_id": PRESET}):
+        with pytest.raises(Reached):
+            start(endpoints["startRun"], executor_group_id=GROUP, **extra)
+    assert [kwargs["executor_group_id"] for _, kwargs in runs.calls] == [GROUP, GROUP]
 
 
-def test_the_refusal_carries_no_value_of_the_request() -> None:
-    _, endpoints = handlers()
-    error = refused(lambda: start(endpoints["startRun"], executor_group_id=GROUP))
-    assert GROUP not in repr(error.detail_fields) and GROUP not in str(error)
-
-
-def test_a_request_that_names_no_group_still_reaches_the_port() -> None:
-    """The control: the refusal is the field's, and the port is what the other requests meet."""
+def test_a_request_that_names_no_group_calls_the_port_without_the_keyword() -> None:
+    """The control: a port written before the field is called exactly as it always was."""
     runs, endpoints = handlers()
     with pytest.raises(Reached):
         start(endpoints["startRun"])
@@ -126,4 +112,5 @@ def test_a_request_that_names_no_group_still_reaches_the_port() -> None:
         start(endpoints["startRun"], executor_connection_id=CONNECTION)
     with pytest.raises(Reached):
         estimate(endpoints["estimateRunCost"])
-    assert runs.calls == ["start_run", "start_run", "estimate_run_cost"]
+    assert [name for name, _ in runs.calls] == ["start_run", "start_run", "estimate_run_cost"]
+    assert all("executor_group_id" not in kwargs for _, kwargs in runs.calls)
