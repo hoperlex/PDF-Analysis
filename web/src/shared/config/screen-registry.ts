@@ -72,6 +72,21 @@ export type ScreenGroup = (typeof SCREEN_GROUPS)[number];
  */
 export type ScreenRoles = 'any' | 'any-role' | readonly [Role, ...Role[]];
 
+/**
+ * How a screen relates to the project the user works in (`R-150c`, `UI-PARITY-01`).
+ *
+ *   `required`  the project is in the path (`/projects/[project_uid]…`): it is always there, a
+ *               `?project=` beside it is redundant, and where the two disagree the path wins;
+ *   `optional`  the screen follows the project the header chose, carried in `?project=`; without
+ *               it the screen shows «Все проекты» (a comparison asks to choose one);
+ *   `global`    the screen is not about one project: it ignores `?project=` but the frame
+ *               carries it on, so choosing a project survives a visit.
+ *
+ * The address is the only source of the project; the helpers that read and write it are in
+ * `web/src/shared/lib/project-context.ts`.
+ */
+export type ProjectScope = 'required' | 'optional' | 'global';
+
 export interface ScreenEntry {
   /** The Next address, dynamic segments as their directory names: `/projects/[project_uid]`. */
   readonly address: string;
@@ -82,7 +97,17 @@ export interface ScreenEntry {
   readonly roles: ScreenRoles;
   /** Whether the navigation menu offers it. A screen under a project is reached from it. */
   readonly inMenu: boolean;
+  /**
+   * The screen's project class. Every row of {@link SCREEN_REGISTRY} carries it — the registry is
+   * held to {@link ScopedScreenEntry} below and the registry guard test reads it from the live
+   * rows. It is optional **here** only because test fixtures outside this change build
+   * `ScreenEntry` literals without it; wave 1 makes it required when it wires the consumers.
+   */
+  readonly projectScope?: ProjectScope;
 }
+
+/** A registry row: a {@link ScreenEntry} that states its project class. */
+export type ScopedScreenEntry = ScreenEntry & { readonly projectScope: ProjectScope };
 
 /**
  * Every screen, in menu order within each group.
@@ -108,10 +133,34 @@ export interface ScreenEntry {
  * project, never from the menu.
  */
 export const SCREEN_REGISTRY = [
-  { address: '/', label: 'Главная', group: 'home', access: 'session', roles: 'any', inMenu: false },
+  {
+    address: '/',
+    label: 'Главная',
+    group: 'home',
+    access: 'session',
+    roles: 'any',
+    inMenu: false,
+    projectScope: 'global',
+  },
 
-  { address: '/projects', label: 'Проекты', group: 'work', access: 'session', roles: 'any-role', inMenu: true },
-  { address: '/dashboard', label: 'Дашборд', group: 'work', access: 'session', roles: 'any-role', inMenu: true },
+  {
+    address: '/projects',
+    label: 'Проекты',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'global',
+  },
+  {
+    address: '/dashboard',
+    label: 'Дашборд',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'optional',
+  },
   {
     address: '/section-optimisation',
     label: 'Оптимизация разделов',
@@ -119,11 +168,15 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'optional',
   },
   /*
    * `W61-DISPATCHER-01` (roadmap Q-2): «Диспетчер». `any-role`, because both roles open it —
    * an administrator assigns and oversees, an expert works on what is given to them — and the
    * API decides what each reads and may do.
+   *
+   * `projectScope: 'global'` is its current behaviour, not a decision: its project class is
+   * undecided (proposal: optional) — debt `D-305`, decided when `UI-PARITY-01` wave 1 is planned.
    */
   {
     address: '/dispatcher',
@@ -132,6 +185,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'global',
   },
   /*
    * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
@@ -145,6 +199,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'optional',
   },
   {
     address: '/stage-comparison',
@@ -153,6 +208,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'optional',
   },
   {
     address: '/projects/[project_uid]',
@@ -161,6 +217,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'required',
   },
   {
     address: '/projects/[project_uid]/documents/[document_uid]',
@@ -169,6 +226,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'required',
   },
   {
     address: '/projects/[project_uid]/versions/[version_uid]',
@@ -177,6 +235,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'required',
   },
   {
     address: '/projects/[project_uid]/versions/[version_uid]/comparison',
@@ -185,6 +244,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'required',
   },
   {
     address: '/projects/[project_uid]/runs/[run_id]',
@@ -193,6 +253,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'required',
   },
   {
     address: '/projects/[project_uid]/runs/[run_id]/review',
@@ -201,6 +262,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'required',
   },
 
   {
@@ -210,9 +272,27 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'optional',
   },
-  { address: '/blocks', label: 'Блоки', group: 'knowledge', access: 'session', roles: 'any-role', inMenu: true },
-  { address: '/norms', label: 'Нормы', group: 'knowledge', access: 'session', roles: 'any-role', inMenu: true },
+  /* `/blocks` is `global` because that is its current behaviour; its project class is undecided — `D-305`. */
+  {
+    address: '/blocks',
+    label: 'Блоки',
+    group: 'knowledge',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'global',
+  },
+  {
+    address: '/norms',
+    label: 'Нормы',
+    group: 'knowledge',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'global',
+  },
   {
     address: '/norms/document',
     label: 'Нормативный документ',
@@ -220,6 +300,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'global',
   },
 
   {
@@ -229,8 +310,17 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'global',
   },
-  { address: '/workers', label: 'Исполнители', group: 'system', access: 'session', roles: 'any-role', inMenu: true },
+  {
+    address: '/workers',
+    label: 'Исполнители',
+    group: 'system',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'global',
+  },
   {
     address: '/analysis-settings',
     label: 'Настройки анализа',
@@ -238,8 +328,17 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: true,
+    projectScope: 'global',
   },
-  { address: '/queue', label: 'Очередь', group: 'system', access: 'session', roles: 'any-role', inMenu: true },
+  {
+    address: '/queue',
+    label: 'Очередь',
+    group: 'system',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: true,
+    projectScope: 'global',
+  },
 
   {
     address: '/optimisation',
@@ -248,6 +347,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: 'any-role',
     inMenu: false,
+    projectScope: 'optional',
   },
 
   {
@@ -257,6 +357,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: ['admin'],
     inMenu: true,
+    projectScope: 'global',
   },
   {
     address: '/admin/users/[user_uid]',
@@ -265,6 +366,7 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: ['admin'],
     inMenu: false,
+    projectScope: 'global',
   },
   {
     address: '/admin/registrations',
@@ -273,10 +375,27 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: ['admin'],
     inMenu: true,
+    projectScope: 'global',
   },
 
-  { address: '/login', label: 'Вход', group: 'account', access: 'public', roles: 'any', inMenu: false },
-  { address: '/register', label: 'Регистрация', group: 'account', access: 'public', roles: 'any', inMenu: false },
+  {
+    address: '/login',
+    label: 'Вход',
+    group: 'account',
+    access: 'public',
+    roles: 'any',
+    inMenu: false,
+    projectScope: 'global',
+  },
+  {
+    address: '/register',
+    label: 'Регистрация',
+    group: 'account',
+    access: 'public',
+    roles: 'any',
+    inMenu: false,
+    projectScope: 'global',
+  },
   {
     address: '/register/submitted',
     label: 'Заявка на регистрацию',
@@ -284,6 +403,7 @@ export const SCREEN_REGISTRY = [
     access: 'public',
     roles: 'any',
     inMenu: false,
+    projectScope: 'global',
   },
   {
     address: '/account',
@@ -292,6 +412,7 @@ export const SCREEN_REGISTRY = [
     access: 'open-to-default-credential',
     roles: 'any',
     inMenu: false,
+    projectScope: 'global',
   },
   {
     address: '/account/password',
@@ -300,10 +421,19 @@ export const SCREEN_REGISTRY = [
     access: 'open-to-default-credential',
     roles: 'any',
     inMenu: false,
+    projectScope: 'global',
   },
 
-  { address: '/403', label: 'Доступ закрыт', group: 'hidden', access: 'public', roles: 'any', inMenu: false },
-] as const satisfies readonly ScreenEntry[];
+  {
+    address: '/403',
+    label: 'Доступ закрыт',
+    group: 'hidden',
+    access: 'public',
+    roles: 'any',
+    inMenu: false,
+    projectScope: 'global',
+  },
+] as const satisfies readonly ScopedScreenEntry[];
 
 /** The registered addresses, as a type: a route file cannot name an address that is not here. */
 export type ScreenAddress = (typeof SCREEN_REGISTRY)[number]['address'];
