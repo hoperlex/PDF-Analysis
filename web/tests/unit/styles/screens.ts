@@ -99,6 +99,7 @@ import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
   DOCUMENT_PAGE_LIMIT,
@@ -665,6 +666,13 @@ export function screens(): Screen[] {
     roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // The «Обновлено» line of the queue and the journal: current, and out of date (a note on the surface tint).
+  add('UpdateTime fresh', withRouter(createElement(UpdateTime, {
+    dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: false, now: Date.parse('2026-10-09T10:05:04Z'),
+  })));
+  add('UpdateTime out of date', withRouter(createElement(UpdateTime, {
+    dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: true, now: Date.parse('2026-10-09T10:05:04Z'),
   })));
   // `W54-WORKERS-WEB`: a running Job names the worker holding its run, with a link to it.
   add('ExecutionQueue running, its worker named', withRouter(createElement(ExecutionQueue, {

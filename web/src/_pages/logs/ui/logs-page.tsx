@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import { RUN_ID_PATTERN } from '@/shared/api';
-import { executionFailure, useExecutionJournal } from '@/entities/execution';
+import { UpdateTime, executionFailure, useExecutionJournal } from '@/entities/execution';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ErrorState, LoadingState, PageShell } from '@/shared/ui';
 import styles from './logs-page.module.css';
@@ -27,9 +27,10 @@ export function LogsPage({ initialRunId }: LogsPageProps) {
   return (
     <PageShell
       title="Журнал выполнения"
-      subtitle="События выполнения на сервере, новые сверху. Показаны только безопасные поля договора."
+      subtitle="События выполнения на сервере, новые сверху. Показаны только безопасные поля договора. Журнал обновляется автоматически, пока вкладка открыта."
       actions={<button type="button" className="am-button am-button--quiet" disabled={invalid} onClick={() => void journal.refetch()}>Обновить</button>}
     >
+      {!invalid ? <UpdateTime dataUpdatedAt={journal.dataUpdatedAt} failed={journal.isError} /> : null}
       <form className={`am-form ${styles.filters}`} onSubmit={(event) => {
         event.preventDefault();
         setFilter(draft.trim());
@@ -54,14 +55,14 @@ export function LogsPage({ initialRunId }: LogsPageProps) {
       {!invalid && readFailure !== null ? (
         <div data-execution-read-failure={readFailure.kind}>
           <ErrorState
-            title="Журнал не открылся"
+            title={journal.data === undefined ? 'Журнал не открылся' : 'Журнал не обновился'}
             detail={readFailure.detail}
             correlationId={readFailure.correlationId}
             onRetry={() => void journal.refetch()}
           />
         </div>
       ) : null}
-      {!invalid && journal.data !== undefined && readFailure === null ? (
+      {!invalid && journal.data !== undefined ? (
         <div className={styles.journal}>
           <ExecutionJournal
             entries={journal.data.items}
