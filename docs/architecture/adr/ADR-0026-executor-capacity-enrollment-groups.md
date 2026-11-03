@@ -113,7 +113,7 @@ It has no enrollment, no installer and no groups. The plan section 2 records the
     - The administrator's confirmation creates the groups, the rules and mode `rules` in one transaction.
     - Under `rules`, `setExecutorRoute` answers `conflict`, and a `work_kind` without a rule is a typed refusal.
     - Rollback is an explicit return to `legacy`. Work already admitted by rules finishes on its own group revisions and is never re-read through a legacy route.
-18. **Refusals reuse the catalogue.** Only `validation_failed`, `conflict`, `dependency_unavailable` and `model_identity_mismatch` are used, with typed details. EXEC-2 adds no error code.
+18. **Refusals reuse the catalogue.** Only `validation_failed`, `conflict`, `dependency_unavailable` and `model_identity_mismatch` are used, with typed details. EXEC-2 adds no error code. *Addendum (`EXEC2-FOLLOWUP-01`, 2026-11-03):* a group whose rate snapshot no longer equals the provider lock is refused with the existing cost-preflight refusal `analysis_input_invalid` (`stage_id`, `reason: cost_estimate_binding_changed`), the word the Run side already uses for a consent whose rates no longer hold, and **only** on operations whose contract declares `422`; an estimate that declares none is computed at the snapshot and the start refuses. Still no new code.
 
 ### Deviations recorded by the owner
 
