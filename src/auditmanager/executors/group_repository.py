@@ -6,9 +6,12 @@ and never commits.
 What is written, and by whom the database holds the rest:
 
 * ``executor_group`` is inserted, archived once (``archived_at`` and ``archived_by`` are write-once) and has its
-  ``rotation_cursor`` advanced; its name and creation are frozen by a trigger;
+  ``rotation_cursor`` advanced; its name and creation are frozen by a trigger and the row is never deleted;
 * ``executor_group_revision`` and ``executor_group_member`` are inserted and never changed (``am_immutable_row``); the
-  revision chain, an archived group and the homogeneity of a member are checked again by triggers;
+  revision chain, an archived group and the homogeneity of a member are checked again by triggers. A revision is
+  written with ``member_count`` -- the number of members it is made with -- in the same transaction as those members:
+  the database refuses a member beyond the count and refuses to commit a revision that holds fewer, so the membership
+  is closed once the revision exists;
 * ``executor_routing_rule_revision`` is inserted and never changed (``am_append_only``);
 * ``executor_routing_mode_event`` is only **read** here (an empty journal is ``legacy``). The cut-over lane
   (``EXEC2-CUTOVER-01``) writes it.
@@ -140,7 +143,9 @@ class GroupRepository:
         return [_group(row) for row in rows]
 
     def archive_group(self, session: Session, group_id: str, *, actor_uid: str) -> GroupRecord:
-        """Archive once. The caller holds the group's row lock and has checked that no rule names it."""
+        """Archive once. The caller holds the group's row lock (``FOR UPDATE``, :meth:`get_group` with ``lock``) and has
+        checked that no rule names it. The insert triggers of a revision, a member and a rule read the archive with
+        ``FOR SHARE``, so they wait for that lock and see the archive."""
         row = session.execute(text(
             "UPDATE executor_group SET archived_at = clock_timestamp(), archived_by = :actor "
             f"WHERE group_id = :id AND archived_at IS NULL RETURNING {_GROUP_COLUMNS}"
@@ -183,16 +188,21 @@ class GroupRepository:
         actor_uid: str,
     ) -> GroupRevisionRecord:
         """Write the revision and its members. Immutable from here on; the database checks the chain and, per member,
-        the homogeneity again."""
+        the homogeneity again.
+
+        The revision declares ``member_count`` = the number of members written here, and the members must follow in
+        this transaction: the database refuses to commit a revision that holds a different number, and a member added
+        later is refused."""
         row = session.execute(text(
             "INSERT INTO executor_group_revision (group_revision_id, group_id, revision_no, pin_id, "
-            "gateway_model, billing, input_per_mtok_usd, output_per_mtok_usd, strategy, created_by) "
-            "VALUES (:id, :group_id, :no, :pin, :model, :billing, :rate_in, :rate_out, :strategy, :actor) "
+            "gateway_model, billing, input_per_mtok_usd, output_per_mtok_usd, strategy, member_count, created_by) "
+            "VALUES (:id, :group_id, :no, :pin, :model, :billing, :rate_in, :rate_out, :strategy, :member_count, "
+            ":actor) "
             f"RETURNING {_REVISION_COLUMNS}"
         ), {"id": str(ExecutorGroupRevisionId.new()), "group_id": group_id, "no": revision_no,
             "pin": settings.pin_id, "model": settings.gateway_model, "billing": settings.billing,
             "rate_in": input_per_mtok_usd, "rate_out": output_per_mtok_usd,
-            "strategy": settings.strategy, "actor": actor_uid}).mappings().one()
+            "strategy": settings.strategy, "member_count": len(members), "actor": actor_uid}).mappings().one()
         for member in members:
             session.execute(text(
                 "INSERT INTO executor_group_member (group_revision_id, connection_id, connection_revision_id, "

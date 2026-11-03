@@ -15,7 +15,9 @@ group revision is made. The members' revisions must pin the group revision's ``p
 share its ``billing`` (:func:`~auditmanager.executors.groups.refuse_member`); a group is never mixed. The rates are
 the provider lock's for ``pin_id``, copied once into the revision. A revision is immutable and referenced by rules
 and (from stage 3) by work admitted on it: nothing here deletes or rewrites one, and archiving a group is one-way and
-leaves every revision readable.
+leaves every revision readable. The membership is closed with the revision: ``insert_revision`` declares
+``member_count`` as the number of members of the request and writes them in the same transaction, and the database
+refuses a member beyond that number and a commit that holds fewer.
 
 **Reads.** The list, the detail, the capacity and the rules are for any role (``api/security.py``); they do not take
 the role set. Dispatch (``EXEC2-GROUP-RUN-01`` and ``EXEC2-GROUP-CMP-01``) reaches these functions through

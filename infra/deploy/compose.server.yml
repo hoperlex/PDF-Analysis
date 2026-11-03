@@ -392,6 +392,12 @@ services:
       # the worker at start. Whatever it is, one executor connection has at most one active run.
       # The `api` never reads it.
       AUDITMANAGER_WORKER_SLOTS: ${AUDITMANAGER_WORKER_SLOTS:-1}
+      # `R-149g`. Whether path A (an agent installed over SSH from the UI) may reach a PRIVATE-range target
+      # (RFC 1918, unique-local, shared address space): `1` or `0`, default `0`, which is the rule before this
+      # setting existed. `1` lets the stand SSH into its hosting's internal networks; loopback, link-local, the
+      # compose network and service names stay refused either way. Anything but `1` or `0` is read as `0` and
+      # logged by name. Only the worker reads it; the `api` does not (see `README.md`, the universal agent).
+      AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE: ${AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE:-0}
     # The provider credential, the private key ring and the optional destination allowlist
     # (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`): a separate file the owner writes on the host,
     # never passed to --env-file, so it stays out of compose substitution and therefore out

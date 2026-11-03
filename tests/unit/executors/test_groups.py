@@ -29,6 +29,7 @@ import pytest
 
 from auditmanager.analysis.public import ModelPin
 from auditmanager.executors import group_commands
+from auditmanager.executors.group_repository import GroupRepository
 from auditmanager.executors.group_commands import (
     archive_group,
     create_group,
@@ -204,6 +205,7 @@ class FakeGroups:
         self.pending = 0
         self.writes: list[str] = []
         self.locked_connections: list[list[str]] = []
+        self.member_counts: list[int] = []
         self.rotation = 0
 
     # -- groups
@@ -246,6 +248,7 @@ class FakeGroups:
         self, session, *, group_id, revision_no, settings, input_per_mtok_usd, output_per_mtok_usd, members,
         actor_uid,
     ):
+        self.member_counts.append(len(members))
         stored = tuple(sorted(
             (GroupMemberRecord(m.connection_id, m.connection_revision_id, m.tie_break_order) for m in members),
             key=lambda m: (m.tie_break_order is None, m.tie_break_order or 0, m.connection_id)))
@@ -875,3 +878,77 @@ def test_the_list_shows_active_groups_first_each_with_its_current_revision_and_r
     assert [s.group.display_name for s in summaries] == ["Newer", "Older"]
     assert summaries[0].routed_work_kinds == ("text_analysis",) and summaries[1].routed_work_kinds == ()
     assert all(s.current_revision.revision_no == 1 for s in summaries)
+
+
+# --- a revision's membership is closed when the revision is made -----------------------------------------------
+
+
+def test_a_revision_is_written_with_the_members_of_the_request_and_no_others() -> None:
+    """``revise_group`` hands the repository the members of *this* request -- the revision declares their number, so
+    a revision cannot inherit the previous one's members or keep a different count."""
+    world = World()
+    created = world.create()
+    world.revise(created.group.group_id, members=[MemberRequest(C1, R1)])
+    assert world.groups.member_counts == [2, 1]
+    assert [len(r.members) for r in world.groups.list_revisions(SESSION, created.group.group_id)] == [1, 2]
+
+
+class _Result:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+
+    def mappings(self) -> "_Result":
+        return self
+
+    def one(self) -> dict[str, Any]:
+        return self._rows[0]
+
+    def all(self) -> list[dict[str, Any]]:
+        return list(self._rows)
+
+    def first(self) -> dict[str, Any] | None:
+        return self._rows[0] if self._rows else None
+
+
+class RecordingSession:
+    """Just enough of a session for ``GroupRepository.insert_revision``: it keeps every statement in order, answers
+    the revision insert with the row it was given and answers the read of the members with the members written."""
+
+    def __init__(self) -> None:
+        self.statements: list[tuple[str, dict[str, Any]]] = []
+        self.members: list[dict[str, Any]] = []
+
+    def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _Result:
+        sql, bound = str(statement), dict(params or {})
+        self.statements.append((sql, bound))
+        if sql.startswith("INSERT INTO executor_group_revision"):
+            return _Result([{
+                "group_revision_id": bound["id"], "group_id": bound["group_id"], "revision_no": bound["no"],
+                "pin_id": bound["pin"], "gateway_model": bound["model"], "billing": bound["billing"],
+                "input_per_mtok_usd": bound["rate_in"], "output_per_mtok_usd": bound["rate_out"],
+                "strategy": bound["strategy"], "created_at": T0, "created_by": bound["actor"]}])
+        if sql.startswith("INSERT INTO executor_group_member"):
+            self.members.append({
+                "group_revision_id": bound["revision"], "connection_id": bound["connection"],
+                "connection_revision_id": bound["connection_revision"], "tie_break_order": bound["tie"]})
+            return _Result([])
+        return _Result(self.members)
+
+
+@pytest.mark.parametrize("count", [1, 2, 16])
+def test_the_repository_declares_exactly_the_number_of_members_it_then_writes(count: int) -> None:
+    """The database refuses a member beyond ``member_count`` and a commit that holds fewer, so the count written with
+    the revision must be the number of member rows that follow it in the same transaction -- never more, never less."""
+    session = RecordingSession()
+    members = [MemberRequest(f"exc_{index:026d}", f"excr_{index:026d}") for index in range(count)]
+    stored = GroupRepository().insert_revision(
+        session, group_id=str(ExecutorGroupId.new()), revision_no=1, settings=SONNET,  # type: ignore[arg-type]
+        input_per_mtok_usd=Decimal("3"), output_per_mtok_usd=Decimal("15"), members=members, actor_uid=ADMIN)
+
+    inserts = [(sql, bound) for sql, bound in session.statements if sql.startswith("INSERT")]
+    (revision_sql, revision_bound), *member_inserts = inserts
+    assert revision_sql.startswith("INSERT INTO executor_group_revision") and "member_count" in revision_sql
+    assert revision_bound["member_count"] == count
+    assert len(member_inserts) == count, "one member row per declared member, after the revision row"
+    assert all(sql.startswith("INSERT INTO executor_group_member") for sql, _ in member_inserts)
+    assert len(stored.members) == count

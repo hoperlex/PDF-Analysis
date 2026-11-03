@@ -101,7 +101,7 @@ FINGERPRINTED_TABLES = TABLES - EXEMPT_FROM_FINGERPRINT
 
 #: ``(table, trigger, function, pg_trigger.tgtype)``. ``tgtype`` bits: 1 row, 2 before,
 #: 4 insert, 8 delete, 16 update, 32 truncate. So 5 and 7 are AFTER and BEFORE INSERT row
-#: triggers, 19 BEFORE UPDATE, 23 BEFORE INSERT OR UPDATE, 27 BEFORE UPDATE OR DELETE (the
+#: triggers, 11 BEFORE DELETE, 19 BEFORE UPDATE, 23 BEFORE INSERT OR UPDATE, 27 BEFORE UPDATE OR DELETE (the
 #: immutable and append-only guards), 31 BEFORE INSERT OR UPDATE OR DELETE, 34 BEFORE TRUNCATE.
 TRIGGERS = (
     ("account_release_mark", "trg_account_release_mark", "am_guard_account_release_mark", 31),
@@ -296,18 +296,24 @@ TRIGGERS = (
     ("executor_connection_revision", "trg_executor_connection_revision_immutable", "am_immutable_row", 27),
     ("executor_enrollment", "trg_executor_enrollment_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_enrollment", "trg_executor_enrollment_write_once", "am_guard_write_once_columns", 19),
-    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): a group's identity and name are frozen and its archive write-once; a
-    # revision and a member are immutable, a revision is numbered without a gap and a member is homogeneous with it; a
-    # rule and a routing-mode event are append-only and a rule names an active group (7 = ROW | BEFORE | INSERT).
+    # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): a group's identity and name are frozen, its archive write-once and
+    # the row is never deleted (11 = ROW | BEFORE | DELETE); a revision and a member are immutable, a revision is numbered
+    # without a gap and a member is homogeneous with it and refused once the revision has the members it declared; the
+    # revision commits with exactly those members (a deferred AFTER INSERT constraint trigger, 5); a rule and a
+    # routing-mode event are append-only, a rule names an active group and an event is numbered without a gap
+    # (7 = ROW | BEFORE | INSERT).
     ("executor_group", "trg_executor_group_frozen_guard", "am_guard_frozen_columns", 19),
+    ("executor_group", "trg_executor_group_no_delete", "am_immutable_row", 11),
     ("executor_group", "trg_executor_group_write_once", "am_guard_write_once_columns", 19),
     ("executor_group_member", "trg_executor_group_member_homogeneous", "am_check_executor_group_member", 7),
     ("executor_group_member", "trg_executor_group_member_immutable", "am_immutable_row", 27),
     ("executor_group_revision", "trg_executor_group_revision_chain", "am_check_executor_group_revision", 7),
+    ("executor_group_revision", "trg_executor_group_revision_has_members", "am_require_executor_group_members", 5),
     ("executor_group_revision", "trg_executor_group_revision_immutable", "am_immutable_row", 27),
     ("executor_probe", "trg_executor_probe_frozen_guard", "am_guard_frozen_columns", 19),
     ("executor_route_event", "trg_executor_route_event_append_only", "am_append_only", 27),
     ("executor_routing_mode_event", "trg_executor_routing_mode_event_append_only", "am_append_only", 27),
+    ("executor_routing_mode_event", "trg_executor_routing_mode_event_number", "am_check_executor_routing_mode_event", 7),
     ("executor_routing_rule_revision", "trg_executor_routing_rule_revision_append_only", "am_append_only", 27),
     ("executor_routing_rule_revision", "trg_executor_routing_rule_revision_group", "am_check_executor_routing_rule", 7),
     ("executor_runner_token", "trg_executor_runner_token_frozen_guard", "am_guard_frozen_columns", 19),
@@ -376,6 +382,7 @@ TRIGGERS = (
 #: commit together with its children. They fire at commit, never during ``pg_restore``.
 DEFERRED_TRIGGERS = frozenset((
     "trg_ar_v3_group_complete",
+    "trg_executor_group_revision_has_members",
     "trg_finding_observation_partition",
     "trg_norm_citation_partition",
     "trg_norm_current_snapshot_event_designates",
@@ -408,13 +415,14 @@ SEQUENCES = {
 #: redefines in place, 47 checks (revision 1, task 2, runner token 6, connection 3, `executor_enrollment` 12,
 #: `executor_agent_install` 23), four foreign keys (the enrollment's connection and runner token, the install's
 #: connection and sealed key), two primary keys and two unique constraints (the enrollment's prefix and hash):
-#: c 1186, f 348, p 123, u 125; `0047_executor_groups_rules` (`EXEC2-SEAL-2`) adds five tables and 32 checks (group 6,
-#: revision 10, member 4, rule 5, routing-mode event 7), four foreign keys (the revision's group, the member's group
-#: revision and its connection revision, the rule's group revision), five primary keys and four unique constraints
-#: (revision number, member tie-break order, rule number, event number); `0048_dispatch_time_binding` adds, on
-#: `audit_run` and on `comparison_ai_job`, 15 checks (7 and 8) and four foreign keys (the group and rule revisions of
-#: each): c 1233, f 356, p 128, u 129 (derived from the DDL, not measured on a database).
-CONSTRAINT_COUNTS = {"c": 1233, "f": 356, "p": 128, "t": 9, "u": 129}
+#: c 1186, f 348, p 123, u 125; `0047_executor_groups_rules` (`EXEC2-SEAL-2`) adds five tables and 33 checks (group 6,
+#: revision 11 -- the declared member count among them --, member 4, rule 5, routing-mode event 7), four foreign keys
+#: (the revision's group, the member's group revision and its connection revision, the rule's group revision), five
+#: primary keys, four unique constraints (revision number, member tie-break order, rule number, event number) and one
+#: constraint trigger (the deferred `trg_executor_group_revision_has_members`, contype `t`); `0048_dispatch_time_binding`
+#: adds, on `audit_run` and on `comparison_ai_job`, 15 checks (7 and 8) and four foreign keys (the group and rule
+#: revisions of each): c 1234, f 356, p 128, t 10, u 129 (derived from the DDL, not measured on a database).
+CONSTRAINT_COUNTS = {"c": 1234, "f": 356, "p": 128, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique

@@ -28,13 +28,21 @@ Nothing about who holds a session is kept in memory.
   ledger row names the grant that was issued for it. An install is never started twice. (A command type of its own
   would have needed a classification in ``scripts/recovery/product_purge.py``, which this task does not own.)
   A small in-memory set of the sessions this process is working on only saves repeated reads; it decides nothing.
+  A worker that has **not** won the grant never ends the session: the failure branches before the grant (the reads of
+  :meth:`~AgentInstallRunner._ready`, the host-key comparison, a refused grant, an unexpected error) end it only after
+  locking the session's row and finding no grant in the ledger, and :meth:`~AgentInstallRunner._grant` takes the same
+  row lock before it issues the grant -- so a worker that lost the race for a session, or read it too early, cannot end
+  a session whose install another worker is running, and an end and a grant never both succeed.
 
 What the worker does, and in which order
 ----------------------------------------
 ``scanning``
     The target passes the **same** :class:`~auditmanager.executors.destinations.DestinationPolicy` as every
     executor destination (plan T-9) *before any connection*; the SSH client is then pointed at the validated
-    address, never at the name again. The host key is read (``ssh-keyscan``), stored write-once and shown to the
+    address, never at the name again. A private range is refused (the ``ssh_command`` transport) unless the stand's
+    administrator set ``AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE=1`` (`R-149g`), which asks the rules about the
+    ``vpn`` transport instead, for the scan and the install alike; loopback, link-local, the compose network and
+    service names are refused either way. The host key is read (``ssh-keyscan``), stored write-once and shown to the
     administrator as a fingerprint. Nothing is trusted on first use.
 ``installing``
     1. before the network and before any write: the confirmed fingerprint is checked against the stored key; the
@@ -138,17 +146,20 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey
 
 __all__ = [
+    "ALLOW_PRIVATE_ENV",
     "EXIT_FAILURES",
     "FAILURES",
     "GRANT_COMMAND_TYPE",
     "INSTALL_THREADS",
     "INSTALL_TRANSPORT",
+    "PRIVATE_INSTALL_TRANSPORT",
     "PUBLIC_ORIGIN_ENV",
     "REMOTE_COMMAND",
     "AgentInstallRunner",
     "InstallTransport",
     "RemoteResult",
     "SshInstallTransport",
+    "allow_private_targets",
     "build_payload",
     "failure_for",
     "grant_key",
@@ -171,9 +182,36 @@ def grant_key(install_id: str) -> str:
     """The idempotency key of the grant that claims ``install_id``'s install."""
     return f"agent-install:{install_id}"
 
+
 #: What the destination rules call this connection: the transport of an ``ssh_command`` connection. A private
-#: range is therefore refused, as it is for a model's SSH endpoint; ``vpn`` would allow it. One constant.
+#: range is therefore refused, as it is for a model's SSH endpoint; ``vpn`` would allow it. This is the default.
 INSTALL_TRANSPORT: Final[str] = "ssh_command"
+#: `R-149g`. The one stand setting that lets path A reach a private range (RFC 1918, unique-local, shared address
+#: space): ``1`` or ``0``, unset is ``0``. It is read once, when the runner is built, so the scan and the install of
+#: every session make the same choice. Only the worker reads it (``compose.server.yml`` forwards it to that service).
+ALLOW_PRIVATE_ENV: Final[str] = "AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE"
+#: What the destination rules are asked when the setting is ``1``: the ``vpn`` transport, the only one that accepts a
+#: private range. Loopback, link-local (the metadata address included), unspecified, multicast and reserved
+#: addresses, the compose network and a single-label or local name stay refused for it as for every transport, and
+#: ``AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`` still narrows.
+PRIVATE_INSTALL_TRANSPORT: Final[str] = "vpn"
+
+
+def allow_private_targets(environ: Mapping[str, str]) -> bool:
+    """:data:`ALLOW_PRIVATE_ENV`: ``1`` allows a private-range target, ``0`` or unset or blank refuses it.
+
+    Anything else is **not** read as a yes: the stand then behaves as if the setting were ``0`` -- the narrower
+    rule -- and says so in the log, naming the variable and never its value. (A relaxation that a typo could
+    switch on, or a worker that a typo could stop, would both be worse than a refused target.)"""
+    raw = environ.get(ALLOW_PRIVATE_ENV, "").strip()
+    if raw == "1":
+        return True
+    if raw not in ("", "0"):
+        _log.warning("%s is neither 1 nor 0; private-range targets stay refused for agent installs",
+                     ALLOW_PRIVATE_ENV)
+    return False
+
+
 #: Sessions worked on at the same time (one thread each). An install takes minutes; the probe loop that calls
 #: the runner must not wait for it.
 INSTALL_THREADS: Final[int] = 4
@@ -577,8 +615,9 @@ _TAKEN: Final[str] = "taken"
 @dataclass(frozen=True, slots=True)
 class _Ready:
     """What an install needs from the database and the image before the network: the session as it now stands,
-    the one validated address, the package, the stand's origin, the model, and the opened key (a secret: no repr,
-    and it lives for the length of one install)."""
+    the one validated address, the package, the stand's origin and the opened key (a secret: no repr, and it lives for
+    the length of one install). The pinned model is **not** here: it is read again in the transaction that issues the
+    grant (:meth:`AgentInstallRunner._grant`), so the payload never names a model older than the grant."""
 
     record: InstallRecord
     address: str
@@ -586,8 +625,16 @@ class _Ready:
     archive: bytes = field(repr=False)
     origin: str
     configured: str | None
-    model: str
     key: str = field(repr=False)
+
+
+@dataclass(slots=True)
+class _Held:
+    """Whether the thread working on a session has won its grant. Confined to that thread and never stored: it only
+    tells the end of an unexpected failure whether the claim is this worker's (then the session is ended) or still
+    unknown (then the ledger and the row lock say whether somebody else holds it)."""
+
+    granted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -633,6 +680,9 @@ class AgentInstallRunner:
         self._ring = ring
         self._policy = policy
         self._environ = dict(environ)
+        #: `R-149g`: the transport the destination rules are asked about, for the scan and the install alike.
+        self._destination_transport: str = (
+            PRIVATE_INSTALL_TRANSPORT if allow_private_targets(self._environ) else INSTALL_TRANSPORT)
         self._transport: InstallTransport = transport or SshInstallTransport()
         self._installs = installs or AgentInstallRepository()
         self._executors = executors or ExecutorRepository()
@@ -714,17 +764,21 @@ class AgentInstallRunner:
 
     # -- one session ------------------------------------------------------------------------
     def _guarded(self, work: _Work) -> None:
+        held = _Held()
         try:
             if work.kind == "scan":
                 self._scan(work)
             else:
-                self._install(work)
+                self._install(work, held)
         except Exception as failure:  # noqa: BLE001 - recorded, never raised into the loop
             # The class name only: a message can carry anything, a key included.
             _log.error("agent install %s failed unexpectedly (%s)", work.record.install_id,
                        type(failure).__name__)
             try:
-                self._end(work, work.record, FAILURE_INSTALL_FAILED)
+                # An install that has not won the grant may be another worker's: it ends the session only if nobody
+                # holds the claim. A scan is claimed by its stored state, so its worker always ends it.
+                self._end(work, work.record, FAILURE_INSTALL_FAILED,
+                          unless_claimed=work.kind == "install" and not held.granted)
             except Exception as again:  # noqa: BLE001
                 _log.error("agent install %s could not be ended (%s)", work.record.install_id,
                            type(again).__name__)
@@ -735,9 +789,13 @@ class AgentInstallRunner:
     def _address(self, record: InstallRecord) -> str | None:
         """The one validated address to connect to, or ``None`` when the destination rules refuse the target
         (or it does not resolve). The name is resolved and every address classified; the connection is then made
-        to the address, never to the name again (``DestinationPolicy.check``)."""
+        to the address, never to the name again (``DestinationPolicy.check``). The transport it asks about is
+        :data:`INSTALL_TRANSPORT`, or :data:`PRIVATE_INSTALL_TRANSPORT` when the stand allows private targets
+        (:data:`ALLOW_PRIVATE_ENV`); the scan and the install both come through here, so they cannot differ. The
+        log carries the refusal's closed category and nothing else."""
         try:
-            addresses = self._policy.check(record.ssh_host, record.ssh_port, transport=INSTALL_TRANSPORT)
+            addresses = self._policy.check(
+                record.ssh_host, record.ssh_port, transport=self._destination_transport)
         except DestinationRefused as refused:
             _log.warning("agent install %s: destination refused (%s)", record.install_id, refused.category)
             return None
@@ -777,21 +835,24 @@ class AgentInstallRunner:
                   "awaiting the host key's confirmation" if moved else "already ended")
 
     # -- installing -------------------------------------------------------------------------
-    def _install(self, work: _Work) -> None:
+    def _install(self, work: _Work, held: _Held | None = None) -> None:
         """``installing``, in four steps with a transaction around each database step and none around a network
         one: everything the database and the image must say (:meth:`_ready`); the host key read again and
         compared (:meth:`_verify_host`); the grant -- the claim -- issued as late as possible so that its fifteen
-        minutes are spent on the install (:meth:`_grant`); the install itself (:meth:`_execute`)."""
+        minutes are spent on the install (:meth:`_grant`); the install itself (:meth:`_execute`).
+
+        Until the grant is won this worker holds nothing: every failure before it ends the session only when no
+        other worker holds the grant (``unless_claimed``). ``held`` is told when the grant is won."""
         ready = self._ready(work)
         if ready is None:  # no longer installing: somebody ended it
             _log.info("agent install %s: already ended", work.record.install_id)
             return
         if isinstance(ready, str):
-            self._end(work, work.record, ready)
+            self._end(work, work.record, ready, unless_claimed=True)
             return
         endpoint, failure = self._verify_host(ready)
         if failure is not None or endpoint is None:
-            self._end(work, ready.record, failure or FAILURE_HOST_UNREACHABLE)
+            self._end(work, ready.record, failure or FAILURE_HOST_UNREACHABLE, unless_claimed=True)
             return
         prepared = self._grant(ready, endpoint)
         record = ready.record
@@ -801,8 +862,10 @@ class AgentInstallRunner:
                 _log.info("agent install %s: %s", record.install_id,
                           "already ended" if prepared == _GONE else "claimed by another worker")
             else:
-                self._end(work, record, prepared)
+                self._end(work, record, prepared, unless_claimed=True)  # the grant was not committed: not ours
             return
+        if held is not None:
+            held.granted = True
         enrollment_id = prepared.enrollment_id
         outcome = self._execute(prepared)
         del prepared  # the key and the payload end with the call
@@ -862,7 +925,7 @@ class AgentInstallRunner:
                 return FAILURE_SECRET_UNREADABLE
             return _Ready(
                 record=record, address=address, package=package, archive=archive, origin=origin,
-                configured=configured, model=revision.settings.gateway_model, key=key,
+                configured=configured, key=key,
             )
 
     def _verify_host(self, ready: _Ready) -> tuple[SshEndpoint | None, str | None]:
@@ -886,9 +949,15 @@ class AgentInstallRunner:
         revocation of an administrator's issue -- attributed to the session's creator, under the idempotency key
         of the session (:func:`grant_key`). A key already taken is ``conflict`` / ``enrollment_shown_once``: the
         session is another worker's (:data:`_TAKEN`). Returns the prepared install, the failure reason, or
-        :data:`_GONE` when the session is no longer ``installing``."""
+        :data:`_GONE` when the session is no longer ``installing``.
+
+        The session's row is locked first (:meth:`_claimed_elsewhere` takes the same lock before it reads the
+        ledger), so a worker that gave up before the grant cannot end the session between this worker's read of
+        the state and its commit of the grant. The model the payload names is read **here**, after the grant
+        has locked the connection and in the same transaction, so a revision of the connection cannot slip in
+        between the model and the grant: the payload never carries a model older than the grant."""
         with self._sessions() as session:
-            record = self._installs.get_install(session, ready.record.install_id)
+            record = self._installs.get_install(session, ready.record.install_id, lock=True)
             if record is None or record.state != "installing":
                 return _GONE
             try:
@@ -899,8 +968,12 @@ class AgentInstallRunner:
                     repository=self._enrollments, commands=self._commands,
                     package_source=lambda: ready.package, journal=self._journal,
                 )
+                current = self._executors.current_revisions(session, [record.connection_id]).get(
+                    record.connection_id)
+                if current is None or _MODEL.fullmatch(current.settings.gateway_model) is None:
+                    return FAILURE_ENROLLMENT_FAILED  # not committed: the grant is rolled back with it
                 payload = build_payload(
-                    secret=issued.secret, origin=ready.origin, model=ready.model,
+                    secret=issued.secret, origin=ready.origin, model=current.settings.gateway_model,
                     sha256=ready.package.sha256, archive=ready.archive,
                     marker=install_marker(record.install_id) if record.access == "generated_key" else "-",
                 )
@@ -946,18 +1019,34 @@ class AgentInstallRunner:
         return _Outcome(reasons.get(result.outcome, FAILURE_INSTALL_FAILED), key_line)
 
     # -- the end ----------------------------------------------------------------------------
+    def _claimed_elsewhere(self, session: Session, record: InstallRecord) -> bool:
+        """Has another worker won the grant of this session? Locks the session's row first and then reads the
+        ledger: :meth:`_grant` holds the same row lock while it issues the grant, so a grant in flight is waited for
+        and then seen, and a grant not yet begun finds the session ended. Used only by a worker that has **not** won
+        the grant itself -- it must never end a session whose install somebody else is running."""
+        self._installs.get_install(session, record.install_id, lock=True)
+        return self._commands.find(
+            session, command_type=GRANT_COMMAND_TYPE, idempotency_key=IdempotencyKey(grant_key(record.install_id)),
+        ) is not None
+
     def _end(
         self, work: _Work, record: InstallRecord, reason: str | None, *, key_line: str | None = None,
-        enrollment_id: str | None = None,
+        enrollment_id: str | None = None, unless_claimed: bool = False,
     ) -> None:
         """End the session -- ``failed`` with ``reason``, ``succeeded`` when ``reason`` is ``None`` -- replace
         its key and journal it, in one transaction.
 
         A success is believed only when the grant the call carried was **redeemed**: ``install.sh`` can exit 0
         on a host that already holds a token while it refuses the new secret. A session somebody else already
-        ended (the API's sweep) is left as it was written: the update names the state it moves the session from."""
+        ended (the API's sweep) is left as it was written: the update names the state it moves the session from.
+
+        ``unless_claimed`` is for a worker that has not won the grant (see :meth:`_claimed_elsewhere`): when the
+        ledger holds the session's grant it is another worker's install, and this one leaves it alone."""
         state = "succeeded" if reason is None else "failed"
         with self._sessions() as session:
+            if unless_claimed and self._claimed_elsewhere(session, record):
+                _log.info("agent install %s: claimed by another worker", record.install_id)
+                return
             if reason is None and enrollment_id is not None:
                 grant = self._enrollments.get_enrollment(session, enrollment_id)
                 if grant is None or grant.redeemed_at is None:

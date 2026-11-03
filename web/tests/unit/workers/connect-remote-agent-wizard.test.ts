@@ -184,11 +184,13 @@ describe('path A: install over SSH', () => {
     expect(markup).toContain('Закрытые ключи и пароли в это приложение не вводятся');
   });
 
-  it('warns that a LAN address is refused, before anyone types one', () => {
+  it('warns that a LAN address is accepted only when the stand’s administrator allowed it, before anyone types one', () => {
     expect(markup).toContain('data-agent-private-range-hint');
     expect(markup).toContain('частных сетей');
-    expect(markup).toContain('завершится отказом');
-    expect(markup).toContain('выберите путь с командой');
+    expect(markup).toContain('только тогда, когда это разрешено в настройках стенда его администратором');
+    expect(markup).toContain('иначе установка завершится отказом');
+    expect(markup).toContain('выберите путь «Выполнить команду на Ubuntu»');
+    expect(markup).not.toContain('не подключается по SSH к адресам частных сетей');
   });
 
   it('shows a problem with what was typed, and a refusal of the command, apart', () => {
@@ -330,6 +332,7 @@ describe('path A: the session', () => {
   it('says a refused LAN address is refused and not merely down, and points at the path that works', () => {
     const sentence = INSTALL_FAILURE_SENTENCES.host_unreachable;
     expect(sentence).toContain('адреса частных сетей');
+    expect(sentence).toContain('только тогда, когда это разрешено в его настройках администратором');
     expect(sentence).toContain('отклоняется, а не просто не отвечает');
     expect(sentence).toContain('Выполнить команду на Ubuntu');
     expect(sentence).toContain('сервер недоступен');

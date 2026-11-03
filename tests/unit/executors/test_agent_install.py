@@ -8,9 +8,15 @@ a stand-in ``sudo`` and a package whose ``install.sh`` records what it was given
 
 * the claim is durable and exclusive: ``requested -> scanning`` is stored, an install is claimed by the grant's
   ledger key (``agent-install:<install_id>``), and a second worker (or a restarted one) leaves a claimed session
-  alone -- including a worker that read the session at the same moment and reached the grant second;
+  alone -- including a worker that read the session at the same moment and reached the grant second. A worker that
+  fails *before* it won the grant (a host key that changed, a missing package, a refused grant, an unexpected error)
+  ends the session only after locking its row and finding no grant in the ledger, and the grant is issued under the
+  same row lock; the model the payload names is read in the grant's own transaction;
 * the destination rules run **before any connection**, on the scan and again on the install; a refused target never
-  reaches the transport;
+  reaches the transport. A private range is refused unless the stand sets ``AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE=1``
+  (`R-149g`; anything but ``1`` is not a yes), which asks the rules about the ``vpn`` transport for the scan and the
+  install alike -- loopback, link-local, the compose network and service names stay refused, and the log names only
+  the refusal's closed category;
 * no trust on first use: the host key is stored write-once by the scan; an install runs only when the key seen now
   equals the key the administrator confirmed, and the connection is pinned to it (``host_key_changed`` otherwise,
   with no grant issued and nothing sent);
@@ -34,6 +40,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -43,7 +50,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -67,13 +74,16 @@ from auditmanager.executors.agent_install_repository import (
     InstallRecord,
 )
 from auditmanager.executors.agent_install_runner import (
+    ALLOW_PRIVATE_ENV,
     EXIT_FAILURES,
     FAILURES,
     GRANT_COMMAND_TYPE,
+    PRIVATE_INSTALL_TRANSPORT,
     REMOTE_COMMAND,
     AgentInstallRunner,
     RemoteResult,
     SshInstallTransport,
+    allow_private_targets,
     build_payload,
     failure_for,
     grant_key,
@@ -123,13 +133,17 @@ def host_key_line() -> str:
 
 
 class FakeSession:
-    """What the runner asks of a session: to be committed. Anything else is a bug in the runner."""
+    """What the runner asks of a session: to be committed. Anything else is a bug in the runner. A commit makes what
+    the ledger staged durable; a transaction that ends without one drops it (:meth:`World.transaction`)."""
 
-    def __init__(self) -> None:
+    def __init__(self, ledger: FakeLedger | None = None) -> None:
         self.commits = 0
+        self.ledger = ledger
 
     def commit(self) -> None:
         self.commits += 1
+        if self.ledger is not None:
+            self.ledger.commit()
 
 
 class FakeInstalls:
@@ -140,6 +154,7 @@ class FakeInstalls:
         self.now = NOW
         self.replaced: list[str] = []
         self.finish_calls: list[dict[str, Any]] = []
+        self.locked: list[str] = []   # the sessions whose row was read ``FOR UPDATE``, in order
 
     def add(self, install_id: str = INSTALL, *, state: str = "requested", access: str = "generated_key",
             host: str = HOST, port: int = PORT, user: str = USER, created_at: datetime = T0,
@@ -162,6 +177,8 @@ class FakeInstalls:
         return (self.now - record.created_at).total_seconds()
 
     def get_install(self, session, install_id, *, lock=False):
+        if lock:
+            self.locked.append(install_id)
         return self.rows.get(install_id)
 
     def claim_requested(self, session, *, seconds, stale_scan_seconds=STALE_SCAN_SECONDS):
@@ -215,9 +232,17 @@ class FakeLedger:
 
     def __init__(self) -> None:
         self.rows: dict[tuple[str, str], dict[str, Any]] = {}
+        self.staged: dict[tuple[str, str], dict[str, Any]] = {}   # written by a transaction that has not committed
 
     def find(self, session, *, command_type, idempotency_key):
         return self.rows.get((command_type, str(idempotency_key)))
+
+    def commit(self) -> None:
+        self.rows.update(self.staged)
+        self.staged.clear()
+
+    def rollback(self) -> None:
+        self.staged.clear()
 
     def claim(self, install_id: str) -> None:
         """What a worker that issued the grant and then died left behind."""
@@ -226,7 +251,7 @@ class FakeLedger:
 
 class FakeExecutors:
     def __init__(self) -> None:
-        self.kind, self.archived, self.revision = "pull", False, True
+        self.kind, self.archived, self.revision, self.model = "pull", False, True, MODEL
 
     def get_connection(self, session, connection_id, *, lock=False):
         return ConnectionRecord(
@@ -234,7 +259,7 @@ class FakeExecutors:
             archived_at=T0 if self.archived else None, archived_by=CREATOR if self.archived else None)
 
     def current_revisions(self, session, connection_ids):
-        revision = SimpleNamespace(settings=SimpleNamespace(gateway_model=MODEL))
+        revision = SimpleNamespace(settings=SimpleNamespace(gateway_model=self.model))
         return {connection_id: revision for connection_id in connection_ids} if self.revision else {}
 
 
@@ -262,11 +287,11 @@ class FakeGrants:
         if self.refuse is not None:
             raise self.refuse
         key = (GRANT_COMMAND_TYPE, kwargs["idempotency_key"])
-        if key in self.ledger.rows:
+        if key in self.ledger.rows or key in self.ledger.staged:
             raise DomainError(ErrorCode.CONFLICT, conflict_reason="enrollment_shown_once")
         number = len(self.calls) + 1
         secret, enrollment_id = f"ame_{number:08d}_" + "A" * 43, f"exen_01M2545JSD15ETSNNV904X99{number:02d}"
-        self.ledger.rows[key] = {"state": "succeeded", "outcome": {"enrollment_id": enrollment_id}}
+        self.ledger.staged[key] = {"state": "succeeded", "outcome": {"enrollment_id": enrollment_id}}
         self.calls.append({**kwargs, "secret_digest": hashlib.sha256(secret.encode()).hexdigest()})
         self.enrollments.by_secret[secret] = enrollment_id
         kwargs["journal"](session, event_type="executor.enrollment_issued", aggregate_type="ExecutorEnrollment",
@@ -320,8 +345,8 @@ class World:
     """One worker with every collaborator a stand-in. ``pump`` is one pass of the worker's loop, waited for."""
 
     def __init__(self) -> None:
-        self.session = FakeSession()
         self.installs, self.ledger, self.executors = FakeInstalls(), FakeLedger(), FakeExecutors()
+        self.session = FakeSession(self.ledger)
         self.enrollments = FakeEnrollments()
         self.grants = FakeGrants(self.enrollments, self.ledger)
         self.journal = Journal()
@@ -343,7 +368,15 @@ class World:
             open_key=self.open_key, load=self.load, clock=lambda: self.now)
         options.update(changes)
         self.installs.now = self.now
-        return AgentInstallRunner(lambda: nullcontext(self.session), **options)  # type: ignore[arg-type]
+        return AgentInstallRunner(self.transaction, **options)  # type: ignore[arg-type]
+
+    @contextmanager
+    def transaction(self):
+        """One short transaction: what it staged in the ledger is durable only if it committed."""
+        try:
+            yield self.session
+        finally:
+            self.ledger.rollback()
 
     def open_key(self, session, ring, *, secret_id, destination, repository=None):
         self.opened.append((secret_id, destination))
@@ -489,6 +522,171 @@ def test_the_destination_policy_is_the_one_every_executor_destination_passes(wor
     assert seen == [(HOST, PORT, runner_module.INSTALL_TRANSPORT)] and runner_module.INSTALL_TRANSPORT == "ssh_command"
 
 
+# -- private-range targets: one stand setting, `R-149g` ---------------------------------------------------------
+
+PRIVATE_ADDRESSES = ["10.0.0.5", "192.168.1.9", "172.16.0.4", "100.64.0.7", "fd00::5"]
+
+
+def with_setting(world: World, value: str | None) -> None:
+    """The worker as the stand starts it with ``AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE`` set to ``value``
+    (``None``: not set at all). The setting is read once, when the runner is built."""
+    world.environ.pop(ALLOW_PRIVATE_ENV, None)
+    if value is not None:
+        world.environ[ALLOW_PRIVATE_ENV] = value
+    world.runner = world.build()
+
+
+def refused_before_any_connection(world: World) -> None:
+    assert world.pump() == 1
+    row = world.installs.rows[INSTALL]
+    assert (row.state, row.failure_reason) == ("failed", "host_unreachable")
+    assert world.host.scans == [] and world.host.calls == []
+
+
+def test_the_setting_is_one_or_zero_and_anything_else_is_not_a_yes() -> None:
+    assert ALLOW_PRIVATE_ENV == "AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE" and PRIVATE_INSTALL_TRANSPORT == "vpn"
+    assert allow_private_targets({ALLOW_PRIVATE_ENV: "1"}) is True
+    assert allow_private_targets({ALLOW_PRIVATE_ENV: " 1 "}) is True, "the whitespace of an env file is not a value"
+    for off in ({}, {ALLOW_PRIVATE_ENV: "0"}, {ALLOW_PRIVATE_ENV: ""}, {ALLOW_PRIVATE_ENV: "  "}):
+        assert allow_private_targets(off) is False, off
+    for invalid in ("true", "True", "yes", "on", "2", "01", "-1", "1.0", "enabled", "1,0"):
+        assert allow_private_targets({ALLOW_PRIVATE_ENV: invalid}) is False, invalid
+
+
+@pytest.mark.parametrize("address", PRIVATE_ADDRESSES)
+def test_with_the_setting_on_a_private_target_is_scanned_and_installed(world: World, address: str) -> None:
+    with_setting(world, "1")
+    world.resolves = [address]
+    row = world.installed()
+    assert (row.state, row.failure_reason) == ("succeeded", None)
+    assert {endpoint.host for endpoint in world.host.scans} == {address}, "the scan and the rescan went to the address"
+    (call,) = world.host.calls
+    assert call["endpoint"].host == address
+
+
+@pytest.mark.parametrize("value", [None, "0", "", " 0 "])
+@pytest.mark.parametrize("address", PRIVATE_ADDRESSES)
+def test_with_the_setting_off_or_absent_a_private_target_is_refused_as_before(
+    world: World, address: str, value: str | None,
+) -> None:
+    with_setting(world, value)
+    world.resolves = [address]
+    world.installs.add()
+    refused_before_any_connection(world)
+
+
+@pytest.mark.parametrize("value", ["true", "yes", "on", "2", "01", "-1", "1.0", "enabled"])
+def test_a_value_that_is_neither_one_nor_zero_leaves_private_targets_refused_and_says_so_by_name(
+    world: World, caplog, value: str,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        with_setting(world, value)
+    assert ALLOW_PRIVATE_ENV in caplog.text, "the stand is not silently different from what the operator wrote"
+    world.resolves = ["10.0.0.5"]
+    world.installs.add()
+    refused_before_any_connection(world)
+
+
+def test_the_log_names_the_variable_of_an_invalid_value_and_never_the_value(world: World, caplog) -> None:
+    with caplog.at_level(logging.WARNING):
+        with_setting(world, "PLEASE-9317")
+    assert ALLOW_PRIVATE_ENV in caplog.text and "PLEASE-9317" not in caplog.text
+
+
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "169.254.169.254", "0.0.0.0", "postgres", "[::1]", "api"])
+def test_with_the_setting_on_loopback_link_local_and_service_names_stay_refused(world: World, host: str) -> None:
+    with_setting(world, "1")
+    world.resolves = ["10.0.0.5"]
+    world.installs.add(host=host)
+    refused_before_any_connection(world)
+
+
+@pytest.mark.parametrize("answers", [
+    ["127.0.0.2"], ["169.254.10.10"], ["10.0.0.5", "169.254.10.10"], [PUBLIC, "127.0.0.2"], ["::1"], ["fe80::1"],
+])
+def test_with_the_setting_on_a_name_that_resolves_to_a_forbidden_address_is_refused(
+    world: World, answers: list[str],
+) -> None:
+    with_setting(world, "1")
+    world.resolves = answers
+    world.installs.add()
+    refused_before_any_connection(world)
+
+
+def test_with_the_setting_on_the_compose_network_stays_refused_and_another_private_range_is_not(world: World) -> None:
+    with_setting(world, "1")
+    answers = ["10.0.0.5"]
+    world.runner = world.build(policy=DestinationPolicy(
+        resolver=lambda host, port: answers, networks=lambda: [ipaddress.ip_network("10.0.0.0/24")]))
+    world.installs.add()
+    refused_before_any_connection(world)
+    answers[:] = ["10.1.0.5"]                                  # the same policy, a private address outside it
+    assert world.installed(SECOND, key_secret="exs_01M2545JSD15ETSNNV904X991M").state == "succeeded"
+
+
+def test_with_the_setting_on_the_allowed_hosts_still_narrow(world: World) -> None:
+    with_setting(world, "1")
+    world.runner = world.build(policy=DestinationPolicy(
+        allowed_hosts=("other.example",), resolver=lambda host, port: ["10.0.0.5"], networks=lambda: ()))
+    world.installs.add()
+    refused_before_any_connection(world)
+
+
+@pytest.mark.parametrize(("value", "transport"), [(None, "ssh_command"), ("0", "ssh_command"), ("1", "vpn")])
+def test_the_scan_and_the_install_ask_the_destination_rules_the_same_question(
+    world: World, value: str | None, transport: str,
+) -> None:
+    seen: list[tuple[str, int, str]] = []
+
+    class Spy(DestinationPolicy):
+        def check(self, host, port, *, transport):
+            seen.append((host, port, transport))
+            return super().check(host, port, transport=transport)
+
+    with_setting(world, value)
+    world.runner = world.build(policy=Spy(resolver=lambda host, port: [PUBLIC], networks=lambda: ()))
+    assert world.installed().state == "succeeded"
+    assert seen == [(HOST, PORT, transport)] * 2, "once for the scan, once for the install, one transport"
+
+
+@pytest.mark.parametrize(("value", "host", "category"), [
+    ("0", "10.0.0.5", "private_range"),
+    ("1", "169.254.10.10", "link_local"),
+    ("1", "127.0.0.1", "loopback"),
+    ("1", "postgres", "service_name"),
+])
+def test_a_refusal_is_logged_as_its_closed_category_and_nothing_else(
+    world: World, caplog, value: str, host: str, category: str,
+) -> None:
+    with_setting(world, value)
+    world.installs.add(host=host)
+    with caplog.at_level(logging.DEBUG):
+        refused_before_any_connection(world)
+    assert category in caplog.text
+    assert host not in caplog.text, "never the address or the name"
+
+
+def test_the_composition_roots_runner_reads_the_setting_from_the_environment_it_is_given() -> None:
+    from auditmanager.executors.public import install_runner_for
+
+    def built(environ: dict[str, str]) -> AgentInstallRunner:
+        return install_runner_for(lambda: nullcontext(FakeSession()), ring=None, environ=environ)  # type: ignore[arg-type]
+
+    assert built({})._destination_transport == runner_module.INSTALL_TRANSPORT == "ssh_command"
+    assert built({ALLOW_PRIVATE_ENV: "1"})._destination_transport == PRIVATE_INSTALL_TRANSPORT == "vpn"
+    assert built({ALLOW_PRIVATE_ENV: "yes"})._destination_transport == "ssh_command"
+
+
+def test_only_the_worker_service_forwards_the_setting_and_it_defaults_to_off_and_is_explained() -> None:
+    compose = (ROOT / "infra" / "deploy" / "compose.server.yml").read_text()
+    api, worker = _service_block(compose, "api"), _service_block(compose, "worker")
+    line = f"      {ALLOW_PRIVATE_ENV}: ${{{ALLOW_PRIVATE_ENV}:-0}}"
+    assert worker.splitlines().count(line) == 1, "the worker forwards it, default 0"
+    assert ALLOW_PRIVATE_ENV not in api, "the api never reads it"
+    readme = (ROOT / "infra" / "deploy" / "README.md").read_text()
+    assert ALLOW_PRIVATE_ENV in readme and "hosting's internal networks" in readme and "`1` or `0`" in readme
+
+
 # -- the claim of an install -------------------------------------------------------------------------
 
 
@@ -556,6 +754,135 @@ def test_two_workers_that_read_one_session_together_install_it_once(world: World
     assert world.host.calls == [] and world.grants.calls == []
     assert world.installs.rows[INSTALL].state == "installing" and world.installs.finish_calls == []
     assert world.journal.of("executor.agent_install_started") == []
+
+
+@pytest.mark.parametrize("claimed", [True, False])
+@pytest.mark.parametrize("how", ["host_key_changed", "package_unavailable", "grant_refused", "unexpected_error"])
+def test_a_worker_that_fails_before_it_won_the_grant_ends_the_session_only_if_nobody_holds_it(
+    world: World, how: str, claimed: bool,
+) -> None:
+    """Worker B read the session; worker A then won the grant (``claimed``) and is installing. B's failure comes before
+    its own grant, in any of the ways that precede it: B must leave A's session alone. Unclaimed, the same failure
+    ends the session -- the guard can fail, and what it guards is only the claimed case."""
+    world.to_installing()
+    other = world.build()
+    work = other._claim()
+    assert work is not None
+    if claimed:
+        world.ledger.claim(INSTALL)
+    if how == "host_key_changed":
+        world.host.key_line = host_key_line()
+        expected = "host_key_changed"
+    elif how == "package_unavailable":
+        world.package_error = DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="agent_package")
+        expected = "package_unavailable"
+    elif how == "grant_refused":
+        world.grants.refuse = DomainError(ErrorCode.CONFLICT, conflict_reason="connection_archived")
+        expected = "enrollment_failed"
+    else:
+        def explode(ready):
+            raise RuntimeError("boom")
+
+        other._verify_host = explode  # type: ignore[method-assign]
+        expected = "install_failed"
+    other._guarded(work)
+
+    row = world.installs.rows[INSTALL]
+    assert world.host.calls == [] and world.grants.calls == []
+    if claimed:
+        assert row.state == "installing" and row.failure_reason is None
+        assert world.installs.finish_calls == [] and world.installs.replaced == [], "the holder's key is not replaced"
+        assert world.journal.of("executor.agent_install_failed") == []
+    else:
+        assert (row.state, row.failure_reason) == ("failed", expected)
+
+
+def test_the_session_row_is_locked_before_the_ledger_is_read_by_a_worker_that_gives_up(world: World) -> None:
+    """The grant is issued with the same row locked (next test), so reading the ledger under the lock sees every grant
+    that was begun: a grant in flight is waited for and then seen."""
+    world.to_installing()
+    other = world.build()
+    work = other._claim()
+    assert work is not None
+    seen: list[list[str]] = []
+    find = world.ledger.find
+
+    def watching(session, *, command_type, idempotency_key):
+        seen.append(list(world.installs.locked))
+        return find(session, command_type=command_type, idempotency_key=idempotency_key)
+
+    world.ledger.find = watching  # type: ignore[method-assign]
+    world.host.key_line = host_key_line()
+    other._install(work)
+    assert seen == [[INSTALL]], "the row was locked when the ledger was read"
+    assert world.installs.rows[INSTALL].failure_reason == "host_key_changed"
+
+
+def test_the_grant_is_issued_with_the_session_row_locked(world: World) -> None:
+    world.to_installing()
+    at_issue: list[list[str]] = []
+    issue = world.grants
+
+    def watching(session, **kwargs):
+        at_issue.append(list(world.installs.locked))
+        return issue(session, **kwargs)
+
+    world.runner._issue_grant = watching  # type: ignore[assignment]
+    world.pump()
+    assert at_issue == [[INSTALL]]
+    assert world.installs.rows[INSTALL].state == "succeeded", "the worker that won the grant ends its own session"
+
+
+def test_the_payload_names_the_model_read_in_the_grants_transaction_not_the_one_read_before_the_network(
+    world: World,
+) -> None:
+    world.to_installing()
+    trail: list[str] = []
+    revisions = world.executors.current_revisions
+
+    def current(session, connection_ids):
+        trail.append("revision")
+        return revisions(session, connection_ids)
+
+    world.executors.current_revisions = current  # type: ignore[method-assign]
+    issue = world.runner._issue_grant
+
+    def granting(session, **kwargs):
+        trail.append("grant")
+        return issue(session, **kwargs)
+
+    world.runner._issue_grant = granting  # type: ignore[assignment]
+    verify = world.runner._verify_host
+
+    def revised_meanwhile(ready):
+        world.executors.model = "claude-sonnet-5"   # the connection got a new revision while the host was scanned
+        return verify(ready)
+
+    world.runner._verify_host = revised_meanwhile  # type: ignore[method-assign]
+    world.pump()
+    (call,) = world.host.calls
+    assert call["payload"].split(b"\n")[3] == b"claude-sonnet-5", "never the model of the revision read before the grant"
+    assert trail == ["revision", "grant", "revision"], "read again after the grant, in the transaction that commits it"
+
+
+@pytest.mark.parametrize("change", ["invalid_model", "no_revision"])
+def test_a_connection_that_cannot_name_a_model_when_the_grant_is_issued_gets_no_grant(world: World, change: str) -> None:
+    world.to_installing()
+    verify = world.runner._verify_host
+
+    def changed_meanwhile(ready):
+        if change == "invalid_model":
+            world.executors.model = "claude opus"      # not a name install.sh accepts
+        else:
+            world.executors.revision = False
+        return verify(ready)
+
+    world.runner._verify_host = changed_meanwhile  # type: ignore[method-assign]
+    world.pump()
+    row = world.installs.rows[INSTALL]
+    assert (row.state, row.failure_reason) == ("failed", "enrollment_failed")
+    assert world.host.calls == []
+    assert (GRANT_COMMAND_TYPE, grant_key(INSTALL)) not in world.ledger.rows, "the grant rolled back with the payload"
 
 
 def test_two_workers_racing_for_one_requested_session_scan_it_once(world: World) -> None:
