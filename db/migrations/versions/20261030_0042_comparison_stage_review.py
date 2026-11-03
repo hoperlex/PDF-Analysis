@@ -311,7 +311,42 @@ def downgrade() -> None:
             raise RuntimeError("0042 populated comparison stage review refuses downgrade")
     if connection.execute(text("SELECT EXISTS(SELECT 1 FROM comparison_ai_job WHERE method='stage_review') OR EXISTS(SELECT 1 FROM executor_route_event WHERE work_kind='comparison_stage_review') OR EXISTS(SELECT 1 FROM stage_text_hint WHERE source_side='right') OR EXISTS(SELECT 1 FROM stage_chain_run WHERE kind='full' OR with_ai OR effective_link_revision_id IS NOT NULL OR stage_chain_batch_id IS NOT NULL OR repair_cycle_count<>0)")).scalar():
         raise RuntimeError("0042 referenced stage review scope refuses downgrade")
-    _text_scope(False)
+    op.execute("""CREATE OR REPLACE FUNCTION am_check_stage_text_evidence_scope() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        DECLARE
+            left_id text;
+            right_id text;
+            left_side text;
+            right_side text;
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM stage_link_revision r
+                 WHERE r.stage_link_revision_id = NEW.stage_link_revision_id
+                   AND r.stage_pair_id = NEW.stage_pair_id
+            ) THEN
+                RAISE EXCEPTION 'stage_text_revision_scope_mismatch' USING ERRCODE = 'AM001';
+            END IF;
+            left_id := coalesce(to_jsonb(NEW)->>'left_fragment_id',
+                                to_jsonb(NEW)->>'source_fragment_id');
+            right_id := coalesce(to_jsonb(NEW)->>'right_fragment_id',
+                                 to_jsonb(NEW)->>'target_fragment_id');
+            IF left_id IS NOT NULL THEN
+                SELECT f.side INTO left_side FROM stage_text_fragment f
+                 WHERE f.stage_text_fragment_id = left_id AND f.stage_pair_id = NEW.stage_pair_id;
+                IF left_side IS DISTINCT FROM 'left' THEN
+                    RAISE EXCEPTION 'stage_text_left_fragment_scope_mismatch' USING ERRCODE = 'AM001';
+                END IF;
+            END IF;
+            IF right_id IS NOT NULL THEN
+                SELECT f.side INTO right_side FROM stage_text_fragment f
+                 WHERE f.stage_text_fragment_id = right_id AND f.stage_pair_id = NEW.stage_pair_id;
+                IF right_side IS DISTINCT FROM 'right' THEN
+                    RAISE EXCEPTION 'stage_text_right_fragment_scope_mismatch' USING ERRCODE = 'AM001';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END
+        $fn$""")
     op.execute("ALTER TABLE stage_text_hint DROP COLUMN source_side")
     op.execute("DROP TRIGGER trg_stage_ai_job_pin ON comparison_ai_job")
     op.execute("DROP TRIGGER trg_stage_ai_job_scope ON comparison_ai_job")

@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0048_dispatch_time_binding"
+HEAD = "0049_stage_identity_checks"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -61,7 +61,8 @@ TABLES = frozenset((
     # add no table. `0046_executor_capacity_enroll` adds `executor_enrollment` and `executor_agent_install`
     # (listed beside the other executor tables below). `0047_executor_groups_rules` adds `executor_group`,
     # `executor_group_revision`, `executor_group_member`, `executor_routing_rule_revision` and
-    # `executor_routing_mode_event` (`EXEC2-SEAL-2`, also listed there); `0048_dispatch_time_binding` adds no table.
+    # `executor_routing_mode_event` (`EXEC2-SEAL-2`, also listed there); `0048_dispatch_time_binding` and
+    # `0049_stage_identity_checks` add no table.
     "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
     "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
@@ -421,8 +422,9 @@ SEQUENCES = {
 #: primary keys, four unique constraints (revision number, member tie-break order, rule number, event number) and one
 #: constraint trigger (the deferred `trg_executor_group_revision_has_members`, contype `t`); `0048_dispatch_time_binding`
 #: adds, on `audit_run` and on `comparison_ai_job`, 15 checks (7 and 8) and four foreign keys (the group and rule
-#: revisions of each): c 1234, f 356, p 128, t 10, u 129 (derived from the DDL, not measured on a database).
-CONSTRAINT_COUNTS = {"c": 1234, "f": 356, "p": 128, "t": 10, "u": 129}
+#: revisions of each): c 1234, f 356, p 128, t 10, u 129 (measured on the stand at ``0048``); `0049_stage_identity_checks`
+#: adds 43 identity-format checks and nothing else (`EXEC2-FIX-CMP-INVENTORY`): c 1277, the other four unchanged.
+CONSTRAINT_COUNTS = {"c": 1277, "f": 356, "p": 128, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -431,7 +433,7 @@ CONSTRAINT_COUNTS = {"c": 1234, "f": 356, "p": 128, "t": 10, "u": 129}
 #: one unfinished install per connection, and one listing index on each of the two tables); 0047 adds twelve (five primary
 #: keys, four unique constraints, the partial unique index of an active group name, and one index each on the member's
 #: connection and the rule's group revision); 0048 adds four (a group-revision index and a pending-work index on each of
-#: `audit_run` and `comparison_ai_job`).
+#: `audit_run` and `comparison_ai_job`); 0049 adds none.
 INDEX_COUNT = 450
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).

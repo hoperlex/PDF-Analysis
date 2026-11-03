@@ -31,12 +31,18 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `EXEC2-FIX-CMP-INVENTORY` for ``0049_stage_identity_checks``, measured by the same method (a fresh empty database
+#: upgraded to exactly ``0049``, the eleven families recomputed with ``_inventory`` and diffed row by row against the ``0048``
+#: figures below): one family moved, ``constraints`` +43 -> 1900, every added row a ``ck_<table>_<column>_format`` CHECK of the
+#: identity columns ``0042`` had left without one (14 tables); nothing was removed or redefined, and columns (1549), relations
+#: (141), indexes (450), triggers (241), functions (78), views, extensions, sequences, policies and the state topology have
+#: the digests of ``0048``. The seal below is therefore the ``0048`` one with the ``constraints`` family replaced.
 #: Resealed by `EXEC2-FIX-CMP-INVENTORY` for ``0042`` to ``0048`` -- the comparison stage review wave (``0042``-``0045``,
 #: `CMP-SEAL-C4` and the two page-bound hotfixes) and the EXEC-2 executor wave (``0046``-``0048``, `EXEC2-SEAL-1` and
 #: `EXEC2-SEAL-2`) -- measured, not predicted, by the method above: for each of ``0041``, ``0045``, ``0046`` and ``0048`` a fresh
 #: empty database on the lane's PostgreSQL stack was upgraded to exactly that revision by ``alembic upgrade`` and the eleven
 #: families recomputed with ``_inventory`` and diffed row by row. ``0041`` reproduced the previous seal in all eleven families
-#: (so the method and the figures below are the ones that sealed it), and ``0048`` is the head. Views, extensions, sequences,
+#: (so the method and the figures below are the ones that sealed it), and ``0048`` was the head of that seal (``0049`` is sealed above). Views, extensions, sequences,
 #: policies and the state topology are identical at all four revisions (5, 1, 7, 0 and 51 rows, same digests).
 #:
 #: ``0042``-``0045`` (CMP, 0041 -> 0045): columns +130 -> 1462 (the twelve new tables 121 -- ``stage_ai_unit`` 13, ``stage_ai_review``
@@ -340,7 +346,7 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (1549, "fe2af5e66658dda832e26c8d23b0fe6f3603c35e77c22137c04f72cf1b1c446e"),
     "relations": (141, "ea3f9c4f791bc938db522b27fe80bf1fcaed96eb46f5204df1c5af7f63a55c01"),
-    "constraints": (1857, "66e1f93c0315bb3910d5c61ad2c55ef04d94206529e22e2e1c79990c03dd0172"),
+    "constraints": (1900, "e9403d294fbf4accc54246b6e7f46da25e47a0e6e7d21ebbbfff78655dd345cd"),
     "indexes": (450, "9f32323579a83c0cc5de00b51597a1e42a2ddf72985e398feeaf0212a31630f8"),
     "triggers": (241, "710b638de7200c0e2b57dd9ec4bbc9f237bf1d90f72dbf249cc661d3e83eb8ef"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),

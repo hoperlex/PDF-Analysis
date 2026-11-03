@@ -21,6 +21,7 @@ from auditmanager.api.app import create_app, create_asgi_app
 from auditmanager.api.security import API_TOKEN_VARIABLE, OPERATION_ROLES
 from auditmanager.comparison.public import COMPARISON_MODULES_ENV
 from tests.integration.composition.test_comparison_ai_stub_operations import REQUESTS as WAVE_C2_REQUESTS
+from tests.integration.composition.test_comparison_stage_c4_wiring import C4 as WAVE_C4_OPERATIONS
 from tests.integration.composition.test_comparison_stage_stub_operations import DEPENDENCIES as WAVE_C3_DEPENDENCIES
 from tests.integration.composition.test_router_answers import DEPLOYMENT_SECRET, static_token
 from tests.support.expected_facts import FACTS
@@ -108,6 +109,9 @@ def _call(client: TestClient, name: str, *, token: str | None, key: str | None =
     return client.request(method, path, headers=headers, **kwargs)
 
 
+HOTFIX_PRESENTATION_OPERATIONS = frozenset({"importComparisonZip", "streamComparisonTechnicalReport"})
+
+
 def test_the_requests_cover_exactly_the_eighteen_operations_the_contract_added() -> None:
     document = json.load(open("contracts/api/v1/openapi.json", encoding="utf-8"))
     first_wave = {"createComparisonUpload", "listComparisonUploads", "getComparisonUpload",
@@ -121,7 +125,11 @@ def test_the_requests_cover_exactly_the_eighteen_operations_the_contract_added()
               if m in ("get", "post", "put", "patch", "delete") and "comparison" in op.get("tags", [])} | {
         "getComparisonQueueSummary"}
     # `CMP-SEAL-C2` tags its fifty operations `comparison` too (all but the AI queue); they are the next wave's.
-    assert set(REQUESTS) == sealed - first_wave - set(WAVE_C2_REQUESTS) - set(WAVE_C3_DEPENDENCIES) and len(REQUESTS) == 18
+    # So are the twenty-four of `CMP-SEAL-C4` (read from the wiring test that drives them) and the two the stage-V3 and
+    # presentation hotfix added under the same tag (`HOTFIX-PRESENTATION-INT-1030`, contract 1.14.0, `docs/program/P02_SEAMS.md`):
+    # `importComparisonZip` and `streamComparisonTechnicalReport`.
+    later = set(WAVE_C2_REQUESTS) | set(WAVE_C3_DEPENDENCIES) | set(WAVE_C4_OPERATIONS) | HOTFIX_PRESENTATION_OPERATIONS
+    assert set(REQUESTS) == sealed - first_wave - later and len(REQUESTS) == 18
     assert {triple[2] for triple in FACTS.operations} >= set(REQUESTS)
 
 
