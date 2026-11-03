@@ -5638,6 +5638,211 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
         return package.file_name, content
 
 
+# EXEC2-GROUP-STORE-01 ---------------------------------------------------------------------------------
+#
+# Executor groups and the routing rule of a work kind (ADR-0026 decisions 10, 11 and 14). Thin, like every adapter
+# here: the rules live in ``auditmanager.executors`` (``groups``, ``group_commands``, ``group_selection``). This
+# section is the lane's own.
+
+
+def _group_member_view(member: Any) -> dict[str, Any]:
+    return _present(
+        connection_id=member.connection_id, connection_revision_id=member.connection_revision_id,
+        tie_break_order=member.tie_break_order,
+    )
+
+
+def _group_revision_view(revision: Any) -> dict[str, Any]:
+    """One immutable revision. The rates are USD per million tokens, snapshotted from the provider lock when the
+    revision was made; a member is named by identity only (no setting, address or key of its connection)."""
+    return {
+        "group_revision_id": revision.group_revision_id, "group_id": revision.group_id,
+        "revision_no": revision.revision_no, "pin_id": revision.pin_id,
+        "gateway_model": revision.gateway_model, "billing": revision.billing,
+        "input_per_mtok_usd": float(revision.input_per_mtok_usd),
+        "output_per_mtok_usd": float(revision.output_per_mtok_usd), "strategy": revision.strategy,
+        "members": [_group_member_view(member) for member in revision.members],
+        "created_at": revision.created_at, "created_by": revision.created_by,
+    }
+
+
+def _group_view(summary: Any) -> dict[str, Any]:
+    group = summary.group
+    return _present(
+        group_id=group.group_id, display_name=group.display_name, created_at=group.created_at,
+        created_by=group.created_by, current_revision=_group_revision_view(summary.current_revision),
+        routed_work_kinds=list(summary.routed_work_kinds), archived_at=group.archived_at,
+    )
+
+
+def _routing_rule_view(rule: Any) -> dict[str, Any]:
+    return {
+        "work_kind": rule.work_kind, "rule_revision_id": rule.rule_revision_id,
+        "group_id": rule.group_id, "group_revision_id": rule.group_revision_id,
+        "set_at": rule.set_at, "set_by": rule.set_by,
+    }
+
+
+def _routing_mode_view(state: Any) -> dict[str, Any]:
+    """``ExecutorRoutingModeState``: before the first change the mode is ``legacy`` and the rest is absent."""
+    return _present(
+        mode=state.mode, mode_event_id=state.mode_event_id, changed_at=state.changed_at,
+        changed_by=state.changed_by,
+    )
+
+
+def _group_capacity_view(capacity: Any) -> dict[str, Any]:
+    return {
+        "group_id": capacity.group_id, "group_revision_id": capacity.group_revision_id,
+        "members": [
+            _present(
+                connection_id=status.connection_id, snapshot_revision_id=status.snapshot_revision_id,
+                current_revision_id=status.current_revision_id,
+                occupancy=None if status.occupancy is None else _occupancy_view(status.occupancy),
+                eligible=status.eligible, ineligible_reason=status.issue,
+            )
+            for status in capacity.members
+        ],
+        "capacity": capacity.capacity, "used": capacity.used, "waiting": capacity.waiting,
+    }
+
+
+class ExecutorGroupAdapter(_SessionHolder):
+    """The port of ``api.routers.executor_groups`` (`EXEC2-GROUP-STORE-01`).
+
+    The four reads take no actor (any role reads, as the connections' reads do) and the four writes re-read the actor's
+    role set inside their own transaction. The rates a group snapshots come from the provider lock
+    (``pinned_models``), read here and handed to the command. No method returns a secret or a setting of a connection."""
+
+    @staticmethod
+    def _roles(session: Session, user_uid: str) -> Any:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    @staticmethod
+    def _settings(body: Any) -> Any:
+        from auditmanager.executors.public import GroupSettings
+
+        return GroupSettings(
+            pin_id=body.pin_id, gateway_model=body.gateway_model, billing=body.billing.value,
+            strategy="least_loaded" if body.strategy is None else body.strategy.value,
+        )
+
+    @staticmethod
+    def _members(body: Any) -> list[Any]:
+        from auditmanager.executors.public import MemberRequest
+
+        return [
+            MemberRequest(
+                connection_id=member.connection_id, connection_revision_id=member.connection_revision_id,
+                tie_break_order=member.tie_break_order,
+            )
+            for member in body.members
+        ]
+
+    # -- reads ----------------------------------------------------------------------------------
+
+    def list_groups(self) -> models.ExecutorGroupList:
+        from auditmanager.executors.public import list_group_summaries
+
+        def work(session: Session) -> models.ExecutorGroupList:
+            return models.ExecutorGroupList.model_validate(
+                {"items": [_group_view(summary) for summary in list_group_summaries(session)]})
+        return self._read(work)
+
+    def get_group(self, *, group_id: str) -> models.ExecutorGroupDetail:
+        from auditmanager.executors.public import group_detail
+
+        def work(session: Session) -> models.ExecutorGroupDetail:
+            detail = group_detail(session, group_id)
+            return models.ExecutorGroupDetail.model_validate({
+                "group": _group_view(detail.summary),
+                "revisions": [_group_revision_view(revision) for revision in detail.revisions],
+            })
+        return self._read(work)
+
+    def get_capacity(self, *, group_id: str) -> models.ExecutorGroupCapacity:
+        from auditmanager.executors.public import group_capacity
+
+        def work(session: Session) -> models.ExecutorGroupCapacity:
+            return models.ExecutorGroupCapacity.model_validate(
+                _group_capacity_view(group_capacity(session, group_id)))
+        # A write transaction: the read ends the probes nobody can still be running, as the connection detail does.
+        return self._write(work)
+
+    def list_rules(self) -> models.ExecutorRoutingRuleList:
+        from auditmanager.executors.public import list_routing_rules
+
+        def work(session: Session) -> models.ExecutorRoutingRuleList:
+            listing = list_routing_rules(session)
+            return models.ExecutorRoutingRuleList.model_validate({
+                "routing_mode": _routing_mode_view(listing.routing_mode),
+                "items": [_routing_rule_view(rule) for rule in listing.rules],
+            })
+        return self._read(work)
+
+    # -- writes ---------------------------------------------------------------------------------
+
+    def create_group(
+        self, *, body: models.CreateExecutorGroupRequest, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup:
+        from auditmanager.executors.public import create_group, pinned_models
+
+        def work(session: Session) -> models.ExecutorGroup:
+            summary = create_group(
+                session, display_name=body.display_name, settings=self._settings(body),
+                members=self._members(body), pins=pinned_models(),
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorGroup.model_validate(_group_view(summary))
+        return self._write(work)
+
+    def revise_group(
+        self, *, group_id: str, body: models.ReviseExecutorGroupRequest, user_uid: str,
+        idempotency_key: str,
+    ) -> models.ExecutorGroup:
+        from auditmanager.executors.public import pinned_models, revise_group
+
+        def work(session: Session) -> models.ExecutorGroup:
+            summary = revise_group(
+                session, group_id=group_id, settings=self._settings(body),
+                members=self._members(body), pins=pinned_models(),
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorGroup.model_validate(_group_view(summary))
+        return self._write(work)
+
+    def archive_group(
+        self, *, group_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorGroup:
+        from auditmanager.executors.public import archive_group
+
+        def work(session: Session) -> models.ExecutorGroup:
+            summary = archive_group(
+                session, group_id=group_id, roles=self._roles(session, user_uid),
+                idempotency_key=idempotency_key, actor_uid=user_uid,
+            )
+            return models.ExecutorGroup.model_validate(_group_view(summary))
+        return self._write(work)
+
+    def set_rule(
+        self, *, work_kind: str, group_revision_id: str, user_uid: str, idempotency_key: str
+    ) -> models.ExecutorRoutingRule:
+        from auditmanager.executors.public import set_routing_rule
+
+        def work(session: Session) -> models.ExecutorRoutingRule:
+            rule = set_routing_rule(
+                session, work_kind=work_kind, group_revision_id=group_revision_id,
+                roles=self._roles(session, user_uid), idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+            )
+            return models.ExecutorRoutingRule.model_validate(_routing_rule_view(rule))
+        return self._write(work)
+
+
 #: `CMP-SEAL-C1`: the stable class name of the withdrawn `0035` operations while the versions module is on.
 _VERSIONS_MODULE_DEPENDENCY = "comparison_versions_module"
 
