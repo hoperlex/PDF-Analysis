@@ -11,8 +11,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.access.public import AccountRepository
 from auditmanager.comparison.work.model import Completed, Failed, Outcome, WorkDependencies, WorkItem, Yielded
-from auditmanager.ingest.comparison_pdf.public import require_expert
-from auditmanager.ingest.public import CommandReplay, payload_fingerprint
+from auditmanager.ingest.public import CommandReplay, payload_fingerprint, require_expert
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AuditEventId, IdempotencyKey

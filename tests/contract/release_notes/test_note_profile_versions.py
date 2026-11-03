@@ -15,6 +15,12 @@ How a note quotes versions, and what each form covers (``x`` stands for any patc
 
 An item that talks about the profiles (the word «профил») and quotes at least one version must cover
 every ``profile_version`` of the packages. An item that quotes no version is not judged here.
+
+One section may be left out by name. `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` added a fifteenth package, the
+draft АР text profile at 1.0.0, beside the fourteen reviewed ones, and the note says «14 разделов, кроме АР».
+An item that writes «кроме АР» (the section code after «кроме», see ``SECTION_NAMES``) states a version range
+for the other profiles only, so the excluded one is not required to be inside that range. The exclusion names
+sections, never versions: any other profile the range leaves out is still reported.
 """
 
 from __future__ import annotations
@@ -30,6 +36,11 @@ VERSION = r"\d+\.\d+\.(?:\d+|x)"
 RANGE = re.compile(rf"(?:с|от)\s+(?P<low>{VERSION})\s+(?:по|до)\s+(?P<high>{VERSION})")
 TOKEN = re.compile(VERSION)
 INFINITY = 10**9
+#: «кроме АР»: how an item names the section it leaves out of the versions it quotes.
+EXCEPT = re.compile(r"кроме\s+(?P<name>[А-ЯЁ]{2,4})(?![А-Яа-яЁё])")
+#: The Cyrillic spelling a note uses for the section codes of the packages (the directory name, upper-cased).
+#: Only the sections a note has a reason to leave out are listed; a section missing here cannot be excluded.
+SECTION_NAMES = {"AR": "АР"}
 
 
 def parse(token: str, *, upper: bool) -> tuple[int, int, int]:
@@ -66,6 +77,12 @@ def profile_versions() -> dict[str, str]:
     }
 
 
+def excluded(text: str) -> set[str]:
+    """The upper-cased section codes an item leaves out by name («кроме АР»)."""
+    named = {found.group("name") for found in EXCEPT.finditer(text)}
+    return {code for code, name in SECTION_NAMES.items() if name in named}
+
+
 def uncovered(items: list[dict], versions: dict[str, str]) -> list[tuple[int, str]]:
     """``(item number, section)`` for every profile left out of an item that quotes versions."""
     missing: list[tuple[int, str]] = []
@@ -73,7 +90,12 @@ def uncovered(items: list[dict], versions: dict[str, str]) -> list[tuple[int, st
         text = item["text"]
         if "профил" not in text.lower() or not quotes_a_version(text):
             continue
-        missing.extend((number, code) for code, version in versions.items() if not covered(text, version))
+        left_out = excluded(text)
+        missing.extend(
+            (number, code)
+            for code, version in versions.items()
+            if code.upper() not in left_out and not covered(text, version)
+        )
     return missing
 
 
@@ -82,9 +104,11 @@ def current_note() -> dict:
     return json.loads((ROOT / "release-notes" / f"{version}.json").read_text(encoding="utf-8"))
 
 
-def test_there_are_fourteen_profiles_each_with_a_version() -> None:
+def test_there_are_fifteen_profiles_each_with_a_version() -> None:
     versions = profile_versions()
-    assert len(versions) == 14, sorted(versions)
+    # fourteen reviewed sections, plus the draft АР profile `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` added
+    assert len(versions) == 15, sorted(versions)
+    assert "ar" in versions, sorted(versions)
     assert all(re.fullmatch(r"\d+\.\d+\.\d+", v) for v in versions.values()), versions
 
 
@@ -123,3 +147,14 @@ def test_the_check_can_fail() -> None:
     assert [covered(closed, v) for v in ("1.1.0", "1.2.0", "1.3.0", "1.3.1", "1.0.9")] == [
         True, True, True, False, False,
     ]
+    # one section may be left out by name, and only the one named
+    with_ar = {**versions, "ar": "1.0.0"}
+    excluding = "У профилей анализа 14 разделов, кроме АР, версии с 1.1.0 по 1.3.x."
+    assert uncovered([{"text": excluding}], with_ar) == []
+    assert uncovered([{"text": "У профилей анализа 14 разделов версии с 1.1.0 по 1.3.x."}], with_ar) == [(1, "ar")]
+    assert uncovered([{"text": "У профилей анализа, кроме АР, версии с 1.2.0 по 1.3.x."}], with_ar) == [(1, "PB")]
+    assert uncovered([{"text": "У профилей, кроме АРХ, версии с 1.1.0 по 1.3.x."}], with_ar) == [(1, "ar")]
+    # a section code `SECTION_NAMES` does not list cannot be excluded: the item still has to cover it
+    assert uncovered([{"text": "У профилей, кроме КЖ, версии с 1.1.0 по 1.1.x."}], versions) == [(1, "AI"), (1, "KJ")]
+    # the exclusion is read from the item's own words
+    assert excluded(excluding) == {"AR"} and excluded("У профилей версии с 1.1.0 по 1.3.x.") == set()

@@ -422,9 +422,10 @@ def build_router(
     # public package, the API side of an install over SSH and the integration-authorisation mark. Optional
     # with a default, for the reason `blocks` gives; declared whatever the port, answerable only with one.
     build_enrollment_routes(router, enrollment)  # type: ignore[arg-type]
-    # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind: eight operations of contract 1.16.0
-    # (`previewExecutorRouting` and `setExecutorRoutingMode` are `EXEC2-CUTOVER-01`'s). Optional with a default, for the
-    # reason `blocks` gives; declared whatever the port, answerable only with one.
+    # `EXEC2-GROUP-STORE-01`. Executor groups and the routing rule of a work kind, and with them the cut-over reads and
+    # writes of contract 1.16.0 (`previewExecutorRouting` and `setExecutorRoutingMode` are `EXEC2-CUTOVER-01`'s, declared
+    # in the same module). Optional with a default, for the reason `blocks` gives; declared whatever the port, answerable
+    # only with one.
     build_executor_group_routes(router, executor_groups)  # type: ignore[arg-type]
     # `CMP-SEAL-C0` (ADR-0025). The comparison modules' upload, version-order and page reads,
     # sealed as stubs answering `503 dependency_unavailable` until `CMP-INGEST-01`,
