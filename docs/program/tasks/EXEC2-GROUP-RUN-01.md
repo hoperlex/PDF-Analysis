@@ -11,7 +11,7 @@ A Run started «Автоматически (по типу задачи)» or on 
 - API contract: 1.16.0, frozen by `EXEC2-SEAL-2`
 - analysis/comparison/event contract: unchanged
 - migration head: `0048`, created by `EXEC2-SEAL-2`; this task adds no migration
-- base commit: `integration/exec2` after `EXEC2-INT-2` is on `origin/dev`
+- base commit: `integration/exec2` at `7491dbf2` (= `origin/dev` `750cdf66` + R-149h)
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 12–16, 18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -24,42 +24,42 @@ A Run started «Автоматически (по типу задачи)» or on 
 - premise: 57 lines outside `executors/` and `comparison/` read a Run's frozen revision, and a Run without one is never limited
 
 ### P-01 — readers of the frozen revision
-- captured_at: 2026-11-02
-- command: `git grep -c connection_revision_id origin/dev -- src/auditmanager ':!src/auditmanager/executors' ':!src/auditmanager/comparison'`
+- captured_at: 2026-11-03
+- command: `git grep -c connection_revision_id 750cdf66 -- src/auditmanager ':!src/auditmanager/executors' ':!src/auditmanager/comparison'`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/analysis/text/binding.py:3
-  origin/dev:src/auditmanager/analysis/text/config.py:1
-  origin/dev:src/auditmanager/analysis/text/cost.py:2
-  origin/dev:src/auditmanager/api/schemas/models.py:1
-  origin/dev:src/auditmanager/bootstrap/adapters.py:2
-  origin/dev:src/auditmanager/bootstrap/composition.py:3
-  origin/dev:src/auditmanager/bootstrap/providers.py:3
-  origin/dev:src/auditmanager/jobs/README.md:1
-  origin/dev:src/auditmanager/jobs/repository.py:20
-  origin/dev:src/auditmanager/runs/commands.py:2
-  origin/dev:src/auditmanager/runs/cost_policy.py:3
-  origin/dev:src/auditmanager/runs/executor.py:3
-  origin/dev:src/auditmanager/runs/extended_review.py:2
-  origin/dev:src/auditmanager/runs/preflight.py:3
-  origin/dev:src/auditmanager/runs/repository.py:8
-  origin/dev:src/auditmanager/runs/v3_group.py:1
-  origin/dev:src/auditmanager/runs/v3_provider_call.py:2
+  750cdf66:src/auditmanager/analysis/text/binding.py:3
+  750cdf66:src/auditmanager/analysis/text/config.py:1
+  750cdf66:src/auditmanager/analysis/text/cost.py:2
+  750cdf66:src/auditmanager/api/schemas/models.py:4
+  750cdf66:src/auditmanager/bootstrap/adapters.py:5
+  750cdf66:src/auditmanager/bootstrap/composition.py:3
+  750cdf66:src/auditmanager/bootstrap/providers.py:3
+  750cdf66:src/auditmanager/jobs/README.md:1
+  750cdf66:src/auditmanager/jobs/repository.py:20
+  750cdf66:src/auditmanager/runs/commands.py:2
+  750cdf66:src/auditmanager/runs/cost_policy.py:3
+  750cdf66:src/auditmanager/runs/executor.py:3
+  750cdf66:src/auditmanager/runs/extended_review.py:2
+  750cdf66:src/auditmanager/runs/preflight.py:3
+  750cdf66:src/auditmanager/runs/repository.py:8
+  750cdf66:src/auditmanager/runs/v3_group.py:1
+  750cdf66:src/auditmanager/runs/v3_provider_call.py:2
   exit=0
   ```
 - interpretation: every listed file must handle `pending` (no revision yet) distinctly from `environment` (no revision ever).
 
 ### P-02 — the no-revision shortcut of the claim
-- captured_at: 2026-11-02
-- command: `git grep -n 'A Run without a connection takes no lock' origin/dev -- src/auditmanager/jobs/repository.py`
+- captured_at: 2026-11-03
+- command: `git grep -n 'A Run without a connection takes no lock' 750cdf66 -- src/auditmanager/jobs/repository.py`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/jobs/repository.py:969:        A Run without a connection takes no lock and is never limited.
+  750cdf66:src/auditmanager/jobs/repository.py:994:        A Run without a connection takes no lock and no unit and is never limited.
   exit=0
   ```
-- interpretation: today a NULL revision means `environment`; after this task it means that only when `binding_state` is `frozen_at_start`.
+- interpretation: a NULL revision means `environment` only when `binding_state` is `frozen_at_start`.
 
-The integrator re-runs every premise command on the actual base before dispatch (`EXEC2-PLAN.md` section 6) and corrects line numbers; a premise that no longer holds stops the dispatch.
+The integrator re-captured these on `750cdf66` before dispatch.
 
 ## Historical evidence
 - correction_mode: none
@@ -85,6 +85,11 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `tests/unit/jobs/**`
 - `tests/integration/runs/test_group_binding.py`
 - `tests/integration/jobs/test_group_dispatch.py`
+- `src/auditmanager/api/routers/runs.py`
+- `src/auditmanager/api/schemas/runs.py`
+- `src/auditmanager/api/routers/ports.py`
+- `src/auditmanager/workers/service.py`
+- `tests/integration/runs/test_group_admission.py`
 
 ## Forbidden hotspots
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
@@ -105,6 +110,11 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - Durable waiting per decision 15, with `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS` (default 1800) read where the worker reads its settings.
 - No re-routing per decision 16.
 - Tests for B3 §11 items 3–12, 14, 17, 18 and 20 for Runs, including a two-process race for the last unit of a two-member group.
+- Remove the stage-2 refusal `_refuse_executor_group` in `api/routers/runs.py` and admit by group or rule instead.
+- Run read models carry `binding_state`, `planned`, `binding`, `wait_reason`, `waiting_since` (`api/schemas/runs.py` `RunStatusView`, the execution queue items in `bootstrap/adapters.py`, run-status region).
+- Dispatch journals one `executor.`-prefixed event per binding (payload keys only from `jobs/events._SAFE_KEYS`).
+- A re-audit keeps the original start's selector kind: an explicit connection stays that connection; a group start re-admits to that group's current revision; a rule start re-admits by the current rule.
+- Shared with `EXEC2-GROUP-CMP-01` by region: `bootstrap/adapters.py` and `api/routers/ports.py`; sections headed `# EXEC2-GROUP-RUN-01`.
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker

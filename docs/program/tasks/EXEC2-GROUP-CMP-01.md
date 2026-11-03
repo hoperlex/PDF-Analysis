@@ -11,7 +11,7 @@ A comparison AI job of any of the five `comparison_*` kinds shows the rule, the 
 - API contract: 1.16.0, frozen by `EXEC2-SEAL-2`
 - analysis/comparison/event contract: unchanged
 - migration head: `0048`, created by `EXEC2-SEAL-2`; this task adds no migration
-- base commit: `integration/exec2` after `EXEC2-INT-2` is on `origin/dev`
+- base commit: `integration/exec2` at `7491dbf2` (= `origin/dev` `750cdf66` + R-149h)
 - architecture: `docs/architecture/adr/ADR-0026-executor-capacity-enrollment-groups.md` decisions 12–16, 18; plan `docs/program/dispatch/EXEC2-PLAN.md`; rulings `R-149a`…`R-149f`
 
 ## Enumerator ownership
@@ -24,34 +24,34 @@ A comparison AI job of any of the five `comparison_*` kinds shows the rule, the 
 - premise: comparison estimates price the route's primary, and 24 comparison lines read a job's revision
 
 ### P-01 — the estimate prices the primary
-- captured_at: 2026-11-02
-- command: `git grep -n 'resolved.primary' origin/dev -- src/auditmanager/comparison/ai_jobs/estimate.py`
+- captured_at: 2026-11-03
+- command: `git grep -n 'resolved.primary' 750cdf66 -- src/auditmanager/comparison/ai_jobs/estimate.py`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/comparison/ai_jobs/estimate.py:63:    if resolved is None or resolved.primary is None:
-  origin/dev:src/auditmanager/comparison/ai_jobs/estimate.py:65:    revision = resolved.primary
+  750cdf66:src/auditmanager/comparison/ai_jobs/estimate.py:63:    if resolved is None or resolved.primary is None:
+  750cdf66:src/auditmanager/comparison/ai_jobs/estimate.py:65:    revision = resolved.primary
   exit=0
   ```
 - interpretation: the estimate moves to the rule's group revision under mode `rules`.
 
 ### P-02 — comparison readers of the revision
-- captured_at: 2026-11-02
-- command: `git grep -c connection_revision_id origin/dev -- src/auditmanager/comparison`
+- captured_at: 2026-11-03
+- command: `git grep -c connection_revision_id 750cdf66 -- src/auditmanager/comparison`
 - captured_output:
   ```text
-  origin/dev:src/auditmanager/comparison/ai_jobs/model.py:1
-  origin/dev:src/auditmanager/comparison/ai_jobs/repository.py:3
-  origin/dev:src/auditmanager/comparison/ai_jobs/service.py:1
-  origin/dev:src/auditmanager/comparison/report/handler.py:1
-  origin/dev:src/auditmanager/comparison/spend/caller.py:4
-  origin/dev:src/auditmanager/comparison/spend/model.py:7
-  origin/dev:src/auditmanager/comparison/spend/repository.py:6
-  origin/dev:src/auditmanager/comparison/stage_ai/repository.py:1
+  750cdf66:src/auditmanager/comparison/ai_jobs/model.py:1
+  750cdf66:src/auditmanager/comparison/ai_jobs/repository.py:3
+  750cdf66:src/auditmanager/comparison/ai_jobs/service.py:1
+  750cdf66:src/auditmanager/comparison/report/handler.py:1
+  750cdf66:src/auditmanager/comparison/spend/caller.py:4
+  750cdf66:src/auditmanager/comparison/spend/model.py:7
+  750cdf66:src/auditmanager/comparison/spend/repository.py:6
+  750cdf66:src/auditmanager/comparison/stage_ai/repository.py:1
   exit=0
   ```
 - interpretation: every listed file must handle a `pending` job.
 
-The integrator re-runs every premise command on the actual base before dispatch (`EXEC2-PLAN.md` section 6) and corrects line numbers; a premise that no longer holds stops the dispatch.
+The integrator re-captured these on `750cdf66` before dispatch.
 
 ## Historical evidence
 - correction_mode: none
@@ -73,6 +73,16 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - `src/auditmanager/comparison/ai_sheets/**`
 - `tests/unit/comparison/**`
 - `tests/integration/comparison/test_group_binding.py`
+- `src/auditmanager/comparison/work/**`
+- `src/auditmanager/comparison/public.py`
+- `src/auditmanager/api/routers/comparison_ai_pairs.py`
+- `src/auditmanager/api/routers/comparison_ai_sheets.py`
+- `src/auditmanager/api/routers/comparison_reports.py`
+- `src/auditmanager/api/routers/comparison_specification.py`
+- `src/auditmanager/api/routers/comparison_stage_c4.py`
+- `src/auditmanager/api/routers/comparison_stage_runs.py`
+- `src/auditmanager/bootstrap/adapters.py`
+- `src/auditmanager/api/routers/ports.py`
 
 ## Forbidden hotspots
 - `contracts/**`, generated models and client, the migration head, root dependency/lock files and global styles (owned by the stage's SEAL task)
@@ -90,6 +100,9 @@ The integrator re-runs every premise command on the actual base before dispatch 
 - Group estimate and consent per decision 13; first-call binding per decision 14; ceilings against the selected member.
 - `pending` handling at every line of premise P-02.
 - Tests for B3 §11 items 3–5, 9–14 and 17 for comparison jobs, including simultaneous dispatch of two jobs under the day ceiling.
+- `ComparisonAiJob` and `ComparisonAiQueueItem` read models carry the binding and waiting fields; `ComparisonAiRoute` carries the group plan.
+- Lock order at call preparation: group row, then member connections in ascending `connection_id`, then the day spend lock.
+- Shared with `EXEC2-GROUP-RUN-01` by region: `bootstrap/adapters.py` and `api/routers/ports.py`; sections headed `# EXEC2-GROUP-CMP-01`.
 
 ## Required tests
 - command: not run in EXEC-2 (`R-149d`); write the tests below and mark those that need PostgreSQL with the suite's existing database marker
