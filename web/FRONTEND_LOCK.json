@@ -16,7 +16,7 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "826f4381d2b446866ac671948505fbe642d40d5219afd096dad70957e8a83e20",
+    "sha256": "0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20",
     "content_commit": "786a780e",
     "content_commit_subject": "chore: EXEC2-ENROLL-SSH-01 grants: enrollment issue for path A, executors.public, worker env in compose",
     "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
@@ -27,7 +27,7 @@
     "operations": 277,
     "component_schemas": 674,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "826f4381d2b446866ac671948505fbe642d40d5219afd096dad70957e8a83e20",
+    "snapshot_sha256": "0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "4f0655ae57f160605b81b3db702d164e96030d48657cc34380d6111517718653",
-      "index.ts": "9d076b515502be5631d8ba6a33bebea19fc56f96f7acc090feaf677bd2d11b23",
-      "operations.gen.ts": "861947fe893c8a2171f62caa0c8c372a1fc6d5ff44bd79fc452b4344d0e5ab10",
-      "types.gen.ts": "6327c00f805f772330cae48eb95f3d62ba095e7fd3f447c79070881faba3880b"
+      "client.gen.ts": "018eaf8052501dad461b28c6e1cf82d56ddfb81ff7f7b89045ecdef9ee23aa84",
+      "index.ts": "58fdf5501963498216d778c7a082b5dd0e62d406e96d799f83c90c0e2f8cc7a8",
+      "operations.gen.ts": "d1eeaf82fd01a0ac5ca8ad38f37916b54ca61eef7191aebbd6a9e328160a45f8",
+      "types.gen.ts": "c15c9ae3003bd3944c24c977ba159683c5b407cf0df37d5d9f78c826ac42f2f8"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

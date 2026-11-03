@@ -6580,7 +6580,7 @@
           "execution"
         ],
         "summary": "List Executor Groups",
-        "description": "List the executor groups with their current revision, archived ones included (`EXEC2-SEAL-2`, ADR-0026 decision 10). `403 permission_denied` for a caller without `admin`.",
+        "description": "List the executor groups with their current revision, archived ones included (`EXEC2-SEAL-2`, ADR-0026 decision 10). Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).",
         "security": [
           {
             "bearerAuth": []
@@ -6695,7 +6695,7 @@
           "execution"
         ],
         "summary": "Get Executor Group",
-        "description": "Read one group and every revision of it, newest first (`EXEC2-SEAL-2`). `404 not_found` for a group that does not exist. `403 permission_denied` for a caller without `admin`.",
+        "description": "Read one group and every revision of it, newest first (`EXEC2-SEAL-2`). `404 not_found` for a group that does not exist. Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).",
         "security": [
           {
             "bearerAuth": []
@@ -6891,7 +6891,7 @@
           "execution"
         ],
         "summary": "Get Executor Group Capacity",
-        "description": "The capacity of a group's current revision as dispatch would see it right now (`EXEC2-SEAL-2`, ADR-0026 decisions 1 and 14): per member its snapshot, its connection's current revision and occupancy and whether it is eligible and, if not, why; and the group's capacity, units in use and pending work. Derived at read time, stored nowhere. `404 not_found`; `403 permission_denied` for a caller without `admin`.",
+        "description": "The capacity of a group's current revision as dispatch would see it right now (`EXEC2-SEAL-2`, ADR-0026 decisions 1 and 14): per member its snapshot, its connection's current revision and occupancy and whether it is eligible and, if not, why; and the group's capacity, units in use and pending work. Derived at read time, stored nowhere. `404 not_found`; Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).",
         "security": [
           {
             "bearerAuth": []
@@ -6949,7 +6949,7 @@
           "execution"
         ],
         "summary": "List Executor Routing Rules",
-        "description": "The current rule of each work kind that has one, and the current routing mode (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17). While the mode is `legacy` the rules exist but are read by nothing. `403 permission_denied` for a caller without `admin`.",
+        "description": "The current rule of each work kind that has one, and the current routing mode (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17). While the mode is `legacy` the rules exist but are read by nothing. Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).",
         "security": [
           {
             "bearerAuth": []

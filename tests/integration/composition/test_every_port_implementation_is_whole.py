@@ -163,6 +163,9 @@ PORT_FOR_ARGUMENT = {
     # `EXEC-SEAL-01`, `EXEC-HTTP-01`: the connections; `EXEC-PULL-01`: the pull channel.
     "executors": "ExecutorPort",
     "runner": "RunnerPort",
+    # `EXEC2-ENROLL-01`: enrollment, health, package, agent installs; `EXEC2-GROUP-STORE-01`: groups and rules.
+    "enrollment": "EnrollmentPort",
+    "executor_groups": "ExecutorGroupPort",
     # `CMP-SEAL-C0`: the comparison modules' three ports, sealed as stubs.
     "comparison_uploads": "ComparisonUploadPort",
     "comparison_version_orders": "ComparisonVersionOrderPort",

@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.16.0 (OpenAPI 3.1.0)
- *   sha256 826f4381d2b446866ac671948505fbe642d40d5219afd096dad70957e8a83e20
+ *   sha256 0c54e120b048bd088827c0543e23d9aa2f95f1395b67312c21ce7f2b388dcf20
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2942,7 +2942,7 @@ export type GetExecutorConnectionResult = ExecutorConnectionDetail;
 /**
  * Get Executor Group
  *
- * Read one group and every revision of it, newest first (`EXEC2-SEAL-2`). `404 not_found` for a group that does not exist. `403 permission_denied` for a caller without `admin`.
+ * Read one group and every revision of it, newest first (`EXEC2-SEAL-2`). `404 not_found` for a group that does not exist. Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
  */
 export type GetExecutorGroupInput = {
   /** Path parameters, substituted into `/executor-groups/{group_id}`. */
@@ -2965,7 +2965,7 @@ export type GetExecutorGroupResult = ExecutorGroupDetail;
 /**
  * Get Executor Group Capacity
  *
- * The capacity of a group's current revision as dispatch would see it right now (`EXEC2-SEAL-2`, ADR-0026 decisions 1 and 14): per member its snapshot, its connection's current revision and occupancy and whether it is eligible and, if not, why; and the group's capacity, units in use and pending work. Derived at read time, stored nowhere. `404 not_found`; `403 permission_denied` for a caller without `admin`.
+ * The capacity of a group's current revision as dispatch would see it right now (`EXEC2-SEAL-2`, ADR-0026 decisions 1 and 14): per member its snapshot, its connection's current revision and occupancy and whether it is eligible and, if not, why; and the group's capacity, units in use and pending work. Derived at read time, stored nowhere. `404 not_found`; Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
  */
 export type GetExecutorGroupCapacityInput = {
   /** Path parameters, substituted into `/executor-groups/{group_id}/capacity`. */
@@ -4287,7 +4287,7 @@ export type ListExecutorConnectionsResult = ExecutorConnectionList;
 /**
  * List Executor Groups
  *
- * List the executor groups with their current revision, archived ones included (`EXEC2-SEAL-2`, ADR-0026 decision 10). `403 permission_denied` for a caller without `admin`.
+ * List the executor groups with their current revision, archived ones included (`EXEC2-SEAL-2`, ADR-0026 decision 10). Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
  */
 export type ListExecutorGroupsInput = {
   /**
@@ -4325,7 +4325,7 @@ export type ListExecutorRoutesResult = ExecutorRouteList;
 /**
  * List Executor Routing Rules
  *
- * The current rule of each work kind that has one, and the current routing mode (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17). While the mode is `legacy` the rules exist but are read by nothing. `403 permission_denied` for a caller without `admin`.
+ * The current rule of each work kind that has one, and the current routing mode (`EXEC2-SEAL-2`, ADR-0026 decisions 11 and 17). While the mode is `legacy` the rules exist but are read by nothing. Readable by every role, as `listExecutorConnections` is (`EXEC2-GROUP-STORE-01`).
  */
 export type ListExecutorRoutingRulesInput = {
   /**
