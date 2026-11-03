@@ -1,8 +1,9 @@
 /**
  * Public API of the `finding` entity.
  *
- * What a finding is allowed to be on screen, and how a page of them is ordered. No
- * fetching: an entity holds the model, a feature holds the request.
+ * What a finding is allowed to be on screen, and how a page of them is ordered. Writes
+ * belong to the features; the one read here is the complete list of a run's findings, which
+ * fills `queryKeys.runs.findings` and has no other home (`api/run-findings-query.ts`).
  */
 
 export type { AdmissionRefusal, AdmittedFindings, FindingAdmission } from './model/admission';
@@ -24,3 +25,12 @@ export {
 
 export type { SeverityBadgeProps } from './ui/severity-badge';
 export { SeverityBadge } from './ui/severity-badge';
+
+export type { CompleteRunFindings } from './api/run-findings-query';
+export {
+  RUN_FINDINGS_MAX_PAGES,
+  RUN_FINDINGS_PAGE_LIMIT,
+  RunFindingsReadFault,
+  readAllRunFindings,
+  runFindingsQueryOptions,
+} from './api/run-findings-query';
