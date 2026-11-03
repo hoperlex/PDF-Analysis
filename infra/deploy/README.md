@@ -537,6 +537,8 @@ worker logs that the variable is neither `1` nor `0`, naming the variable and ne
 `host_unreachable` and the worker logs only the closed category of the refusal (`loopback`, `private_range`, …),
 never the address.
 
+**Offline wait of group work — `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`** (ADR-0026 decision 15, `R-149c`). Read by the worker only (compose forwards `${AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS:-1800}`). A Run or comparison job routed to an executor group waits without limit while its members are busy, and while every member is offline it ends `no_executor_online` after this many seconds. Whole seconds from 1 to 604800; any other value, a blank one included, stops the worker before it registers.
+
 *The risk, in one sentence:* with `1` the stand can open an SSH connection to any address in the networks its own
 hosting routes to — the hosting's internal networks included — on the word of an administrator who types the
 address and confirms a host key, so turn it on only on a stand whose internal networks hold nothing an SSH login

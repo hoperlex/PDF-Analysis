@@ -35,6 +35,8 @@ from auditmanager.workers.service import HEARTBEAT_FILE, IDENTITY_FILE, JobWakeu
 
 #: `R-149g`: read by the worker's path-A install runner only (`executors.agent_install_runner`).
 AGENT_INSTALL_ALLOW_PRIVATE_ENV = "AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE"
+#: `ADR-0026` decision 15: the worker ends offline group work after this long; the `api` never reads it.
+GROUP_OFFLINE_WAIT_ENV = "AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS"
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "infra/deploy/compose.server.yml"
 
@@ -252,7 +254,7 @@ class TestTheComposeService:
         # The worker-only names: where the worker writes its identity, how many runs it executes at
         # once (`EXEC-PAR-QUEUE-01`), and whether path A may reach private ranges (`R-149g`); the
         # `api` reads none of them.
-        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV} == api - {API_TOKEN_ENV}
+        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV, GROUP_OFFLINE_WAIT_ENV} == api - {API_TOKEN_ENV}
         assert WORKER_SLOTS_ENV in worker and WORKER_SLOTS_ENV not in api
         assert AGENT_INSTALL_ALLOW_PRIVATE_ENV in worker and AGENT_INSTALL_ALLOW_PRIVATE_ENV not in api
 

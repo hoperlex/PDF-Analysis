@@ -398,6 +398,10 @@ services:
       # compose network and service names stay refused either way. Anything but `1` or `0` is read as `0` and
       # logged by name. Only the worker reads it; the `api` does not (see `README.md`, the universal agent).
       AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE: ${AUDITMANAGER_AGENT_INSTALL_ALLOW_PRIVATE:-0}
+      # `EXEC2-GROUP-RUN-01` / `EXEC2-GROUP-CMP-01` (ADR-0026 decision 15): how long group work waits while every member
+      # is offline before it ends `no_executor_online` (whole seconds, 1..604800; a blank value refuses to start,
+      # so the default is written here).
+      AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS: ${AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS:-1800}
     # The provider credential, the private key ring and the optional destination allowlist
     # (`AUDITMANAGER_EXECUTOR_ALLOWED_HOSTS`): a separate file the owner writes on the host,
     # never passed to --env-file, so it stays out of compose substitution and therefore out

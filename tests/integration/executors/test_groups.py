@@ -827,17 +827,3 @@ def test_the_four_reads_are_open_to_an_expert_and_the_four_writes_are_not(sessio
     ]
     assert [answer.status for answer in denied] == [403, 403, 403, 403]
     assert {answer.json()["details"]["required_capability"] for answer in denied} == {"role:admin"}
-
-
-def test_start_run_and_estimate_run_cost_refuse_an_executor_group_until_dispatch_exists(session, served) -> None:
-    group = "exg_01M2545JSD15ETSNNV904X991K"
-    version = "ver_01M2545JSD15ETSNNV904X991J"
-    before = rows(session)
-    for method, path, extra in (
-        ("POST", "/runs", {}), ("POST", "/runs/cost-estimate", {}), ("POST", "/runs", {"relaxed_limits": True}),
-    ):
-        answer = call(served, method, path, {"version_uid": version, "executor_group_id": group, **extra})
-        assert answer.status == 503, (path, answer.body)
-        assert answer.json()["error_code"] == "dependency_unavailable"
-        assert answer.json()["details"] == {"dependency": "executor_group_dispatch"}
-    assert rows(session) == before
