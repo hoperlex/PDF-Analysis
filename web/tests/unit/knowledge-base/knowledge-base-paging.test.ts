@@ -44,6 +44,10 @@ function record(n: number, over: Partial<DecisionRecord> = {}): DecisionRecord {
     recorded_at: '2026-09-10T09:00:00.000Z',
     project_uid: `prj_${ULID}`,
     run_id: `run_${ULID}`,
+    document_uid: `doc_${ULID}`,
+    version_uid: `ver_${ULID}`,
+    project_name: 'Школа',
+    document_name: 'АР-1',
     category: 'internal_contradiction',
     finding_text: `Решение номер ${n}`,
     current_verdict: 'accepted',
@@ -59,7 +63,7 @@ const FILTERED = [record(9, { category: 'dimensions', finding_text: 'Решен�
 const ACCEPTED = [record(8, { finding_text: 'Решение отобранное по вердикту' })];
 
 function answer(items: DecisionRecord[], next: string | null): ApiResponse<DecisionRecordPage> {
-  return { data: { items, page: { next_cursor: next } }, status: 200, correlationId: 'cid-kb' };
+  return { data: { items, page: { next_cursor: next }, total: items.length }, status: 200, correlationId: 'cid-kb' };
 }
 
 /** The first render starts the query in an effect; it settles on zero-delay timers after it. */
