@@ -63,8 +63,10 @@ from auditmanager.runs.reconciliation import (
     reconcile_interrupted_runs,
 )
 from auditmanager.runs.provider import (
+    AdmittedGroup,
     ChosenPreset,
     FrozenRoute,
+    GroupAdmitter,
     PresetResolver,
     ProviderBinding,
     ProviderResolver,
@@ -100,8 +102,10 @@ __all__ = [
     "DurableCarrier",
     "EffectCheckpoint",
     "ExecutionResult",
+    "AdmittedGroup",
     "ChosenPreset",
     "FrozenRoute",
+    "GroupAdmitter",
     "PresetResolver",
     "INITIAL_STATE",
     "INTERRUPTED_REASON",

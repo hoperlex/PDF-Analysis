@@ -215,7 +215,10 @@ def dispatch_v3_provider_call(
         from dataclasses import replace
         approved_config = replace(config, approved_cost_ceiling=True,
             approved_model_id=cost_policy.model_id, approved_rate_sha256=cost_policy.rate_sha256,
-            approved_connection_revision_id=cost_policy.connection_revision_id)
+            approved_connection_revision_id=cost_policy.connection_revision_id,
+            # `EXEC2-GROUP-RUN-01`: a Run admitted on a group is held to the member dispatch bound, and a Run still
+            # pending (no member yet) is refused by `require_approved_model` below, before any call.
+            approved_group_revision_id=cost_policy.executor_group_revision_id)
         pin = next((row for row in pinned_models() if row.model_id == request.model_id), None)
         if pin is None:
             raise _refuse("cost_model_price_unavailable")

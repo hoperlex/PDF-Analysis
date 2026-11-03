@@ -21,6 +21,13 @@ What it does, in five threads
   the poll carries on alone until the connection is re-established -- the stated
   fallback, never a silent one.
 * **reclaim** -- inside the dispatch loop, every :data:`RECLAIM_SECONDS`.
+* **group waits** -- inside the dispatch loop, every :data:`GROUP_WAIT_SECONDS` (`EXEC2-GROUP-RUN-01`, ADR-0026 decision
+  15). A Run admitted on an executor group is bound to a member at the claim, not at start; until then it waits, and the
+  reason (`executor_at_capacity`, `runner_offline`, `needs_reconsent`) and since when are stored on the Run. This pass
+  keeps them true, and a Run whose members have all been offline for longer than
+  ``AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`` (default 1800) ends `no_executor_online`. The value is read once, by the
+  service, where it reads its other settings; a malformed one stops the worker at construction. Waiting for a busy member
+  never expires.
 * **slots** -- a pool of ``slots`` threads, each running one claimed run to a terminal.
   ``slots`` is ``AUDITMANAGER_WORKER_SLOTS`` (`EXEC-PAR-QUEUE-01`; one by default). With more
   than one, the dispatch loop fills a free slot straight after it filled the last one rather
@@ -85,6 +92,10 @@ from auditmanager.jobs.public import (
 from auditmanager.workers.registry import HEARTBEAT_SECONDS, WorkerRegistry
 
 _log = logging.getLogger(__name__)
+
+#: `EXEC2-GROUP-RUN-01`. How often the dispatch loop keeps the waits of the Runs admitted on a group true; the same cadence
+#: as the in-process carrier's (``runs.carrier.GROUP_WAIT_SECONDS``, held equal by a unit test).
+GROUP_WAIT_SECONDS: Final[float] = 5.0
 
 #: The stated fallback when no notification arrives (R-105).
 POLL_SECONDS: Final[float] = 5.0
@@ -252,11 +263,20 @@ class WorkerService:
         temporaries_sweep: Callable[[], SweepReport] = sweep_running_temporaries,
         temporaries_sweep_seconds: float = TEMPORARIES_SWEEP_SECONDS,
         comparison_work: ComparisonWork | None = None,
+        group_offline_wait_seconds: float | None = None,
     ) -> None:
         if slots < 1:
             raise ValueError("a worker needs at least one slot")
         if temporaries_sweep_seconds <= 0:
             raise ValueError("the temporaries sweep needs a positive interval")
+        # `EXEC2-GROUP-RUN-01`: `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS`, read here once (default 1800); a value that is
+        # not a whole number of seconds raises `ValueError` now, before the worker registers, and is never replaced.
+        self._group_offline_wait_seconds = float(
+            JobRepository.group_offline_wait_seconds() if group_offline_wait_seconds is None
+            else group_offline_wait_seconds
+        )
+        if self._group_offline_wait_seconds <= 0:
+            raise ValueError("the offline wait of a group is positive")
         self._engine = engine
         self._sessions = session_factory
         self._execute = execute
@@ -385,6 +405,7 @@ class WorkerService:
     def _dispatch_loop(self) -> None:
         next_poll = 0.0
         next_reclaim = 0.0
+        next_waits = 0.0
         woken = False
         try:
             while not self._stopped.is_set():
@@ -392,6 +413,9 @@ class WorkerService:
                 if now >= next_reclaim:
                     self._reclaim()
                     next_reclaim = monotonic() + self._reclaim_seconds
+                if now >= next_waits:
+                    self._refresh_group_waits()
+                    next_waits = monotonic() + GROUP_WAIT_SECONDS
                 if self._poll_now.is_set():
                     self._poll_now.clear()
                     woken = True
@@ -459,6 +483,23 @@ class WorkerService:
             self._comparison.reclaim()
         except Exception:
             _log.exception("worker %s comparison lease reclaim pass failed", self._worker_id)
+
+    def _refresh_group_waits(self) -> None:
+        """Keep the wait of every Run admitted on a group true, and end the ones nobody can serve (decision 15).
+
+        Housekeeping, so the one place a failure is logged and the loop carries on: the next pass repeats it. A worker
+        whose intake is off still does it -- it reads and writes the Runs' waits and claims nothing."""
+        try:
+            with self._sessions() as session:
+                report = JobRepository().refresh_group_waits(
+                    session, offline_wait_seconds=self._group_offline_wait_seconds,
+                )
+                session.commit()
+        except Exception:
+            _log.exception("worker %s group wait pass failed; retried", self._worker_id)
+            return
+        if report.expired:
+            _log.info("worker %s: %d run(s) ended no_executor_online", self._worker_id, report.expired)
 
     def _claim_next(self) -> bool:
         """Hand one runnable Job to a free slot, or, when there is none, one comparison item.
@@ -587,6 +628,7 @@ def healthy(state_dir: Path, *, max_age_seconds: float, now: float) -> bool:
 
 
 __all__ = [
+    "GROUP_WAIT_SECONDS",
     "HEARTBEAT_FILE",
     "IDENTITY_FILE",
     "POLL_SECONDS",

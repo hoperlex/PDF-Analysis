@@ -599,7 +599,8 @@ class RunPort(Protocol):
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
-                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate: ...
+                          preset_id: str | None = None, relaxed_limits: bool = False,
+                          executor_group_id: str | None = None) -> models.RunCostEstimate: ...  # EXEC2-GROUP-RUN-01
 
     def start_run(
         self,
@@ -612,6 +613,7 @@ class RunPort(Protocol):
         relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
@@ -627,6 +629,11 @@ class RunPort(Protocol):
         ``preset_id`` (`ANALYSIS-PRESETS-01`) names a saved preset instead: its executor
         connection is applied exactly as if the caller had named it, and the run records the
         preset revision. A preset together with ``executor_connection_id`` is refused.
+
+        ``executor_group_id`` (`EXEC2-GROUP-RUN-01`, ADR-0026 decisions 12 and 13) names an executor
+        group instead of a connection or a preset: the run is admitted on the group's current
+        revision with ``binding_state`` ``pending``, and the connection is chosen at dispatch. It is
+        exclusive with both other selectors and is part of the payload the key is compared by.
         """
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:

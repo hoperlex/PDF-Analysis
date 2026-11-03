@@ -180,11 +180,13 @@ class ExecutionAdapter(_SessionHolder):
                 ))
             else:
                 next_cursor = None
+            facts = _queue_binding_facts(session, [row.run_id for row in items])  # EXEC2-GROUP-RUN-01
             return models.ExecutionQueuePage(
                 items=[models.ExecutionQueueItem(**{
                     "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
                     "priority": row.priority, "created_at": row.created_at,
                     "available_at": row.available_at,
+                    **facts.get(row.run_id, {}),
                 }) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
@@ -254,6 +256,10 @@ class ExecutionAdapter(_SessionHolder):
                                  connection_route=self._runs.route_freezer,
                                  cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
                                  cost_consent=cost_consent, cost_actor_uid=user_uid,
+                                 # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used.
+                                 # A run adapter always has the attribute (``None`` is the `environment` source); the
+                                 # default is for the stand-ins older suites hand this port, which have no group seam.
+                                 group_admitter=getattr(self._runs, "group_admitter", None),
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -278,6 +284,7 @@ class ExecutionAdapter(_SessionHolder):
                 "job_id": row.job_id, "run_id": row.run_id, "state": row.state,
                 "priority": row.priority, "created_at": row.created_at,
                 "available_at": row.available_at,
+                **_queue_binding_facts(session, [row.run_id]).get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
             })
         return self._write(write)
 
@@ -875,8 +882,14 @@ class RunAdapter(_SessionHolder):
         preset_resolver: Any = None,
         cost_preflight: Any = None,
         require_cost_consent: bool = False,
+        group_admitter: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing rules
+        # while the mode is `rules`, in the start's own transaction; ``None`` is the `environment` source (and the many
+        # tests that build a bare adapter): a start that names a group is then refused, and one that names nothing is
+        # what it always was.
+        self._group_admitter = group_admitter
         # `ANALYSIS-PRESETS-01`. Reads a named preset's current revision in the start's own
         # transaction (:func:`resolve_analysis_preset`); ``None`` keeps the many tests that build a
         # bare adapter as they are, and a start that names a preset then answers
@@ -927,25 +940,29 @@ class RunAdapter(_SessionHolder):
             from auditmanager.runs.preflight import RunCostPreflight
             self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
                 provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
-                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store)
+                preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store,
+                group_admitter=group_admitter)
         if require_cost_consent and self._cost_preflight is None:
             raise ValueError("served analysis starts require a cost preflight policy")
 
     def estimate_run_cost(self, *, version_uid: str, executor_connection_id: str | None = None,
                           reaudit_of_run_id: str | None = None,
-                          preset_id: str | None = None, relaxed_limits: bool = False) -> models.RunCostEstimate:
+                          preset_id: str | None = None, relaxed_limits: bool = False,
+                          executor_group_id: str | None = None) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
         def estimate(session):
             if reaudit_of_run_id is not None:
-                if executor_connection_id is not None or preset_id is not None or relaxed_limits:
+                if (executor_connection_id is not None or preset_id is not None or relaxed_limits
+                        or executor_group_id is not None):
                     raise DomainError(ErrorCode.VALIDATION_FAILED, field="reaudit_of_run_id", constraint="server_selected_route")
                 value = self._cost_preflight.estimate_reaudit(session, run_id=reaudit_of_run_id)
                 if value.as_dict()["version_uid"] != version_uid:
                     raise DomainError(ErrorCode.VALIDATION_FAILED, field="version_uid", constraint="reaudit_source_version")
                 return value
             return self._cost_preflight.estimate_run(session, version_uid=version_uid,
-                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits)
+                executor_connection_id=executor_connection_id, preset_id=preset_id, relaxed_limits=relaxed_limits,
+                **({"executor_group_id": executor_group_id} if executor_group_id is not None else {}))
         value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
 
@@ -1056,6 +1073,7 @@ class RunAdapter(_SessionHolder):
         relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        executor_group_id: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1071,6 +1089,10 @@ class RunAdapter(_SessionHolder):
         `ANALYSIS-PRESETS-01`: ``preset_id`` is a saved preset. The command resolves its current
         revision in this transaction and starts as if the caller had named that preset's executor;
         the run records the preset revision. Together with ``executor_connection_id`` it is refused.
+
+        `EXEC2-GROUP-RUN-01`: ``executor_group_id`` names an executor group instead. The run is admitted on the group's
+        current revision, ``pending``, and the connection is chosen at dispatch; it is exclusive with the connection and
+        the preset. With nothing named, a deployment whose routing mode is `rules` admits the run by the current rule.
         """
         from auditmanager.runs import start_audit_run
 
@@ -1118,6 +1140,8 @@ class RunAdapter(_SessionHolder):
                 cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
                 cost_consent=cost_consent,
                 cost_actor_uid=cost_actor_uid,
+                executor_group_id=executor_group_id,
+                group_admitter=self._group_admitter,
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1213,6 +1237,12 @@ class RunAdapter(_SessionHolder):
         """`EXEC-HTTP-01`: the run-start freezer of the ``database`` source, or ``None``.
         ``ExecutionAdapter.reaudit_run`` passes it so a re-audit freezes today's route."""
         return self._route_freezer
+
+    @property
+    def group_admitter(self) -> Any:
+        """`EXEC2-GROUP-RUN-01`: the seam that admits a start on a group, or ``None`` (the `environment` source).
+        ``ExecutionAdapter.reaudit_run`` passes it so a re-audit keeps the kind of selector the original start used."""
+        return self._group_admitter
 
     @property
     def cost_preflight(self) -> Any:
@@ -1490,6 +1520,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             if run.connection_revision_id is not None and run.state in ("queued", "running")
             else None
         ),
+        **_group_status_fields(session, run, chosen),  # EXEC2-GROUP-RUN-01
         stages=tuple(
             StageStateView(
                 stage_id=stage.stage_id,
@@ -1515,6 +1546,64 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             for stage in stages
         ),
     )
+
+
+# EXEC2-GROUP-RUN-01 ----------------------------------------------------------------------------------------
+# What a Run admitted by a rule or a group adds to its status and to the execution queue (ADR-0026 decisions 12 to 15,
+# contract 1.16.0). A Run whose executor was frozen at start adds nothing: its reading is byte for byte what it was.
+
+
+def _group_status_fields(session: Session, run: Any, executor: Any) -> dict[str, Any]:
+    """``binding_state``, ``planned``, ``binding``, ``wait_reason`` and ``waiting_since`` of a Run's status.
+
+    * ``frozen_at_start`` (every Run written before, an explicit connection, a preset, the route, the ``environment``
+      source): nothing -- "absent is read as ``frozen_at_start``" (``RunStatus.binding_state``). A row object without the
+      attribute is such a Run;
+    * ``pending``: the plan admission froze (the group, its revision, the rule revision when a rule routed it, the pin, the
+      model and the billing), no ``binding``, and -- while the Run is still waiting -- the stored ``wait_reason`` with
+      ``waiting_since``. The derived ``queue_reason`` is not reported for it;
+    * ``bound``: the same plan and the ``binding`` dispatch wrote; ``executor`` (the caller's own mapping from the frozen
+      revision) names the same connection.
+    """
+    from auditmanager.api.schemas.runs import RunBindingView, RunGroupPlanView
+    from auditmanager.executors.public import group_revision_of
+
+    state = getattr(run, "binding_state", "frozen_at_start")
+    if state == "frozen_at_start":
+        return {}
+    revision = group_revision_of(session, run.executor_group_revision_id)
+    if revision is None:  # a foreign key forbids it; a stored fact that contradicts its own constraint is not hidden
+        raise DomainError(ErrorCode.INTERNAL_ERROR, message="a run's group revision is missing")
+    fields: dict[str, Any] = {
+        "binding_state": state,
+        "planned": RunGroupPlanView(
+            group_id=revision.group_id, group_revision_id=revision.group_revision_id,
+            rule_revision_id=run.routing_rule_revision_id, pin_id=revision.pin_id,
+            gateway_model=revision.gateway_model, billing=revision.billing,
+        ),
+    }
+    if state == "bound" and executor is not None:
+        fields["binding"] = RunBindingView(
+            connection_id=executor.connection_id, connection_revision_id=run.connection_revision_id,
+            display_name=executor.display_name, pin_id=executor.pin_id, gateway_model=revision.gateway_model,
+        )
+    if state == "pending" and run.state == "queued" and run.wait_reason is not None:
+        fields["wait_reason"] = run.wait_reason
+        fields["waiting_since"] = run.waiting_since
+    return fields
+
+
+def _queue_binding_facts(session: Session, run_ids: Sequence[str]) -> dict[str, dict[str, Any]]:
+    """``binding_state`` (and ``wait_reason`` while it waits) of the queue items whose Run was admitted by a rule or a
+    group, keyed by Run. An ordinary Run has no entry, so its queue item is exactly what it was."""
+    from auditmanager.runs import RunRepository
+
+    found: dict[str, dict[str, Any]] = {}
+    for run_id, (binding_state, wait_reason) in RunRepository().binding_facts(session, run_ids).items():
+        found[run_id] = {"binding_state": binding_state}
+        if wait_reason is not None:
+            found[run_id]["wait_reason"] = wait_reason
+    return found
 
 
 def _observation_view(

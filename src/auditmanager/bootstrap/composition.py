@@ -250,6 +250,12 @@ class _ComparisonRoutes:
         # A worker holding live credentials must never turn their replay into a live call.
         if job.provider_mode != "live":
             raise route_missing()
+        # `EXEC2-GROUP-RUN-01` (premise P-01, ADR-0026 decision 12). A job admitted on a group has **no connection
+        # revision until its first dispatched call binds one** (`GROUP-CMP-01`); `None` here is a pending job, not a job
+        # that froze none. Binding precedes routing, so reaching this line unbound is a skipped dispatch: nothing is
+        # opened and nothing is called.
+        if job.connection_revision_id is None:
+            raise route_missing()
         context = ComparisonCallContext(self._runtime.session_factory)
         try:
             bound = bind_connection(
@@ -549,6 +555,10 @@ def build_application(
         # `ANALYSIS-PRESETS-01`. A named preset is read in the start's own transaction and then
         # started as the executor it names; always passed, so a served start never ignores one.
         preset_resolver=resolve_analysis_preset,
+        # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing
+        # rules while the mode is `rules`: set for the `database` source only. The `environment` source has none, so it
+        # refuses a start that names a group and never holds a `pending` Run.
+        group_admitter=providers.admit_group,
         # No expert-approved six-set pack is installed in the beta candidate.
         # This keeps group start closed while allowing historical group reads.
         ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),

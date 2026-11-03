@@ -30,4 +30,23 @@ the units in use under it, and compares them with the capacity; a claim that los
 `ExecutionNotClaimed` having written nothing. The comparison call preparation takes the same lock and asks
 the same question (`comparison/spend/repository.py`), so a Run and a call never both take the last unit.
 
+A Run admitted on an executor group (`EXEC2-GROUP-RUN-01`, ADR-0026 decisions 12 to 16) is written `binding_state =
+'pending'` with **no** connection revision -- which is also what the `environment` source has, so a NULL revision means
+"never limited" only for a `frozen_at_start` Run. The claim decides the binding state first. A `pending` Run takes the
+dispatch path: it locks, in this order, the worker's intake, the group's row, the member connections' advisory locks in
+ascending `connection_id`, then the control row, the Run and the Job; reads each member's facts (current revision equals the
+group's snapshot, not archived, served, `ok` probe on the current key, a `pull` runner online, a free unit); re-checks that
+the consent still holds; picks the member with the lowest `used / capacity` (ties by the group's persisted rotation); and
+writes the connection revision **once**, with `binding_state` `pending` to `bound`, advancing the rotation and journalling
+one `executor.run_dispatched` event, all before the commit -- model I/O starts only after it. A claim that finds no member
+raises `GroupDispatchWaiting` (an `ExecutionNotClaimed`) having written nothing; the carrier stores why in a transaction of
+its own. A `bound` Run is claimed like a `frozen_at_start` one on its bound member, so an Attempt retry never moves and
+an `outcome_unknown` is never redispatched.
+
+`next_queued_run` offers a `pending` Run when its group revision has a member with a free unit, and not one that waits for
+consent or for a runner. `refresh_group_waits` (the worker's dispatch loop and the in-process carrier call it every five
+seconds) keeps `wait_reason` (`executor_at_capacity`, `runner_offline`, `needs_reconsent`) and `waiting_since` true, and ends
+a Run that has waited for `runner_offline` longer than `AUDITMANAGER_GROUP_OFFLINE_WAIT_SECONDS` (default 1800) with
+`dependency_unavailable`, `dependency: no_executor_online`. Waiting for capacity never expires.
+
 Create subfolders/classes only when a real use case requires them. Keep internal APIs private by default.

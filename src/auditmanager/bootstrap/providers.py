@@ -12,7 +12,11 @@ between them is assembled here and nowhere else:
   AR v3 beta Runs only, that says the replayed call charges nothing (see the class);
 * :class:`DatabaseProviders` -- ``database``. ``freeze`` resolves the ``text_analysis`` route at
   run start; ``resolve`` builds, per Attempt, the adapter of the revision the run froze, opening
-  that connection's current key with the worker's private ring.
+  that connection's current key with the worker's private ring. `EXEC2-GROUP-RUN-01`: ``admit_group``
+  admits a start on a group or by the routing rules (:class:`GroupAdmission`); the connection of such a run
+  is chosen at dispatch, so ``resolve`` serves it only once it is ``bound`` and refuses a ``pending`` one.
+  The ``environment`` source has neither: it refuses a group start, and ``resolve`` refuses a ``pending`` run
+  as it refuses a ``bound`` one (a connection it cannot serve).
 
 Nothing here falls back: a source that cannot serve a run says so with a typed error.
 """
@@ -32,6 +36,7 @@ from auditmanager.analysis.public import (
 )
 from auditmanager.analysis.text import CallBinding, ModelRequest, ModelResponse, ProviderMode
 from auditmanager.executors.public import ExecutorRepository, SecretUnreadableError
+from auditmanager.executors.resolver import admit_group, group_of_revision
 from auditmanager.executors.runtime import (
     DestinationPolicy,
     KindRuntime,
@@ -39,13 +44,14 @@ from auditmanager.executors.runtime import (
     freeze_connection,
     route_missing,
 )
-from auditmanager.runs import FrozenRoute, ProviderBinding, RouteFreezer
+from auditmanager.runs import AdmittedGroup, FrozenRoute, GroupAdmitter, ProviderBinding, RouteFreezer
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
     "WORK_KIND",
     "DatabaseProviders",
     "EnvironmentProviders",
+    "GroupAdmission",
     "ProviderSource",
     "UnboundAdapter",
 ]
@@ -76,13 +82,23 @@ class UnboundAdapter:
 
 
 class ProviderSource:
-    """What the composition root hands the run path: ``resolve`` always, ``freeze`` for the
+    """What the composition root hands the run path: ``resolve`` always, ``freeze`` and ``admit_group`` for the
     ``database`` source only."""
 
     freeze: RouteFreezer | None = None
+    #: `EXEC2-GROUP-RUN-01`. ``None`` for the ``environment`` source: a start that names a group is then refused
+    #: (``environment_source``), and a start that names nothing is what it always was.
+    admit_group: GroupAdmitter | None = None
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:  # pragma: no cover
         raise NotImplementedError
+
+
+def _awaits_dispatch(run: Any) -> bool:
+    """A run admitted by a rule or a group whose connection no member has been bound to yet. ``None`` for the
+    connection revision does **not** say this: with ``frozen_at_start`` it is the ``environment`` source. The row says
+    it (``binding_state``); a run object without the attribute is a run written before the column existed."""
+    return getattr(run, "binding_state", None) == "pending"
 
 
 def _is_ar_v3_beta_run(run: Any) -> bool:
@@ -125,8 +141,15 @@ class EnvironmentProviders(ProviderSource):
             else ProviderBinding(adapter=adapter, config=config, call=ar_v3_replay_call)
         )
         self.freeze = None
+        self.admit_group = None
 
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:
+        if _awaits_dispatch(run):
+            # `EXEC2-GROUP-RUN-01`: a run admitted by a rule or a group has **no connection yet**, and no
+            # connection is what an environment run has too. Serving it here would run group work on this
+            # process's own adapter -- the silent switch the plan forbids. The environment source refuses a
+            # group start, so only a source switched under pending work reaches this line.
+            raise route_missing()
         if getattr(run, "connection_revision_id", None) is not None:
             # The run froze a connection under the `database` source; this process serves the
             # `environment` one. Using its adapter would record a call against a revision that
@@ -151,6 +174,7 @@ class DatabaseProviders(ProviderSource):
         #: engine the Attempt's own session is bound to.
         self._runtime = runtime
         self.freeze = self._freeze
+        self.admit_group = GroupAdmission(ceiling_usd=ceiling_usd)
 
     def _runtime_for(self, session: Session) -> KindRuntime:
         if self._runtime is not None:
@@ -188,7 +212,9 @@ class DatabaseProviders(ProviderSource):
     def resolve(self, session: Session, run: Any, context: Any) -> ProviderBinding:
         revision_id = getattr(run, "connection_revision_id", None)
         if revision_id is None:
-            # A run frozen under the `environment` source, served after the switch: no fallback.
+            # A run frozen under the `environment` source, served after the switch: no fallback. And a run
+            # admitted by a group that no member has taken (`EXEC2-GROUP-RUN-01`): the claim binds it before
+            # any stage runs, so a pending run here means the dispatch was skipped -- nothing is called.
             raise route_missing()
         try:
             bound = bind_connection(
@@ -214,3 +240,30 @@ class DatabaseProviders(ProviderSource):
             identity_basis=bound.identity_basis, connection_revision_id=bound.revision.revision_id,
         )
         return ProviderBinding(adapter=bound.adapter, config=config, call=call)
+
+
+class GroupAdmission:
+    """The ``database`` source's admission on a group or by the routing rules (`EXEC2-GROUP-RUN-01`).
+
+    A callable, so that the ``runs`` context takes it as a :data:`~auditmanager.runs.GroupAdmitter` and never imports
+    the executors context. It adds what the executors context does not know: the input budget that follows the
+    group's pin (the same ``input_budget_characters`` the route freezer applies to a revision's pin), and the
+    estimate's spelling of the billing."""
+
+    def __init__(self, *, ceiling_usd: float) -> None:
+        self._ceiling = ceiling_usd
+
+    def __call__(self, session: Session, *, group_id: str | None = None) -> AdmittedGroup | None:
+        admitted = admit_group(session, WORK_KIND, group_id=group_id)
+        if admitted is None:
+            return None
+        return AdmittedGroup(
+            group_id=admitted.group_id, group_revision_id=admitted.group_revision_id, pin_id=admitted.pin_id,
+            gateway_model=admitted.gateway_model,
+            billing="unmetered" if admitted.billing == "not_metered" else "metered",
+            input_budget_characters=input_budget_characters(admitted.pin_id, self._ceiling),
+            rule_revision_id=admitted.rule_revision_id,
+        )
+
+    def group_of(self, session: Session, group_revision_id: str) -> str | None:
+        return group_of_revision(session, group_revision_id)

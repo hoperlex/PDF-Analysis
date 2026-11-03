@@ -61,11 +61,21 @@ def model_rate_sha256(pin: ModelPin) -> str:
 
 
 def require_approved_model(config, pin: ModelPin, call=None) -> None:
+    """Hold a call to the model, the rate and the connection revision the accepted run command approved.
+
+    No pinned revision (``approved_connection_revision_id`` is ``None``) normally means the ``environment`` source,
+    which froze none and is held to the model and the rate only. **A run admitted on a group is the exception**
+    (`EXEC2-GROUP-RUN-01`): it has no connection until dispatch binds one, so a ``None`` there with a group revision
+    approved is a run that has not been bound, and it is refused here like a changed binding -- before any call, so
+    nothing is sent and nothing is spent."""
     if not getattr(config, "approved_cost_ceiling", False):
         return
     expected_revision = getattr(config, "approved_connection_revision_id", None)
+    awaiting_dispatch = (
+        getattr(config, "approved_group_revision_id", None) is not None and expected_revision is None)
     if (getattr(config, "approved_model_id", None) != pin.model_id
             or getattr(config, "approved_rate_sha256", None) != model_rate_sha256(pin)
+            or awaiting_dispatch
             or expected_revision is not None and getattr(call, "connection_revision_id", None) != expected_revision):
         raise DomainError(ErrorCode.ANALYSIS_INPUT_INVALID, stage_id="text_analysis", reason="cost_estimate_binding_changed")
 
