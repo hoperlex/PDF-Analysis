@@ -156,13 +156,21 @@ function SpecificationRow({ item, mayAct }: { readonly item: ComparisonSpecifica
   </section>;
 }
 
+/** How often the list of whole specifications is re-read while a transition of it is moving. */
+export const SPECIFICATION_POLL_MS = 3000;
+
 export function SpecificationPanel({ seriesId, mayAct }: { readonly seriesId: ComparisonSeriesId; readonly mayAct: boolean }) {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState<Cursor | undefined>();
   const query = useQuery({ queryKey: [...COMPARISON_KEYS.all, 'specifications', seriesId, cursor], enabled: open,
     queryFn: async () => (await listComparisonSpecifications({ path: { comparison_series_id: seriesId }, query: { limit: 100, ...(cursor === undefined ? {} : { cursor }) } })).data,
-    refetchInterval: open ? 3000 : false,
+    // Re-read only while a listed transition is moving (`running` or `paused`); a panel that is open on
+    // finished transitions schedules nothing. The interval is the named constant the polling guard reads.
+    refetchInterval: (reading) =>
+      reading.state.data?.items.some((item) => item.state === 'running' || item.state === 'paused')
+        ? SPECIFICATION_POLL_MS
+        : false,
   });
   const nextCursor = query.data?.page.next_cursor;
   return <div data-whole-specifications="" onClick={(event) => event.stopPropagation()}>

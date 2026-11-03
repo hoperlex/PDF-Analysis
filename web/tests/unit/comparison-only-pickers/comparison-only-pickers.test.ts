@@ -45,7 +45,11 @@ const PROJECT = `prj_${ULID}`;
 const USER = `usr_${ULID}`;
 const SHA = 'a'.repeat(64);
 
-const MARK_TEXT = 'Загружено без пакета портала — только для сравнения';
+// `CMP-PDF-SECTION-RUN-1030` (hotfix `10099a4e`, which rewrote `comparison-only-version.test.ts` and not
+// this file): a PDF admitted through comparison may now be analysed by section from its own text and pages,
+// so the mark no longer says «только для сравнения». It says only that the portal bundle is absent. The
+// screens still mark such a version, which is what this file pins; the older sentence is asserted gone below.
+const MARK_TEXT = 'PDF без пакета портала';
 /** The badge of the shared mark component; the option text says the same words without it. */
 const BADGE = 'data-comparison-only-mark=""';
 
@@ -513,6 +517,8 @@ describe('the document picker of the blocks page', () => {
 describe('the words the five screens say', () => {
   it('are the entity sentences, in Russian and without a Latin letter (the file format PDF aside)', () => {
     expect(COMPARISON_ONLY_MARK).toBe(MARK_TEXT);
+    // The run start is no longer refused for such a version, so the mark must not say it is.
+    expect(`${COMPARISON_ONLY_MARK} ${COMPARISON_ONLY_DETAIL}`).not.toContain('только для сравнения');
     for (const sentence of [COMPARISON_ONLY_MARK, COMPARISON_ONLY_DETAIL, COMPARISON_ONLY_START_NOTE]) {
       expect(/[A-Za-z]/.test(sentence.replaceAll('PDF', ''))).toBe(false);
       expect(sentence).toMatch(/[Ѐ-ӿ]/);

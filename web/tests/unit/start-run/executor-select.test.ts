@@ -66,9 +66,12 @@ describe('the selector is on the control', () => {
     expect(markup).toMatch(/<button type="button" class="am-button" disabled="">Запустить прогон<\/button>/);
   });
 
-  it('offers raised AI limits off by default and explains the standard request', () => {
+  it('offers the temporary statistics mode off by default and explains the standard request', () => {
     const markup = control(seeded());
-    expect(markup).toMatch(/<input type="checkbox"\/>Повышенные лимиты ИИ-анализа/);
+    // `SECTION-STATS-UNCAPPED-1030` (hotfix `af581631`) renamed the raised-limits toggle of the run start
+    // «Временный режим сбора статистики»; the request field it sets is still `relaxed_limits`.
+    expect(markup).toMatch(/<input type="checkbox"\/>Временный режим сбора статистики/);
+    expect(markup).not.toContain('Повышенные лимиты ИИ-анализа');
     expect(markup).toContain('Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
     expect(markup).not.toContain('relaxed_limits');
   });

@@ -1,11 +1,17 @@
 /**
- * `AR-V3-BETA-PACK-STATUS-WEB-01`: the version's run list offers the six-check start only on an
- * installed reviewed pack. What a started group does is in `run-list-ar-v3-started.test.ts`.
+ * `AR-V3-BETA-PACK-STATUS-WEB-01`, as `3821261a` ("restore original-source text profile") left it: the
+ * version's run list offers the six-check start on NO answer of the pack status.
  *
- * Rendered, not read from source (`D-53`). The list is rendered in both of its start positions
- * — the empty state's action and the foot of a list with runs — over every answer the pack status
- * can be in; the control must be absent from the markup in all but one, with nothing in its place:
- * no disabled button, no placeholder, no explanation (the settings panel carries that).
+ * It used to draw the control beside the ordinary start on an installed, valid pack (and only then). The
+ * owner restored the ordinary АР start with its original-source text profile and took the six-check
+ * control off the run list; its API, the old group review and the control's own component remain
+ * (`run-list-ar-v3-started.test.ts`, `ar-v3-group-start-*.test.ts`, `start-cost-flow.test.ts`). The grid
+ * below is the one the old rule was pinned over -- both start positions, every answer the pack status can
+ * be in -- with the verdict turned over: the control is absent from the markup in ALL of them, with
+ * nothing in its place, and a reintroduction on any one answer reddens that row.
+ *
+ * Rendered, not read from source (`D-53`). The list is rendered in both of its start positions -- the
+ * empty state's action and the foot of a list with runs.
  */
 
 import { createElement } from 'react';
@@ -42,60 +48,63 @@ function listMarkup(client: Client): string {
 
 const SIX_CHECKS = 'Запустить шесть проверок АР v3';
 
-describe('the six-check start is drawn only on an installed, valid pack', () => {
-  const statuses: ReadonlyArray<readonly [string, (client: Client) => void, boolean]> = [
-    ['loading', () => {}, false],
+describe('the six-check start is drawn on no answer of the pack status', () => {
+  // The third member is what the old rule drew; it is kept in the grid, because "installed and valid" is
+  // exactly the row a reintroduction would turn back on.
+  const statuses: ReadonlyArray<readonly [string, (client: Client) => void]> = [
+    ['loading', () => {}],
     [
       'a failed read',
       (client) => seedError(client, PACK, new ApiError(503, {
         contract_version: '1.16.0', error_code: 'dependency_unavailable', message: 'm',
         correlation_id: 'c', retryable: true,
       }, 'c')),
-      false,
     ],
-    ['not installed', (client) => client.setQueryData(PACK, NOT_INSTALLED_PACK), false],
-    ['installed', (client) => client.setQueryData(PACK, installedPackFixture()), true],
-    [
-      'installed without a review',
-      (client) => client.setQueryData(PACK, withoutMember(installedPackFixture(), 'review')),
-      false,
-    ],
+    ['not installed', (client) => client.setQueryData(PACK, NOT_INSTALLED_PACK)],
+    ['installed', (client) => client.setQueryData(PACK, installedPackFixture())],
+    ['installed without a review', (client) => client.setQueryData(PACK, withoutMember(installedPackFixture(), 'review'))],
     [
       'installed with the wrong scopes',
       (client) => client.setQueryData(PACK, { ...installedPackFixture(), scope_ids: ['F1', 'F2'] }),
-      false,
     ],
-    ['an undeclared state', (client) => client.setQueryData(PACK, { state: 'withdrawn' }), false],
-    ['not installed with a member', (client) => client.setQueryData(PACK, { ...NOT_INSTALLED_PACK, pack_sha256: 'x' }), false],
+    ['an undeclared state', (client) => client.setQueryData(PACK, { state: 'withdrawn' })],
+    ['not installed with a member', (client) => client.setQueryData(PACK, { ...NOT_INSTALLED_PACK, pack_sha256: 'x' })],
   ];
 
   for (const withRuns of [false, true]) {
-    for (const [name, seed, drawn] of statuses) {
-      it(`${withRuns ? 'a list with runs' : 'an empty list'}, ${name}: ${drawn ? 'drawn' : 'absent'}`, () => {
+    for (const [name, seed] of statuses) {
+      it(`${withRuns ? 'a list with runs' : 'an empty list'}, ${name}: absent`, () => {
         const client = listClient(withRuns);
         seed(client);
         const markup = listMarkup(client);
-        expect(markup.includes(SIX_CHECKS), name).toBe(drawn);
-        expect(markup.includes('data-ar-v3-group-start'), name).toBe(drawn);
-        if (!drawn) {
-          // Nothing in its place: no disabled copy, no placeholder, no sentence about the pack.
-          expect(markup).not.toContain('шесть проверок');
-          expect(markup).not.toContain('Шесть отдельных прогонов');
-          expect(markup).not.toContain('disabled');
-          expect(markup).not.toContain('Пакет проверенных норм');
-        }
-        // The legacy start is untouched by any of it.
+        expect(markup.includes(SIX_CHECKS), name).toBe(false);
+        expect(markup.includes('data-ar-v3-group-start'), name).toBe(false);
+        // Nothing in its place: no disabled copy, no placeholder, no sentence about the pack.
+        expect(markup).not.toContain('шесть проверок');
+        expect(markup).not.toContain('Шесть отдельных прогонов');
+        expect(markup).not.toContain('Пакет проверенных норм');
+        expect(markup).not.toContain('data-ar-start-note');
+        // The ordinary start is the only start, drawn once, and untouched by any of it.
+        expect(markup).toContain('data-start-run-control="true"');
         expect(markup).toContain('>Запустить прогон</button>');
         expect(markup.match(/>Запустить прогон<\/button>/g)).toHaveLength(1);
       });
     }
   }
 
-  it('draws the new control after the legacy one, so the usual start stays first', () => {
+  it('does not even read the pack status, so a status that stops being readable changes nothing here', () => {
     const client = listClient(false);
-    client.setQueryData(PACK, installedPackFixture());
-    const markup = listMarkup(client);
-    expect(markup.indexOf('>Запустить прогон</button>')).toBeGreaterThan(-1);
-    expect(markup.indexOf(SIX_CHECKS)).toBeGreaterThan(markup.indexOf('>Запустить прогон</button>'));
+    listMarkup(client);
+    expect(client.getQueryCache().find({ queryKey: PACK }), 'the run list observes the pack status').toBeUndefined();
+  });
+
+  it('draws the same list whatever the pack says', () => {
+    const drawn = statuses.map(([, seed]) => {
+      const client = listClient(true);
+      seed(client);
+      // The ids React mints for labels differ per render; the structure does not.
+      return listMarkup(client).replace(/_[rR]_[A-Za-z0-9]+_/g, '_ID_');
+    });
+    for (const markup of drawn) expect(markup).toBe(drawn[0]);
   });
 });

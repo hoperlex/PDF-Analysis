@@ -14,9 +14,18 @@ describe('explicit version comparison controls', () => {
     expect(markup).not.toContain('data-estimate-panel');
   });
 
-  it('states archive bounds and rejection policy and requires a file before importing', () => {
+  it('states the archive policy and requires a file before importing', () => {
     const markup = renderScreen(newClient(), createElement(ZipImport, { projectUid: PROJECT_UID, disabled: false, onImported: () => undefined }));
-    for (const sentence of ['16 МиБ', '100 PDF', '256 МиБ', '__MACOSX отклоняются', 'Импортировать ZIP']) expect(markup).toContain(sentence);
+    // `SECTION-STATS-UNCAPPED-1030` (hotfix `af581631`): the temporary statistics mode lifted the
+    // application's limits on the archive's size and on the number of PDFs (16 MiB, 100 PDF and 256 MiB
+    // before it), so the screen says that they are lifted and keeps the rules that remain: one level of
+    // nested archives, and a foreign file or `__MACOSX` refused.
+    for (const sentence of [
+      'прикладные лимиты объёма ZIP и количества PDF сняты', 'Допустим один уровень вложенных ZIP',
+      '__MACOSX отклоняются', 'Импортировать ZIP',
+    ]) expect(markup).toContain(sentence);
+    // And it does not state a limit the server no longer holds.
+    for (const lifted of ['16 МиБ', '100 PDF', '256 МиБ']) expect(markup).not.toContain(lifted);
     expect(markup).toMatch(/disabled=""[^>]*>Импортировать ZIP/);
   });
 

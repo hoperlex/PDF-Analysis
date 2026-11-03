@@ -49,7 +49,9 @@ const SEAM_OPERATIONS: ReadonlyArray<readonly [string, string, string]> =
  * takes no credential at all, so it declares neither.
  */
 const OPEN_OPERATIONS = ['issueToken', 'readRegistrationStatus', 'submitRegistration'] as const;
-const NO_CREDENTIAL_TO_REFUSE = ['submitRegistration'] as const;
+// `EXEC2-SEAL-1` (ADR-0026 decision 6): the agent package is public code with no secret, served by
+// version with no authentication, so it has no credential to refuse either.
+const NO_CREDENTIAL_TO_REFUSE = ['submitRegistration', 'downloadAgentPackage'] as const;
 // `EXEC-PULL-01`: the four operations a runner (a Claude Code session or an unattended agent)
 // calls. They take a credential, the runner token, which is a principal of its own and holds no
 // role: a refused token is the 401, and there is no role to be denied, so no 403 is declared.
@@ -59,6 +61,11 @@ const RUNNER_OPERATIONS = [
   'failExecutorTask',
   'getExecutorTaskImage',
   'submitExecutorTaskAnswer',
+  // `EXEC2-SEAL-1` (ADR-0026 decisions 4 and 5): an agent reports its health with its runner token and
+  // redeems an enrollment secret, presented as the bearer, for that token. Neither holds a role, so a
+  // refused secret or token is the 401 and no 403 is declared.
+  'reportRunnerHealth',
+  'redeemExecutorEnrollment',
 ] as const;
 
 const document = JSON.parse(readText(CONTRACT_PATH)) as {
@@ -109,6 +116,11 @@ describe('the seam operations', () => {
       'appendDecision',
       // `CMP-SEAL-C1`: the eight keyed writes of the version comparison core (ADR-0025 decision 19) sit in this list in order.
       'applyComparisonMatrixEdits',
+      // `CMP-SEAL-C4`: the stage review cards, their verdicts, the batch and the resumable chain controls
+      // (`applyStageCardVerdicts`, `cancelStageChainBatch`, `createStageReviewCard`, `pauseStageChainBatch`,
+      // `resumeStageChainBatch`, `resumeStageChainRun`, `startStageChainBatch`, `undoStageLinkRepair`) are keyed
+      // expert commands, like the stage writes already here; `importComparisonZip` is keyed like an upload.
+      'applyStageCardVerdicts',
       // `CMP-SEAL-C3`: all sixteen stage writes are keyed expert commands, including
       // the resumable part receipt and cancellation controls.
       'applyStageSheetMap',
@@ -121,6 +133,10 @@ describe('the seam operations', () => {
       // the contract, so this list follows it and does not lead it.
       'archiveAnalysisPreset',
       'archiveExecutorConnection',
+      // `EXEC2-SEAL-2` (ADR-0026 decisions 10, 11 and 17): the group, rule and routing-mode writes are
+      // administrator commands, keyed like the connection writes. So are `EXEC2-SEAL-1`'s enrollment,
+      // integration mark and agent install (decisions 4, 6, 7 and 9, `R-149b`).
+      'archiveExecutorGroup',
       'cancelComparisonAiPairCheck',
       'cancelComparisonAiSheetChanges',
       'cancelComparisonReport',
@@ -128,6 +144,7 @@ describe('the seam operations', () => {
       'cancelComparisonSpecification',
       'cancelComparisonUpload',
       'cancelRun',
+      'cancelStageChainBatch',
       'cancelStageChainRun',
       'cancelStageUpload',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
@@ -136,6 +153,7 @@ describe('the seam operations', () => {
       'completeComparisonUploadFile',
       'completeStageUploadFile',
       'confirmComparisonUploadSet',
+      'confirmExecutorAgentInstallHostKey',
       'confirmStagePair',
       'confirmStageUploadCandidate',
       'continueComparisonReport',
@@ -144,9 +162,12 @@ describe('the seam operations', () => {
       'createAnalysisPreset',
       'createComparisonReport',
       'createComparisonUpload',
+      'createExecutorAgentInstall',
       'createExecutorConnection',
+      'createExecutorGroup',
       'createProject',
       'createStageAssembly',
+      'createStageReviewCard',
       'createStageUpload',
       // `W60-OPT-PROPOSALS-01`: a decision on a proposal is appended, keyed like `appendDecision`.
       'decideOptimisationProposal',
@@ -159,6 +180,8 @@ describe('the seam operations', () => {
       'finishComparisonSeries',
       'generateComparisonSummary',
       'generateExecutorSshKey',
+      'importComparisonZip',
+      'issueExecutorEnrollment',
       // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like
       // the other executor writes. The runner's own four operations (claim, extend, answer, fail)
       // are not keyed: the answer is idempotent on the task, and a claim repeats by design.
@@ -168,6 +191,7 @@ describe('the seam operations', () => {
       'pauseComparisonLaunchQueue',
       'pauseComparisonSeries',
       'pauseComparisonUpload',
+      'pauseStageChainBatch',
       'pauseStageUpload',
       'prepareComparisonClientReport',
       'prepareComparisonMatrix',
@@ -182,15 +206,21 @@ describe('the seam operations', () => {
       'resumeComparisonLaunchQueue',
       'resumeComparisonSeries',
       'resumeComparisonUpload',
+      'resumeStageChainBatch',
+      'resumeStageChainRun',
       'resumeStageUpload',
       'retryComparisonAiSheetChanges',
       'retryComparisonUploadSet',
       'reviseAnalysisPreset',
       'reviseExecutorConnection',
+      'reviseExecutorGroup',
       'reviseStageAssembly',
       'revokeRunnerToken',
       'setExecutionPaused',
+      'setExecutorIntegrationAuthorisation',
       'setExecutorRoute',
+      'setExecutorRoutingMode',
+      'setExecutorRoutingRule',
       'setExecutorSecret',
       'setJobPriority',
       'setStagePairCompleteness',
@@ -206,8 +236,10 @@ describe('the seam operations', () => {
       'startComparisonSpecification',
       'startOptimisationPass',
       'startRun',
+      'startStageChainBatch',
       'startStageChainRun',
       'undoComparisonMatrixEdit',
+      'undoStageLinkRepair',
       'uploadComparisonReportSource',
       'uploadComparisonUploadPart',
       'uploadDocument',

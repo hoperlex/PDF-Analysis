@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExtendedRunReview } from '@/shared/api';
 import { ExtendedReviewView, extendedReviewDefinitive, extendedReviewPollInterval, MAX_TERMINAL_REVIEW_READS } from '@/widgets/extended-review/ui/extended-review';
+import { SourceInspector } from '@/widgets/extended-review/ui/source-inspector';
+
+import { newClient, renderScreen } from '../screens/harness';
 
 const runId = 'run_01M664JCG1QH0NTEWZTC3PM19K';
 beforeEach(() => { vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://api.example.test/api/v1'); });
@@ -64,27 +67,44 @@ describe('server-frozen extended workflow', () => {
     expect(render(v2({ status: 'not_started' }))).toContain('data-extended-procedure-plan');
   });
 
+  // The source panel is opened by pressing a source of an observation (`ObservationList` keeps the chosen one in a
+  // `useState`), so one static render of the whole view cannot show it. The list is rendered for what it says before the
+  // press; the panel is rendered through its own export for what it says after (`8eb1f31f`, `81fb5aca`).
+  const inspect = (source: Record<string, unknown>) => renderScreen(newClient(), createElement(SourceInspector, {
+    source, fallbackVersion: '', projectUid: 'prj_01M4FQ53F2QEVBX84XJZZ3NACB', onClose: () => undefined }));
+
   it('never builds a portal crop URL for native-page sources and keeps source provenance', () => {
+    const native = { source_id: 'native_example', kind: 'image', source_type: 'native_page', page_number: 2, crop_sha256: 'a'.repeat(64),
+      version_uid: 'ver_01M00000000000000000000000' };
     const html = render(v2({ result: { workflow_version: 'extended-review-v2', version_uid: 'ver_01M00000000000000000000000',
       procedures: [], observations: [{ observation_id: 'o1', title: 'Наблюдение', source_ids: ['native_example'] }],
-      sources: [{ source_id: 'native_example', kind: 'image', source_type: 'native_page', page_number: 2, crop_sha256: 'a'.repeat(64) }],
+      sources: [native],
     } }));
     expect(html).toContain('страница PDF');
-    expect(html).toContain('data-native-page-source');
-    expect(html).toContain('ver_01M00000000000000000000000');
-    expect(html).toContain('a'.repeat(64));
-    expect(html).toContain('Открыть исходную версию PDF');
     expect(html).not.toContain('<img');
     expect(html).not.toContain('/portal-blocks/');
+    // And the panel the press opens: the version the page belongs to, the digest, the way back to the version; no crop.
+    const panel = inspect(native);
+    expect(panel).toContain('Физическая страница PDF 2');
+    expect(panel).toContain('страница PDF');
+    expect(panel).toContain('ver_01M00000000000000000000000');
+    expect(panel).toContain('a'.repeat(64));
+    expect(panel).toContain('Открыть сведения об исходной версии');
+    expect(panel).not.toContain('<img');
+    expect(panel).not.toContain('/portal-blocks/');
   });
 
   it('retains the portal crop path for actual portal IMAGE blocks', () => {
+    const block = { source_id: 'blk_0123456789abcdef0123456789abcdef', kind: 'image', page_number: 1, version_uid: 'ver_01M00000000000000000000000' };
     const html = render(v2({ result: { version_uid: 'ver_01M00000000000000000000000',
       observations: [{ observation_id: 'o1', title: 'Наблюдение', source_ids: ['blk_0123456789abcdef0123456789abcdef'] }],
-      sources: [{ source_id: 'blk_0123456789abcdef0123456789abcdef', kind: 'image', page_number: 1 }],
+      sources: [block],
     } }));
-    expect(html).toContain('<img');
-    expect(html).toContain('Исходный блок на странице 1');
+    expect(html).toContain('изображение блока');
+    const panel = inspect(block);
+    expect(panel).toContain('<img');
+    expect(panel).toContain('/portal-blocks/blk_0123456789abcdef0123456789abcdef');
+    expect(panel).toContain('Исходное изображение блока на физической странице 1');
   });
 });
 

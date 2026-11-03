@@ -269,16 +269,32 @@ describe('this slice adds no second polling loop', () => {
     join('widgets', 'stage-changes', 'ui', 'stage-journal.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-batch-controls.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-run-controls.tsx'),
+    // `CMP-SPEC` (`2510d5e3`): the whole-specification list of a series, re-read only while one of its
+    // transitions is `running` or `paused` -- the source was `open ? 3000 : false`, a poll with no end
+    // while the panel was open, and now names `SPECIFICATION_POLL_MS` and ends when nothing moves.
+    join('widgets', 'version-series', 'ui', 'specification-panel.tsx'),
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));
+
+  // The third named exception, `EMERGENCY-ANALYSIS` (`af8c69f7`, `widgets/extended-review`). The section-analysis
+  // panel re-reads `getExtendedRunReview` while the base run moves and for a bounded number of reads after it ends.
+  // It is not a run poll either (the run endpoint is policed below). Its callback is not inline: the whole decision
+  // is `extendedReviewPollInterval`, a pure function the unit tests drive (`analysis-extended/workflow.test.ts`), so
+  // the assertion below holds the SOURCE to the shape instead: the option calls that function and nothing else, the
+  // function has an arm that schedules nothing and is bounded by `MAX_TERMINAL_REVIEW_READS`, and the file has no
+  // timer of its own. It is a viewer-lane path; this file only names it.
+  const ALLOWED_EXTENDED_REVIEW_POLL = [join('widgets', 'extended-review', 'ui', 'extended-review.tsx')];
+  const isAllowedExtendedReviewPoll = ({ path }: { path: string }) =>
+    ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
 
   it('schedules no interval and no timer of its own', () => {
     const offenders = sources.filter(
       (file) =>
         /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
         !isAllowedProbePoll(file) &&
-        !isAllowedComparisonPoll(file),
+        !isAllowedComparisonPoll(file) &&
+        !isAllowedExtendedReviewPoll(file),
     );
     expect(offenders.map((o) => o.path)).toEqual([]);
   });
@@ -301,6 +317,28 @@ describe('this slice adds no second polling loop', () => {
         expect(value, `${file.path}: a callback`).toMatch(/^:\s*(?:\([^)]*\)|\w+)?\s*=>/);
         expect(value, `${file.path}: an arm that schedules nothing`).toMatch(/:\s*false\b|\?\s*false\b|return false\b/);
       }
+      // And it never reaches the run endpoint.
+      expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+    }
+  });
+
+  it('lets the section-analysis panel poll only through its bounded interval function, with no timer of its own', () => {
+    const named = sources.filter(isAllowedExtendedReviewPoll);
+    expect(named.map((f) => f.path)).toHaveLength(ALLOWED_EXTENDED_REVIEW_POLL.length);
+
+    for (const file of named) {
+      const text = code(file);
+      expect(text, file.path).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/);
+      // Exactly one use of the option, and it is the function.
+      expect(text.match(/refetchInterval/g), file.path).toHaveLength(1);
+      expect(text, file.path).toMatch(
+        /refetchInterval:\s*\(reading\)\s*=>\s*extendedReviewPollInterval\(active, terminalReads, reading\.state\.data\)/,
+      );
+      // The function: one arm that schedules nothing, and a bound on the reads after the run has ended.
+      const body = text.match(/export function extendedReviewPollInterval[\s\S]*?\n\}/)?.[0] ?? '';
+      expect(body, `${file.path}: the interval function`).toMatch(/\?\s*\d+\s*:\s*false\b/);
+      expect(body, `${file.path}: the bound`).toContain('terminalReads < MAX_TERMINAL_REVIEW_READS');
+      expect(text, file.path).toMatch(/export const MAX_TERMINAL_REVIEW_READS = \d+;/);
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
@@ -354,6 +392,9 @@ describe('this slice adds no second polling loop', () => {
     const ALLOWED_ONE_SHOT = [
       join('entities', 'audit-run', 'api', 'run-status-query.ts'),
       join('features', 'reaudit-run', 'model', 'use-reaudit-cost-approval.ts'),
+      // `8eb1f31f` (compare saved run results): reads each of the two runs once before its findings and once after,
+      // and refuses the comparison when the run changed between the two reads. Two one-shot reads, no schedule.
+      join('widgets', 'stage-comparison', 'api', 'read-saved-results.ts'),
     ];
 
     const direct = sources.filter((file) => /\bgetRunStatus\s*\(/.test(code(file)));

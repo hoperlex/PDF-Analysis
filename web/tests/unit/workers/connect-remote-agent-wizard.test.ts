@@ -67,7 +67,11 @@ describe('«Добавить подключение» is closed until it is aske
     expect(markup).toContain('Добавить подключение');
     expect(markup).toContain('data-executor-create');
     expect(markup).toContain('aria-expanded="false"');
-    for (const absent of ['data-connect-wizard', 'Удалённый Ubuntu-агент', 'API-провайдер', 'data-wizard-step']) {
+    // The wizard's own root is `data-connect-wizard="<step>"`. The launcher's button carries
+    // `data-connect-wizard-toggle`, which begins with the same letters, so the bare prefix is not what is
+    // looked for: it is the attribute with its `=`.
+    expect(markup).toContain('data-connect-wizard-toggle="true"');
+    for (const absent of ['data-connect-wizard=', 'Удалённый Ubuntu-агент', 'API-провайдер', 'data-wizard-step']) {
       expect(markup, absent).not.toContain(absent);
     }
   });

@@ -1,19 +1,30 @@
 /**
- * `AR-V3-BETA-PACK-STATUS-WEB-FIX-01`: the six-check start while the page around it changes.
+ * `AR-V3-BETA-PACK-STATUS-WEB-FIX-01` and `-02`: the six-check start while the page around it changes,
+ * as `3821261a` ("restore original-source text profile") left it.
  *
- * The static tests in `tests/unit/screens/run-list-ar-v3-start.test.ts` pin which status draws the
- * control. They cannot say what a status that CHANGES does to a start already sent: the control is
- * drawn only on an installed pack, so a failed re-read of the pack unmounts it, and with it the
- * mutation's observer (the per-call `onSuccess` that navigates) and the idempotency key held in a
- * `useRef`. These tests mount the real run list, the real control and the real mutation in a
- * minimal DOM (`live-render.ts`), move the pack status under a request in flight, and read what
- * the request carried and where the page went.
+ * The run list used to mount the control, hold its idempotency key and its mutation observer, and keep it
+ * drawn while a start was in flight although the pack status stopped being readable or the list itself
+ * stopped showing. That owner decision removed the control from the run list: the ordinary start is the
+ * only start there. The control, `useArV3GroupStartIntent` and the start's mutation remain, for a caller
+ * that mounts them, so the file now pins two things:
  *
- * Only the transport is replaced: the four generated operations the tree calls, and the router.
+ *   - the run list mounts NO six-check control, whatever the pack status or the list does, and does not
+ *     read the pack (`the run list ...`);
+ *   - what a caller that DOES mount the control relies on, which the run list's tests used to prove through
+ *     it: the key is the same on a retry and after the control was taken off the page, the observer opens
+ *     the started group although no control is mounted, a pending start leaves its button disabled and a
+ *     disabled button takes no press, and one version's pending start says nothing about another
+ *     (`a caller that mounts the control`). The caller here is `Host`, which does what the run list did:
+ *     it holds the intent, mounts the control and opens the accepted group's review.
+ *
+ * These tests mount the real control and the real mutation in a minimal DOM (`live-render.ts`), and read
+ * what the request carried and where the page went. Only the transport is replaced: the generated
+ * operations the tree calls, and the router.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
+import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigation = vi.hoisted(() => ({ pushed: [] as string[] }));
@@ -38,7 +49,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 import { ApiError, getArV3BetaPackStatus, listRuns, queryKeys, startArV3BetaGroup, estimateArV3GroupCost } from '@/shared/api';
 import type { ApiResponse, ArV3BetaGroup, ErrorCode, RunStatusPage } from '@/shared/api';
 import { RUN_PAGE_LIMIT, arV3GroupReviewAddress } from '@/entities/audit-run';
-import { useArV3GroupStartIntent, useStartArV3Group } from '@/features/start-ar-v3-group';
+import { StartArV3GroupControl, useArV3GroupStartIntent, useStartArV3Group } from '@/features/start-ar-v3-group';
 import { RunList } from '@/widgets/run-list';
 
 import { runStatus } from '../review/fixtures';
@@ -106,12 +117,34 @@ function newClient(): QueryClient {
   return client;
 }
 
-const tree = (client: QueryClient, versionUid: string = VERSION_UID) =>
+/** The run list, as the page mounts it. */
+const listTree = (client: QueryClient, versionUid: string = VERSION_UID) =>
   createElement(
     QueryClientProvider,
     { client },
     createElement(RunList, { projectUid: PROJECT_UID, versionUid } as never),
   );
+
+/**
+ * A caller of the six-check start: it holds the intent for as long as it lives, mounts the control while
+ * `show` says so, and opens the review of the group the 202 names -- what the run list did. Keyed by the
+ * version, as the run list was, because the observer holds one version's answer.
+ */
+function Host({ versionUid, show }: { readonly versionUid: string; readonly show: boolean }) {
+  const router = useRouter();
+  const intent = useArV3GroupStartIntent(versionUid as never);
+  return show
+    ? createElement(StartArV3GroupControl, {
+        projectUid: PROJECT_UID as never,
+        versionUid: versionUid as never,
+        intent,
+        onStarted: (group: ArV3BetaGroup) => router.push(arV3GroupReviewAddress(group.group_id)),
+      })
+    : null;
+}
+
+const tree = (client: QueryClient, versionUid: string = VERSION_UID, show = true) =>
+  createElement(QueryClientProvider, { client }, createElement(Host, { key: versionUid, versionUid, show }));
 
 let live: LiveRender | null = null;
 
@@ -147,8 +180,105 @@ const keyOfCall = (index: number): string => {
   return (call[0] as { idempotencyKey: string }).idempotencyKey;
 };
 
-describe('the harness itself can see what these tests rely on', () => {
-  it('draws the control on an installed pack and presses it', async () => {
+/** A first page with one run and a way on to a second: the state in which «Дальше» is drawn. */
+const FIRST_PAGE: RunStatusPage = { items: [runStatus()], page: { next_cursor: 'cursor-2' } } as RunStatusPage;
+const NEXT = 'Дальше';
+const FIRST_PAGE_KEY = queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT);
+const LIST_LOADING = 'Загрузка: прогоны этой версии';
+const NEVER = (): Promise<never> => new Promise(() => undefined);
+
+function pagedClient(): QueryClient {
+  const client = newClient();
+  client.setQueryData(FIRST_PAGE_KEY, FIRST_PAGE);
+  return client;
+}
+
+describe('the run list mounts no six-check control, whatever the pack and the list do', () => {
+  it('draws the ordinary start on an installed pack, no control, and does not observe the pack status', async () => {
+    const client = newClient();
+    live = await mountLive(listTree(client));
+    expect(live.markup()).toContain('data-start-run-control');
+    expect(live.markup()).not.toContain(CONTROL);
+    expect(live.count(SIX_CHECKS)).toBe(0);
+    expect(live.markup()).not.toContain('шесть проверок');
+    const pack = client.getQueryCache().find({ queryKey: queryKeys.runs.arV3PackStatus() });
+    expect(pack?.getObserversCount() ?? 0, 'the run list reads the pack status').toBe(0);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('draws nothing in the control\u2019s place when the pack read fails, and nothing again when it recovers', async () => {
+    const client = newClient();
+    live = await mountLive(listTree(client));
+    await failPackRead(client);
+    expect(live.markup()).not.toContain(CONTROL);
+    expect(live.markup()).not.toContain('шесть проверок');
+    await recoverPackRead(client);
+    expect(live.markup()).not.toContain(CONTROL);
+    expect(live.markup()).not.toContain('шесть проверок');
+    expect(live.markup()).toContain('data-start-run-control');
+  });
+
+  it('draws none while the list is loading, whatever the pack status is', async () => {
+    for (const [name, pack] of [
+      ['not installed', NOT_INSTALLED_PACK],
+      ['a contract fault', { state: 'withdrawn' }],
+      ['installed', installedPackFixture()],
+    ] as const) {
+      const client = newClient();
+      client.removeQueries({ queryKey: FIRST_PAGE_KEY });
+      client.setQueryData(queryKeys.runs.arV3PackStatus(), pack);
+      vi.mocked(listRuns).mockImplementation(NEVER as never);
+      live = await mountLive(listTree(client));
+      expect(live.markup(), `${name}: the list was not loading`).toContain(LIST_LOADING);
+      expect(live.markup(), name).not.toContain(CONTROL);
+      expect(live.markup(), name).not.toContain('шесть проверок');
+      await live.unmount();
+      live = null;
+    }
+  });
+
+  it('draws none while the list has failed, whatever the pack status is', async () => {
+    for (const [name, pack] of [
+      ['not installed', NOT_INSTALLED_PACK],
+      ['installed', installedPackFixture()],
+    ] as const) {
+      const client = newClient();
+      client.removeQueries({ queryKey: FIRST_PAGE_KEY });
+      client.setQueryData(queryKeys.runs.arV3PackStatus(), pack);
+      vi.mocked(listRuns).mockRejectedValue(envelopeError(503, 'dependency_unavailable', true));
+      live = await mountLive(listTree(client));
+      await live.settle(() => undefined);
+      expect(live.markup(), `${name}: the list had not failed`).toContain('data-list-failure');
+      expect(live.markup(), name).not.toContain(CONTROL);
+      expect(live.markup(), name).not.toContain('шесть проверок');
+      await live.unmount();
+      live = null;
+    }
+  });
+
+  it('draws none on the first page, while the next one loads, or after it failed to re-read', async () => {
+    const client = pagedClient();
+    live = await mountLive(listTree(client));
+    expect(live.markup()).not.toContain(CONTROL);
+
+    vi.mocked(listRuns).mockReturnValueOnce(deferred<{ data: RunStatusPage }>().promise as never);
+    await live.press(NEXT);
+    expect(live.markup(), 'the list did not go to its loading state').toContain(LIST_LOADING);
+    expect(live.markup()).not.toContain(CONTROL);
+    await live.unmount();
+
+    const failing = pagedClient();
+    live = await mountLive(listTree(failing));
+    vi.mocked(listRuns).mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
+    await live.settle(() => failing.refetchQueries({ queryKey: FIRST_PAGE_KEY }));
+    expect(live.markup(), 'the list did not go to its error state').toContain('data-list-failure');
+    expect(live.markup()).not.toContain(CONTROL);
+    expect(start).not.toHaveBeenCalled();
+  });
+});
+
+describe('a caller that mounts the control: the harness itself can see what these tests rely on', () => {
+  it('draws the control and presses it', async () => {
     const client = newClient();
     live = await mountLive(tree(client));
     expect(live.markup()).toContain(CONTROL);
@@ -160,19 +290,19 @@ describe('the harness itself can see what these tests rely on', () => {
     expect(live.markup()).toContain('запрос на шесть проверок');
   });
 
-  it('draws nothing in its place once the pack read has failed', async () => {
+  it('draws nothing when the caller does not show it, and the control again when it does', async () => {
     const client = newClient();
-    live = await mountLive(tree(client));
-    await failPackRead(client);
+    live = await mountLive(tree(client, VERSION_UID, false));
     expect(live.markup()).not.toContain(CONTROL);
     expect(live.markup()).not.toContain('шесть проверок');
-    await recoverPackRead(client);
+    await live.update(tree(client, VERSION_UID, true));
     expect(live.markup()).toContain(CONTROL);
   });
 });
 
-describe('a start in flight when the pack status stops being readable', () => {
-  it('keeps the control mounted and still opens the started group', async () => {
+describe('a start in flight when the control is taken off the page', () => {
+  // The mutation's observer and the key are the caller's, so taking the control away does not lose them.
+  it('still opens the started group', async () => {
     const client = newClient();
     live = await mountLive(tree(client));
     const reply = deferred<Accepted>();
@@ -180,29 +310,11 @@ describe('a start in flight when the pack status stops being readable', () => {
     await approveCost(live);
     await live.press(SIX_CHECKS);
 
-    await failPackRead(client);
-    expect(live.markup(), 'the control was unmounted under a request in flight').toContain(CONTROL);
-    expect(live.markup()).toContain('запрос на шесть проверок');
+    await live.update(tree(client, VERSION_UID, false));
+    expect(live.markup(), 'the control stayed mounted').not.toContain(CONTROL);
 
     await live.settle(() => reply.resolve(ACCEPTED));
     expect(navigation.pushed, 'the accepted group was not opened').toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-  });
-
-  it('draws nothing again once the request has settled and the pack is still unreadable', async () => {
-    const client = newClient();
-    live = await mountLive(tree(client));
-    const reply = deferred<Accepted>();
-    start.mockReturnValueOnce(reply.promise);
-    await approveCost(live);
-    await live.press(SIX_CHECKS);
-    await failPackRead(client);
-
-    // The invalidation an accepted start triggers re-reads the pack; it is still failing.
-    packStatus.mockRejectedValue(readFailure());
-    await live.settle(() => reply.resolve(ACCEPTED));
-    expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-    expect(live.markup()).not.toContain(CONTROL);
-    expect(live.markup()).not.toContain('шесть проверок');
   });
 
   it('sends the SAME key when the control comes back after the request failed unseen', async () => {
@@ -214,15 +326,13 @@ describe('a start in flight when the pack status stops being readable', () => {
     await live.press(SIX_CHECKS);
     const first = keyOfCall(0);
 
-    await failPackRead(client);
-    // The answer never reached the page (the connection dropped): the server may have made the
-    // group, the page does not know. The pack is still unreadable, so the control goes.
-    packStatus.mockRejectedValue(readFailure());
+    await live.update(tree(client, VERSION_UID, false));
+    // The answer never reached the page (the connection dropped): the server may have made the group, the
+    // page does not know.
     await live.settle(() => reply.reject(new TypeError('Failed to fetch')));
     expect(live.markup()).not.toContain(CONTROL);
 
-    packStatus.mockResolvedValue({ data: installedPackFixture() } as never);
-    await live.settle(() => client.refetchQueries({ queryKey: queryKeys.runs.arV3PackStatus() }));
+    await live.update(tree(client, VERSION_UID, true));
     expect(live.markup()).toContain(CONTROL);
 
     start.mockResolvedValueOnce(ACCEPTED);
@@ -231,9 +341,46 @@ describe('a start in flight when the pack status stops being readable', () => {
     expect(start).toHaveBeenCalledTimes(2);
     expect(keyOfCall(1), 'a new key would make a second group of six runs').toBe(first);
   });
+
+  it('shows the refusal, and retries under the same key, when the control comes back after a failed start', async () => {
+    const client = newClient();
+    live = await mountLive(tree(client));
+    const reply = deferred<Accepted>();
+    start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
+    await live.press(SIX_CHECKS);
+    const first = keyOfCall(0);
+
+    await live.update(tree(client, VERSION_UID, false));
+    await live.settle(() => reply.reject(envelopeError(503, 'dependency_unavailable', true)));
+    expect(live.count(RETRY), 'a refusal that came while no control was mounted drew a retry').toBe(0);
+
+    await live.update(tree(client, VERSION_UID, true));
+    expect(live.markup(), 'the control came back with no sign of the failed start').toContain('data-ar-v3-group-failure');
+    expect(live.count(RETRY)).toBe(1);
+
+    start.mockResolvedValueOnce(ACCEPTED);
+    await live.press(RETRY);
+    expect(keyOfCall(1), 'a retry under a new key would make a second group').toBe(first);
+    expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
+  });
+
+  it('opens a group accepted while the control was away even when it is back by then', async () => {
+    const client = newClient();
+    live = await mountLive(tree(client));
+    const reply = deferred<Accepted>();
+    start.mockReturnValueOnce(reply.promise);
+    await approveCost(live);
+    await live.press(SIX_CHECKS);
+
+    await live.update(tree(client, VERSION_UID, false));
+    await live.update(tree(client, VERSION_UID, true));
+    await live.settle(() => reply.resolve(ACCEPTED));
+    expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
+  });
 });
 
-describe('a list mounted while a start is still on its way', () => {
+describe('a caller mounted while a start is still on its way', () => {
   it('draws the control with its button disabled, so the pending start is not sent twice', async () => {
     const client = newClient();
     live = await mountLive(tree(client));
@@ -242,9 +389,7 @@ describe('a list mounted while a start is still on its way', () => {
     await live.press(SIX_CHECKS);
     await live.unmount();
 
-    // The page is opened again; the pack read fails, but the earlier request is still pending.
-    packStatus.mockRejectedValueOnce(readFailure());
-    await client.refetchQueries({ queryKey: queryKeys.runs.arV3PackStatus() });
+    // The page is opened again; the earlier request is still pending.
     live = await mountLive(tree(client));
     expect(live.markup()).toContain(CONTROL);
     expect(live.markup()).toMatch(DISABLED_SIX_CHECKS);
@@ -302,158 +447,6 @@ describe('a pending start leaves its button disabled, and a disabled button take
   });
 });
 
-/** A first page with one run and a way on to a second: the state in which «Дальше» is drawn. */
-const FIRST_PAGE: RunStatusPage = { items: [runStatus()], page: { next_cursor: 'cursor-2' } } as RunStatusPage;
-const NEXT = 'Дальше';
-const FIRST_PAGE_KEY = queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT);
-const LIST_LOADING = 'Загрузка: прогоны этой версии';
-
-function pagedClient(): QueryClient {
-  const client = newClient();
-  client.setQueryData(FIRST_PAGE_KEY, FIRST_PAGE);
-  return client;
-}
-
-describe('a start in flight when the run list itself stops showing the list', () => {
-  // `AR-V3-BETA-PACK-STATUS-WEB-FIX-02`, finding 1. The list's query key carries the cursor and
-  // the query has no placeholder data, so «Дальше» turns the list into its loading state, and a
-  // failed re-read turns it into its error state; both returned before the control was drawn.
-
-  it('keeps the control and still opens the started group while the next page loads', async () => {
-    const client = pagedClient();
-    live = await mountLive(tree(client));
-    const reply = deferred<Accepted>();
-    start.mockReturnValueOnce(reply.promise);
-    await approveCost(live);
-    await live.press(SIX_CHECKS);
-
-    vi.mocked(listRuns).mockReturnValueOnce(deferred<{ data: RunStatusPage }>().promise as never);
-    await live.press(NEXT);
-    expect(live.markup(), 'the list did not go to its loading state').toContain(LIST_LOADING);
-    expect(live.markup(), 'the control was unmounted under a request in flight').toContain(CONTROL);
-    expect(live.markup()).toContain('запрос на шесть проверок');
-
-    await live.settle(() => reply.resolve(ACCEPTED));
-    expect(navigation.pushed, 'the accepted group was not opened').toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-  });
-
-  it('keeps the control and still opens the started group while the list failed to re-read', async () => {
-    const client = pagedClient();
-    live = await mountLive(tree(client));
-    const reply = deferred<Accepted>();
-    start.mockReturnValueOnce(reply.promise);
-    await approveCost(live);
-    await live.press(SIX_CHECKS);
-
-    vi.mocked(listRuns).mockRejectedValueOnce(envelopeError(503, 'dependency_unavailable', true));
-    await live.settle(() => client.refetchQueries({ queryKey: FIRST_PAGE_KEY }));
-    expect(live.markup(), 'the list did not go to its error state').toContain('data-list-failure');
-    expect(live.markup(), 'the control was unmounted under a request in flight').toContain(CONTROL);
-
-    await live.settle(() => reply.resolve(ACCEPTED));
-    expect(navigation.pushed, 'the accepted group was not opened').toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-  });
-
-  it('shows the refusal, and retries under the same key, when the page comes back after a failed start', async () => {
-    const client = pagedClient();
-    live = await mountLive(tree(client));
-    const reply = deferred<Accepted>();
-    start.mockReturnValueOnce(reply.promise);
-    await approveCost(live);
-    await live.press(SIX_CHECKS);
-    const first = keyOfCall(0);
-
-    const nextPage = deferred<{ data: RunStatusPage }>();
-    vi.mocked(listRuns).mockReturnValueOnce(nextPage.promise as never);
-    await live.press(NEXT);
-    await live.settle(() => reply.reject(envelopeError(503, 'dependency_unavailable', true)));
-    expect(live.count(RETRY), 'a refusal that came while the list was loading was swallowed').toBe(0);
-
-    await live.settle(() => nextPage.resolve({ data: FIRST_PAGE }));
-    expect(live.markup(), 'the control came back with no sign of the failed start').toContain('data-ar-v3-group-failure');
-    expect(live.count(RETRY)).toBe(1);
-
-    start.mockResolvedValueOnce(ACCEPTED);
-    await live.press(RETRY);
-    expect(keyOfCall(1), 'a retry under a new key would make a second group').toBe(first);
-    expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-  });
-
-  it('opens a group accepted while the list was loading even when it is back by then', async () => {
-    const client = pagedClient();
-    live = await mountLive(tree(client));
-    const reply = deferred<Accepted>();
-    start.mockReturnValueOnce(reply.promise);
-    await approveCost(live);
-    await live.press(SIX_CHECKS);
-
-    const nextPage = deferred<{ data: RunStatusPage }>();
-    vi.mocked(listRuns).mockReturnValueOnce(nextPage.promise as never);
-    await live.press(NEXT);
-    await live.settle(() => nextPage.resolve({ data: FIRST_PAGE }));
-    await live.settle(() => reply.resolve(ACCEPTED));
-    expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-  });
-});
-
-describe('a fresh visit draws no six-check control while the list is not showing', () => {
-  const NEVER = (): Promise<never> => new Promise(() => undefined);
-
-  it('draws none while the list is loading, whatever the pack status is', async () => {
-    for (const [name, pack] of [
-      ['not installed', NOT_INSTALLED_PACK],
-      ['a contract fault', { state: 'withdrawn' }],
-      ['installed', installedPackFixture()],
-    ] as const) {
-      const client = newClient();
-      client.removeQueries({ queryKey: queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT) });
-      client.setQueryData(queryKeys.runs.arV3PackStatus(), pack);
-      vi.mocked(listRuns).mockImplementation(NEVER as never);
-      live = await mountLive(tree(client));
-      expect(live.markup(), `${name}: the list was not loading`).toContain(LIST_LOADING);
-      expect(live.markup(), name).not.toContain(CONTROL);
-      expect(live.markup(), name).not.toContain('шесть проверок');
-      await live.unmount();
-      live = null;
-    }
-  });
-
-  it('draws none while the list has failed, whatever the pack status is', async () => {
-    for (const [name, pack] of [
-      ['not installed', NOT_INSTALLED_PACK],
-      ['installed', installedPackFixture()],
-    ] as const) {
-      const client = newClient();
-      client.removeQueries({ queryKey: queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT) });
-      client.setQueryData(queryKeys.runs.arV3PackStatus(), pack);
-      vi.mocked(listRuns).mockRejectedValue(envelopeError(503, 'dependency_unavailable', true));
-      live = await mountLive(tree(client));
-      await live.settle(() => undefined);
-      expect(live.markup(), `${name}: the list had not failed`).toContain('data-list-failure');
-      expect(live.markup(), name).not.toContain(CONTROL);
-      expect(live.markup(), name).not.toContain('шесть проверок');
-      await live.unmount();
-      live = null;
-    }
-  });
-
-  it('draws none once a start has settled and the list is loading again', async () => {
-    const client = pagedClient();
-    // The invalidation an accepted start triggers re-reads the first page; it still has a next.
-    vi.mocked(listRuns).mockResolvedValue({ data: FIRST_PAGE } as never);
-    live = await mountLive(tree(client));
-    start.mockResolvedValueOnce(ACCEPTED);
-    await approveCost(live);
-    await live.press(SIX_CHECKS);
-    expect(navigation.pushed).toEqual([arV3GroupReviewAddress(GROUP_ID)]);
-
-    vi.mocked(listRuns).mockReturnValue(deferred<{ data: RunStatusPage }>().promise as never);
-    await live.press(NEXT);
-    expect(live.markup()).toContain(LIST_LOADING);
-    expect(live.markup(), 'a settled start must not keep the control drawn').not.toContain(CONTROL);
-  });
-});
-
 describe('the key of one intent', () => {
   it('is the same on a retry after a failure, and on a second press', async () => {
     const client = newClient();
@@ -505,7 +498,7 @@ describe('a start pending for one version says nothing about another', () => {
   // change, so production never changes the version of a mounted list; the live harness's
   // `update()` does, and `useIsMutating` kept answering for the first version until a
   // mutation-cache event happened.
-  it('allows an independent estimate and approved start when the list switches version', async () => {
+  it('allows an independent estimate and approved start when the caller switches version', async () => {
     const client = newClient();
     live = await mountLive(tree(client));
     start.mockReturnValueOnce(deferred<Accepted>().promise);

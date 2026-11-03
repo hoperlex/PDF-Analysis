@@ -398,9 +398,9 @@ const UPLOAD_SEGMENTS = ['projects', 'prj_01', 'documents'] as const;
 
 function uploadRequest(
   body: ReadableStream<Uint8Array>,
-  extra: { signal?: AbortSignal; headers?: Record<string, string> } = {},
+  extra: { signal?: AbortSignal; headers?: Record<string, string>; url?: string } = {},
 ): Request {
-  return new Request(UPLOAD_URL, {
+  return new Request(extra.url ?? UPLOAD_URL, {
     method: 'POST',
     body,
     duplex: 'half',
@@ -610,14 +610,21 @@ describe('a request body is streamed to the API under a deadline', () => {
     expect(empty.calls[0]!.init.signal).toBeUndefined();
   });
 
+  // `SECTION-STATS-UNCAPPED-1030` (hotfix `af581631`): the three upload routes -- a document, the next
+  // version of a document and a comparison ZIP -- carry a 24 hour deadline, because the temporary
+  // statistics mode lifted the application's own size and time limits on intake. Every other write keeps
+  // the 290 s deadline, which is what the tests below pin on a streamed body that is not an upload.
+  const OTHER_WRITE_URL = 'http://localhost/bff/v1/projects/prj_01/stage-uploads';
+  const OTHER_WRITE_SEGMENTS = ['projects', 'prj_01', 'stage-uploads'] as const;
+
   it('carries a 290 second deadline on a write and aborts the upstream request when it passes', async () => {
     const deadline = new AbortController();
     const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
     const { fetch, calls } = recordingFetch(okJson);
 
-    await forwardWithCredential(uploadRequest(pulledOnDemand(1, 1).stream), UPLOAD_SEGMENTS, TARGET, {
-      fetch,
-    });
+    await forwardWithCredential(
+      uploadRequest(pulledOnDemand(1, 1).stream, { url: OTHER_WRITE_URL }), OTHER_WRITE_SEGMENTS, TARGET, { fetch },
+    );
 
     expect(UPSTREAM_DEADLINE_MS).toBe(290_000);
     expect(timeout).toHaveBeenCalledTimes(1);
@@ -627,6 +634,25 @@ describe('a request body is streamed to the API under a deadline', () => {
     deadline.abort(new DOMException('timeout', 'TimeoutError'));
     expect(signal.aborted).toBe(true);
     expect((signal.reason as DOMException).name).toBe('TimeoutError');
+  });
+
+  it('carries a 24 hour deadline on the three upload routes, and 290 seconds on a write beside them', async () => {
+    const day = 86_400_000;
+    for (const [url, segments, expected] of [
+      [UPLOAD_URL, UPLOAD_SEGMENTS, day],
+      ['http://localhost/bff/v1/projects/prj_01/documents/doc_01/versions', ['projects', 'prj_01', 'documents', 'doc_01', 'versions'], day],
+      ['http://localhost/bff/v1/projects/prj_01/comparison-zip-uploads', ['projects', 'prj_01', 'comparison-zip-uploads'], day],
+      [OTHER_WRITE_URL, OTHER_WRITE_SEGMENTS, UPSTREAM_DEADLINE_MS],
+      // A path that only contains an upload route's name is not an upload route.
+      ['http://localhost/bff/v1/projects/prj_01/documents/doc_01/blocks', ['projects', 'prj_01', 'documents', 'doc_01', 'blocks'], UPSTREAM_DEADLINE_MS],
+    ] as const) {
+      const timeout = vi.spyOn(AbortSignal, 'timeout');
+      const { fetch } = recordingFetch(okJson);
+      await forwardWithCredential(uploadRequest(pulledOnDemand(1, 1).stream, { url }), segments, TARGET, { fetch });
+      expect(timeout, url).toHaveBeenCalledTimes(1);
+      expect(timeout, url).toHaveBeenCalledWith(expected);
+      timeout.mockRestore();
+    }
   });
 
   it('puts the deadline on a small write as well, and on nothing that sends no body', async () => {

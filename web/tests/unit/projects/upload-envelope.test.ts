@@ -102,11 +102,21 @@ describe('the envelope the user is shown is the envelope the contract declares',
     ]);
   });
 
-  it('takes those numbers from the contract document, not from this file', () => {
+  it('takes the rule from the contract document, not from this file', () => {
     // The generator emits identifier patterns but not prose limits, so the envelope text
-    // is the only place these two numbers can be checked against their source.
-    expect(contract).toContain('at most 500 pages, and the whole upload at most 250 MiB');
-    expect(contract).toContain('every page must carry an embedded text layer or at least one portal block');
+    // is the only place the rule can be checked against its source.
+    //
+    // `EXEC2-FIX-WEB` (D-292), a contract mismatch reported and not fixed here: the sentence this test
+    // used to anchor the two figures on, "at most 500 pages, and the whole upload at most 250 MiB", was
+    // replaced by hotfix `af581631` (SECTION-STATS-UNCAPPED-1030) with "the temporary statistics intake
+    // removes application size and page-count ceilings". The web still states 250 MiB (the server's
+    // sandbox cap on the PDF member) and 500 pages (the default deployment's bound), as `b51aa02a`
+    // decided, so no sentence of the contract now backs those two figures. The test pins what the
+    // contract does say -- and that the old sentence is gone, so a reseal that states the figures again
+    // reddens it and sends the next session back to anchor them.
+    expect(contract).toContain('the temporary statistics intake removes application size and page-count ceilings');
+    expect(contract).not.toContain('at most 500 pages, and the whole upload at most 250 MiB');
+    expect(contract).toContain('Every page must carry an embedded text layer or at least one portal block');
   });
 
   it('names every refusal reason before a file is chosen', () => {
