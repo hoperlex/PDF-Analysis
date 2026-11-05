@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.20.0"]
+    contract_version: Literal["1.21.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1708,6 +1708,11 @@ class RunStatus(_Object):
     binding: ExecutorBinding = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     waiting_since: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151v` (contract 1.21.0): the account that started the run and its display label; absent for a run
+    #: created before migration 0051.
+    started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class RunStatusPage(_Object):
@@ -1745,6 +1750,9 @@ class ExecutionQueueItem(_Object):
     finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     interrupted_reason: str = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151v` (contract 1.21.0): who started the job's run, by display label; absent before migration 0051.
+    started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
     binding_state: ExecutorBindingState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 

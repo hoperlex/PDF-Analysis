@@ -181,7 +181,22 @@ def _queue_cursor(raw: str | None, scope: tuple[str, str, str] | None = None) ->
     return QueuePosition(rank, priority, created_at, job_id)
 
 
-def _queue_item_model(row: Any, facts: Mapping[str, Mapping[str, Any]]) -> models.ExecutionQueueItem:
+def _starter_labels(session: Session, rows: Sequence[Any]) -> dict[str, str]:
+    """`R-151v`: the display label of each account that started a listed run, each read once."""
+    from auditmanager.access.public import AccountRepository
+
+    accounts = AccountRepository()
+    labels: dict[str, str] = {}
+    for uid in {row.started_by_user_uid for row in rows if getattr(row, "started_by_user_uid", None) is not None}:
+        account = accounts.get_account(session, uid)
+        if account is not None:
+            labels[uid] = account.record.display_label
+    return labels
+
+
+def _queue_item_model(
+    row: Any, facts: Mapping[str, Mapping[str, Any]], labels: Mapping[str, str] | None = None,
+) -> models.ExecutionQueueItem:
     """One queue item of the wire from a read row and the binding facts of its run.
 
     A member the row does not have is **left unset** (never ``None``), so the answer omits it: the contract
@@ -195,6 +210,8 @@ def _queue_item_model(row: Any, facts: Mapping[str, Mapping[str, Any]]) -> model
         **_unset_none(
             started_at=row.started_at, finished_at=row.finished_at,
             error_code=row.error_code, interrupted_reason=row.interrupted_reason,
+            # `R-151v`: who started the run, by label; absent for a run created before 0051.
+            started_by_label=(labels or {}).get(getattr(row, "started_by_user_uid", None) or ""),
         ),
         **facts.get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
     })
@@ -242,8 +259,9 @@ class ExecutionAdapter(_SessionHolder):
             else:
                 next_cursor = None
             facts = _queue_binding_facts(session, [row.run_id for row in items])  # EXEC2-GROUP-RUN-01
+            labels = _starter_labels(session, items)  # `R-151v`
             return models.ExecutionQueuePage(
-                items=[_queue_item_model(row, facts) for row in items],
+                items=[_queue_item_model(row, facts, labels) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
             )
@@ -316,6 +334,7 @@ class ExecutionAdapter(_SessionHolder):
                                  # A run adapter always has the attribute (``None`` is the `environment` source); the
                                  # default is for the stand-ins older suites hand this port, which have no group seam.
                                  group_admitter=getattr(self._runs, "group_admitter", None),
+                                 started_by_user_uid=user_uid,  # `R-151v`
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -336,7 +355,7 @@ class ExecutionAdapter(_SessionHolder):
             row = ExecutionRepository().get_queue_item(session, job_id)
             if row is None:
                 raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Job")
-            return _queue_item_model(row, _queue_binding_facts(session, [row.run_id]))
+            return _queue_item_model(row, _queue_binding_facts(session, [row.run_id]), _starter_labels(session, [row]))
         return self._write(write)
 
     def get_dispatch_status(self) -> models.ExecutionDispatchStatus:
@@ -1182,6 +1201,7 @@ class RunAdapter(_SessionHolder):
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
         executor_group_id: str | None = None,
+        started_by_user_uid: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1250,6 +1270,7 @@ class RunAdapter(_SessionHolder):
                 cost_actor_uid=cost_actor_uid,
                 executor_group_id=executor_group_id,
                 group_admitter=self._group_admitter,
+                started_by_user_uid=started_by_user_uid,  # `R-151v`
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1562,6 +1583,14 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     repository = RunRepository()
     run = repository.get(session, run_id)
     stages = repository.stage_results(session, run_id)
+    # `R-151v`: who started the run, by the account's own display label; none before 0051.
+    started_by = getattr(run, "started_by_user_uid", None)
+    started_by_label = None
+    if started_by is not None:
+        from auditmanager.access.public import AccountRepository
+
+        starter = AccountRepository().get_account(session, started_by)
+        started_by_label = None if starter is None else starter.record.display_label
     # `EXEC-PAR-START-01`. Which executor the run froze, from its frozen revision; none for a
     # run that froze none. The name and the pinned model only -- nothing of the connection's
     # address, key or probe is read here.
@@ -1579,6 +1608,8 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
     return RunStatusView(
+        started_by_user_uid=started_by,
+        started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
         # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
         # `run_status_body` renders it only when one was pinned.

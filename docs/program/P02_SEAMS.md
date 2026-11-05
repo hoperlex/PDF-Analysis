@@ -1037,6 +1037,10 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0F` (contract `1.21.0`, migration `0051_run_started_by`) records who started a run (`R-151v`): `startRun` and
+`reauditRun` write the subject into `audit_run.started_by_user_uid`, a frozen RESTRICT reference; `RunStatus` carries
+`started_by_user_uid` and `started_by_label`, `ExecutionQueueItem` `started_by_label`, each absent for an older run.
+
 `UI-PARITY-P0E` (contract `1.20.0`, no migration) added two reads. `listDocuments` takes the optional `section_code`
 filter (a `ProjectSection`): only documents whose current version is confirmed for that section, unclassified ones never; the
 section page of ruling `R-151l` reads it. `getExecutionDispatch` (`GET /execution/dispatch`) returns the durable pause state

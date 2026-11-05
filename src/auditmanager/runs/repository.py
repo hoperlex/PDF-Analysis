@@ -65,7 +65,8 @@ _RUN_COLUMNS = (
     "terminal_detail, "
     "interrupted_reason, degradation_set, terminal_at, created_at, reaudit_of_run_id, "
     "connection_revision_id, norm_retrieval_set_id, preset_revision_id, "
-    "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since"
+    "binding_state, executor_group_revision_id, routing_rule_revision_id, wait_reason, waiting_since, "
+    "started_by_user_uid"
 )
 
 _INSERT_RUN = text(
@@ -74,12 +75,12 @@ _INSERT_RUN = text(
         run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id,
         norms_snapshot_id, provider_mode, frozen_input_digest, command_id,
         reaudit_of_run_id, connection_revision_id, norm_retrieval_set_id, preset_revision_id,
-        binding_state, executor_group_revision_id, routing_rule_revision_id
+        binding_state, executor_group_revision_id, routing_rule_revision_id, started_by_user_uid
     ) VALUES (
         :run_id, :project_uid, :version_uid, :state, :analysis_profile_id,
         :prompt_bundle_id, :norms_snapshot_id, :provider_mode, :frozen_input_digest, :command_id,
         :reaudit_of_run_id, :connection_revision_id, :norm_retrieval_set_id, :preset_revision_id,
-        :binding_state, :executor_group_revision_id, :routing_rule_revision_id
+        :binding_state, :executor_group_revision_id, :routing_rule_revision_id, :started_by_user_uid
     )
     """
 )
@@ -312,6 +313,8 @@ class RunRow:
     #: and since when; both ``None`` unless it waits. Not frozen: the dispatcher keeps them.
     wait_reason: str | None = None
     waiting_since: datetime | None = None
+    #: `R-151v` (migration 0051): the account whose command created the run; ``None`` before 0051. Frozen.
+    started_by_user_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -379,6 +382,7 @@ def _run_row(row: Any) -> RunRow:
         routing_rule_revision_id,
         wait_reason,
         waiting_since,
+        started_by_user_uid,
     ) = tuple(row)
     return RunRow(
         run_id=run_id,
@@ -406,6 +410,7 @@ def _run_row(row: Any) -> RunRow:
         routing_rule_revision_id=routing_rule_revision_id,
         wait_reason=wait_reason,
         waiting_since=waiting_since,
+        started_by_user_uid=started_by_user_uid,
     )
 
 
@@ -445,8 +450,11 @@ class RunRepository:
         binding_state: str = "frozen_at_start",
         executor_group_revision_id: str | None = None,
         routing_rule_revision_id: str | None = None,
+        started_by_user_uid: str | None = None,
     ) -> RunRow:
         """Insert the run in ``created``. The frozen set is written once, here.
+
+        ``started_by_user_uid`` (`R-151v`, migration 0051) is the account whose command created the run; frozen.
 
         ``norms_snapshot_id`` is the snapshot the creating command pinned
         (`W55A-PIN-01`): ``start_audit_run`` and ``reaudit_run`` read the current one in
@@ -488,6 +496,7 @@ class RunRepository:
                     "binding_state": binding_state,
                     "executor_group_revision_id": executor_group_revision_id,
                     "routing_rule_revision_id": routing_rule_revision_id,
+                    "started_by_user_uid": started_by_user_uid,
                 },
             )
         except DBAPIError as exc:

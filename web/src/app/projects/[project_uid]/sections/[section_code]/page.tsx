@@ -2,8 +2,8 @@
  * `/projects/[project_uid]/sections/[section_code]` — the route file for one section of one project
  * (`R-151l`, `UI-PARITY-P0E`).
  *
- * Delegation-only: the route decides nothing. It awaits `requireScreen` with its own address, then checks the
- * two path segments without a request: a project uid that does not have the contract's shape, or a section code
+ * Delegation-only: the route decides nothing. It awaits `requireScreen` with its own address, then checks
+ * both segments of the address without a request: a project uid that does not have the contract's shape, or a section code
  * outside the fifteen, is a malformed address and answers not-found.
  */
 

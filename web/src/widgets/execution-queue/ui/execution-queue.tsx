@@ -73,6 +73,8 @@ export function ExecutionQueue({
             <QueueItemWaiting item={item} />
             {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
             <p>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></p>
+            {/* `R-151v`: who started the run, as the original's queue says; older runs do not know. */}
+            <p data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</p>
             <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>
             <p>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></p>
             <p data-queue-started>

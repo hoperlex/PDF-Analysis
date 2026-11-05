@@ -91,6 +91,8 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             # its current revision, `pending`; exclusivity with a connection and a preset, an unknown or archived group
             # and the `environment` source are refused there, before the idempotency key is claimed.
             **({"executor_group_id": body.executor_group_id} if body.executor_group_id is not None else {}),
+            # `R-151v`: the run records who started it.
+            started_by_user_uid=subject.user_uid,
         )
         # 202, and the same 202 for a replay under the same key and payload: the run
         # exists either way, and the frozen document gives both the one status.

@@ -11,7 +11,15 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.20.0` (`UI-PARITY-P0E`)
+## Current contract `1.21.0` (`UI-PARITY-P0F`)
+
+Additive slice for ruling `R-151v`: who started a run. `RunStatus` gains the optional `started_by_user_uid` and
+`started_by_label`, `ExecutionQueueItem` the optional `started_by_label` (the account's display label). Both are absent
+for a run created before migration `0051_run_started_by`, which adds `audit_run.started_by_user_uid` (a frozen RESTRICT
+reference to `app_user`; an account that started a run is archived, never purged). No operation, no error code.
+The API now has 250 paths, 278 operations and 675 schemas; migration head `0051`. The domain catalogs are at candidate revision 39.
+
+## Contract `1.20.0` (`UI-PARITY-P0E`, historical)
 
 Additive read slice for the UI parity programme (rulings `R-151f`, `R-151l`). One optional query parameter and one operation;
 no migration, no new schema, no new error code.
@@ -20,7 +28,7 @@ that section (its `classification.section_code`); a document whose current versi
 the unfiltered order with rows removed, and a cursor resumes after its row in the filtered listing.
 `getExecutionDispatch` (`GET /execution/dispatch`) returns the `ExecutionDispatchStatus` `setExecutionPaused` writes, so the top
 strip can show the pause state without reading the queue; readable by `expert` and `admin`, refused to `viewer` (`R-150w`).
-The API now has 250 paths, 278 operations and 675 schemas; migration head `0050`. The domain catalogs are at candidate revision 38.
+The API then had 250 paths, 278 operations and 675 schemas; migration head `0050`. The domain catalogs were at candidate revision 38.
 
 ## Contract `1.19.0` (`UI-PARITY-P0B`, historical)
 

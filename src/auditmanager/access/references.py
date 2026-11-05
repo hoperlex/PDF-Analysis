@@ -123,6 +123,12 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "this account changed a vendor list (W60-PRICE-LIST-01)",
     ),
     AccountReference(
+        "audit_run",
+        "started_by_user_uid",
+        "RESTRICT",
+        "this account started an audit run (R-151v, migration 0051)",
+    ),
+    AccountReference(
         "optimisation_pass",
         "started_by_user_uid",
         "RESTRICT",

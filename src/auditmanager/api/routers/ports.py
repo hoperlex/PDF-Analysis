@@ -647,6 +647,7 @@ class RunPort(Protocol):
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
         executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
+        started_by_user_uid: str | None = None,  # `R-151v`: the account whose request this is
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
