@@ -18,8 +18,11 @@
  * become history on their own tab once rules are in force.
  *
  * The screen opens on «Процессы», as it always has, unless the address names a tab (`?tab=`):
- * the redirect from the key form names «Подключения». Refreshed on tab return, after a command,
- * and by «Обновить», which reads again whatever the open tab shows.
+ * the redirect from the key form names «Подключения». The worker list of «Процессы» refreshes
+ * itself under the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md`
+ * §7.1) while the browser tab is visible, as the queue and the journal do, and says when it was last
+ * read («Обновлено ЧЧ:ММ:СС», or that the data may be out of date). Everything is also refreshed on
+ * tab return, after a command, and by «Обновить», which reads again whatever the open tab shows.
  *
  * The key form arrives as a prop: it is a server component rendered by the route, so the key
  * never becomes a JavaScript value (`features/set-executor-secret`).
@@ -32,7 +35,7 @@ import type { ReactNode } from 'react';
 import type { ExecutionWorker } from '@/shared/api';
 import { newIdempotencyKey, queryKeys } from '@/shared/api';
 import { useMe } from '@/entities/account';
-import { executionFailure, useWorkers } from '@/entities/execution';
+import { UpdateTime, executionFailure, useWorkers } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useSetWorkerIntake } from '@/features/set-worker-intake';
 import { ExecutorConnections } from '@/widgets/executor-connections';
@@ -85,7 +88,8 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   const [completed, setCompleted] = useState(false);
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
-  const workers = useWorkers(cursor);
+  // The list is read, and polled, only while its own tab is open.
+  const workers = useWorkers(cursor, tab === 'processes');
   const account = useMe();
   const client = useQueryClient();
   const intake = useSetWorkerIntake();
@@ -132,7 +136,7 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   return (
     <PageShell
       title="Исполнители"
-      subtitle="Подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения. Данные обновляются при возврате на вкладку, после команды и по запросу."
+      subtitle="Подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения. Список процессов обновляется автоматически, пока вкладка открыта; остальные данные — при возврате на вкладку, после команды и по запросу."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.execution.all() })}>Обновить</button>}
     >
       <WorkersTabs active={tab} onSelect={openTab}>
@@ -143,6 +147,7 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
         {tab === 'rules' ? <ExecutorRules roles={roles} legacyRoutes={<ExecutorRoutes roles={roles} history />} /> : null}
         {tab === 'routes' ? <ExecutorRoutes roles={roles} /> : null}
         {tab === 'processes' ? (<>
+        <UpdateTime dataUpdatedAt={workers.dataUpdatedAt} failed={workers.isError} />
         {account.isPending ? <LoadingState what="права на управление исполнителями" /> : null}
         {accountFailure !== null ? (
           <div data-workers-account-failure={accountFailure.kind}>
@@ -151,16 +156,21 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
           </div>
         ) : null}
         {workers.isPending ? <LoadingState what="исполнителей" /> : null}
+        {/*
+          * A failed read with no data is «не прочитаны». A failed read after a successful one keeps
+          * the last list on screen under the stale line (`UpdateTime`), as on the queue: a periodic
+          * read that blinked must not erase the registry; the failure is still said, never swallowed.
+          */}
         {readFailure !== null ? (
           <div data-workers-read-failure={readFailure.kind}>
-            <ErrorState title="Исполнители не прочитаны" detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void workers.refetch()} />
+            <ErrorState title={workers.data === undefined ? 'Исполнители не прочитаны' : 'Исполнители не обновились'} detail={readFailure.detail} correlationId={readFailure.correlationId} onRetry={() => void workers.refetch()} />
           </div>
         ) : null}
         {/*
           * As on the queue (`C-27`): the rows do not wait for `getMe`. Until the roles are
           * read, or when that read fails, `roles` is empty and no switch is drawn.
           */}
-        {workers.data !== undefined && readFailure === null ? (
+        {workers.data !== undefined ? (
           <WorkerList
             items={workers.data.items}
             roles={roles}

@@ -35,9 +35,8 @@ import {
   resumeComparisonUpload,
   retryComparisonUploadSet,
 } from '@/shared/api';
+import { UPLOAD_POLL_MS } from '@/shared/config';
 import { COMPARISON_KEYS, uploadIsActive, useKeyedCommand } from '@/entities/version-series';
-
-export const UPLOAD_POLL_MS = 2_000;
 
 function moving(upload: ComparisonUpload | undefined): boolean {
   return upload !== undefined && (upload.state === 'uploading' || upload.state === 'processing');

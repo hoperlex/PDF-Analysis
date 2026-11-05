@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { StageCardEvidence, StageChangeCard } from '@/shared/api';
 import { applyStageCardVerdicts, failureMessage, getStageChainRun, newIdempotencyKey } from '@/shared/api';
+import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
 import { UNCONFIRMED_LABEL } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
@@ -19,8 +20,6 @@ import { StageRawDifferences } from './stage-raw-differences';
 import type { OpenStageRawDifference } from './stage-raw-differences';
 import { StageHighLevelChanges } from './stage-high-level-changes';
 import styles from './stage-changes.module.css';
-
-export const STAGE_REVIEW_POLL_MS = 1500;
 
 export type OpenStageEvidence = (evidence: StageCardEvidence, card: StageChangeCard) => void;
 export interface StageReviewProps {

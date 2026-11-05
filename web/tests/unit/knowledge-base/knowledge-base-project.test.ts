@@ -5,7 +5,8 @@
  * проекты»; with one it sends `project_uid`, states the project and how many entries match
  * (`total`, not the length of the page), and a change of project returns to the first page as a
  * change of filter does. An unknown project is an empty page with `total: 0`, and the screen shows
- * the uid it was given and the existing empty state — it does not claim the project exists.
+ * the uid it was given and the empty state of a selection, with «Все проекты» as the way out — it does
+ * not claim the project exists, and it does not claim that the installation has no decision (`D-313`).
  *
  * Mounted live (`analysis-settings/live-render.ts`) under a mounted address, because a project
  * change and a press are events the one-pass render cannot deliver. Only the transport is replaced.
@@ -217,21 +218,30 @@ describe('the screen states its scope and how many entries match', () => {
     expect(visible((await mountAt('')).markup())).toContain('1 запись');
   });
 
-  it('says «0 записей» and the existing empty state for a project with nothing in it, by the uid it was given', async () => {
+  it('says «0 записей» and the empty state of a selection for a project with nothing in it, by the uid it was given', async () => {
     const view = await mountAt(`project=${UNKNOWN}`);
     const text = visible(view.markup());
     expect(text).toContain(`Охват ${UNKNOWN} 0 записей`);
-    expect(text).toContain('Решений пока нет');
+    expect(text).toContain('По выбранному отбору решений нет');
+    // It says nothing about the installation: a project with no decision is not an installation with none (D-313).
+    expect(text).not.toContain('Решений пока нет');
+    expect(text).not.toContain('ещё не принято ни одного решения');
     // It does not claim the project exists: no name was found for it anywhere.
     expect(text).not.toContain('Проект Альфа');
-    expect(text).not.toContain('Все проекты');
+    // The scope line still names the project. «Все проекты» is the way out below it, once, as a link to the unfiltered screen.
+    expect(text).not.toContain('Охват Все проекты');
+    expect(text.match(/Все проекты/g)).toHaveLength(1);
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base"[^>]*>Все проекты<\/a>/);
+    // Only the project narrows the list, so there is no category or verdict to reset.
+    expect(text).not.toContain('Сбросить категорию и вердикт');
   });
 
   it('says a known project’s name from the project list when it has no decisions to carry the name', async () => {
     const view = await mountAt(`project=${LISTED_ONLY}`);
     const text = visible(view.markup());
     expect(text).toContain('Охват Проект из списка 0 записей');
-    expect(text).toContain('Решений пока нет');
+    expect(text).toContain('По выбранному отбору решений нет');
+    expect(text).not.toContain('ещё не принято ни одного решения');
   });
 
   it('does not read the project list for «Все проекты»', async () => {
@@ -260,6 +270,100 @@ describe('each record says where it belongs', () => {
     expect(text).toContain('Проект Бета · АР-1');
     expect(text).not.toContain('Проект Бета · АР-1 ·');
     expect(text).not.toContain('Без раздела');
+  });
+});
+
+describe('an empty page under a selection is about the selection, and the way back is on the screen (D-313)', () => {
+  let live: LiveRender | null = null;
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+  });
+
+  /** The default answers, except that a category of `dimensions` or a verdict of `rejected` matches nothing. */
+  function nothingFor(category: string | null, verdict: string | null): void {
+    const everything = journal.getMockImplementation() as unknown as ((input: { query: Query }) => Promise<unknown>) | undefined;
+    expect(everything).toBeDefined();
+    journal.mockImplementation(((input: { query: Query }) =>
+      (category !== null && input.query.category === category) || (verdict !== null && input.query.verdict === verdict)
+        ? Promise.resolve(answer([], null, 0))
+        : everything!(input)) as unknown as typeof listDecisions);
+  }
+
+  async function mountAt(query: string): Promise<LiveRender> {
+    live = await mountLive(page(freshClient(), query));
+    await settled(live);
+    return live;
+  }
+
+  async function change(view: LiveRender, label: string, value: string): Promise<boolean> {
+    const delivered = await view.change(label, value);
+    await settled(view);
+    return delivered;
+  }
+
+  it('keeps the installation sentence for a journal that is empty with no category, verdict or project', async () => {
+    journal.mockImplementation((async () => answer([], null, 0)) as unknown as typeof listDecisions);
+    const view = await mountAt('');
+    const text = visible(view.markup());
+    expect(text).toContain('Решений пока нет');
+    expect(text).toContain('В этой установке ещё не принято ни одного решения');
+    expect(text).not.toContain('По выбранному отбору');
+    expect(text).not.toContain('Сбросить категорию и вердикт');
+    expect(view.markup()).toContain('data-knowledge-base-empty="installation"');
+  });
+
+  it('says it is the selection when a category matches nothing, and the button resets category and verdict together', async () => {
+    // Both the category and the verdict match nothing, so a reset that cleared only one of them would still show an empty page.
+    nothingFor('dimensions', 'accepted');
+    const view = await mountAt('');
+    expect(visible(view.markup())).toContain('Решение номер 1');
+    expect(await change(view, 'Категория', 'dimensions')).toBe(true);
+    const text = visible(view.markup());
+    expect(text).toContain('По выбранному отбору решений нет');
+    expect(text).not.toContain('ещё не принято ни одного решения');
+    expect(text).not.toContain('Решений пока нет');
+    // No project is chosen, so there is no «Все проекты» to offer: the words appear once, in the scope line, and are no link.
+    expect(text.match(/Все проекты/g)).toHaveLength(1);
+    expect(view.markup()).not.toMatch(/<a [^>]*>Все проекты<\/a>/);
+
+    // A verdict as well, so that the reset is seen to clear both.
+    await change(view, 'Вердикт', 'accepted');
+    expect(visible(view.markup())).toContain('По выбранному отбору решений нет');
+    expect(await press(view, 'Сбросить категорию и вердикт')).toBe(true);
+
+    const after = visible(view.markup());
+    expect(after).toContain('Решение номер 1');
+    expect(after).not.toContain('По выбранному отбору');
+    // Both filters are back on «Любая категория» and «Любой вердикт»: pressing the button once cleared the two.
+    expect(view.count('Сбросить категорию и вердикт')).toBe(0);
+  });
+
+  it('offers «Все проекты» with the rest of the address kept, beside the reset, when a project and a verdict are on', async () => {
+    nothingFor(null, 'rejected');
+    // `foo` is kept; `tab` is one of the parameters that only meant something inside the old project and goes with it.
+    const view = await mountAt(`project=${A}&foo=bar&tab=x`);
+    expect(await change(view, 'Вердикт', 'rejected')).toBe(true);
+    const text = visible(view.markup());
+    expect(text).toContain('По выбранному отбору решений нет');
+    expect(text).toContain('Сбросить категорию и вердикт');
+    expect(text.match(/Все проекты/g)).toHaveLength(1);
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все проекты<\/a>/);
+    // The scope line still names the project the reader is in.
+    expect(view.markup()).toContain('data-journal-scope="project"');
+    expect(text).toContain('Охват Проект Альфа');
+  });
+
+  it('resets from the empty state back to the project’s own first page, not to «Все проекты»', async () => {
+    nothingFor('dimensions', null);
+    const view = await mountAt(`project=${A}`);
+    await change(view, 'Категория', 'dimensions');
+    expect(visible(view.markup())).toContain('По выбранному отбору решений нет');
+    await press(view, 'Сбросить категорию и вердикт');
+    const text = visible(view.markup());
+    expect(text).toContain('Решение номер 11');
+    expect(text).toContain('Охват Проект Альфа');
+    expect(text).not.toContain('Охват Все проекты');
   });
 });
 

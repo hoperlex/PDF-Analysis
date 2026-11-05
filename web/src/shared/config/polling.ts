@@ -114,3 +114,54 @@ export function isOperationalListStale({ dataUpdatedAt, failed, now }: Operation
   if (dataUpdatedAt <= 0) return false;
   return failed || now - dataUpdatedAt > OPERATIONAL_LIST_STALE_MS;
 }
+
+/*
+ * Every other timed re-read of the web client. Each of these is a *bounded* poll: the callback
+ * that uses it returns `false` the moment the thing it waits for has happened, so it is not a
+ * loop that outlives its subject. (The one slower tick is the projects table, which falls back
+ * to `OVERVIEW_IDLE_POLL_MS` instead of stopping.) The interval is the only thing fixed here; the
+ * stop condition lives with the query, next to the state it reads (`tests/unit/run/polling.test.ts`
+ * holds each call site to that shape). A new timed read names its interval in this file, not in
+ * the slice that uses it, and that test reddens on a `*_POLL_MS` defined anywhere else.
+ *
+ * The values are the ones the call sites carried before they were gathered here. Grouped by what
+ * they poll.
+ */
+
+// --- Executor connections and the agent wizard («Исполнители») ---
+
+/** How often a connection is read again while one of its «Проверить» probes is still open. */
+export const PROBE_POLL_MS = 3000;
+/** How often an agent install session (path A) is read while the worker is still working on it. */
+export const AGENT_INSTALL_POLL_MS = 3000;
+/** How often an agent connection's detail is read while its agent is still enrolling or not yet ready. */
+export const AGENT_STATUS_POLL_MS = 5000;
+
+// --- «Сравнение версий»: projects, matrix, series, uploads, specifications ---
+
+/** The projects table while something in it is computed or uploaded (`version-comparison-projects.js:296-300`). */
+export const OVERVIEW_BUSY_POLL_MS = 5_000;
+/** The projects table when nothing in it moves. */
+export const OVERVIEW_IDLE_POLL_MS = 30_000;
+/** The comparison matrix of a document while it is being built (`version-comparison.js:785`). */
+export const MATRIX_BUILD_POLL_MS = 1_500;
+/** A comparison series while it is queued or running (`version-comparison.js:828`). */
+export const SERIES_POLL_MS = 2_000;
+/** A comparison upload, and its proposal, while the upload is being read. */
+export const UPLOAD_POLL_MS = 2_000;
+/** The list of whole specifications of a series while one of its transitions is running or paused. */
+export const SPECIFICATION_POLL_MS = 3000;
+
+// --- AI checks of a comparison ---
+
+/** An AI job or report that is queued or running (`version-comparison.js:865`, `md-report.js:121`). */
+export const AI_POLL_MS = 3_000;
+/** The AI queues while something waits in them (`version-comparison.js:956`). */
+export const AI_QUEUE_POLL_MS = 5_000;
+
+// --- Stage review: the stage chain runs and what they produce ---
+
+/** A stage-chain run, its batch and its results while the run is queued or running. */
+export const STAGE_REVIEW_POLL_MS = 1500;
+/** The text-evidence request of a stage review while its run is queued or running. */
+export const STAGE_TEXT_POLL_MS = 1500;

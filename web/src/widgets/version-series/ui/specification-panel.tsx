@@ -9,6 +9,7 @@ import {
   cancelComparisonSpecification, estimateComparisonSpecification, listComparisonSpecificationChanges,
   listComparisonSpecifications, newIdempotencyKey, startComparisonSpecification,
 } from '@/shared/api';
+import { SPECIFICATION_POLL_MS } from '@/shared/config';
 import { COMPARISON_KEYS, EstimatePanel, SPEC_METHOD_LABELS, SPEC_PHASE_LABELS, comparisonFailure, consentOf, specFieldLabel } from '@/entities/version-series';
 import { browserDownloadSink, deliverDownload } from '@/features/export-run';
 import { pdfPageUrl, useEvidenceDocument } from '@/features/open-evidence';
@@ -155,9 +156,6 @@ function SpecificationRow({ item, mayAct }: { readonly item: ComparisonSpecifica
     {changes ? <ChangeList key={item.comparison_id ?? item.transition_id} transitionId={item.transition_id} complete={item.state === 'completed'} /> : null}
   </section>;
 }
-
-/** How often the list of whole specifications is re-read while a transition of it is moving. */
-export const SPECIFICATION_POLL_MS = 3000;
 
 export function SpecificationPanel({ seriesId, mayAct }: { readonly seriesId: ComparisonSeriesId; readonly mayAct: boolean }) {
   const client = useQueryClient();

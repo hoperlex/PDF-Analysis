@@ -5,14 +5,13 @@ import { useEffect } from 'react';
 
 import type { StageChangeCard } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
+import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
 import { AiLabel } from '@/entities/version-series';
 import { ErrorState } from '@/shared/ui';
 
 import { readSyntheses } from '../api/reads';
 import type { OpenStageEvidence } from './stage-changes';
 import styles from './stage-changes.module.css';
-
-export const STAGE_REVIEW_POLL_MS = 1500;
 
 const SECTIONS = [
   { decision: 'REAL_CHANGE', label: 'Изменения высокого уровня', collapsed: false },

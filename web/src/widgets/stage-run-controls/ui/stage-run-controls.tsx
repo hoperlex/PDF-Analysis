@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { StageChainRun } from '@/shared/api';
 import { ApiError, cancelStageChainRun, estimateStageChainRun, failureMessage, getStageChainRun,
   getStageSheetMap, listStageChangeCards, newIdempotencyKey, resumeStageChainRun, startStageChainRun } from '@/shared/api';
+import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { ErrorState, LoadingState } from '@/shared/ui';
@@ -17,8 +18,6 @@ import { IntentKey, latestFullRun, RUN_WORDS, runActive, STAGE_RUN_KEYS, STEP_WO
 import { StageEstimateConsent } from './estimate-consent';
 import { StageRepairHistory } from './stage-repair-history';
 import styles from './stage-run-controls.module.css';
-
-export const STAGE_REVIEW_POLL_MS = 1500;
 
 export interface StageRunControlsProps {
   readonly pairId: string;

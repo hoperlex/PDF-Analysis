@@ -5,12 +5,11 @@ import { useEffect, useState } from 'react';
 
 import type { StageTextDifference, StageTextFragment } from '@/shared/api';
 import { failureMessage, getStageChainRun } from '@/shared/api';
+import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
 import { fragmentLookup, loadStageTextEvidence } from '@/widgets/stage-text-evidence';
 import { ErrorState } from '@/shared/ui';
 
 import styles from './stage-journal.module.css';
-
-export const STAGE_REVIEW_POLL_MS = 1500;
 
 export type OpenStageRawDifference = (difference: StageTextDifference,
   left: StageTextFragment | undefined, right: StageTextFragment | undefined) => void;

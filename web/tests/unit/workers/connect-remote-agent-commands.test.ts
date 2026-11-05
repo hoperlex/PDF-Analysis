@@ -42,9 +42,8 @@ vi.mock('react', async (importOriginal) => {
 });
 
 import { CONTRACT_VERSION, queryKeys } from '@/shared/api';
+import { AGENT_INSTALL_POLL_MS, AGENT_STATUS_POLL_MS } from '@/shared/config';
 import {
-  AGENT_INSTALL_POLL_MS,
-  AGENT_STATUS_POLL_MS,
   agentInstallQueryKey,
   agentRevisionRequest,
   installIsMoving,
