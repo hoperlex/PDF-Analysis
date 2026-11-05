@@ -780,6 +780,12 @@ class FindingPort(Protocol):
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         """One finding with its observation, evidence, provenance and projection."""
 
+    def set_execution_status(
+        self, *, finding_uid: str, status: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.FindingExecutionState:
+        """`R-151g`: set or clear the designer's execution status of an accepted finding. Keyed."""
+        ...
+
     def finding_exists(self, *, finding_uid: str) -> bool:
         """Is this a published finding? `D-74`.
 

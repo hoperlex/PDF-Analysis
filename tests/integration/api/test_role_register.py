@@ -80,6 +80,7 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "renameDocument": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/title"),
     "setDocumentTags": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/tags"),
     "listDocumentTags": ("GET", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/document-tags"),
+    "setFindingExecutionStatus": ("PUT", "/findings/fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/execution-status"),
     # `W54-SEAL-01`. The worker registry (R-80 any-role read, administrator intake).
     "listWorkers": ("GET", "/execution/workers"),
     "setWorkerIntake": ("PUT", "/execution/workers/wrk_01M2545JSD15ETSNNV904X991T/intake"),
@@ -489,6 +490,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "renameDocument": _ANY_ROLE,
     "setDocumentTags": _ANY_ROLE,
     "listDocumentTags": _READ,
+    "setFindingExecutionStatus": _EXPERT,
     "listExecutionJournal": _ANY_ROLE,
     "listWorkers": _ANY_ROLE,
     # `EXEC-SEAL-01`: connections, probes and routes are product reads.

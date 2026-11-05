@@ -28,7 +28,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
 import type { TableColumn } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
+import { EXECUTION_STATUS_LABELS, SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
 import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
@@ -401,6 +401,12 @@ export function FindingList({
                           severity={finding.decided_severity}
                           title="Важность, решённая экспертом"
                         />
+                      </span>
+                    )}
+                    {finding.execution_status === undefined ? null : (
+                      // `R-151g`: the original's «Принято · Учтено» -- the designer's execution of an accepted finding.
+                      <span className={styles.execution} data-execution-status={finding.execution_status}>
+                        {EXECUTION_STATUS_LABELS[finding.execution_status]}
                       </span>
                     )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>

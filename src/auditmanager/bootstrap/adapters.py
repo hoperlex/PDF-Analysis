@@ -181,6 +181,20 @@ def _queue_cursor(raw: str | None, scope: tuple[str, str, str] | None = None) ->
     return QueuePosition(rank, priority, created_at, job_id)
 
 
+def _with_execution_status(session: Session, views: Sequence[Any]) -> list[Any]:
+    """`R-151g`: each finding with its designer execution status, read once for the whole list."""
+    from dataclasses import replace
+
+    from auditmanager.decisions.execution_status import execution_statuses
+
+    known = execution_statuses(session, [view.finding_uid for view in views])
+    return [
+        replace(view, execution_status=known[view.finding_uid][0], execution_status_at=known[view.finding_uid][1])
+        if view.finding_uid in known else view
+        for view in views
+    ]
+
+
 def _starter_labels(session: Session, rows: Sequence[Any]) -> dict[str, str]:
     """`R-151v`: the display label of each account that started a listed run, each read once."""
     from auditmanager.access.public import AccountRepository
@@ -2295,7 +2309,7 @@ class FindingAdapter(_SessionHolder):
                 views = [v for v in views if v.category == category]
             if verdict is not None:
                 views = [v for v in views if v.current_verdict == verdict]
-            return tuple(views)
+            return tuple(_with_execution_status(session, views))
 
         return self._read(work)
 
@@ -2325,15 +2339,30 @@ class FindingAdapter(_SessionHolder):
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_finding_view(
+                finding=_with_execution_status(session, [_finding_view(
                     row, evidence, verdict, matches[0].merged,
                     _v3_beta_citations(session, members),
-                ),
+                )])[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )
 
         return self._read(work)
+
+    def set_execution_status(
+        self, *, finding_uid: str, status: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.FindingExecutionState:
+        from auditmanager.decisions.execution_status import execution_statuses, set_execution_status
+
+        def write(session: Session) -> models.FindingExecutionState:
+            set_execution_status(
+                session, finding_uid=finding_uid, status=status, actor_uid=user_uid, idempotency_key=idempotency_key,
+            )
+            known = execution_statuses(session, [finding_uid]).get(finding_uid)
+            if known is None:
+                return models.FindingExecutionState(finding_uid=finding_uid)
+            return models.FindingExecutionState(finding_uid=finding_uid, status=known[0], set_at=known[1])
+        return self._write(write)
 
     def finding_exists(self, *, finding_uid: str) -> bool:
         """`D-74`. The question the decision ledger has always asked, offered to the router.

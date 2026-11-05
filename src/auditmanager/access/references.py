@@ -123,6 +123,12 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "this account changed a vendor list (W60-PRICE-LIST-01)",
     ),
     AccountReference(
+        "finding_execution_status",
+        "set_by_user_uid",
+        "RESTRICT",
+        "this account set a finding's execution status (R-151g, migration 0054)",
+    ),
+    AccountReference(
         "document_tag",
         "created_by_user_uid",
         "RESTRICT",

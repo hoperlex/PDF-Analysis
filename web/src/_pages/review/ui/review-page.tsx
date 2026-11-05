@@ -53,6 +53,7 @@ import { useExportRun } from '@/features/export-run';
 import type { DecisionIntent } from '@/widgets/decision-panel';
 import { DocumentContext } from '@/widgets/document-context';
 import { useRecordVerdict } from '@/features/record-verdict';
+import { ExecutionStatusControl } from '@/features/set-execution-status';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
 import { firstDeclaredPage } from '@/entities/finding-observation';
@@ -319,6 +320,15 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                   })
                 }
               /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
+              {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
+              {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
+                <ExecutionStatusControl
+                  key={detail.finding_uid}
+                  findingUid={detail.finding_uid as FindingUid}
+                  runId={runId}
+                  status={detail.execution_status ?? null}
+                />
+              ) : null}
 
               <DecisionHistory
                 events={historyQuery.data?.data.items ?? []}

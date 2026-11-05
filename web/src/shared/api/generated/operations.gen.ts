@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.23.0 (OpenAPI 3.1.0)
- *   sha256 9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7
+ *   AuditManager PC-01 API 1.24.0 (OpenAPI 3.1.0)
+ *   sha256 fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -157,6 +157,7 @@ import type {
   FailExecutorTaskRequest,
   FindingCategory,
   FindingDetail,
+  FindingExecutionState,
   FindingPage,
   FindingUid,
   GenerateComparisonSummaryRequest,
@@ -239,6 +240,7 @@ import type {
   SetExecutorRoutingModeRequest,
   SetExecutorRoutingRuleRequest,
   SetExecutorSecretRequest,
+  SetFindingExecutionStatusRequest,
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
@@ -557,6 +559,7 @@ export const OPERATION_IDS = [
   'setExecutorRoutingMode',
   'setExecutorRoutingRule',
   'setExecutorSecret',
+  'setFindingExecutionStatus',
   'setGlobalVendorList',
   'setJobPriority',
   'setProjectVendorList',
@@ -6668,6 +6671,36 @@ export type SetExecutorSecretInput = {
 export type SetExecutorSecretResult = ExecutorSecretMetadata;
 
 // ------------------------------------------------------------------------------------
+// setFindingExecutionStatus - PUT /findings/{finding_uid}/execution-status
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Finding Execution Status
+ *
+ * `UI-PARITY-P0I` (contract 1.24.0, ruling `R-151g`): set, or clear with `null`, what the designer did with an accepted finding (the original's SU-10 labels, entered by hand; no registry import). Setting a status on a finding whose current verdict is not `accepted` is `422 validation_failed` (`constraint: finding_not_accepted`); clearing never is. It is not an expert decision: the verdict, the decision journal and every counter are unchanged. The same status again changes nothing; a change appends `finding.execution_status_set` to the audit trail. `expert` only.
+ */
+export type SetFindingExecutionStatusInput = {
+  /** Path parameters, substituted into `/findings/{finding_uid}/execution-status`. */
+  path: {
+    finding_uid: FindingUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetFindingExecutionStatusRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setFindingExecutionStatus` (`application/json`, HTTP 200). */
+export type SetFindingExecutionStatusResult = FindingExecutionState;
+
+// ------------------------------------------------------------------------------------
 // setGlobalVendorList - PUT /vendor-lists/{section_code}
 // ------------------------------------------------------------------------------------
 
@@ -11210,6 +11243,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  setFindingExecutionStatus: {
+    operationId: 'setFindingExecutionStatus',
+    method: 'PUT',
+    path: '/findings/{finding_uid}/execution-status',
+    pathParams: ['finding_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['findings'],
   },
   setGlobalVendorList: {
     operationId: 'setGlobalVendorList',

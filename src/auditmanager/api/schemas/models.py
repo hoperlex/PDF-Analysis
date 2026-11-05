@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.23.0"]
+    contract_version: Literal["1.24.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1797,6 +1797,30 @@ class SetDocumentArchivedRequest(_Object):
     archived: bool
 
 
+class FindingExecutionStatus(str, enum.Enum):
+    """`R-151g` (contract 1.24.0): what the designer did with an accepted finding, the original's SU-10 labels:
+    ``taken_into_account`` «Учтено», ``amended`` «Внесено», ``declined`` «Отклонено», ``agreed`` «По согласованию»."""
+
+    TAKEN_INTO_ACCOUNT = "taken_into_account"
+    AMENDED = "amended"
+    DECLINED = "declined"
+    AGREED = "agreed"
+
+
+class SetFindingExecutionStatusRequest(_Object):
+    """`R-151g`: the new execution status, or ``null`` to clear it."""
+
+    status: FindingExecutionStatus | None
+
+
+class FindingExecutionState(_Object):
+    """`R-151g`: a finding's execution status after the command; ``status`` and ``set_at`` absent when it has none."""
+
+    finding_uid: FindingUid
+    status: FindingExecutionStatus = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    set_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
 class SetDocumentTagsRequest(_Object):
     """`R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all."""
 
@@ -2141,6 +2165,10 @@ class Finding(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     decided_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151g` (contract 1.24.0): the designer's execution status of an accepted finding, and when it was set.
+    execution_status: FindingExecutionStatus = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    execution_status_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
@@ -2174,6 +2202,10 @@ class FindingDetail(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     decided_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151g` (contract 1.24.0): as on ``Finding``.
+    execution_status: FindingExecutionStatus = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    execution_status_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)

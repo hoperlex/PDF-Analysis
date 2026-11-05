@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 254,
+    "path_count": 255,
     "operations": [
       [
         "DELETE",
@@ -1370,6 +1370,11 @@
       ],
       [
         "PUT",
+        "/findings/{finding_uid}/execution-status",
+        "setFindingExecutionStatus"
+      ],
+      [
+        "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
       ],
@@ -1772,6 +1777,8 @@
       "FindingCategory",
       "FindingComparison",
       "FindingDetail",
+      "FindingExecutionState",
+      "FindingExecutionStatus",
       "FindingMatchProposal",
       "FindingObservation",
       "FindingObservationId",
@@ -1944,6 +1951,7 @@
       "SetExecutorRoutingModeRequest",
       "SetExecutorRoutingRuleRequest",
       "SetExecutorSecretRequest",
+      "SetFindingExecutionStatusRequest",
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
       "SetProjectVendorListRequest",
@@ -2101,6 +2109,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0053_document_tags",
-  "contract_version": "1.23.0"
+  "migration_head": "0054_finding_execution_status",
+  "contract_version": "1.24.0"
 }

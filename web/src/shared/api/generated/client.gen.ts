@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.23.0 (OpenAPI 3.1.0)
- *   sha256 9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7
+ *   AuditManager PC-01 API 1.24.0 (OpenAPI 3.1.0)
+ *   sha256 fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -492,6 +492,8 @@ import type {
   SetExecutorRoutingRuleResult,
   SetExecutorSecretInput,
   SetExecutorSecretResult,
+  SetFindingExecutionStatusInput,
+  SetFindingExecutionStatusResult,
   SetGlobalVendorListInput,
   SetGlobalVendorListResult,
   SetJobPriorityInput,
@@ -3430,6 +3432,18 @@ export function setExecutorSecret(
 }
 
 /**
+ * Set Finding Execution Status
+ *
+ * `PUT /findings/{finding_uid}/execution-status` - a write; carries a required Idempotency-Key.
+ */
+export function setFindingExecutionStatus(
+  input: SetFindingExecutionStatusInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetFindingExecutionStatusResult>> {
+  return request<SetFindingExecutionStatusResult>(OPERATIONS.setFindingExecutionStatus, input, options);
+}
+
+/**
  * Set Global Vendor List
  *
  * `PUT /vendor-lists/{section_code}`.
@@ -4211,6 +4225,7 @@ export const apiClient = {
   setExecutorRoutingMode,
   setExecutorRoutingRule,
   setExecutorSecret,
+  setFindingExecutionStatus,
   setGlobalVendorList,
   setJobPriority,
   setProjectVendorList,

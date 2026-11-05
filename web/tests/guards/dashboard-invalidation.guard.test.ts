@@ -172,6 +172,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/start-run/model/use-start-run.ts': true,
   // `R-151a`: archiving or renaming a document moves the dashboard's documents and sections.
   'src/features/manage-document/model/use-manage-document.ts': true,
+  // `R-151g`: the execution status is not a decision and moves no dashboard figure.
+  'src/features/set-execution-status/model/use-set-execution-status.ts': false,
   // Cost preflights are POST reads. They create no Run/job or dashboard spend.
   'src/features/start-run/model/use-run-cost-approval.ts': false,
   // `AR-V3-BETA-PACK-STATUS-WEB-01`: an accepted start queues six runs at once, so

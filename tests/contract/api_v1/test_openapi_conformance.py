@@ -588,7 +588,8 @@ class TestN1ComponentReferenceResolution:
         # unknown `project_uid` filter of `getSectionSpecification` is `404` too).
         # `UI-PARITY-P0G` adds two: `setDocumentArchived` and `renameDocument` address a document by identity.
         # `UI-PARITY-P0H` adds two: `setDocumentTags` and `listDocumentTags` address a document or a project.
-        assert len(report) == 213, report
+        # `UI-PARITY-P0I` adds one: `setFindingExecutionStatus` addresses a finding.
+        assert len(report) == 214, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

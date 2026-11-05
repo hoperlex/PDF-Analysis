@@ -85,3 +85,13 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
 }
+
+/* `R-151g`: the designer's execution status of an accepted finding, beside its verdict. */
+.execution {
+  justify-self: start;
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-ok);
+  border-radius: var(--am-radius-pill);
+  color: var(--am-ok);
+  font-size: var(--am-text-xs);
+}

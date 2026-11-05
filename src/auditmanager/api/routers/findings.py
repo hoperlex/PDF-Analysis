@@ -14,7 +14,9 @@ from auditmanager.api.routers.declarations import (
     envelope_responses,
     success,
 )
+from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import FindingPort, RunPort
+from auditmanager.api.security import CurrentSubject
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate
@@ -101,6 +103,30 @@ def build_finding_routes(
     def get_finding(finding_uid: Annotated[models.FindingUid, Path()]) -> WireResponse:
         view = findings.get_finding(finding_uid=finding_uid)
         return json_response(200, encode_json(finding_detail_body(view)))
+
+    @router.put(
+        "/findings/{finding_uid}/execution-status",
+        operation_id="setFindingExecutionStatus",
+        tags=["findings"],
+        status_code=200,
+        response_model=models.FindingExecutionState,
+        responses={
+            **success(200, "The finding's execution status after the command."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def set_execution_status(
+        finding_uid: Annotated[models.FindingUid, Path()],
+        body: models.SetFindingExecutionStatusRequest,
+        idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
+    ) -> WireResponse:
+        # `R-151g`: what the designer did with an accepted remark; not an expert decision.
+        state = findings.set_execution_status(
+            finding_uid=finding_uid, status=None if body.status is None else body.status.value,
+            user_uid=subject.user_uid, idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(state.model_dump(mode="json", exclude_none=True)))
 
 
 

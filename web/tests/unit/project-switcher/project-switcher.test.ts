@@ -79,7 +79,7 @@ function at(pathname: string | null, search = ''): SwitcherAddress {
 
 function apiError(status: number, code: ErrorEnvelope['error_code'], retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.23.0',
+    contract_version: '1.24.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-switcher-1',

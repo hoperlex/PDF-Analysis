@@ -11,7 +11,17 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.23.0` (`UI-PARITY-P0H`)
+## Current contract `1.24.0` (`UI-PARITY-P0I`)
+
+Slice for ruling `R-151g`: the designer's execution status of an accepted finding, our own instead of the original's
+SU-10 registry labels. `setFindingExecutionStatus` (`PUT /findings/{finding_uid}/execution-status`, keyed, `expert` only,
+body `SetFindingExecutionStatusRequest {status}` with `FindingExecutionStatus` `taken_into_account` | `amended` | `declined` |
+`agreed` or `null` to clear) answers `FindingExecutionState`; setting it on a finding not accepted is `422`
+(`finding_not_accepted`). `Finding` and `FindingDetail` gain the optional `execution_status` and `execution_status_at`. It is
+not an expert decision. Migration `0054_finding_execution_status`. No error code.
+The API now has 255 paths, 283 operations and 683 schemas; migration head `0054`. The domain catalogs are at candidate revision 42.
+
+## Contract `1.23.0` (`UI-PARITY-P0H`, historical)
 
 Slice for ruling `R-151e`: free tags on a document, and a filter by tag (the original's folders are not built: no order,
 no drag, no group entity). `setDocumentTags` (`PUT /projects/{project_uid}/documents/{document_uid}/tags`, keyed, body
@@ -19,7 +29,7 @@ no drag, no group entity). `setDocumentTags` (`PUT /projects/{project_uid}/docum
 (`GET /projects/{project_uid}/document-tags`, `DocumentTagList` of `DocumentTagCount {tag, document_count}`) is the project's
 catalogue without archived documents; `listDocuments` takes the optional `tag` filter (case-insensitive) and `DocumentVersion`
 gains the optional `tags`. Migration `0053_document_tags` adds `document_tag`. No error code.
-The API now has 254 paths, 282 operations and 680 schemas; migration head `0053`. The domain catalogs are at candidate revision 41.
+The API then had 254 paths, 282 operations and 680 schemas; migration head `0053`. The domain catalogs were at candidate revision 41.
 
 ## Contract `1.22.0` (`UI-PARITY-P0G`, historical)
 

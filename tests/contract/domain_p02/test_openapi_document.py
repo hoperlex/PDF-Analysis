@@ -116,6 +116,8 @@ REQUIRED_OPERATIONS = {
     # `UI-PARITY-P0H`, `R-151e`. Free tags on a document and the project's catalogue.
     "setDocumentTags",
     "listDocumentTags",
+    # `UI-PARITY-P0I`, `R-151g`. The designer's execution status of an accepted finding.
+    "setFindingExecutionStatus",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",
@@ -415,6 +417,7 @@ WRITE_OPERATIONS = {
     "setDocumentArchived",
     "renameDocument",
     "setDocumentTags",
+    "setFindingExecutionStatus",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
     # `COMPARE-PERSISTED-SUMMARY-01`. Each appends a row of the sheet-link history, so both are keyed.

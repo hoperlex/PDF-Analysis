@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-282 operations, sealed. `A5` generates the typed client from this document; `B6`
+283 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,9 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0I` (contract `1.24.0`, migration `0054_finding_execution_status`) adds the designer's execution status of an
+accepted finding (`R-151g`): `setFindingExecutionStatus` (keyed, `expert`), `Finding.execution_status`. Not a decision.
+
 `UI-PARITY-P0H` (contract `1.23.0`, migration `0053_document_tags`) adds free tags on a document (`R-151e`):
 `setDocumentTags` (keyed, `expert` or `admin`) and the catalogue `listDocumentTags` (a product read); `listDocuments` filters by
 `tag`; `DocumentVersion.tags`.
@@ -1088,6 +1091,7 @@ could.
 | `renameDocument` | `PUT /projects/{project_uid}/documents/{document_uid}/title` |
 | `setDocumentTags` | `PUT /projects/{project_uid}/documents/{document_uid}/tags` |
 | `listDocumentTags` | `GET /projects/{project_uid}/document-tags` |
+| `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -1368,7 +1372,7 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`,
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,

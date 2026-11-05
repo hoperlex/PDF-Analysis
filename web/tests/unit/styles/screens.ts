@@ -70,6 +70,7 @@ import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparis
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { BatchStartPanelView } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
+import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ProjectSections } from '@/widgets/project-sections';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
@@ -169,7 +170,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.23.0',
+    contract_version: '1.24.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1182,6 +1183,17 @@ export function screens(): Screen[] {
       }),
     ),
   );
+  // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
+  add('FindingList with an execution status', render(createElement(FindingList, {
+    groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
+      ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const }
+      : finding)),
+    selectedFindingUid: null,
+    onSelect: noop,
+  })));
+  add('ExecutionStatusControl with a refusal', render(createElement(ExecutionStatusControlView, {
+    status: 'taken_into_account', busy: false, error: 'Статус ставится только принятой находке.', onChange: noop,
+  })));
   // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
   add(
     'FindingList with row actions, recorded and refused',

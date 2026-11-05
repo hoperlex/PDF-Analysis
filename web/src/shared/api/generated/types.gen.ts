@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.23.0 (OpenAPI 3.1.0)
- *   sha256 9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7
+ *   AuditManager PC-01 API 1.24.0 (OpenAPI 3.1.0)
+ *   sha256 fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.23.0';
+export const CONTRACT_VERSION = '1.24.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7';
+export const CONTRACT_DIGEST = 'fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -378,6 +378,8 @@ export const SCHEMA_NAMES = [
   'FindingCategory',
   'FindingComparison',
   'FindingDetail',
+  'FindingExecutionState',
+  'FindingExecutionStatus',
   'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
@@ -550,6 +552,7 @@ export const SCHEMA_NAMES = [
   'SetExecutorRoutingModeRequest',
   'SetExecutorRoutingRuleRequest',
   'SetExecutorSecretRequest',
+  'SetFindingExecutionStatusRequest',
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
@@ -3859,7 +3862,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.23.0";
+  contract_version: "1.24.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4645,6 +4648,9 @@ export type Finding = {
   current_verdict: Verdict;
   decided_severity?: Severity;
   decision_recorded_at?: string | null;
+  execution_status?: FindingExecutionStatus;
+  /** `R-151g`: when the execution status was set. */
+  execution_status_at?: string;
   finding_uid: FindingUid;
   latest_decision_id?: DecisionId | null;
   merged_observations?: Array<FindingObservation>;
@@ -4695,6 +4701,9 @@ export type FindingDetail = {
   decided_severity?: Severity;
   decision_event_count?: number;
   decision_recorded_at?: string | null;
+  execution_status?: FindingExecutionStatus;
+  /** `R-151g`: when the execution status was set. */
+  execution_status_at?: string;
   finding_uid: FindingUid;
   /** The comment of the most recent event carrying one, whatever its type. */
   latest_comment?: string | null;
@@ -4711,6 +4720,24 @@ export type FindingDetail = {
   stated_value?: string;
   version_uid: VersionUid;
 };
+
+/** `R-151g`: a finding's execution status after the command; `status` and `set_at` are absent when it has none. */
+export type FindingExecutionState = {
+  finding_uid: FindingUid;
+  set_at?: string;
+  status?: FindingExecutionStatus;
+};
+
+/** `R-151g` (contract 1.24.0): what the designer did with an accepted finding, the original's SU-10 labels: `taken_into_account` «Учтено», `amended` «Внесено», `declined` «Отклонено», `agreed` «По согласованию». Not an expert decision. */
+export const FINDING_EXECUTION_STATUS_VALUES = [
+  'taken_into_account',
+  'amended',
+  'declined',
+  'agreed',
+] as const;
+
+/** FindingExecutionStatus - the closed value set above. */
+export type FindingExecutionStatus = (typeof FINDING_EXECUTION_STATUS_VALUES)[number];
 
 /** A proposed label for a finding of either run; never a decision or a carryover. */
 export type FindingMatchProposal = {
@@ -6442,6 +6469,11 @@ export type SetExecutorRoutingRuleRequest = {
 export type SetExecutorSecretRequest = {
   purpose: ExecutorSecretPurpose;
   value: string;
+};
+
+/** `R-151g`: the new execution status, or `null` to clear it. */
+export type SetFindingExecutionStatusRequest = {
+  status: FindingExecutionStatus | null;
 };
 
 /**
