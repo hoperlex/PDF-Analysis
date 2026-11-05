@@ -22,7 +22,7 @@ import { useProjectList } from '@/entities/project';
 
 import styles from './document-context.module.css';
 
-export type ContextLevel = 'document' | 'version' | 'run' | 'review';
+export type ContextLevel = 'section' | 'document' | 'version' | 'run' | 'review';
 
 /** Identities as the route gave them (already shape-checked by the page). */
 export interface DocumentContextProps {
@@ -31,6 +31,8 @@ export interface DocumentContextProps {
   readonly documentUid?: string | undefined;
   readonly versionUid?: string | undefined;
   readonly runId?: string | undefined;
+  /** `R-151l`: on the section page, the section's worded label. */
+  readonly sectionLabel?: string | undefined;
 }
 
 export interface ContextStep {
@@ -47,6 +49,8 @@ export interface ContextFacts {
   readonly versionUid?: string | undefined;
   readonly versionOrdinal?: number | undefined;
   readonly runId?: string | undefined;
+  /** `R-151l`: the section page's own step, its label already worded. */
+  readonly sectionLabel?: string | undefined;
 }
 
 const ORDER: readonly ContextLevel[] = ['document', 'version', 'run', 'review'];
@@ -58,6 +62,10 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
     { key: 'projects', label: 'Проекты', href: routes.projects() },
     { key: 'project', label: facts.projectName ?? 'Проект', href: routes.project(facts.projectUid) },
   ];
+  if (current === 'section') {
+    steps.push({ key: 'section', label: facts.sectionLabel ?? 'Раздел', href: null });
+    return steps;
+  }
   if (facts.documentUid !== undefined) {
     steps.push({
       key: 'document',
@@ -113,7 +121,7 @@ function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly proje
   );
 }
 
-export function DocumentContext({ projectUid, current, documentUid, versionUid, runId }: DocumentContextProps) {
+export function DocumentContext({ projectUid, current, documentUid, versionUid, runId, sectionLabel }: DocumentContextProps) {
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
   const version = useDocumentVersion(knownVersion ?? null);
@@ -128,6 +136,7 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
       versionUid: knownVersion,
       versionOrdinal: version.data?.version_ordinal,
       runId,
+      sectionLabel,
     },
     current,
   );

@@ -126,7 +126,7 @@ export function Dashboard({ projectUid = null, allProjectsHref = '/dashboard' }:
       <div className={styles.grid} data-widget="dashboard">
         <section className={`${styles.panel} ${styles.sections}`} aria-labelledby="dashboard-sections-heading">
           <h2 id="dashboard-sections-heading">Разделы проекта</h2>
-          <SectionsPanel rows={data.section_breakdown} />
+          <SectionsPanel rows={data.section_breakdown} projectUid={projectUid} />
         </section>
         <section className={styles.panel} aria-labelledby="dashboard-documents-heading">
           <h2 id="dashboard-documents-heading">Документы по проектам</h2>

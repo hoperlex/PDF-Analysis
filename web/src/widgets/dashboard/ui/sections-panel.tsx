@@ -54,6 +54,11 @@ import styles from './sections-panel.module.css';
 
 export interface SectionsPanelProps {
   readonly rows: readonly SectionDocumentCount[];
+  /**
+   * `R-151l`: the project the dashboard follows (`?project=`), or `null` for «Все проекты». With a project, a
+   * chosen section opens that project's section page; across all projects there is no one section page to open.
+   */
+  readonly projectUid?: string | null | undefined;
 }
 
 
@@ -72,7 +77,7 @@ function SectionMetrics({ documents, audit }: { readonly documents: number; read
   );
 }
 
-export function SectionsPanel({ rows }: SectionsPanelProps) {
+export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
   const [selected, setSelected] = useState<ProjectSectionCode | null>(null);
   const result = summarizeSectionBreakdown(rows);
 
@@ -130,7 +135,11 @@ export function SectionsPanel({ rows }: SectionsPanelProps) {
         <div className={styles.selection} data-selected-section={selected}>
           <strong>{PROJECT_SECTIONS.find((section) => section.code === selected)?.name}</strong>
           <span>Документов в разделе: {summary.byCode[selected]}.</span>
-          <Link href={routes.projects()}>Открыть проекты</Link>
+          {projectUid === null ? (
+            <Link href={routes.projects()}>Открыть проекты</Link>
+          ) : (
+            <Link href={routes.projectSection(projectUid, selected)}>Открыть раздел</Link>
+          )}
         </div>
       )}
     </div>

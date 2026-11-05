@@ -25,11 +25,12 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 import type { DocumentVersion, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
-import { VersionRow, useDocumentList } from '@/entities/document-version';
+import { DocumentCardGrid, useDocumentList } from '@/entities/document-version';
 
 import { projectStructure } from '../model/structure';
 import styles from './project-sections.module.css';
@@ -51,24 +52,17 @@ function DocumentRows({
    */
   readonly toClassification?: boolean;
 }) {
+  // `R-151s` (UI-A-45): the original's card grid, on our tokens; each card is one document's current version.
   return (
-    <ul className="am-rows">
-      {documents.map((version) => (
-        <VersionRow
-          key={version.document_uid}
-          version={version}
-          href={
-            toClassification
-              ? routes.versionClassification(projectUid, version.version_uid)
-              : routes.version(projectUid, version.version_uid)
-          }
-          secondary={{
-            href: routes.document(projectUid, version.document_uid),
-            label: 'Все версии документа',
-          }}
-        />
-      ))}
-    </ul>
+    <DocumentCardGrid
+      documents={documents}
+      addresses={(version) => ({
+        href: toClassification
+          ? routes.versionClassification(projectUid, version.version_uid)
+          : routes.version(projectUid, version.version_uid),
+        documentHref: routes.document(projectUid, version.document_uid),
+      })}
+    />
   );
 }
 
@@ -118,6 +112,10 @@ export function ProjectStructureView({ projectUid, items, hasNextPage }: Project
               </summary>
               {documents.length === 0 ? null : (
                 <div className={styles.cardBody}>
+                  {/* `R-151l`: the section's own page lists every document of the section, not one page of the project. */}
+                  <p data-section-page-link={section.code}>
+                    <Link href={routes.projectSection(projectUid, section.code)}>Открыть раздел</Link>
+                  </p>
                   <DocumentRows projectUid={projectUid} documents={documents} />
                 </div>
               )}

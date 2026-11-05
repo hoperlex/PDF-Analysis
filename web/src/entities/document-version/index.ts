@@ -117,3 +117,7 @@ export type { ClassificationBadgesProps } from './ui/classification-badges';
 export { ClassificationBadges } from './ui/classification-badges';
 export type { ClassificationHistoryProps } from './ui/classification-history';
 export { ClassificationHistory } from './ui/classification-history';
+
+// `R-151s` (UI-A-45): documents as a grid of cards.
+export type { DocumentCardAddresses, DocumentCardGridProps } from './ui/document-cards';
+export { DocumentCardGrid, documentCardTitle } from './ui/document-cards';

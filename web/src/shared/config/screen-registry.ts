@@ -227,6 +227,16 @@ export const SCREEN_REGISTRY = [
     projectScope: 'required',
   },
   {
+    // `R-151l`: the original's section page, in our nouns — one project's documents of one section.
+    address: '/projects/[project_uid]/sections/[section_code]',
+    label: 'Раздел',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: false,
+    projectScope: 'required',
+  },
+  {
     address: '/projects/[project_uid]/documents/[document_uid]',
     label: 'Документ',
     group: 'work',

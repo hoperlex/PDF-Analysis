@@ -70,6 +70,10 @@ export const routes = {
   /** One project: its documents, and the upload that adds one. */
   project: (projectUid: string): string => `/projects/${projectUid}`,
 
+  /** One section of one project: the documents confirmed for it, as cards (`R-151l`, `R-151s`). */
+  projectSection: (projectUid: string, sectionCode: string): string =>
+    `/projects/${projectUid}/sections/${sectionCode}`,
+
   /**
    * One document and its versions.
    *

@@ -112,7 +112,8 @@ describe('the structure as a reader sees it', () => {
   it('links every row to its version and to its document, as the flat list did', () => {
     expect(markup).toContain(`href="/projects/${PROJECT_UID}/versions/${KJ_R.version_uid}"`);
     expect(markup).toContain(`href="/projects/${PROJECT_UID}/documents/${KJ_R.document_uid}"`);
-    expect((markup.match(/Все версии документа/g) ?? []).length).toBe(ITEMS.length);
+    // `R-151s`: each card carries its document's history as «все версии».
+    expect((markup.match(/>все версии</g) ?? []).length).toBe(ITEMS.length);
   });
 
   it('opens an unclassified document at its version’s stage-and-section panel', () => {

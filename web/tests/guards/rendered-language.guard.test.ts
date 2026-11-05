@@ -1204,6 +1204,8 @@ const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
   project: queryKeys.projects.detail(PROJECT_UID),
   documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
+  // `R-151l`: the section page's own read, `listDocuments` with `section_code` (the route seeds `AR`).
+  sectionDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR'),
   versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
   version: queryKeys.versions.detail(VERSION_UID),
   // `W59-SECTION-UI-01`: the version screen's stage-and-section panel.
@@ -1283,6 +1285,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.projects, { items: [project()], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.sectionDocuments, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.version, version());
   // Unconfirmed, so the expert's seed draws the form and the reader's seed its sentence.
@@ -1442,6 +1445,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.projects, { items: [], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [], page });
+  client.setQueryData(KEYS.sectionDocuments, { items: [], page });
   client.setQueryData(KEYS.versions, { items: [], page });
   client.setQueryData(KEYS.version, version());
   client.setQueryData(KEYS.runs, { items: [], page });

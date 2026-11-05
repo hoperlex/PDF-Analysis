@@ -169,9 +169,9 @@ describe('the registry is the route tree: every page has a row and every row a p
   it('reads a tree and a registry of a credible size', () => {
     // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
     // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
-    // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31.
-    expect(routeAddresses().length).toBe(31);
-    expect(REGISTRY.length).toBe(31);
+    // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32.
+    expect(routeAddresses().length).toBe(32);
+    expect(REGISTRY.length).toBe(32);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -380,6 +380,7 @@ describe('R-150c: every row states how the screen relates to the project', () =>
   it('required: exactly the screens with the project in the path -- everything under /projects/[project_uid]', () => {
     expect(scopeOf(REGISTRY, 'required')).toEqual([
       '/projects/[project_uid]',
+      '/projects/[project_uid]/sections/[section_code]',
       '/projects/[project_uid]/documents/[document_uid]',
       '/projects/[project_uid]/versions/[version_uid]',
       '/projects/[project_uid]/versions/[version_uid]/comparison',

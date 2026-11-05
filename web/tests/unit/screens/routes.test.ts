@@ -657,6 +657,8 @@ describe('every screen address is built once and matches a route file on disk', 
       workers: routes.workers(),
       projects: routes.projects(),
       project: routes.project(PROJECT_UID),
+      // `R-151l`: a confirmed section of the project structure links its own page (the census confirms `GP`).
+      projectSection: routes.projectSection(PROJECT_UID, 'GP'),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),
       version: routes.version(PROJECT_UID, VERSION_UID),
       // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
