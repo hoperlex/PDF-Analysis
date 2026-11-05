@@ -25,14 +25,19 @@ import { formatInstant } from '@/shared/lib';
 import { formatBytes } from '../model/upload-envelope';
 import { COMPARISON_ONLY_DETAIL, isComparisonOnly } from '../model/upload-kind';
 import { ComparisonOnlyMark } from './comparison-only-mark';
+import styles from './version-panel.module.css';
 
 export interface VersionPanelProps {
   readonly version: DocumentVersion;
 }
 
-function Field({ label, children }: { readonly label: string; readonly children: React.ReactNode }) {
+function Field({ label, children, wide = false }: {
+  readonly label: string;
+  readonly children: React.ReactNode;
+  readonly wide?: boolean;
+}) {
   return (
-    <p>
+    <p className={wide ? `${styles.field} ${styles.wide}` : styles.field}>
       <strong>{label}</strong> {children}
     </p>
   );
@@ -53,29 +58,32 @@ export function VersionPanel({ version }: VersionPanelProps) {
             <p data-comparison-only-detail="">{COMPARISON_ONLY_DETAIL}</p>
           </>
         ) : null}
-        <Field label="Версия">
-          <code>{version.version_uid}</code>
-        </Field>
-        <Field label="Документ">
-          <code>{version.document_uid}</code>
-        </Field>
-        <Field label="Порядковый номер">
-          {version.version_ordinal} <em>(только порядок отображения, не идентификатор)</em>
-        </Field>
-        <Field label="Тип содержимого">{version.media_type}</Field>
-        <Field label="Страниц">{version.page_count}</Field>
-        <Field label="Размер">
-          {formatBytes(version.byte_size)} ({version.byte_size} байт)
-        </Field>
-        <Field label="SHA-256">
-          <code>{version.sha256}</code>
-        </Field>
-        <Field label="Опубликовано">{formatInstant(version.published_at)}</Field>
-        {version.source_filename !== undefined && version.source_filename !== null ? (
-          <Field label="Загружено как">
-            {version.source_filename} <em>(для отображения, не идентификатор)</em>
+        {/* The facts as a compact grid, as the original's document card states them; long values take the row. */}
+        <div className={styles.fields}>
+          <Field label="Версия">
+            <code>{version.version_uid}</code>
           </Field>
-        ) : null}
+          <Field label="Документ">
+            <code>{version.document_uid}</code>
+          </Field>
+          <Field label="Порядковый номер">
+            {version.version_ordinal} <em>(только порядок отображения, не идентификатор)</em>
+          </Field>
+          <Field label="Тип содержимого">{version.media_type}</Field>
+          <Field label="Страниц">{version.page_count}</Field>
+          <Field label="Размер">
+            {formatBytes(version.byte_size)} ({version.byte_size} байт)
+          </Field>
+          <Field label="SHA-256" wide>
+            <code>{version.sha256}</code>
+          </Field>
+          <Field label="Опубликовано">{formatInstant(version.published_at)}</Field>
+          {version.source_filename !== undefined && version.source_filename !== null ? (
+            <Field label="Загружено как" wide>
+              {version.source_filename} <em>(для отображения, не идентификатор)</em>
+            </Field>
+          ) : null}
+        </div>
         <p>
           <strong>Входной манифест</strong>
         </p>

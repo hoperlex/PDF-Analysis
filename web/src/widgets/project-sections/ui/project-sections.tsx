@@ -310,7 +310,7 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
               aria-pressed={tag === item.tag}
               onClick={() => { setTag(item.tag); setCursor(undefined); }}
             >
-              {item.tag} {item.document_count}
+              {item.tag} <span className={styles.tagCount}>{item.document_count}</span>
             </button>
           ))}
         </div>

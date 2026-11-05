@@ -1,6 +1,6 @@
 .workspace {
   display: grid;
-  gap: var(--am-gap-lg);
+  gap: var(--am-gap);
   min-width: 0;
 }
 
@@ -40,7 +40,7 @@
 
 .panel {
   min-width: 0;
-  padding: var(--am-gap-lg);
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);

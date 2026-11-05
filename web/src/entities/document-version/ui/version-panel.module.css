@@ -1,0 +1,17 @@
+/* A version's facts as a compact grid of label-value pairs (UI parity, dense layout). Tokens only. */
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.field {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
