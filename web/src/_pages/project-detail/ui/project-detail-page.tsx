@@ -33,8 +33,7 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { DocumentVersion, Role } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
@@ -54,14 +53,33 @@ export interface ProjectDetailPageProps {
 
 type ProjectTab = 'documents' | 'optimisation';
 
+const NO_PARAMS = new URLSearchParams();
+
 const TABS: readonly { readonly tab: ProjectTab; readonly label: string }[] = [
   { tab: 'documents', label: 'Документы' },
   { tab: 'optimisation', label: 'Оптимизация' },
 ];
 
+/**
+ * `UI-A-22`: the tab lives in the address (`?tab=`), so a link, a reload and «Назад» return to the same
+ * tab. An absent or unknown value is the first tab, said plainly by the address once a tab is chosen.
+ */
+export function tabOf(value: string | null): ProjectTab {
+  return TABS.some((entry) => entry.tab === value) ? (value as ProjectTab) : 'documents';
+}
+
 export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageProps) {
   const router = useRouter();
-  const [tab, setTab] = useState<ProjectTab>('documents');
+  // Outside the app router (a static render, a test without its contexts) both hooks answer `null`:
+  // the first tab, and a change of tab written onto the project's own address.
+  const pathname = usePathname() ?? routes.project(projectUid);
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const tab = tabOf(searchParams.get('tab'));
+  const setTab = (next: ProjectTab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', next);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   if (!looksLikeProjectUid(projectUid)) {
     return (
