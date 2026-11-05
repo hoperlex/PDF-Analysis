@@ -32,7 +32,7 @@ export const ROLE_LABELS: Readonly<Record<Role, string>> = {
  * account given the role by the host command is still shown by its label. Turning the switch off
  * again is the rollback.
  */
-export const VIEWER_ROLE_OFFERED = false;
+export const VIEWER_ROLE_OFFERED = true;
 
 /** The roles an administrator's form offers, in the contract's order. */
 export const ASSIGNABLE_ROLES: readonly Role[] = ROLE_VALUES.filter(

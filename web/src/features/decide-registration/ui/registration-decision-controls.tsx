@@ -15,7 +15,7 @@ import type { FormEvent } from 'react';
 
 import type { RegistrationRequest, Role } from '@/shared/api';
 import { ROLE_VALUES } from '@/shared/api';
-import { ASSIGNABLE_ROLES, roleLabels } from '@/entities/account';
+import { ASSIGNABLE_ROLES, roleLabels, rolesCombinationAllowed } from '@/entities/account';
 import { registrationFailure } from '@/entities/registration-request';
 import { useIntentKey } from '@/shared/lib';
 import { ErrorState } from '@/shared/ui';
@@ -26,7 +26,7 @@ import { useDecideRegistration } from '../model/use-decide-registration';
 export function RegistrationDecisionControls({ request }: { readonly request: RegistrationRequest }) {
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
   const [reason, setReason] = useState('');
-  const [localFailure, setLocalFailure] = useState<'roles' | 'reason' | null>(null);
+  const [localFailure, setLocalFailure] = useState<'roles' | 'viewer' | 'reason' | null>(null);
   const [confirmReject, setConfirmReject] = useState<string | null>(null);
   const decision = useDecideRegistration();
   const roles = ROLE_VALUES.filter((role) => selectedRoles.includes(role));
@@ -44,6 +44,7 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
     event.preventDefault();
     const valid = approvedRoles(roles);
     if (valid === null) { setLocalFailure('roles'); return; }
+    if (!rolesCombinationAllowed(valid)) { setLocalFailure('viewer'); return; }
     setLocalFailure(null);
     decision.mutate({ kind: 'approve', requestId: request.request_id, roles: valid, idempotencyKey });
   }
@@ -87,6 +88,7 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
         )}
       </form>
       {localFailure === 'roles' ? <div data-registration-decision-failure="roles"><ErrorState title="Заявка не одобрена" detail="Выберите хотя бы одну роль. Запрос не отправлен." /></div> : null}
+      {localFailure === 'viewer' ? <div data-registration-decision-failure="viewer_exclusive"><ErrorState title="Заявка не одобрена" detail="Роль «Наблюдатель» не сочетается с другими ролями. Запрос не отправлен." /></div> : null}
       {localFailure === 'reason' ? <div data-registration-decision-failure="reason"><ErrorState title="Заявка не отклонена" detail="Причина должна содержать от 1 до 256 символов. Запрос не отправлен." /></div> : null}
       {failure ? <div data-registration-decision-failure={failure.kind}><ErrorState title="Решение не сохранено" detail={failure.detail} correlationId={failure.correlationId} /></div> : null}
       {decision.isSuccess ? <p className="am-note" role="status">Решение сохранено. Список обновляется.</p> : null}

@@ -20,7 +20,7 @@ import type { FormEvent } from 'react';
 import type { Account } from '@/shared/api';
 import { ROLE_VALUES } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { ASSIGNABLE_ROLES, roleLabels } from '@/entities/account';
+import { ASSIGNABLE_ROLES, roleLabels, rolesCombinationAllowed } from '@/entities/account';
 import { userFailure } from '@/entities/user';
 import { ErrorState } from '@/shared/ui';
 
@@ -40,6 +40,7 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const [rolesRefused, setRolesRefused] = useState(false);
 
   async function execute(command: UserCommand): Promise<boolean> {
     try {
@@ -66,6 +67,10 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
     event.preventDefault();
     const selected = new FormData(event.currentTarget).getAll('role');
     const roles = ROLE_VALUES.filter((role) => selected.includes(role));
+    // `R-150e`: «Наблюдатель» is the only role of an account that holds it; the server refuses the
+    // combination as well, so the form asks first and sends nothing it would refuse.
+    if (!rolesCombinationAllowed(roles)) { setRolesRefused(true); return; }
+    setRolesRefused(false);
     void execute({ kind: 'roles', roles });
   }
 
@@ -99,6 +104,7 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
         <h2>Роли</h2>
         {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" name="role" value={role} defaultChecked={account.roles.includes(role)} /> {roleLabels([role])[0]}</label>)}
         <p className="am-form__hint">При изменении ролей все прежние пропуска этой учётной записи отзываются. Пользователю потребуется войти снова.</p>
+        {rolesRefused ? <div data-user-failure="viewer_exclusive"><ErrorState title="Роли не сохранены" detail="Роль «Наблюдатель» не сочетается с другими ролями. Запрос не отправлен." /></div> : null}
         <button className="am-button" type="submit" disabled={manage.isPending}>Сохранить роли</button>
       </form>
 

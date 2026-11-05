@@ -135,9 +135,9 @@ describe('the viewer role (R-150e)', () => {
     expect(rolesCombinationAllowed(['admin', 'viewer'])).toBe(false);
   });
 
-  it('is not offered by the administrator forms until every screen hides its actions', () => {
-    // The switch is the rollback: off, the forms offer the two older roles only.
-    expect(VIEWER_ROLE_OFFERED).toBe(false);
-    expect([...ASSIGNABLE_ROLES]).toEqual(['expert', 'admin']);
+  it('is offered by the administrator forms now that every screen hides its actions (switch on 2026-11-05)', () => {
+    // The switch is the rollback: turned off, the forms offer the two older roles only.
+    expect(VIEWER_ROLE_OFFERED).toBe(true);
+    expect([...ASSIGNABLE_ROLES]).toEqual(['expert', 'admin', 'viewer']);
   });
 });
