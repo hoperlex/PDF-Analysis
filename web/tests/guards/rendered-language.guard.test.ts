@@ -2749,6 +2749,15 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       onPriority: () => {}, onNext: null, onPrevious: () => {},
     }),
   },
+  // `UI-PARITY-QUEUE-A`: a state is chosen in the filter and no job is in it (the choice is page state, not cache).
+  {
+    name: 'execution-queue-filtered-empty',
+    make: () => createElement(ExecutionQueue, {
+      items: [], roles: [], asOf: null, filtered: true,
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
   /*
    * `W54-WORKERS-WEB`. The worker list's branches the «Исполнители» page reaches only from
    * a page the cache states do not hold: a state outside the sealed set, an empty later

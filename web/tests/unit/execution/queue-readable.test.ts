@@ -66,7 +66,7 @@ describe('the row names the work', () => {
 describe('the row says when the job started and ended', () => {
   it('shows a dash for a time the job does not have', () => {
     const markup = rows([item()]);
-    expect(markup).toContain('data-queue-started="">Начат: —</p>');
+    expect(markup).toContain('data-queue-started="true">Начат: —</p>');
     expect(markup).toContain('Завершён: —');
   });
 
