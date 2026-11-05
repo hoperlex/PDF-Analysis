@@ -38,3 +38,4 @@ export { PROJECT_PAGE_LIMIT, useProjectList } from './api/use-project-list';
 
 export type { ProjectRowProps } from './ui/project-row';
 export { ProjectRow } from './ui/project-row';
+export { useAddressProject } from './api/use-address-project';

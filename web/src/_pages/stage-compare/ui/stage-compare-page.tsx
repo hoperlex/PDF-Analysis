@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 
 import type { ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
+import { routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { useMe } from '@/entities/account';
-import { useProjectList } from '@/entities/project';
+import { useAddressProject, useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { StageWorkspace } from './stage-workspace';
 import styles from './stage-compare-page.module.css';
@@ -15,7 +15,10 @@ export function StageComparePage() {
   const projects = useProjectList();
   const me = useMe();
   const product = useProductVersion(true);
-  const [chosen, setChosen] = useState<ProjectUid | null>(null);
+  // `R-150c`: the project follows the header, so it lives in the address.
+  const [addressProject, chooseProject] = useAddressProject(routes.stageComparison());
+  const chosen = addressProject as ProjectUid | null;
+  const setChosen = (next: ProjectUid | null) => chooseProject(next);
   const projectItems = projects.data?.items ?? [];
   const projectUid = chosen ?? (projectItems.length === 1 ? projectItems[0]!.project_uid : null);
   const moduleOn = product.data?.comparison_modules === 'versions,stages';
