@@ -26,7 +26,7 @@ A document counts by its current version only; its result run is the latest run 
 `(created_at, run_id)`; a failed, cancelled or still running run is not a result. A document is `not_run`, `clean` (a result with no
 finding), `awaiting_decision` or `checked`, and `partial` flags a partial result. `no_expert_decision` is `not_run +
 awaiting_decision`.
-The API now has 250 paths, 277 operations and 675 schemas; migration head `0049`. The domain catalogs are at candidate revision 37.
+The API now has 250 paths, 277 operations and 675 schemas; migration head `0050`. The domain catalogs are at candidate revision 37.
 
 ## Contract `1.18.0` (`UI-PARITY-QUEUE-A`, historical)
 

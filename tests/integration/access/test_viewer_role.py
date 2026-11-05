@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.access.accounts import AccountRepository
 from auditmanager.access.models import require_exclusive_viewer
+from auditmanager.access.registrations import RegistrationRepository
 from auditmanager.access.repository import UserRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 
@@ -22,6 +23,7 @@ PASSWORD = "a-long-enough-password"  # noqa: S105 - a test literal
 
 users = UserRepository()
 accounts = AccountRepository()
+registrations = RegistrationRepository()
 
 COMBINED = (
     frozenset({"viewer", "expert"}),
@@ -147,3 +149,34 @@ class TestTheColumnCheck:
                     text("INSERT INTO app_user_role (user_uid, role) VALUES (:u, 'superuser')"),
                     {"u": uid},
                 )
+
+
+class TestTheRegistrationApproval:
+    def _submit(self, session: Session, email: str) -> str:
+        record = registrations.submit(
+            session, login=email, password=PASSWORD, last_name="Петрова", first_name="Анна", middle_name=None
+        )
+        session.commit()
+        return str(record.request_id)
+
+    @pytest.mark.parametrize("roles", COMBINED)
+    def test_a_combination_is_refused_and_the_request_stays_pending(
+        self, session: Session, roles: frozenset[str]
+    ) -> None:
+        request_id = self._submit(session, "new@example.com")
+        with pytest.raises(DomainError) as caught:
+            registrations.approve(session, actor_uid=_seed(session), request_id=request_id, roles=sorted(roles))
+        _assert_viewer_exclusive(caught)
+        session.rollback()
+        state = session.execute(
+            text("SELECT status FROM registration_request WHERE request_id = :r"), {"r": request_id}
+        ).scalar_one()
+        assert state == "pending"  # the status column
+
+    def test_the_viewer_alone_is_granted(self, session: Session) -> None:
+        request_id = self._submit(session, "new@example.com")
+        _, account = registrations.approve(
+            session, actor_uid=_seed(session), request_id=request_id, roles=["viewer"]
+        )
+        session.commit()
+        assert accounts.roles_of(session, str(account.user_uid)) == frozenset({"viewer"})
