@@ -15,6 +15,43 @@ after host verification.
 | `v0.6.0` | `37393a979a430e490843d7f410e9eca9491a4ea1` | `bf03d913bde596a77` (computed from tagged tree) | not measured (stand environment) | `1.0.0-draft.1` | `0021_portal_bundles` | `934705c04a71…` | `30053740f569…` | `W55B-INT-MAIN-PREP-03.md` (R-125 same-SHA gate completion); deploy run `38897018419`, owner-run host verification in `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md`; five live checks waived in `W55B-INT-TAG-01.md` | — (not promoted) |
 | `v0.7.0` — on `origin/main`, **host verification owed**, not tagged | `48c8e34ccd08a58ae61cbd09ecdba49066a5ad46` (the owner's pull request #3) | `bbbab3c0dfb856a39` computed from `git archive` of that SHA (`compute_build_id()`) | not measured (stand environment) | `1.0.0-draft.1` | `0028_classification_corrections` | `934705c04a71…` (builtin AR profile, unchanged since `v0.6.0`) | `30053740f569…` (builtin AR profile, unchanged since `v0.6.0`) | **none on this tree.** The owner merged pull requests #2 and #3 into `main` without a gate (`R-141e`); `NIGHT-1020-GATE-0-7-0-01.md` is an `R-125` completion of an earlier lineage and covers neither the classification correction, the normative references nor the hardening slices; light checks only (`RELEASE-0-7-0-RECORD-01.md`). Deploy workflow run `39571427597`, success, reported by the integrator and not re-read here; `infra/deploy/verify-deployed.sh` on the host: **pending** | none — the normative corpus is not imported on the stand |
 
+## `v0.10.0` and `v0.11.0` — notes for what `main` already ran without a version
+
+Written by `RELEASE-0-10-0-0-11-0` on `origin/dev` at the owner's request of 2026-11-05 (versions existed on
+the stand without a description). After `0.9.0` (pull request #38, `158a815e`) the owner merged `dev` into
+`main` four times while `VERSION` stayed `0.9.0`: #39 (`5b831b45`, 2026-11-03), #40 (`6f388afc`), #41
+(`06d4a07b`) and #42 (`86d4965e`, all 2026-11-05). Each is a release in the sense of `RELEASE_PROCESS.md`,
+but the form rule `descending_dates` wants every higher version strictly later, so the deployments of one
+day share a version, as pull requests #19 to #38 of 2026-10-30 share `0.9.0`: `0.10.0` (revision 1,
+2026-11-03, seven items) is #39, and `0.11.0` (revision 1, 2026-11-05, seven items) is #40 to #42.
+`VERSION` is `0.11.0`. Minor versions, because each day adds features. Nothing is stored before the next
+deploy of `main`; after it the rows are permanent and only a higher revision changes a text.
+
+| Note | Item | Commits |
+| --- | --- | --- |
+| 0.10.0 | 1 «Группы», «Правила», cut-over, the three-way start choice | `49a47617`, `f552393c`, `43ae38b2`, `938b3aae`, `6c4ded41` |
+| 0.10.0 | 2 «Добавить подключение», SSH install after the fingerprint, 15-minute command, OpenRouter, moving an agent, 1–16 concurrent runs | `548cf96b`, `e4cf01a8`, `ea3fbed1`, `669f2024`, `375800b1`, `d0a806e8` |
+| 0.10.0 | 3 the review's page viewer with highlight and frame (`tasks/REVIEW-VIEWER-01.md`, no flag) | `1a7575c5`…`f2a68106`, `38d4e950` |
+| 0.10.0 | 4 waiting reasons, planned and actual model | `d0a806e8`, `43ae38b2` |
+| 0.10.0 | 5 intake limits back to 250 MiB and 500 pages unless `AUDITMANAGER_INTAKE_RELAXED=1` | `733ac3f7`, `d0573f05` |
+| 0.10.0 | 6 undo of a link repair on a finished stage comparison makes the run stale | `efcf75e4` |
+| 0.10.0 | 7 a failed specification batch leaves no final aggregate and is asked again | `d0573f05` |
+| 0.11.0 | 1 «Проекты ▾» with the two document counts, project-scoped «Дашборд» and «База знаний», the context strip with the version choice | `13a74f80`, `1383264f`, `d369d9be`, `3fb5705a`, `ecba6592`, `4a2bb756` |
+| 0.11.0 | 2 the role «Наблюдатель», offered by the admin forms | `5c6f9d0c`, `1b2780d7`, `32b3f121` |
+| 0.11.0 | 3 «Список / Таблица», the verdict tally and filter, finding and filter in the address | `8da0b60a`, `1e3bfe71`, `4f7c19cb` |
+| 0.11.0 | 4 the readable queue, state filter and badge, 10-second refresh with the update time | `928dded3`, `3e6362ab`, `7d117a57`, `6adeae81` |
+| 0.11.0 | 5 «Отменить прогон» and «События прогона» | `71009019`, `5664f286` |
+| 0.11.0 | 6 the five numbers of a dashboard section row; «за всё время» on the verdict panel | `deaeaa7f`, `c29ef738` |
+| 0.11.0 | 7 every finding of a run on «Разбор находок»; «Назад»/«Далее» in «База знаний»; the home tile counts current versions | `3ca0ffed`, `c29ef738` |
+
+Left out: the 2026-10-30 analysis blocks `BLOCK10`…`BLOCK16`, enrollment and pull-claim internals, the
+`EXEC2-FOLLOWUP-01` captions, «Обновить» on a project's sections. Moved with `VERSION`: the revision map and
+version order of `test_release_notes_form.py`, the version set of `test_release_loader.py`, and
+`test_note_profile_versions.py`, which now judges the newest note that quotes profile versions (`0.9.0`),
+because neither new note talks about the profiles. Checks: none run (owner: not a code task); the texts
+were measured by a throwaway script against the form rules and the current note's screens were read in
+the screen registry. No independent note judge, no table row and no tag.
+
 ## `v0.9.0` development candidate — section analysis, large documents and sheet pairing
 
 Prepared by `RELEASE-0-9-0-DEV-01` on `origin/dev` only: `VERSION=0.9.0` and `release-notes/0.9.0.json` (revision 3, 2026-10-28, seven items; dated the day after `0.8.2` because the form rule wants strictly descending dates and `0.8.2` carries 2026-10-27). The note describes what an expert can see on this tree and no more: the approval and withdrawal of a sheet pairing in the version comparison with the recomputed differences of the approved pairs, and a model summary of those pairs that in this build exists only for recorded cases; the 14 section profiles from `1.1.0` to `1.3.x`, status `reviewed` shown as «проверен» (no human review took place; the beta switch `SHOW_REVIEW_INDICATION` keeps the old label «рабочая версия, проверка человеком не проводилась» off the screens, `R-146ba`), the same-document total-against-rows checks asked of 12 of them, and, for five of them (АИ, ЭОМ, ИТП, СС, ТХ: `AI`, `EOM`, `ITP`, `SS`, `TX`), the report of an absent entry under «Документация»; whole-page windows for a text above one model call, each window analysed on its own under one cost ceiling; «Спецификация и цены» and «Предложения» for a version confirmed in any of the 15 sections; the removal of the ordinary АР start (only the six-check group remains); the corrected sentence about «Без раздела» on the dashboard; and an executor connection of the kind «Команда по SSH» that can now be routed and chosen, with the plain `http://` address rule of the connection settings. The note claims no measured quality for any prompt and no speed-up. Revision 2 (`REVIEW-INDICATION-SWITCH-01`) removed the quotation of that label from the note and the claim «проверенный экспертом набор» from the АР item; revision 3 (`ACCESS-COMPARE-JUDGE-FIXES-01`) corrected the profile versions the note quotes (it had said «1.1.0 или 1.2.0» while five profiles were at `1.3.0`) and added the sentence about «Документация»; the note had not reached `main`. `release-notes/0.8.2.json` is not edited. Every claim is traced to a commit and a test in `RELEASE-0-9-0-DEV-01.md`. There is no table row, no tag, no `origin/main` push, no complete gate (`D-205`), two independent note-judge passes (the first on `e1199c25`, the second on `79a7e415`, whose findings are fixed in `d04e8f83`) and no stand deployment.
