@@ -151,6 +151,7 @@ import {
 } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 
 import type { Screen } from './contrast';
+import { sectionAudit } from '../dashboard/audit-counts';
 import { QUEUE_WORK } from '../execution/queue-work';
 
 function withRouter(element: ReactElement): string {
@@ -1646,9 +1647,10 @@ export function screens(): Screen[] {
       ],
       run_activity: { by_state: RUN_STATE_VALUES.map((state) => ({ state, count: 1 })) },
       section_breakdown: [
-        ...PROJECT_SECTION_VALUES.map((section) => ({ section, document_count: 1 })),
-        { document_count: 1 },
+        ...PROJECT_SECTION_VALUES.map((section) => ({ section, document_count: 1, ...sectionAudit(1) })),
+        { document_count: 1, ...sectionAudit(1) },
       ],
+      awaiting_decision_findings: 0,
     };
     const loaded = newClient();
     loaded.setQueryData(queryKeys.dashboard.summary(PROJECT_UID), summary);

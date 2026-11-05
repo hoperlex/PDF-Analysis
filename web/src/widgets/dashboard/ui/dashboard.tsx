@@ -133,7 +133,7 @@ export function Dashboard({ projectUid = null, allProjectsHref = '/dashboard' }:
           <DocumentsPanel rows={data.documents_by_project} />
         </section>
         <section className={styles.panel} aria-labelledby="dashboard-verdicts-heading">
-          <h2 id="dashboard-verdicts-heading">Находки по вердикту</h2>
+          <h2 id="dashboard-verdicts-heading">Находки по вердикту, за всё время</h2>
           <VerdictsPanel rows={data.findings_by_verdict} />
         </section>
         <section className={`${styles.panel} ${styles.runs}`} aria-labelledby="dashboard-runs-heading">

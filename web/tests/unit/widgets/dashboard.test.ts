@@ -48,6 +48,7 @@ import { formatCostMicros } from '@/entities/audit-run';
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { Dashboard } from '@/widgets/dashboard';
 
+import { sectionAudit } from '../dashboard/audit-counts';
 import { newClient, renderWith } from '../screens/harness';
 
 const ULID_A = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
@@ -94,9 +95,11 @@ const SUMMARY: DashboardSummary = {
     ...PROJECT_SECTIONS.map((section, index) => ({
       section: section.code,
       document_count: index + 1,
+      ...sectionAudit(index + 1),
     })),
-    { document_count: PROJECT_SECTIONS.length + 1 },
+    { document_count: PROJECT_SECTIONS.length + 1, ...sectionAudit(PROJECT_SECTIONS.length + 1) },
   ],
+  awaiting_decision_findings: 13,
 };
 
 /** `SUMMARY`, with `run_activity.spend` absent — no provider call made at all. */
@@ -141,7 +144,7 @@ const SUMMARY_SECTION_UNKNOWN: DashboardSummary = {
   ...SUMMARY,
   section_breakdown: [
     ...SUMMARY.section_breakdown.filter((row) => row.section !== 'GP'),
-    { section: 'ZZ', document_count: 5 } as unknown as SectionDocumentCount,
+    { section: 'ZZ', document_count: 5, ...sectionAudit(5) } as unknown as SectionDocumentCount,
   ],
 };
 
@@ -301,7 +304,17 @@ describe('every number the dashboard renders is the fixture, and nothing else is
     expect(markup).toContain('data-verdict="rejected"');
     expect(markup).toContain('data-verdict="needs_manual_review"');
     const text = visible(markup);
-    expect(text).toContain('Находок: 70');
+    expect(text).toContain('Находок за всё время: 70');
+  });
+
+  it('labels the verdict panel as all-time and keeps the findings that await a decision out of it (R-150q)', () => {
+    const markup = render(SUMMARY);
+    const panel = visible(sectionMarkup(markup, 'dashboard-verdicts-heading'));
+    expect(visible(markup)).toContain('Находки по вердикту, за всё время');
+    expect(panel).toContain('По вердикту, за всё время');
+    expect(panel).toContain('всех прогонов');
+    // 13 is `awaiting_decision_findings`: the home tile's figure, a different count from this panel's 16.
+    expect(panel).not.toMatch(/\b13\b/);
   });
 
   it('renders the run count and the reported spend, with its cost basis', () => {

@@ -206,6 +206,7 @@ import {
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
+import { sectionAudit } from '../unit/dashboard/audit-counts';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { COMPARISON_SHAPES } from '../unit/version-compare/shapes';
 import {
@@ -1142,9 +1143,11 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
       ...PROJECT_SECTIONS.map((section) => ({
         section: section.code,
         document_count: section.code === 'KM' ? 1 : 0,
+        ...sectionAudit(section.code === 'KM' ? 1 : 0),
       })),
-      { document_count: 1 },
+      { document_count: 1, ...sectionAudit(1) },
     ],
+    awaiting_decision_findings: 0,
     ...over,
   };
 }
