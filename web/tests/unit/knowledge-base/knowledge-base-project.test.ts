@@ -349,9 +349,10 @@ describe('an empty page under a selection is about the selection, and the way ba
     expect(text).toContain('Сбросить категорию и вердикт');
     expect(text.match(/Все проекты/g)).toHaveLength(1);
     expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все проекты<\/a>/);
-    // The scope line still names the project the reader is in.
+    // The scope line still states the project the reader is in. An empty page carries no record to name it, and the project list
+    // does not hold it, so the line shows the uid it was given, as it does for any project the page cannot name.
     expect(view.markup()).toContain('data-journal-scope="project"');
-    expect(text).toContain('Охват Проект Альфа');
+    expect(text).toContain(`Охват ${A} 0 записей`);
   });
 
   it('resets from the empty state back to the project’s own first page, not to «Все проекты»', async () => {
