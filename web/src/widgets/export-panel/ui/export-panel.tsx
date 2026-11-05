@@ -141,17 +141,20 @@ export function ExportPanel({
 
       {exportable ? (
         <>
-          <button
-            type="button"
-            className="am-button"
-            data-intent="export"
-            disabled={isPending === true}
-            onClick={onExport}
-          >
-            {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
-          </button>
-          <XlsxDownload runId={runId} />
-          {mayImportDecisions === true ? <ImportDecisions runId={runId} /> : null}
+          {/* The three file actions in one row, as the original's toolbar; each says its own outcome under it. */}
+          <div className="am-export__actions">
+            <button
+              type="button"
+              className="am-button"
+              data-intent="export"
+              disabled={isPending === true}
+              onClick={onExport}
+            >
+              {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
+            </button>
+            <XlsxDownload runId={runId} />
+            {mayImportDecisions === true ? <ImportDecisions runId={runId} /> : null}
+          </div>
           {/*
             `R-18` names the column names printed as a list — "documentation
             standing where an interface should be". They are still here, still taken from

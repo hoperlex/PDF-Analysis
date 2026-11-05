@@ -2039,19 +2039,26 @@ li.am-state .am-state__detail {
   background: var(--am-accent-light);
 }
 
+/*
+ * The finding's text takes the whole first line; the pages and the badges share the second. With the
+ * badges beside the text, the list column (at most 360px, less the ✓/✕ of R-151n) left the text a
+ * word per line.
+ */
 .am-finding-row__text {
-  grid-column: 1;
+  grid-column: 1 / -1;
   display: block;
 }
 
 .am-button.am-finding-row .am-badge {
   grid-column: 2;
-  grid-row: 1;
-  align-self: start;
+  grid-row: 2;
+  justify-self: end;
 }
 
 .am-finding-row__pages {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
+  align-self: center;
   display: block;
   font-family: var(--am-font-mono);
   font-size: var(--am-text-xs);
@@ -2433,6 +2440,13 @@ li.am-state .am-state__detail {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.am-export__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--am-gap-sm);
 }
 
 .am-export__header h3 {
