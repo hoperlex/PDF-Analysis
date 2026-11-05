@@ -204,6 +204,40 @@ def _schema_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
     out["response"]["body"]["length"] += len(projected.encode("utf-8")) - len(original.encode("utf-8"))
     return out
 
+# `UI-PARITY-P0B` (contract 1.19.0): every `listProjects` item also carries `audit_counts`, the project's documents by
+# audit state. Record 16 stays as it was captured (`R-10`, `D-16`); the in-memory projection below adds the one property
+# the contract added, with the value the journey's own earlier records give (see
+# `test_the_audit_counts_of_record_16_follow_from_the_records_before_it`), and nothing else. The record's bytes are
+# pinned, so a changed record is refused before it is projected.
+_AUDIT_COUNTS_CASE = "16-listProjects.success"
+_AUDIT_COUNTS_RECORD_SHA256 = "8e5bcc3240fe659516fdf8f96a98e88b29432494db1cc6defe2632750641c24d"
+_AUDIT_COUNTS_BEFORE = '"document_count": 1}'
+_AUDIT_COUNTS_AFTER = (
+    '"document_count": 1, "audit_counts": {"document_count": 1, "not_run": 0, "clean": 0, '
+    '"awaiting_decision": 1, "checked": 0, "partial": 0, "no_expert_decision": 1}}'
+)
+
+
+def _audit_counts_expected(expected: dict[str, Any], *, value: str = _AUDIT_COUNTS_AFTER) -> dict[str, Any]:
+    if expected["case"] != _AUDIT_COUNTS_CASE:
+        return expected
+    raw = (journey.RECORDS / f"{_AUDIT_COUNTS_CASE}.json").read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == _AUDIT_COUNTS_RECORD_SHA256, (
+        "the historical record of listProjects changed; review it before projecting"
+    )
+    body = expected["response"]["body"]
+    original = body["text"]
+    assert body["kind"] == "text" and original == json.loads(raw)["response"]["body"]["text"], (
+        f"{_AUDIT_COUNTS_CASE}: the projection received a changed historical body"
+    )
+    assert original.count(_AUDIT_COUNTS_BEFORE) == 1 and '"audit_counts"' not in original
+    projected = original.replace(_AUDIT_COUNTS_BEFORE, value, 1)
+    out = json.loads(json.dumps(expected))
+    out["response"]["body"]["text"] = projected
+    out["response"]["body"]["length"] += len(projected.encode("utf-8")) - len(original.encode("utf-8"))
+    return out
+
+
 #: The operationIds this corpus covers, written out rather than read from the contract:
 #: this suite's job is to notice a surface that changed, and an expectation computed from a
 #: file the change could also touch would not.
@@ -878,6 +912,7 @@ def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any
     if expected["case"] == "12-exportRunCsv.success":
         expected = _csv_compat_expected(expected)
     expected = _schema_compat_expected(expected)
+    expected = _audit_counts_expected(expected)
     exchange = exchanges[expected["case"]]
     found = journey.differences(exchange, expected)
     assert not found, (
@@ -915,6 +950,52 @@ def test_schema_compat_still_reddens_on_a_wrong_live_field(
         before, after, 1
     )
     assert any("body:" in difference for difference in journey.differences(exchanges[case], wrong))
+
+
+def test_the_audit_counts_of_record_16_follow_from_the_records_before_it() -> None:
+    """The projected value is not copied from the server: it is what the journey's own earlier records say.
+
+    By record 16 the project holds one document whose current version has a published run (record 06: state
+    `published`, no degradation) with three findings, all pending when read (record 08), and the journey accepted one
+    of them (record 10). A result run with an undecided finding is `awaiting_decision` (`R-150n` ... `R-150u`): one
+    document, awaiting, `no_expert_decision` the same one. A projection that said `checked` or `clean` would be the
+    frozen defect `characterization-can-freeze-a-defect` warns about, and fails here.
+    """
+    def load(case: str) -> dict[str, Any]:
+        return json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
+
+    run = json.loads(load("06-getRunStatus.success")["response"]["body"]["text"])
+    findings = json.loads(load("08-listRunFindings.success")["response"]["body"]["text"])["items"]
+    decision = json.loads(load("10-appendDecision.success")["response"]["body"]["text"])
+    assert run["state"] == "published" and run["degradation_set"] == []
+    assert len(findings) == 3 and {item["current_verdict"] for item in findings} == {"pending"}
+    assert decision["current_verdict"] == "accepted"
+    undecided = len(findings) - 1
+    assert undecided >= 1, "every finding decided would make the document `checked`, and the projection wrong"
+    text = _audit_counts_expected(load(_AUDIT_COUNTS_CASE))["response"]["body"]["text"]
+    projected = json.loads(text)["items"][0]["audit_counts"]
+    assert projected == {
+        "document_count": 1, "not_run": 0, "clean": 0, "awaiting_decision": 1,
+        "checked": 0, "partial": 0, "no_expert_decision": 1,
+    }
+
+
+def test_the_audit_counts_projection_reddens_on_a_wrong_value_and_refuses_a_changed_record(
+    exchanges: dict[str, Any]
+) -> None:
+    """The comparison can fail: the right projection reproduces the live body, a wrong value is reported, and a
+    record whose bytes are not the pinned ones is refused before it is projected."""
+    record = json.loads((journey.RECORDS / f"{_AUDIT_COUNTS_CASE}.json").read_text(encoding="utf-8"))
+    right = _audit_counts_expected(record)
+    assert journey.differences(exchanges[_AUDIT_COUNTS_CASE], right) == []
+    wrong = _audit_counts_expected(
+        record, value=_AUDIT_COUNTS_AFTER.replace('"checked": 0', '"checked": 1').replace('"awaiting_decision": 1', '"awaiting_decision": 0')
+    )
+    assert any("body:" in difference for difference in journey.differences(exchanges[_AUDIT_COUNTS_CASE], wrong))
+    changed = json.loads(json.dumps(record))
+    changed["response"]["body"]["text"] += " "
+    with pytest.raises(AssertionError, match="changed historical"):
+        _audit_counts_expected(changed)
 
 
 def test_schema_compat_refuses_a_changed_historical_record() -> None:

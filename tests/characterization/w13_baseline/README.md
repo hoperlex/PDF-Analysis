@@ -8,6 +8,16 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-11-05 by `UI-PARITY-P0B`, contract 1.19.0
+
+**Thirty-seven records, none added and none edited; record 16 moves in the comparison only, by one property.** Every
+`listProjects` item now also carries `audit_counts`, the project's documents by audit state. As with the portal kind and the
+error envelopes, the committed record is left as it was captured and an in-memory projection (`_audit_counts_expected`)
+inserts the one property, after pinning the record's bytes by digest. The projected value is not copied from the server:
+`test_the_audit_counts_of_record_16_follow_from_the_records_before_it` derives it from records 06, 08 and 10 (a published run
+with three findings, one accepted: one document awaiting a decision). The projection is shown able to fail by a wrong
+value and by a changed historical record (`test_the_audit_counts_projection_reddens_on_a_wrong_value_and_refuses_a_changed_record`).
+
 ## Amended 2026-11-04 by `EXEC2-FIX-BETA-STUBS`, after `BETA-COST-PREFLIGHT-1030`
 
 **Thirty-seven records, none added and none moved in its response: the journey's `startRun` now carries a
