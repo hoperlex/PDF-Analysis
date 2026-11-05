@@ -96,7 +96,7 @@ import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
-import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex } from '@/shared/ui';
+import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -711,6 +711,24 @@ export function screens(): Screen[] {
   add('VersionList cold', withRouter(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
   add('RunList cold', withRouter(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
   add('UploadPanel', renderWith(newClient(), createElement(UploadPanel, { projectUid: PROJECT_UID })));
+
+  // `UI-A-68`, `R-150f`: the shared table in its first consumer's shape -- a caption, scoped heads, rows and the
+  // current row marked -- so its colour rules are measured before any screen opens the findings table.
+  add(
+    'Table, the findings table shape',
+    render(
+      createElement(Table<{ readonly id: string; readonly text: string }>, {
+        caption: 'Находки прогона',
+        columns: [
+          { key: 'id', header: '№', cell: (row: { readonly id: string; readonly text: string }) => row.id },
+          { key: 'text', header: 'Находка', cell: (row: { readonly id: string; readonly text: string }) => row.text },
+        ],
+        rows: [{ id: '1', text: 'Первая находка' }, { id: '2', text: 'Вторая находка' }],
+        rowKey: (row: { readonly id: string; readonly text: string }) => row.id,
+        currentKey: '2',
+      }),
+    ),
+  );
 
   // `UI-A-24`: the context strip on a version page offers the document's other versions once there are two,
   // and says the history is longer than the page when it is -- the `.switch` and `.more` rules of the strip.
