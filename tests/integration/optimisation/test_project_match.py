@@ -428,7 +428,7 @@ def test_scope_roles_and_request_values(session: Session, cast, world) -> None:
              document_uid=str(DocumentUid.new()))
     denied = _refused(ErrorCode.PERMISSION_DENIED, _read, session, cast, world, reader,
                       actor_roles=frozenset())
-    assert denied.detail_fields["required_capability"] == "role:admin|expert"
+    assert denied.detail_fields["required_capability"] == "role:admin|expert|viewer"  # R-150e: the viewer reads too
     assert _read(session, cast, world, reader, actor_roles=frozenset({"admin"})).state == (
         STATE_VERSION_UNCLASSIFIED
     )
