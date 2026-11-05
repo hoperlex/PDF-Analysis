@@ -15,6 +15,31 @@ function strings(value: unknown): string[] { return Array.isArray(value) ? value
 const ASSESSMENT: Readonly<Record<string, string>> = { supports: 'Цитата предварительно поддерживает наблюдение', contradicts: 'Цитата предварительно противоречит наблюдению', insufficient: 'Цитаты недостаточно для вывода' };
 const NORMS: Readonly<Record<string, string>> = { candidates: 'Есть кандидаты нормативных ссылок', not_found: 'Подходящие нормативные ссылки не найдены', unavailable: 'Нормативные основания не проверены или недоступны' };
 
+/**
+ * `R-151q` (UI-B-78): the critic's queues as chips, the original «Critic v2» screen's queues inside our extended
+ * review. Each chip counts the whole run's observations this response carries (never one page of them) and sets the
+ * «Рекомендация критика» filter. The critic's word is a recommendation, not the expert's decision.
+ */
+export const CRITIC_QUEUES: readonly (readonly [string, string])[] = [
+  ['all', 'Все'],
+  ['accept', 'Сохранить'],
+  ['reject', 'Снять'],
+  ['borderline', 'Пограничные'],
+  ['needs_human', 'Нужен человек'],
+  ['rewrite', 'Уточнить'],
+  ['not_reviewed', 'Без критики'],
+];
+
+export function criticQueueCounts(observations: readonly RecordValue[]): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = Object.fromEntries(CRITIC_QUEUES.map(([value]) => [value, 0]));
+  for (const item of observations) {
+    counts.all = (counts.all ?? 0) + 1;
+    const key = item.review_status === 'not_reviewed' ? 'not_reviewed' : text(object(item.review ?? item.critic)?.llm_decision);
+    if (key in counts) counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export function ObservationList({ observations, sources, fallbackVersion, projectUid, anchorId = 'extended-observations' }: {
   readonly observations: readonly RecordValue[]; readonly sources: readonly RecordValue[]; readonly fallbackVersion: string; readonly projectUid?: string; readonly anchorId?: string;
 }) {
@@ -38,6 +63,7 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
     const searchable = [item.title, item.description, item.observation_id, item.cross_window_batch_key, ...strings(item.window_ids), critic?.explanation, candidate?.title, candidate?.description, ...ids].map(text).join('\n').toLocaleLowerCase('ru');
     return { item, index, critic, fixed, candidate, ids, pages, searchable };
   }), [observations, sourceIndex]);
+  const queueCounts = useMemo(() => criticQueueCounts(observations), [observations]);
   const requiredPage = /^[1-9]\d*$/.test(pageSearch.trim()) && Number.isSafeInteger(Number(pageSearch)) ? Number(pageSearch) : null;
   const invalidPage = pageSearch.trim() !== '' && requiredPage === null;
   const needle = search.trim().toLocaleLowerCase('ru');
@@ -55,6 +81,19 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
   return <section id={anchorId} aria-label="Кандидаты расширенного анализа" className={styles.candidatePanel}>
     <h3>Наблюдения и источники</h3>
     <p>Поиск и фильтры меняют только этот список. MD, HTML, JSON и технический XLSX сохраняют полную запись, включая скрытые фильтром наблюдения и исходные варианты.</p>
+    <div className={styles.queues} role="group" aria-label="Очереди критика" data-critic-queues="">
+      {CRITIC_QUEUES.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          className={advice === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+          aria-pressed={advice === value}
+          onClick={() => { setAdvice(value); setPage(0); }}
+        >
+          {label} <span className={styles.queueCount}>{queueCounts[value] ?? 0}</span>
+        </button>
+      ))}
+    </div>
     <div className={styles.filters}>
       <label>Поиск по заголовку, описанию, рекомендации или источнику<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
       <label>Рекомендация критика<select value={advice} onChange={(event) => { setAdvice(event.target.value); setPage(0); }}><option value="all">Все рекомендации</option><option value="not_reviewed">Критика не выполнялась</option><option value="accept">Рекомендует сохранить</option><option value="reject">Рекомендует снять</option><option value="borderline">Пограничный случай</option><option value="needs_human">Нужна проверка человека</option><option value="rewrite">Рекомендует уточнить</option></select></label>
