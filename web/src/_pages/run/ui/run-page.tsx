@@ -15,6 +15,7 @@ import { routes } from '@/shared/lib';
 import { CancelRunControl } from '@/features/cancel-run';
 
 import { LazyRunProgress } from './lazy-run-progress';
+import { RunEvents } from './run-events';
 import styles from './run-page.module.css';
 import { DocumentContext } from '@/widgets/document-context';
 
@@ -45,6 +46,7 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
       <div className={styles.content}>
         <CancelRunControl runId={runId} />
         <LazyRunProgress projectUid={projectUid} runId={runId} />
+        <RunEvents runId={runId} />
       </div>
     </PageShell>
   );
