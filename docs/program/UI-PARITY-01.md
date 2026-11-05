@@ -47,7 +47,7 @@ One supplier per item; no consumer before its supplier.
 | `getProject`; selector and section counters | P0 | waves 1, 2 | metrics dictionary approved |
 | read-only role | P0, one change | cross-cutting line | matrix approved |
 | last-run state, finding counts, severity summary on documents/versions | P0 | wave 2 | dictionary |
-| `severity` filter and summary on `listRunFindings` | P0 | wave 2 | summary scope equals filter scope; decided severity plus a labelled «предложено моделью» row (`R-151j`) |
+| severity strip and filter on «Разбор» | **delivered without a contract change** (e5846fb4): the page loads the whole run (`R-150i`), so counts and filter share that scope, as the verdict tally does | wave 2 | decided severity plus a labelled «предложено моделью» row (`R-151j`) |
 | finding → portal block (`portal_block_id`), sheet label | P0 | wave 2 | — |
 | queue group A: item names and times, state filter and period, overview, next-job flag, attempts | P0 | waves 3, 4 | ETA by the median of similar past runs (`R-151u`) |
 | knowledge base: section, filters, decision `kind` and «Тип» filter | P0 | wave 3 | `R-151h` |
@@ -56,7 +56,7 @@ One supplier per item; no consumer before its supplier.
 | batch run: estimates of several documents, one consent | P0 | wave 2 | `R-151c`; a consent per run stays on the server |
 | decision import from our own export by `finding_uid` | P0 | wave 2 | `R-151d` |
 | document tags and a tag filter | P0 | wave 2 | `R-151e` |
-| queue pause state for the header | P0 | wave 1 | `R-151f`; «interrupt now» is a later contract |
+| queue pause state for the header | **1.20.0** (`getExecutionDispatch`) and web 110b9dac | wave 1 | `R-151f`; «interrupt now» is a later contract |
 | finding execution status (designer side) | P0 | wave 2 | `R-151g`; who sets it is decided in the task |
 | who started a run | P0 | waves 3, 4 | `R-151v` |
 | start from a stage (UI-A-60) | own task, about 2–3 days | wave 2 | `R-151i`; idempotency key fixed in the task |
@@ -64,6 +64,8 @@ One supplier per item; no consumer before its supplier.
 | dispatcher: subscription accounts, provider limits | not built (`R-150y`) | — | — |
 
 **P0b (2026-11-05, contract `1.19.0`):** the counters wave 1 waits for — a document's audit state, `audit_counts` on each `listProjects` item and on the section panel, `awaiting_decision_findings` for the home tile — are delivered under `R-150n`…`R-150u`; their dictionary is `UI-PARITY-METRICS.md`. The selector and the new columns remain waves 1 and 2.
+
+**Delivered 2026-11-05 (unverified candidates on `origin/dev`):** contract 1.20.0 (`listDocuments` `section_code`, `getExecutionDispatch`); web: pause state in the header (`R-151f`), section page and card grid (`R-151l`, `R-151s`), «Блоки» as a version tab (`R-151m`), «Диспетчер» following the header (`R-151m`), ✓/✕ in rows (`R-151n`), batch start (`R-151c`), multi-file upload (`R-151b`), optimisation on the document (`R-151r`), critic queue chips (`R-151q`), severity strip (`R-151j`). Owed (contract 1.21.0 and later): `R-151a` archive and rename, `R-151e` tags, `R-151g` execution status, `R-151h` knowledge-base kind, `R-151d` decision import, `R-151v` run starter, `R-151u` ETA, `R-151i` start from a stage.
 
 **Freeze list of P0:** register questions Q-UI-6, 7, 8, 9, 10, 11, 14 and Q-UI-B7 have options that change the contract. The night window of 2026-11-04 shipped P0a only (no pending decision) and recorded the rest as debt; the owner answered all eight on 2026-11-05 (`R-151a`…`R-151h`). The contract slot for this work is the UI-parity session's until the programme ends (`R-151w`).
 
