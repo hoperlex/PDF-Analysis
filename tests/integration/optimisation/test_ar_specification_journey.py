@@ -22,7 +22,7 @@ credential, over the committed synthetic fixtures and nothing else:
 What is held: before the price list the specification read says so (``price_list_missing``);
 after it the extractor has read exactly the oracle's seven rows (one table continued onto the
 second sheet without a repeated header, a name wrapped above its anchor line, a manufacturer with
-its legal form), the matcher prices exactly the oracle's four rows and counts the other three by
+its legal form), the matcher prices exactly the oracle's five rows and counts the other two by
 their reasons, the totals are the oracle's, and the pass holds exactly the oracle's four
 ``cheaper_analog`` proposals -- each priced from a matched position and a proposed position in the
 same unit and currency, the saving ``(current - proposed) x quantity`` and absent (never ``0``)
@@ -145,9 +145,14 @@ def journey(client: TestClient, expert: dict[str, str]) -> dict[str, Any]:
     )
     assert classified.status_code == 200, classified.content
 
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): the served startRun routes an АР version to the draft АР
+    # text profile now, and (`REVIEW-FIX-TESTS-1102`) every served start needs a priced consent, so a bare start is
+    # refused on the consent. The published run the journey reads is still made in-process: the oracle carries the
+    # v1 reference profile's run, not a run of the draft АР profile.
     refused = client.post("/runs", headers=expert | _key("run"), json={"version_uid": version})
     assert refused.status_code == 422, refused.content
-    assert refused.json()["error_code"] == "section_profile_unavailable", refused.content
+    assert refused.json()["error_code"] == "validation_failed", refused.content
+    assert refused.json()["details"] == {"field": "cost_consent", "constraint": "confirmation_required"}, refused.content
     run_id = publish_reference_run(version, tag="spec-table")
     run = client.get(f"/runs/{run_id}", headers=expert)
     assert run.status_code == 200, run.content
@@ -402,5 +407,7 @@ def test_rows_that_are_not_priced_never_become_proposals(journey) -> None:
     proposed = {item["row_position"] for item in journey["proposals"]["items"]}
     unpriced = {row["position"] for row in ORACLE["specification"]["rows"]
                 if row["status"] == "unmatched"}
-    assert unpriced == {"4", "5"}
+    # Row 4 (120 п.м, priced per м) is priced since `BETA-UNIT-ALIASES-1030` (d93d245c, owner decision
+    # 2026-10-30: running metres equal metres at factor one); only row 5 has no price-list position.
+    assert unpriced == {"5"}
     assert not proposed & unpriced

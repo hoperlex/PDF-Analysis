@@ -15,6 +15,16 @@
  * knowledge-base view on the server, and a count assembled in this file would be a second
  * answer to a question the server already answers.
  *
+ * The journal is paged (50 per page, newest first): «Далее» and «Назад» walk the server's
+ * opaque cursors with a stack, and changing either filter returns to the first page.
+ *
+ * **The project comes from the address, here, and nowhere else** (`UI-PARITY-01`, «Project
+ * context»; the screen's registry class is `optional`). `?project=` is read with
+ * `readProjectContext` and sent as `project_uid`; it is one of the journal's filters, so it is in
+ * the cache key, and — like a filter change — a project change returns to the first page. No
+ * `?project=` is «Все проекты». The screen says which of the two it shows, and how many entries
+ * match (`total` of the page, not the length of the page on screen).
+ *
  * The two filters are the contract's own `category` and `verdict`, and they mean what the
  * contract says they mean: the **finding's** category, and the verdict that now stands for
  * it. Neither filters the event, so a comment left on a finding that was later accepted is
@@ -22,13 +32,16 @@
  * be accepted.
  */
 
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import type { ErrorStateProps } from '@/shared/ui';
-import type { FindingCategory, Verdict } from '@/shared/api';
+import type { FindingCategory, ProjectUid, Verdict } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
+import { readProjectContext } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
-import { CATEGORY_LABELS, useDecisionJournal } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, recordCountLabel, useDecisionJournal } from '@/entities/expert-decision';
+import { useProjectList } from '@/entities/project';
 
 import { LazyKnowledgeBase } from './lazy-knowledge-base';
 import styles from './knowledge-base-page.module.css';
@@ -73,6 +86,40 @@ const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
   ...CATEGORY_LABELS,
 };
 
+/** What a render without a mounted router (a one-pass test render) reads as the query string. */
+const NO_PARAMS = new URLSearchParams();
+
+/** The scope the screen states when no project is chosen. */
+const ALL_PROJECTS = 'Все проекты';
+
+/**
+ * The cursors of the pages walked past, oldest first, and the project they were issued under. The
+ * server's cursors are opaque and belong to the filters they came with, so a stack whose project is
+ * not the address's project is not read at all: the first page is asked for. That is derived on
+ * every render (and the stale stack is then dropped during the render, not in an effect), so a
+ * request with the old project's cursor and the new project is never made, not even for one render.
+ */
+interface CursorWalk {
+  readonly project: ProjectUid | null;
+  readonly cursors: readonly string[];
+}
+
+const NO_CURSORS: readonly string[] = [];
+
+/**
+ * The project's name, for the scope line. From the records the server just sent when there are
+ * any (they carry `project_name`), otherwise from the project list — the page of it the screens
+ * already read — and otherwise the uid the address carries, as it is. An unknown project is not
+ * in either, and is never given a name it does not have.
+ *
+ * Its own component, so the project list is read only when an address names a project.
+ */
+function ProjectName({ projectUid, recordedName }: { projectUid: ProjectUid; recordedName: string | undefined }) {
+  const projects = useProjectList();
+  const listedName = projects.data?.items.find((project) => project.project_uid === projectUid)?.name;
+  return <>{recordedName ?? listedName ?? projectUid}</>;
+}
+
 /**
  * The failure, presented once.
  *
@@ -109,13 +156,37 @@ function journalFailure(error: unknown, retry: () => void): ErrorStateProps {
 }
 
 export function KnowledgeBasePage() {
+  // `null` only where no router is mounted; the address is then no address and names no project.
+  const pathname = usePathname();
+  const { projectUid } = readProjectContext(pathname ?? '', useSearchParams() ?? NO_PARAMS);
+
   const [category, setCategory] = useState<CategoryChoice>('all');
   const [verdict, setVerdict] = useState<VerdictChoice>('all');
+  /*
+   * The cursors of the pages walked past, oldest first; the last one is the page on screen
+   * and an empty stack is the first page. The server's cursors are opaque and one-way, so
+   * «Назад» is a pop, not a computation. The same construction as the execution journal, with
+   * the project it was walked under beside it: a stack of another project is an empty one.
+   */
+  const [walk, setWalk] = useState<CursorWalk>({ project: projectUid, cursors: NO_CURSORS });
+  const cursors = walk.project === projectUid ? walk.cursors : NO_CURSORS;
+  const cursor = cursors.at(-1);
+  // Forget a stack of another project instead of only ignoring it: going back to that project
+  // (Back, a pasted link) must open its first page, because a cursor is not in the address and the
+  // address is the only thing that restores a screen. React re-renders at once, before anything
+  // is drawn or requested.
+  if (walk.project !== projectUid) setWalk({ project: projectUid, cursors: NO_CURSORS });
 
   const journal = useDecisionJournal({
+    ...(projectUid === null ? {} : { project_uid: projectUid }),
     ...(category === 'all' ? {} : { category }),
     ...(verdict === 'all' ? {} : { verdict }),
+    ...(cursor === undefined ? {} : { cursor }),
   });
+  const next = journal.data?.page.next_cursor ?? null;
+  const total = journal.data?.total;
+  const first = journal.data?.items[0];
+  const recordedName = first !== undefined && first.project_uid === projectUid ? first.project_name : undefined;
 
   return (
     <PageShell
@@ -124,11 +195,17 @@ export function KnowledgeBasePage() {
       subtitle="Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий."
     >
       <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
-        <label className="am-kb__filter">
-          <span>Категория</span>
+        <div className="am-kb__filter">
+          <label htmlFor="kb-filter-category">Категория</label>
           <select
+            id="kb-filter-category"
             value={category}
-            onChange={(event) => setCategory(event.target.value as CategoryChoice)}
+            onChange={(event) => {
+              // A cursor belongs to the filter it was issued under: a new filter starts at
+              // the first page.
+              setCategory(event.target.value as CategoryChoice);
+              setWalk({ project: projectUid, cursors: NO_CURSORS });
+            }}
           >
             {CATEGORY_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
@@ -136,12 +213,16 @@ export function KnowledgeBasePage() {
               </option>
             ))}
           </select>
-        </label>
-        <label className="am-kb__filter">
-          <span>Вердикт</span>
+        </div>
+        <div className="am-kb__filter">
+          <label htmlFor="kb-filter-verdict">Вердикт</label>
           <select
+            id="kb-filter-verdict"
             value={verdict}
-            onChange={(event) => setVerdict(event.target.value as VerdictChoice)}
+            onChange={(event) => {
+              setVerdict(event.target.value as VerdictChoice);
+              setWalk({ project: projectUid, cursors: NO_CURSORS });
+            }}
           >
             {VERDICT_CHOICES.map((choice) => (
               <option key={choice} value={choice}>
@@ -149,9 +230,20 @@ export function KnowledgeBasePage() {
               </option>
             ))}
           </select>
-        </label>
+        </div>
       </div>
       <div className={styles.results}>
+        <p className={styles.scope} data-journal-scope={projectUid === null ? 'all' : 'project'}>
+          <span className={styles.scopeKey}>Охват</span>
+          <strong className={styles.scopeValue}>
+            {projectUid === null ? ALL_PROJECTS : <ProjectName projectUid={projectUid} recordedName={recordedName} />}
+          </strong>
+          {total === undefined ? null : (
+            <span className={styles.count} data-journal-total={total}>
+              {recordCountLabel(total)}
+            </span>
+          )}
+        </p>
         <LazyKnowledgeBase
           records={journal.data?.items ?? []}
           isLoading={journal.isPending}
@@ -161,6 +253,28 @@ export function KnowledgeBasePage() {
               : journalFailure(journal.error, () => void journal.refetch())
           }
         />
+        {cursors.length === 0 && next === null ? null : (
+          <nav className="am-pager" aria-label="Страницы решений">
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              disabled={cursors.length === 0}
+              onClick={() => setWalk({ project: projectUid, cursors: cursors.slice(0, -1) })}
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              disabled={next === null}
+              onClick={() => {
+                if (next !== null) setWalk({ project: projectUid, cursors: [...cursors, next] });
+              }}
+            >
+              Далее
+            </button>
+          </nav>
+        )}
       </div>
     </PageShell>
   );

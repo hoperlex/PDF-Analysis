@@ -6,6 +6,11 @@ Output is identities, counts and outcome words; a key, a header or an address is
 
 Exit codes: ``0`` done (or nothing to do), ``2`` refused (the message says why), ``3`` import-env
 created the connection but its probe did not pass, so it is not routed yet.
+
+`EXEC2-FOLLOWUP-01`: while the routing mode is ``rules`` the legacy routes are read-only, so import-env
+imports the connection, **sets no route** and says so on stderr (the mode, that no route was set, and that
+the connection has to be added to a group and a rule). That is a finished import and exits ``0`` when the
+probe passed; ``3`` still means the probe did not pass. Under ``legacy`` nothing differs.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import sys
 from collections.abc import Mapping
 
 from auditmanager.executors.destinations import DestinationPolicy
+from auditmanager.executors.model import ROUTING_MODE_RULES
 from auditmanager.executors.operations import (
     SYSTEM_ACTOR_UID,
     OperationRefused,
@@ -25,7 +31,14 @@ from auditmanager.executors.operations import (
 )
 from auditmanager.executors.sealing import SealingConfigurationError, load_private_ring
 
-__all__ = ["main"]
+__all__ = ["RULES_NOTICE", "main"]
+
+#: What import-env says on stderr when the routing mode is ``rules`` and so no route was set. Words only: no identity, no value.
+RULES_NOTICE = (
+    "import-env: the routing mode is rules; no route was set (the legacy routes are read-only under rules). "
+    "The connection is imported: add it to a group and to the rule of text_analysis "
+    "(the Groups and Rules tabs of the executors screen) so that work reaches it."
+)
 
 
 def _session_factory(environ: Mapping[str, str]):  # type: ignore[no-untyped-def]
@@ -78,6 +91,9 @@ def run(argv: list[str], environ: Mapping[str, str]) -> int:
                 return 0
             print(f"import-env: created {result.connection_id}; probe {result.probe_outcome}; "
                   f"{'routed to text_analysis' if result.routed else 'NOT routed'}")
+            if result.routing_mode == ROUTING_MODE_RULES:
+                print(RULES_NOTICE, file=sys.stderr)
+                return 0 if result.probe_outcome == "ok" else 3
             return 0 if result.routed else 3
         report = rewrap(sessions, ring=ring, actor_uid=arguments.actor)
         print(f"rewrap: {report.rewrapped} re-sealed, {report.already_active} already on the "

@@ -58,6 +58,16 @@ and built from the worker's `KindRuntime`.
 - **Refusals reuse the catalogue**: `validation_failed` (`field`, `constraint`), `conflict`
   (`conflict_reason`), `dependency_unavailable` (`dependency`), `permission_denied`.
 
+## `import-env` and the routing mode (`EXEC2-FOLLOWUP-01`, ADR-0026 decision 17)
+
+`python -m auditmanager.executors import-env` makes the first connection from `PROXY_LLM_*`, runs its probe on the worker's
+path and, on `ok`, assigns it to `text_analysis`. That last step is a legacy route, and while the routing mode is `rules`
+`setExecutorRoute` is refused (`conflict` / `routing_mode_rules`). Under `rules` the command therefore **imports the
+connection, skips the route step and says so on stderr**: the mode is `rules`, no route was set, and the connection has to be
+added to a group and to the rule of `text_analysis` by hand («Исполнители» → «Группы» and «Правила»). That is a finished
+import and exits `0` when the probe passed; exit `3` still means the probe did not pass. Under `legacy` nothing differs, and a
+repeat is still a no-op that names the existing connection. (`ImportReport.routing_mode` carries the mode the route step met.)
+
 ## Capacity (`EXEC2-CAP-01`, ADR-0026 decisions 1 and 2)
 
 `max_active_runs` (1 to 16; absent reads as 1) is a setting of every kind. It is the most **units** of the

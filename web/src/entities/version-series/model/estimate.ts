@@ -14,6 +14,8 @@
 
 import type { ComparisonAiConsent, ComparisonAiEstimate, ComparisonAiMethod } from '@/shared/api';
 
+import { JOB_PLANNED_TAIL } from './job-executor';
+
 /** The consent line of each kind of start (the original's `CONSENT`, `projects.js:558`; the sheet's own, `sheet-changes.js:35`). */
 export const CONSENT_LINES = {
   pair_check: 'Подтверждаю передачу листов и подсказок для проверки сомнительных пар исполнителю',
@@ -142,6 +144,13 @@ export interface EstimateLine {
   readonly muted?: boolean;
 }
 
+/**
+ * `EXEC2-FOLLOWUP-01`: an estimate admitted by a rule or a group names a group and a model and **no connection** (the route has an
+ * `executor_group_id`): the line says so, and that the connection is chosen at the job's first call. A route with a connection
+ * (every estimate that existed before groups) has no such line.
+ */
+export const GROUP_ROUTE_LINE = `Исполнитель: группа подключений; ${JOB_PLANNED_TAIL}.`;
+
 /** The lines of the estimate, in the order the reader needs them: what, how much, to whom, at what price. */
 export function estimateLines(estimate: ComparisonAiEstimate): readonly EstimateLine[] {
   return [
@@ -158,6 +167,7 @@ export function estimateLines(estimate: ComparisonAiEstimate): readonly Estimate
       muted: true,
     },
     { key: 'model', text: `Модель: ${estimate.route.pinned_model} · ${BILLING_LABELS[estimate.route.billing]}.` },
+    ...(estimate.route.executor_group_id === undefined ? [] : [{ key: 'executor', text: GROUP_ROUTE_LINE, muted: true }]),
     { key: 'cost', text: closed(`Оценка стоимости: ${costLine(estimate)}`) },
     { key: 'ceilings', text: ceilingsLine(estimate), muted: true },
   ];

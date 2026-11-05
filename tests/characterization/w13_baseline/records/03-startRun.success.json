@@ -36,8 +36,8 @@
         "w13base-{{session_tag}}-run"
       ]
     ],
-    "body_length": 49,
-    "body_note": "StartRunRequest, version_uid only; provider_mode omitted"
+    "body_length": 199,
+    "body_note": "StartRunRequest, version_uid and the cost_consent taken from the estimate of the same version (BETA-COST-PREFLIGHT-1030); provider_mode omitted"
   },
   "response": {
     "status": 202,

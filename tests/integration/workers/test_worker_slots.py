@@ -127,9 +127,10 @@ def plant(sessions: sessionmaker[Session]) -> Plant:
 
 @pytest.fixture
 def start_service(
-    engine: Engine, sessions: sessionmaker[Session], plant: Plant,
+    engine: Engine, sessions: sessionmaker[Session], plant: Plant, started_services: list[WorkerService],
 ) -> Iterator[Callable[..., WorkerService]]:
-    started: list[WorkerService] = []
+    """Start a service; the stand-in's runs are released when the test ends, and then ``started_services`` (which
+    this fixture depends on, so it is torn down after this one) drains and stops every service, pass or fail."""
 
     def start(*, slots: int, poll_seconds: float = 30.0) -> WorkerService:
         service = WorkerService(
@@ -137,17 +138,14 @@ def start_service(
             version="exec-par-queue-suite", slots=slots, poll_seconds=poll_seconds,
             heartbeat_seconds=0.5, reclaim_seconds=300.0,
         )
+        started_services.append(service)  # before start(): a service that fails half way is stopped too
         service.start()
-        started.append(service)
         return service
 
     try:
         yield start
     finally:
         plant.release_all()
-        for service in started:
-            service.drain(timeout=WAIT_SECONDS)
-            service.stop()
 
 
 def _queue(

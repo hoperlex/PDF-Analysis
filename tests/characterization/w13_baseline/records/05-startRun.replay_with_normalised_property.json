@@ -36,7 +36,7 @@
         "w13base-{{session_tag}}-run"
       ]
     ],
-    "body_length": 78,
+    "body_length": 228,
     "body_note": "the key of case 03, with provider_mode stated explicitly"
   },
   "response": {

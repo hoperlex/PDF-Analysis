@@ -34,7 +34,7 @@ def downgrade() -> None:
         raise RuntimeError('stage_ai_generations_in_use')
     op.execute('DROP TRIGGER trg_stage_ai_generation_pin ON stage_ai_unit')
     op.drop_constraint('uq_stage_ai_unit_generation', 'stage_ai_unit', type_='unique')
-    op.create_unique_constraint('uq_stage_ai_unit_source', 'stage_ai_unit',
+    op.create_unique_constraint('stage_ai_unit_stage_chain_run_id_kind_group_id_source_sha25_key', 'stage_ai_unit',
         ['stage_chain_run_id','kind','group_id','source_sha256'])
     op.drop_constraint('ck_stage_ai_unit_generation', 'stage_ai_unit', type_='check')
     op.drop_column('stage_ai_unit', 'generation')

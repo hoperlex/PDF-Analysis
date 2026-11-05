@@ -13,8 +13,9 @@ from auditmanager.analysis.public import (
     AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID, ProviderConfig,
     ProviderMode, StageStatus,
 )
+from auditmanager.documents.public import MANIFEST_ROLE_SOURCE_DOCUMENT
 from auditmanager.findings.public import TerminalSelection
-from auditmanager.runs import executor, v3_worker
+from auditmanager.runs import cost_policy, executor, v3_worker
 from auditmanager.runs.repository import RunRow
 from auditmanager.runs.v3_group import TrustedPackRegistry
 from auditmanager.runs.v3_review_terminal import V3ReviewTerminal
@@ -46,9 +47,17 @@ class Jobs:
 
 
 class Runs:
-    def __init__(self, *, citation=False, prior_cost=None):
+    def __init__(self, *, citation=False, prior_cost=None, relaxed_limits=False):
         self.citation = citation
         self.prior_cost = prior_cost
+        self.relaxed_limits = relaxed_limits
+
+    def get(self, session, run_id):
+        # The worker reads the accepted cost authority of its Run (`read_run_cost_policy`, `EXEC2-GROUP-RUN-01`):
+        # a Run with no accepted command is the default-ceiling policy; a relaxed one names its command.
+        assert run_id == AUTHORITY.run_id
+        return SimpleNamespace(command_id="cmd_01M2545JSD15ETSNNV904X991J" if self.relaxed_limits else None,
+                               connection_revision_id=None)
 
     def cost(self, session, run_id):
         assert run_id == AUTHORITY.run_id
@@ -68,13 +77,18 @@ def _arrange(monkeypatch, *, completed=False, citation=False,
     order = []
     jobs = Jobs(completed=completed, cost_micros=cost_micros,
                 cost_basis=cost_basis)
-    runs = Runs(citation=citation, prior_cost=prior_cost)
+    runs = Runs(citation=citation, prior_cost=prior_cost, relaxed_limits=relaxed_limits)
+    monkeypatch.setattr(cost_policy, "CommandRepository", lambda: SimpleNamespace(
+        get=lambda *_args: SimpleNamespace(state="succeeded", outcome={"relaxed_limits": relaxed_limits})))
 
     def dispatch(*args, **kwargs):
         assert kwargs["settings"] == (
             v3_worker.V3_RELAXED_SETTINGS if relaxed_limits else v3_worker.V3_BETA_SETTINGS
         )
         assert kwargs["max_text_bytes"] == v3_worker.MAX_V3_SAVED_TEXT_BYTES
+        # The policy the worker read (no consent in either case here) travels to the provider call.
+        policy = kwargs["cost_policy"]
+        assert (policy.approved, policy.ceiling_usd, policy.enforce_ceiling) == (False, 1.0, not relaxed_limits)
         order.append("dispatch")
         jobs.completed = True
 
@@ -259,12 +273,14 @@ def test_executor_routes_exact_v3_pair_to_review_only_chain(monkeypatch):
 
     class Documents:
         def get_version(self, *_args):
-            return SimpleNamespace(
-                entry=lambda _role: SimpleNamespace(
-                    blob_id="blob_01M25P3TH08VVTTGJRXYBZZ7RP",
-                    sha256="0" * 64, size_bytes=12, media_type="application/pdf",
-                ), manifest=(),
+            # 10099a4e: the executor selects the analysed source from the version's manifest by role
+            # (`analysis_source_entry`), as the start command does, so the stand-in carries a manifest.
+            # 66460f0f: source preparation checks the PDF against the version's recorded page count.
+            source = SimpleNamespace(
+                role=MANIFEST_ROLE_SOURCE_DOCUMENT, blob_id="blob_01M25P3TH08VVTTGJRXYBZZ7RP",
+                sha256="0" * 64, size_bytes=12, media_type="application/pdf",
             )
+            return SimpleNamespace(entry=lambda _role: source, manifest=(source,), page_count=3)
 
     class Session:
         def commit(self):

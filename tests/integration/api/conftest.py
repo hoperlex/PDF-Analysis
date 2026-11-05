@@ -741,7 +741,11 @@ class LedgerDecisionAdapter:
         )
 
     def decision_journal(
-        self, *, category: str | None = None, verdict: str | None = None
+        self,
+        *,
+        category: str | None = None,
+        verdict: str | None = None,
+        project_uid: str | None = None,
     ) -> Sequence[DecisionRecordView]:
         """The journal, straight off `W38-KB`'s read. No ordering is applied here.
 
@@ -760,15 +764,20 @@ class LedgerDecisionAdapter:
                 recorded_at=entry.recorded_at,
                 project_uid=entry.project_uid,
                 run_id=entry.run_id,
+                document_uid=entry.document_uid,
+                version_uid=entry.version_uid,
+                project_name=entry.project_name,
+                document_name=entry.document_name,
                 category=entry.category,
                 finding_text=entry.finding_text,
                 current_verdict=entry.current_verdict,
                 decision_event_count=entry.decision_event_count,
                 verdict=entry.verdict,
                 comment=entry.comment,
+                section=entry.section,
             )
             for entry in decision_journal(
-                self._session, category=category, verdict=verdict
+                self._session, category=category, verdict=verdict, project_uid=project_uid
             )
         )
 
@@ -837,6 +846,19 @@ class SeamRunAdapter:
 
     def get_run_status(self, *, run_id: str) -> RunStatusView:
         return self._view(run_id)
+
+    def estimate_run_cost(
+        self, *, version_uid: str, executor_connection_id: str | None = None,
+        reaudit_of_run_id: str | None = None, preset_id: str | None = None, relaxed_limits: bool = False,
+        executor_group_id: str | None = None,
+    ) -> Any:
+        """`D-74`. The port declares it; this stand-in prices nothing, and says which dependency is missing."""
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="run_cost_estimator")
+
+    def get_extended_review(self, *, run_id: str) -> Any:
+        """`D-74`. An unknown run is ``404`` as for every run read; this stand-in holds no saved review."""
+        self._view(run_id)
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="extended_review_reader")
 
     def get_norm_verification(self, *, run_id: str) -> Any:
         # `R-146at`: the shipping adapter reads the Run first (an absent one is 404), then
@@ -973,6 +995,9 @@ def router(ingest: IngestService, session: Session, suite_account: str) -> Surfa
     test that drove the router alone would be testing half the edge. See ``driver.py``.
     """
     class MissingBetaGroup:
+        def estimate_ar_v3_group_cost(self, **_: Any) -> Any:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
+
         def start_ar_v3_group(self, **_: Any) -> Any:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="ArV3RunGroup")
 

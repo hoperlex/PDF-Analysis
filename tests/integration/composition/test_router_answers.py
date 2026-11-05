@@ -106,6 +106,20 @@ SEALED_STUB_GETS: frozenset[str] = frozenset({
     f"{_STUB_STAGE_PAIR}/sheet-suggestions",
     f"{_STUB_STAGE_PAIR}/text-fragments",
     "/stage-uploads/stu_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    # `CMP-SEAL-C4`: the sixteen reads of the stage review answer the same typed module refusal while the stage module is off.
+    f"{_STUB_STAGE_REVISION}/chain-estimate",
+    "/stage-chain-batches/scb_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "/stage-assemblies/sas_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "/stage-change-cards/ccd_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "/stage-change-cards/ccd_01ARZ3NDEKTSV4RRFFQ69G5FAV/verdicts",
+    "/comparison-page-profiles/cpr_01ARZ3NDEKTSV4RRFFQ69G5FAV/stage-text",
+    *(
+        f"/stage-chain-runs/crn_01ARZ3NDEKTSV4RRFFQ69G5FAV/{leaf}"
+        for leaf in (
+            "ai-reviews", "classifications", "synthesis", "graphic-evidence", "sheet-link-repairs", "cards",
+            "journal", "journal.xlsx", "journal.pdf", "journal.html",
+        )
+    ),
 })
 #: The versions module is on in this sweep. The served sheet and report reads answer `404 not_found`
 #: for an absent identity; the companion absent-parent sweep checks their module-off refusal separately.
@@ -358,6 +372,10 @@ def _absent_identity(parameter: str) -> str:
         "stage_pair_id": "stp",
         "stage_link_revision_id": "slk",
         "stage_chain_run_id": "crn",
+        # `CMP-SEAL-C4`: so the stage review's reads reach their stubs and not the pattern's 422.
+        "stage_chain_batch_id": "scb",
+        "stage_assembly_id": "sas",
+        "stage_change_card_id": "ccd",
     }
     return f"{prefixes.get(parameter, 'prj')}_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 

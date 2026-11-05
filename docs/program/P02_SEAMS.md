@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-259 operations, sealed. `A5` generates the typed client from this document; `B6`
+277 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -908,6 +908,9 @@ connection is applied as if the caller had named it) and `RunStatus` the read-on
 `CMP-SEAL-C1` (contract `1.10.0`) sealed the version comparison core as stubs on 2026-10-28 -- the effective matrix of a document set (`getComparisonMatrix`, `prepareComparisonMatrix`, `listComparisonMatrixEdits`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `listComparisonAiLinks`), the series of adjacent transitions and their sheet pairs (`startComparisonSeries`, `listComparisonSeries`, `getComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `listComparisonSheetPairs`, `getComparisonSheetPair`, `streamComparisonPairTile`) and the read models `getComparisonOverview` and `getComparisonQueueSummary`. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-MATRIX-01`, `CMP-SERIES-01`, `CMP-VIEWER-01`, `CMP-VC-OVERVIEW-01`) wires it. While the module «Сравнение версий» is on, `approveSheetPairing`, `withdrawSheetPairing` and `generateComparisonSummary` answer `503 dependency_unavailable`; migration `0039_comparison_core` adds seven tables and turns the active `0035` approvals into manual matrix edits (`ADR-0025` decision 13).
 `CMP-SEAL-C2` (contract `1.11.0`) sealed the version comparison AI, specifications, launch queue and reports as stubs on 2026-10-29 -- the AI check of the doubtful pairs of a document set (`estimateComparisonAiPairCheck`, `startComparisonAiPairCheck`, `getComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `listComparisonAiPairHints`), the AI description of changes (per series and per sheet pair, with the «Проверить» list and the MD of one sheet), specifications (the deterministic positions of a page and of a sheet pair, and the AI comparison of whole specifications per transition), the launch queue and the installation's AI queue, and the MD summary and the PDF reports -- fifty endpoints of the API in all. Reads are any one role; every write is an expert's act and keyed. Each answers `503 dependency_unavailable` until its lane (`CMP-VC-AIPAIR-01`, `CMP-VC-AISHEET-01`, `CMP-VC-SPEC-01`, `CMP-VC-QUEUE-01`, `CMP-VC-REPORT-01`) wires it, and `comparison_modules` first while the module «Сравнение версий» is off. Every AI start carries the estimate it consents to; migration `0040_comparison_ai_reports` adds twelve tables (`ADR-0025` decisions 17, 19 and 20).
 `CMP-SEAL-C3` (contract `1.12.0`) seals thirty-two stage comparison operations as typed stubs: separate resumable PDF/ZIP intake and candidate confirmation, expert-confirmed П/Р pairs and assemblies, sheet passports and append-only full map revisions, immutable raw text evidence and pinned seven-step chain runs. Reads are any one role; writes are expert acts with required idempotency keys. While `comparison_modules` excludes stages, each refuses with `comparison_modules`; otherwise it refuses its lane dependency until the C3 lanes wire it. Migration `0041_comparison_stage_core` adds fifteen project-reachable tables. D-262 still blocks first ZIP-set use until the caller enforces raw-upload, admission, disk and per-PDF validation bounds.
+`CMP-SEAL-C4` (contract `1.13.0`) sealed the stage comparison's AI review, link repair, full chain and expert journal on 2026-10-30 (`docs/program/CMP-SEAL-C4.md`): the assembly reload `getStageAssembly`; the chain's estimate, resume and batches (`estimateStageChainRun`, `resumeStageChainRun`, `startStageChainBatch`, `getStageChainBatch`, `pauseStageChainBatch`, `resumeStageChainBatch`, `cancelStageChainBatch`); the AI answers `listStageAiReviews`, `listStageClassifications` and `getStageSynthesis`, and the graphic evidence `listStageGraphicEvidence`; the sheet-link repairs `listStageLinkRepairs` and `undoStageLinkRepair`; the expert's cards and verdicts (`listStageChangeCards`, `getStageChangeCard`, `applyStageCardVerdicts`, `listStageCardVerdicts`); the change journal and its three exports (`getStageChangeJournal`, `streamStageChangeJournalXlsx`, `streamStageChangeJournalPdf`, `streamStageChangeJournalHtml`); and the page profile's stage text `getStageProfileText`. `createStageReviewCard` followed under the same version: an expert asks that evidence the cards hide be reviewed, which adds a `REVIEW` card and leaves the raw evidence unchanged. Reads are any one of `expert` and `admin`; every write is an expert's act and keyed. Migration `0042_comparison_stage_review` adds twelve project-reachable tables, and `0043_stage_ai_generations` preserves the immutable AI generations for explicit recovery. AI output never edits a raw difference.
+`BETA-COST-PREFLIGHT-1030` (contract `1.13.0`) added `estimateRunCost` and `estimateArV3GroupCost`: read-only cost preflights (`expert`) that write nothing and take no key. A changed source, profile, preset, route or model makes an earlier estimate digest stale; a start or a re-audit carries the consent (`cost_consent`) bound to one digest, and `startRun` gains `relaxed_limits`, the raised output limit chosen per Run.
+`HOTFIX-PRESENTATION-INT-1030` (contract `1.14.0`) added `getExtendedRunReview` (the source-bound preliminary extended analysis of a Run and its explicit coverage, `expert` or `admin`), `importComparisonZip` (`expert`, keyed: a reviewed, bounded ZIP of PDFs becomes immutable upload members, and an unsafe or non-PDF member is refused before anything is created) and `streamComparisonTechnicalReport` (the saved evidence of a comparison series as a workbook or an HTML bundle, no model call).
 `W57B-NORMS-CATALOGUE-XLSX-01` added `listNormDocuments` and `exportRunXlsx` on 2026-10-20:
 the current norms snapshot's documents as a catalogue with display names derived from the
 stored file names (any one role), and the run's W57b Excel workbook with `exportRunCsv`'s
@@ -984,6 +987,45 @@ refuses it as `authentication_required`. `EXEC-IMAGE-DELIVERY-01` adds
 `tools/executor-runner/RUNNER_API.md`.
 `getExecutorConnection` carries a `pull` connection's token metadata and open task count. No error
 code is added.
+
+`EXEC2-SEAL-1` (contract `1.15.0`, `ADR-0026`, rulings `R-149a` to `R-149f`, migration `0046_executor_capacity_enroll`)
+sealed the capacity of a connection and the universal agent: `issueExecutorEnrollment` (`admin`, keyed) shows a
+single-use enrollment grant once, with the install command that carries the package version and its sha256;
+`redeemExecutorEnrollment` exchanges the grant for a runner token and `reportRunnerHealth` stores the agent's
+version, clients and sanitised authentication state on that token; `downloadAgentPackage` serves the agent package
+by its version; `createExecutorAgentInstall`, `getExecutorAgentInstall` and `confirmExecutorAgentInstallHostKey`
+are the API side of an install over SSH (the host-key fingerprint is confirmed by value, never trusted on first
+use); and `setExecutorIntegrationAuthorisation` sets the administrator's mark that the clients behind a `pull`
+connection are authorised for this integration. `redeemExecutorEnrollment` authenticates with the enrollment secret
+(it is the one `ENROLLMENT_OPERATIONS` entry) and `reportRunnerHealth` with the runner token (it joins
+`RUNNER_OPERATIONS`); neither takes an account or a role. `downloadAgentPackage`
+is the fourth operation the sealed contract declares with `security: []`: the package is public code with no
+secret, and its integrity is the sha256 the install command carries (decision 6); it is addressed by version,
+a path parameter that is not an identity because a version is the only thing that tells two builds of that public
+code apart. The catalogue gains no error code.
+
+`EXEC2-SEAL-2` (contract `1.16.0`, `ADR-0026` decisions 10 to 17, migrations `0047_executor_groups_rules` and
+`0048_dispatch_time_binding`) sealed executor groups, routing rules, the routing mode and dispatch-time binding:
+`listExecutorGroups`, `createExecutorGroup`, `getExecutorGroup`, `reviseExecutorGroup`, `archiveExecutorGroup`
+and `getExecutorGroupCapacity` (a group is a set of interchangeable executors of one model; a revision is
+immutable and snapshots each member's connection revision); `listExecutorRoutingRules` and `setExecutorRoutingRule`
+(a rule points one work kind at a group revision and is append-only; the work kind is a closed vocabulary and the
+path key of the rule, not an identity); `previewExecutorRouting` and `setExecutorRoutingMode` (the cut-over from the
+legacy routes to rules, bound to the `preview_digest` that was shown, and its rollback). Reads are any one of
+`expert` and `admin`, except the preview, which is `admin`'s; every write is an administrator's and keyed.
+`startRun` and `estimateRunCost` gain the optional `executor_group_id`, exclusive with `executor_connection_id` and
+`preset_id`, and the status of a Run and of a comparison AI job gains `binding_state`, `planned`, `binding`,
+`wait_reason` and `waiting_since`: with a group the connection is chosen at dispatch. The routing mode stays
+`legacy` until `setExecutorRoutingMode` moves it. The catalogue gains no error code.
+
+`UI-PARITY-P0A` (contract `1.17.0`, no migration) added the read-only filters and fields the dashboard and the knowledge base
+need for the project chosen in the header, and no operation: `getDashboardSummary` takes an optional `project_uid` query
+parameter (every panel is then that project's by the definitions it already has; an unknown project is `not_found`, a
+malformed one `validation_failed`, and the operation stays any one role), and `listDecisions` takes the same optional
+`project_uid` (a filter on the finding, not a parent: no `not_found`). `DecisionRecord` gains `document_uid`, `version_uid`,
+`project_name`, `document_name` (joined at read time, stored nowhere) and the optional confirmed `section` of the finding's
+version, and `DecisionRecordPage` gains `total`, the count of entries matching the filters. Neither operation is keyed, and
+the catalogue gains no error code.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
@@ -1231,6 +1273,53 @@ could.
 | `listStageChainRuns` | `GET /stage-pairs/{stage_pair_id}/chain-runs` |
 | `getStageChainRun` | `GET /stage-chain-runs/{stage_chain_run_id}` |
 | `cancelStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/cancellation` |
+| `listExecutorGroups` | `GET /executor-groups` |
+| `createExecutorGroup` | `POST /executor-groups` |
+| `getExecutorGroup` | `GET /executor-groups/{group_id}` |
+| `reviseExecutorGroup` | `POST /executor-groups/{group_id}/revisions` |
+| `archiveExecutorGroup` | `POST /executor-groups/{group_id}/archive` |
+| `getExecutorGroupCapacity` | `GET /executor-groups/{group_id}/capacity` |
+| `listExecutorRoutingRules` | `GET /executor-routing-rules` |
+| `setExecutorRoutingRule` | `PUT /executor-routing-rules/{work_kind}` |
+| `previewExecutorRouting` | `GET /executor-routing/preview` |
+| `setExecutorRoutingMode` | `POST /executor-routing/mode` |
+| `issueExecutorEnrollment` | `POST /executor-connections/{connection_id}/enrollments` |
+| `setExecutorIntegrationAuthorisation` | `POST /executor-connections/{connection_id}/integration-authorisation` |
+| `createExecutorAgentInstall` | `POST /executor-connections/{connection_id}/agent-installs` |
+| `getExecutorAgentInstall` | `GET /executor-connections/{connection_id}/agent-installs/{install_id}` |
+| `confirmExecutorAgentInstallHostKey` | `POST /executor-connections/{connection_id}/agent-installs/{install_id}/confirm-host-key` |
+| `redeemExecutorEnrollment` | `POST /runner/enroll` |
+| `reportRunnerHealth` | `POST /runner/health` |
+| `downloadAgentPackage` | `GET /runner/agent-package/{version}` |
+| `estimateStageChainRun` | `GET /stage-link-revisions/{stage_link_revision_id}/chain-estimate` |
+| `resumeStageChainRun` | `POST /stage-chain-runs/{stage_chain_run_id}/resume` |
+| `startStageChainBatch` | `POST /projects/{project_uid}/stage-chain-batches` |
+| `getStageChainBatch` | `GET /stage-chain-batches/{stage_chain_batch_id}` |
+| `pauseStageChainBatch` | `POST /stage-chain-batches/{stage_chain_batch_id}/pause` |
+| `resumeStageChainBatch` | `POST /stage-chain-batches/{stage_chain_batch_id}/resume` |
+| `cancelStageChainBatch` | `POST /stage-chain-batches/{stage_chain_batch_id}/cancellation` |
+| `listStageAiReviews` | `GET /stage-chain-runs/{stage_chain_run_id}/ai-reviews` |
+| `listStageClassifications` | `GET /stage-chain-runs/{stage_chain_run_id}/classifications` |
+| `getStageSynthesis` | `GET /stage-chain-runs/{stage_chain_run_id}/synthesis` |
+| `listStageGraphicEvidence` | `GET /stage-chain-runs/{stage_chain_run_id}/graphic-evidence` |
+| `listStageLinkRepairs` | `GET /stage-chain-runs/{stage_chain_run_id}/sheet-link-repairs` |
+| `undoStageLinkRepair` | `POST /stage-link-repairs/{stage_link_repair_id}/undo` |
+| `listStageChangeCards` | `GET /stage-chain-runs/{stage_chain_run_id}/cards` |
+| `getStageChangeCard` | `GET /stage-change-cards/{stage_change_card_id}` |
+| `applyStageCardVerdicts` | `POST /stage-chain-runs/{stage_chain_run_id}/card-verdicts` |
+| `listStageCardVerdicts` | `GET /stage-change-cards/{stage_change_card_id}/verdicts` |
+| `getStageChangeJournal` | `GET /stage-chain-runs/{stage_chain_run_id}/journal` |
+| `streamStageChangeJournalXlsx` | `GET /stage-chain-runs/{stage_chain_run_id}/journal.xlsx` |
+| `streamStageChangeJournalPdf` | `GET /stage-chain-runs/{stage_chain_run_id}/journal.pdf` |
+| `streamStageChangeJournalHtml` | `GET /stage-chain-runs/{stage_chain_run_id}/journal.html` |
+| `getStageProfileText` | `GET /comparison-page-profiles/{comparison_page_profile_id}/stage-text` |
+| `getStageAssembly` | `GET /stage-assemblies/{stage_assembly_id}` |
+| `createStageReviewCard` | `POST /stage-chain-runs/{stage_chain_run_id}/review-cards` |
+| `estimateRunCost` | `POST /runs/cost-estimate` |
+| `estimateArV3GroupCost` | `POST /ar-v3-beta/groups/cost-estimate` |
+| `getExtendedRunReview` | `GET /runs/{run_id}/extended-review` |
+| `importComparisonZip` | `POST /projects/{project_uid}/comparison-zip-uploads` |
+| `streamComparisonTechnicalReport` | `GET /comparison-series/{comparison_series_id}/technical-report` |
 
 Rules that hold across the whole surface:
 
@@ -1243,7 +1332,7 @@ Rules that hold across the whole surface:
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,
   `setExecutorRoute`, `createAnalysisPreset`, `reviseAnalysisPreset`, `archiveAnalysisPreset`,
   `issueRunnerToken`, `revokeRunnerToken`,
-  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `startComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `startComparisonAiSheetChanges`, `pauseComparisonAiSheetChanges`, `resumeComparisonAiSheetChanges`, `cancelComparisonAiSheetChanges`, `finishComparisonAiSheetChanges`, `dequeueComparisonAiSheetChanges`, `retryComparisonAiSheetChanges`, `startComparisonSheetDescription`, `startComparisonSpecification`, `cancelComparisonSpecification`, `enqueueComparisonLaunch`, `pauseComparisonLaunchQueue`, `resumeComparisonLaunchQueue`, `clearComparisonLaunchQueue`, `removeComparisonLaunchEntry`, `createComparisonReport`, `uploadComparisonReportSource`, `startComparisonReport`, `cancelComparisonReport`, `continueComparisonReport`, `rebuildComparisonReportPdf`, `deleteComparisonReport` and `prepareComparisonClientReport`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness`, `createStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload`, `applyStageSheetMap`, `recomputeStageTextEvidence`, `startStageChainRun`, `cancelStageChainRun`, and no others. A repeat of the decision carryover under another key
+  `createComparisonUpload`, `uploadComparisonUploadPart`, `completeComparisonUploadFile`, `confirmComparisonUploadSet`, `excludeComparisonUploadSet`, `retryComparisonUploadSet`, `pauseComparisonUpload`, `resumeComparisonUpload`, `cancelComparisonUpload`, `appendComparisonVersionOrder`, `prepareComparisonMatrix`, `applyComparisonMatrixEdits`, `undoComparisonMatrixEdit`, `startComparisonSeries`, `pauseComparisonSeries`, `resumeComparisonSeries`, `cancelComparisonSeries`, `finishComparisonSeries`, `startComparisonAiPairCheck`, `pauseComparisonAiPairCheck`, `resumeComparisonAiPairCheck`, `cancelComparisonAiPairCheck`, `startComparisonAiSheetChanges`, `pauseComparisonAiSheetChanges`, `resumeComparisonAiSheetChanges`, `cancelComparisonAiSheetChanges`, `finishComparisonAiSheetChanges`, `dequeueComparisonAiSheetChanges`, `retryComparisonAiSheetChanges`, `startComparisonSheetDescription`, `startComparisonSpecification`, `cancelComparisonSpecification`, `enqueueComparisonLaunch`, `pauseComparisonLaunchQueue`, `resumeComparisonLaunchQueue`, `clearComparisonLaunchQueue`, `removeComparisonLaunchEntry`, `createComparisonReport`, `uploadComparisonReportSource`, `startComparisonReport`, `cancelComparisonReport`, `continueComparisonReport`, `rebuildComparisonReportPdf`, `deleteComparisonReport` and `prepareComparisonClientReport`, `confirmStagePair`, `createStageAssembly`, `reviseStageAssembly`, `setStagePairCompleteness`, `createStageUpload`, `uploadStageUploadPart`, `completeStageUploadFile`, `confirmStageUploadCandidate`, `rejectStageUploadCandidate`, `pauseStageUpload`, `resumeStageUpload`, `cancelStageUpload`, `applyStageSheetMap`, `recomputeStageTextEvidence`, `startStageChainRun`, `cancelStageChainRun`, `resumeStageChainRun`, `startStageChainBatch`, `pauseStageChainBatch`, `resumeStageChainBatch`, `cancelStageChainBatch`, `undoStageLinkRepair`, `applyStageCardVerdicts`, `createStageReviewCard`, `importComparisonZip`, `issueExecutorEnrollment`, `setExecutorIntegrationAuthorisation`, `createExecutorAgentInstall`, `confirmExecutorAgentInstallHostKey`, `createExecutorGroup`, `reviseExecutorGroup`, `archiveExecutorGroup`, `setExecutorRoutingRule`, `setExecutorRoutingMode`, and no others. A repeat of the decision carryover under another key
   that names the same pair and decision answers the event already carried (`replayed: true`)
   and appends nothing.
   `setGlobalVendorList` and `setProjectVendorList` take no key: a repeat of the latest
@@ -1305,6 +1394,16 @@ Rules that hold across the whole surface:
     answer_differs`, and an answer to an expired, failed or cancelled task is `conflict`;
   * `failExecutorTask`: a repeat on a failed task answers it unchanged; a task already
     answered or expired is `conflict`;
+  * `reportRunnerHealth` (`EXEC2-SEAL-1`): a repeat stores the same report again on the calling
+    token, and a later report replaces the earlier one; a report that violates the schema is
+    `validation_failed`;
+  * `redeemExecutorEnrollment` (`EXEC2-SEAL-1`): a repeat from the same `runner_instance_id` inside
+    the exchange window is answered idempotently, so an agent that lost the response is not
+    locked out; a repeat after the window is `conflict` with `conflict_reason:
+    enrollment_redeemed`, and an unknown, expired or revoked secret is `authentication_required`;
+  * `estimateRunCost` and `estimateArV3GroupCost` (`BETA-COST-PREFLIGHT-1030`) are POSTs that
+    write nothing: a repeat computes the estimate again, and its digest differs only when the
+    source, profile, preset, route, model or rates differ;
 * every response carries `X-Correlation-Id`;
 * every non-2xx body is the `ErrorEnvelope`, with `retryable` pinned to the catalog
   value for the reported code;
@@ -1313,10 +1412,11 @@ Rules that hold across the whole surface:
   response, and it would outlive the request that authorized it;
 * growing lists — projects, findings, decision history — are cursor-paginated;
 * every operation requires a bearer credential **and** a credential generation the account
-  still accepts, except the four a runner calls with a runner token (`EXEC-PULL-01`,
-  `RUNNER_OPERATIONS` in `src/auditmanager/api/security.py`: a principal of its own, no account and
-  no role) and those the sealed contract declares with `security: []` —
-  `issueToken`, `submitRegistration` and `readRegistrationStatus`, listed by
+  still accepts, except the six a runner calls with a runner token (`EXEC-PULL-01`, `EXEC-IMAGE-DELIVERY-01`
+  and `EXEC2-SEAL-1`, `RUNNER_OPERATIONS` in `src/auditmanager/api/security.py`: a principal of its own, no
+  account and no role), the one an agent calls with an enrollment secret (`redeemExecutorEnrollment`, `ENROLLMENT_OPERATIONS`
+  in the same module) and those the sealed contract declares with `security: []` —
+  `issueToken`, `submitRegistration`, `readRegistrationStatus` and `downloadAgentPackage`, listed by
   `python3 -c "import json; d = json.load(open('contracts/api/v1/openapi.json')); print(sorted(o['operationId'] for p in d['paths'].values() for o in p.values() if isinstance(o, dict) and o.get('security') == []))"`
   and held in code as `UNAUTHENTICATED_OPERATIONS` in `src/auditmanager/api/security.py`.
   `changePassword` raises that generation, which is how a credential already issued is taken

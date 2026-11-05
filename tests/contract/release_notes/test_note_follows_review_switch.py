@@ -27,10 +27,16 @@ SWITCHED = re.compile(
 )
 # Quotes the switch does not govern: the label above the comparison summary (owner and integrator rule)
 # and the label of a draft profile (the owner took off the label of a reviewed profile only).
+#
+# The second quote is also the status of a draft profile written as a note writes it («статус «черновик» до проверки
+# экспертом»): the draft label stays on the screen (``DRAFT_LABEL_SOURCE`` is asserted to still carry it), so
+# saying that a draft profile is a draft until an expert reviews it says nothing the switch hides.
 NOT_SWITCHED = (
     "Сводка подготовлена моделью, проверка человеком не проводилась",
     "черновик, требует экспертной проверки",
+    "статус «черновик» до проверки экспертом",
 )
+DRAFT_LABEL_SOURCE = ROOT / "web" / "src" / "entities" / "analysis-profile" / "model" / "presentation.ts"
 
 
 def switch_default(source: str) -> bool:
@@ -56,6 +62,11 @@ def test_the_switch_is_declared_once_and_its_default_is_readable() -> None:
     assert isinstance(switch_default(SWITCH_MODULE.read_text(encoding="utf-8")), bool)
 
 
+def test_the_draft_label_the_note_may_paraphrase_is_still_on_the_screen() -> None:
+    """The carve-out for a draft profile's status is only true while the draft label is drawn."""
+    assert "черновик, требует экспертной проверки" in DRAFT_LABEL_SOURCE.read_text(encoding="utf-8")
+
+
 def test_the_current_note_quotes_nothing_the_switch_hides_while_it_is_off() -> None:
     if switch_default(SWITCH_MODULE.read_text(encoding="utf-8")):
         return  # the wording is on the screens; a note may quote it
@@ -75,7 +86,12 @@ def test_the_check_can_fail() -> None:
     assert claims_a_switched_screen("Каждая тема требует проверки эксперта.")
     assert not claims_a_switched_screen("У профилей состояние «проверен» вместо черновика.")
     assert not claims_a_switched_screen("Ни человек, ни реальные документы эти инструкции не проверяли.")
-    summary, draft = NOT_SWITCHED
+    summary, draft, draft_status = NOT_SWITCHED
+    # the draft status may be said in a note, and nothing else the switch governs comes in with it
+    assert not claims_a_switched_screen(f"Профиль имеет {draft_status}.")
+    assert claims_a_switched_screen(f"Профиль имеет {draft_status}; у остальных пометка «{label}».")
+    assert claims_a_switched_screen("Профиль получает статус «черновик» до проверки человеком.")
+    assert claims_a_switched_screen("Результат остаётся черновиком до проверки экспертом.")
     assert not claims_a_switched_screen(f"Сводка готовится с пометкой «{summary}» и ссылками.")
     assert claims_a_switched_screen(f"Сводка с пометкой «{summary}»; профиль «{label}».")
     assert not claims_a_switched_screen(f"Состояние «проверен» вместо «{draft}».")

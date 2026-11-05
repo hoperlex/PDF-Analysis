@@ -135,7 +135,10 @@ describe('the start-run control says which, and links to the panel that settles 
     );
     expect(markup).toContain('>Подтвердить стадию и раздел</a>');
     expect(markup).toContain('Прогон не запущен.');
-    expect(markup.match(/<button\b/g)).toHaveLength(1);
+    // The control's own two buttons («Оценить стоимость», «Запустить прогон», since `6fe0bd50`) and no retry.
+    expect([...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([
+      'Оценить стоимость', 'Запустить прогон',
+    ]);
     expect(markup).not.toContain('Повторить');
     expect(offersASubstitute(markup.replace(/<[^>]+>/g, ' '))).toBe(false);
   });
@@ -146,7 +149,10 @@ describe('the start-run control says which, and links to the panel that settles 
     expect(markup).toContain('Для подтверждённого раздела нет профиля анализа.');
     expect(markup).toContain('data-classification-link=""');
     expect(markup).toContain('>Открыть стадию и раздел версии</a>');
-    expect(markup.match(/<button\b/g)).toHaveLength(1);
+    // The control's own two buttons («Оценить стоимость», «Запустить прогон», since `6fe0bd50`) and no retry.
+    expect([...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([
+      'Оценить стоимость', 'Запустить прогон',
+    ]);
     expect(offersASubstitute(markup.replace(/<[^>]+>/g, ' '))).toBe(false);
   });
 

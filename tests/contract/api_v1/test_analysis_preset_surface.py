@@ -57,8 +57,12 @@ def test_a_run_start_takes_exactly_these_fields(openapi_document: dict[str, Any]
     start = openapi_document["components"]["schemas"]["StartRunRequest"]
     # `BETA-COST-PREFLIGHT-1030` added `cost_consent` and `relaxed_limits`: both are acts of one start (a consent is
     # bound to one estimate digest, the raised output limit is chosen per Run), decided here not to be preset settings.
+    # `EXEC2-SEAL-2` added `executor_group_id` (ADR-0026 decisions 12 to 14): a group is an admission target whose
+    # connection is chosen at dispatch, and the contract declares it exclusive with `executor_connection_id` and
+    # `preset_id`, so a preset (which holds a connection) cannot also name one; decided here not to be a preset setting.
     assert set(start["properties"]) == {
-        "version_uid", "provider_mode", "executor_connection_id", "preset_id", "relaxed_limits", "cost_consent"}
+        "version_uid", "provider_mode", "executor_connection_id", "preset_id", "relaxed_limits", "cost_consent",
+        "executor_group_id"}
     assert start["required"] == ["version_uid"]
     reaudit = openapi_document["paths"]["/runs/{run_id}/reaudit"]["post"]
     # a re-audit takes only a consent for its own estimate, so a preset still cannot fill anything there
@@ -74,8 +78,10 @@ def test_every_setting_of_a_preset_is_a_field_a_run_start_takes(openapi_document
     # `provider_mode` is a start field a preset deliberately does not hold: the deployment's own mode
     # is the only one a start may name, so there is nothing to choose.
     assert settings <= start_fields
-    # `relaxed_limits` and `cost_consent` are per-start acts, not settings (see the premise above).
-    assert start_fields - settings == {"provider_mode", "relaxed_limits", "cost_consent"}
+    # `relaxed_limits` and `cost_consent` are per-start acts, not settings (see the premise above). So is
+    # `executor_group_id` (`EXEC2-SEAL-2`): exclusive with `preset_id` in the contract, it is chosen per start and a
+    # preset does not hold it; ADR-0026 gives a preset no group setting.
+    assert start_fields - settings == {"provider_mode", "relaxed_limits", "cost_consent", "executor_group_id"}
     # and the setting a preset names is the same type the start field is
     assert (schemas["SaveAnalysisPresetRequest"]["properties"]["executor_connection_id"]["$ref"]
             == schemas["StartRunRequest"]["properties"]["executor_connection_id"]["$ref"]

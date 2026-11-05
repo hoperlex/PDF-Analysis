@@ -42,7 +42,7 @@ const NNBSP = '\u202F';
 
 function refusal(details?: Record<string, string | number | boolean | null>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     error_code: 'analysis_input_budget_exceeded',
     message: 'A caller-safe sentence.',
     correlation_id: 'cid-budget',
@@ -132,7 +132,7 @@ describe('the re-audit classifier prints the same figures', () => {
     const other = new ApiError(
       409,
       {
-        contract_version: '1.16.0', error_code: 'state_transition_not_allowed', message: 'm',
+        contract_version: '1.17.0', error_code: 'state_transition_not_allowed', message: 'm',
         correlation_id: 'c', retryable: false, details: FIGURES as never,
       },
       'c',
@@ -156,15 +156,19 @@ describe('the start-run control shows the refusal with its figures and no retry'
     ));
   }
 
-  it('renders the warning state with both figures, the correlation id and one button only', () => {
+  it('renders the warning state with both figures, the correlation id and the two buttons of the control only', () => {
     const markup = control(refusal(FIGURES));
     expect(markup).toContain('am-state--warning');
     expect(markup).toContain('data-run-failure="input_budget_exceeded"');
     expect(markup).toContain(SENTENCE);
     expect(markup).toContain('cid-budget');
     expect(markup).toContain('Прогон не запущен.');
-    // The start button and nothing else: a retry cannot help a text that is too large.
-    expect(markup.match(/<button\b/g)).toHaveLength(1);
+    // The control's own two buttons and nothing else: since `6fe0bd50` a start is an estimate («Оценить
+    // стоимость») followed by the start itself, and a retry still cannot help a text that is too large.
+    expect([...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual([
+      'Оценить стоимость', 'Запустить прогон',
+    ]);
+    expect(markup.match(/<button\b/g)).toHaveLength(2);
     expect(markup).toContain('>Запустить прогон<');
     expect(markup).not.toContain('Повторить');
   });

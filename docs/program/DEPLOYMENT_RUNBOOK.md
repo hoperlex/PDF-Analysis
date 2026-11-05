@@ -1607,6 +1607,8 @@ network path and, only when the probe is `ok`, assigns the connection to `text_a
 run changes nothing and names the existing connection. Exit `3` means the connection exists but the
 probe did not pass: read the outcome in «Подключения», fix it there and assign by hand.
 
+Under routing mode `rules` (after the `EXEC2-CUTOVER-01` cut-over) a route cannot be set, so `import-env` creates and probes the connection, sets no route and says so on stderr; add the connection to a group and a rule in «Исполнители» (`EXEC2-FOLLOWUP-01`). Exit `0` then means imported and probed `ok`, `3` still means the probe did not pass.
+
 **Baseline OpenRouter after the source switch.** With `AUDITMANAGER_PROVIDER_SOURCE=database`,
 the worker now accepts a complete `PROXY_LLM_BASE_URL`, `PROXY_LLM_TOKEN`,
 `PROXY_LLM_MODEL` triplet in its private `provider.env`. On first start it creates

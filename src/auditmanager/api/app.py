@@ -206,7 +206,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **One hundred and eighty-five** of the 277
+    ``ValidationError`` out of ``components.schemas``. **One hundred and eighty-six** of the 277
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
@@ -241,21 +241,21 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     ``getMe``; `EXEC-PULL-01`'s six pull-channel operations (a path identity, a body or both)
     joined the first, and so did `COMPARE-PERSISTED-SUMMARY-01`'s ``approveSheetPairing`` and
     ``generateComparisonSummary`` (a body each) and ``withdrawSheetPairing`` (a path identity checked by
-    pattern).
-    **Fifteen cannot**, because the contract declares no ``422`` for them:
+    pattern), and `UI-PARITY-P0A`'s ``getDashboardSummary`` (the optional ``project_uid`` filter it gained
+    leaves the group below and joins this one; ``listDecisions`` already declared its own).
+    **Fourteen cannot**, because the contract declares no ``422`` for them:
     ``getRunStatus``, ``getDocumentVersion``, ``getFinding``, ``exportRunCsv``,
     ``getVersionBlocks`` (`W45-BLOCKS`, the same shape as ``getDocumentVersion``),
     ``getUser``, ``archiveUser``, ``restoreUser`` and ``purgeUser`` (`W49-SEAL-01`: a path
     identity and nothing else), ``getAssignment`` (`W61-DISPATCHER-01`, the same shape), ``listProposalDecisions`` and
     ``exportOptimisationProposalsCsv`` (`W60-OPT-PROPOSALS-01`, a path identity and nothing else),
     ``getRunNormReferences`` (`NORM-REFS-RUN-01`, the same shape), and
-    ``getDashboardSummary`` (`W46-SEAL`) and ``getMe`` (`W49-SEAL-01`), which take no
-    parameter at all, so a fortiori nothing a 422 could ever be about. FastAPI
-    injects one anyway, for any operation with parameters, and there is no switch
+    ``getMe`` (`W49-SEAL-01`), which takes no parameter at all, so a fortiori nothing a 422 could
+    ever be about. FastAPI injects one anyway, for any operation with parameters, and there is no switch
     (``fastapi/openapi/utils.py:517-535`` -- the condition is on the *absence* of a declared
     422, ``4XX`` or ``default``).
 
-    Thirteen of the fifteen take a path identity and the optional correlation header and nothing
+    Thirteen of the fourteen take a path identity and the optional correlation header and nothing
     else. A malformed path identity is ``404 not_found`` by design -- the frozen
     ``NotFound`` response says this surface "never reveals the existence of a resource
     the caller may not see" -- and the correlation header is declared but deliberately
@@ -264,13 +264,12 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     application, not a difference from the contract, and the narrowness is what makes
     that checkable: an operation's 422 is removed only when the response object is
     byte-for-byte :data:`_FASTAPIS_OWN_422`, so a declared one is never touched.
-    ``getDashboardSummary`` and ``getMe`` take no path identity at all -- only the
-    optional correlation header -- and FastAPI does not inject a 422 for them in the first
-    place: measured, not assumed (a bare unconstrained header carries nothing for
-    ``fastapi/openapi/utils.py`` to validate). So they reach ``responses`` below with no
-    422 already, and this function removes nothing from them; they are named here only so
-    that "eleven cannot" is checkable against the served document rather than against nine
-    names and two implicit ones. The two schemas go only if nothing still references them, and the
+    ``getMe`` takes no path identity at all -- only the optional correlation header -- and
+    FastAPI does not inject a 422 for it in the first place: measured, not assumed (a bare
+    unconstrained header carries nothing for ``fastapi/openapi/utils.py`` to validate). So it
+    reaches ``responses`` below with no 422 already, and this function removes nothing from it;
+    it is named here only so that "fourteen cannot" is checkable against the served document
+    rather than against a list of names and one implicit entry. The two schemas go only if nothing still references them, and the
     function refuses rather than leave a dangling ``$ref``.
     """
     removed = 0

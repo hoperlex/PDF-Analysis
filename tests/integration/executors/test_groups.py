@@ -189,8 +189,7 @@ def archive(session, group_id: str):
         session, group_id=group_id, roles=ADMIN_ROLES, idempotency_key=key(), actor_uid=ADMIN)
 
 
-def rows(session) -> dict[str, int]:
-    """What a refused request must not change: the group tables, the commands recorded for them and their events."""
+def _counted(session) -> dict[str, int]:
     counted = {
         table: int(session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()) for table in GROUP_TABLES
     }
@@ -203,6 +202,27 @@ def rows(session) -> dict[str, int]:
         "'executor.group_revised', 'executor.group_archived', 'executor.routing_rule_set')"
     )).scalar_one())
     return counted
+
+
+#: What the lane's database already held when the current test began (see :func:`_baseline`).
+_BASELINE: dict[str, int] = {}
+
+
+@pytest.fixture(autouse=True)
+def _baseline(session):
+    """The group tables are append-only and a group is never deleted, so what other suites *commit* stays for ever:
+    ``jobs/test_group_dispatch`` commits thirty groups on every run (its racing claims need real commits). A count here is
+    therefore the test's own, taken from the numbers it started at -- not a claim that the table was empty, which holds
+    on the first run of a fresh lane database and on no later one."""
+    _BASELINE.clear()
+    _BASELINE.update(_counted(session))
+    yield
+
+
+def rows(session) -> dict[str, int]:
+    """What a refused request must not change: the group tables, the commands recorded for them and their events,
+    as this test has changed them (the rows it started with are not counted)."""
+    return {name: number - _BASELINE[name] for name, number in _counted(session).items()}
 
 
 def refused_cleanly(session, call) -> DomainError:
@@ -558,7 +578,8 @@ def test_an_archive_is_soft_and_every_revision_member_and_rule_stays_readable(se
     assert group_detail(session, old.group.group_id).revisions[0] == old_revision
     assert [(m.connection_id, m.connection_revision_id) for m in old_revision.members] == sorted(
         [(one[0], one[1]), (two[0], two[1])])
-    names = [(s.group.display_name, s.group.archived_at is not None) for s in list_group_summaries(session)]
+    names = [(s.group.display_name, s.group.archived_at is not None) for s in list_group_summaries(session)
+             if s.group.display_name in ("New", "Old")]  # not the groups other suites committed (see `_baseline`)
     assert names == [("New", False), ("Old", True)], "archived groups are listed, after the active ones"
     assert rows(session)["executor_group_revision"] == 2 and rows(session)["executor_routing_rule_revision"] == 2
 
@@ -746,7 +767,9 @@ def test_the_eight_operations_through_the_served_application(session, served) ->
         SONNET_PIN.input_per_mtok_usd, SONNET_PIN.output_per_mtok_usd)
 
     listed = call(served, "GET", "/executor-groups", keyed=False)
-    assert listed.status == 200 and [g["group_id"] for g in listed.json()["items"]] == [gid]
+    assert listed.status == 200 and [
+        g["group_id"] for g in listed.json()["items"] if g["display_name"] == "Pool"  # not those other suites committed
+    ] == [gid]
     detail_ = call(served, "GET", f"/executor-groups/{gid}", keyed=False)
     assert detail_.status == 200 and [r["revision_no"] for r in detail_.json()["revisions"]] == [1]
     assert detail_.json()["group"]["group_id"] == gid

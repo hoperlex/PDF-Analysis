@@ -12,8 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from auditmanager.comparison.modules import MODULE_STAGES
 from auditmanager.comparison.stage_links.read import StageSheetReadService
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
-from auditmanager.ingest.comparison_pdf.public import require_expert
-from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint, require_expert
 from auditmanager.shared.db import session_scope
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdempotencyKey, StageChainRunId, StageChainStepId

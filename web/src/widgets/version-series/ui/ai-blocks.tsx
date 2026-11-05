@@ -33,6 +33,7 @@ import {
   AI_SHEET_STATE_LABELS,
   AI_TEXT_NOTE,
   AiText,
+  JobExecutor,
   RecordedMark,
   RETRY_FAILED_LABEL,
   REPORT_KIND_LABELS,
@@ -158,6 +159,7 @@ export function AiChangesBlockView({
           <button type="button" className="am-button am-button--small am-button--quiet" disabled={busy} title="Описать заново только листы с ошибкой (например, после отказа провайдера); готовые листы не повторяются." data-ai-retry="" onClick={() => onAct('retry')}>{RETRY_FAILED_LABEL}</button>
         ) : null}
       </div>
+      {job === undefined ? null : <JobExecutor job={job} />}
       {job?.state === 'paused' && job.pause_reason !== undefined ? (
         <p className={aiStyles.warning} role="status" data-ai-pause-reason={job.pause_reason}>
           Пауза: {AI_PAUSE_REASON_LABELS[job.pause_reason]}. {AI_PAUSE_ADVICE[job.pause_reason]}
@@ -538,6 +540,7 @@ export function SummaryReportBlockView({ report, summaryReady, transitions, name
         ) : null}
       </div>
       <CommandRefusal failure={failure} />
+      {report?.job === undefined ? null : <JobExecutor job={report.job} />}
       {report === undefined ? null : (
         <>
           {report.failure_reason === undefined || report.state === 'running' ? null : (

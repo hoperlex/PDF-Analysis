@@ -3,8 +3,9 @@
 The shipped ``SectionAdapter``, ``RunAdapter`` and ``ExecutionAdapter`` behind the shipped
 ``build_router`` and the real ASGI app, driven through ``starlette``'s test client with real
 bearer credentials for real accounts, against the lane's own PostgreSQL and MinIO. The
-section table is the **real** text-profile registry (every ``text-profile/1`` package in the tree;
-АР is not one since `PROD-11-AR-V1-V2-REMOVAL-01`). ``PB`` (`PB-PROFILE-01`) now has a draft profile, so the
+section table is the **real** text-profile registry (every ``text-profile`` package in the tree, all fifteen:
+АР is one again since `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`, as it was not between
+`PROD-11-AR-V1-V2-REMOVAL-01` and that hotfix). ``PB`` (`PB-PROFILE-01`) now has a draft profile, so the
 refusal for a section without one is proved on a registry built without that section
 (``WITHOUT_PB``), through the same adapters and the same routes.
 
@@ -16,16 +17,16 @@ Cases (the decision's tests 3-5 and the task's failure list):
   under a foreign document or project is ``404``;
 * every version read projects the classification; a version nobody classified carries none,
   even when its document has the legacy ``section`` ``AR``;
-* the review lists all fifteen choices, marks ``executable`` exactly as the registry does (fourteen:
-  АР is listed and is not executable) and never pre-selects;
+* the review lists all fifteen choices, marks ``executable`` exactly as the registry does (all fifteen,
+  АР included since `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`) and never pre-selects;
 * ``startRun`` on an unclassified version is ``422 version_classification_required`` (no details;
   ``BETA-CONTRACT-SEAL-01``, ``D-179``) and leaves no run and no command record; on a
   version whose section the registry lacks ``422 section_profile_unavailable``; on a ``PB`` version
   the run pins the ``PB`` package's own profile and bundle (it is only started here: nothing is
   executed, and its recorded replay is `SECTION-RECORDINGS-01`'s); on a ``KJ`` version
-  the run pins the ``KJ`` package's profile and bundle, and an ``AR`` version is
-  ``422 section_profile_unavailable`` for ``startRun`` and for ``reauditRun`` alike, leaving no run
-  and no command record (it used to pin the v1 pair);
+  the run pins the ``KJ`` package's profile and bundle, and an ``AR`` version pins the ``AR`` package's own
+  draft profile and bundle for ``startRun`` and for ``reauditRun`` alike (between `PROD-11-AR-V1-V2-REMOVAL-01`
+  and the hotfix both were ``422 section_profile_unavailable``; before that it pinned the v1 pair);
 * a replay of an accepted key answers the run it created; a re-audit routes from the version's
   classification now, and an older run keeps the profile it pinned.
 
@@ -45,6 +46,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.testclient import TestClient
 
+from auditmanager.analysis.public import ProviderConfig, ProviderMode
 from auditmanager.access.accounts import AccountRepository as AccountAccessRepository
 from auditmanager.access.repository import UserRepository as UserAccessRepository
 from auditmanager.analysis.text.profile_registry import (
@@ -66,6 +68,11 @@ from auditmanager.runs import RunRepository
 from auditmanager.shared.errors import ErrorCode
 from auditmanager.shared.identity import DocumentUid, ProjectUid, RunId, VersionUid
 from tests.support.v1_reference_profile import V1_REFERENCE_PROFILE
+
+
+#: 99b337fb: `RunAdapter.start_run` hands its provider configuration's model to the start command as the operational
+#: model, so an adapter that starts a run carries a configuration (recorded mode, the model the recordings were made with).
+RECORDED_CONFIG = ProviderConfig(ProviderMode.RECORDED, "claude-opus-5", 1.0, None, True)
 
 SECRET = "w59-section-routing-http-token"
 REGISTRY = load_text_profile_registry()
@@ -207,7 +214,7 @@ def _client(
 ) -> tuple[TestClient, _Carrier]:
     carrier = _Carrier()
     run_adapter = RunAdapter(
-        sessions, blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
+        sessions, blob_store=None, adapter=None, provider_config=RECORDED_CONFIG, provider_mode="recorded",
         carrier=carrier,
         section_profiles=registry.section_profiles(), text_profiles=registry.resolve,
     )
@@ -379,8 +386,9 @@ class TestReview:
         )
         executable = {option["section_code"] for option in review["options"] if option["executable"]}
         assert executable == set(REGISTRY.executable_sections())
-        assert {"KJ", "PB"} <= executable and "AR" not in executable and len(executable) == 14, (
-            "`PB-PROFILE-01`: fire safety has a profile; `PROD-11-AR-V1-V2-REMOVAL-01`: АР has none"
+        assert {"KJ", "PB", "AR"} <= executable and len(executable) == 15, (
+            "`PB-PROFILE-01`: fire safety has a profile; `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): "
+            "АР has its draft original-source profile again, so all fifteen choices are executable"
         )
         assert review["recognised_text_consulted"] is False
         suggested = {
@@ -405,7 +413,7 @@ class TestReview:
         ).json()
         executable = {option["section_code"] for option in review["options"] if option["executable"]}
         assert executable == set(WITHOUT_PB.executable_sections())
-        assert "PB" not in executable and "AR" not in executable and len(executable) == 13
+        assert "PB" not in executable and "AR" in executable and len(executable) == 14
 
     def test_admin_may_read_a_review(self, sessions, blob_store, world) -> None:
         client, _ = _client(sessions, blob_store)
@@ -499,18 +507,33 @@ class TestRunStart:
         assert replay.status_code == 202 and replay.json()["run_id"] == run["run_id"]
         assert len(carrier.submitted) == 1
 
-    def test_an_ar_classified_version_is_refused_and_leaves_nothing(
+    def test_an_ar_classified_version_pins_the_ar_profile_and_no_other_sections(
         self, sessions, blob_store, world
     ) -> None:
-        """`PROD-11-AR-V1-V2-REMOVAL-01`: АР used to pin the v1 pair; it has no text profile now."""
+        """`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): АР is routed to its own draft profile.
+
+        `PROD-11-AR-V1-V2-REMOVAL-01` had АР refused (``section_profile_unavailable``) because it had no text
+        profile; the hotfix gave it the original-source profile 1.0.0, so a classified АР version starts the
+        ordinary single Run on that pair, which no other section shares. Only the pin is asserted here: the
+        carrier records and nothing executes.
+        """
         client, carrier = _client(sessions, blob_store)
         token, _ = _expert()
         assert _classify(client, token, _version_path(world, world.ar), "P", "AR").status_code == 200
         key = _key()
-        _assert_unroutable(_start(client, token, world.ar, key), "section_profile_unavailable")
-        assert _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.ar) == 0
-        assert _count(sessions, "SELECT count(*) FROM command_record WHERE idempotency_key = :k", k=key) == 0
-        assert carrier.submitted == []
+        accepted = _start(client, token, world.ar, key)
+        assert accepted.status_code == 202, accepted.content
+        run = accepted.json()
+        table = REGISTRY.section_profiles()
+        ar_profile, ar_bundle = table["AR"]
+        assert (run["analysis_profile_id"], run["prompt_bundle_id"]) == (ar_profile, ar_bundle)
+        assert ar_profile != str(V1_REFERENCE_PROFILE.analysis_profile_id)
+        assert all(pair != table["AR"] for code, pair in table.items() if code != "AR")
+        assert _count(sessions, "SELECT count(*) FROM audit_run WHERE version_uid = :v", v=world.ar) == 1
+        assert len(carrier.submitted) == 1
+        replay = _start(client, token, world.ar, key)
+        assert replay.status_code == 202 and replay.json()["run_id"] == run["run_id"]
+        assert len(carrier.submitted) == 1
 
 
 class TestReaudit:
@@ -533,18 +556,21 @@ class TestReaudit:
         )
         assert len(carrier.submitted) == 1
 
-    def test_a_reaudit_of_a_version_classified_ar_is_refused_and_leaves_nothing(
+    def test_a_reaudit_of_a_version_classified_ar_routes_to_the_ar_profile(
         self, sessions, blob_store, world
     ) -> None:
-        """`PROD-11-AR-V1-V2-REMOVAL-01`: the re-audit routes like the start, so it refuses АР too."""
+        """`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`: the re-audit routes like the start, so it takes АР's profile now."""
         client, carrier = _client(sessions, blob_store)
         token, _ = _expert()
         assert _classify(client, token, _version_path(world, world.reaudit), "P", "AR").status_code == 200
-        key = _key()
-        _assert_unroutable(
-            client.post(f"/runs/{world.source}/reaudit", headers=_headers(token, key)),
-            "section_profile_unavailable",
-        )
-        assert _count(sessions, "SELECT count(*) FROM command_record WHERE idempotency_key = :k", k=key) == 0
-        assert _count(sessions, "SELECT count(*) FROM audit_run WHERE reaudit_of_run_id = :r", r=world.source) == 0
-        assert carrier.submitted == []
+        accepted = client.post(f"/runs/{world.source}/reaudit", headers=_headers(token, _key()))
+        assert accepted.status_code == 202, accepted.content
+        ar_profile, ar_bundle = REGISTRY.section_profiles()["AR"]
+        assert (accepted.json()["analysis_profile_id"], accepted.json()["prompt_bundle_id"]) == (ar_profile, ar_bundle)
+        assert _count(sessions, "SELECT count(*) FROM audit_run WHERE reaudit_of_run_id = :r", r=world.source) == 1
+        with sessions() as session:
+            source = RunRepository().get(session, world.source)
+        assert (source.analysis_profile_id, source.prompt_bundle_id) == (
+            world.seeded.analysis_profile_id, world.seeded.prompt_bundle_id,
+        ), "the source run keeps the pair it pinned"
+        assert len(carrier.submitted) == 1

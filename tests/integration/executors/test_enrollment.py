@@ -160,8 +160,15 @@ class StubEnrollment:
             "created_by": user_uid, "secrets": [], "routed_work_kinds": []})
 
 
-class StubRunner:
-    """The ``RunnerPort`` as far as the seam asks it: a runner token and nothing else."""
+class TokenOnlyRunner:
+    """The ``RunnerPort`` as far as the seam asks it: a runner token and nothing else.
+
+    Not called ``StubRunner``: ``test_runner_seam.StubRunner`` is the whole port and ``DeliveringRunner`` extends it, and
+    the port-wholeness guard resolves a base class by name, so a second class of that name makes the base unreadable.
+
+    Any other method of the port is an ``AttributeError`` that names it -- the form
+    ``test_every_port_implementation_is_whole`` reads as "answers to nothing it was not given"; this suite drives
+    only the authentication of a runner token."""
 
     def __init__(self) -> None:
         self.presented: list[str] = []
@@ -170,17 +177,44 @@ class StubRunner:
         self.presented.append(presented)
         return RunnerIdentity("ern_T", CONNECTION) if presented == TOKEN else None
 
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(f"this suite drives only authenticate_runner of the RunnerPort, not {name}")
+
+
+class _Wired:
+    """``StubEnrollment`` as ``build_router`` is given it: every call forwarded, so the stub still records it.
+
+    A class constructed in the call is what ``test_every_port_implementation_is_whole`` can read; a parameter
+    handed through is not, and the guard reports what it cannot read."""
+
+    def __init__(self, port: "StubEnrollment") -> None:
+        self._port = port
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._port, name)
+
 
 def _surface(port: StubEnrollment | None, *, roles: frozenset[str] = frozenset({"admin"})):
-    router = build_router(
-        projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
-        exports=None,  # type: ignore[arg-type]
-        credentials=driver.SuiteCredentialAdapter(roles=roles),
-        accounts=driver.SuiteAccountAdapter(),
-        registrations=driver.SuiteRegistrationAdapter(),
-        runner=StubRunner(),  # type: ignore[arg-type]
-        enrollment=port,  # type: ignore[arg-type]
-    )
+    if port is None:
+        router = build_router(
+            projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+            exports=None,  # type: ignore[arg-type]
+            credentials=driver.SuiteCredentialAdapter(roles=roles),
+            accounts=driver.SuiteAccountAdapter(),
+            registrations=driver.SuiteRegistrationAdapter(),
+            runner=TokenOnlyRunner(),  # type: ignore[arg-type]
+            enrollment=None,
+        )
+    else:
+        router = build_router(
+            projects=None, documents=None, runs=None, findings=None, decisions=None,  # type: ignore[arg-type]
+            exports=None,  # type: ignore[arg-type]
+            credentials=driver.SuiteCredentialAdapter(roles=roles),
+            accounts=driver.SuiteAccountAdapter(),
+            registrations=driver.SuiteRegistrationAdapter(),
+            runner=TokenOnlyRunner(),  # type: ignore[arg-type]
+            enrollment=_Wired(port),  # type: ignore[arg-type]
+        )
     return driver.Surface(router)
 
 

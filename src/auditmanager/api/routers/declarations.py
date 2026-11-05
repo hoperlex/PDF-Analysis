@@ -26,6 +26,7 @@ __all__ = [
     "CursorParam",
     "IncludeArchivedParam",
     "LimitParam",
+    "ProjectUidFilterParam",
     "RegistrationStatusFilterParam",
     "STATE_CONFLICT_DESCRIPTION",
     "VerdictFilterParam",
@@ -172,6 +173,18 @@ VerdictFilterParam = Annotated[
     models.Verdict | None,
     BeforeValidator(_absent),
     WithJsonSchema({"$ref": "#/components/schemas/Verdict"}),
+    Query(json_schema_extra=optional_property),
+]
+
+#: `UI-PARITY-P0A`. The optional ``project_uid`` query filter of ``getDashboardSummary`` and
+#: ``listDecisions``: the project the header of the product names. Spelled as ``listAssignments``'
+#: own ``project_uid`` is (an inline ``ProjectUid`` query parameter, not a reusable component -- the
+#: component of that name is the *path* parameter): the shape is enforced, so a malformed value is a
+#: ``422`` and not an empty page, and the empty string is the absent parameter.
+ProjectUidFilterParam = Annotated[
+    models.ProjectUid | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"$ref": "#/components/schemas/ProjectUid"}),
     Query(json_schema_extra=optional_property),
 ]
 

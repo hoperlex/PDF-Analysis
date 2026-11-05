@@ -20,10 +20,13 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
+
+from tests.support.worker_services import stop_all
 
 _HARNESS_NAME = "b5_run_harness"
 _HARNESS_PATH = Path(__file__).resolve().parents[1] / "runs" / "harness.py"
@@ -84,3 +87,24 @@ def quiet_queue(sessions: sessionmaker[Session]) -> Iterator[None]:
                 ), {"job_id": job_id, "available_at": available_at})
             JobRepository().set_paused(cleanup, paused=bool(paused))
             cleanup.commit()
+
+
+#: How long the teardown waits for the runs a service still has in flight (the plants release their gates first).
+DRAIN_SECONDS = 30.0
+
+
+@pytest.fixture
+def started_services() -> Iterator[list[Any]]:
+    """Every ``WorkerService`` a test of this suite started, stopped at teardown **whatever happened**.
+
+    A starting fixture appends the service to this list *before* it calls ``start()``, so a service that fails
+    half way is stopped as well, and depends on this fixture, so that its own teardown (the release of the
+    runs it holds) runs first. ``stop_all`` drains and stops each service in a ``try`` of its own and then
+    requires that no worker loop thread is left in the process (``tests/support/worker_services.py``): a
+    worker that outlives its test would otherwise keep heartbeating, and failing to, into the tests after it.
+    """
+    started: list[Any] = []
+    try:
+        yield started
+    finally:
+        stop_all(started, drain_timeout=DRAIN_SECONDS)

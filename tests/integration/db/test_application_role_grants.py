@@ -250,9 +250,10 @@ def test_the_application_role_does_the_crud_the_contexts_do(applied: Stand) -> N
         connection.execute("SELECT count(*) FROM contract_state_transition").fetchone()
         connection.execute("SELECT count(*) FROM finding_current_verdict").fetchone()
         assert connection.execute("SELECT nextval('audit_event_sequence_no_seq')").fetchone()[0] > 0
-        # row locks: the two append-only tables the code locks, and a read-write one
+        # row locks: the three append-only tables the code locks, and a read-write one
         connection.execute("SELECT assignment_uid FROM work_assignment FOR UPDATE").fetchall()
         connection.execute("SELECT version_uid FROM document_version_classification FOR NO KEY UPDATE").fetchall()
+        connection.execute("SELECT project_uid FROM stage_assembly WHERE stage_assembly_id = 'x' FOR UPDATE").fetchall()
         connection.execute("SELECT job_id FROM job FOR UPDATE SKIP LOCKED").fetchall()
         # the SQL helper a CHECK calls, and pgvector's operator (the extension keeps its PUBLIC default)
         assert connection.execute("SELECT am_is_ascending_page_list(ARRAY[1, 2, 3], 3)").fetchone() == (True,)
@@ -377,7 +378,11 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'TRUNCATE TABLE "{table}"')
             refused.append(table)
-    assert refused == sorted(coverage.TABLES) and len(refused) == 110  # 0041: fifteen comparison-stage tables added to the 0040 inventory
+    # 110 at 0041 (fifteen comparison-stage tables added to the 0040 inventory); then 0042 adds twelve (the stage AI review,
+    # repairs, expert cards and batches), 0046 two (``executor_enrollment``, ``executor_agent_install``) and 0047 five
+    # (``executor_group``, ``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
+    # ``executor_routing_mode_event``); 0043-0045 and 0048 add none: 110 + 12 + 2 + 5 = 129.
+    assert refused == sorted(coverage.TABLES) and len(refused) == 129
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -410,7 +415,11 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
             with pytest.raises(errors.InsufficientPrivilege):
                 connection.execute(f'DELETE FROM "{table}" WHERE false')
             checked.append(table)
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 55  # 0041: eight immutable stage tables added to the 0040 inventory
+    # 55 at 0041 (eight immutable stage tables added to the 0040 inventory); then 0042 adds nine immutable stage tables
+    # and 0047 four (``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
+    # ``executor_routing_mode_event``; ``executor_group`` is read-write: its rotation cursor advances and its archive is
+    # write-once): 55 + 9 + 4 = 68.
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 68
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:
@@ -423,12 +432,20 @@ def test_read_only_tables_refuse_every_write(applied: Stand) -> None:
                     connection.execute(statement)
 
 
+#: The append-only tables whose rows the code locks, with the key column the role may "update" -- pinned here as a literal,
+#: and not read back from ``LOCK_ONLY_UPDATE``, so that a table dropped from the declaration fails the assertion below.
+_LOCK_ONLY_TABLES = (
+    ("work_assignment", "assignment_uid"),
+    ("document_version_classification", "version_uid"),
+    ("stage_assembly", "stage_assembly_id"),
+)
+
+
 def test_a_lock_only_table_can_be_locked_and_cannot_be_updated(applied: Stand) -> None:
     with applied.owner() as owner:
-        others = {t: _first_column(owner, t, exclude=k) for t, k in
-                  (("work_assignment", "assignment_uid"), ("document_version_classification", "version_uid"))}
+        others = {t: _first_column(owner, t, exclude=k) for t, k in _LOCK_ONLY_TABLES}
     with applied.app(autocommit=False) as connection:
-        for table, key in (("work_assignment", "assignment_uid"), ("document_version_classification", "version_uid")):
+        for table, key in _LOCK_ONLY_TABLES:
             other = others[table]
             connection.execute(f'SELECT "{key}" FROM "{table}" FOR UPDATE').fetchall()
             connection.execute(f'SELECT "{key}" FROM "{table}" FOR NO KEY UPDATE').fetchall()
@@ -436,6 +453,7 @@ def test_a_lock_only_table_can_be_locked_and_cannot_be_updated(applied: Stand) -
                 connection.execute(f'UPDATE "{table}" SET "{other}" = "{other}"')
             connection.rollback()
             assert table in grants.LOCK_ONLY_UPDATE
+    assert sorted(grants.LOCK_ONLY_UPDATE) == sorted(table for table, _key in _LOCK_ONLY_TABLES)
 
 
 def test_a_second_wall_the_trigger_refuses_even_a_privilege_forced_on(applied: Stand) -> None:

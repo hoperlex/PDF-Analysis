@@ -85,7 +85,17 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
             "comparison_launch_entry"} <= tool.PRODUCT_TABLES
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches are
     # product data too (PRODUCT 77 -> 89).
-    assert len(tool.PRODUCT_TABLES) == 89 and len(tool.KEEP_TABLES) == 30 and len(tool.MIXED_TABLES) == 3
+    # `0046_executor_capacity_enroll` and `0047_executor_groups_rules` (`EXEC2-SEAL-1`, `EXEC2-SEAL-2`): the enrollment
+    # grants, the install sessions, the groups with their revisions and members, the routing rules and the
+    # routing-mode journal are the stand's configuration of its own executors, like the connections and tokens they
+    # name, so they join the kept tables (KEEP 30 -> 37); no product table is added, and none of them is mixed.
+    assert {"executor_enrollment", "executor_agent_install", "executor_group", "executor_group_revision",
+            "executor_group_member", "executor_routing_rule_revision",
+            "executor_routing_mode_event"} <= tool.KEEP_TABLES
+    assert not {"executor_enrollment", "executor_agent_install", "executor_group", "executor_group_revision",
+                "executor_group_member", "executor_routing_rule_revision",
+                "executor_routing_mode_event"} & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
+    assert len(tool.PRODUCT_TABLES) == 89 and len(tool.KEEP_TABLES) == 37 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -133,7 +143,12 @@ def test_a_dry_run_prints_the_classification_with_exact_counts_and_changes_nothi
     # administrator's changed password. The keep side was 3 rows before the access events existed.
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')")[0] == 3
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')")[0] == 4
-    assert "  audit_event  (delete 24 rows, keep 7 rows)" in out
+    # The seed drives the real pipeline, and its source-preparation stage journals `stage.pdf_precheck` (a PRODUCT event: the
+    # PDF precheck's progress, `runs/executor.py`), at most once a second per run. The 24 are the events that exist whatever
+    # the host's speed; the precheck rows are counted from the database, so the figure is exact and not a timing guess.
+    prechecks = digest_of(stand.engine, "audit_event", "event_type = 'stage.pdf_precheck'")[0]
+    assert prechecks >= 1, "the seed no longer reaches the PDF precheck: this decomposition would be vacuous"
+    assert f"  audit_event  (delete {24 + prechecks} rows, keep 7 rows)" in out
     assert "  command_record  (delete 10 rows, keep 1 rows)" in out
     assert "norm-owned objects (the custody ledger's, never touched): 2" in out
     assert "other objects (named by no row; never touched): 1 (blobs/ 1)" in out

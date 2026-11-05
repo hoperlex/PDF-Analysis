@@ -332,14 +332,26 @@ def _providers() -> DatabaseProviders:
     return DatabaseProviders(ring=None, policy=object(), base_config=None, ceiling_usd=1.0)  # type: ignore[arg-type]
 
 
-def _record_freezes(monkeypatch: pytest.MonkeyPatch, answer: FrozenConnection) -> list[tuple[tuple, dict]]:
+def _record_freezes(
+    monkeypatch: pytest.MonkeyPatch, answer: FrozenConnection, *, billing: str = "metered",
+) -> list[tuple[tuple, dict]]:
     calls: list[tuple[tuple, dict]] = []
 
     def fake(*args: Any, **kwargs: Any) -> FrozenConnection:
         calls.append((args, kwargs))
         return answer
 
+    def revision_of(self: Any, session: Any, revision_id: str) -> Any:
+        # `EXEC2-GROUP-RUN-01`: after the freeze the seam reads the frozen revision once more, for the billing the
+        # estimate spells. The session here is `object()`: the read is answered, and it is asked for the frozen id.
+        assert revision_id == answer.revision_id
+        return RevisionRecord(
+            revision_id=revision_id, connection_id=answer.connection_id, revision_no=1, settings=_settings(billing=billing),
+            created_at=NOW, created_by="usr_unit",
+        )
+
     monkeypatch.setattr(providers_module, "freeze_connection", fake)
+    monkeypatch.setattr(providers_module.ExecutorRepository, "get_revision", revision_of)
     return calls
 
 
@@ -358,6 +370,7 @@ def test_the_seam_without_a_name_makes_the_call_it_always_made(monkeypatch: pyte
     route = _providers().freeze(session)  # type: ignore[misc]
     assert calls == [((session, WORK_KIND), {})], "no connection_id keyword is passed"
     assert route.chosen_connection_id is None and route.revision_id == "rev_1"
+    assert route.billing == "metered", "the billing is the frozen revision's, spelled as the estimate spells it"
 
 
 def test_the_seam_with_a_name_asks_for_that_connection_and_reports_it_chosen(
@@ -378,9 +391,10 @@ def test_the_seam_with_a_name_asks_for_that_connection_and_reports_it_chosen(
 def test_the_seam_reports_a_standby_as_before_and_as_not_chosen(monkeypatch: pytest.MonkeyPatch) -> None:
     _record_freezes(monkeypatch, _frozen(
         connection_id="exc_standby", standby_connection_id="exc_standby", reason="primary_archived",
-    ))
+    ), billing="not_metered")
     route = _providers().freeze(object())  # type: ignore[misc]
     assert route.chosen_connection_id is None
+    assert route.billing == "unmetered", "a connection that is not metered is unmetered in the estimate"
     assert (route.primary_connection_id, route.standby_connection_id, route.standby_reason) == (
         "exc_primary", "exc_standby", "primary_archived",
     )

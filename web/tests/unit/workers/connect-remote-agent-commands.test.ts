@@ -12,6 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as ReactModule from 'react';
 
 const calls = vi.hoisted(() => ({ invalidations: [] as unknown[] }));
 
@@ -36,7 +37,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
+  const actual = await importOriginal<typeof ReactModule>();
   return { ...actual, useRef: <T,>(initial: T) => ({ current: initial }) };
 });
 

@@ -35,6 +35,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
@@ -42,7 +43,7 @@ from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, event, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,6 +65,7 @@ from auditmanager.comparison.public import (
     Consent,
     GroupRoutes,
     OutcomeUnknown,
+    build_group_wait_sweep,
 )
 from auditmanager.comparison.spend import dispatch
 from auditmanager.executors.public import (
@@ -291,14 +293,16 @@ class Adapter(ai.ScriptedLiveAdapter):
 class Members:
     """The composition root's binder, as a test: the route of the member the job is bound to, over a scripted adapter."""
 
-    def __init__(self, adapter: Adapter, *, unmetered: bool = False) -> None:
+    def __init__(self, adapter: Adapter, *, unmetered: bool = False, pin: Any = None) -> None:
         self.adapter, self.unmetered, self.opened = adapter, unmetered, []
+        #: The rates the member's route is priced at: the lock as it stands (a test moves it by naming another pin).
+        self.pin = SONNET_PIN if pin is None else pin
 
     def route(self, session: Any, job: AiJobRecord) -> CallRoute:
         self.opened.append((job.binding_state, job.connection_revision_id))
         return CallRoute(
             adapter=self.adapter, model_identity=job.pinned_model, connection_revision_id=job.connection_revision_id,
-            expected_model=SONNET, check_identity=True, unmetered=self.unmetered, pin=SONNET_PIN)
+            expected_model=SONNET, check_identity=True, unmetered=self.unmetered, pin=self.pin)
 
     route_for = route
 
@@ -544,6 +548,217 @@ def test_a_job_that_ended_is_never_given_a_wait(db: Db) -> None:
     assert (after["state"], after["wait_reason"], after["waiting_since"]) == ("cancelled", None, None), "and is not given a wait afterwards"
 
 
+# --- 3b. the wait sweep: the wait is kept true and the expiry does not wait for an item to be retried (`EXEC2-FOLLOWUP-01`, decision 15) ----
+
+
+def age_wait(db: Db, job_id: str, interval: str) -> None:
+    db.connection.execute(text(
+        "UPDATE comparison_ai_job SET waiting_since = waiting_since - CAST(:interval AS interval) WHERE comparison_ai_job_id = :j"),
+        {"interval": interval, "j": job_id})
+
+
+def waiting_job(s: Scene) -> tuple[str, Any]:
+    """A started job whose first call has been refused as a wait (an item in hand, nobody retrying it). ``(job_id, item)``."""
+    job_id = s.start().record.job_id
+    item = s.claim()
+    refuse(s, item, routes_over(Adapter(reply()))[0])
+    return job_id, item
+
+
+def sweep(db: Db, limit: float = 1800.0, **kw: Any) -> Any:
+    """One pass of the sweep the worker runs (every method, each with its hook), over the harness' sessions."""
+    return build_group_wait_sweep(db.sessions, **kw).sweep(limit)
+
+
+@contextmanager
+def recorded_sql(db: Db) -> Iterator[list[str]]:
+    """Every statement the harness' connection executes, whitespace-normalised: the sweep's own SQL, seen rather than assumed."""
+    statements: list[str] = []
+
+    def record(connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: bool) -> None:
+        statements.append(" ".join(statement.split()))
+
+    event.listen(db.connection, "before_cursor_execute", record)
+    try:
+        yield statements
+    finally:
+        event.remove(db.connection, "before_cursor_execute", record)
+
+
+def sweep_sql(statements: list[str]) -> dict[str, list[str]]:
+    """The sweep's three kinds of statement: the keyset page of candidates and the two ``SKIP LOCKED`` locks (the job's items, then its row)."""
+    return {
+        "page": [sql for sql in statements if "FROM comparison_ai_job WHERE binding_state = 'pending'" in sql and "ORDER BY created_at, comparison_ai_job_id LIMIT" in sql],
+        "items": [sql for sql in statements if "FROM comparison_work WHERE comparison_ai_job_id" in sql and sql.endswith("FOR UPDATE SKIP LOCKED")],
+        "job": [sql for sql in statements if "FROM comparison_ai_job WHERE comparison_ai_job_id" in sql and sql.endswith("FOR UPDATE SKIP LOCKED")],
+    }
+
+
+def set_runners(db: Db, s: Scene, *, online: bool) -> None:
+    """Put a runner of every member on line, or take it off: the token is issued once and its ``last_seen_at`` moved."""
+
+    def run(session: Session) -> None:
+        for connection_id, _ in s.members:
+            if not session.execute(text("SELECT count(*) FROM executor_runner_token WHERE connection_id = :c AND revoked_at IS NULL"), {"c": connection_id}).scalar_one():
+                issue_runner_token(
+                    session, connection_id=connection_id, expires_in_days=None, roles=ADMIN_ROLES, idempotency_key=key(), actor_uid=ACTOR)
+            session.execute(text(
+                "UPDATE executor_runner_token SET last_seen_at = clock_timestamp() - make_interval(secs => :ago) "
+                "WHERE connection_id = :c AND revoked_at IS NULL"), {"c": connection_id, "ago": 5 if online else 3600})
+
+    db.seed(run)
+
+
+def test_the_sweep_ends_a_job_that_waited_for_a_runner_longer_than_the_limit_though_no_item_is_retried(db: Db) -> None:
+    """The in-call expiry needs one of the job's items to come back; the sweep does not. The outcome is the in-call one: ``failed`` /
+    ``no_executor_online``, the wait cleared, the live items asked to stop -- and nothing was called, bound or journalled. The statements the
+    sweep ran are looked at: the keyset page, the lock of the job's items and then of its row, both ``SKIP LOCKED``."""
+    s = scene(db, online=False)
+    job_id, item = waiting_job(s)
+    assert db.job(job_id)["wait_reason"] == "runner_offline"
+    age_wait(db, job_id, "31 minutes")
+
+    with recorded_sql(db) as statements:
+        report = sweep(db, batch_size=1)
+    assert (report.expired, report.failed) == (1, 0)
+    ran = sweep_sql(statements)
+    assert len(ran["page"]) == 2, "a full page of one, then a read that finds the job gone"
+    assert len(ran["items"]) == 1 and len(ran["job"]) == 1, "one job decided, under both locks"
+    assert statements.index(ran["items"][0]) < statements.index(ran["job"][0]), "items first, then the job row"
+    assert "state IN ('queued', 'running')" in ran["page"][0] and "wait_reason IS DISTINCT FROM 'needs_reconsent'" in ran["page"][0]
+
+    job = db.job(job_id)
+    assert (job["state"], job["failure_reason"], job["wait_reason"], job["waiting_since"]) == ("failed", "no_executor_online", None, None)
+    assert job["binding_state"] == "pending" and job["connection_revision_id"] is None
+    assert db.one("SELECT cancel_requested_at IS NOT NULL FROM comparison_work WHERE comparison_work_id = :w", w=item.work_id)
+    assert not db.one("SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :w", w=item.work_id)
+    assert db.one("SELECT rotation_cursor FROM executor_group WHERE group_id = :g", g=s.group_id) == 0, "nothing was dispatched"
+    shown = models.ComparisonAiJob.model_validate(s.service.view(job_id).as_dict())
+    assert shown.state.value == "failed" and shown.failure_reason == "no_executor_online" and shown.wait_reason is None
+
+    again = sweep(db)
+    assert (again.expired, again.updated, again.skipped, again.failed) == (0, 0, 0, 0), "a job that ended is no candidate"
+
+
+def test_the_sweep_leaves_a_job_that_has_not_waited_longer_than_the_limit_and_takes_no_lock_for_it(db: Db) -> None:
+    s = scene(db, online=False)
+    job_id, _ = waiting_job(s)
+    age_wait(db, job_id, "29 minutes")
+    with recorded_sql(db) as statements:
+        assert sweep(db).expired == 0
+    ran = sweep_sql(statements)
+    assert ran["page"] and not ran["items"] and not ran["job"], "a wait that is true and young is not even locked"
+    job = db.job(job_id)
+    assert (job["state"], job["wait_reason"]) == ("running", "runner_offline")
+    age_wait(db, job_id, "2 minutes")
+    assert sweep(db).expired == 1, "and ends it once it has"
+
+
+def test_the_sweep_never_ends_a_job_that_waits_for_capacity(db: Db) -> None:
+    s = scene(db, members=1, capacity=1)
+    job_id = s.start().record.job_id
+    occupier, mine = s.claim(), s.claim()
+    ai.insert_call(db.connection, occupier, state="sent", revision_id=s.members[0][1])
+    assert refuse(s, mine, routes_over(Adapter(reply()))[0]).reason == "connection_busy"
+    assert db.job(job_id)["wait_reason"] == "executor_at_capacity"
+    age_wait(db, job_id, "10 days")
+    aged = db.job(job_id)["waiting_since"]
+    report = sweep(db)
+    assert (report.expired, report.updated) == (0, 0)
+    after = db.job(job_id)
+    assert (after["state"], after["wait_reason"], after["waiting_since"]) == ("running", "executor_at_capacity", aged), "no end, clock untouched"
+
+
+def test_the_sweep_clears_the_wait_of_a_job_whose_group_has_an_eligible_member_again(db: Db) -> None:
+    """The wait was written when nobody was online; a runner is back. The job's next call binds, so the stored wait is not true any more: the
+    sweep clears it (the clock with it) instead of leaving it to age toward an end the job no longer deserves."""
+    s = scene(db, online=True)
+    job_id = s.start().record.job_id
+    assert db.seed(lambda session: AiJobRepository().set_wait(session, job_id, "runner_offline")) is not None
+    age_wait(db, job_id, "31 minutes")
+    report = sweep(db)
+    assert (report.expired, report.updated) == (0, 1)
+    job = db.job(job_id)
+    assert (job["state"], job["wait_reason"], job["waiting_since"], job["binding_state"]) == ("queued", None, None, "pending")
+
+
+def test_a_runner_back_at_minute_29_and_gone_again_does_not_end_the_job_on_real_rows(db: Db) -> None:
+    """The old sweep read the age of the stored wait and ended this job at minute 31. The offline clock is now the sweep's own observation."""
+    s = scene(db, online=False)
+    job_id, _ = waiting_job(s)
+    age_wait(db, job_id, "29 minutes")
+    set_runners(db, s, online=True)
+    assert sweep(db).updated == 1 and db.job(job_id)["wait_reason"] is None, "a runner at minute 29: the wait is cleared"
+    set_runners(db, s, online=False)
+    report = sweep(db)
+    assert (report.updated, report.expired) == (1, 0)
+    job = db.job(job_id)
+    assert job["wait_reason"] == "runner_offline"
+    assert db.one("SELECT EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since)) < 60 FROM comparison_ai_job WHERE comparison_ai_job_id = :j", j=job_id), (
+        "the new wait began now")
+    age_wait(db, job_id, "2 minutes")
+    assert sweep(db).expired == 0 and db.job(job_id)["state"] == "running", "minute 31 of the first wait is minute 2 of this one"
+    age_wait(db, job_id, "29 minutes")
+    assert sweep(db).expired == 1, "continuously dark for longer than the limit: the job ends"
+
+
+def test_a_job_stored_at_capacity_whose_group_goes_dark_ends_after_the_limit_from_the_sweeps_own_observation(db: Db) -> None:
+    s = scene(db, online=False)
+    job_id = s.start().record.job_id
+    assert db.seed(lambda session: AiJobRepository().set_wait(session, job_id, "executor_at_capacity")) is not None
+    age_wait(db, job_id, "10 days")
+    report = sweep(db)
+    assert (report.updated, report.expired) == (1, 0), "the group is dark: the wait is runner_offline now, not a wait for a place"
+    assert db.job(job_id)["wait_reason"] == "runner_offline"
+    assert db.one("SELECT EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since)) < 60 FROM comparison_ai_job WHERE comparison_ai_job_id = :j", j=job_id), (
+        "and its clock began at the observation, not ten days ago")
+    assert sweep(db).expired == 0
+    age_wait(db, job_id, "31 minutes")
+    assert sweep(db).expired == 1 and db.job(job_id)["failure_reason"] == "no_executor_online", "eventually"
+
+
+def test_the_sweep_walks_every_page_on_real_rows(db: Db) -> None:
+    first, second = scene(db, online=False), scene(db, online=False, mode=False)  # the mode is `rules` already
+    ids = [waiting_job(first)[0]]
+    # A job queues three items and the queue hands them out oldest first, whoever asks: the first job's other two are
+    # taken (and refused as waits, as the first one was) so that the second scene's claim reaches its own job's item.
+    for _ in range(2):
+        refuse(first, first.claim(), routes_over(Adapter(reply()))[0])
+    ids.append(waiting_job(second)[0])
+    for job_id in ids:
+        age_wait(db, job_id, "31 minutes")
+    with recorded_sql(db) as statements:
+        report = sweep(db, batch_size=1)
+    assert report.expired == 2 and {db.job(job_id)["state"] for job_id in ids} == {"failed"}
+    assert len(sweep_sql(statements)["page"]) >= 2, "a page of one, then the next after the last job seen"
+
+
+def test_the_sweep_never_touches_a_job_that_ended_and_writes_no_wait(db: Db) -> None:
+    s = scene(db, online=False)
+    job_id, _ = waiting_job(s)
+    age_wait(db, job_id, "31 minutes")
+    assert db.seed(lambda session: AiJobRepository().move(session, job_id, from_states=["queued", "running"], to_state="cancelled"))
+    report = sweep(db)
+    assert (report.expired, report.updated, report.skipped, report.failed) == (0, 0, 0, 0)
+    ended = db.job(job_id)
+    assert (ended["state"], ended["failure_reason"], ended["wait_reason"], ended["waiting_since"]) == ("cancelled", None, None, None)
+
+
+def test_the_sweep_leaves_a_paused_job_alone_whatever_its_wait_says(db: Db) -> None:
+    s = scene(db, online=False)
+    job_id, _ = waiting_job(s)
+    age_wait(db, job_id, "31 minutes")
+    with db.sessions() as session:
+        assert s.service.pause_system(session, job_id, "quota") is True
+        session.commit()
+    before = db.job(job_id)
+    set_runners(db, s, online=True)  # even a group that could take it: a paused job is a person's to resume, and its wait is not rewritten
+    report = sweep(db)
+    assert (report.updated, report.expired, report.skipped) == (0, 0, 0)
+    after = db.job(job_id)
+    assert (after["state"], after["wait_reason"], after["waiting_since"]) == ("paused", before["wait_reason"], before["waiting_since"])
+
+
 # --- 4. a consent that does not hold (decision 14) -----------------------------------------------------------------------------------
 
 
@@ -574,6 +789,80 @@ def test_a_consent_that_does_not_hold_calls_nothing_records_needs_reconsent_and_
     again = s.claim()
     first_call(s, again, routes)
     assert db.job(job_id)["binding_state"] == "bound", "the job goes on under the new consent"
+
+
+def test_a_provider_lock_that_moved_after_the_group_revision_was_made_pauses_the_job_for_a_new_consent_and_calls_nothing(
+    db: Db, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`EXEC2-FOLLOWUP-01` item 1, the rule a Run's dispatch holds: the rates the consent was given on (the group revision's snapshot)
+    must be the rates the bound member is priced at now (the provider lock's). When they differ the first call is refused through the
+    consent-stale path -- the job pauses and records ``needs_reconsent`` -- and nothing is re-priced, bound, journalled or sent."""
+    from auditmanager.executors import public
+
+    s = scene(db)
+    job_id = s.start().record.job_id
+    item = s.claim()
+    real = pinned_models()
+    monkeypatch.setattr(public, "pinned_models", lambda: tuple(
+        replace(pin, output_per_mtok_usd=pin.output_per_mtok_usd * 2) if pin.model_id == SONNET else pin for pin in real))
+    adapter = Adapter(reply())
+    routes, members = routes_over(adapter)
+    refused = refuse(s, item, routes)
+    assert (refused.reason, refused.pauses_job) == ("consent_stale", True)
+    job = db.job(job_id)
+    assert (job["state"], job["pause_reason"], job["wait_reason"], job["binding_state"]) == ("paused", "route_changed", "needs_reconsent", "pending")
+    assert job["connection_revision_id"] is None and members.opened == [] and adapter.requests == []
+    assert not db.one("SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :w", w=item.work_id)
+    assert db.one("SELECT rotation_cursor FROM executor_group WHERE group_id = :g", g=s.group_id) == 0, "nothing was dispatched"
+
+    # While the lock stays moved a new consent cannot be honoured: it would be priced on the same snapshot and refused by the first call
+    # again, for ever. A client reads the estimate -- an operation that declares no 422, so it is served at the group's snapshot, as before --
+    # and the operation that takes the consent refuses it with the registered cost-binding reason.
+    shown = s.service.estimate(s.scope)
+    assert shown.route.executor_group_revision_id == s.group_revision_id and shown.estimate_digest
+    consent = AiConsentInput(estimate_digest=shown.estimate_digest, confirmed=True)
+    with pytest.raises(DomainError) as no_resume:
+        s.service.resume(
+            job_id=job_id, method="pair_check", command=s.command("resume_comparison_ai_pair_check"), consent=consent)
+    assert no_resume.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert dict(no_resume.value.detail_fields) == {"stage_id": WORK_KIND, "reason": "cost_estimate_binding_changed"}
+    assert db.job(job_id)["state"] == "paused" and db.job(job_id)["consent_no"] == 1, "a refused resume writes nothing"
+    cancelled = s.service.cancel(job_id=job_id, method="pair_check", command=s.command("cancel_comparison_ai_pair_check"))
+    assert cancelled.record.state == "cancelled"
+    with pytest.raises(DomainError) as no_start:
+        s.start()
+    assert no_start.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
+    assert dict(no_start.value.detail_fields) == {"stage_id": WORK_KIND, "reason": "cost_estimate_binding_changed"}
+    assert not db.one("SELECT count(*) FROM comparison_ai_job WHERE comparison_ai_job_id <> :j AND document_uid = :d", j=job_id, d=s.scope.document_uid), (
+        "a refused start created no job")
+
+    # The lock is as consented again: a start is taken, and the new job binds at its first call.
+    monkeypatch.setattr(public, "pinned_models", lambda: real)
+    started = s.start()
+    assert started.record.state == "queued"
+    first_call(s, s.claim(), routes)
+    assert db.job(started.record.job_id)["binding_state"] == "bound"
+
+
+def test_a_later_call_of_a_bound_job_is_refused_when_the_lock_moved_after_it_was_bound(db: Db) -> None:
+    """The rates of a bound job's later calls come from the lock of the moment, while its consent stands on the group revision's snapshot: the
+    Run's call-time guard, at every call. The refusal is ``consent_stale`` and pauses the job; a bound job holds no wait to record."""
+    s = scene(db)
+    job_id = s.start().record.job_id
+    first_call(s, s.claim(), routes_over(Adapter(reply()))[0])
+    assert db.job(job_id)["binding_state"] == "bound"
+    bound_to = db.job(job_id)["connection_revision_id"]
+
+    moved = replace(SONNET_PIN, output_per_mtok_usd=SONNET_PIN.output_per_mtok_usd * 2)
+    later = Adapter(reply())
+    routes, _ = routes_over(later, pin=moved)
+    item = s.claim()
+    refused = refuse(s, item, routes, label="r")
+    assert (refused.reason, refused.pauses_job) == ("consent_stale", True)
+    job = db.job(job_id)
+    assert (job["state"], job["pause_reason"], job["wait_reason"], job["binding_state"]) == ("paused", "route_changed", None, "bound")
+    assert job["connection_revision_id"] == bound_to and later.requests == []
+    assert not db.one("SELECT count(*) FROM comparison_model_call WHERE comparison_work_id = :w", w=item.work_id)
 
 
 # --- 5. no re-routing (decision 16) ----------------------------------------------------------------------------------------------------
@@ -723,6 +1012,9 @@ def test_two_dispatches_decided_at_once_cannot_both_fit_the_one_call_that_fits_u
         for revision_id, (group_id, connection) in groups.items()
     }
     monkeypatch.setattr(public, "group_revision_of", lambda session, revision_id, groups=None: revisions.get(revision_id))
+    # The fake groups hold the rates of the journal's own pin; the provider lock the dispatch compares them with is that pin too
+    # (`EXEC2-FOLLOWUP-01`: the rates the consent was given on are the rates the member is priced at now).
+    monkeypatch.setattr(public, "pinned_models", lambda: (spend.PIN,))
     monkeypatch.setattr(public, "member_facts", lambda session, revision, repository=None: [
         MemberFacts(connection_id=m.connection_id, tie_break_order=None, revision_is_snapshot=True, archived=False, served=True,
                     probed_ok=True, runner_online=True, capacity=2, used=0) for m in revision.members])

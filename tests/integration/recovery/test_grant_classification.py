@@ -137,6 +137,18 @@ def test_the_repository_code_needs_nothing_the_classification_withholds() -> Non
     assert grants.evidence_problems(grants.observed_statements(SOURCE)) == []
 
 
+def test_every_write_whose_table_the_scan_cannot_read_is_declared() -> None:
+    """`stage_ai_*` answers are inserted by one f-string over a literal table map; the scan cannot read the name, so the
+    register says which tables it is and this checks the register against the code in both directions."""
+    assert grants.dynamic_write_problems(SOURCE) == []
+    from auditmanager.comparison.stage_ai.repository import ANSWER_TABLES
+
+    declared = grants.DYNAMIC_WRITES["comparison/stage_ai/repository.py"][1]
+    assert declared == {table for table, _prefix, _field in ANSWER_TABLES.values()}, "the register differs from the code's own map"
+    seen = grants.observed_statements(SOURCE)
+    assert all("INSERT" in seen[table].verbs for table in declared), "a declared table is not counted as written"
+
+
 def test_the_scan_finds_the_statements_the_classification_rests_on() -> None:
     seen = grants.observed_statements(SOURCE)
     assert "DELETE" in seen["app_user"].verbs and "DELETE" in seen["app_user_role"].verbs
@@ -212,6 +224,87 @@ class TestTheScanRefusesAStatementTheClassesDoNotAllow:
         )
         seen = grants.observed_statements(root)
         assert seen["model_call"].verbs == {"LOCK"} and "job" not in seen, seen
+
+    def test_a_table_read_only_in_a_where_subquery_is_not_locked(self, tmp_path: Path) -> None:
+        """PostgreSQL locks the ``FROM`` items of the SELECT that carries the clause, and not the tables of an ``IN (SELECT ...)``
+        in its ``WHERE`` (`pg_locks`: RowShareLock on ``document``, AccessShareLock on ``document_version``)."""
+        root = self._tree(
+            tmp_path,
+            "SELECT d.document_uid FROM document d WHERE d.document_uid IN "
+            "(SELECT v.document_uid FROM document_version v JOIN model_call mc ON mc.run_id = v.version_uid) "
+            "ORDER BY d.document_uid FOR UPDATE",
+        )
+        seen = grants.observed_statements(root)
+        assert {table: found.verbs for table, found in seen.items()} == {"document": {"LOCK"}}, seen
+        assert grants.evidence_problems(seen) == []
+
+    def test_a_table_in_a_derived_table_of_the_from_clause_is_locked(self, tmp_path: Path) -> None:
+        root = self._tree(
+            tmp_path,
+            "SELECT 1 FROM job j JOIN (SELECT run_id FROM model_call) m ON m.run_id = j.run_id FOR UPDATE",
+        )
+        seen = grants.observed_statements(root)
+        assert {table: found.verbs for table, found in seen.items()} == {"job": {"LOCK"}, "model_call": {"LOCK"}}, seen
+        problems = grants.evidence_problems(seen)
+        assert any(p.startswith("model_call is append-only but the code needs ['LOCK']") for p in problems), problems
+
+    def test_a_lock_inside_a_subquery_reaches_only_that_subquery(self, tmp_path: Path) -> None:
+        root = self._tree(
+            tmp_path,
+            "SELECT 1 FROM job WHERE job.job_id IN (SELECT mc.model_call_id FROM model_call mc FOR UPDATE)",
+        )
+        seen = grants.observed_statements(root)
+        assert {table: found.verbs for table, found in seen.items()} == {"model_call": {"LOCK"}}, seen
+        problems = grants.evidence_problems(seen)
+        assert any(p.startswith("model_call is append-only but the code needs ['LOCK']") for p in problems), problems
+
+    def test_a_with_query_is_not_locked_by_the_main_query(self, tmp_path: Path) -> None:
+        root = self._tree(
+            tmp_path,
+            "WITH m AS (SELECT run_id FROM model_call) SELECT j.job_id FROM job j JOIN m ON m.run_id = j.run_id FOR UPDATE",
+        )
+        seen = grants.observed_statements(root)
+        assert {table: found.verbs for table, found in seen.items()} == {"job": {"LOCK"}}, seen
+
+    def test_a_bracket_inside_a_literal_does_not_open_a_group(self, tmp_path: Path) -> None:
+        root = self._tree(tmp_path, "SELECT 1 FROM model_call WHERE note = '(' FOR UPDATE")
+        seen = grants.observed_statements(root)
+        assert {table: found.verbs for table, found in seen.items()} == {"model_call": {"LOCK"}}, seen
+
+    def test_a_write_through_a_substituted_table_name_is_refused_unless_declared(self, tmp_path: Path) -> None:
+        root = tmp_path / "src"
+        (root / "pkg").mkdir(parents=True)
+        (root / "pkg/repo.py").write_text(
+            'from sqlalchemy import text\n\ndef write(table):\n    return text(f"INSERT INTO {table}(a) VALUES (1)")\n',
+            encoding="utf-8")
+        problems = grants.dynamic_write_problems(root)
+        assert any("pkg/repo.py:4 writes (INSERT) a table named by a substitution" in p for p in problems), problems
+        # a read through a substituted name is not a write: nothing to declare
+        (root / "pkg/repo.py").write_text(
+            'from sqlalchemy import text\n\ndef read(table):\n    return text(f"SELECT a FROM {table}")\n',
+            encoding="utf-8")
+        assert not any("pkg/repo.py" in p for p in grants.dynamic_write_problems(root))
+
+    def test_a_declaration_for_a_write_the_code_no_longer_holds_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        root = tmp_path / "src"
+        (root / "pkg").mkdir(parents=True)
+        (root / "pkg/repo.py").write_text("x = 1\n", encoding="utf-8")
+        monkeypatch.setattr(grants, "DYNAMIC_WRITES", {"pkg/repo.py": ("INSERT", frozenset({"project"}), "stale")})
+        problems = grants.dynamic_write_problems(root)
+        assert any("declares a INSERT in pkg/repo.py, which holds none" in p for p in problems), problems
+
+    def test_a_declared_dynamic_write_counts_its_tables_as_written(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        root = tmp_path / "src"
+        (root / "pkg").mkdir(parents=True)
+        (root / "pkg/repo.py").write_text(
+            'from sqlalchemy import text\n\ndef write(table):\n    return text(f"INSERT INTO {table}(a) VALUES (1)")\n',
+            encoding="utf-8")
+        monkeypatch.setattr(grants, "DYNAMIC_WRITES", {"pkg/repo.py": ("INSERT", frozenset({"project"}), "test")})
+        seen = grants.observed_statements(root)
+        assert seen["project"].verbs == {"INSERT"}, seen
+        assert grants.dynamic_write_problems(root) == []
 
     def test_a_write_to_a_read_only_table_is_refused(self, tmp_path: Path) -> None:
         root = self._tree(tmp_path, "INSERT INTO alembic_version (version_num) VALUES (:v)")

@@ -33,6 +33,7 @@ import { UserList } from '@/widgets/user-list';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
+import { Dashboard } from '@/widgets/dashboard';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { DocumentList } from '@/widgets/document-list';
@@ -80,6 +81,7 @@ import { ProjectStructureView } from '@/widgets/project-sections';
 import { VersionClassificationView } from '@/widgets/version-classification';
 import { portalBlocksQueryOptions } from '@/entities/block';
 import type {
+  DashboardSummary,
   DecisionEvent,
   DecisionRecord,
   ErrorCode,
@@ -92,13 +94,14 @@ import type {
 import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
-import { ApiError, PROJECT_SECTION_VALUES, queryKeys } from '@/shared/api';
+import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
   DOCUMENT_PAGE_LIMIT,
@@ -155,7 +158,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -309,6 +312,10 @@ const RECORDS: readonly DecisionRecord[] = (
   }),
   project_uid: PROJECT_UID,
   run_id: RUN_ID,
+  document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  project_name: 'Школа',
+  document_name: 'АР-1',
   category: index % 2 === 0 ? 'internal_contradiction' : 'explicit_placeholder',
   finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
   current_verdict: verdict,
@@ -665,6 +672,13 @@ export function screens(): Screen[] {
     roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // The «Обновлено» line of the queue and the journal: current, and out of date (a note on the surface tint).
+  add('UpdateTime fresh', withRouter(createElement(UpdateTime, {
+    dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: false, now: Date.parse('2026-10-09T10:05:04Z'),
+  })));
+  add('UpdateTime out of date', withRouter(createElement(UpdateTime, {
+    dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: true, now: Date.parse('2026-10-09T10:05:04Z'),
   })));
   // `W54-WORKERS-WEB`: a running Job names the worker holding its run, with a link to it.
   add('ExecutionQueue running, its worker named', withRouter(createElement(ExecutionQueue, {
@@ -1608,7 +1622,39 @@ export function screens(): Screen[] {
   // The knowledge base, `R-23`: eight `.am-kb__*` colour rules reached nothing before it.
   // The PAGE is derived above; the widget is not an address and stays here.
   add('KnowledgeBase', render(createElement(KnowledgeBase, { records: RECORDS })));
+  // `UI-PARITY-P0A`: the place line of a record of a classified version (the rows above carry none).
+  add('KnowledgeBase with a place line', render(createElement(KnowledgeBase, { records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })) })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
+
+  /*
+   * «Дашборд» for one project, and for a project the server does not know (`UI-PARITY-01`,
+   * «Project context»). The page is derived above and is read cold there, so the loaded dashboard
+   * — the scope line the hero carries — and the unknown-project state with its way out are
+   * answered here: a state selected by the address's `?project=`, which a route table cannot carry.
+   */
+  {
+    const summary: DashboardSummary = {
+      documents_by_project: [{ project_uid: PROJECT_UID, name: 'Договор поставки', document_count: 3 }],
+      findings_by_verdict: [
+        { verdict: 'pending', count: 1 },
+        { verdict: 'accepted', count: 2 },
+        { verdict: 'rejected', count: 3 },
+        { verdict: 'needs_manual_review', count: 4 },
+      ],
+      run_activity: { by_state: RUN_STATE_VALUES.map((state) => ({ state, count: 1 })) },
+      section_breakdown: [
+        ...PROJECT_SECTION_VALUES.map((section) => ({ section, document_count: 1 })),
+        { document_count: 1 },
+      ],
+    };
+    const loaded = newClient();
+    loaded.setQueryData(queryKeys.dashboard.summary(PROJECT_UID), summary);
+    add('Dashboard for one project', renderWith(loaded, createElement(Dashboard, { projectUid: PROJECT_UID })));
+
+    const unknown = newClient();
+    seedError(unknown, queryKeys.dashboard.summary(PROJECT_UID), apiError(404, 'not_found', false));
+    add('Dashboard for an unknown project', renderWith(unknown, createElement(Dashboard, { projectUid: PROJECT_UID })));
+  }
 
   /*
    * The session screens' OTHER SHAPES, `R-26`. `/login` and `/account/password` are

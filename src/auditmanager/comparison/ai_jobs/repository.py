@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
 
@@ -46,7 +47,7 @@ from auditmanager.comparison.spend.model import JOB_KEY
 from auditmanager.comparison.work.model import KIND_PATTERN
 from auditmanager.shared.identity import ComparisonAiJobId, ComparisonWorkId
 
-__all__ = ["AiJobRepository", "LIVE_SCOPE_INDEXES", "WorkItemRow"]
+__all__ = ["AiJobRepository", "LIVE_SCOPE_INDEXES", "PendingWait", "WorkItemRow"]
 
 #: The partial unique indexes of the database that hold "one live job per scope" (migration ``0040``). A unique violation of
 #: one of them is the race the service's own look-before-insert lost.
@@ -94,6 +95,45 @@ _SET_WAIT = text(
     "wait_reason = :reason "
     f"WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' AND {_LIVE} "
     "RETURNING EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since))"
+)
+#: `EXEC2-FOLLOWUP-01`, the wait sweep (`comparison/ai_jobs/group_waits.py`). The jobs it looks at, oldest first, one page at a time: a
+#: **keyset** over ``(created_at, comparison_ai_job_id)`` so a pass walks every candidate however many there are. A candidate is a
+#: ``pending`` job that is **queued or running** -- a paused job waits for a person and a terminal one for nobody, so neither is read or
+#: written -- of one of the methods the sweep can end, whatever reason it stores (``needs_reconsent`` is a pause's wait and is never
+#: touched). ``wait_expired`` is measured on database time, strictly, as the in-call expiry reads it. This is the *reading that picks the
+#: page and tells whether anything has to be decided*; what is written or ended is read again under the job's lock (:data:`_LOCK_PENDING_WAIT`).
+_PENDING_COLUMNS = (
+    "comparison_ai_job_id AS job_id, created_at, method, executor_group_revision_id AS group_revision_id, wait_reason, "
+    "(waiting_since IS NOT NULL AND EXTRACT(EPOCH FROM (clock_timestamp() - waiting_since)) > :offline_seconds) AS wait_expired"
+)
+_PENDING_FILTER = (
+    "binding_state = 'pending' AND state IN ('queued', 'running') AND wait_reason IS DISTINCT FROM 'needs_reconsent'"
+)
+_PENDING_WAITS = text(
+    f"SELECT {_PENDING_COLUMNS} FROM comparison_ai_job WHERE {_PENDING_FILTER} AND method = ANY (CAST(:methods AS text[])) "
+    "AND (CAST(:after_job_id AS text) IS NULL "
+    "OR (created_at, comparison_ai_job_id) > (CAST(:after_created_at AS timestamptz), CAST(:after_job_id AS text))) "
+    "ORDER BY created_at, comparison_ai_job_id LIMIT :batch_size"
+)
+#: The job's lock, taken ``SKIP LOCKED`` so a command or a handler in flight is not waited for. It answers what the job holds **now**: its
+#: wait and -- on database time, from the two locked values -- whether the job has waited for it longer than ``:offline_seconds``. What the
+#: sweep writes or ends is decided from this row and from nothing read before the lock.
+_LOCK_PENDING_WAIT = text(
+    f"SELECT {_PENDING_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id AND {_PENDING_FILTER} "
+    "FOR UPDATE SKIP LOCKED"
+)
+#: A cleared wait: no member had an issue, so the job's next call dispatches. Only a **live** (queued or running) pending job; the pair CHECK of
+#: migration ``0048`` wants both columns or neither.
+_CLEAR_WAIT = text(
+    "UPDATE comparison_ai_job SET wait_reason = NULL, waiting_since = NULL "
+    "WHERE comparison_ai_job_id = :job_id AND binding_state = 'pending' AND state IN ('queued', 'running') AND wait_reason IS NOT NULL"
+)
+#: The job's items that have not ended, locked in the order of their identities and ``SKIP LOCKED``. Locks are taken **items first, then
+#: the job row**, as every handler and command takes them; ending a job cancels its items, and a sweep that took the job first would
+#: deadlock with a handler that holds an item and wants the job.
+_LOCK_LIVE_ITEMS = text(
+    "SELECT comparison_work_id FROM comparison_work WHERE comparison_ai_job_id = :job_id AND terminal_at IS NULL "
+    "ORDER BY comparison_work_id FOR UPDATE SKIP LOCKED"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id")
 _GET_LOCKED = text(f"SELECT {_COLUMNS} FROM comparison_ai_job WHERE comparison_ai_job_id = :job_id FOR UPDATE")
@@ -189,9 +229,29 @@ _QUEUE_POSITION = text(
 )
 
 
+def _pending_wait(row: Any) -> PendingWait:
+    return PendingWait(
+        job_id=str(row["job_id"]), created_at=row["created_at"], method=str(row["method"]), group_revision_id=str(row["group_revision_id"]),
+        wait_reason=None if row["wait_reason"] is None else str(row["wait_reason"]), expired=bool(row["wait_expired"]),
+    )
+
+
 def _record(row: Any) -> AiJobRecord:
     values = {name: row[name] for name in AiJobRecord.__dataclass_fields__ if name != "estimate"}
     return AiJobRecord(estimate=dict(row["estimate"]), **values)
+
+
+@dataclass(frozen=True, slots=True)
+class PendingWait:
+    """A live ``pending`` job as the wait sweep sees it: its method and group revision, the reason it waits (``None`` when it waits for
+    nothing yet) and whether it has waited for that reason longer than the limit."""
+
+    job_id: str
+    created_at: datetime
+    method: str
+    group_revision_id: str
+    wait_reason: str | None
+    expired: bool
 
 
 class WorkItemRow:
@@ -274,6 +334,40 @@ class AiJobRepository:
             raise ValueError("a wait reason is one of the contract's three")
         found = session.execute(_SET_WAIT, {"job_id": job_id, "reason": reason}).scalar_one_or_none()
         return None if found is None else float(found)
+
+    def pending_waits(
+        self, session: Session, *, methods: Sequence[str], offline_seconds: float, batch_size: int,
+        after: tuple[datetime, str] | None = None,
+    ) -> list[PendingWait]:
+        """`EXEC2-FOLLOWUP-01`. One page of the live ``pending`` jobs (queued or running; never paused or ended) of ``methods``, oldest first, after
+        the keyset position ``after``, each with the reason it stores and whether that wait is older than ``offline_seconds``. Read-only: no
+        lock is taken."""
+        rows = session.execute(_PENDING_WAITS, {
+            "methods": list(methods), "offline_seconds": float(offline_seconds), "batch_size": batch_size,
+            "after_created_at": None if after is None else after[0], "after_job_id": None if after is None else after[1],
+        }).mappings().all()
+        return [_pending_wait(row) for row in rows]
+
+    def lock_live_items(self, session: Session, job_id: str) -> bool:
+        """`EXEC2-FOLLOWUP-01`. Lock every item of the job that has not ended, ``SKIP LOCKED``. ``True`` when this transaction holds all of them
+        (a job with none is trivially so); ``False`` when another transaction holds one -- a handler is in the middle of it, and the
+        caller leaves the job for a later pass instead of ending it under that handler."""
+        locked = len(session.execute(_LOCK_LIVE_ITEMS, {"job_id": job_id}).all())
+        return locked == self.live_item_count(session, job_id)
+
+    def lock_pending_wait(self, session: Session, job_id: str, *, offline_seconds: float) -> PendingWait | None:
+        """`EXEC2-FOLLOWUP-01`. Lock the job row ``SKIP LOCKED`` and read its wait. ``None`` when the job is no longer ``pending`` and live
+        (queued or running), when it now waits for ``needs_reconsent``, or when another transaction holds it. Take the job's items first
+        (:meth:`lock_live_items`)."""
+        row = session.execute(
+            _LOCK_PENDING_WAIT, {"job_id": job_id, "offline_seconds": float(offline_seconds)},
+        ).mappings().first()
+        return None if row is None else _pending_wait(row)
+
+    def clear_wait(self, session: Session, job_id: str) -> bool:
+        """`EXEC2-FOLLOWUP-01`. The wait of a live ``pending`` job ends: some member can take it. ``False`` when the job has no wait or is not a
+        live ``pending`` one (a paused or ended job is never written)."""
+        return session.execute(_CLEAR_WAIT, {"job_id": job_id}).rowcount == 1
 
     def insert_item(
         self, session: Session, *, job: JobRecord, kind: str, payload: Mapping[str, Any], dedupe_key: str,

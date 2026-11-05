@@ -14,6 +14,9 @@
  *   - **the shape.** One row per address, a Russian label, a role list only on a `session`
  *     row and never empty, and the addresses the guard redirects to at the access levels that
  *     make a redirect cycle impossible.
+ *   - **the project class** (`R-150c`, `UI-PARITY-01`). Every row states a `projectScope`; the
+ *     `required` rows are exactly the ones with `[project_uid]` in the address; the `optional`
+ *     set is exactly six screens; every other row is `global`.
  *
  * Every check is a pure function over rows, exercised against a deliberately broken registry
  * — which proves it can go red — and against the live one.
@@ -25,6 +28,7 @@ import { routeAddresses } from '../unit/screens/route-screens';
 
 import { ROLE_VALUES } from '@/shared/api';
 import type { ScreenEntry, ScreenGroup } from '@/shared/config';
+import type { ProjectScope } from '@/shared/lib';
 import {
   CHANGE_PASSWORD_SCREEN,
   FORBIDDEN_SCREEN,
@@ -37,6 +41,8 @@ import {
 } from '@/shared/config';
 
 const REGISTRY: readonly ScreenEntry[] = SCREEN_REGISTRY;
+
+const PROJECT_SCOPES: readonly ProjectScope[] = ['required', 'optional', 'global'];
 
 // ---------------------------------------------------------------- the checks, as functions
 
@@ -95,6 +101,11 @@ function shapeFindings(registry: readonly ScreenEntry[]): string[] {
           findings.push(`${row.address} lists ${String(role)}, which is not a contract role`);
         }
       }
+    }
+    if (!PROJECT_SCOPES.includes(row.projectScope as ProjectScope)) {
+      findings.push(`${row.address} has no project class`);
+    } else if (row.address.includes('[project_uid]') !== (row.projectScope === 'required')) {
+      findings.push(`${row.address} is ${row.projectScope} and ${row.address.includes('[project_uid]') ? 'has' : 'lacks'} a project in its path`);
     }
     if (row.inMenu && row.group === 'hidden') findings.push(`${row.address} is hidden and in the menu`);
     if (row.inMenu && row.address.includes('[')) {
@@ -180,10 +191,18 @@ describe('the registry is the route tree: every page has a row and every row a p
 describe('every row has the shape §3.1 gives it', () => {
   it('can fail: each shape rule names the row that breaks it', () => {
     const broken: ScreenEntry[] = [
-      { address: '/x', label: 'Икс', group: 'work', access: 'session', roles: 'any', inMenu: true },
-      { address: '/x', label: 'Ex', group: 'hidden', access: 'public', roles: ['admin'], inMenu: true },
-      { address: '/y/[id]', label: 'Игрек', group: 'work', access: 'session', roles: ['admin', 'admin'], inMenu: true },
-      { address: '/z', label: 'Зет', group: 'account', access: 'public', roles: 'any-role', inMenu: false },
+      { address: '/x', label: 'Икс', group: 'work', access: 'session', roles: 'any', inMenu: true, projectScope: 'global' },
+      { address: '/x', label: 'Ex', group: 'hidden', access: 'public', roles: ['admin'], inMenu: true, projectScope: 'global' },
+      {
+        address: '/y/[id]',
+        label: 'Игрек',
+        group: 'work',
+        access: 'session',
+        roles: ['admin', 'admin'],
+        inMenu: true,
+        projectScope: 'global',
+      },
+      { address: '/z', label: 'Зет', group: 'account', access: 'public', roles: 'any-role', inMenu: false, projectScope: 'global' },
     ];
     expect(shapeFindings(broken)).toEqual([
       '/x has two rows',
@@ -280,5 +299,89 @@ describe('R-66: the groups, their members and their order', () => {
     expect(labels['/projects']).toBe('Проекты');
     expect(labels['/admin/users']).toBe('Пользователи');
     expect(labels['/admin/registrations']).toBe('Заявки на регистрацию');
+  });
+});
+
+// ------------------------------------------------------------------------ project class
+
+/** The addresses of the rows with this class, in registry order. */
+function scopeOf(registry: readonly ScreenEntry[], scope: ProjectScope): string[] {
+  return registry.filter((row) => row.projectScope === scope).map((row) => row.address);
+}
+
+/** The ruling (`R-150c`): the screens that follow the header's project. Order is the registry's. */
+const OPTIONAL_SCREENS = [
+  '/dashboard',
+  '/section-optimisation',
+  '/version-comparison',
+  '/stage-comparison',
+  '/knowledge-base',
+  '/optimisation',
+];
+
+describe('R-150c: every row states how the screen relates to the project', () => {
+  it('can fail: a row with no class, an unknown class, and a class that contradicts the path are each named', () => {
+    const base = REGISTRY.find((row) => row.address === '/dashboard')!;
+    const unstated: ScreenEntry = {
+      address: base.address,
+      label: base.label,
+      group: base.group,
+      access: base.access,
+      roles: base.roles,
+      inMenu: base.inMenu,
+    };
+    const broken: ScreenEntry[] = [
+      unstated,
+      { ...base, address: '/a', projectScope: 'sometimes' as unknown as ProjectScope },
+      { ...base, address: '/b/[project_uid]', inMenu: false, projectScope: 'optional' },
+      { ...base, address: '/c', projectScope: 'required' },
+    ];
+    expect(shapeFindings(broken).filter((finding) => /project/.test(finding))).toEqual([
+      '/dashboard has no project class',
+      '/a has no project class',
+      '/b/[project_uid] is optional and has a project in its path',
+      '/c is required and lacks a project in its path',
+    ]);
+  });
+
+  it('can fail: the optional set is compared as a set, so one more or one fewer is a difference', () => {
+    const widened = REGISTRY.map((row) => (row.address === '/queue' ? { ...row, projectScope: 'optional' as const } : row));
+    expect(scopeOf(widened, 'optional').sort()).not.toEqual([...OPTIONAL_SCREENS].sort());
+    const narrowed = REGISTRY.map((row) => (row.address === '/dashboard' ? { ...row, projectScope: 'global' as const } : row));
+    expect(scopeOf(narrowed, 'optional').sort()).not.toEqual([...OPTIONAL_SCREENS].sort());
+  });
+
+  it('every live row carries one of the three classes', () => {
+    expect(REGISTRY.filter((row) => !PROJECT_SCOPES.includes(row.projectScope as ProjectScope)).map((row) => row.address)).toEqual([]);
+  });
+
+  it('required: exactly the screens with the project in the path -- everything under /projects/[project_uid]', () => {
+    expect(scopeOf(REGISTRY, 'required')).toEqual([
+      '/projects/[project_uid]',
+      '/projects/[project_uid]/documents/[document_uid]',
+      '/projects/[project_uid]/versions/[version_uid]',
+      '/projects/[project_uid]/versions/[version_uid]/comparison',
+      '/projects/[project_uid]/runs/[run_id]',
+      '/projects/[project_uid]/runs/[run_id]/review',
+    ]);
+    // The project list is not under a project: it is the screen that chooses one.
+    expect(REGISTRY.find((row) => row.address === '/projects')?.projectScope).toBe('global');
+  });
+
+  it('optional: exactly the six screens that follow the header', () => {
+    expect(scopeOf(REGISTRY, 'optional').sort()).toEqual([...OPTIONAL_SCREENS].sort());
+  });
+
+  it('global: every other screen, including /dispatcher and /blocks (their class is undecided, D-305)', () => {
+    const others = REGISTRY.filter((row) => !row.address.includes('[project_uid]') && !OPTIONAL_SCREENS.includes(row.address));
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.filter((row) => row.projectScope !== 'global').map((row) => row.address)).toEqual([]);
+    for (const address of ['/dispatcher', '/blocks']) {
+      expect(REGISTRY.find((row) => row.address === address)?.projectScope, address).toBe('global');
+    }
+    // The three sets partition the registry.
+    expect(scopeOf(REGISTRY, 'required').length + scopeOf(REGISTRY, 'optional').length + scopeOf(REGISTRY, 'global').length).toBe(
+      REGISTRY.length,
+    );
   });
 });

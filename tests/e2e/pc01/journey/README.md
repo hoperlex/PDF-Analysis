@@ -579,7 +579,7 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | «Диспетчер», «Мои задачи» | assign (twice), take, complete | admin-only cannot take the work; an expert sees no creation form; a return needs a reason |
 | price lists | upload the committed CSV (twice, ten positions); a second revision with formula-named vendors, a priceless row and an analog | admin-only sees no upload; an empty file; a table with no columns (422) |
 | vendor lists | the global list (administrator), the project list | an expert is offered no global button; a row with no vendor |
-| «Спецификация и цены» | the committed set's seven rows read, five matched, four counted (RUB 464278), three left out with their reasons | `price_list_missing` before any list |
+| «Спецификация и цены» | the committed set's seven rows read, six matched, five counted (RUB 501478), two left out with their reasons | `price_list_missing` before any list |
 | «Предложения» | a pass (twice) with the oracle's four proposals; accept; accept then reject; revise with a `=`-comment; history; the decision filter; two CSVs (BOM, 42 columns, 4 and 5 data rows, no formula cell) | a pass with no price list is refused `409 conflict`; admin-only starts nothing and decides nothing; «На доработку» needs a comment; a pass over the set with no table holds no proposal and its CSV is the header alone |
 | «Оптимизация разделов», dashboard | the АР section across projects (an `ar_bound` step); the section panel counts the journey's own section, ПБ | a section with no members |
 | «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |

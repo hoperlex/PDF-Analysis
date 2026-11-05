@@ -103,6 +103,12 @@ export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
 export interface DecisionJournalFilters {
   readonly category?: FindingCategory;
   readonly verdict?: Verdict;
+  /**
+   * The project the journal is restricted to (`?project=`, `UI-PARITY-P0A`). Absent is «Все
+   * проекты»: the parameter is left out, never sent empty. Part of the key, so two projects are
+   * two cache entries and a project change cannot show the other project's page.
+   */
+  readonly project_uid?: ProjectUid;
   readonly cursor?: string;
   readonly limit?: number;
 }
@@ -475,7 +481,26 @@ export const queryKeys = {
    * maps every mutation hook under `features/**` against this promise.
    */
   dashboard: {
-    summary: () => ['dashboard', 'summary'] as const,
+    /**
+     * The summary of one project (`UI-PARITY-P0A`, `?project=`), or of every project.
+     *
+     * **`summary()` with no project is two things on purpose: the entry «Все проекты» is filed
+     * under, and the PREFIX of every project's entry.** A project's key is the same two segments
+     * plus `{ project }`, and React Query matches keys by partial equality, so the invalidation
+     * every mutation already makes (`invalidateQueries({ queryKey: queryKeys.dashboard.summary() })`,
+     * and the guard that maps each mutation hook to it) reaches «Все проекты» and every project's
+     * summary alike, with no site changed. The home page's tiles read the same unscoped entry
+     * (`widgets/home-tiles`), so they keep sharing it with the dashboard's «Все проекты».
+     *
+     * «Все проекты» is the absence of the parameter, as it is in the address. `null`, `undefined`
+     * and an empty string all name no project and give the prefix; a key with `{ project: null }`
+     * would be a second spelling of the same question, filed beside the first and missed by a
+     * reader that built the other.
+     */
+    summary: (projectUid?: ProjectUid | null) =>
+      projectUid === undefined || projectUid === null || projectUid === ''
+        ? (['dashboard', 'summary'] as const)
+        : (['dashboard', 'summary', { project: projectUid }] as const),
   },
   /**
    * `getMe`. The signed-in account as the API describes it now — its name, roles and profile

@@ -7,6 +7,8 @@ import type {
 } from '@/shared/api';
 import { listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
 
+import { OPERATIONAL_LIST_POLL } from './operational-poll';
+
 export const EXECUTION_PAGE_LIMIT = 25;
 
 /*
@@ -14,6 +16,10 @@ export const EXECUTION_PAGE_LIMIT = 25;
  * default `staleTime: 30_000` would otherwise let a remount, a tab return or a navigation back
  * to the queue or the journal show a page up to thirty seconds old although each of them is
  * the screen an operator opens to see what the runner is doing now.
+ *
+ * They also refresh themselves on the `OPERATIONAL_LIST_POLLING` cadence (`operational-poll.ts`):
+ * while the tab is visible, backing off after a failed read. «Исполнители» does not poll yet;
+ * that screen is another change.
  */
 
 export function queueQueryOptions(cursor?: string) {
@@ -22,6 +28,7 @@ export function queueQueryOptions(cursor?: string) {
     queryFn: async () => (await listExecutionQueue({
       query: { limit: EXECUTION_PAGE_LIMIT, ...(cursor === undefined ? {} : { cursor }) },
     })).data,
+    ...OPERATIONAL_LIST_POLL,
     refetchOnWindowFocus: 'always',
     staleTime: 0,
   } as const;
@@ -41,6 +48,7 @@ export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = tr
         ...(cursor === undefined ? {} : { cursor }),
       },
     })).data,
+    ...OPERATIONAL_LIST_POLL,
     refetchOnWindowFocus: 'always',
     staleTime: 0,
     enabled,

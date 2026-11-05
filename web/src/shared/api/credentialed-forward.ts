@@ -53,7 +53,9 @@
  * (measured, `docs/program/W55B-STREAM-01.md`). The deadline is not put on a read: a document
  * download may legitimately run for as long as the reader takes to fetch it. Whatever aborts the
  * browser's own request aborts the upstream one too, so an upload the user cancelled stops
- * holding one of the API's two upload slots.
+ * holding one of the API's two upload slots. **The three upload routes are the exception**
+ * (`SECTION-STATS-UNCAPPED-1030`, hotfix `af581631`): a document, the next version of a document and a
+ * comparison ZIP carry a 24 hour deadline while the temporary statistics mode lifts the intake limits.
  *
  * **The path is rebuilt from segments, never concatenated from a string.** An open
  * forwarder's characteristic defect is that `/bff/v1/../../admin` or an absolute URL in
@@ -210,7 +212,7 @@ export function synthesizedEnvelope(
   correlationId: string,
 ): ErrorEnvelope {
   return {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     correlation_id: correlationId,
     error_code: errorCode,
     message,

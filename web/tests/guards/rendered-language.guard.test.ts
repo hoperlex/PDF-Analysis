@@ -135,6 +135,7 @@ import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import {
   MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
 } from '@/features/start-ar-v3-group';
+import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
@@ -149,6 +150,29 @@ import { ExecutorSelectView, StartRunControl, StartRunFailureView } from '@/feat
 import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
 import { executorChoices } from '@/entities/executor-connection';
+import { StageChanges, StageJournal } from '@/widgets/stage-changes';
+import { STAGE_REVIEW_KEYS } from '@/widgets/stage-changes/api/reads';
+import { StagePairCatalog } from '@/widgets/stage-pair-catalog';
+import { StageRunControls } from '@/widgets/stage-run-controls';
+import { STAGE_RUN_KEYS } from '@/widgets/stage-run-controls/model/runs';
+import { StageSheetMap } from '@/widgets/stage-sheet-map';
+import { StageTextEvidence } from '@/widgets/stage-text-evidence';
+import { STAGE_PAIR_KEYS } from '@/entities/stage-pair';
+import { StageUploadPanel } from '@/_pages/stage-compare/ui/stage-upload-panel';
+import { StageWorkspace } from '@/_pages/stage-compare/ui/stage-workspace';
+import { StageComparePage } from '@/_pages/stage-compare';
+import { StageComparisonPage } from '@/_pages/stage-comparison';
+import { PdfPrecheckProgress } from '@/widgets/run-progress/ui/pdf-precheck-progress';
+import { executorGroupCapacityKey, executorGroupsKey, executorRoutingRulesKey } from '@/entities/executor-group';
+import { executionFailure } from '@/entities/execution';
+import { GroupCommandFailure } from '@/features/manage-executor-group';
+import { GroupSelectView } from '@/features/start-run';
+import { SshInstallSession, agentInstallQueryKey } from '@/features/connect-remote-agent';
+import {
+  ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, capacityOf, ruleList, ruleOf,
+} from '../unit/executor-groups/executor-groups-fixtures';
+import { connectionId as executorConnectionId } from '../unit/workers/executor-fixtures';
+import { install as agentInstall } from '../unit/workers/connect-remote-agent-fixtures';
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY,
   OUTCOME_CASES as EXECUTOR_OUTCOME_CASES, PULL_ONLINE as EXECUTOR_PULL_ONLINE, runnerToken, seedExecutors,
@@ -322,6 +346,14 @@ export function contractVocabulary(): ReadonlySet<string> {
   return new Set([...contractEnums(), ...csvColumnNames(), ...manifestRoles(), ...betaPolicyIdentifiers()]);
 }
 
+/** The members of the contract's `ProjectSection`, which the section badges print. */
+function projectSectionCodes(): readonly string[] {
+  const openapi = readJson<OpenApi>(CONTRACT_PATH);
+  const codes = openapi.components.schemas['ProjectSection']?.enum ?? [];
+  expect(codes.length, 'the contract publishes no ProjectSection members, so no badge is permitted').toBeGreaterThan(10);
+  return codes;
+}
+
 /**
  * The residue: Latin that no contract in this repository defines.
  *
@@ -382,6 +414,17 @@ const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] 
   { word: 'Claude', why: 'The model family name in «Формат сообщений Claude». A product name, not translated for the reason AuditManager is not; no contract here defines it.' },
   { word: 'authorized_keys', why: 'The file OpenSSH reads on the remote machine, named where the generated public key is shown so the person knows where to add it. The spelling is fixed by OpenSSH; no contract here defines it, and it is not a filename the extension pattern matches.' },
   { word: 'MD', why: 'The abbreviation of Markdown in «Сводка изменений (MD)», «Скачать MD», «Исходный MD» and «MD листа», the names of the original\'s buttons (`CMP-VC-UI-02`). A format name that Russian technical writing does not translate; no contract here defines the word, and a bare `MD` is not a filename the extension pattern matches.' },
+  // ------------------------------------------------------------------------------------
+  // `CMP-SEAL-C3`/`C4`: the formats the comparison screens export, and the name of the worksheet that holds the full data.
+  // Each is a format or a literal name outside this programme, for the reason `PDF`, `CSV` and `ZIP` are above; none is a
+  // contract value (the contract publishes the formats as media types, matched separately). The residue cap below went
+  // from 21 to 25 for these four, and `HTML` is therefore no longer the probe that "a format the vocabulary does not
+  // name" reddens (it is `DOCX` now).
+  // ------------------------------------------------------------------------------------
+  { word: 'RawJSON', why: 'The name of the worksheet that holds the full saved data in the exported workbook (`xlsx` of «Проекты и стадии», `entities/audit-run/lib/extended-xlsx.ts`), printed so the reader can find it in Excel. It is a literal name inside a file the reader opens, not a word the application says; listed before `JSON` so the name is consumed whole.' },
+  { word: 'XLSX', why: 'The workbook format of «Скачать Excel» and of the technical export (`Технический XLSX`). Office Open XML is standardised outside this programme (ECMA-376), Russian technical writing does not translate it, and no contract here defines the word.' },
+  { word: 'JSON', why: 'The data format of an export (`RFC 8259`), beside `CSV` and `ZIP` in the export description. A standard name that Russian technical writing does not translate; no contract here defines the word, and a bare `JSON` is not a filename the extension pattern matches.' },
+  { word: 'HTML', why: 'The page format of the comparison report package («HTML с изображениями (ZIP)»). A standard name (WHATWG) that Russian technical writing does not translate; no contract here defines the word, and a bare `HTML` is not a filename the extension pattern matches.' },
   {
     word: 'MiB',
     why:
@@ -417,6 +460,15 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
   // `W55B-WEB-BLOCKS`. The text-line index's block id, which «Строки текста» prints as the
   // block's identifier: `openapi.json` pins `BlockGeometry.block_id` to `^b_[0-9]{6}$`.
   { name: 'text-line block ids', pattern: /\bb_[0-9]{6}\b/g },
+  // `ee90c6a5` (the original-style section presentation, owner-directed): the dashboard, the home overview and the project
+  // structure print each section's code as a badge, the way the original application does -- `AR`, `KJ`, `EOM`. The codes
+  // are the members of the contract's `ProjectSection`, read here and not listed, and they are permitted ONLY as the whole
+  // of a text node: the badge. `Run AR` and `AR-документ` still leave `AR` an offence, and the schema stays in
+  // `TRANSLATED_SCHEMAS`, so a section named in a sentence by its code is as red as it was.
+  // `af581631` (the quota hotfix): the ZIP import hint names the metadata folder macOS adds to an archive, which the import
+  // refuses by name. Apple's archive utility fixes the spelling; it is a literal folder name, not a word the application says.
+  { name: 'the macOS archive metadata folder', pattern: /\b__MACOSX\b/g },
+  { name: 'section code badges', pattern: new RegExp(`^(?:${projectSectionCodes().join('|')})$`, 'g') },
   // RFC 6838. `application/pdf` is the only one this application names, but the shape is
   // the authority, not the value.
   { name: 'media types', pattern: /\b[a-z]+\/[a-z0-9.+-]+\b/g },
@@ -445,7 +497,8 @@ const MACHINE_SHAPES: readonly { readonly name: string; readonly pattern: RegExp
     name: 'analysis profile version designation',
     // The AR profile is named v3 in its frozen profile and on the beta screen. A bare
     // English `version` remains an offence; only the digit-bound designation is masked.
-    pattern: /\bv[1-9][0-9]*\b/g,
+    // `V3` as well as `v3`: the stage comparison names its engine «V3 · эксперимент» (`CMP-SEAL-C4`).
+    pattern: /\b[vV][1-9][0-9]*\b/g,
   },
   {
     name: 'units attached to a number',
@@ -1010,6 +1063,10 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
   ...decision(),
   project_uid: PROJECT_UID,
   run_id: RUN_ID,
+  document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  project_name: 'Школа',
+  document_name: 'АР-1',
   category: 'internal_contradiction',
   finding_text: 'Срок поставки указан как 30 дней в §4 и как 45 дней в §9.',
   current_verdict: 'accepted',
@@ -1019,7 +1076,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1031,7 +1088,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1162,6 +1219,11 @@ const KEYS = {
   // detail is seeded beside them by `seedExecutors`, under keys that depend on the connection.
   executorConnections: queryKeys.execution.connections(),
   executorRoutes: queryKeys.execution.routes(),
+  // `EXEC2-WEB-GROUPS-01`: «Группы» and «Правила». A key of `KEYS` is seeded loaded, ERRORED in `failedClient` and
+  // emptied in `emptyClient`, so both tabs render loading (cold), failed, empty and read without a case of their own.
+  // The capacity of each group is under a key that depends on the group, and is seeded beside the list.
+  executorGroups: executorGroupsKey(),
+  executorRoutingRules: executorRoutingRulesKey(),
   // `W59-ANALYSIS-SETTINGS-01`: «Настройки анализа», the registry's fifteen rows.
   analysisProfiles: queryKeys.analysis.profiles(),
   // `AR-V3-BETA-PACK-STATUS-WEB-01`: whether the reviewed AR v3 pack is installed. A key of
@@ -1242,7 +1304,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.journal, {
     items: [
       record(),
-      record({ decision_id: `dec_${ULID}A`, decision_event_count: 1 }),
+      // `UI-PARITY-P0A`: one row of a classified version, so the place line prints a section's name too.
+      record({ decision_id: `dec_${ULID}A`, decision_event_count: 1, section: 'AR' }),
       // One row per remaining `Verdict` and per remaining `FindingCategory`, so the
       // knowledge base puts every badge this contract publishes on a screen. Before this
       // the journal held `accepted`/`internal_contradiction` twice and nothing else.
@@ -1257,6 +1320,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
       ),
     ],
     page,
+    // `UI-PARITY-P0A`: the count over every page of the journal; the knowledge base prints it.
+    total: 7,
   });
   client.setQueryData(KEYS.dashboardSummary, dashboardSummary());
   /*
@@ -1305,6 +1370,13 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.workers, { items: WORKERS, page });
   // Every shape of connection and probe, and a route with a standby.
   seedExecutors(client);
+  // `EXEC2-WEB-GROUPS-01`: two groups read and one archived, the capacity of each that is not archived, and the rules in
+  // the legacy mode (a cut-over has not been made).
+  client.setQueryData(KEYS.executorGroups, { items: [MAIN_GROUP, ROUTED_GROUP, ARCHIVED_GROUP] });
+  for (const group of [MAIN_GROUP, ROUTED_GROUP]) {
+    client.setQueryData(executorGroupCapacityKey(group.group_id), capacityOf(group));
+  }
+  client.setQueryData(KEYS.executorRoutingRules, ruleList('legacy'));
   client.setQueryData(KEYS.analysisProfiles, { items: ANALYSIS_PROFILES });
   client.setQueryData(KEYS.arV3PackStatus, installedPackFixture());
   // A current snapshot and the three ways another one can stand; two designations; two hits;
@@ -1372,7 +1444,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.run, run());
   client.setQueryData(KEYS.findings, { data: { items: [], page } });
   client.setQueryData(KEYS.decisions, { data: { items: [], page } });
-  client.setQueryData(KEYS.journal, { items: [], page });
+  client.setQueryData(KEYS.journal, { items: [], page, total: 0 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [], page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
@@ -1383,6 +1455,9 @@ function emptyClient(): Client {
   // No connection, no route: the empty branches of both new tabs.
   client.setQueryData(KEYS.executorConnections, { items: [], pinned_models: [...EXECUTOR_PINNED] });
   client.setQueryData(KEYS.executorRoutes, { items: [] });
+  // And no group, no rule: the empty branches of «Группы» and «Правила».
+  client.setQueryData(KEYS.executorGroups, { items: [] });
+  client.setQueryData(KEYS.executorRoutingRules, ruleList('legacy'));
   // No snapshot loaded, so none is current: «Нормы» renders its refusal, not an empty list.
   client.setQueryData(KEYS.normSnapshots, { items: [], page });
   client.setQueryData(KEYS.normEvents, { items: [], page });
@@ -1430,7 +1505,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.documents, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
-  client.setQueryData(KEYS.journal, { items: [record()], page });
+  client.setQueryData(KEYS.journal, { items: [record()], page, total: 1 });
   client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
   return client;
 }
@@ -1841,7 +1916,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.16.0',
+    contract_version: '1.17.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1875,15 +1950,27 @@ function startGroupViews(): ReactElement {
     startRefusal(500, 'internal_error'),
     new TransportError('Запрос не дошёл.', { retryable: true }),
   ].map(classifyArV3GroupStartFailure);
-  const view = (key: string, pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null) =>
+  // The cost reading is held by the caller's intent (a `useMutation` observer), so the estimate's own two branches -- its
+  // request in flight and its refusal -- are given to the view as the reading that produces them.
+  const cost = (over: Partial<NonNullable<StartArV3GroupViewProps['cost']>>) => ({
+    estimate: null, ceiling: '', approved: false, consent: undefined, draftConsent: undefined, pending: false, error: null,
+    reset: () => undefined, request: () => undefined, setCeiling: () => undefined, setApproved: () => undefined, ...over,
+  }) as unknown as NonNullable<StartArV3GroupViewProps['cost']>;
+  const view = (
+    key: string, pending: boolean, failure: ReturnType<typeof classifyArV3GroupStartFailure> | null,
+    withCost?: NonNullable<StartArV3GroupViewProps['cost']>,
+  ) =>
     createElement(StartArV3GroupView, {
       key, projectUid: PROJECT_UID, versionUid: VERSION_UID, pending, failure, onSend: () => undefined,
+      ...(withCost === undefined ? {} : { cost: withCost }),
     });
   return createElement(
     'div',
     null,
     view('idle', false, null),
     view('pending', true, null),
+    view('estimating', false, null, cost({ pending: true })),
+    view('estimate-refused', false, null, cost({ error: startRefusal(503, 'dependency_unavailable', { dependency: 'metadata_store' }) })),
     ...failures.map((failure, index) => view(`failure-${index}`, false, failure)),
     view('malformed', false, MALFORMED_GROUP_ANSWER),
   );
@@ -2037,7 +2124,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.16.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.17.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2440,6 +2527,203 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       onPriority: () => {}, onNext: null, onPrevious: null,
     }),
   },
+  /*
+   * `CMP-SEAL-C3`/`C4`: «Сравнение стадий», widget by widget. See STAGE_PAIR_ID above for why each has its own seed.
+   */
+  {
+    name: 'stage-changes-no-run',
+    make: () => createElement(StageChanges, { runId: undefined, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+  },
+  {
+    name: 'stage-changes-reading',
+    make: () => createElement(StageChanges, { runId: STAGE_RUN_ID, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+  },
+  {
+    name: 'stage-changes-failed',
+    make: () => createElement(StageChanges, { runId: STAGE_RUN_ID, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+    seedClient: (client) => {
+      seedError(client, STAGE_REVIEW_KEYS.cards(STAGE_RUN_ID), stageFailure());
+      seedError(client, ['stage-review-run', STAGE_RUN_ID], stageFailure());
+      seedError(client, ['stage-high-level', STAGE_RUN_ID], stageFailure());
+    },
+  },
+  {
+    name: 'stage-changes-empty',
+    make: () => createElement(StageChanges, { runId: STAGE_RUN_ID, mayAct: true, onOpenEvidence: STAGE_NOOP }),
+    seedClient: (client) => client.setQueryData(STAGE_REVIEW_KEYS.cards(STAGE_RUN_ID), { cards: [], counts: {} }),
+  },
+  {
+    name: 'stage-journal-no-run',
+    make: () => createElement(StageJournal, { runId: undefined, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+  },
+  {
+    name: 'stage-journal-reading',
+    make: () => createElement(StageJournal, { runId: STAGE_RUN_ID, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+  },
+  {
+    name: 'stage-journal-failed',
+    make: () => createElement(StageJournal, { runId: STAGE_RUN_ID, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+    seedClient: (client) => seedError(client, [...STAGE_REVIEW_KEYS.journal(STAGE_RUN_ID), 'designation'], stageFailure()),
+  },
+  {
+    name: 'stage-journal-empty',
+    make: () => createElement(StageJournal, { runId: STAGE_RUN_ID, mayAct: false, onOpenEvidence: STAGE_NOOP }),
+    seedClient: (client) => client.setQueryData([...STAGE_REVIEW_KEYS.journal(STAGE_RUN_ID), 'designation'], {
+      result: {
+        run_id: STAGE_RUN_ID, grouping: 'designation', accepted_count: 0, ai_hidden_same_count: 0, ai_service_count: 0,
+        stale: false, groups: [],
+      },
+      groups: [],
+    }),
+  },
+  {
+    name: 'stage-pair-catalog-reading',
+    make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: false }),
+  },
+  {
+    name: 'stage-pair-catalog-failed',
+    make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => {
+      seedError(client, STAGE_PAIR_KEYS.pairs(PROJECT_UID), stageFailure());
+      seedError(client, STAGE_PAIR_KEYS.suggestions(PROJECT_UID), stageFailure());
+    },
+  },
+  {
+    name: 'stage-pair-catalog-empty',
+    make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: true }),
+    seedClient: (client) => {
+      client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [], page: STAGE_PAGE });
+      client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), { items: [], page: STAGE_PAGE });
+    },
+  },
+  {
+    name: 'stage-upload-panel-reading',
+    make: () => createElement(StageUploadPanel, { projectUid: PROJECT_UID, mayAct: false }),
+  },
+  {
+    name: 'stage-upload-panel-failed',
+    make: () => createElement(StageUploadPanel, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => seedError(client, ['comparison', 'stage-uploads', PROJECT_UID, ''], stageFailure()),
+  },
+  {
+    name: 'stage-upload-panel-empty',
+    make: () => createElement(StageUploadPanel, { projectUid: PROJECT_UID, mayAct: true }),
+    seedClient: (client) => client.setQueryData(['comparison', 'stage-uploads', PROJECT_UID, ''], { items: [], page: STAGE_PAGE }),
+  },
+  {
+    name: 'stage-workspace-reading',
+    make: () => createElement(StageWorkspace, { projectUid: PROJECT_UID, mayAct: false }),
+  },
+  {
+    name: 'stage-workspace-failed',
+    make: () => createElement(StageWorkspace, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => seedError(client, [...STAGE_PAIR_KEYS.projectPairs(PROJECT_UID), 'workspace'], stageFailure()),
+  },
+  {
+    // The pair is read and the run the workspace opens on belongs to another pair: it is refused, with no controls under it.
+    name: 'stage-workspace-foreign-run',
+    make: () => createElement(StageWorkspace, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => {
+      client.setQueryData([...STAGE_PAIR_KEYS.projectPairs(PROJECT_UID), 'workspace'], [{
+        pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'unknown',
+        left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
+      }]);
+      client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
+      client.setQueryData(['stage-full-run', STAGE_RUN_ID], stageRun({ pair_id: STAGE_OTHER_PAIR_ID }));
+    },
+  },
+  {
+    name: 'stage-run-controls-reading',
+    make: () => createElement(StageRunControls, { pairId: STAGE_PAIR_ID, mayAct: false }),
+  },
+  {
+    name: 'stage-run-controls-failed',
+    make: () => createElement(StageRunControls, { pairId: STAGE_PAIR_ID, mayAct: false }),
+    seedClient: (client) => seedError(client, STAGE_RUN_KEYS.map(STAGE_PAIR_ID), stageFailure()),
+  },
+  {
+    // No pair chosen: the map asks for one. Controlled by the workspace in the product; uncontrolled here, so it reads the
+    // project's pairs itself (pending, failed, or an empty list).
+    name: 'stage-sheet-map-pairs-reading',
+    make: () => createElement(StageSheetMap, { projectUid: PROJECT_UID, mayAct: false }),
+  },
+  {
+    name: 'stage-sheet-map-pairs-failed',
+    make: () => createElement(StageSheetMap, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => seedError(client, STAGE_PAIR_KEYS.pairs(PROJECT_UID), stageFailure()),
+  },
+  {
+    // A pair chosen: the map reads its sheets (pending), has none saved yet (the empty map) and, on this entry, an
+    // evidence place that belongs to another pair.
+    name: 'stage-sheet-map-reading',
+    make: () => createElement(StageSheetMap, { projectUid: PROJECT_UID, mayAct: true, pairId: STAGE_PAIR_ID }),
+  },
+  {
+    name: 'stage-sheet-map-foreign-evidence',
+    make: () => createElement(StageSheetMap, {
+      projectUid: PROJECT_UID, mayAct: false, pairId: STAGE_PAIR_ID,
+      focus: { pairId: STAGE_OTHER_PAIR_ID, runId: STAGE_RUN_ID, revisionId: 'slk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', token: 1 } as never,
+    }),
+  },
+  {
+    name: 'stage-sheet-map-failed',
+    make: () => createElement(StageSheetMap, { projectUid: PROJECT_UID, mayAct: false, pairId: STAGE_PAIR_ID }),
+    seedClient: (client) => {
+      seedError(client, ['stage-sheet-map', STAGE_PAIR_ID, 'passports'], stageFailure());
+      seedError(client, ['stage-sheet-map', STAGE_PAIR_ID, 'suggestions'], stageFailure());
+      seedError(client, ['stage-sheet-map', STAGE_PAIR_ID, 'current'], stageFailure());
+    },
+  },
+  {
+    // The text comparison of a revision, whose last recompute failed to read: the sentence under the controls.
+    name: 'stage-text-evidence-failed',
+    make: () => createElement(StageTextEvidence, {
+      revisionId: 'slk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', mayAct: true, dirty: false, evidence: undefined, loading: false,
+      needsRecompute: false, error: stageFailure(), names: new Map<string, string>(), onCompleted: STAGE_NOOP,
+      onFocus: STAGE_NOOP, onHint: STAGE_NOOP,
+    }),
+  },
+  {
+    // The list of runs of a version, a page that repeats a run: refused rather than shown twice.
+    name: 'stage-comparison-repeated-page',
+    make: () => createElement(StageComparisonPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
+    seedClient: (client) => client.setQueryData(KEYS.runs, { items: [run(), run()], page: STAGE_PAGE }),
+  },
+  {
+    // «Сравнение стадий» is off on this stand: the module says so instead of drawing a workspace.
+    name: 'stage-compare-module-off',
+    make: () => createElement(StageComparePage, {}),
+    seedClient: (client) => client.setQueryData(queryKeys.releases.version(), { comparison_modules: 'versions' }),
+  },
+  {
+    name: 'stage-compare-module-unread',
+    make: () => createElement(StageComparePage, {}),
+    seedClient: (client) => seedError(client, queryKeys.releases.version(), stageFailure()),
+  },
+  {
+    // A run that has not passed its source preparation, whose progress journal cannot be read.
+    name: 'pdf-precheck-journal-failed',
+    make: () => createElement(PdfPrecheckProgress, { status: run({ state: 'queued', stages: [] }) }),
+    seedClient: (client) => seedError(client, queryKeys.execution.journal(RUN_ID), stageFailure()),
+  },
+  {
+    // A job that has finished: the only row that offers «Повторный аудит», the control the browser journey presses by text
+    // (`manifest.json`). A queued job offers cancel and priority, never this, so no other state renders it.
+    name: 'execution-queue-finished-admin',
+    make: () => createElement(ExecutionQueue, {
+      items: (['succeeded', 'failed', 'cancelled'] as const).map((state, index) => ({
+        job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${'ABC'[index] as string}`,
+        run_id: RUN_ID,
+        state,
+        priority: 2,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+      })),
+      roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
   {
     name: 'execution-queue-unknown-state',
     make: () => createElement(ExecutionQueue, {
@@ -2544,11 +2828,13 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
   {
     // `CMP-SEAL-C2` (ADR-0025 decision 17): a route for each of the four kinds of model work of «Сравнение версий», beside
-    // «Анализ текста», so that every member of `ExecutorWorkKind` stands on a screen.
+    // «Анализ текста», and (`CMP-SEAL-C4`) the AI review of «Сравнение стадий», so that every member of `ExecutorWorkKind`
+    // stands on a screen.
     name: 'workers-routes-comparison-kinds',
     make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, (
-      ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report'] as const
+      ['text_analysis', 'comparison_pair_check', 'comparison_sheet_changes', 'comparison_spec', 'comparison_report',
+        'comparison_stage_review'] as const
     ).map((kind) => ({
       work_kind: kind, primary_connection_id: EXECUTOR_READY.connection.connection_id,
       set_at: '2026-10-21T10:00:00Z', set_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
@@ -2559,6 +2845,100 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'workers-routes-unassigned',
     make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'routes' }),
     seedClient: (client) => seedExecutors(client, EXECUTOR_CASES, []),
+  },
+  /*
+   * `EXEC2-WEB-GROUPS-01` (ADR-0026 decisions 10, 11 and 17). The tabs «Группы» and «Правила» are in none of the route
+   * seeds, because the address names one tab only by `?tab=`. Each is rendered here as the administrator and as an
+   * expert (who reads and changes nothing), in the legacy mode and under rules; the loading, failed and empty branches
+   * come from the cold, refused and empty cache states, because their keys are in `KEYS`.
+   */
+  {
+    name: 'workers-groups',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+  },
+  {
+    name: 'workers-groups-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
+  },
+  {
+    // The groups are read and their capacities are not: the pending branch of each group's occupancy.
+    name: 'workers-groups-capacity-pending',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'groups' }),
+    seedClient: (client) => {
+      for (const group of [MAIN_GROUP, ROUTED_GROUP]) {
+        client.removeQueries({ queryKey: executorGroupCapacityKey(group.group_id) });
+      }
+    },
+  },
+  {
+    name: 'workers-rules',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+  },
+  {
+    name: 'workers-rules-expert',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    seedClient: (client) => client.setQueryData(KEYS.account, { ...ADMIN_USER_ACCOUNT, roles: ['expert'] }),
+  },
+  {
+    // Under rules: a rule for two kinds of work (the second on an earlier revision of its group), the others unruled.
+    name: 'workers-rules-in-force',
+    make: () => createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'rules' }),
+    seedClient: (client) => client.setQueryData(KEYS.executorRoutingRules, ruleList('rules', [
+      ruleOf('text_analysis', ROUTED_GROUP, 1),
+      ruleOf('comparison_pair_check', { ...MAIN_GROUP, current_revision: { ...MAIN_GROUP.current_revision, group_revision_id: 'exgr_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z' } }, 2),
+    ])),
+  },
+  {
+    // The three-way start choice's group select, over every answer the group list can be in.
+    name: 'start-run-group-select',
+    make: () => createElement(GroupSelectView, {
+      id: 'group-select', reading: { phase: 'ready', groups: [MAIN_GROUP, ROUTED_GROUP, ARCHIVED_GROUP] },
+      value: MAIN_GROUP.group_id, disabled: false, onChange: () => {},
+    }),
+  },
+  {
+    name: 'start-run-group-select-loading',
+    make: () => createElement(GroupSelectView, {
+      id: 'group-select', reading: { phase: 'loading' }, value: null, disabled: false, onChange: () => {},
+    }),
+  },
+  {
+    name: 'start-run-group-select-failed',
+    make: () => createElement(GroupSelectView, {
+      id: 'group-select', reading: { phase: 'failed', detail: 'Список групп не получен.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', onRetry: () => {} },
+      value: null, disabled: false, onChange: () => {},
+    }),
+  },
+  {
+    name: 'start-run-group-select-gone',
+    make: () => createElement(GroupSelectView, {
+      id: 'group-select', reading: { phase: 'ready', groups: [] }, value: MAIN_GROUP.group_id, disabled: true, onChange: () => {},
+    }),
+  },
+  {
+    // The one sentence under every refused or unknown group, rule and mode command.
+    name: 'group-command-failure',
+    make: () => createElement('div', null,
+      createElement(GroupCommandFailure, { failure: executionFailure(apiError(409, 'state_transition_not_allowed'), false) }),
+      createElement(GroupCommandFailure, { failure: executionFailure(new TypeError('Failed to fetch'), true) }),
+    ),
+  },
+  {
+    // The path-A install session whose read failed: the last answer is kept and the failure is said under it.
+    name: 'ssh-install-session-unreadable',
+    make: () => createElement(SshInstallSession, {
+      connectionId: executorConnectionId(62), initial: agentInstall(executorConnectionId(62)), onRetry: () => {},
+    }),
+    // The read has an answer (the one the command gave) and its re-read failed: data and an error together. A bare seeded
+    // error would be replaced by the hook's `initialData` when it mounts, and the branch would not render.
+    seedClient: (client) => {
+      const key = agentInstallQueryKey(agentInstall(executorConnectionId(62)).install_id);
+      client.setQueryData(key, agentInstall(executorConnectionId(62)));
+      client.getQueryCache().find({ queryKey: [...key] })?.setState({
+        status: 'error', error: apiError(503, 'dependency_unavailable'), errorUpdatedAt: Date.now(), fetchFailureCount: 1,
+      });
+    },
   },
   ...EXECUTOR_SECRET_OUTCOMES.map((outcome) => ({
     name: `executor-secret-form-${outcome}`,
@@ -3198,6 +3578,28 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   },
 ];
 
+/**
+ * `CMP-SEAL-C3` and `CMP-SEAL-C4`: the identities and the failures the «Сравнение стадий» widgets are rendered with.
+ *
+ * Those widgets keep their reads under keys of their own (`['stage-full-run', id]`, `['stage-sheet-map', pair, ...]`), none of
+ * which is in `KEYS`, so the cold, refused and empty cache states cannot reach them. Each is therefore rendered by an entry
+ * of its own below, with the cache holding exactly the answer that selects the branch: nothing (the read pending), an error
+ * under the key it reads, or an empty answer. Only the branches a person reaches by pressing something -- a settled
+ * command, a closed `<details>`, a chosen tab -- stay in `UNREACHABLE_IN_ONE_PASS`.
+ */
+const STAGE_PAIR_ID = 'stp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const STAGE_OTHER_PAIR_ID = 'stp_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
+const STAGE_RUN_ID = 'crn_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const STAGE_NOOP = (): void => undefined;
+const stageFailure = (): ApiError => apiError(503, 'dependency_unavailable');
+const STAGE_PAGE = { next_cursor: null } as { next_cursor: null };
+/** A run of the pair, as the workspace lists it and as it reads it back. */
+const stageRun = (over: Record<string, unknown> = {}): never => ({
+  run_id: STAGE_RUN_ID, pair_id: STAGE_PAIR_ID, kind: 'full', state: 'completed', stale: false, steps: [],
+  created_at: '2026-10-09T10:00:00Z', updated_at: '2026-10-09T10:01:00Z', link_revision_id: 'slk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+  input_sha256: SHA, pinned_version_uids: [], with_ai: true, ...over,
+}) as never;
+
 const SCREENS: readonly ScreenCase[] = [
   ...DERIVED_SCREENS,
   ...EXTRA_SHAPES,
@@ -3647,7 +4049,9 @@ describe('the guard reads a contract rather than a list of words', () => {
   });
 
   it('keeps the hand-written residue small, and every entry reasoned', () => {
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(21);
+    // 25 since `D-292`: four format and sheet names of the comparison exports (`XLSX`, `JSON`, `HTML`, `RawJSON`), each
+    // with its reason. It was 21.
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(25);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
@@ -3718,7 +4122,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.16.0',
+            contract_version: '1.17.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3740,7 +4144,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.16.0',
+            contract_version: '1.17.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -3769,7 +4173,9 @@ describe('the guard can tell an English label from a legitimate Latin string', (
 
   it('still reddens a file format the vocabulary does not name', () => {
     expect(unexplainedLatin('Файл распознанного текста в формате Markdown', VOCABULARY)).toEqual(['Markdown']);
-    expect(unexplainedLatin('Версия в виде HTML', VOCABULARY)).toEqual(['HTML']);
+    expect(unexplainedLatin('Версия в виде DOCX', VOCABULARY)).toEqual(['DOCX']);
+    // The four the comparison exports name are named now, and each is named whole.
+    for (const named of ['HTML', 'XLSX', 'JSON', 'RawJSON']) expect(unexplainedLatin(`Версия в виде ${named}`, VOCABULARY), named).toEqual([]);
     expect(unexplainedLatin('архив в формате ZIP', VOCABULARY)).toEqual([]);
   });
 
@@ -4505,6 +4911,20 @@ function offencesOnScreens(): Map<string, { readonly words: Set<string>; readonl
   return found;
 }
 
+describe('R-18: a section code is permitted as a badge and nowhere else', () => {
+  it('lets a code stand alone as the whole of a text node', () => {
+    for (const code of projectSectionCodes()) expect(unexplainedLatin(code, VOCABULARY), code).toEqual([]);
+  });
+
+  it('still reports it in a sentence, beside a word, in another case or inside a longer token', () => {
+    expect(unexplainedLatin('Раздел AR', VOCABULARY)).toEqual(['AR']);
+    expect(unexplainedLatin('AR документ', VOCABULARY)).toEqual(['AR']);
+    expect(unexplainedLatin('Run AR', VOCABULARY)).toEqual(['Run', 'AR']);
+    expect(unexplainedLatin('ar', VOCABULARY)).toEqual(['ar']);
+    expect(unexplainedLatin('ARX', VOCABULARY)).toEqual(['ARX']);
+  });
+});
+
 describe('R-18: no Latin word reaches a reviewer that a contract did not put there', () => {
   const found = offencesOnScreens();
   const known = new Set(OUTSTANDING.map((entry) => offenceKey(entry.text)));
@@ -4569,13 +4989,42 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     expect(texts.length, 'the manifest names no click target by text').toBeGreaterThan(1);
 
     const markup = renderedScreens().map((s) => s.markup).join('\n');
-    for (const text of texts) {
-      expect(
-        markup.includes(`>${text}<`) || markup.includes(`>${text} <`) || markup.includes(`> ${text}<`),
-        `the journey presses a control labelled "${text}" and no rendered screen carries it ` +
-          'as element text. Either the label moved and the manifest did not, or the reverse. ' +
-          'A substring check against web/src cannot see this -- it is why D-61 exists.',
-      ).toBe(true);
+    const carried = (text: string): boolean =>
+      markup.includes(`>${text}<`) || markup.includes(`>${text} <`) || markup.includes(`> ${text}<`);
+
+    // `D-292`: a control the journey presses that exists only after another press is not on any screen one static pass
+    // draws, and saying so by name -- with the reason, and in both directions, so the entry goes the day a state renders
+    // the control -- is the same discipline as `UNREACHABLE_IN_ONE_PASS`. It excuses a control from being SEEN here; the
+    // journey itself (`tests/e2e/pc01/journey`) is the instrument that presses it.
+    const PRESSED_BEFORE_IT_EXISTS: readonly { readonly text: string; readonly why: string }[] = [
+      {
+        text: 'Подтвердить',
+        why:
+          'The confirmation panel of «Очередь» (`queue-page.tsx`, `data-execution-intent`) is drawn when `intent` is set by ' +
+          'pressing a row action: «Отменить прогон», «Повторный аудит» or the priority form. `intent` is a `useState` and one ' +
+          'static pass presses nothing. «Исполнители» and «Нормы» confirm the same way, behind their own press.',
+      },
+    ];
+    const excused = new Set(PRESSED_BEFORE_IT_EXISTS.map((entry) => entry.text));
+    const missing = [...new Set(texts)].filter((text) => !carried(text));
+    expect(
+      missing.filter((text) => !excused.has(text)),
+      'the journey presses these controls by their text and no rendered screen carries them as element text. ' +
+        'Either the label moved and the manifest did not, or the reverse. A substring check against web/src ' +
+        'cannot see this -- it is why D-61 exists. If the control exists only after another press, name it in ' +
+        'PRESSED_BEFORE_IT_EXISTS with the reason.',
+    ).toEqual([]);
+    // The other direction: the excuse may only shrink.
+    expect(
+      PRESSED_BEFORE_IT_EXISTS.filter((entry) => carried(entry.text)).map((entry) => entry.text),
+      'these are excused as pressed before they exist and a state now renders them. Delete their entries.',
+    ).toEqual([]);
+    expect(
+      PRESSED_BEFORE_IT_EXISTS.filter((entry) => !texts.includes(entry.text)).map((entry) => entry.text),
+      'these are excused and the manifest no longer presses them. Delete their entries.',
+    ).toEqual([]);
+    for (const { text, why } of PRESSED_BEFORE_IT_EXISTS) {
+      expect(why.length, `${text} carries no reason`).toBeGreaterThan(80);
     }
   });
 
@@ -4781,6 +5230,68 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
   // exported as `VersionBlockViews`, and `BLOCKS_SHAPES` renders the «Строки текста» tab over
   // every answer `getVersionBlocks` distinguishes. The document chooser below still needs a
   // click on a project row before it exists, so its three stay.
+  /*
+   * `D-292` (`EXEC2-FIX-WEB`): the branches of the newer screens that a person reaches by pressing something. Every other
+   * branch of those screens -- pending, failed, empty -- has a state of its own above (`EXEC2-WEB-GROUPS-01` and
+   * `CMP-SEAL-C3`/`C4`), so this list holds only what one static pass cannot select, each with the reason. The words are
+   * still judged by `no branch label carries English, reachable or not`.
+   */
+  {
+    label: 'Загрузка: оценка стоимости…',
+    why: '`start-run-control.tsx`, while the cost estimate of the start is in flight: `useRunCostApproval` holds it in a `useMutation` that «Оценить стоимость» starts. One static pass cannot press the button or put a mutation into the pending state through a query cache.',
+  },
+  {
+    label: 'Загрузка: стоимость повторного аудита…',
+    why: '`queue-page.tsx`, between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): a `useMutation` in flight, which one static pass cannot start.',
+  },
+  {
+    label: 'Стоимость повторного аудита не оценена',
+    why: '`queue-page.tsx`, after the cost estimate of a re-audit was refused: the refusal sits in a settled `useMutation` that «Повторный аудит» started. A seeded query cache does not set a mutation observer\'s state.',
+  },
+  {
+    label: 'Загрузка: предложение перехода…',
+    why: '`cut-over-panel.tsx`: the proposal is read only while the panel is open, and `open` is a `useState` that the panel\'s opening button (`CUT_OVER_LABEL`) sets. One static pass renders the panel closed, and its read is not even enabled.',
+  },
+  {
+    label: 'Предложение перехода не прочитано',
+    why: '`cut-over-panel.tsx`: the failed read of the proposal, which exists only while the panel is open (`useState` set by the opening button, `CUT_OVER_LABEL`). The query is disabled in a static pass, so there is nothing to seed an error into.',
+  },
+  {
+    label: 'Загрузка: сохранение группы…',
+    why: '`group-form.tsx`, while «Создать группу» or «Сохранить новую версию» is in flight: a `useMutation` whose pending state one static pass cannot reach, because it builds its own observer and reads no cache.',
+  },
+  {
+    label: 'Загрузка: сохранение правила…',
+    why: '`rule-editor.tsx`, while «Назначить группу» is in flight: a `useMutation` whose pending state one static pass cannot reach, because it builds its own observer and reads no cache.',
+  },
+  {
+    label: 'Загрузка: сохранённые результаты двух прогонов…',
+    why: '`saved-results.tsx`: the read of the two runs\' saved findings starts when «Сравнить сохранённые результаты» sets `requested`, a `useState`; until then the query is disabled and `isFetching` is false.',
+  },
+  {
+    label: 'История не открылась',
+    why: '`stage-changes.tsx` `VerdictHistory`: the history of a card is read only after its `<details>` is opened (`onToggle` sets `open`, which enables the query). One static pass renders it closed.',
+  },
+  {
+    label: 'История не открылась или откат не выполнен',
+    why: '`stage-repair-history.tsx`: the repairs are read only after the section is opened (`open` is a `useState`, and the query is `enabled: open`), and the same sentence says a failed undo, a settled mutation.',
+  },
+  {
+    label: 'Карта не сохранена',
+    why: '`stage-sheet-map.tsx`: the refusal of «Сохранить решение эксперта» is `commandError`, a `useState` that the settled `applyStageSheetMap` call writes. One static pass cannot press it or fill the state.',
+  },
+  {
+    label: 'Карточка проверки не создана',
+    why: '`stage-review-request.tsx`: the refusal of «Создать карточку проверки» is a `useState` that the settled `createStageReviewCard` call writes, past two presses (open the form, send it) this harness cannot make.',
+  },
+  {
+    label: 'Набор не обработан',
+    why: '`stage-upload-panel.tsx`: the refusal of an upload step (create, part, complete, confirm) is a `useState` written by the settled command. One static pass cannot choose a file or press a button to fill it.',
+  },
+  {
+    label: 'Сборка не открылась или решение не сохранено',
+    why: '`stage-assembly-editor.tsx`: the assembly is read only after the `<details>` «Состав сборки Р» is opened (`open` is a `useState` that enables the queries), and the same sentence says a refused save, a settled command.',
+  },
   {
     label: 'Список документов не удалось прочитать.',
     why:

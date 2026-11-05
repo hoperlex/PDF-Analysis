@@ -339,7 +339,11 @@ function readable(markup: string): string {
     .replace(/<(input|textarea)\b[^>]*>(?:[^<]*<\/textarea>)?/g, ' ')
     .replace(/<code>[^<]*<\/code>/g, ' ')
     .replace(/<time[^>]*>[^<]*<\/time>/g, ' ')
-    .replace(/<[^>]+>/g, ' ');
+    .replace(/<[^>]+>/g, ' ')
+    // A timestamp as the screens print it (`formatInstant`: `2026-10-27 08:00:00 UTC`). The `UTC` designator
+    // is taken out only where a timestamp precedes it -- the rule of `rendered-language.guard.test.ts` -- so a
+    // bare `UTC` in a sentence is still foreign Latin.
+    .replace(/\b\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|\s*UTC)?\b/g, ' ');
 }
 
 const ALLOWED_LATIN = new Set(['SSH', 'Claude', 'Code', 'codex', 'Ubuntu', 'API', 'OpenRouter', 'SHA']);

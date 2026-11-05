@@ -166,7 +166,7 @@ def test_membership_is_the_current_versions_confirmed_in_the_section(world) -> N
     body = answer.json()
     assert body["section_code"] == "AR"
     assert body["extraction_algorithm"] == "specification-text-v1"
-    assert body["match_algorithm"] == "price-match-v1"
+    assert body["match_algorithm"] == "price-match-v2"
     if body["limit_reason"] == "projects":  # more projects than the scan bound: nothing listed
         assert body["state"] == "section_too_large" and body["projects"] == []
     else:
@@ -200,7 +200,7 @@ def test_each_projects_price_state_and_sources_are_its_own(world) -> None:
     assert (project["price_state"], project["name"]) == ("priced", project["name"])
     assert project["price_list"]["price_list_id"] == world["price_list_id"]
     assert (project["price_list"]["revision_number"], project["price_list"]["position_count"]) == (1, 1)
-    assert project["matching"]["algorithm"] == "price-match-v1"
+    assert project["matching"]["algorithm"] == "price-match-v2"
     assert project["matching"]["totals"] == []
     (source,) = project["sources"]
     assert source["document_uid"] == uploads["priced"]["document_uid"]
@@ -221,7 +221,10 @@ def test_each_projects_price_state_and_sources_are_its_own(world) -> None:
 
 def test_a_published_run_makes_its_set_ready_with_the_saved_text_read(world) -> None:
     projects, uploads, auth = world["projects"], world["uploads"], world["auth"]
-    # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the published run the АР reads need is made in-process (tests/support/published_run.py).
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): the served startRun routes an АР version to the draft АР text
+    # profile now, and (`REVIEW-FIX-TESTS-1102`) every served start needs a priced consent, so a bare start is refused
+    # on the consent. The published run the АР reads need is still made in-process (tests/support/published_run.py):
+    # the recordings carry the v1 reference profile's run, not a run of the draft АР profile.
     refused = world["client"].post(
         "/runs",
         headers=auth | {
@@ -231,7 +234,8 @@ def test_a_published_run_makes_its_set_ready_with_the_saved_text_read(world) -> 
         content=json.dumps({"version_uid": uploads["priced"]["version_uid"]}).encode("utf-8"),
     )
     assert refused.status_code == 422, refused.content
-    assert refused.json()["error_code"] == "section_profile_unavailable"
+    assert refused.json()["error_code"] == "validation_failed", refused.content
+    assert refused.json()["details"] == {"field": "cost_consent", "constraint": "confirmation_required"}, refused.content
     run_id = publish_reference_run(uploads["priced"]["version_uid"], tag="sec-spec")
     state = world["client"].get(f"/runs/{run_id}", headers=auth).json()["state"]
     assert state == "published", state
@@ -245,7 +249,7 @@ def test_a_published_run_makes_its_set_ready_with_the_saved_text_read(world) -> 
     assert set(source["skipped_by_reason"].values()) == {0}
     assert project["row_count"] == 0
     assert project["matching"] == {
-        "algorithm": "price-match-v1",
+        "algorithm": "price-match-v2",
         "counts": {"matched": 0, "ambiguous": 0, "unmatched": 0},
         "totals": [],
         "excluded": {

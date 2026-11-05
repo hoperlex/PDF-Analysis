@@ -36,7 +36,7 @@
         "w13base-{{session_tag}}-run"
       ]
     ],
-    "body_length": 49,
+    "body_length": 199,
     "body_note": "byte-identical to case 03, under the same Idempotency-Key"
   },
   "response": {

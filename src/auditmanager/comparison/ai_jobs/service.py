@@ -48,6 +48,7 @@ from auditmanager.comparison.ai_jobs.estimate import (
     read_job_route,
     read_legacy_route,
     read_route,
+    require_group_rates_hold,
 )
 from auditmanager.comparison.ai_jobs.model import (
     BINDING_BOUND,
@@ -349,6 +350,8 @@ class ComparisonAiJobService:
         if self._repo.live_on_scope(session, scope) is not None:
             raise _conflict(CONFLICT_AI_JOB_ACTIVE)
         estimate = self.estimate_in(session, scope, estimate_mode, job=estimate_job)
+        # Every start operation declares 422: a group whose rates are not the lock's is refused before the consent is taken.
+        require_group_rates_hold(session, estimate.route)
         self._require_consentable(estimate, consent, allow_zero_calls=_may_run_without_model(method, estimate))
         try:
             job_id = self._repo.insert(
@@ -544,6 +547,8 @@ class ComparisonAiJobService:
         if consent is None or not consent.confirmed:
             raise _consent_required()
         estimate = self.estimate_in(session, job.scope, mode, job=job)
+        # A resume and a retry declare 422 (the finish does not, and takes no new consent): refuse a group whose rates are not the lock's.
+        require_group_rates_hold(session, estimate.route)
         method = self._method_of(job.scope.method)
         self._require_consentable(estimate, consent, allow_zero_calls=_may_run_without_model(method, estimate))
         if not self._repo.renew_consent(

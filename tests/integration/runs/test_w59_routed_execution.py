@@ -3,10 +3,10 @@
 Before this seal the executor handed every v1-style run the АР profile whatever the run
 had pinned. With the registry's resolver (what the served application and the worker pass):
 
-* an ``AR``-classified version cannot start a run at all (`PROD-11-AR-V1-V2-REMOVAL-01`: АР is
-  not a text profile; the refusal is ``section_profile_unavailable`` and nothing is written). The
-  test that showed the АР run reproducing the recorded corpus run is replaced by a ``PB`` run that
-  does the same: ПБ's recording carries the corpus run's findings;
+* an ``AR``-classified version starts a run on АР's own pair (`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`; between
+  `PROD-11-AR-V1-V2-REMOVAL-01` and that hotfix it could not start at all: ``section_profile_unavailable``,
+  nothing written). The test that showed the АР run reproducing the recorded corpus run is replaced by a ``PB``
+  run that does the same: ПБ's recording carries the corpus run's findings;
 * a ``KJ``-classified run reaches ``text_analysis`` with the ``KJ`` package's profile and its
   ``system_prompt.md`` (one trailing newline stripped) as the bundle's system prompt;
 * a run whose pinned pair the registry does not hold is refused before any stage runs, with
@@ -55,20 +55,30 @@ def _classified_run(session: Session, seeded: Any, code: str, key: str) -> str:
     return started.run_id
 
 
-def test_an_ar_classified_version_cannot_start_a_run(
+def test_an_ar_classified_version_starts_a_run_on_the_ar_profile_pair(
     session: Session, seeded, new_key
 ) -> None:
+    """`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): АР is a text profile again (draft 1.0.0).
+
+    `PROD-11-AR-V1-V2-REMOVAL-01` had АР refused with ``section_profile_unavailable`` and nothing written. The
+    hotfix registered the original-source profile, so the routed start pins АР's own pair -- the one no other section
+    shares -- and writes the run and its command. What the run then does is `AR`'s recorded replay, not this seal's.
+    """
     key = new_key("w59-ar-routed")
-    with pytest.raises(DomainError) as refused:
-        _classified_run(session, seeded, "AR", key)
-    assert refused.value.code is ErrorCode.SECTION_PROFILE_UNAVAILABLE
-    assert "AR" not in REGISTRY.section_profiles()
+    run_id = _classified_run(session, seeded, "AR", key)
+    table = REGISTRY.section_profiles()
+    assert "AR" in table
+    pinned = session.execute(
+        text("SELECT analysis_profile_id, prompt_bundle_id FROM audit_run WHERE run_id = :r"), {"r": run_id}
+    ).one()
+    assert tuple(pinned) == table["AR"]
+    assert all(pair != table["AR"] for code, pair in table.items() if code != "AR")
     assert session.execute(
         text("SELECT count(*) FROM audit_run WHERE version_uid = :v"), {"v": seeded.version_uid}
-    ).scalar_one() == 0
+    ).scalar_one() == 1
     assert session.execute(
         text("SELECT count(*) FROM command_record WHERE idempotency_key = :k"), {"k": str(key)}
-    ).scalar_one() == 0
+    ).scalar_one() == 1
 
 
 def test_a_pb_routed_run_reproduces_the_recorded_corpus_run_end_to_end(

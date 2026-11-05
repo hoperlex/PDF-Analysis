@@ -114,7 +114,9 @@ def test_an_unknown_or_malformed_group_is_validation_failed_on_the_field(reads: 
 def test_an_archived_group_is_a_conflict_with_its_reason(reads: SimpleNamespace) -> None:
     reads.groups[GROUP] = _summary(GROUP, archived=True)
     error = _refusal(lambda: resolver.admit_group(None, "text_analysis", group_id=GROUP))  # type: ignore[arg-type]
-    assert error.code is ErrorCode.CONFLICT and dict(error.detail_fields) == {"conflict_reason": "group_archived"}
+    assert error.code is ErrorCode.CONFLICT and dict(error.detail_fields) == {
+        "conflict_reason": "group_archived", "aggregate_type": "ExecutorGroup",
+    }
 
 
 # --- no selector ----------------------------------------------------------------------------------------------------------

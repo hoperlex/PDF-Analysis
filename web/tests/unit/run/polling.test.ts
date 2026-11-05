@@ -150,7 +150,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.16.0',
+              contract_version: '1.17.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -179,7 +179,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.16.0',
+            contract_version: '1.17.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',
@@ -269,16 +269,40 @@ describe('this slice adds no second polling loop', () => {
     join('widgets', 'stage-changes', 'ui', 'stage-journal.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-batch-controls.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-run-controls.tsx'),
+    // `CMP-SPEC` (`2510d5e3`): the whole-specification list of a series, re-read only while one of its
+    // transitions is `running` or `paused` -- the source was `open ? 3000 : false`, a poll with no end
+    // while the panel was open, and now names `SPECIFICATION_POLL_MS` and ends when nothing moves.
+    join('widgets', 'version-series', 'ui', 'specification-panel.tsx'),
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));
+
+  // The third named exception, `EMERGENCY-ANALYSIS` (`af8c69f7`, `widgets/extended-review`). The section-analysis
+  // panel re-reads `getExtendedRunReview` while the base run moves and for a bounded number of reads after it ends.
+  // It is not a run poll either (the run endpoint is policed below). Its callback is not inline: the whole decision
+  // is `extendedReviewPollInterval`, a pure function the unit tests drive (`analysis-extended/workflow.test.ts`), so
+  // the assertion below holds the SOURCE to the shape instead: the option calls that function and nothing else, the
+  // function has an arm that schedules nothing and is bounded by `MAX_TERMINAL_REVIEW_READS`, and the file has no
+  // timer of its own. It is a viewer-lane path; this file only names it.
+  const ALLOWED_EXTENDED_REVIEW_POLL = [join('widgets', 'extended-review', 'ui', 'extended-review.tsx')];
+  const isAllowedExtendedReviewPoll = ({ path }: { path: string }) =>
+    ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
+
+  // The fourth named exception, the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md` §7.1). The
+  // execution queue and journal refresh themselves. The option is written once, in `operational-poll.ts`, and applied by spread
+  // to those two queries only; the assertion further down holds the source to that shape.
+  const ALLOWED_OPERATIONAL_LIST_POLL = [join('entities', 'execution', 'api', 'operational-poll.ts')];
+  const isAllowedOperationalListPoll = ({ path }: { path: string }) =>
+    ALLOWED_OPERATIONAL_LIST_POLL.some((allowed) => path.endsWith(allowed));
 
   it('schedules no interval and no timer of its own', () => {
     const offenders = sources.filter(
       (file) =>
         /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
         !isAllowedProbePoll(file) &&
-        !isAllowedComparisonPoll(file),
+        !isAllowedComparisonPoll(file) &&
+        !isAllowedExtendedReviewPoll(file) &&
+        !isAllowedOperationalListPoll(file),
     );
     expect(offenders.map((o) => o.path)).toEqual([]);
   });
@@ -304,6 +328,54 @@ describe('this slice adds no second polling loop', () => {
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
+  });
+
+  it('lets the section-analysis panel poll only through its bounded interval function, with no timer of its own', () => {
+    const named = sources.filter(isAllowedExtendedReviewPoll);
+    expect(named.map((f) => f.path)).toHaveLength(ALLOWED_EXTENDED_REVIEW_POLL.length);
+
+    for (const file of named) {
+      const text = code(file);
+      expect(text, file.path).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/);
+      // Exactly one use of the option, and it is the function.
+      expect(text.match(/refetchInterval/g), file.path).toHaveLength(1);
+      expect(text, file.path).toMatch(
+        /refetchInterval:\s*\(reading\)\s*=>\s*extendedReviewPollInterval\(active, terminalReads, reading\.state\.data\)/,
+      );
+      // The function: one arm that schedules nothing, and a bound on the reads after the run has ended.
+      const body = text.match(/export function extendedReviewPollInterval[\s\S]*?\n\}/)?.[0] ?? '';
+      expect(body, `${file.path}: the interval function`).toMatch(/\?\s*\d+\s*:\s*false\b/);
+      expect(body, `${file.path}: the bound`).toContain('terminalReads < MAX_TERMINAL_REVIEW_READS');
+      expect(text, file.path).toMatch(/export const MAX_TERMINAL_REVIEW_READS = \d+;/);
+      // And it never reaches the run endpoint.
+      expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+    }
+  });
+
+  it('lets the operational lists poll only through the policy function, only while visible, and only the queue and the journal', () => {
+    const named = sources.filter(isAllowedOperationalListPoll);
+    expect(named.map((f) => f.path)).toHaveLength(ALLOWED_OPERATIONAL_LIST_POLL.length);
+    for (const file of named) {
+      const text = code(file);
+      // No timer of its own: React Query owns the schedule and this module only answers "how long?".
+      expect(text, file.path).not.toMatch(/setInterval\s*\(|setTimeout\s*\(/);
+      // Exactly one use of the option, and it is the policy function; never in the background.
+      expect(text.match(/refetchInterval\b/g), file.path).toHaveLength(1);
+      expect(text, file.path).toMatch(/refetchInterval:\s*operationalListRefetchInterval,/);
+      expect(text, file.path).toMatch(/refetchIntervalInBackground:\s*false,/);
+      expect(text, file.path).toMatch(/operationalListInterval\(\{ failures: consecutiveFailures\(query\), visible: tabIsVisible\(\) \}\)/);
+      // And it never reaches the run endpoint.
+      expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+    }
+    // The spread is in the queue and the journal read, and in nothing else of the entity.
+    const hooks = sources.find((file) => file.path.endsWith(join('entities', 'execution', 'api', 'use-execution.ts')));
+    expect(hooks).toBeDefined();
+    const body = code(hooks!);
+    expect(body.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g)).toHaveLength(2);
+    const section = (name: string) => body.split(`export function ${name}`)[1]?.split('\nexport ')[0] ?? '';
+    expect(section('queueQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
+    expect(section('journalQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
+    expect(section('workersQueryOptions')).not.toContain('OPERATIONAL_LIST_POLL');
   });
 
   it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {
@@ -354,6 +426,9 @@ describe('this slice adds no second polling loop', () => {
     const ALLOWED_ONE_SHOT = [
       join('entities', 'audit-run', 'api', 'run-status-query.ts'),
       join('features', 'reaudit-run', 'model', 'use-reaudit-cost-approval.ts'),
+      // `8eb1f31f` (compare saved run results): reads each of the two runs once before its findings and once after,
+      // and refuses the comparison when the run changed between the two reads. Two one-shot reads, no schedule.
+      join('widgets', 'stage-comparison', 'api', 'read-saved-results.ts'),
     ];
 
     const direct = sources.filter((file) => /\bgetRunStatus\s*\(/.test(code(file)));

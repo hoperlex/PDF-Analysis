@@ -339,6 +339,21 @@ REQUIRED_OPERATIONS = {
     "listStageTextFragments", "listStageTextExclusions", "listStageRawDifferences",
     "listStageTextHints", "recomputeStageTextEvidence", "startStageChainRun",
     "listStageChainRuns", "getStageChainRun", "cancelStageChainRun",
+    # `BETA-COST-PREFLIGHT-1030` (contract 1.13.0): the two source-bound cost estimates a start must carry a consent for.
+    "estimateRunCost", "estimateArV3GroupCost",
+    # `CMP-SEAL-C4` (contract 1.13.0): the stage AI review, link repair, full chain and batch, change cards, expert
+    # verdicts and the journal with its three exports, and the stage text and assembly reads. `createStageReviewCard`
+    # is the expert review escalation sealed after it, still under 1.13.0.
+    "estimateStageChainRun", "resumeStageChainRun", "startStageChainBatch", "getStageChainBatch",
+    "pauseStageChainBatch", "resumeStageChainBatch", "cancelStageChainBatch",
+    "listStageAiReviews", "listStageClassifications", "getStageSynthesis", "listStageGraphicEvidence",
+    "listStageLinkRepairs", "undoStageLinkRepair",
+    "listStageChangeCards", "getStageChangeCard", "applyStageCardVerdicts", "listStageCardVerdicts",
+    "getStageChangeJournal", "streamStageChangeJournalXlsx", "streamStageChangeJournalPdf",
+    "streamStageChangeJournalHtml", "getStageProfileText", "getStageAssembly", "createStageReviewCard",
+    # `HOTFIX-PRESENTATION-INT-1030` (contract 1.14.0): the source-bound extended review read, the reviewed bounded
+    # version ZIP intake and the technical comparison export.
+    "getExtendedRunReview", "importComparisonZip", "streamComparisonTechnicalReport",
 }
 
 #: The operations a caller reaches while holding no credential. `UNAUTHENTICATED_OPERATIONS`
@@ -486,6 +501,12 @@ WRITE_OPERATIONS = {
     "resumeStageUpload", "cancelStageUpload", "confirmStagePair", "createStageAssembly",
     "reviseStageAssembly", "setStagePairCompleteness", "applyStageSheetMap",
     "recomputeStageTextEvidence", "startStageChainRun", "cancelStageChainRun",
+    # `CMP-SEAL-C4`: the keyed writes of the full chain, its batches, the link repairs and the expert's cards. The two
+    # cost estimates (`estimateRunCost`, `estimateArV3GroupCost`) are POSTs that write nothing and take no key.
+    "resumeStageChainRun", "startStageChainBatch", "pauseStageChainBatch", "resumeStageChainBatch",
+    "cancelStageChainBatch", "undoStageLinkRepair", "applyStageCardVerdicts", "createStageReviewCard",
+    # `HOTFIX-PRESENTATION-INT-1030`: the reviewed version ZIP intake stores versions, keyed like `uploadDocument`.
+    "importComparisonZip",
 }
 
 PAGINATED_OPERATIONS = {
@@ -532,6 +553,9 @@ PAGE_AGGREGATES: dict[str, set[str]] = {
     # `W55B-SEAL-01`. The status that tells a produced geometry with no blocks from one never
     # produced, the run it came from, and the whole version's block count.
     "listVersionPortalBlocks": {"version_uid", "status", "produced_by_run_id", "block_count"},
+    # `UI-PARITY-P0A`. The number of journal entries that match the filters, on every page: the knowledge base's
+    # «N записей». A property of the filtered listing and not of the page's items.
+    "listDecisions": {"total"},
 }
 
 
@@ -681,15 +705,61 @@ VOCABULARY_PATH_PARAMETERS: dict[str, str] = {
 }
 
 
+#: `EXEC2-SEAL-1`. A path parameter that names a **release of a public artifact** and is allowed anyway, by the exact
+#: path that carries it: ``{path parameter name: (path, operationId, the closed grammar it must resolve to)}``.
+#: ADR-0026 decision 6 serves the agent package *by version*, without authentication: the package is public code
+#: built deterministically into the image, a version is the only thing that tells two builds apart, and the install
+#: command carries the sha256 that checks the bytes. A version is not one of the non-identities this guard exists for
+#: (a file name, an ordinal, a sheet number, a checksum), but it is not a closed enum either (the images that exist
+#: change with each build), so it cannot borrow ``VOCABULARY_PATH_PARAMETERS``, whose second test demands an enum.
+#: This register is keyed by path as well as by name -- the same parameter name on any other path is still reported --
+#: and the test below it holds the parameter to an anchored ``major.minor.patch`` grammar, so a free-text key cannot
+#: borrow the exception.
+VERSIONED_ARTIFACT_PATH_PARAMETERS: dict[str, tuple[str, str, str]] = {
+    "version": ("/runner/agent-package/{version}", "downloadAgentPackage", "#/components/schemas/AgentPackageVersion"),
+}
+
+
 def test_no_endpoint_addresses_a_resource_by_a_non_identity(openapi_document: dict) -> None:
     """No path keys on a file name, an ordinal, a sheet number or a checksum."""
     for path in openapi_document["paths"]:
         for parameter in re.findall(r"\{([^}]+)\}", path):
             if parameter in VOCABULARY_PATH_PARAMETERS:
                 continue
+            if VERSIONED_ARTIFACT_PATH_PARAMETERS.get(parameter, (None,))[0] == path:
+                continue
             assert parameter.endswith(("_uid", "_id")), (
                 f"{path} addresses a resource by {parameter!r}, which is not an identity"
             )
+
+
+def test_a_versioned_artifact_path_parameter_is_its_anchored_grammar(openapi_document: dict) -> None:
+    """The registered exception is exactly one open read of public code, keyed by a strict version grammar."""
+    operations = _operations(openapi_document)
+    for name, (path, operation_id, schema_ref) in VERSIONED_ARTIFACT_PATH_PARAMETERS.items():
+        carried = [
+            found for found in operations.values()
+            if re.search(rf"\{{{name}\}}", found["_path"])
+        ]
+        assert [(found["operationId"], found["_path"], found["_method"]) for found in carried] == [
+            (operation_id, path, "get")
+        ], f"{{{name}}} is carried by something other than the registered read: {[f['_path'] for f in carried]}"
+        assert operation_id in UNAUTHENTICATED_OPERATIONS and operation_id in OPERATIONS_WITH_NO_CREDENTIAL_TO_REFUSE
+        parameters = [
+            _resolve(openapi_document, p["$ref"]) if "$ref" in p else p
+            for p in [*openapi_document["paths"][path].get("parameters", []), *carried[0].get("parameters", [])]
+        ]
+        (versioned,) = [p for p in parameters if p["in"] == "path"]
+        assert versioned["name"] == name and versioned["required"] is True
+        assert versioned["schema"] == {"$ref": schema_ref}
+        schema = _resolve(openapi_document, schema_ref)
+        assert schema["type"] == "string"
+        pattern = re.compile(schema["pattern"])
+        assert schema["pattern"].startswith("^") and schema["pattern"].endswith("$")
+        # a version of the package, and nothing a caller could use to name a file or walk a path
+        assert pattern.fullmatch("1.0.0") and pattern.fullmatch("0.12.345")
+        for refused in ("latest", "1.0", "1.0.0.0", "../1.0.0", "1.0.0/x", "1.0.0\n", "v1.0.0", "", "1.0.x"):
+            assert not pattern.fullmatch(refused), refused
 
 
 def test_a_vocabulary_path_parameter_is_its_closed_enum(openapi_document: dict) -> None:
@@ -844,9 +914,14 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # `ANALYSIS-PRESETS-01` adds ``listAnalysisPresets``: the list takes no input.
     # `CMP-SEAL-C1` adds ``getComparisonQueueSummary``: the installation's comparison queue addresses no identity.
     # `CMP-SEAL-C2` adds ``getComparisonAiQueue``: the installation's AI queue addresses no identity either.
-    {"getDashboardSummary", "getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
+    # `EXEC2-SEAL-2` adds three reads of the installation's own routing: the group list, the routing rules (one per
+    # work kind, with the mode) and the cut-over preview each take no identity, no filter and no body.
+    # `UI-PARITY-P0A` removes ``getDashboardSummary``: it takes the optional ``project_uid`` filter, so it now
+    # declares the ``404`` and ``422`` an input-taking operation must (``listDecisions`` already had its own).
+    {"getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
-     "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue"}
+     "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
+     "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting"}
 )
 
 
@@ -943,11 +1018,12 @@ def test_no_operation_declares_a_cookie_parameter_today(openapi_document: dict) 
     assert found == [], f"a cookie parameter now exists and needs a decision: {found}"
 
 
-def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
+def test_a_required_cookie_parameter_makes_an_input_less_operation_take_input(
     openapi_document: dict,
 ) -> None:
-    """`X-7`'s own mutation: a required cookie parameter added to `getDashboardSummary`,
-    the one operation this document declares as input-less.
+    """`X-7`'s own mutation: a required cookie parameter added to `listReleases`,
+    an operation this document declares as input-less. (`UI-PARITY-P0A` moved this subject
+    from `getDashboardSummary`, which now takes the optional `project_uid`, to `listReleases`.)
 
     Before this repair, `_takes_caller_input` counted ``path``, ``query`` and a
     ``header`` other than ``X-Correlation-Id`` -- three of OpenAPI 3.1's four parameter
@@ -964,7 +1040,7 @@ def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
     the operation takes input.
     """
     mutated = copy.deepcopy(openapi_document)
-    operation = mutated["paths"]["/dashboard"]["get"]
+    operation = mutated["paths"]["/releases"]["get"]
     operation.setdefault("parameters", []).append(
         {
             "in": "cookie",
@@ -975,14 +1051,14 @@ def test_a_required_cookie_parameter_makes_getdashboardsummary_take_input(
     )
 
     operations = _operations(mutated)
-    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(mutated, operations["listReleases"]) is True
 
     # The real two-sided rule, run against the mutated document: now that the cookie
-    # counts, a `getDashboardSummary` that still declares no client-fault response is
+    # counts, a `listReleases` that still declares no client-fault response is
     # the defect X's first direction names -- caller input with no way to report it
     # malformed -- and the rule itself, unchanged, is what catches it.
     with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
-        _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+        _assert_client_fault_rule(mutated, "listReleases", operations["listReleases"])
 
 
 def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
@@ -995,7 +1071,7 @@ def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
     ordinary case every other input-taking operation is already in.
     """
     mutated = copy.deepcopy(openapi_document)
-    operation = mutated["paths"]["/dashboard"]["get"]
+    operation = mutated["paths"]["/releases"]["get"]
     operation.setdefault("parameters", []).append(
         {
             "in": "cookie",
@@ -1012,9 +1088,9 @@ def test_a_required_cookie_parameter_with_its_client_fault_response_is_accepted(
     }
 
     operations = _operations(mutated)
-    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(mutated, operations["listReleases"]) is True
     # The real rule, run against the honestly-repaired mutation: no exception.
-    _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+    _assert_client_fault_rule(mutated, "listReleases", operations["listReleases"])
 
 
 def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
@@ -1030,7 +1106,7 @@ def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
     reproduction exercises that merge for the ``cookie`` branch specifically.
     """
     mutated = copy.deepcopy(openapi_document)
-    path_item = mutated["paths"]["/dashboard"]
+    path_item = mutated["paths"]["/releases"]
     path_item.setdefault("parameters", []).append(
         {
             "in": "cookie",
@@ -1044,9 +1120,9 @@ def test_a_cookie_parameter_declared_on_the_path_item_also_counts(
     )
 
     operations = _operations(mutated)
-    assert _takes_caller_input(mutated, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(mutated, operations["listReleases"]) is True
     with pytest.raises(AssertionError, match="takes caller input and declares no client-fault"):
-        _assert_client_fault_rule(mutated, "getDashboardSummary", operations["getDashboardSummary"])
+        _assert_client_fault_rule(mutated, "listReleases", operations["listReleases"])
 
 
 def test_the_correlation_header_exemption_is_case_insensitive(openapi_document: dict) -> None:
@@ -1056,25 +1132,25 @@ def test_the_correlation_header_exemption_is_case_insensitive(openapi_document: 
     contract's own ``X-Correlation-Id``, is still the same header on the wire and must
     still be exempt.
 
-    Both directions, on `getDashboardSummary` (input-less today): a differently-cased
+    Both directions, on `listReleases` (input-less today): a differently-cased
     correlation header alone must not count as caller input, and adding one alongside
     a genuinely new header must still count -- the exemption is for *one* header, not
     for every header once any capitalisation of the correlation header is present.
     """
     only_recased = copy.deepcopy(openapi_document)
-    path_item = only_recased["paths"]["/dashboard"]
+    path_item = only_recased["paths"]["/releases"]
     path_item["get"]["parameters"] = [{"in": "header", "name": "x-correlation-id"}]
     operations = _operations(only_recased)
-    assert _takes_caller_input(only_recased, operations["getDashboardSummary"]) is False
+    assert _takes_caller_input(only_recased, operations["listReleases"]) is False
 
     with_a_real_header_too = copy.deepcopy(openapi_document)
-    path_item = with_a_real_header_too["paths"]["/dashboard"]
+    path_item = with_a_real_header_too["paths"]["/releases"]
     path_item["get"]["parameters"] = [
         {"in": "header", "name": "X-CORRELATION-ID"},
         {"in": "header", "name": "X-Scope", "required": True, "schema": {"type": "string"}},
     ]
     operations = _operations(with_a_real_header_too)
-    assert _takes_caller_input(with_a_real_header_too, operations["getDashboardSummary"]) is True
+    assert _takes_caller_input(with_a_real_header_too, operations["listReleases"]) is True
 
 
 # ---------------------------------------------------------------------------
@@ -1269,7 +1345,7 @@ def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
                 f"{name} takes no credential, so it has none to refuse and no subject to deny"
             )
             continue
-        assert responses["401"]["$ref"] == "#/components/responses/AuthenticationRequired", name
+        assert _is_the_shared_response(openapi_document, responses["401"], "AuthenticationRequired"), name
         if name in RUNNER_OPERATIONS_WITHOUT_A_403:
             assert "403" not in responses, (
                 f"{name} is called with a runner token, which holds no role a 403 could deny"
@@ -1279,7 +1355,68 @@ def test_every_operation_can_report_401_and_403(openapi_document: dict) -> None:
                 f"{name} presents no credential, so it has no subject a 403 could deny"
             )
         else:
-            assert responses["403"]["$ref"] == "#/components/responses/PermissionDenied", name
+            assert _is_the_shared_response(openapi_document, responses["403"], "PermissionDenied"), name
+
+
+def _effective_response(document: dict, response: dict) -> dict:
+    """A response as a client sees it: the component followed, each header followed, the prose dropped.
+
+    ``description`` is annotation (the conformance engine drops it too, `N4`), so it is not compared; the
+    content, and each header's requiredness and schema, are.
+    """
+    resolved = _resolve(document, response["$ref"]) if "$ref" in response else response
+    headers = {}
+    for header_name, header in resolved.get("headers", {}).items():
+        header = _resolve(document, header["$ref"]) if "$ref" in header else header
+        headers[header_name] = {"required": header.get("required"), "schema": header.get("schema")}
+    return {"headers": headers, "content": resolved.get("content")}
+
+
+def _is_the_shared_response(document: dict, response: dict, component: str) -> bool:
+    """Whether ``response`` is ``#/components/responses/<component>``: by reference, or spelled out in full.
+
+    The original operations point at the component. The operations `CMP-SEAL-C4` sealed (twenty-seven of them, the
+    stage chain, batch, card and journal operations and the three `HOTFIX-PRESENTATION-INT-1030` reads) carry the
+    same response spelled out inline, as FastAPI generates it and as the conformance engine's `N1` treats it
+    (a component reference is inlined before the comparison), so the reference is not what the contract promises a
+    client; the shape is. An inline response therefore counts only when its effective content and headers equal the
+    component's: a different envelope, a missing correlation header or a missing response still fails.
+    """
+    reference = f"#/components/responses/{component}"
+    if response.get("$ref") == reference:
+        return True
+    if "$ref" in response:
+        return False
+    return _effective_response(document, response) == _effective_response(document, {"$ref": reference})
+
+
+def test_an_inline_error_response_is_the_shared_one_only_if_it_says_the_same(openapi_document: dict) -> None:
+    """`_is_the_shared_response` can fail: each way an inline copy can differ from the component is red."""
+    shared = openapi_document["components"]["responses"]["AuthenticationRequired"]
+    inline = {
+        "description": "No credential was presented.",
+        "headers": {"X-Correlation-Id": {"required": True, "schema": {"$ref": "#/components/schemas/CorrelationId"}}},
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}},
+    }
+    assert _is_the_shared_response(openapi_document, {"$ref": "#/components/responses/AuthenticationRequired"},
+                                   "AuthenticationRequired")
+    assert _is_the_shared_response(openapi_document, inline, "AuthenticationRequired")
+    assert not _is_the_shared_response(openapi_document, {"$ref": "#/components/responses/PermissionDenied"},
+                                       "AuthenticationRequired")
+    # the two refusals have one shape and differ in prose and in the status that carries them, so an inline copy
+    # is the same effective response for either; which status it sits under is what the caller's test checks
+    assert _is_the_shared_response(openapi_document, inline, "PermissionDenied")
+    wrong_body = copy.deepcopy(inline)
+    wrong_body["content"]["application/json"]["schema"] = {"$ref": "#/components/schemas/Finding"}
+    assert not _is_the_shared_response(openapi_document, wrong_body, "AuthenticationRequired")
+    no_header = {k: v for k, v in inline.items() if k != "headers"}
+    assert not _is_the_shared_response(openapi_document, no_header, "AuthenticationRequired")
+    optional_header = copy.deepcopy(inline)
+    optional_header["headers"]["X-Correlation-Id"]["required"] = False
+    assert not _is_the_shared_response(openapi_document, optional_header, "AuthenticationRequired")
+    no_body = {k: v for k, v in inline.items() if k != "content"}
+    assert not _is_the_shared_response(openapi_document, no_body, "AuthenticationRequired")
+    assert shared["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/ErrorEnvelope"}
 
 
 def test_the_document_no_longer_says_it_has_no_authentication(

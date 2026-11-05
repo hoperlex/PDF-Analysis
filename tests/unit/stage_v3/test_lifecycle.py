@@ -15,7 +15,8 @@ from tests.unit.stage_v3.test_procedures import snapshot, run_fixture
 def test_durable_runtime_four_calls_three_fresh_windows_and_saved_replay(monkeypatch):
     runtime, item, repo, jobs, _caller = scene()
     for index, row in enumerate(repo.source["all_profiles"]):
-        row.update(side="left" if index == 0 else "right", page_number=1)
+        # The saved snapshot carries the page-profile content key that the source report cites (81fb5aca).
+        row.update(side="left" if index == 0 else "right", page_number=1, content_key=f"page-key-{index}")
     for row in repo.source["fragments"]:
         row["created_at"] = datetime.now(timezone.utc)
     runtime.test_run["engine"] = ENGINE
@@ -32,7 +33,12 @@ def test_durable_runtime_four_calls_three_fresh_windows_and_saved_replay(monkeyp
             return SimpleNamespace(response=response, call_id=identity, pause=None)
 
     runtime._caller = Caller()
-    monkeypatch.setattr(bridge, "results", lambda _s, _r: {row["group_id"]: row["payload"]["v3_result"]
+    # 8f56fd29: the bridge reads the run's stored planning authority from the command record. This stub
+    # session has no SQL, and a run without stored authority is legacy by definition (policy.py), which is
+    # exactly the four-call original procedure this test pins. The lookup itself must still happen.
+    policy_lookups = []
+    monkeypatch.setattr(bridge, "policy_for_run", lambda _s, run_id: policy_lookups.append(run_id))
+    monkeypatch.setattr(bridge, "results", lambda _s, _r, bundle=None: {row["group_id"]: row["payload"]["v3_result"]
         for row in repo.units.values() if row["state"] == "completed" and "v3_result" in row["payload"]})
     original_failed = runtime._failed
 
@@ -61,6 +67,7 @@ def test_durable_runtime_four_calls_three_fresh_windows_and_saved_replay(monkeyp
             raise AssertionError((phase, "did not finish"))
     assert calls == ["mapper", "miner", "dedupe", "verify"]
     assert pauses == 3
+    assert policy_lookups and set(policy_lookups) == {uid("crn", 1)}
     final = [row for row in repo.answers.values() if row["group_id"] == "v3:final:cards"]
     assert final[0]["cards"][0]["experimental"]["parameters"][0]["verification"]["verdict"] == "CONFIRMED"
     before = copy.deepcopy(repo.source["differences"])

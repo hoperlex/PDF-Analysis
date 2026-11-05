@@ -525,6 +525,22 @@ def test_a_name_that_is_not_a_label_is_refused(raw: object, constraint: str) -> 
     assert clean_display_name("  Pool  ") == "Pool" and clean_display_name("x" * 120) == "x" * 120
 
 
+@pytest.mark.parametrize("raw", ["Gateway A / text_analysis", "a b", "a  b", "Пул моделей / text_analysis", "text_analysis (2)"])
+def test_a_label_may_hold_spaces(raw: str) -> None:
+    """The proposed names of a cut-over are ``<connection name> / <work kind>``: a space is part of a label.
+
+    The unprintable class once held two ordinary spaces where the line and paragraph separators belong (the file lost
+    the two characters), so every name of a cut-over, and every group named with a space, was refused as ``printable``.
+    """
+    assert clean_display_name(raw) == raw
+
+
+@pytest.mark.parametrize("raw", ["a\u2028b", "a\u2029b", "a\x7fb", "a\x85b", "a\ud800b", "a\nb"])
+def test_a_line_or_paragraph_separator_and_the_other_unprintable_characters_are_still_refused(raw: str) -> None:
+    error = refusal(lambda: clean_display_name(raw))
+    assert detail(error) == ("validation_failed", {"field": "display_name", "constraint": "printable"})
+
+
 def test_only_an_administrator_creates_a_group_and_the_key_is_not_claimed_for_anybody_else() -> None:
     world = World()
     error = refusal(lambda: world.create(roles=("expert",)))

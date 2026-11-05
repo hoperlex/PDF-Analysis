@@ -7,7 +7,11 @@
  */
 
 export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, getWebBuildId, hasApiBaseUrl } from './env';
-export { RUN_POLLING, pollDelayMs } from './polling';
+export {
+  OPERATIONAL_LIST_POLLING, OPERATIONAL_LIST_STALE_MS, RUN_POLLING,
+  isOperationalListStale, operationalListInterval, pollDelayMs,
+} from './polling';
+export type { OperationalListFreshness, OperationalListPollState } from './polling';
 export { SHOW_REVIEW_INDICATION } from './review-indication';
 
 // `W50-PLAN.md` §3.1: the only list of screens, and the one validator for `next`/`from`.

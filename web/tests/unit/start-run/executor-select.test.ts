@@ -66,9 +66,12 @@ describe('the selector is on the control', () => {
     expect(markup).toMatch(/<button type="button" class="am-button" disabled="">Запустить прогон<\/button>/);
   });
 
-  it('offers raised AI limits off by default and explains the standard request', () => {
+  it('offers the temporary statistics mode off by default and explains the standard request', () => {
     const markup = control(seeded());
-    expect(markup).toMatch(/<input type="checkbox"\/>Повышенные лимиты ИИ-анализа/);
+    // `SECTION-STATS-UNCAPPED-1030` (hotfix `af581631`) renamed the raised-limits toggle of the run start
+    // «Временный режим сбора статистики»; the request field it sets is still `relaxed_limits`.
+    expect(markup).toMatch(/<input type="checkbox"\/>Временный режим сбора статистики/);
+    expect(markup).not.toContain('Повышенные лимиты ИИ-анализа');
     expect(markup).toContain('Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
     expect(markup).not.toContain('relaxed_limits');
   });
@@ -140,7 +143,7 @@ describe('a connection whose settings were not read is not offered', () => {
     client.setQueryData(queryKeys.execution.connections(), { items: [READY.connection], pinned_models: [] });
     // Its detail read failed: the list is known, the settings are not.
     seedError(client, queryKeys.execution.connection(READY.connection.connection_id),
-      new ApiError(503, { contract_version: '1.16.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'c', retryable: true } satisfies ErrorEnvelope, 'c'));
+      new ApiError(503, { contract_version: '1.17.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'c', retryable: true } satisfies ErrorEnvelope, 'c'));
     const markup = control(client);
     const option = optionFor(markup, READY.connection.connection_id);
     expect(option?.[0]).toContain('disabled');
@@ -160,7 +163,7 @@ describe('while the list loads or fails, the default route can still be estimate
   it('says the list is not read and keeps default-route estimation available', () => {
     const client = newClient();
     seedError(client, queryKeys.execution.connections(), new ApiError(503, {
-      contract_version: '1.16.0', error_code: 'dependency_unavailable', message: 'm',
+      contract_version: '1.17.0', error_code: 'dependency_unavailable', message: 'm',
       correlation_id: 'cid-list', retryable: true,
     }, 'cid-list'));
     const markup = control(client);
