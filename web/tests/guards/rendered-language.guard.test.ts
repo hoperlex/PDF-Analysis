@@ -5147,6 +5147,10 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'Роли не сохранены',
+    why: 'R-150e: the user form shows this only after its submit finds «Наблюдатель» ticked beside another role; one static render cannot tick boxes or submit. The rule itself is rolesCombinationAllowed, tested in tests/unit/entities/account.test.ts.',
+  },
+  {
     label: 'События прогона не открылись',
     why: 'UI-B-39: the run page shows this only after the run-filtered listExecutionJournal read fails; the run page is censused cold, where that read has not settled. The same ErrorState with this title is the only failure branch of RunEvents.',
   },
