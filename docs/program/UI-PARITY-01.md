@@ -53,6 +53,8 @@ One supplier per item; no consumer before its supplier.
 | dispatcher: schedule facts, worker metrics, admin journal | P4 | wave 4 | — |
 | dispatcher: schedule plan, reserve calendar, subscription accounts, provider limits | outside delivery | — | approved domain description |
 
+**P0b (2026-11-05, contract `1.19.0`):** the counters wave 1 waits for — a document's audit state, `audit_counts` on each `listProjects` item and on the section panel, `awaiting_decision_findings` for the home tile — are delivered under `R-150n`…`R-150u`; their dictionary is `UI-PARITY-METRICS.md`. The selector and the new columns remain waves 1 and 2.
+
 **Freeze list of P0:** register questions Q-UI-6, 7, 8, 9, 10, 11, 14 and Q-UI-B7 have options that change the contract. Without an answer at freeze time the feature is excluded from P0; no option is chosen silently. The night window of 2026-11-04 shipped P0a only (no pending decision) and recorded the rest as debt.
 
 ## Polling (R-150k)
