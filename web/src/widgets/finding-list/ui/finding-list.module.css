@@ -66,3 +66,22 @@
   color: var(--am-failed);
   font-size: var(--am-text-xs);
 }
+
+/* `R-151j`: the severity strip -- the expert's decided severity as a filter, the model's proposal labelled apart. */
+.severities {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap);
+}
+
+.stripLabel {
+  align-self: center;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.proposed {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}

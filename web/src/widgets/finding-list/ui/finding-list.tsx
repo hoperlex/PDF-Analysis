@@ -23,12 +23,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import type { Finding, FindingCategory, Verdict } from '@/shared/api';
+import type { Finding, FindingCategory, Severity, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
 import type { TableColumn } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { SeverityBadge, countGrouped } from '@/entities/finding';
+import { SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
 import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
@@ -56,6 +56,59 @@ export interface FindingListProps {
    * passes it only to a session that may decide; without it the list draws no action at all.
    */
   readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
+  /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
+  readonly severityFilter?: SeverityFilter | undefined;
+  readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
+}
+
+/**
+ * `R-151j`: the severity strip. The canonical severity is the expert's decision (`decided_severity`); a finding
+ * without one is «Не определена». The model's proposal (`observation.proposed_severity`) is counted on its own,
+ * labelled row and never filters or decides (AGENTS §4). Counts and filter share one scope: the whole run, which
+ * the page loads entirely (`R-150i`).
+ */
+export type SeverityFilter = 'all' | Severity | 'undetermined';
+
+const SEVERITY_ORDER: readonly Severity[] = ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'];
+
+export interface SeverityTally {
+  readonly decided: Readonly<Record<Severity | 'undetermined', number>>;
+  readonly proposed: Readonly<Record<Severity, number>>;
+}
+
+export function tallySeverity(groups: readonly FindingGroup<Finding>[]): SeverityTally {
+  const decided: Record<Severity | 'undetermined', number> = {
+    critical: 0, economic: 0, operational: 0, recommendation: 0, check_adjacent: 0, undetermined: 0,
+  };
+  const proposed: Record<Severity, number> = { critical: 0, economic: 0, operational: 0, recommendation: 0, check_adjacent: 0 };
+  for (const group of groups) {
+    for (const finding of group.findings) {
+      decided[finding.decided_severity ?? 'undetermined'] += 1;
+      const proposal = finding.observation.proposed_severity;
+      if (proposal !== undefined) proposed[proposal] += 1;
+    }
+  }
+  return { decided, proposed };
+}
+
+/** A severity filter read from the address: an absent or unknown value is «Все». */
+export function severityFilterOf(value: string | null): SeverityFilter {
+  return value === 'undetermined' || SEVERITY_ORDER.includes(value as Severity) ? (value as SeverityFilter) : 'all';
+}
+
+export function filterBySeverity(
+  groups: readonly FindingGroup<Finding>[],
+  filter: SeverityFilter,
+): readonly FindingGroup<Finding>[] {
+  if (filter === 'all') return groups;
+  return groups
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => (f.decided_severity ?? 'undetermined') === filter) }))
+    .filter((group) => group.findings.length > 0);
+}
+
+/** Whether a run carries any severity at all; a legacy run has none and draws no strip. */
+function hasSeverity(tally: SeverityTally): boolean {
+  return SEVERITY_ORDER.some((severity) => tally.decided[severity] > 0 || tally.proposed[severity] > 0);
 }
 
 /**
@@ -174,8 +227,16 @@ export function FindingList({
   verdictFilter,
   onVerdictFilterChange,
   renderRowActions,
+  severityFilter,
+  onSeverityFilterChange,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
+  const severity = severityFilter ?? ownSeverity;
+  const setSeverity = (next: SeverityFilter) => {
+    if (onSeverityFilterChange !== undefined) onSeverityFilterChange(next);
+    else setOwnSeverity(next);
+  };
   const [view, setView] = useState<'list' | 'table'>('list');
   const filter = verdictFilter ?? ownFilter;
   const setFilter = (next: VerdictFilter) => {
@@ -204,7 +265,8 @@ export function FindingList({
   }
 
   const tally = tallyVerdicts(groups);
-  const shown = filterGroups(groups, filter);
+  const severities = tallySeverity(groups);
+  const shown = filterBySeverity(filterGroups(groups, filter), severity);
 
   return (
     <div className="am-finding-list" data-finding-count={total}>
@@ -241,6 +303,38 @@ export function FindingList({
           ))}
         </div>
       </div>
+      {hasSeverity(severities) ? (
+        <div className={styles.severities} data-severity-strip="">
+          <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
+            <span className={styles.stripLabel}>Важность (решение эксперта):</span>
+            <button
+              type="button"
+              className="am-button am-button--quiet am-button--small"
+              aria-pressed={severity === 'all'}
+              data-severity-filter="all"
+              onClick={() => setSeverity('all')}
+            >
+              Все
+            </button>
+            {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={severity === value}
+                data-severity-filter={value}
+                onClick={() => setSeverity(value)}
+              >
+                {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
+              </button>
+            ))}
+          </div>
+          <p className={styles.proposed} data-proposed-severity="">
+            Предложено моделью (не решение эксперта):{' '}
+            {SEVERITY_ORDER.map((value) => `${SEVERITY_LABELS[value]} ${severities.proposed[value]}`).join(' · ')}
+          </p>
+        </div>
+      ) : null}
       {faults.length > 0 ? (
         <ErrorState
           title="Нарушение целостности данных"
@@ -256,7 +350,7 @@ export function FindingList({
 
       {shown.length === 0 ? (
         <p className="am-note" data-verdict-filter-empty={filter}>
-          Находок с таким вердиктом нет.
+          {severity === 'all' ? 'Находок с таким вердиктом нет.' : 'Находок с таким отбором нет.'}
         </p>
       ) : null}
 
