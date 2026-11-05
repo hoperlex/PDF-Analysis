@@ -42,7 +42,6 @@ import { chosenSeverity, draftFromControl } from '../model/severity-draft';
 import type { SeverityDraft } from '../model/severity-draft';
 
 import styles from './decision-panel.module.css';
-import { useMayActAsExpert } from '@/entities/account';
 
 /** Which intent is in flight, so only that control shows as busy. */
 export type DecisionIntent = 'accept' | 'reject' | 'comment';
@@ -86,7 +85,7 @@ export interface DecisionPanelProps {
   readonly onSeverityChosen?: (() => void) | undefined;
 }
 
-function DecisionPanelInner({
+export function DecisionPanel({
   currentVerdict,
   observationId,
   onAccept,
@@ -223,14 +222,4 @@ function DecisionPanelInner({
       {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
     </section>
   );
-}
-
-/**
- * `R-150e`: offered only to an account that may take an expert's action; the server refuses it
- * to anyone else. While the account is not known yet the control stays drawn.
- */
-export function DecisionPanel(props: Parameters<typeof DecisionPanelInner>[0]) {
-  const mayAct = useMayActAsExpert();
-  if (!mayAct) return <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>;
-  return <DecisionPanelInner {...props} />;
 }

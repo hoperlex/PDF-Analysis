@@ -376,7 +376,7 @@ def test_reads_need_a_role_and_never_show_another_projects_price_list(
         (list_price_list_positions, {"price_list_id": revision.price_list_id}),
     ):
         refused = _refused(ErrorCode.PERMISSION_DENIED, call, session, actor_roles=nobody, **kwargs)
-        assert refused.detail_fields["required_capability"] == "role:admin|expert"
+        assert refused.detail_fields["required_capability"] == "role:admin|expert|viewer"  # R-150e: the viewer reads too
 
     roles = _roles(session, cast.admin)
     assert list_price_list_revisions(session, project_uid=cast.other_project, actor_roles=roles) == ()

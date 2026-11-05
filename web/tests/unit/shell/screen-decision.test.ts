@@ -94,9 +94,9 @@ describe('the four decisions, in order', () => {
 });
 
 describe('the live registry', () => {
-  it('has exactly three administrator-only rows', () => {
+  it('has exactly three administrator-only rows and four operator rows (R-150w)', () => {
     expect(SCREEN_REGISTRY.filter((screen) => Array.isArray(screen.roles)).map((screen) => screen.address)).toEqual([
-      '/admin/users', '/admin/users/[user_uid]', '/admin/registrations',
+      '/dispatcher', '/logs', '/workers', '/queue', '/admin/users', '/admin/users/[user_uid]', '/admin/registrations',
     ]);
   });
 

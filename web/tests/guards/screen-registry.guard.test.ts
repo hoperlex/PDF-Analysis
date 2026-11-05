@@ -150,6 +150,8 @@ const R66: Partial<Record<ScreenGroup, string[]>> = {
 };
 
 const R66_STUBS = ['/section-optimisation', '/norms', '/analysis-settings', '/queue'];
+/** `R-150w`: the operator's screens, closed to «Наблюдатель». */
+const OPERATOR_SCREENS: readonly string[] = ['/queue', '/logs', '/workers', '/dispatcher'];
 
 // --------------------------------------------------------------------------------- tree
 
@@ -234,8 +236,12 @@ describe('every row has the shape §3.1 gives it', () => {
     expect(cycleFindings(REGISTRY)).toEqual([]);
   });
 
-  it('R-60: exactly the three administrator screens require admin', () => {
+  it('R-60: exactly the three administrator screens require admin; R-150w: four operator screens require expert or admin', () => {
     expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
+      ['/dispatcher', ['expert', 'admin']],
+      ['/logs', ['expert', 'admin']],
+      ['/workers', ['expert', 'admin']],
+      ['/queue', ['expert', 'admin']],
       ['/admin/users', ['admin']],
       ['/admin/users/[user_uid]', ['admin']],
       ['/admin/registrations', ['admin']],
@@ -279,11 +285,20 @@ describe('R-66: the groups, their members and their order', () => {
     expect(routeAddresses().map((route) => route.address)).toContain('/optimisation');
   });
 
-  it('the four stubs are session screens any account holding a role opens (R-80)', () => {
+  it('the four stubs are session screens any account holding a role opens (R-80), the queue only an expert or an administrator (R-150w)', () => {
     for (const address of R66_STUBS) {
       const row = REGISTRY.find((entry) => entry.address === address);
       expect(row, `${address} is not registered`).toBeDefined();
-      expect([row?.access, row?.roles, row?.inMenu], address).toEqual(['session', 'any-role', true]);
+      // `R-150w`: «Наблюдатель» does not see the operational screens; the queue is one of them.
+      const roles = OPERATOR_SCREENS.includes(address) ? ['expert', 'admin'] : 'any-role';
+      expect([row?.access, row?.roles, row?.inMenu], address).toEqual(['session', roles, true]);
+    }
+  });
+
+  it('the operational screens are not a viewer\'s (R-150w): queue, journal, executors and dispatcher need expert or admin', () => {
+    for (const address of OPERATOR_SCREENS) {
+      const row = REGISTRY.find((entry) => entry.address === address);
+      expect(row?.roles, address).toEqual(['expert', 'admin']);
     }
   });
 

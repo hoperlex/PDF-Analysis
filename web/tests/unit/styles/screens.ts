@@ -72,6 +72,7 @@ import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
+import { DocumentContext } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
@@ -95,7 +96,7 @@ import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
-import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex } from '@/shared/ui';
+import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -710,6 +711,39 @@ export function screens(): Screen[] {
   add('VersionList cold', withRouter(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
   add('RunList cold', withRouter(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
   add('UploadPanel', renderWith(newClient(), createElement(UploadPanel, { projectUid: PROJECT_UID })));
+
+  // `UI-A-68`, `R-150f`: the shared table in its first consumer's shape -- a caption, scoped heads, rows and the
+  // current row marked -- so its colour rules are measured before any screen opens the findings table.
+  add(
+    'Table, the findings table shape',
+    render(
+      createElement(Table<{ readonly id: string; readonly text: string }>, {
+        caption: 'Находки прогона',
+        columns: [
+          { key: 'id', header: '№', cell: (row: { readonly id: string; readonly text: string }) => row.id },
+          { key: 'text', header: 'Находка', cell: (row: { readonly id: string; readonly text: string }) => row.text },
+        ],
+        rows: [{ id: '1', text: 'Первая находка' }, { id: '2', text: 'Вторая находка' }],
+        rowKey: (row: { readonly id: string; readonly text: string }) => row.id,
+        currentKey: '2',
+      }),
+    ),
+  );
+
+  // `UI-A-24`: the context strip on a version page offers the document's other versions once there are two,
+  // and says the history is longer than the page when it is -- the `.switch` and `.more` rules of the strip.
+  {
+    const client = populatedClient();
+    const second = { ...version(), version_uid: `${VERSION_UID.slice(0, -1)}Z` as DocumentVersion['version_uid'], version_ordinal: 2 };
+    client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), {
+      items: [version(), second],
+      page: { next_cursor: 'Y3Vyc29y' },
+    });
+    add(
+      'DocumentContext, a version of two, with more history',
+      renderScreen(client, createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID, current: 'version' })),
+    );
+  }
   add('ExecutionJournal loaded', withRouter(createElement(ExecutionJournal, {
     entries: [{
       event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
@@ -1254,8 +1288,7 @@ export function screens(): Screen[] {
   // The decision panel: refused comment, pending intent, and a failure.
   add(
     'DecisionPanel refused',
-    render(
-      createElement(DecisionPanel, {
+    renderWith(newClient(), createElement(DecisionPanel, {
         currentVerdict: 'accepted',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,
@@ -1271,8 +1304,7 @@ export function screens(): Screen[] {
   );
   add(
     'DecisionPanel failed',
-    render(
-      createElement(DecisionPanel, {
+    renderWith(newClient(), createElement(DecisionPanel, {
         currentVerdict: 'pending',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,
@@ -1616,8 +1648,7 @@ export function screens(): Screen[] {
   // The decision panel on a v2 finding after an accept was refused for want of a severity.
   add(
     'DecisionPanel, v2 finding, severity refused',
-    render(
-      createElement(DecisionPanel, {
+    renderWith(newClient(), createElement(DecisionPanel, {
         currentVerdict: 'accepted',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,

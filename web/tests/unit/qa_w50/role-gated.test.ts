@@ -134,11 +134,13 @@ describe('6 (fixture): admin screens are absent from the menu for an expert', ()
 });
 
 describe('6 (live): the administrator rows are role-gated in the real registry', () => {
-  it('the live role-gated set contains exactly the three admin screens', () => {
+  it('the live role-gated set is the four operator screens (R-150w) and the three admin screens', () => {
     const rows: readonly ScreenEntry[] = SCREEN_REGISTRY;
     const admin = ['/admin/users', '/admin/users/[user_uid]', '/admin/registrations'];
+    // `R-150w`: the operator's screens ask for expert or admin, so «Наблюдатель» does not open them.
+    const operator = ['/dispatcher', '/logs', '/workers', '/queue'];
     // `R-80`: every other product row asks for any role (`any-role`), not for a listed one.
-    expect(rows.filter((row) => Array.isArray(row.roles)).map((row) => row.address)).toEqual(admin);
+    expect(rows.filter((row) => Array.isArray(row.roles)).map((row) => row.address)).toEqual([...operator, ...admin]);
     expect(rows.filter((row) => row.group === 'admin').map((row) => row.address)).toEqual(admin);
   });
 
@@ -252,8 +254,12 @@ describe('8 (live): /403 names admin for every live administrator row', () => {
         // `R-80`: a product screen opens with any one role, and the screen names each.
         for (const label of Object.values(ROLE_LABELS)) expect(text, row.address).toContain(`«${label}»`);
       } else {
-        expect(text, row.address).toContain('«Администратор»');
-        expect(text, row.address).not.toContain('«Эксперт»');
+        // A listed set: the screen names exactly the roles that open the row, and no other.
+        const listed = new Set<string>(row.roles);
+        for (const [role, label] of Object.entries(ROLE_LABELS)) {
+          if (listed.has(role)) expect(text, row.address).toContain(`«${label}»`);
+          else expect(text, row.address).not.toContain(`«${label}»`);
+        }
       }
     }
   });

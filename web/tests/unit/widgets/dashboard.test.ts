@@ -259,7 +259,14 @@ function expectedNumberTokens(summary: DashboardSummary): ReadonlySet<string> {
     add(summary.run_activity.spend.model_call_count);
   }
 
-  for (const row of summary.section_breakdown) add(row.document_count);
+  for (const row of summary.section_breakdown) {
+    add(row.document_count);
+    // `UI-A-35`: a section row also renders the original's other four numbers, read from the server.
+    add(row.finding_count);
+    add(row.audit_counts.not_run);
+    add(row.audit_counts.no_expert_decision);
+    add(row.audit_counts.checked);
+  }
 
   return tokens;
 }

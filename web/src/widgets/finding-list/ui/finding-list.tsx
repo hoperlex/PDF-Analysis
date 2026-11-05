@@ -24,7 +24,8 @@ import { useState } from 'react';
 
 import type { Finding, FindingCategory, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
-import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
+import type { TableColumn } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
 import { SeverityBadge, countGrouped } from '@/entities/finding';
 import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
@@ -100,6 +101,55 @@ const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string 
   { value: 'rejected', label: 'Отклонены' },
 ];
 
+
+/**
+ * `UI-A-68`: the original's table of findings — №, verdict, category, the finding, the recommendation, the
+ * norms it cites and the pages — over the same filtered findings as the list. A row's number opens the
+ * finding beside the table, as a row of the list does.
+ */
+function FindingTable({
+  groups,
+  selectedFindingUid,
+  onSelect,
+}: {
+  readonly groups: readonly FindingGroup<Finding>[];
+  readonly selectedFindingUid: string | null;
+  readonly onSelect: (findingUid: string) => void;
+}) {
+  const rows = groups.flatMap((group) => group.findings);
+  const numberOf = new Map(rows.map((finding, index) => [finding.finding_uid, index + 1]));
+  const columns: readonly TableColumn<Finding>[] = [
+    {
+      key: 'number',
+      header: '№',
+      cell: (finding) => (
+        <button type="button" className="am-button am-button--quiet" data-finding-uid={finding.finding_uid} onClick={() => onSelect(finding.finding_uid)}>
+          {numberOf.get(finding.finding_uid)}
+        </button>
+      ),
+    },
+    { key: 'verdict', header: 'Вердикт', cell: (finding) => <VerdictBadge verdict={finding.current_verdict} /> },
+    { key: 'category', header: 'Категория', cell: (finding) => categoryHeading(finding.observation.category) },
+    { key: 'finding', header: 'Находка', cell: (finding) => finding.observation.finding_text },
+    { key: 'recommendation', header: 'Рекомендация', cell: (finding) => finding.observation.recommendation_text },
+    {
+      key: 'norms',
+      header: 'Нормы',
+      cell: (finding) => (finding.observation.norm_citations ?? []).length === 0 ? '—' : String((finding.observation.norm_citations ?? []).length),
+    },
+    { key: 'pages', header: 'Стр.', cell: (finding) => declaredPages(finding.observation).join(', ') },
+  ];
+  return (
+    <Table
+      caption="Находки прогона"
+      columns={columns}
+      rows={rows}
+      rowKey={(finding) => finding.finding_uid}
+      currentKey={selectedFindingUid}
+    />
+  );
+}
+
 /** Category labels. The contract value is what the row carries; this is only the heading. */
 function categoryHeading(category: FindingCategory): string {
   return CATEGORY_LABELS[category];
@@ -116,6 +166,7 @@ export function FindingList({
   onVerdictFilterChange,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const [view, setView] = useState<'list' | 'table'>('list');
   const filter = verdictFilter ?? ownFilter;
   const setFilter = (next: VerdictFilter) => {
     if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
@@ -151,6 +202,20 @@ export function FindingList({
         <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
           Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
         </p>
+        <div className={styles.filter} role="group" aria-label="Вид списка находок">
+          {(['list', 'table'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className="am-button am-button--quiet"
+              aria-pressed={view === mode}
+              data-finding-view={mode}
+              onClick={() => setView(mode)}
+            >
+              {mode === 'list' ? 'Список' : 'Таблица'}
+            </button>
+          ))}
+        </div>
         <div className={styles.filter} role="group" aria-label="Отбор по вердикту">
           {FILTERS.map((option) => (
             <button
@@ -185,7 +250,11 @@ export function FindingList({
         </p>
       ) : null}
 
-      {shown.map((group) => (
+      {view === 'table' && shown.length > 0 ? (
+        <FindingTable groups={shown} selectedFindingUid={selectedFindingUid} onSelect={onSelect} />
+      ) : null}
+
+      {view === 'table' ? null : shown.map((group) => (
         <section
           key={group.category}
           className="am-finding-group"

@@ -1,5 +1,27 @@
 # Current state
 
+**Updated 2026-11-05 by `UI-PARITY-INT-1105c` (unverified development candidate, third publication).** The administrator forms offer «Наблюдатель» (`VIEWER_ROLE_OFFERED` on). Both the user form and the registration approval refuse it beside another role before sending (`R-150e`); turning the switch off is the rollback.
+
+Stand rerun on `b9a725c5`: 108 passed. It covers the dashboard census, the inventory at `0050`, the `0015` vocabulary and the optimisation viewer capability tests, the three reds of the earlier combined check, now green.
+
+`test_project_match` `unit_mismatch` stays red and is unrelated to this work (`D-315`). Web checks for the form change: `tsc`, eslint and focused vitest, green.
+
+**Updated 2026-11-05 by `UI-PARITY-INT-1105b` (unverified development candidate, second publication).** New on top of `UI-PARITY-INT-1105`:
+- the dashboard's section rows carry the original's five numbers (`UI-A-35`);
+- the findings table in «Разбор», with the first `shared/ui` `Table` (`UI-A-68`, `R-150f`);
+- the decision gate moved from `DecisionPanel` to the review page, and the review writes `?finding=`/`?verdict=` through `window.history`;
+- fixes from the combined check: the cancel failure sentence, the census renders with a query client, the guards and role tests know the operator screens (`R-150w`), the viewer's refusal capability in the optimisation tests, the `0050` vocabulary and the inventory reseal (constraints digest at `0050`), and the dashboard census seeds a second project.
+
+Checks on this tree's web part:
+- `tsc` and eslint (whole `web/`) are green;
+- the whole web vitest: 5047 / 5051 on `d8e36ee4`, then the four remaining files green on `9d017a8a`.
+
+Backend checks, measured earlier on `bef54479`:
+- the combined check gave contract 543, unit 81, and stand integration green for access (309), dashboard (22), execution (18) and characterization (75);
+- its two DB reds and the dashboard census red are fixed by test changes here, and were **not re-run on a stand**.
+
+Still owed (`D-314`): those three tests on a stand, the `test_project_match` `unit_mismatch` comparison at the base, the browser journey and `next build`. No full gate without the owner's order.
+
 **Updated 2026-11-05 by `UI-PARITY-INT-1105` (unverified development candidate, published ahead of its checks by the owner's order).** UI-parity waves 0–3 code on one tree (`docs/program/UI-PARITY-01.md`, `R-150a`…`R-150z`). It holds:
 - the readable queue (contract 1.18.0: work names, start, end, error, state and period filters);
 - document audit-state counters (1.19.0, `UI-PARITY-METRICS.md`);

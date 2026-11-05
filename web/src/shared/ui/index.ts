@@ -59,3 +59,6 @@ export { AVATAR_PALETTE_SIZE, avatarColourIndex, normaliseColourKey } from './av
 
 export type { CostApprovalEstimate, CostApprovalProps } from './cost-approval';
 export { CostApproval, ceilingMicros, microsAsUsd, usableCostEstimate } from './cost-approval';
+
+export type { TableColumn, TableProps } from './table';
+export { Table } from './table';

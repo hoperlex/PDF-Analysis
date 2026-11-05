@@ -447,7 +447,7 @@ def test_the_read_writes_nothing(world: World) -> None:
 
 def test_roles_and_request_values(world: World) -> None:
     denied = _refused(ErrorCode.PERMISSION_DENIED, world.read, actor_roles=frozenset())
-    assert denied.detail_fields["required_capability"] == "role:admin|expert"
+    assert denied.detail_fields["required_capability"] == "role:admin|expert|viewer"  # R-150e: the viewer reads too
     assert world.read(actor_roles=frozenset({"admin"})).state == SECTION_STATE_READY
     for field, value in (("section_code", "АР"), ("project_uid", "prj_bad"), ("limit", 201)):
         refused = _refused(ErrorCode.VALIDATION_FAILED, world.read, **{field: value})
