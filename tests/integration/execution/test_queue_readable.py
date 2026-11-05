@@ -2,9 +2,9 @@
 across a filter.
 
 Every test builds its own runs and jobs on the suite's rolled-back session and asserts about *those* (the lane database
-carries other suites' rows, so a count over the whole queue would be an assertion about someone else's data). The period
-tests move their jobs to a decade no other row is in (``created_at`` is a plain column; its order against the other rows
-is what the query reads, and the fixture states the dates it uses).
+carries other suites' rows, so a count over the whole queue would be an assertion about someone else's data). A period
+is bounded by the creation instants the database gave the test's own jobs (``job.created_at`` is frozen by
+``trg_job_frozen_guard`` and defaults to ``clock_timestamp()``, so each job of a test has its own, in creation order).
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from auditmanager.runs.repository import RunRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import RunId
 
-#: A window in which no other row of any suite lives.
-WINDOW = datetime(2031, 3, 1, tzinfo=timezone.utc)
+#: Any instant: a cursor's scope is compared, never looked up.
+SOME_INSTANT = datetime(2031, 3, 1, tzinfo=timezone.utc)
 
 
 def _run(session, seeded) -> str:
@@ -42,6 +42,17 @@ def _run(session, seeded) -> str:
 def _queued(session, seeded) -> tuple[str, str]:
     run_id = _run(session, seeded)
     return run_id, JobRepository().enqueue(session, run_id=run_id)
+
+
+def _dated(session, seeded, count: int) -> tuple[list[str], list[datetime]]:
+    """``count`` queued jobs and the creation instants the database gave them, strictly increasing."""
+    ids = [_queued(session, seeded)[1] for _ in range(count)]
+    created = [
+        session.execute(text("SELECT created_at FROM job WHERE job_id = :job"), {"job": job}).scalar_one()
+        for job in ids
+    ]
+    assert created == sorted(set(created)), "the test needs jobs created at distinct, increasing instants"
+    return ids, created
 
 
 def _everything(adapter: ExecutionAdapter, **filters):
@@ -184,36 +195,29 @@ def test_a_filtered_listing_is_the_unfiltered_one_with_the_other_states_removed_
 
 def test_the_period_is_half_open_over_the_creation_of_the_job(session, blob_store, helpers):
     seeded = helpers.seed_version(session, blob_store)
-    ids = []
-    for day in range(3):
-        _, job_id = _queued(session, seeded)
-        session.execute(
-            text("UPDATE job SET created_at = :at WHERE job_id = :job"),
-            {"at": WINDOW + timedelta(days=day), "job": job_id},
-        )
-        ids.append(job_id)
+    ids, at = _dated(session, seeded, 3)
     first, second, third = ids
     adapter = _adapter(session)
 
     def listed(**filters):
         return [i.job_id for i in _everything(adapter, **filters) if i.job_id in ids]
 
-    day = timedelta(days=1)
-    assert listed(created_from=WINDOW, created_to=WINDOW + 3 * day) == [first, second, third]
-    assert listed(created_from=WINDOW + day, created_to=WINDOW + 3 * day) == [second, third], "the lower bound is included"
-    assert listed(created_from=WINDOW, created_to=WINDOW + 2 * day) == [first, second], "the upper bound is not"
-    assert listed(created_from=WINDOW + day, created_to=WINDOW + day) == [], "an empty interval holds nothing"
-    assert listed(created_from=WINDOW + 3 * day, created_to=WINDOW) == [], "an inverted one holds nothing"
-    assert listed(created_from=WINDOW + 2 * day) == [third], "an open end is unbounded"
-    assert listed(created_to=WINDOW + day) == [first]
+    after_all = at[2] + timedelta(microseconds=1)
+    assert listed(created_from=at[0], created_to=after_all) == [first, second, third]
+    assert listed(created_from=at[1], created_to=after_all) == [second, third], "the lower bound is included"
+    assert listed(created_from=at[0], created_to=at[2]) == [first, second], "the upper bound is not"
+    assert listed(created_from=at[1], created_to=at[1]) == [], "an empty interval holds nothing"
+    assert listed(created_from=at[2], created_to=at[0]) == [], "an inverted one holds nothing"
+    assert listed(created_from=at[2]) == [third], "an open end is unbounded"
+    assert listed(created_to=at[1]) == [first]
     # The same instant with another offset is the same bound.
     plus_five = timezone(timedelta(hours=5))
     assert listed(
-        created_from=(WINDOW + day).astimezone(plus_five), created_to=(WINDOW + 3 * day).astimezone(plus_five),
+        created_from=at[1].astimezone(plus_five), created_to=after_all.astimezone(plus_five),
     ) == [second, third]
     # The period composes with the state: all three are queued, none are cancelled.
-    assert listed(state="queued", created_from=WINDOW, created_to=WINDOW + 3 * day) == [first, second, third]
-    assert listed(state="cancelled", created_from=WINDOW, created_to=WINDOW + 3 * day) == []
+    assert listed(state="queued", created_from=at[0], created_to=after_all) == [first, second, third]
+    assert listed(state="cancelled", created_from=at[0], created_to=after_all) == []
 
 
 # ------------------------------------------------------------------------------ a cursor across a filter
@@ -258,8 +262,8 @@ def test_a_cursor_issued_under_one_filter_is_refused_under_another_and_under_non
     refusals = [
         {"state": "queued"},
         {},
-        {"state": "cancelled", "created_from": WINDOW},
-        {"state": "cancelled", "created_to": WINDOW},
+        {"state": "cancelled", "created_from": SOME_INSTANT},
+        {"state": "cancelled", "created_to": SOME_INSTANT},
     ]
     for other in refusals:
         with pytest.raises(DomainError) as error:
@@ -276,19 +280,19 @@ def test_a_cursor_issued_under_one_filter_is_refused_under_another_and_under_non
 
 def test_a_period_cursor_is_bound_to_the_period_too(session, blob_store, helpers):
     seeded = helpers.seed_version(session, blob_store)
-    ids = []
-    for day in range(3):
-        _, job_id = _queued(session, seeded)
-        session.execute(text("UPDATE job SET created_at = :at WHERE job_id = :job"),
-                        {"at": WINDOW + timedelta(days=day), "job": job_id})
-        ids.append(job_id)
+    ids, at = _dated(session, seeded, 3)
     adapter = _adapter(session)
-    bounds = {"created_from": WINDOW, "created_to": WINDOW + timedelta(days=3)}
-    first = adapter.list_queue(cursor=None, limit=1, **bounds)
-    assert [item.job_id for item in first.items] == [ids[0]] and first.page.next_cursor is not None
-    second = adapter.list_queue(cursor=first.page.next_cursor, limit=1, **bounds)
-    assert [item.job_id for item in second.items] == [ids[1]]
+    bounds = {"created_from": at[0], "created_to": at[2] + timedelta(microseconds=1)}
+    walked, cursor = [], None
+    while True:
+        page = adapter.list_queue(cursor=cursor, limit=1, **bounds)
+        walked.extend(item.job_id for item in page.items)
+        if page.page.next_cursor is None:
+            break
+        if len(walked) == 1:
+            first_cursor = page.page.next_cursor
+        cursor = page.page.next_cursor
+    assert [job for job in walked if job in ids] == ids, "paging under a period walks the period and ends"
     with pytest.raises(DomainError) as error:
-        adapter.list_queue(cursor=first.page.next_cursor, limit=1, created_from=WINDOW,
-                           created_to=WINDOW + timedelta(days=2))
+        adapter.list_queue(cursor=first_cursor, limit=1, created_from=at[0], created_to=at[2])
     assert dict(error.value.detail_fields) == {"field": "cursor", "constraint": "scope"}

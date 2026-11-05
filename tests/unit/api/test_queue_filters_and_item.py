@@ -12,8 +12,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from auditmanager.api.app import create_documentation_app
+from auditmanager.api.routers.declarations import QueueCreatedFromParam, QueueCreatedToParam
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import decode_cursor, encode_cursor
 from auditmanager.bootstrap.adapters import _queue_cursor, _queue_item_model, _queue_scope
@@ -154,6 +156,26 @@ def test_the_binding_facts_of_a_group_run_still_ride_the_item() -> None:
 def test_a_reason_outside_the_catalogue_is_refused_rather_than_shown() -> None:
     with pytest.raises(ValueError):
         _queue_item_model(_row(error_code="not_a_catalogue_code"), {})
+
+
+# ---------------------------------------------------------------------------- the period parameters
+
+
+@pytest.mark.parametrize("annotation", [QueueCreatedFromParam, QueueCreatedToParam])
+def test_a_period_bound_is_an_rfc_3339_instant_with_an_offset_and_nothing_else(annotation) -> None:
+    adapter = TypeAdapter(annotation)
+    for good, expected in (
+        ("2026-11-04T10:00:00Z", datetime(2026, 11, 4, 10, tzinfo=timezone.utc)),
+        ("2026-11-04T10:00:00.250000Z", datetime(2026, 11, 4, 10, 0, 0, 250000, tzinfo=timezone.utc)),
+        ("2026-11-04T15:00:00+05:00", datetime(2026, 11, 4, 10, tzinfo=timezone.utc)),
+    ):
+        assert adapter.validate_python(good) == expected, good
+    assert adapter.validate_python("") is None and adapter.validate_python(None) is None, "the absent parameter"
+    # A number is a Unix time to pydantic, which would turn a typo into a filter that selects another era.
+    for bad in ("1", "20261104", "1730714400", "2026-11-04", "2026-11-04T10:00:00", "2026-11-04T10:00:00 05:00",
+                "2026-11-04 10:00:00Z", "yesterday", "2026-13-40T10:00:00Z"):
+        with pytest.raises(ValidationError):
+            adapter.validate_python(bad)
 
 
 # ---------------------------------------------------------------------------- the declared surface

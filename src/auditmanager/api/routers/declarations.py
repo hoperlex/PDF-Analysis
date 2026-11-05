@@ -8,6 +8,7 @@ contract declares, and the gate compares the result on every run.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, Final, Literal, Mapping
 
 from fastapi import Header, Query
@@ -198,6 +199,24 @@ ProjectUidFilterParam = Annotated[
 #: included and an upper bound that is not, so two adjacent periods never count a job twice. Both are RFC 3339
 #: instants with an offset (``AwareDatetime``): a time with no zone is refused as ``validation_failed`` rather than
 #: read in a zone the server chose. As everywhere above, the empty string is the absent parameter.
+_RFC3339_INSTANT: Final[re.Pattern[str]] = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})"
+)
+
+
+def _instant(value: Any) -> Any:
+    """An RFC 3339 date-time with an offset, or the absent parameter.
+
+    Pydantic reads a bare number, or a numeric string, as seconds since 1970 -- so ``?created_from=20261104`` would
+    be accepted and mean an evening in August 1970, a filter that silently selects something else. The shape the
+    contract names is checked first instead, and anything else is ``validation_failed``. (A ``+`` offset in a query
+    string must be written ``%2B``; an unescaped one arrives as a space and is refused for the same reason.)"""
+    value = _absent(value)
+    if isinstance(value, str) and _RFC3339_INSTANT.fullmatch(value) is None:
+        raise ValueError("an RFC 3339 date-time with an offset, such as 2026-11-04T10:00:00Z")
+    return value
+
+
 QUEUE_JOB_STATES: Final[tuple[str, ...]] = (
     "queued", "leased", "running", "retry_wait", "succeeded", "failed", "cancelled", "dead_letter",
 )
@@ -215,7 +234,7 @@ QueueStateFilterParam = Annotated[
 ]
 QueueCreatedFromParam = Annotated[
     AwareDatetime | None,
-    BeforeValidator(_absent),
+    BeforeValidator(_instant),
     WithJsonSchema({"type": "string", "format": "date-time"}),
     Query(
         description=(
@@ -228,7 +247,7 @@ QueueCreatedFromParam = Annotated[
 ]
 QueueCreatedToParam = Annotated[
     AwareDatetime | None,
-    BeforeValidator(_absent),
+    BeforeValidator(_instant),
     WithJsonSchema({"type": "string", "format": "date-time"}),
     Query(
         description=(

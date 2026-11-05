@@ -29,8 +29,6 @@ from auditmanager.shared.identity import RunId
 from .test_query_surface import MixedRun, get, ok
 
 QUEUE = "/execution/queue"
-#: A decade nothing else is in; the jobs below are moved into it so a period selects exactly them.
-WINDOW = datetime(2032, 5, 1, tzinfo=timezone.utc)
 
 
 @pytest.fixture
@@ -40,11 +38,14 @@ def queue_surface(shipped_router: Surface, session_factory: sessionmaker[Session
     return Surface(router)
 
 
-def _jobs(session: Session, mixed: MixedRun, count: int) -> list[str]:
-    """``count`` queued jobs of the mixed run's version, created in the window one day apart."""
+def _jobs(session: Session, mixed: MixedRun, count: int) -> tuple[list[str], list[datetime]]:
+    """``count`` queued jobs of the mixed run's version and the creation instants the database gave them.
+
+    ``job.created_at`` is frozen by ``trg_job_frozen_guard`` and defaults to ``clock_timestamp()``, so the jobs of one
+    test have distinct instants in creation order; a period is bounded by them."""
     ids = []
     repo, jobs = RunRepository(), JobRepository()
-    for day in range(count):
+    for _ in range(count):
         run_id = str(RunId.new())
         repo.create(
             session, run_id=run_id, project_uid=mixed.run.run.project_uid, version_uid=mixed.run.run.version_uid,
@@ -52,11 +53,11 @@ def _jobs(session: Session, mixed: MixedRun, count: int) -> list[str]:
             provider_mode="recorded", frozen_input_digest="a" * 64, command_id=None,
         )
         repo.advance(session, run_id=run_id, from_state="created", to_state="queued")
-        job_id = jobs.enqueue(session, run_id=run_id)
-        session.execute(text("UPDATE job SET created_at = :at WHERE job_id = :job"),
-                        {"at": WINDOW + timedelta(days=day), "job": job_id})
-        ids.append(job_id)
-    return ids
+        ids.append(jobs.enqueue(session, run_id=run_id))
+    at = [session.execute(text("SELECT created_at FROM job WHERE job_id = :job"), {"job": job}).scalar_one()
+          for job in ids]
+    assert at == sorted(set(at)), "the test needs jobs created at distinct, increasing instants"
+    return ids, at
 
 
 def _mine(body: dict[str, Any], ids: list[str]) -> list[str]:
@@ -67,11 +68,16 @@ def _z(moment: datetime) -> str:
     return quote(moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"))
 
 
+def _bounds(at: list[datetime]) -> str:
+    """The period that holds exactly the jobs created at these instants (the upper bound is not included)."""
+    return f"created_from={_z(at[0])}&created_to={_z(at[-1] + timedelta(microseconds=1))}"
+
+
 def test_an_item_names_its_work_and_omits_what_the_job_does_not_have(
     queue_surface: Surface, session: Session, mixed_run: MixedRun
 ) -> None:
-    ids = _jobs(session, mixed_run, 1)
-    body = ok(get(queue_surface, f"{QUEUE}?limit=200&created_from={_z(WINDOW)}&created_to={_z(WINDOW + timedelta(days=1))}"))
+    ids, at = _jobs(session, mixed_run, 1)
+    body = ok(get(queue_surface, f"{QUEUE}?limit=200&{_bounds(at)}"))
     (item,) = [i for i in body["items"] if i["job_id"] == ids[0]]
     assert item["project_uid"] == mixed_run.run.run.project_uid
     assert item["version_uid"] == mixed_run.run.run.version_uid
@@ -86,13 +92,12 @@ def test_an_item_names_its_work_and_omits_what_the_job_does_not_have(
 def test_the_state_filter_reaches_the_database_and_a_state_nobody_is_in_is_an_empty_page(
     queue_surface: Surface, session: Session, mixed_run: MixedRun
 ) -> None:
-    ids = _jobs(session, mixed_run, 2)
-    window = f"created_from={_z(WINDOW)}&created_to={_z(WINDOW + timedelta(days=2))}"
-    queued = ok(get(queue_surface, f"{QUEUE}?state=queued&{window}&limit=200"))
+    ids, at = _jobs(session, mixed_run, 2)
+    queued = ok(get(queue_surface, f"{QUEUE}?state=queued&{_bounds(at)}&limit=200"))
     assert _mine(queued, ids) == ids and {i["state"] for i in queued["items"]} == {"queued"}
     for other in ("running", "succeeded", "failed", "cancelled", "dead_letter", "leased", "retry_wait"):
-        page = ok(get(queue_surface, f"{QUEUE}?state={other}&{window}&limit=200"))
-        assert page["items"] == [], other
+        page = ok(get(queue_surface, f"{QUEUE}?state={other}&{_bounds(at)}&limit=200"))
+        assert _mine(page, ids) == [], other
 
 
 def test_a_state_outside_the_eight_is_refused_not_ignored(queue_surface: Surface) -> None:
@@ -113,11 +118,10 @@ def test_a_period_without_an_offset_or_not_a_time_is_refused(queue_surface: Surf
 def test_the_period_selects_by_creation_and_an_empty_parameter_is_the_absent_one(
     queue_surface: Surface, session: Session, mixed_run: MixedRun
 ) -> None:
-    ids = _jobs(session, mixed_run, 3)
-    day = timedelta(days=1)
-    first_two = ok(get(queue_surface, f"{QUEUE}?created_from={_z(WINDOW)}&created_to={_z(WINDOW + 2 * day)}&limit=200"))
+    ids, at = _jobs(session, mixed_run, 3)
+    first_two = ok(get(queue_surface, f"{QUEUE}?created_from={_z(at[0])}&created_to={_z(at[2])}&limit=200"))
     assert _mine(first_two, ids) == ids[:2], "the upper bound is not included"
-    last = ok(get(queue_surface, f"{QUEUE}?created_from={_z(WINDOW + 2 * day)}&limit=200"))
+    last = ok(get(queue_surface, f"{QUEUE}?created_from={_z(at[2])}&limit=200"))
     assert _mine(last, ids) == [ids[2]], "the lower bound is included"
     # `?state=&created_from=` change nothing: the empty string is the absent parameter.
     whole = ok(get(queue_surface, f"{QUEUE}?limit=200"))
@@ -128,8 +132,8 @@ def test_the_period_selects_by_creation_and_an_empty_parameter_is_the_absent_one
 def test_a_cursor_is_refused_under_other_filters_and_resumes_under_its_own(
     queue_surface: Surface, session: Session, mixed_run: MixedRun
 ) -> None:
-    ids = _jobs(session, mixed_run, 3)
-    window = f"created_from={_z(WINDOW)}&created_to={_z(WINDOW + timedelta(days=3))}"
+    ids, at = _jobs(session, mixed_run, 3)
+    window = _bounds(at)
     first = ok(get(queue_surface, f"{QUEUE}?state=queued&{window}&limit=1"))
     cursor = first["page"]["next_cursor"]
     assert cursor and [i["job_id"] for i in first["items"]] == [ids[0]]
