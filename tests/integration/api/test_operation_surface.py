@@ -138,6 +138,16 @@ def test_every_declared_operation_is_reachable(
         "stage_assembly_id": "sas_01M2545JSD15ETSNNV904X991W",
         "stage_link_revision_id": "slk_01M2545JSD15ETSNNV904X991W",
         "stage_chain_run_id": "crn_01M2545JSD15ETSNNV904X991W",
+        # `CMP-SEAL-C4`: a durable batch of chain runs, a link repair and an expert change card.
+        "stage_chain_batch_id": "scb_01M2545JSD15ETSNNV904X991W",
+        "stage_link_repair_id": "crp_01M2545JSD15ETSNNV904X991W",
+        "stage_change_card_id": "ccd_01M2545JSD15ETSNNV904X991W",
+        # `EXEC2-SEAL-1`: an agent install session, and the version of the public agent package (a closed
+        # `MAJOR.MINOR.PATCH` code, not an identity). `EXEC2-SEAL-2`: a work kind of the routing rules (a closed
+        # vocabulary, like `section_code`).
+        "install_id": "exai_01M2545JSD15ETSNNV904X991W",
+        "version": "1.0.0",
+        "work_kind": "text_analysis",
     }
     for operation_id, method, template in sorted(declared_operations(openapi_document)):
         path = template

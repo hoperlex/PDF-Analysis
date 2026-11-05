@@ -31,34 +31,47 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
-#: NOT resealed for ``0047_executor_groups_rules`` and ``0048_dispatch_time_binding`` either (`EXEC2-SEAL-2`, `R-149d`).
-#: What a capable runner will find on top of the 0046 figures below, derived from the DDL and not measured: columns +46
-#: (``executor_group`` 7, ``executor_group_revision`` 12 -- ``member_count`` among them --, ``executor_group_member`` 4,
-#: ``executor_routing_rule_revision`` 6, ``executor_routing_mode_event`` 7, and five on each of ``audit_run`` and
-#: ``comparison_ai_job``: ``binding_state``, ``executor_group_revision_id``, ``routing_rule_revision_id``,
-#: ``wait_reason``, ``waiting_since``; the row of ``comparison_ai_job.connection_revision_id`` is redefined, same column,
-#: now nullable); relations +5 (the five tables, no view); constraints +66 (checks +48, foreign keys +8, primary keys +5,
-#: unique keys +4, constraint triggers +1: the deferred ``trg_executor_group_revision_has_members``, contype ``t``);
-#: indexes +16 (five primary keys, four unique keys, ``ux_executor_group_name_active``,
-#: ``ix_executor_group_member_connection``, ``ix_executor_routing_rule_group_revision``, and ``ix_*_group_revision`` and
-#: ``ix_*_pending`` on each of ``audit_run`` and ``comparison_ai_job``); triggers +13 (twelve on the new tables --
-#: nine guards and ``trg_executor_group_no_delete``, ``trg_executor_group_revision_has_members`` and
-#: ``trg_executor_routing_mode_event_number`` -- and ``trg_comparison_ai_job_binding_pin``;
-#: ``trg_audit_run_frozen_guard`` is re-created on ``am_guard_audit_run_frozen`` with two more columns in its list, so its row is
-#: redefined and the count unchanged by it); functions +6 (``am_check_executor_group_revision``,
-#: ``am_check_executor_group_member``, ``am_check_executor_routing_rule``, ``am_require_executor_group_members``,
-#: ``am_check_executor_routing_mode_event``, ``am_guard_audit_run_frozen``; ``am_guard_comparison_ai_job_consent`` is
-#: replaced, same name, so its digest moves); views, extensions, sequences, policies and the state topology unchanged.
-#: NOT resealed for ``0046_executor_capacity_enroll`` (`EXEC2-SEAL-1`, `R-149d`: no database run in EXEC-2), and the
-#: seal below has not been resealed for ``0042``-``0045`` either, so ``EXPECTED_INVENTORY`` does not describe head. What
-#: the integrator will find when a capable runner recomputes the eleven families, derived from the DDL and not measured:
-#: columns +41 (``executor_connection_revision`` 1, ``executor_task`` 1, ``executor_runner_token`` 6,
-#: ``executor_connection`` 2, ``executor_enrollment`` 11, ``executor_agent_install`` 20); relations +2 (the two tables);
-#: constraints +55 (checks +47, foreign keys +4, primary keys +2, unique keys +2; ``ck_executor_secret_purpose`` and
-#: ``ck_executor_secret_public_material`` are redefined, same rows, so only their digest moves); indexes +8 (two primary
-#: keys, the two unique keys of the grant, ``ux_executor_enrollment_pending``, ``ux_executor_agent_install_open`` and one
-#: ``ix_*_connection`` on each table); triggers +4 (a frozen and a write-once guard on each table); functions, views,
-#: extensions, sequences, policies and the state topology unchanged.
+#: Resealed by `EXEC2-FIX-CMP-INVENTORY` for ``0049_stage_identity_checks``, measured by the same method (a fresh empty database
+#: upgraded to exactly ``0049``, the eleven families recomputed with ``_inventory`` and diffed row by row against the ``0048``
+#: figures below): one family moved, ``constraints`` +43 -> 1900, every added row a ``ck_<table>_<column>_format`` CHECK of the
+#: identity columns ``0042`` had left without one (14 tables); nothing was removed or redefined, and columns (1549), relations
+#: (141), indexes (450), triggers (241), functions (78), views, extensions, sequences, policies and the state topology have
+#: the digests of ``0048``. The seal below is therefore the ``0048`` one with the ``constraints`` family replaced.
+#: Resealed by `EXEC2-FIX-CMP-INVENTORY` for ``0042`` to ``0048`` -- the comparison stage review wave (``0042``-``0045``,
+#: `CMP-SEAL-C4` and the two page-bound hotfixes) and the EXEC-2 executor wave (``0046``-``0048``, `EXEC2-SEAL-1` and
+#: `EXEC2-SEAL-2`) -- measured, not predicted, by the method above: for each of ``0041``, ``0045``, ``0046`` and ``0048`` a fresh
+#: empty database on the lane's PostgreSQL stack was upgraded to exactly that revision by ``alembic upgrade`` and the eleven
+#: families recomputed with ``_inventory`` and diffed row by row. ``0041`` reproduced the previous seal in all eleven families
+#: (so the method and the figures below are the ones that sealed it), and ``0048`` was the head of that seal (``0049`` is sealed above). Views, extensions, sequences,
+#: policies and the state topology are identical at all four revisions (5, 1, 7, 0 and 51 rows, same digests).
+#:
+#: ``0042``-``0045`` (CMP, 0041 -> 0045): columns +130 -> 1462 (the twelve new tables 121 -- ``stage_ai_unit`` 13, ``stage_ai_review``
+#: 9, ``stage_ai_classification`` 9, ``stage_ai_synthesis`` 9, ``stage_graphic_evidence`` 11, ``stage_link_repair`` 9,
+#: ``stage_link_repair_event`` 8, ``stage_change_card`` 13, ``stage_card_evidence`` 12, ``stage_card_verdict`` 10,
+#: ``stage_chain_batch`` 8, ``stage_chain_batch_item`` 10 -- plus ``stage_chain_run`` 7, ``comparison_ai_job`` 1 and
+#: ``stage_text_hint`` 1); relations +12 -> 134 (the twelve tables); constraints +141 -> 1736 (the twelve tables' primary keys,
+#: foreign keys, unique keys and CHECKs, five on ``stage_chain_run`` and one on each of ``comparison_ai_job`` and
+#: ``stage_text_hint``; sixteen further rows are redefined, same name, so only their digest moves: ``0042`` redefines
+#: ``ck_comparison_ai_job_method``, ``ck_comparison_ai_job_scope`` and ``ck_executor_route_work_kind``, ``0044`` the page-count
+#: CHECK of ``document_version`` and five ``stage_upload*`` size CHECKs, ``0045`` the seven page-coordinate CHECKs of the
+#: comparison tables); indexes +40 -> 426; triggers +25 -> 224 (the immutable and scope guards of the new tables,
+#: ``trg_stage_ai_generation_pin`` of ``0043``, ``trg_stage_chain_c4_pins`` and ``trg_stage_effective_revision`` on
+#: ``stage_chain_run``, ``trg_stage_ai_job_scope`` and ``trg_stage_ai_job_pin`` on ``comparison_ai_job``); functions +3 -> 72
+#: (``am_check_stage_ai_job_scope``, ``am_check_stage_c4_scope``, ``am_check_stage_effective_revision``;
+#: ``am_check_stage_text_evidence_scope`` is redefined, same row).
+#:
+#: ``0046`` (EXEC-2 stage 1, 0045 -> 0046): columns +41 -> 1503; relations +2 -> 136 (``executor_enrollment`` and
+#: ``executor_agent_install``); constraints +55 -> 1791 (``ck_executor_secret_purpose`` and ``ck_executor_secret_public_material``
+#: are redefined, same rows); indexes +8 -> 434; triggers +4 -> 228; functions unchanged at 72.
+#:
+#: ``0047`` and ``0048`` (EXEC-2 stages 2 and 3, 0046 -> 0048): columns +46 -> 1549 (the five new tables and five on each of
+#: ``audit_run`` and ``comparison_ai_job``; ``comparison_ai_job.connection_revision_id`` is redefined, same column, now
+#: nullable); relations +5 -> 141 (``executor_group``, ``executor_group_revision``, ``executor_group_member``,
+#: ``executor_routing_rule_revision``, ``executor_routing_mode_event``); constraints +66 -> 1857; indexes +16 -> 450; triggers
+#: +13 -> 241 (``trg_audit_run_frozen_guard`` is re-created on ``am_guard_audit_run_frozen``, same row, new digest); functions
+#: +6 -> 78 (``am_guard_comparison_ai_job_consent`` is replaced, same name, so its digest moves). The figures derived from the
+#: DDL by ``EXEC2-SEAL-1`` and ``EXEC2-SEAL-2`` (+41 / +2 / +55 / +8 / +4 / 0 and +46 / +5 / +66 / +16 / +13 / +6) were all
+#: confirmed.
 #: Resealed by `CMP-SEAL-C2` for ``0040_comparison_ai_reports``, measured, not predicted: a fresh database upgraded to
 #: ``0040`` was recomputed in all eleven families and compared with the 0039 seal below. Six families moved, each by exactly
 #: the migration's DDL and nothing was removed: columns +181 -> 1188 (the twelve tables 180 and ``comparison_work.comparison_ai_job_id``);
@@ -329,14 +342,14 @@ from sqlalchemy import Engine, text
 #: to ``state-machines.json``; the registration lifecycle is guarded by its own trigger).
 #: `CMP-SEAL-C3` adds fifteen tables, 144 columns, 192 constraints, 39 indexes, 28 triggers and nine
 #: functions (one callable profile-scope predicate); views, extensions, sequences, policies and the
-#: state topology remain unchanged. The counts and hashes below were measured on a fresh 0041 DB.
+#: state topology remain unchanged. Those were the figures measured on a fresh 0041 DB; the seal below is the head's.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1332, "8e7a2a6f5f563b85265a88de82d1325c939d8e0b4ec6b544657a845e4eadca08"),
-    "relations": (122, "048791816fd0f1182b1df4bf48aea1d634752e4400c2038c043b96526cb6c97f"),
-    "constraints": (1595, "b9e805c49e1a856159af7b46def5788ef8fca58c7b816a4c8388009a3640d8ae"),
-    "indexes": (386, "e5906e97fdcc9f2d3e8c21611de11c36a0bd731e4a8f3f9720c2e388ddb9fa52"),
-    "triggers": (199, "d6f9ec422ab162c10bcc6fd5a88caa4845be171edf112078c9534868efd46ac9"),
-    "functions": (69, "be1d82b8ed99c91cddaa1d8dcda2d4805b5e634511551a5e9e1230ad4c9dc7df"),
+    "columns": (1549, "fe2af5e66658dda832e26c8d23b0fe6f3603c35e77c22137c04f72cf1b1c446e"),
+    "relations": (141, "ea3f9c4f791bc938db522b27fe80bf1fcaed96eb46f5204df1c5af7f63a55c01"),
+    "constraints": (1900, "e9403d294fbf4accc54246b6e7f46da25e47a0e6e7d21ebbbfff78655dd345cd"),
+    "indexes": (450, "9f32323579a83c0cc5de00b51597a1e42a2ddf72985e398feeaf0212a31630f8"),
+    "triggers": (241, "710b638de7200c0e2b57dd9ec4bbc9f237bf1d90f72dbf249cc661d3e83eb8ef"),
+    "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),
     "sequences": (7, "6d533fe16349a92b16b5ca89d51fcb083f1ecdf4f252bc276667a92361bf1656"),

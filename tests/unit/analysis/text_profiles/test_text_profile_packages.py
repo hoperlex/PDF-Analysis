@@ -290,6 +290,15 @@ def test_source_hashes_agree_with_the_catalogued_candidate_metadata() -> None:
 def test_source_files_exist_at_the_recorded_legacy_commit() -> None:
     if not (LEGACY / ".git").exists():
         pytest.skip(f"legacy repository {LEGACY} is not on this host; hash-at-commit check skipped")
+    # A clone whose history no longer holds the recorded commit (the upstream history was rewritten after the W56A
+    # download) cannot answer the check either: it is the same "not on this host" case, named, never a pass (D-299).
+    commits = sorted({manifest["source"]["commit"] for _, manifest in _legacy_packages()})
+    missing = [
+        commit for commit in commits
+        if subprocess.run(["git", "-C", str(LEGACY), "cat-file", "-e", f"{commit}^{{commit}}"], capture_output=True).returncode
+    ]
+    if missing:
+        pytest.skip(f"legacy repository {LEGACY} does not hold the recorded commit(s) {missing}; hash-at-commit check skipped (D-299)")
     checked = 0
     for _, manifest in _legacy_packages():
         commit = manifest["source"]["commit"]

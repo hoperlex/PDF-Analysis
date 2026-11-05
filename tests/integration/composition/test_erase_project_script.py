@@ -458,7 +458,26 @@ def test_the_order_is_plan_then_retype_then_apply_with_no_dump_anywhere(rig: Rig
     assert "retype the project id" in completed.stdout and "retype the plan digest" in completed.stdout
     # ... and nothing but the module was ever run: no dump, no restore, no mirror, no listing of the bucket.
     assert len(rig.calls) == 2, rig.calls
-    assert not any(word in call for call in rig.calls for word in ("pg_dump", "pg_restore", "mirror", "exec"))
+    assert not any(runs_a_dump_a_mirror_or_a_shell_in_a_container(record["argv"]) for record in rig.records)  # type: ignore[arg-type]
+
+
+def runs_a_dump_a_mirror_or_a_shell_in_a_container(argv: list[str]) -> bool:
+    """A docker call that dumps, restores, mirrors, or ``exec``s into a running container.
+
+    ``exec`` is matched as a whole argument (the compose subcommand), not as a substring: the one-off container's
+    arguments carry host paths (the module directory is mounted), and a checkout whose directory name contains
+    ``exec`` (``exec2-...``) is not an ``exec`` call. The three tool names stay substring matches.
+    """
+    return "exec" in argv or any(word in token for token in argv for word in ("pg_dump", "pg_restore", "mirror"))
+
+
+def test_the_dump_mirror_and_exec_guard_can_fail_and_ignores_a_path_that_merely_contains_exec() -> None:
+    assert runs_a_dump_a_mirror_or_a_shell_in_a_container(["compose", "exec", "postgres", "psql"])
+    assert runs_a_dump_a_mirror_or_a_shell_in_a_container(["compose", "run", "postgres", "sh", "-c", "pg_dump x"])
+    assert runs_a_dump_a_mirror_or_a_shell_in_a_container(["compose", "run", "pg_restore"])
+    assert runs_a_dump_a_mirror_or_a_shell_in_a_container(["mc", "mirror", "a", "b"])
+    assert not runs_a_dump_a_mirror_or_a_shell_in_a_container(
+        ["compose", "run", "--rm", "-v", "/work/exec2-fix/scripts/recovery:/app/scripts/recovery:ro", "api"])
 
 
 def test_the_apply_prints_the_manifest_the_digest_the_queries_and_what_it_did_not_reach(rig: Rig) -> None:

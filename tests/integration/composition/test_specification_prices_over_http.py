@@ -170,7 +170,10 @@ def test_every_state_appears_as_its_input_does(world) -> None:
     assert unanalysed["price_list"]["source_filename"] == "Прайс.csv"
     assert unanalysed["run_id"] is None
 
-    # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the published run the АР reads need is made in-process (tests/support/published_run.py).
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a): the served startRun routes an АР version to the draft АР text
+    # profile now, and (`REVIEW-FIX-TESTS-1102`) every served start needs a priced consent, so a bare start is refused
+    # on the consent. The published run the АР reads need is still made in-process (tests/support/published_run.py):
+    # the recordings carry the v1 reference profile's run, not a run of the draft АР profile.
     refused = world["client"].post(
         "/runs",
         headers=world["auth"] | {
@@ -180,7 +183,8 @@ def test_every_state_appears_as_its_input_does(world) -> None:
         content=json.dumps({"version_uid": ar["version_uid"]}).encode("utf-8"),
     )
     assert refused.status_code == 422, refused.content
-    assert refused.json()["error_code"] == "section_profile_unavailable"
+    assert refused.json()["error_code"] == "validation_failed", refused.content
+    assert refused.json()["details"] == {"field": "cost_consent", "constraint": "confirmation_required"}, refused.content
     run_id = publish_reference_run(ar["version_uid"], tag="spec-prices")
     state = world["client"].get(f"/runs/{run_id}", headers=world["auth"]).json()["state"]
     assert state == "published", state
@@ -196,7 +200,7 @@ def test_every_state_appears_as_its_input_does(world) -> None:
     assert (extraction["table_count"], extraction["row_count"], extraction["skipped_count"]) == (0, 0, 0)
     assert set(extraction["skipped_by_reason"].values()) == {0}
     assert body["matching"] == {
-        "algorithm": "price-match-v1",
+        "algorithm": "price-match-v2",
         "counts": {"matched": 0, "ambiguous": 0, "unmatched": 0},
         "totals": [],
         "excluded": {

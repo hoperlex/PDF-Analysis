@@ -195,9 +195,10 @@ class TestRouting:
                 route_classified_version(classified, without_kj)
             assert unavailable.value.code is ErrorCode.SECTION_PROFILE_UNAVAILABLE
             assert unavailable.value.detail_fields == {}
-            # `PROD-11-AR-V1-V2-REMOVAL-01`: the refusal used to be shown to hold while АР stayed
-            # registered; АР is not, so the other sections are the ones that must not be substituted.
-            assert "AR" not in without_kj and {"PB", "TX"} <= set(without_kj), (
+            # The refusal holds while every other section stays registered -- АР among them again since
+            # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a); between `PROD-11-AR-V1-V2-REMOVAL-01` and the
+            # hotfix АР was the one code the table lacked. None of them is substituted for the missing KJ.
+            assert "KJ" not in without_kj and {"AR", "PB", "TX"} <= set(without_kj), (
                 "the refusal must hold while other sections stay registered"
             )
             route = route_classified_version(classified, profiles)

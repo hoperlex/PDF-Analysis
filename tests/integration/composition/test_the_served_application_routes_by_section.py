@@ -113,10 +113,16 @@ def test_start_run_passes_the_section_table_and_no_profile(served: Any) -> None:
     assert "analysis_profile_id" not in kwargs and "prompt_bundle_id" not in kwargs
     assert dict(kwargs["section_profiles"]) == _registry_table()
     # `PB-PROFILE-01`: fire safety has a draft profile of its own and PB's pair is its own, not
-    # another section's. `PROD-11-AR-V1-V2-REMOVAL-01`: the table covers the fourteen sections that
-    # have a text profile; АР, the fifteenth code, is the one with none.
-    assert set(kwargs["section_profiles"]) == SECTION_CODES - {"AR"}
-    assert "AR" not in kwargs["section_profiles"]
+    # another section's. `PROD-11-AR-V1-V2-REMOVAL-01` took АР out of the table; the
+    # `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030` (3821261a) put it back with its own draft profile
+    # (the original-source text profile 1.0.0), so the table covers all fifteen codes again.
+    assert set(kwargs["section_profiles"]) == SECTION_CODES
+    ar_entry = load_text_profile_registry().entries["AR"]
+    ar = tuple(kwargs["section_profiles"]["AR"])
+    assert ar == (ar_entry.analysis_profile_id, ar_entry.prompt_bundle_id)
+    assert all(
+        tuple(pair) != ar for code, pair in kwargs["section_profiles"].items() if code != "AR"
+    )
     pb_entry = load_text_profile_registry().entries["PB"]
     pb = tuple(kwargs["section_profiles"]["PB"])
     assert pb == (pb_entry.analysis_profile_id, pb_entry.prompt_bundle_id)

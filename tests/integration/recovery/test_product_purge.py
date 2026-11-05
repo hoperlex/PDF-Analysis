@@ -143,7 +143,12 @@ def test_a_dry_run_prints_the_classification_with_exact_counts_and_changes_nothi
     # administrator's changed password. The keep side was 3 rows before the access events existed.
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')")[0] == 3
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')")[0] == 4
-    assert "  audit_event  (delete 24 rows, keep 7 rows)" in out
+    # The seed drives the real pipeline, and its source-preparation stage journals `stage.pdf_precheck` (a PRODUCT event: the
+    # PDF precheck's progress, `runs/executor.py`), at most once a second per run. The 24 are the events that exist whatever
+    # the host's speed; the precheck rows are counted from the database, so the figure is exact and not a timing guess.
+    prechecks = digest_of(stand.engine, "audit_event", "event_type = 'stage.pdf_precheck'")[0]
+    assert prechecks >= 1, "the seed no longer reaches the PDF precheck: this decomposition would be vacuous"
+    assert f"  audit_event  (delete {24 + prechecks} rows, keep 7 rows)" in out
     assert "  command_record  (delete 10 rows, keep 1 rows)" in out
     assert "norm-owned objects (the custody ledger's, never touched): 2" in out
     assert "other objects (named by no row; never touched): 1 (blobs/ 1)" in out

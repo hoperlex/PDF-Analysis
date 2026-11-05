@@ -170,6 +170,13 @@ class _ConfiguredRuns:
     #: `EXEC-HTTP-01`. No route freezer: ``ExecutionAdapter.reaudit_run`` passes the adapter's
     #: freezer to the command, and ``None`` is a wiring without the ``database`` provider source.
     route_freezer: None = None
+    #: `REVIEW-FIX-TESTS-1102` / `BETA-COST-PREFLIGHT-1030`. ``ExecutionAdapter.reaudit_run`` asks whether the
+    #: deployment demands a priced consent and hands over the adapter's preflight when it does. This stub is a wiring
+    #: without the gate (``False``), so the re-audit it drives carries no consent; the served application closes the
+    #: gate (``test_the_served_start_requires_a_priced_consent.py``) and the consented re-audit is
+    #: ``test_cost_preflight.py``'s.
+    require_cost_consent: bool = False
+    cost_preflight: None = None
 
     def __init__(self, configuration: tuple[str, str, str]) -> None:
         self.configuration = configuration

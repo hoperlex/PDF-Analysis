@@ -97,19 +97,44 @@ def test_a_fresh_upgrade_widens_the_page_ceiling_and_adds_three_nullable_columns
         assert connection.execute(text(
             "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
             "WHERE conname = 'ck_document_version_page_count'"
-        )).scalar_one() == "CHECK (((page_count >= 1) AND (page_count <= 500)))"
+        )).scalar_one() == "CHECK ((page_count >= 1))", (
+            "0021 widened the ceiling to 500; `0044_section_stats_uncapped` removed it (a positive count, no ceiling)"
+        )
         assert connection.execute(text(
             "SELECT provolatile FROM pg_proc WHERE proname = 'am_is_ascending_page_list'"
         )).scalar_one() == "i", "a CHECK may call only an IMMUTABLE function"
 
 
-def test_the_ceiling_is_five_hundred_and_not_five_hundred_and_one(migrated_engine: Engine) -> None:
+def test_at_head_a_version_has_a_positive_page_count_and_no_ceiling(migrated_engine: Engine) -> None:
+    """`0044_section_stats_uncapped` removed the 500-page ceiling that 0021 set; the lower bound stays."""
     with migrated_engine.begin() as connection:
         document = _document(connection)
-        _version(connection, document, 1, pages=500)  # control: the new ceiling is accepted
-        _version(connection, document, 2, pages=31)  # control: the old ceiling is gone
-        _refused(connection, document, 3, pages=501)
-        _refused(connection, document, 4, pages=0)
+        _version(connection, document, 1, pages=500)  # control: the former ceiling is accepted
+        _version(connection, document, 2, pages=31)  # control: the older ceiling is gone
+        _version(connection, document, 3, pages=501)  # the former refusal is gone
+        _version(connection, document, 4, pages=5000)
+        _refused(connection, document, 5, pages=0)
+        _refused(connection, document, 6, pages=-1)
+
+
+def test_the_ceiling_of_0021_is_five_hundred_and_not_five_hundred_and_one(
+    empty_database, foundation_command,
+) -> None:
+    """The claim of this migration, shown at the last revision that still carried it (``0043``): 0044 removes the ceiling."""
+    url = empty_database.url.render_as_string(hide_password=False)
+    up = foundation_command(_alembic("upgrade", "0043_stage_ai_generations"), url)
+    assert up.returncode == 0, up.describe()
+    engine = create_database_engine(empty_database)
+    try:
+        with engine.begin() as connection:
+            assert _head(connection) == "0043_stage_ai_generations"
+            document = _document(connection)
+            _version(connection, document, 1, pages=500)  # control: the new ceiling is accepted
+            _version(connection, document, 2, pages=31)  # control: the old ceiling is gone
+            _refused(connection, document, 3, pages=501)
+            _refused(connection, document, 4, pages=0)
+    finally:
+        engine.dispose()
 
 
 def test_the_three_counts_are_all_set_or_all_null(migrated_engine: Engine) -> None:

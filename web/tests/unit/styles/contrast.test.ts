@@ -959,7 +959,7 @@ describe('the register is held to the census in both directions, and in both pal
  */
 const PENDING_PAIR_ROWS = 72;
 /** Likewise for the colour rules no screen reaches. */
-const PENDING_UNREACHED_ROWS = 85;
+const PENDING_UNREACHED_ROWS = 61;
 
 describe('the pending list is a ratchet: it may only shrink, and nothing on it may get worse', () => {
   const rows = PENDING_PAIRS.flatMap((row) => row.themes.map((theme) => ({ row, theme })));

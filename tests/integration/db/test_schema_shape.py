@@ -115,6 +115,13 @@ IMMUTABLE_TABLES = {
     # `0041_comparison_stage_core`: assembly acts, full maps and raw evidence are append-only.
     "stage_assembly", "stage_assembly_member", "stage_link_revision", "stage_link_item",
     "stage_text_fragment", "stage_text_exclusion", "stage_text_difference", "stage_text_hint",
+    # `0042_comparison_stage_review` (`CMP-SEAL-C4`): the stage AI's per-unit review, classification and synthesis answers, the
+    # graphic evidence, a link repair and each of its events, a change card with its evidence and each expert verdict are written
+    # once; a changed card or a new verdict is a new row, and the effective state is a query. The unit and the batch rows
+    # (``stage_ai_unit``, ``stage_chain_batch``, ``stage_chain_batch_item``) move through states, so they carry the frozen-column
+    # guard instead -- the migration's own ``IMMUTABLE`` tuple is the nine tables below.
+    "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis", "stage_graphic_evidence",
+    "stage_link_repair", "stage_link_repair_event", "stage_change_card", "stage_card_evidence", "stage_card_verdict",
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`, ADR-0026 decision 10): a group revision and its member snapshots are
     # written once, and a changed group is a new revision. The group row itself is never deleted (``am_immutable_row``
     # guards DELETE only; its name and creation are frozen, its archive is write-once and its rotation cursor advances).
@@ -291,6 +298,32 @@ NON_CONTRACT_IDENTITY_COLUMNS = {
     # (``runner_instance_id``), 8 to 64 characters of ``A-Za-z0-9_-`` -- the agent's own random string, not an
     # entity this product mints; ``ck_executor_task_claimed_by_instance_id`` checks its shape.
     "claimed_by_instance_id",
+}
+
+#: A column name that two tables use for two different identities (or for a label) cannot carry one prefix in the
+#: name-keyed map inside the test below, so the table-qualified exceptions live here and the sweep consults them first.
+#:
+#: ``group_id`` is the Run group of an AR v3 run (``arg``) in ``ar_v3_run_group*``, the executor group (``exg``,
+#: ``0047_executor_groups_rules``, ADR-0026 decision 10) in ``executor_group`` and ``executor_group_revision``, and --
+#: in the four ``stage_ai_*`` tables of ``0042_comparison_stage_review`` -- a grouping label, see below.
+#: ``stage_link_repair_event.revision_id`` names a stage link revision (``slk``); everywhere else ``revision_id`` is an
+#: executor connection revision (``excr``).
+PREFIX_BY_TABLE_COLUMN = {
+    ("executor_group", "group_id"): "exg",
+    ("executor_group_revision", "group_id"): "exg",
+    ("stage_link_repair_event", "revision_id"): "slk",
+}
+
+#: ``stage_ai_*.group_id`` is not an entity identity: it is the stage AI's own grouping label -- ``grp:`` plus the first 24 hex
+#: digits of a digest of the link items it groups (``comparison/stage_review`` and ``comparison/stage_ai/source.py``), or the
+#: fixed name ``v3:final:cards`` -- bounded by ``char_length BETWEEN 1 AND 128`` in the migration and echoed by the model
+#: as a string. No contract prefix exists for it and none is minted (``contracts/domain/v1/identifiers.json`` lists no such
+#: identity). Qualified by table so that a future ``group_id`` elsewhere is still swept.
+NON_CONTRACT_TABLE_COLUMNS = {
+    ("stage_ai_unit", "group_id"),
+    ("stage_ai_review", "group_id"),
+    ("stage_ai_classification", "group_id"),
+    ("stage_ai_synthesis", "group_id"),
 }
 
 
@@ -506,8 +539,31 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "rule_revision_id": "exrr",
         "routing_rule_revision_id": "exrr",
         "mode_event_id": "exrm",
+        # `CMP-SEAL-C4`, migration 0042 (the stage review, ADR-0025): the stage AI's unit and its review, classification and
+        # synthesis answers, the graphic evidence, a link repair with its events and the two link revisions it names, the run
+        # a repair's recompute started, a change card with its evidence and its verdicts (a verdict can carry a previous one
+        # forward), the revision a run is read at, and the durable batch of runs with its items.
+        "stage_ai_unit_id": "saunit",
+        "stage_ai_review_id": "sarev",
+        "stage_ai_classification_id": "sacls",
+        "stage_ai_synthesis_id": "sasyn",
+        "stage_graphic_evidence_id": "sge",
+        "source_graphic_evidence_id": "sge",
+        "source_difference_id": "std",
+        "stage_link_repair_id": "crp",
+        "stage_link_repair_event_id": "crpe",
+        "before_revision_id": "slk",
+        "after_revision_id": "slk",
+        "effective_link_revision_id": "slk",
+        "recompute_run_id": "crn",
+        "stage_change_card_id": "ccd",
+        "stage_card_evidence_id": "sce",
+        "stage_card_verdict_id": "cdv",
+        "carried_from_verdict_id": "cdv",
+        "stage_chain_batch_id": "scb",
+        "stage_chain_batch_item_id": "scbi",
     }
-    assert set(prefix_by_column.values()) <= {
+    assert (set(prefix_by_column.values()) | set(PREFIX_BY_TABLE_COLUMN.values())) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()
     }
 
@@ -541,10 +597,19 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         and column not in NON_CONTRACT_IDENTITY_COLUMNS
     ]
     assert len(identity_columns) >= 20, "the identity-column query found too few columns"
+    # A stale table-qualified entry would silently exempt nothing today and a renamed column tomorrow.
+    stale = [
+        entry
+        for entry in sorted(NON_CONTRACT_TABLE_COLUMNS | set(PREFIX_BY_TABLE_COLUMN))
+        if entry not in set(identity_columns)
+    ]
+    assert stale == [], f"table-qualified entries naming no identity column: {stale}"
 
     missing = []
     for table, column in identity_columns:
-        prefix = prefix_by_column.get(column)
+        if (table, column) in NON_CONTRACT_TABLE_COLUMNS:
+            continue
+        prefix = PREFIX_BY_TABLE_COLUMN.get((table, column), prefix_by_column.get(column))
         assert prefix is not None, f"{table}.{column} has no declared prefix in this test"
         needle = pattern_for(prefix)
         if not any(

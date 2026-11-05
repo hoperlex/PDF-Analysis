@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import zipfile
 from xml.etree import ElementTree as ET
 
-import pytest
-
 from auditmanager.comparison.report.technical_export import render_html, render_xlsx
-from auditmanager.shared.errors import DomainError
 
 
 def source():
@@ -50,7 +48,43 @@ def test_html_zip_escapes_content_keeps_raw_provenance_and_preview_mapping():
         assert archive.read('images/0001.png') == b'PNG'
 
 
+def _sheet_cells(archive):
+    """Every inline-string cell per sheet name, read back from the workbook XML."""
+    ns = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+          'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
+    workbook = ET.fromstring(archive.read('xl/workbook.xml'))
+    sheets = {}
+    for index, sheet in enumerate(workbook.find('m:sheets', ns), 1):
+        root = ET.fromstring(archive.read(f'xl/worksheets/sheet{index}.xml'))
+        sheets[sheet.get('name')] = [[''.join(cell.itertext()) for cell in row] for row in root.iter('{%s}row' % ns['m'])]
+    return sheets
+
+
 def test_excel_does_not_silently_truncate_overlong_cell():
+    # a670f5d8 (BLOCK7, 2026-10-30) replaced the refusal of a 32768-unit cell by a lossless export:
+    # the table cell is an explicit excerpt and the complete value lives in the RawJSON sheet.
     data = source(); data['series']['display_title'] = 'x' * 32768
-    with pytest.raises(DomainError):
-        render_xlsx(data)
+    rendered = render_xlsx(data)
+    with zipfile.ZipFile(io.BytesIO(rendered)) as archive:
+        sheets = _sheet_cells(archive)
+    marker = ' … [ОТРЫВОК; полное значение и источники в RawJSON]'
+    # Sheet "Сводка" carries the title: the cell is cut under the 32767-unit Excel limit and says so.
+    excerpts = [cell for row in sheets['Сводка'] for cell in row if cell.endswith(marker)]
+    assert len(excerpts) == 1
+    assert excerpts[0].startswith('x' * 30_000) and len(excerpts[0]) <= 32767
+    assert all(len(cell) <= 32767 for rows in sheets.values() for row in rows for cell in row)
+    # Nothing is lost: the RawJSON chunks, joined without a separator, are the complete record
+    # and it still holds the whole 32768-character title.
+    chunks = [row for row in sheets['RawJSON'][1:]]
+    assert [row[0] for row in chunks] == [str(number) for number in range(1, len(chunks) + 1)]
+    assert {row[1] for row in chunks} == {str(len(chunks))}
+    full = ''.join(row[2] for row in chunks)
+    assert json.loads(full) == data
+    assert json.loads(full)['series']['display_title'] == 'x' * 32768
+    assert all(len(row[2]) <= 30_000 for row in chunks)
+    # The summary names the digest of exactly those bytes.
+    digest = hashlib.sha256(full.encode()).hexdigest()
+    assert ['SHA256 полного JSON UTF-8', digest] in sheets['Сводка']
+    # A value under the limit is not marked as an excerpt.
+    with zipfile.ZipFile(io.BytesIO(render_xlsx(source()))) as archive:
+        assert not any(cell.endswith(marker) for rows in _sheet_cells(archive).values() for row in rows for cell in row)

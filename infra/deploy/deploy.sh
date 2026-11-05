@@ -840,8 +840,10 @@ checkout_heads() {
     local versions="$REPO/db/migrations/versions" file revisions="" downs=""
     for file in "$versions"/*.py; do
         [ -f "$file" ] || continue
-        revisions="$revisions$(LC_ALL=C sed -n 's/^revision\(: str\)\{0,1\} = "\([^"]*\)".*$/\2/p' "$file")"$'\n'
-        downs="$downs$(LC_ALL=C sed -n 's/^down_revision\(: [^=]*\)\{0,1\} = \(.*\)$/\2/p' "$file" | grep -o '"[^"]*"' | tr -d '"' || true)"$'\n'
+        # Either quote style: a revision written with single quotes (0043) must count as well, or its
+        # down_revision is never seen and the tree reads as two heads (EXEC2-FIX-CMP-INVENTORY).
+        revisions="$revisions$(LC_ALL=C sed -n "s/^revision\(: str\)\{0,1\} = [\"']\([^\"']*\)[\"'].*\$/\2/p" "$file")"$'\n'
+        downs="$downs$(LC_ALL=C sed -n 's/^down_revision\(: [^=]*\)\{0,1\} = \(.*\)$/\2/p' "$file" | grep -o "[\"'][^\"']*[\"']" | tr -d "\"'" || true)"$'\n'
     done
     LC_ALL=C comm -23 \
         <(printf '%s\n' "$revisions" | grep -v '^$' | LC_ALL=C sort -u) \

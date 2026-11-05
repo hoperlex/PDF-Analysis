@@ -823,6 +823,20 @@ def _resolve(document: Mapping[str, Any], node: Mapping[str, Any]) -> Mapping[st
     return node
 
 
+#: `CMP-SEAL-C4` and `HOTFIX-PRESENTATION-INT-1030`: the reads that declare a query parameter -- `cursor` and `limit` (the run's
+#: AI answers, graphic evidence, repairs, cards and verdicts), `grouping` (the journal), `query` (a page profile's stage text),
+#: `engine` (the chain estimate) and `format` (the technical report) -- and whose port this suite does not wire. ``shipped_router``
+#: passes no stage-review or comparison-report adapter, so on this surface the operation cannot answer a page at all and a
+#: parameter cannot be shown to change one; the parameters are driven where the port exists (`test_comparison_stage_c4_wiring.py`
+#: and `tests/integration/comparison/**`). Unlike the older entries of the set below, each one is proved to be unserved here by
+#: :func:`test_the_stage_review_query_operations_are_still_unserved_on_this_surface`: a lane that wires the port into this
+#: surface must move the entry out of here and drive it, or this suite goes red.
+STAGE_REVIEW_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
+    "estimateStageChainRun", "getStageChangeJournal", "getStageProfileText", "getStageSynthesis", "listStageAiReviews",
+    "listStageCardVerdicts", "listStageChangeCards", "listStageClassifications", "listStageGraphicEvidence",
+    "listStageLinkRepairs", "streamComparisonTechnicalReport",
+})
+
 #: Operations whose query parameters are declared but whose port is a sealed stub, so the
 #: drive below cannot show a parameter changing the answer (`CONTRACT_PIN_REGISTRY.md`'s
 #: sealed-stub rule). `W55A-SEAL-01` listed the four norms operations here;
@@ -856,7 +870,7 @@ SEALED_STUB_QUERY_OPERATIONS: frozenset[str] = frozenset({
     "listStageRawDifferences", "listStageSheetMapHistory", "listStageSheetPassports",
     "listStageSheetSuggestions", "listStageTextExclusions", "listStageTextFragments",
     "listStageTextHints", "listStageUploads", "uploadStageUploadPart",
-})
+}) | STAGE_REVIEW_STUB_QUERY_OPERATIONS
 
 #: The four norms listings, driven over the shipped ``NormsSearchAdapter`` on this suite's
 #: rollback-joined session (`W55A-PIN-01`).
@@ -1000,6 +1014,35 @@ class _RecordingQuery(Mapping[str, Sequence[str]]):
         return len(self._values)
 
 
+def test_the_stage_review_query_operations_are_still_unserved_on_this_surface(
+    shipped_router: Surface, contract: dict[str, Any]
+) -> None:
+    """The exemption of :data:`STAGE_REVIEW_STUB_QUERY_OPERATIONS` is only true while no adapter answers the operation here."""
+    import re
+
+    prefixes = {
+        "stage_link_revision_id": "slk", "stage_chain_run_id": "crn", "comparison_page_profile_id": "cpr",
+        "comparison_series_id": "cser", "stage_change_card_id": "ccd", "stage_chain_batch_id": "scb",
+        "stage_assembly_id": "sas",
+    }
+    found: dict[str, tuple[str, str]] = {}
+    for template, operations in contract["paths"].items():
+        for method, operation in operations.items():
+            if isinstance(operation, dict) and operation.get("operationId") in STAGE_REVIEW_STUB_QUERY_OPERATIONS:
+                found[operation["operationId"]] = (method.upper(), template)
+    assert set(found) == STAGE_REVIEW_STUB_QUERY_OPERATIONS
+    served = []
+    for operation_id, (method, template) in sorted(found.items()):
+        path = re.sub(r"\{(\w+)\}", lambda m: f"{prefixes[m.group(1)]}_01M2545JSD15ETSNNV904X991W", template)
+        answer = dispatch(shipped_router, Request.build(method, path))
+        if answer.status < 500:
+            served.append((operation_id, answer.status))
+    assert served == [], (
+        f"these operations now answer on this surface: {served}. A parameter of a served operation has to be driven below, "
+        "not exempted."
+    )
+
+
 def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     shipped_router: Surface,
     mixed_run: MixedRun,
@@ -1098,6 +1141,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # (`test_price_list_positions_read_the_query_parameters_they_declare`): a revision's
         # positions come from an uploaded price list, which this sweep has none of.
         "listPriceListPositions": "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions",
+        # `UI-PARITY-P0A`. An aggregate and not a page: driven by its own test below.
+        "getDashboardSummary": "/dashboard",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1110,7 +1155,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDocuments": {"cursor", "limit"},
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
-        "listDecisions": {"category", "cursor", "limit", "verdict"},
+        "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
         "listExecutionQueue": {"cursor", "limit"},
@@ -1131,6 +1176,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "diff_limit",
         },
         "listPriceListPositions": {"offset", "limit"},
+        "getDashboardSummary": {"project_uid"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1272,6 +1318,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "getSectionSpecification",
             "compareDocumentVersions",
             "listPriceListPositions",
+            "getDashboardSummary",
         ):
             continue  # driven by its own test below
         target = targets[operation_id]
@@ -1363,6 +1410,22 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             if not accepted["items"] or carried != {"accepted"} or impossible["items"]:
                 inert.setdefault(operation_id, []).append("verdict")
 
+        if "project_uid" in names and operation_id == "listDecisions":
+            # `UI-PARITY-P0A`. The journal is deployment-wide, so the discriminating pair is this
+            # run's own project (a non-empty page of exactly that project, whose `total` is the
+            # length of the page it fits on) against a project that does not exist (an empty one).
+            project = mixed_run.run.project_uid
+            mine = ok(get(surface, f"{target}{sep}project_uid={project}&limit=200"))
+            nobody = ok(get(surface, f"{target}{sep}project_uid=prj_01ARZ3NDEKTSV4RRFFQ69G5FAV&limit=200"))
+            if (
+                not mine["items"]
+                or {item["project_uid"] for item in mine["items"]} != {project}
+                or mine["total"] != len(mine["items"])
+                or nobody["items"]
+                or nobody["total"] != 0
+            ):
+                inert.setdefault(operation_id, []).append("project_uid")
+
         if "q" in names and operation_id == "listNormDocuments":
             # The catalogue's text filter keeps the document whose designation it starts.
             kept = ok(get(surface, f"{target}{sep}q={quote('ГОСТ 21.501')}&limit=200"))
@@ -1412,6 +1475,36 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "the contract declares these query parameters and supplying one changes nothing, "
         f"so a caller has it silently ignored: {inert}"
     )
+
+
+def test_the_dashboard_reads_the_project_filter_it_declares(
+    shipped_router: Surface, mixed_run: MixedRun
+) -> None:
+    """`UI-PARITY-P0A`: ``project_uid`` reaches ``getDashboardSummary`` and changes its answer.
+
+    The same rule as the sweep above -- **supply the parameter and require the answer to change**
+    -- on an aggregate that has no page to compare: this run's project against the whole
+    deployment, and against a project that does not exist.
+    """
+    project = mixed_run.run.project_uid
+    whole = ok(get(shipped_router, "/dashboard"))
+    scoped = ok(get(shipped_router, f"/dashboard?project_uid={project}"))
+    inert: list[str] = []
+    if [row["project_uid"] for row in scoped["documents_by_project"]] != [project]:
+        inert.append("documents_by_project")
+    if {row["verdict"]: row["count"] for row in scoped["findings_by_verdict"]}["pending"] != len(
+        mixed_run.findings
+    ):
+        inert.append("findings_by_verdict")
+    if sum(row["count"] for row in scoped["run_activity"]["by_state"]) != 1:
+        inert.append("run_activity")
+    if scoped == whole or len(whole["documents_by_project"]) <= 1:
+        inert.append("the answer did not change")
+    assert inert == [], f"getDashboardSummary accepts project_uid and ignores it: {inert}"
+    unknown = get(shipped_router, "/dashboard?project_uid=prj_01ARZ3NDEKTSV4RRFFQ69G5FAV")
+    assert unknown.status == 404 and json.loads(unknown.body)["error_code"] == "not_found", unknown.body
+    refused = get(shipped_router, "/dashboard?project_uid=not-a-project")
+    assert refused.status == 422, refused.body
 
 
 def _seed_accounts_and_requests(session: Session, router: Surface) -> dict[str, str]:

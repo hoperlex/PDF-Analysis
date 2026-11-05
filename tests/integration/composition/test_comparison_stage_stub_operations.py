@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -14,6 +16,12 @@ from auditmanager.comparison.public import COMPARISON_MODULES_ENV
 from tests.integration.composition.test_router_answers import DEPLOYMENT_SECRET, static_token
 from tests.support.expected_facts import FACTS
 
+#: The version the sealed contract itself declares (`info.version`), read from the document and not pinned here, so a reseal does
+#: not leave a stale literal in this file: the envelope of every refusal carries the sealed version
+#: (`ErrorEnvelope.contract_version`), and the document is the independent statement of it.
+CONTRACT_VERSION = json.loads(
+    (Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json").read_text(encoding="utf-8")
+)["info"]["version"]
 PRJ = "prj_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 DOC = "doc_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 DOC2 = "doc_01ARZ3NDEKTSV4RRFFQ69G5FAW"
@@ -157,7 +165,7 @@ def test_every_stage_route_answers_a_typed_module_or_lane_refusal(
         return
     assert response.status_code == 503, (name, modules, response.status_code, body)
     assert body["error_code"] == "dependency_unavailable"
-    assert body["contract_version"] == "1.13.0"
+    assert body["contract_version"] == CONTRACT_VERSION
     expected = "comparison_modules" if modules == "none" else DEPENDENCIES[name]
     assert body["details"] == {"dependency": expected}, (name, modules, body)
 

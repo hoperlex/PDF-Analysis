@@ -178,9 +178,13 @@ class TestNoRouteEscapesTheSeam:
         # account; still nothing for these four, which need no register entry because
         # since the same seal a route with no `operationId` requires any complete account
         # (`ROLES_OF_A_ROUTE_WITHOUT_AN_OPERATION`), exactly as before it required a
-        # credential.
+        # credential. `EXEC2-SEAL-1` (contract 1.15.0, ADR-0026) added one more by name, and only one:
+        # ``downloadAgentPackage``, the public agent package an operator's host fetches before it holds any
+        # credential (``GET /runner/agent-package/{version}``, a closed ``MAJOR.MINOR.PATCH`` code, no body); it is pinned
+        # beside the others in ``test_role_register.py::test_the_registers_are_the_ruled_ones``, and a fifth name is
+        # still a failure here.
         assert UNAUTHENTICATED_OPERATIONS == frozenset(
-            {"issueToken", "submitRegistration", "readRegistrationStatus"}
+            {"issueToken", "submitRegistration", "readRegistrationStatus", "downloadAgentPackage"}
         )
 
     def test_the_four_declare_no_operation_id(self, router: Surface) -> None:

@@ -555,6 +555,11 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # carried it: the live part of CURRENT_STATE.md was cut to its newest entries, and the whole state at
         # `EXEC2-INT-3` is archived verbatim in docs/program/history/CURRENT_STATE_2026-11-03_51183a75.md.)
         ("docs/program/CURRENT_STATE.md", "241 paths / 267 operations / 644 schemas"),
+        # CURRENT_STATE.md's `EXEC2-INT-3` entry (2026-11-03) records the head of its day, "migration head
+        # `0048_dispatch_time_binding`". `EXEC2-FIX-CMP-INVENTORY` (2026-11-04) then added `0049_stage_identity_checks`
+        # (the format CHECK on the 43 FK identity columns of 0042), and the file's "Facts of this tree" states the
+        # current head; the entry is a record of its day and is kept as written.
+        ("docs/program/CURRENT_STATE.md", "migration head `0048_dispatch"),
     }
 )
 

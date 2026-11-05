@@ -17,6 +17,9 @@
  * a behaviour change, just where the branch lives now.
  */
 
+import Link from 'next/link';
+
+import type { ProjectUid } from '@/shared/api';
 import { ErrorState, LoadingState } from '@/shared/ui';
 
 import { useDashboardSummary } from '../api/use-dashboard-summary';
@@ -27,19 +30,54 @@ import { RunActivityPanel } from './run-activity-panel';
 import { SectionsPanel } from './sections-panel';
 import styles from './dashboard.module.css';
 
+export interface DashboardProps {
+  /**
+   * The project the address names (`?project=`), or `null` for «Все проекты». The page reads it
+   * from the address; the address is the only source of the project (`UI-PARITY-01`, «Project
+   * context»), so the widget keeps no copy of it.
+   */
+  readonly projectUid?: ProjectUid | null;
+  /**
+   * Where «Все проекты» leads: this same screen with the project taken out of the address. Built
+   * by the page with `switchProject(…, null)`, so every other parameter of the address is kept.
+   */
+  readonly allProjectsHref?: string;
+}
+
+/** The scope the screen states, when it covers every project. */
+const ALL_PROJECTS = 'Все проекты';
+
 // Heading ids for `aria-labelledby` only, deliberately not spelled like this stylesheet's
 // own class-naming convention: `styling-layer.test.ts` scans every `.tsx` for that pattern
 // and expects each hit to be a declared class or modifier, so an id that happened to start
 // the same way would read as an undeclared class.
-export function Dashboard() {
-  const summary = useDashboardSummary();
+export function Dashboard({ projectUid = null, allProjectsHref = '/dashboard' }: DashboardProps) {
+  const summary = useDashboardSummary(projectUid);
 
   if (summary.isPending) {
     return <div className={styles.showcase} data-dashboard-showcase="true"><LoadingState what="сводку по системе" /></div>;
   }
 
   if (summary.isError) {
-    const failure = classifyDashboardFailure(summary.error);
+    const failure = classifyDashboardFailure(summary.error, projectUid);
+    if (failure.kind === 'project_not_found') {
+      // An unknown project is its own state with a way out. It is never a summary of zeros and
+      // never «Все проекты»: the reader asked for one project, and is told it is not there.
+      return (
+        <div className={styles.showcase} data-dashboard-showcase="true" data-dashboard-scope="unknown-project">
+          <ErrorState
+            title={failure.title}
+            detail={<span data-list-failure={failure.kind}>{failure.detail}</span>}
+            correlationId={failure.correlationId}
+          />
+          <p className={styles.way}>
+            <Link className="am-button am-button--quiet" href={allProjectsHref}>
+              {ALL_PROJECTS}
+            </Link>
+          </p>
+        </div>
+      );
+    }
     return (
       <div className={styles.showcase} data-dashboard-showcase="true">
         <ErrorState
@@ -55,6 +93,14 @@ export function Dashboard() {
   }
 
   const data = summary.data;
+  // With a project the server answers that project's one row (`documents_by_project`), name
+  // included: the same read, so the name needs no second request and no page of the project list
+  // that may not hold it. Were the row ever absent, the uid the address carries is shown as it is,
+  // not a name this screen made up.
+  const scopeName =
+    projectUid === null
+      ? ALL_PROJECTS
+      : (data.documents_by_project.find((row) => row.project_uid === projectUid)?.name ?? projectUid);
 
   return (
     <div className={styles.showcase} data-dashboard-showcase="true">
@@ -64,6 +110,10 @@ export function Dashboard() {
           <h2 className={styles.heroTitle}>Сводка по проектам</h2>
           <p className={styles.heroDescription}>
             Разделы, документы, находки и прогоны в едином обзоре.
+          </p>
+          <p className={styles.scope} data-dashboard-scope={projectUid === null ? 'all' : 'project'}>
+            <span className={styles.scopeKey}>Охват</span>
+            <strong className={styles.scopeValue}>{scopeName}</strong>
           </p>
         </div>
         <div className={styles.heroArt} aria-hidden="true">

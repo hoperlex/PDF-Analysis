@@ -55,6 +55,14 @@ _TOKEN = {API_TOKEN_ENV: "worker-suite-deployment-secret"}
 # --- the role and the token exemption ---------------------------------------------------
 
 
+
+#: `REVIEW-FIX-SEAMS-1102`: read by the api only (see the parity test).
+ANALYSIS_PLAN_SWITCHES_ENV = frozenset({
+    "AUDITMANAGER_EXTENDED_ANALYSIS_PLAN", "AUDITMANAGER_EXTENDED_COVERAGE", "AUDITMANAGER_EXTENDED_CROSS_WINDOW",
+    "AUDITMANAGER_NATIVE_PAGE_PIECES", "AUDITMANAGER_NORM_PARAGRAPH_CONTEXT", "AUDITMANAGER_PROJECT_PARAMETERS",
+    "AUDITMANAGER_PROJECT_PARAMETER_CONTEXT", "AUDITMANAGER_PROJECT_PARAMETER_REVIEW_CONTEXT", "AUDITMANAGER_STAGE_V3_PLAN",
+})
+
 class TestTheRoleIsExplicitAndTheWorkerHoldsNoSecret:
     def test_an_unset_role_is_w53s_in_process_execution(self) -> None:
         assert load(_ENV | _TOKEN).execution_role == "all"
@@ -313,7 +321,13 @@ class TestTheComposeService:
         # The worker-only names: where the worker writes its identity, how many runs it executes at
         # once (`EXEC-PAR-QUEUE-01`), and whether path A may reach private ranges (`R-149g`); the
         # `api` reads none of them.
-        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV, GROUP_OFFLINE_WAIT_ENV} == api - {API_TOKEN_ENV}
+        # The api-only names besides the secret: the rollback switches of the paid analysis plan
+        # (`REVIEW-FIX-SEAMS-1102`). The api prices every fresh estimate (`runs/preflight.py`) and
+        # picks the stage plan of every fresh stage run (`comparison/stage_v3/policy.py`); the worker
+        # executes the consent and the policy frozen at the start and never reads them, as the
+        # compose comment says. Each must stay off the worker, so a worker reading one is red too.
+        assert worker - {WORKER_STATE_DIR_ENV, WORKER_SLOTS_ENV, AGENT_INSTALL_ALLOW_PRIVATE_ENV, GROUP_OFFLINE_WAIT_ENV} == api - {API_TOKEN_ENV} - ANALYSIS_PLAN_SWITCHES_ENV
+        assert ANALYSIS_PLAN_SWITCHES_ENV <= api and not (ANALYSIS_PLAN_SWITCHES_ENV & worker)
         assert WORKER_SLOTS_ENV in worker and WORKER_SLOTS_ENV not in api
         assert AGENT_INSTALL_ALLOW_PRIVATE_ENV in worker and AGENT_INSTALL_ALLOW_PRIVATE_ENV not in api
 

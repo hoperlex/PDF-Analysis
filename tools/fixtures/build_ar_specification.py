@@ -16,8 +16,9 @@ holds no proposals. This builder writes a second, **synthetic** AR set beside it
   repeated header, as the numbering and the group heading show;
 * `ar_specification.zip` -- the portal bundle around that PDF (all five members);
 * `ar_specification_prices.csv` -- a price list for it: positions of the same normalised units,
-  cheaper analogs from a vendor, one unit mismatch (`п.м` against `м`), one row without a
-  price, one row without a numeric quantity;
+  cheaper analogs from a vendor, one running-metre row priced per metre (`п.м` against `м`,
+  equated at factor one by the owner's decision of 2026-10-30, `BETA-UNIT-ALIASES-1030`), one
+  row without a price, one row without a numeric quantity;
 * `expected_specification.json` -- the oracle: the rows the extractor must read, how each one
   matches, the totals, and the proposals an optimisation pass must hold -- every figure computed
   here from the authored numbers, never read from the product;
@@ -70,6 +71,32 @@ SECTION_CODE = "AR"
 #: The AR vendor list the journey sets (a project override): the one vendor the analogs come from.
 VENDOR_LIST = ("Завод Север",)
 DEFAULT_CURRENCY = "RUB"
+
+#: The algorithm and generator versions the oracle expects the product to report. This builder is
+#: pure standard library and imports nothing from `src/`, so the names are written out here.
+#: `price-match-v2` / `cheaper-analog-v2` are what `BETA-UNIT-ALIASES-1030` (d93d245c) introduced:
+#: the v1 pair read a running-metre row against a per-metre price as a unit mismatch.
+MATCH_ALGORITHM = "price-match-v2"
+GENERATOR_VERSION = "cheaper-analog-v2"
+
+#: The owner's unit rule, restated here and not read from the product. Direct owner poll
+#: 2026-10-30 («Да, сопоставлять с коэффициентом 1»), `BETA-UNIT-ALIASES-1030` / d93d245c:
+#: a specification quantity in running metres is priced by a price-list position per metre
+#: (and the other way round) at factor ONE -- the quantity and the unit price are used as
+#: printed, nothing is converted. Every other pair of different units stays a mismatch.
+RUNNING_METRE = "п.м"
+METRE = "м"
+UNIT_FACTORS = {
+    (RUNNING_METRE, METRE): Decimal(1),
+    (METRE, RUNNING_METRE): Decimal(1),
+}
+
+
+def unit_factor(row_unit: str, price_unit: str) -> Decimal | None:
+    """The factor from the row's quantity to the price's unit, or None for a unit mismatch."""
+    if row_unit == price_unit:
+        return Decimal(1)
+    return UNIT_FACTORS.get((row_unit, price_unit))
 
 TITLE = "СП-7-АР-С. Раздел 3. Спецификация (синтетический документ)"
 AUTHOR = "СИНТЕТИКПРОЕКТ (вымышленная организация)"
@@ -218,6 +245,9 @@ class ExpectedRow:
     reason: str | None
     basis: str | None
     price: str | None  # the matched position's unit price
+    #: The unit the price list prices that position in (None: the price list has no candidate).
+    #: It can differ from the row's unit only by the owner's rule (`UNIT_FACTORS`).
+    price_unit: str | None
     analog_price: str | None  # the cheaper analog's unit price, when a proposal exists
     analog_basis: str | None
     analog_vendor: str | None
@@ -225,19 +255,24 @@ class ExpectedRow:
 
 EXPECTED_ROWS = (
     ExpectedRow("1", 3, "Дверь противопожарная ДПМ-01/60 EI60 ООО «Промет»", "шт", "4", "4",
-                "ООО «Промет»", "matched", None, "mark", "25000", "21000", "code_family", "Завод Север"),
+                "ООО «Промет»", "matched", None, "mark", "25000", "шт", "21000", "code_family",
+                "Завод Север"),
     ExpectedRow("2", 3, "Окно ПВХ двухкамерное ОП В2 1460х1460", "шт", "12", "12", None,
-                "matched", None, "name", "18500", "17200", "name_similarity", "Завод Север"),
+                "matched", None, "name", "18500", "шт", "17200", "name_similarity", "Завод Север"),
     ExpectedRow("3", 3, "Анкер химический ООО «Промет»", "шт", "200", "200", "ООО «Промет»",
-                "matched", None, "name", "12.75", "9.5", "name_similarity", "Завод Север"),
+                "matched", None, "name", "12.75", "шт", "9.5", "name_similarity", "Завод Север"),
+    # Priced per metre, printed in running metres: matched at factor one under the owner's rule
+    # of 2026-10-30 (`BETA-UNIT-ALIASES-1030`, d93d245c; `UNIT_FACTORS`). Under the v1 matcher this
+    # row was `unmatched` / `unit_mismatch`. The single position of this name is the only
+    # candidate, so there is no cheaper analog for it.
     ExpectedRow("4", 4, "Профиль направляющий ПН 50х40", "п.м", "120", "120", None,
-                "unmatched", "unit_mismatch", None, None, None, None, None),
+                "matched", None, "name", "310", "м", None, None, None),
     ExpectedRow("5", 4, "Решётка вентиляционная РВ-200", "шт", "6", "6", None,
-                "unmatched", "no_position", None, None, None, None, None),
+                "unmatched", "no_position", None, None, None, None, None, None),
     ExpectedRow("6", 4, "Монтажная пена", "компл", None, "-", None,
-                "matched", None, "name", "450", "300", "name_similarity", "Завод Север"),
+                "matched", None, "name", "450", "компл", "300", "name_similarity", "Завод Север"),
     ExpectedRow("7", 4, "Гидроизоляционная мембрана Техноэласт ЭПП", "м2", "340.8", "340,8", None,
-                "matched", None, "name", "410", None, None, None),
+                "matched", None, "name", "410", "м2", None, None, None),
 )
 SHEET_LABELS = {3: "3", 4: "4"}
 
@@ -247,6 +282,44 @@ def price_list_csv() -> bytes:
     for name, mark, unit, price, vendor in PRICE_POSITIONS:
         lines.append(f";{name};{mark};{unit};{price.replace('.', ',')};{DEFAULT_CURRENCY};{vendor}")
     return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def check_model() -> list[str]:
+    """The authored rows against the authored price list and the owner's unit rule.
+
+    The oracle states for each row whether it prices; this proves each statement from the
+    authored numbers (the price list and `UNIT_FACTORS`) so a row cannot be called matched
+    where no price-list position in a compatible unit stands behind it, nor called a unit
+    mismatch where the owner's rule equates the units.
+    """
+    positions = {(unit, price) for _name, _mark, unit, price, _vendor in PRICE_POSITIONS}
+    problems = []
+    for row in EXPECTED_ROWS:
+        factor = None if row.price_unit is None else unit_factor(row.unit, row.price_unit)
+        if row.status == "matched":
+            if row.price is None or row.price_unit is None:
+                problems.append(f"row {row.position}: matched without a price and its unit")
+            elif (row.price_unit, row.price) not in positions:
+                problems.append(
+                    f"row {row.position}: the price list has no position at {row.price} per {row.price_unit}"
+                )
+            elif factor is None:
+                problems.append(
+                    f"row {row.position}: matched, but {row.unit!r} is not priceable per {row.price_unit!r}"
+                )
+        elif row.reason == "unit_mismatch":
+            if row.price_unit is None:
+                problems.append(f"row {row.position}: a unit mismatch needs a candidate in another unit")
+            elif factor is not None:
+                problems.append(
+                    f"row {row.position}: called a unit mismatch, but {row.unit!r} against "
+                    f"{row.price_unit!r} is priceable at factor {factor}"
+                )
+        elif row.reason == "no_position" and row.price_unit is not None:
+            problems.append(f"row {row.position}: no_position, yet a candidate unit is declared")
+        if row.status == "unmatched" and (row.price is not None or row.analog_price is not None):
+            problems.append(f"row {row.position}: an unmatched row carries a price")
+    return problems
 
 
 def _plain(value: Decimal) -> str:
@@ -266,10 +339,13 @@ def oracle(pdf: bytes, bundle: bytes, prices: bytes) -> dict[str, object]:
     for expected in EXPECTED_ROWS:
         quantity = None if expected.quantity is None else Decimal(expected.quantity)
         price = None if expected.price is None else Decimal(expected.price)
+        factor = None if expected.price_unit is None else unit_factor(expected.unit, expected.price_unit)
         amount = None
         reason = expected.reason
         if expected.status == "matched" and quantity is not None and price is not None:
-            amount = quantity * price
+            assert factor is not None, expected.position
+            # The quantity in the price's unit, times the unit price (factor one for п.м -> м).
+            amount = quantity * factor * price
             total += amount
             counted += 1
         elif expected.status == "matched":
@@ -295,7 +371,8 @@ def oracle(pdf: bytes, bundle: bytes, prices: bytes) -> dict[str, object]:
         if expected.analog_price is not None:
             assert price is not None
             analog = Decimal(expected.analog_price)
-            saving = None if quantity is None else (price - analog) * quantity
+            assert factor is not None, expected.position
+            saving = None if quantity is None else (price - analog) * quantity * factor
             proposals.append({
                 "ordinal": len(proposals) + 1,
                 "row_position": expected.position,
@@ -341,7 +418,7 @@ def oracle(pdf: bytes, bundle: bytes, prices: bytes) -> dict[str, object]:
             "rows": rows,
         },
         "matching": {
-            "algorithm": "price-match-v1",
+            "algorithm": MATCH_ALGORITHM,
             "counts": {
                 "matched": sum(1 for row in EXPECTED_ROWS if row.status == "matched"),
                 "ambiguous": 0,
@@ -351,7 +428,7 @@ def oracle(pdf: bytes, bundle: bytes, prices: bytes) -> dict[str, object]:
             "excluded": excluded,
         },
         "proposals": {
-            "generator": "cheaper-analog-v1",
+            "generator": GENERATOR_VERSION,
             "count": len(proposals),
             "items": proposals,
             "total_saving": {
@@ -519,6 +596,9 @@ def build_zip(pdf: bytes) -> bytes:
 
 
 def build_all() -> list[tuple[Path, bytes]]:
+    model_problems = check_model()
+    if model_problems:
+        raise build_ar_corpus.BuildError("the authored rows against the price list:\n  " + "\n  ".join(model_problems))
     font = build_ar_corpus.load_font()
     pdf = build_pdf(font)
     problems = verify_text_layer(font, pdf)

@@ -115,7 +115,14 @@ def _drive(probe_database_url: str, blob_store: Any, recordings: Path, manifest_
         first.held.observe = lambda run_id: _committed(factory, run_id)
         out.db["before"] = accept._counts(factory, served.version_uid)
 
+        # `REVIEW-FIX-TESTS-1102`: the stock composition starts a group only with a priced consent, taken from the
+        # group estimate of this version. Built once: the replay below repeats it (the consent is part of the
+        # command's fingerprint).
+        priced = first.wire.call("POST", f"{GROUPS}/cost-estimate", token=token, body=body)
+        assert priced.status == 200, priced.text
+        body = {**body, "cost_consent": accept.run_consent(priced.data)}
         out.start = first.wire.call("POST", GROUPS, token=token, key="queue-start", body=body)
+        assert out.start.status == 202, out.start.text
         group = out.start.data
         out.run_ids = [member["run_id"] for member in group["members"]]
         out.db["after_start"] = accept._counts(factory, served.version_uid)
