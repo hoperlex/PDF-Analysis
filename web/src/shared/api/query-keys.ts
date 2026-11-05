@@ -288,6 +288,12 @@ export const queryKeys = {
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
     /**
+     * `getExecutionDispatch` (`UI-PARITY-P0E`, `R-151f`): the installation's pause state, read by the top
+     * strip on every screen. Under `execution`, so pausing or resuming (which invalidates `execution.all`)
+     * refreshes it at once.
+     */
+    dispatch: () => ['execution', 'dispatch'] as const,
+    /**
      * One page of `listWorkers` (`W54-WORKERS-WEB`). The page size is part of the key: the
      * «Исполнители» screen pages through the registry, and the queue and run screens read
      * one larger first page only to name the worker holding a run.

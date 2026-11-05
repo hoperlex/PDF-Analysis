@@ -1,7 +1,7 @@
 export {
   EXECUTION_PAGE_LIMIT, WORKER_LOOKUP_LIMIT, WORKER_PAGE_LIMIT,
-  journalQueryOptions, queueQueryOptions, workersQueryOptions,
-  useExecutionJournal, useExecutionQueue, useWorkerLookup, useWorkers,
+  dispatchQueryOptions, journalQueryOptions, queueQueryOptions, workersQueryOptions,
+  useExecutionDispatch, useExecutionJournal, useExecutionQueue, useWorkerLookup, useWorkers,
 } from './api/use-execution';
 export type { ExecutionQueueFilter, ExecutionQueueState } from './api/use-execution';
 export { executionFailure } from './model/failure';

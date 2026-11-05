@@ -103,6 +103,7 @@ import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
+import { PauseStatusView } from '@/widgets/pause-status';
 import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
@@ -557,6 +558,13 @@ export function screens(): Screen[] {
         'AppFrame, the project selector open, a refresh failed over a loaded list',
         seeded('/dashboard', '', SWITCHER_PAGE, apiError(503, 'dependency_unavailable', true)),
       );
+      // `R-151f`: the queue's pause state in the strip -- paused with the switch asked and a refusal, and unread.
+      const pauseView = (over: Partial<Parameters<typeof PauseStatusView>[0]>) => inStrip(createElement(PauseStatusView, {
+        status: { paused: true, changed_at: '2026-11-05T10:00:00Z' }, failed: false, mayToggle: true, asking: true,
+        busy: false, error: 'Недостаточно прав для этого действия.', onAsk: noop, onConfirm: noop, onCancel: noop, ...over,
+      }));
+      add('AppFrame, the pause state: paused, the switch asked, a refusal', pauseView({}));
+      add('AppFrame, the pause state: unread', pauseView({ status: undefined, failed: true }));
     }
     add(
       'Release history, loading',

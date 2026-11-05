@@ -475,7 +475,7 @@ describe('this slice adds no second polling loop', () => {
     }
   });
 
-  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal and the worker list', () => {
+  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal, the worker list and the pause state', () => {
     const named = sources.filter(isAllowedOperationalListPoll);
     expect(named.map((f) => f.path)).toHaveLength(ALLOWED_OPERATIONAL_LIST_POLL.length);
     for (const file of named) {
@@ -490,18 +490,20 @@ describe('this slice adds no second polling loop', () => {
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
-    // The spread is in the queue, the journal and the worker list read, and in nothing else of the entity.
+    // The spread is in the queue, the journal, the worker list and the pause-state read (`R-151f`: the top strip
+    // shows the pause state on every screen), and in nothing else of the entity.
     const hooks = sources.find((file) => file.path.endsWith(join('entities', 'execution', 'api', 'use-execution.ts')));
     expect(hooks).toBeDefined();
     const body = code(hooks!);
-    expect(body.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g)).toHaveLength(3);
+    expect(body.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g)).toHaveLength(4);
     expect(body.match(/refetchInterval/g) ?? []).toHaveLength(0);
     const section = (name: string) => body.split(`export function ${name}`)[1]?.split('\nexport ')[0] ?? '';
     expect(section('queueQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
     expect(section('journalQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
     expect(section('workersQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
+    expect(section('dispatchQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
     // The hooks over those options add nothing of their own, and the reads of other things in the entity are not polled.
-    for (const hook of ['useExecutionQueue', 'useExecutionJournal', 'useWorkers', 'useWorkerLookup']) {
+    for (const hook of ['useExecutionQueue', 'useExecutionJournal', 'useWorkers', 'useWorkerLookup', 'useExecutionDispatch']) {
       expect(section(hook), hook).not.toMatch(/OPERATIONAL_LIST_POLL|refetchInterval/);
     }
   });

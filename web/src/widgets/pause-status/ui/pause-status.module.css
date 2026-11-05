@@ -1,0 +1,33 @@
+/*
+ * The queue's pause state in the frame's top strip (`R-151f`). Every colour, length and radius is a
+ * token (`--am-*`); the badge is the shared `.am-badge`.
+ */
+
+.status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.link {
+  display: inline-flex;
+  color: inherit;
+  text-decoration: none;
+}
+
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.question {
+  color: var(--am-ink);
+}
+
+.error {
+  color: var(--am-failed);
+}
