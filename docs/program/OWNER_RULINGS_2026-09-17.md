@@ -1877,7 +1877,7 @@ below are quoted as given; the consequence column is what the plan does with the
 | R-149n | The wait reason of a group whose members are ineligible for a reason other than capacity, 2026-11-03: «Точная подпись в UI». | The contract does not change, and the stored reason stays `runner_offline` with the 30-minute limit (`R-149c`) for every such case. The web reads `getExecutorGroupCapacity` and shows each member's actual `ineligible_reason`. |
 | R-149o | The probe in the cut-over preview's `ready`, which needs a contract change (`probe_not_ok` in `ExecutorRoutingPreviewIssue`), 2026-11-03: «Отложить на следующую волну». | Not done in EXEC-2. It is recorded as `D-293`; until then the integrator checks every Primary's probe by hand before confirming the stand's cut-over (`R-149m`). |
 
-## 3.50 — R-150a…R-150u, UI/UX parity with the original application (owner, 2026-11-02 to 2026-11-04)
+## 3.50 — R-150a…R-150y, UI/UX parity with the original application (owner, 2026-11-02 to 2026-11-04)
 
 The owner asked for a structural UI/UX refactor so that `web/` matches the original application (clone of `SU10KAZ/PDF-proverka`, HEAD `d213bfdc`) in function and flow. The analysis and the plan are the session's local register (`.local/reports/ui-parity/UI-PARITY-REGISTER.md`, 198 rows) and its programme record `docs/program/UI-PARITY-01.md`. The answers came in chat and in direct polls; the consequence column is what the plan does with them.
 
@@ -1904,3 +1904,7 @@ The owner asked for a structural UI/UX refactor so that `web/` matches the origi
 | R-150s | A `partial` run: «Да, с маркером “!”». | `published` and `partial` are both audit results; a partial result marks the document «частично» (Q-MD-5). |
 | R-150t | AR v3 six-run groups: «Позже, при включении АР v3». | Counters use the general per-run rule now; the group rule is decided when AR v3 is switched on (Q-MD-9 stays open, debt). |
 | R-150u | Optimisation in «Проверено экспертом»: «Не входит, свой счёт». | «Проверено» is computed on findings only; optimisation proposals are counted separately (Q-MD-3). |
+| R-150v | The counters lane stopped after declined actions, 2026-11-05: «Продолжать». | The P0b counters lane resumes under R-150n…u; wave 1 still waits for its counters. |
+| R-150w | Whether the read-only role sees «Очередь», «Журнал выполнения» and «Исполнители»: «Не видит». | As in the original, where only the operator sees the dispatcher: these screens and their read operations (the matrix's 12 open queue, journal, worker and executor reads, including the two that write lazily) are refused to the role. |
+| R-150x | The read-only role's name in the interface: «Наблюдатель». | UI label «Наблюдатель» beside «Эксперт» and «Администратор»; the contract code is `viewer`, as in the original. |
+| R-150y | The dispatcher domain description (`dispatcher-domain-2026-11-04.md`): «Принять рекомендации». | The schedule plan is built together with the schedule facts once «done work» is defined; the reserve calendar is reduced to a date on an assignment and a month grid; subscription accounts are not built; provider limits are not built now. The first two join wave 4; closes the build question of D-304. |
