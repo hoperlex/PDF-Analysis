@@ -46,6 +46,9 @@ export interface FindingListProps {
   /** Already presented as `ErrorState` props by the page, so `retryable` is decided once. */
   readonly error?: ErrorStateProps | null | undefined;
   readonly integrityFaults?: readonly FindingIntegrityFault[] | undefined;
+  /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own. */
+  readonly verdictFilter?: VerdictFilter | undefined;
+  readonly onVerdictFilterChange?: ((filter: VerdictFilter) => void) | undefined;
 }
 
 /**
@@ -61,6 +64,11 @@ const WAITING: ReadonlySet<Verdict> = new Set<Verdict>(['pending', 'needs_manual
 export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all'> {
   if (WAITING.has(verdict)) return 'waiting';
   return verdict === 'accepted' ? 'accepted' : 'rejected';
+}
+
+/** A verdict filter read from the address: an absent or unknown value is «Все». */
+export function verdictFilterOf(value: string | null): VerdictFilter {
+  return value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'all';
 }
 
 export interface VerdictTally {
@@ -104,8 +112,15 @@ export function FindingList({
   isLoading,
   error,
   integrityFaults,
+  verdictFilter,
+  onVerdictFilterChange,
 }: FindingListProps) {
-  const [filter, setFilter] = useState<VerdictFilter>('all');
+  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const filter = verdictFilter ?? ownFilter;
+  const setFilter = (next: VerdictFilter) => {
+    if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
+    else setOwnFilter(next);
+  };
   if (isLoading === true) return <LoadingState what="находки" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 

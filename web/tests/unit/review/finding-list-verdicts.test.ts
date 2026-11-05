@@ -44,3 +44,15 @@ describe('verdicts at a glance', () => {
     expect(filterGroups(onlyAccepted, 'rejected')).toEqual([]);
   });
 });
+
+describe('the verdict filter read from the address', () => {
+  it('reads a known value and falls to «Все» otherwise', async () => {
+    const { verdictFilterOf } = await import('@/widgets/finding-list');
+    expect(verdictFilterOf('waiting')).toBe('waiting');
+    expect(verdictFilterOf('accepted')).toBe('accepted');
+    expect(verdictFilterOf('rejected')).toBe('rejected');
+    expect(verdictFilterOf(null)).toBe('all');
+    expect(verdictFilterOf('all')).toBe('all');
+    expect(verdictFilterOf('pending')).toBe('all');
+  });
+});

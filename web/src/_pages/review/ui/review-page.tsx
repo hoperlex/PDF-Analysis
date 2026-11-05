@@ -32,6 +32,7 @@
  */
 
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -42,7 +43,8 @@ import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { ExportPanel } from '@/widgets/export-panel';
-import { FindingList } from '@/widgets/finding-list';
+import { FindingList, verdictFilterOf } from '@/widgets/finding-list';
+import type { VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
@@ -65,8 +67,37 @@ export interface ReviewPageProps {
   readonly runId: RunId;
 }
 
+const NO_PARAMS = new URLSearchParams();
+
 export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
-  const [selection, setSelection] = useState<ReviewSelection | null>(null);
+  // `UI-PARITY-01` completion scenario 5: the chosen finding and the verdict filter live in the address
+  // (`?finding=`, `?verdict=`), so a saved link opens the same finding under the same filter. Outside the
+  // app router both hooks answer `null` and the page keeps its first finding and «Все».
+  const router = useRouter();
+  const pathname = usePathname() ?? routes.review(projectUid, runId);
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const linkedFinding = searchParams.get('finding');
+  const verdictFilter = verdictFilterOf(searchParams.get('verdict'));
+  const [selection, setSelectionState] = useState<ReviewSelection | null>(
+    linkedFinding === null ? null : selectFinding(linkedFinding),
+  );
+  const writeAddress = (key: 'finding' | 'verdict', value: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === null) params.delete(key);
+    else params.set(key, value);
+    const query = params.toString();
+    router.replace(query === '' ? pathname : `${pathname}?${query}`, { scroll: false });
+  };
+  // Choosing a finding writes it to the address; turning a page inside the same finding does not.
+  const setSelection = (next: ReviewSelection | null | ((current: ReviewSelection | null) => ReviewSelection | null)) => {
+    if (typeof next !== 'function' && next !== null && next.findingUid !== selection?.findingUid) {
+      writeAddress('finding', next.findingUid);
+    }
+    setSelectionState(next);
+  };
+  const setVerdictFilter = (filter: VerdictFilter) => {
+    writeAddress('verdict', filter === 'all' ? null : filter);
+  };
 
   // `D-57`: this query used to build its own options, and its `queryFn` filed the
   // transport envelope under a key the run screen fills with the model. One shape per
@@ -177,6 +208,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         <div className={`am-review__list ${styles.list}`}>
           <FindingList
             groups={groups}
+            verdictFilter={verdictFilter}
+            onVerdictFilterChange={setVerdictFilter}
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
               setSelection(selectFinding(findingUid));
