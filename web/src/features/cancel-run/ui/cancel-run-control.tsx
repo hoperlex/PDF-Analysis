@@ -68,7 +68,7 @@ export function CancelRunControl({ runId }: { readonly runId: string }) {
       </div>
       {cancel.error === null ? null : (
         <p className="am-note" role="alert">
-          Прогон не отменён: {failureMessage(cancel.error)}
+          Прогон не отменён: {failureMessage(cancel.error).detail}
         </p>
       )}
     </div>
