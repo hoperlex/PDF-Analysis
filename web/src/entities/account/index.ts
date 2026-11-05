@@ -22,3 +22,4 @@ export {
 } from './model/account';
 
 export { meQueryOptions, useMe } from './api/use-me';
+export { mayActAsExpert, useMayActAsExpert } from './api/use-may-act';
