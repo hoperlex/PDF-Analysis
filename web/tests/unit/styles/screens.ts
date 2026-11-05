@@ -71,6 +71,7 @@ import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { BatchStartPanelView } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
 import { ExecutionStatusControlView } from '@/features/set-execution-status';
+import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
@@ -170,7 +171,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.24.0',
+    contract_version: '1.25.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1183,6 +1184,25 @@ export function screens(): Screen[] {
       }),
     ),
   );
+  // `R-151h`: the knowledge base's proposal half, a decision with a comment and one without.
+  add('ProposalDecisions loaded', render(createElement(ProposalDecisions, {
+    records: [
+      {
+        proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+        optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'accept', comment: 'Аналог подходит по характеристикам.',
+        actor_label: 'Иванова А. С.', decided_at: '2026-11-06T09:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+        document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID, section: 'AR',
+        row_text: 'Дверь металлическая ДМ-1', proposed_vendor: 'ООО «Двери»', unit: 'шт',
+      },
+      {
+        proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+        optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'revise', comment: null,
+        actor_label: 'Иванова А. С.', decided_at: '2026-11-06T08:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+        document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID,
+        row_text: 'Лента монтажная', proposed_vendor: 'ООО «Крепёж»', unit: 'м',
+      },
+    ],
+  })));
   // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
   add('FindingList with an execution status', render(createElement(FindingList, {
     groups: groupByCategory(FINDINGS.map((finding, index) => index === 0

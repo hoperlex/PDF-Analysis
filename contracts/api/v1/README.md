@@ -11,7 +11,16 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.24.0` (`UI-PARITY-P0I`)
+## Current contract `1.25.0` (`UI-PARITY-P0J`)
+
+Slice for ruling `R-151h`: the knowledge base's «Предложения» half. `listProposalDecisionJournal` (`GET /proposal-decisions`,
+a product read, optional `project_uid` filter, cursor and `total`) lists every expert decision on an optimisation proposal,
+newest first, as `ProposalDecisionRecord` (verdict, comment, actor label, project, document, version, section, the
+specification row and the proposed vendor). `listDecisions` stays the «Замечания» half; the screen switches between them
+with «Тип». No migration, no error code.
+The API now has 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs are at candidate revision 43.
+
+## Contract `1.24.0` (`UI-PARITY-P0I`, historical)
 
 Slice for ruling `R-151g`: the designer's execution status of an accepted finding, our own instead of the original's
 SU-10 registry labels. `setFindingExecutionStatus` (`PUT /findings/{finding_uid}/execution-status`, keyed, `expert` only,
@@ -19,7 +28,7 @@ body `SetFindingExecutionStatusRequest {status}` with `FindingExecutionStatus` `
 `agreed` or `null` to clear) answers `FindingExecutionState`; setting it on a finding not accepted is `422`
 (`finding_not_accepted`). `Finding` and `FindingDetail` gain the optional `execution_status` and `execution_status_at`. It is
 not an expert decision. Migration `0054_finding_execution_status`. No error code.
-The API now has 255 paths, 283 operations and 683 schemas; migration head `0054`. The domain catalogs are at candidate revision 42.
+The API then had 255 paths, 283 operations and 683 schemas; migration head `0054`. The domain catalogs were at candidate revision 42.
 
 ## Contract `1.23.0` (`UI-PARITY-P0H`, historical)
 

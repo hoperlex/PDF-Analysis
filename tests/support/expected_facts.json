@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 255,
+    "path_count": 256,
     "operations": [
       [
         "DELETE",
@@ -467,6 +467,11 @@
         "GET",
         "/projects/{project_uid}/vendor-lists",
         "getEffectiveVendorLists"
+      ],
+      [
+        "GET",
+        "/proposal-decisions",
+        "listProposalDecisionJournal"
       ],
       [
         "GET",
@@ -1880,6 +1885,8 @@
       "ProposalDecisionCounts",
       "ProposalDecisionId",
       "ProposalDecisionList",
+      "ProposalDecisionRecord",
+      "ProposalDecisionRecordPage",
       "ProposalDecisionResult",
       "ProposalDecisionState",
       "ProposalMatchBasis",
@@ -2110,5 +2117,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0054_finding_execution_status",
-  "contract_version": "1.24.0"
+  "contract_version": "1.25.0"
 }

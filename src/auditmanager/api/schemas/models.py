@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.24.0"]
+    contract_version: Literal["1.25.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2456,6 +2456,36 @@ class DecisionRecordPage(_Object):
     items: list[DecisionRecord]
     page: PageInfo
     #: `UI-PARITY-P0A`. The number of entries that match the filters, not the number on this page.
+    total: Annotated[int, Field(ge=0)]
+
+
+class ProposalDecisionRecord(_Object):
+    """`R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it
+    decided about -- the knowledge base's «Предложения» half, as ``DecisionRecord`` is its «Замечания» half."""
+
+    proposal_decision_id: ProposalDecisionId
+    optimisation_proposal_id: OptimisationProposalId
+    optimisation_pass_id: OptimisationPassId
+    verdict: ProposalVerdict
+    comment: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    decided_at: datetime
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    document_name: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    row_text: Annotated[str, Field(min_length=1)]
+    proposed_vendor: Annotated[str, Field(min_length=1)]
+    unit: Annotated[str, Field(min_length=1)]
+
+
+class ProposalDecisionRecordPage(_Object):
+    """`R-151h`: one page of the proposal decision journal, newest first, and how many entries match."""
+
+    items: list[ProposalDecisionRecord]
+    page: PageInfo
     total: Annotated[int, Field(ge=0)]
 
 

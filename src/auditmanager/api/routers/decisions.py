@@ -182,6 +182,36 @@ def build_decision_routes(
         return json_response(200, encode_json(body))
 
 
+    @router.get(
+        "/proposal-decisions",
+        operation_id="listProposalDecisionJournal",
+        tags=["decisions"],
+        status_code=200,
+        response_model=models.ProposalDecisionRecordPage,
+        responses={
+            **success(
+                200,
+                "One page of the decisions on optimisation proposals, newest first, and the number that match.",
+            ),
+            # No 404, for the reason `listDecisions` gives: `project_uid` is a filter, not a parent.
+            **envelope_responses(401, 403, 422, 500, 503),
+        },
+    )
+    def list_proposal_decisions(
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+        project_uid: ProjectUidFilterParam = None,  # type: ignore[assignment]
+    ) -> WireResponse:
+        # `R-151h`: the knowledge base's «Предложения» half.
+        rows = decisions.proposal_decision_journal(project_uid=project_uid)
+        page = paginate(
+            rows, limit=limit, cursor=cursor,
+            sort_key=lambda row: (timestamp(row.decided_at), row.proposal_decision_id),
+        )
+        body = page_body([row.model_dump(mode="json", exclude_none=True) for row in page.items], page.next_cursor)
+        body["total"] = len(rows)
+        return json_response(200, encode_json(body))
+
 def _decision_sort_key(view: object) -> tuple[str, ...]:
     """``(recorded_at, decision_id)`` -- the declared client-visible total order.
 

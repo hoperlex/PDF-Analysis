@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.24.0 (OpenAPI 3.1.0)
- *   sha256 fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3
+ *   AuditManager PC-01 API 1.25.0 (OpenAPI 3.1.0)
+ *   sha256 bb30a8829183dbc737e6ef5863cda1c78e916a71e7f178e1f96d76bb8785131d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.24.0';
+export const CONTRACT_VERSION = '1.25.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3';
+export const CONTRACT_DIGEST = 'bb30a8829183dbc737e6ef5863cda1c78e916a71e7f178e1f96d76bb8785131d';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -481,6 +481,8 @@ export const SCHEMA_NAMES = [
   'ProposalDecisionCounts',
   'ProposalDecisionId',
   'ProposalDecisionList',
+  'ProposalDecisionRecord',
+  'ProposalDecisionRecordPage',
   'ProposalDecisionResult',
   'ProposalDecisionState',
   'ProposalMatchBasis',
@@ -3862,7 +3864,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.24.0";
+  contract_version: "1.25.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5719,6 +5721,33 @@ export const PROPOSAL_DECISION_ID_PATTERN = "^opd_[0-9A-HJKMNP-TV-Z]{26}$";
 /** Every decision of one proposal, oldest first; the last is current. */
 export type ProposalDecisionList = {
   items: Array<ProposalDecision>;
+};
+
+/** `R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it decided about -- the knowledge base's «Предложения» half, as `DecisionRecord` is its «Замечания» half. */
+export type ProposalDecisionRecord = {
+  actor_label: string;
+  comment: string | null;
+  decided_at: string;
+  document_name: string;
+  document_uid: DocumentUid;
+  optimisation_pass_id: OptimisationPassId;
+  optimisation_proposal_id: OptimisationProposalId;
+  project_name: string;
+  project_uid: ProjectUid;
+  proposal_decision_id: ProposalDecisionId;
+  proposed_vendor: string;
+  row_text: string;
+  section?: ProjectSection;
+  unit: string;
+  verdict: ProposalVerdict;
+  version_uid: VersionUid;
+};
+
+/** `R-151h`: one page of the proposal decision journal, newest first, and how many entries match. */
+export type ProposalDecisionRecordPage = {
+  items: Array<ProposalDecisionRecord>;
+  page: PageInfo;
+  total: number;
 };
 
 /** The decision appended (or replayed) and the proposal as it now stands. */

@@ -1078,7 +1078,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.24.0',
+    contract_version: '1.25.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1090,7 +1090,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.24.0',
+    contract_version: '1.25.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1925,7 +1925,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.24.0',
+    contract_version: '1.25.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2133,7 +2133,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.24.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.25.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -4156,7 +4156,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.24.0',
+            contract_version: '1.25.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4178,7 +4178,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.24.0',
+            contract_version: '1.25.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5150,6 +5150,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Загрузка: решения по предложениям…',
+    why: 'R-151h: the knowledge base reads the proposal journal only after «Тип: Предложения» is pressed; one static pass renders «Замечания». tests/unit/knowledge-base/proposal-journal.test.ts renders the loading branch of ProposalDecisions.',
+  },
+  {
+    label: 'Решений по предложениям оптимизации нет.',
+    why: 'R-151h: the empty proposal journal is drawn only after «Тип: Предложения» is pressed; tests/unit/knowledge-base/proposal-journal.test.ts renders it.',
+  },
   {
     label: 'Блоков нет.',
     why: 'R-151m: the version\'s «Блоки» tab says this only for a version admitted for comparison only (upload_kind comparison_pdf); the matrix seeds one portal-bundle version for every screen. tests/unit/blocks/version-blocks.test.ts seeds that version and reads the sentence.',

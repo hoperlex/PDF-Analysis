@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.24.0 (OpenAPI 3.1.0)
- *   sha256 fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3
+ *   AuditManager PC-01 API 1.25.0 (OpenAPI 3.1.0)
+ *   sha256 bb30a8829183dbc737e6ef5863cda1c78e916a71e7f178e1f96d76bb8785131d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -338,6 +338,8 @@ import type {
   ListPriceListRevisionsResult,
   ListProjectsInput,
   ListProjectsResult,
+  ListProposalDecisionJournalInput,
+  ListProposalDecisionJournalResult,
   ListProposalDecisionsInput,
   ListProposalDecisionsResult,
   ListRegistrationsInput,
@@ -2508,6 +2510,18 @@ export function listProjects(
 }
 
 /**
+ * List Proposal Decision Journal
+ *
+ * `GET /proposal-decisions`.
+ */
+export function listProposalDecisionJournal(
+  input: ListProposalDecisionJournalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListProposalDecisionJournalResult>> {
+  return request<ListProposalDecisionJournalResult>(OPERATIONS.listProposalDecisionJournal, input, options);
+}
+
+/**
  * List Proposal Decisions
  *
  * `GET /optimisation-proposals/{optimisation_proposal_id}/decisions`.
@@ -4148,6 +4162,7 @@ export const apiClient = {
   listPriceListPositions,
   listPriceListRevisions,
   listProjects,
+  listProposalDecisionJournal,
   listProposalDecisions,
   listRegistrations,
   listReleases,

@@ -118,6 +118,8 @@ REQUIRED_OPERATIONS = {
     "listDocumentTags",
     # `UI-PARITY-P0I`, `R-151g`. The designer's execution status of an accepted finding.
     "setFindingExecutionStatus",
+    # `UI-PARITY-P0J`, `R-151h`. The knowledge base's proposal half.
+    "listProposalDecisionJournal",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",

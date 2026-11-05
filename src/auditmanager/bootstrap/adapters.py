@@ -2424,6 +2424,37 @@ class DecisionAdapter(_SessionHolder):
 
         return self._read(lambda s: tuple(_event_view(e) for e in history(s, finding_uid)))
 
+    def proposal_decision_journal(self, *, project_uid: str | None = None) -> Sequence[models.ProposalDecisionRecord]:
+        """`R-151h`: the proposal decision journal, each actor named by the account's display label."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.proposals.journal import proposal_decision_journal
+
+        def work(session: Session) -> Sequence[models.ProposalDecisionRecord]:
+            entries = proposal_decision_journal(session, project_uid=project_uid)
+            labels = _Labels(session, AccountRepository())
+            return tuple(
+                models.ProposalDecisionRecord(
+                    proposal_decision_id=entry.proposal_decision_id,
+                    optimisation_proposal_id=entry.optimisation_proposal_id,
+                    optimisation_pass_id=entry.optimisation_pass_id,
+                    verdict=entry.verdict,
+                    comment=entry.comment,
+                    actor_label=labels.of(entry.actor_user_uid),
+                    decided_at=entry.decided_at,
+                    project_uid=entry.project_uid,
+                    project_name=entry.project_name,
+                    document_uid=entry.document_uid,
+                    document_name=entry.document_name,
+                    version_uid=entry.version_uid,
+                    **({} if entry.section is None else {"section": entry.section}),
+                    row_text=entry.row_text,
+                    proposed_vendor=entry.proposed_vendor,
+                    unit=entry.unit,
+                )
+                for entry in entries
+            )
+        return self._read(work)
+
     def decision_journal(
         self,
         *,

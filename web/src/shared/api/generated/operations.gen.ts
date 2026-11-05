@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.24.0 (OpenAPI 3.1.0)
- *   sha256 fad13abe2ac700a5010f80611d6a4727f5fb1ee02d1203b7614b7a7a73f297f3
+ *   AuditManager PC-01 API 1.25.0 (OpenAPI 3.1.0)
+ *   sha256 bb30a8829183dbc737e6ef5863cda1c78e916a71e7f178e1f96d76bb8785131d
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -199,6 +199,7 @@ import type {
   ProjectSection,
   ProjectUid,
   ProposalDecisionList,
+  ProposalDecisionRecordPage,
   ProposalDecisionResult,
   ProposalDecisionState,
   ReauditRunRequest,
@@ -482,6 +483,7 @@ export const OPERATION_IDS = [
   'listPriceListPositions',
   'listPriceListRevisions',
   'listProjects',
+  'listProposalDecisionJournal',
   'listProposalDecisions',
   'listRegistrations',
   'listReleases',
@@ -4656,6 +4658,34 @@ export type ListProjectsInput = {
 
 /** Success body of `listProjects` (`application/json`, HTTP 200). */
 export type ListProjectsResult = ProjectPage;
+
+// ------------------------------------------------------------------------------------
+// listProposalDecisionJournal - GET /proposal-decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Proposal Decision Journal
+ *
+ * `UI-PARITY-P0J` (contract 1.25.0, ruling `R-151h`): every expert decision on an optimisation proposal, newest first by `(decided_at, proposal_decision_id)`, with its project, document, version, section, specification row and proposed vendor, and `total`. The original's knowledge base lists both kinds with a «Тип» filter; ours reads this beside `listDecisions`. `project_uid` is a filter, not a parent. A product read.
+ */
+export type ListProposalDecisionJournalInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    /** Restrict the page to decisions on proposals of this project. Absent means no project filter. */
+    project_uid?: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listProposalDecisionJournal` (`application/json`, HTTP 200). */
+export type ListProposalDecisionJournalResult = ProposalDecisionRecordPage;
 
 // ------------------------------------------------------------------------------------
 // listProposalDecisions - GET /optimisation-proposals/{optimisation_proposal_id}/decisions
@@ -10165,6 +10195,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['projects'],
+  },
+  listProposalDecisionJournal: {
+    operationId: 'listProposalDecisionJournal',
+    method: 'GET',
+    path: '/proposal-decisions',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'project_uid'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['decisions'],
   },
   listProposalDecisions: {
     operationId: 'listProposalDecisions',

@@ -851,6 +851,10 @@ class DecisionPort(Protocol):
         pages. The server's ``sequence_no`` is never exposed, in a field or in a cursor.
         """
 
+    def proposal_decision_journal(self, *, project_uid: str | None) -> Sequence[models.ProposalDecisionRecord]:
+        """`R-151h`: every decision on an optimisation proposal, newest first, optionally of one project."""
+        ...
+
     def decision_journal(
         self,
         *,

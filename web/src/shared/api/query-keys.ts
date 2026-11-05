@@ -476,6 +476,9 @@ export const queryKeys = {
      */
     journal: (filters: DecisionJournalFilters = {}) =>
       ['findings', 'journal', filters] as const,
+    /** `R-151h`: one page of the proposal decision journal (`listProposalDecisionJournal`), by its filters. */
+    proposalJournal: (filters: { readonly project_uid?: string; readonly cursor?: string; readonly limit?: number } = {}) =>
+      ['findings', 'proposal-journal', filters] as const,
   },
   /**
    * `getDashboardSummary`. `W46-WIRE`.

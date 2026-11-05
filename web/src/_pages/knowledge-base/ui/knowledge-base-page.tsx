@@ -40,7 +40,8 @@ import type { FindingCategory, ProjectUid, Verdict } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
 import { readProjectContext, switchProject } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
-import { CATEGORY_LABELS, recordCountLabel, useDecisionJournal } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useProposalDecisionJournal } from '@/entities/expert-decision';
+import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { useProjectList } from '@/entities/project';
 
 import { LazyKnowledgeBase } from './lazy-knowledge-base';
@@ -166,6 +167,9 @@ export function KnowledgeBasePage() {
 
   const [category, setCategory] = useState<CategoryChoice>('all');
   const [verdict, setVerdict] = useState<VerdictChoice>('all');
+  // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base.
+  const [kind, setKind] = useState<'findings' | 'proposals'>('findings');
+  const [proposalCursors, setProposalCursors] = useState<readonly string[]>(NO_CURSORS);
   /*
    * The cursors of the pages walked past, oldest first; the last one is the page on screen
    * and an empty stack is the first page. The server's cursors are opaque and one-way, so
@@ -181,6 +185,13 @@ export function KnowledgeBasePage() {
   // is drawn or requested.
   if (walk.project !== projectUid) setWalk({ project: projectUid, cursors: NO_CURSORS });
 
+  const proposals = useProposalDecisionJournal(
+    {
+      ...(projectUid === null ? {} : { project_uid: projectUid }),
+      ...(proposalCursors.length === 0 ? {} : { cursor: proposalCursors.at(-1) }),
+    },
+    kind === 'proposals',
+  );
   const journal = useDecisionJournal({
     ...(projectUid === null ? {} : { project_uid: projectUid }),
     ...(category === 'all' ? {} : { category }),
@@ -227,6 +238,22 @@ export function KnowledgeBasePage() {
       subtitle="Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий."
     >
       <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
+        <div className="am-kb__filter" role="group" aria-label="Тип решений">
+          <span>Тип</span>
+          {(['findings', 'proposals'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={kind === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+              aria-pressed={kind === value}
+              data-kb-kind={value}
+              onClick={() => { setKind(value); setProposalCursors(NO_CURSORS); }}
+            >
+              {value === 'findings' ? 'Замечания' : 'Предложения'}
+            </button>
+          ))}
+        </div>
+        {kind === 'proposals' ? null : <>
         <div className="am-kb__filter">
           <label htmlFor="kb-filter-category">Категория</label>
           <select
@@ -263,8 +290,46 @@ export function KnowledgeBasePage() {
             ))}
           </select>
         </div>
+        </>}
       </div>
-      <div className={styles.results}>
+      {kind === 'proposals' ? (
+        <div className={styles.results}>
+          {proposals.data === undefined ? null : (
+            <p className={styles.scope} data-proposal-journal-total={proposals.data.total}>
+              <span className={styles.count}>{recordCountLabel(proposals.data.total)}</span>
+            </p>
+          )}
+          <ProposalDecisions
+            records={proposals.data?.items ?? []}
+            isLoading={proposals.isPending}
+            error={proposals.error === null ? null : journalFailure(proposals.error, () => void proposals.refetch())}
+          />
+          {proposalCursors.length === 0 && (proposals.data?.page.next_cursor ?? null) === null ? null : (
+            <nav className="am-pager" aria-label="Страницы решений по предложениям">
+              <button
+                type="button"
+                className="am-button am-button--quiet"
+                disabled={proposalCursors.length === 0}
+                onClick={() => setProposalCursors(proposalCursors.slice(0, -1))}
+              >
+                Назад
+              </button>
+              <button
+                type="button"
+                className="am-button am-button--quiet"
+                disabled={(proposals.data?.page.next_cursor ?? null) === null}
+                onClick={() => {
+                  const nextCursor = proposals.data?.page.next_cursor;
+                  if (nextCursor !== null && nextCursor !== undefined) setProposalCursors([...proposalCursors, nextCursor]);
+                }}
+              >
+                Далее
+              </button>
+            </nav>
+          )}
+        </div>
+      ) : null}
+      {kind === 'proposals' ? null : <div className={styles.results}>
         <p className={styles.scope} data-journal-scope={projectUid === null ? 'all' : 'project'}>
           <span className={styles.scopeKey}>Охват</span>
           <strong className={styles.scopeValue}>
@@ -308,7 +373,7 @@ export function KnowledgeBasePage() {
             </button>
           </nav>
         )}
-      </div>
+      </div>}
     </PageShell>
   );
 }
