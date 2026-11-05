@@ -1196,8 +1196,7 @@ export function screens(): Screen[] {
   // The decision panel: refused comment, pending intent, and a failure.
   add(
     'DecisionPanel refused',
-    render(
-      createElement(DecisionPanel, {
+    renderWith(newClient(), createElement(DecisionPanel, {
         currentVerdict: 'accepted',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,
@@ -1213,8 +1212,7 @@ export function screens(): Screen[] {
   );
   add(
     'DecisionPanel failed',
-    render(
-      createElement(DecisionPanel, {
+    renderWith(newClient(), createElement(DecisionPanel, {
         currentVerdict: 'pending',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,
@@ -1558,8 +1556,7 @@ export function screens(): Screen[] {
   // The decision panel on a v2 finding after an accept was refused for want of a severity.
   add(
     'DecisionPanel, v2 finding, severity refused',
-    render(
-      createElement(DecisionPanel, {
+    renderWith(newClient(), createElement(DecisionPanel, {
         currentVerdict: 'accepted',
         observationId: OBSERVATION_ID,
         onAccept: noop, onReject: noop, onComment: noop,
