@@ -1523,7 +1523,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
 
 
 def test_the_dashboard_reads_the_project_filter_it_declares(
-    shipped_router: Surface, mixed_run: MixedRun
+    shipped_router: Surface, mixed_run: MixedRun, session: Session
 ) -> None:
     """`UI-PARITY-P0A`: ``project_uid`` reaches ``getDashboardSummary`` and changes its answer.
 
@@ -1532,6 +1532,9 @@ def test_the_dashboard_reads_the_project_filter_it_declares(
     deployment, and against a project that does not exist.
     """
     project = mixed_run.run.project_uid
+    # A second project of this test's own, so the whole deployment is never this one project alone: on a
+    # fresh database the comparison below would otherwise prove nothing (the answer cannot change).
+    MixedRun(session)
     whole = ok(get(shipped_router, "/dashboard"))
     scoped = ok(get(shipped_router, f"/dashboard?project_uid={project}"))
     inert: list[str] = []
