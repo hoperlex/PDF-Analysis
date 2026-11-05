@@ -11,12 +11,13 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
-import type { RunId, VersionUid } from '@/shared/api';
+import type { DocumentUid, RunId, VersionUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { runStatusQueryOptions } from '@/entities/audit-run';
-import { useDocumentVersion } from '@/entities/document-version';
+import { useDocumentVersion, useVersionList } from '@/entities/document-version';
 import { useProjectList } from '@/entities/project';
 
 import styles from './document-context.module.css';
@@ -80,6 +81,38 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
   return steps;
 }
 
+
+/**
+ * `UI-A-24`: on the version page the strip also lets the reader move to another version of the same
+ * document, as the original's V# choice does. It lists the first page of the document's versions; a
+ * longer history says so instead of hiding the rest.
+ */
+function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly projectUid: string; readonly documentUid: string; readonly versionUid: string }) {
+  const router = useRouter();
+  const versions = useVersionList(documentUid as DocumentUid);
+  const items = versions.data?.items ?? [];
+  if (items.length < 2) return null;
+  const more = (versions.data?.page.next_cursor ?? null) !== null;
+  return (
+    <label className={styles.switch}>
+      <span>Версия</span>
+      <select
+        value={versionUid}
+        onChange={(event) => {
+          router.push(routes.version(projectUid, event.target.value));
+        }}
+      >
+        {items.map((item) => (
+          <option key={item.version_uid} value={item.version_uid}>
+            {`Версия ${item.version_ordinal}`}
+          </option>
+        ))}
+      </select>
+      {more ? <span className={styles.more}>показаны первые {items.length}</span> : null}
+    </label>
+  );
+}
+
 export function DocumentContext({ projectUid, current, documentUid, versionUid, runId }: DocumentContextProps) {
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
@@ -113,6 +146,9 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
           </li>
         ))}
       </ol>
+      {current === 'version' && knownVersion !== undefined && (documentUid ?? version.data?.document_uid) !== undefined ? (
+        <VersionSwitch projectUid={projectUid} documentUid={(documentUid ?? version.data?.document_uid) as string} versionUid={knownVersion} />
+      ) : null}
     </nav>
   );
 }

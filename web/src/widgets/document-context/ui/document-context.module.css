@@ -32,3 +32,17 @@
   color: var(--am-ink);
   font-weight: 600;
 }
+
+/* `UI-A-24`: the version choice beside the strip. */
+.switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+}
+
+.more {
+  color: var(--am-ink-muted);
+}
