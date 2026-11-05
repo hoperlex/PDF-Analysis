@@ -255,6 +255,16 @@ export const SCREEN_REGISTRY = [
     projectScope: 'required',
   },
   {
+    // `R-151m`: the original's «Блоки» tab of a project, in our nouns a tab of the version.
+    address: '/projects/[project_uid]/versions/[version_uid]/blocks',
+    label: 'Блоки',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: false,
+    projectScope: 'required',
+  },
+  {
     address: '/projects/[project_uid]/versions/[version_uid]/comparison',
     label: 'Сравнение прогонов',
     group: 'work',
@@ -298,7 +308,8 @@ export const SCREEN_REGISTRY = [
     group: 'knowledge',
     access: 'session',
     roles: 'any-role',
-    inMenu: true,
+    // `R-151m`: «Блоки» is a tab of the version now; the address stays, out of the menu, as a chooser.
+    inMenu: false,
     projectScope: 'global',
   },
   {

@@ -5151,6 +5151,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'Блоков нет.',
+    why: 'R-151m: the version\'s «Блоки» tab says this only for a version admitted for comparison only (upload_kind comparison_pdf); the matrix seeds one portal-bundle version for every screen. tests/unit/blocks/version-blocks.test.ts seeds that version and reads the sentence.',
+  },
+  {
+    label: 'Эта версия из другого проекта.',
+    why: 'R-151m: the version\'s «Блоки» tab says this only when the version read answers a project other than the one in the address; the matrix seeds one project for every screen. tests/unit/blocks/version-blocks.test.ts seeds the mismatch and reads the sentence.',
+  },
+  {
     label: 'Роли не сохранены',
     why: 'R-150e: the user form shows this only after its submit finds «Наблюдатель» ticked beside another role; one static render cannot tick boxes or submit. The rule itself is rolesCombinationAllowed, tested in tests/unit/entities/account.test.ts.',
   },

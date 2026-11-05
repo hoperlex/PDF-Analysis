@@ -661,6 +661,8 @@ describe('every screen address is built once and matches a route file on disk', 
       projectSection: routes.projectSection(PROJECT_UID, 'GP'),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),
       version: routes.version(PROJECT_UID, VERSION_UID),
+      // `R-151m`: the version page links its «Блоки» tab.
+      versionBlocks: routes.versionBlocks(PROJECT_UID, VERSION_UID),
       // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
       // version at the stage-and-section panel, and so does the run control's refusal.
       versionClassification: routes.versionClassification(PROJECT_UID, VERSION_UID),

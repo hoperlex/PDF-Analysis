@@ -142,7 +142,8 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
 const R66: Partial<Record<ScreenGroup, string[]>> = {
   home: [],
   work: ['/dashboard', '/section-optimisation', '/dispatcher', '/version-comparison', '/stage-comparison'],
-  knowledge: ['/knowledge-base', '/blocks', '/norms'],
+  // `R-151m`: «Блоки» is a tab of the version, out of the menu.
+  knowledge: ['/knowledge-base', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
   admin: ['/admin/users', '/admin/registrations'],
   account: [],
@@ -169,9 +170,10 @@ describe('the registry is the route tree: every page has a row and every row a p
   it('reads a tree and a registry of a credible size', () => {
     // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
     // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
-    // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32.
-    expect(routeAddresses().length).toBe(32);
-    expect(REGISTRY.length).toBe(32);
+    // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
+    // the version's «Блоки» tab: 32 -> 33.
+    expect(routeAddresses().length).toBe(33);
+    expect(REGISTRY.length).toBe(33);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -308,7 +310,7 @@ describe('R-66: the groups, their members and their order', () => {
     expect([view?.group, view?.access, view?.roles, view?.inMenu]).toEqual(['knowledge', 'session', 'any-role', false]);
     expect(view?.label).toBe('Нормативный документ');
     // The menu still offers «Нормы» once, and not its document view.
-    expect(menu(REGISTRY).knowledge).toEqual(['/knowledge-base', '/blocks', '/norms']);
+    expect(menu(REGISTRY).knowledge).toEqual(['/knowledge-base', '/norms']);
   });
 
   it('the labels are the ruling\'s words', () => {
@@ -383,6 +385,7 @@ describe('R-150c: every row states how the screen relates to the project', () =>
       '/projects/[project_uid]/sections/[section_code]',
       '/projects/[project_uid]/documents/[document_uid]',
       '/projects/[project_uid]/versions/[version_uid]',
+      '/projects/[project_uid]/versions/[version_uid]/blocks',
       '/projects/[project_uid]/versions/[version_uid]/comparison',
       '/projects/[project_uid]/runs/[run_id]',
       '/projects/[project_uid]/runs/[run_id]/review',
@@ -395,7 +398,7 @@ describe('R-150c: every row states how the screen relates to the project', () =>
     expect(scopeOf(REGISTRY, 'optional').sort()).toEqual([...OPTIONAL_SCREENS].sort());
   });
 
-  it('global: every other screen, including /dispatcher and /blocks (their class is undecided, D-305)', () => {
+  it('global: every other screen, including /dispatcher and /blocks (R-151m: /blocks is the chooser out of the menu; /dispatcher follows the header once its screen reads ?project=, owed)', () => {
     const others = REGISTRY.filter((row) => !row.address.includes('[project_uid]') && !OPTIONAL_SCREENS.includes(row.address));
     expect(others.length).toBeGreaterThan(0);
     expect(others.filter((row) => row.projectScope !== 'global').map((row) => row.address)).toEqual([]);

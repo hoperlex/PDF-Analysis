@@ -45,19 +45,30 @@
  * (`widgets/portal-blocks`) — and, as the second tab, «Строки текста», the text-line index
  * this screen showed before, moved to `text-lines.tsx` unchanged. The tab is page state like
  * the choice of version, and like it does not survive a reload.
+ *
+ * **A tab of the version since `R-151m`.** The original shows «Блоки» as a tab of its project; ours is the
+ * version's tab at `/projects/[project_uid]/versions/[version_uid]/blocks`, where this screen opens with the
+ * version already chosen (from the address, never from memory) and the context strip says where it is. The
+ * chooser at `/blocks` stays for a reader who comes without a version, out of the menu, and once a version is
+ * chosen it offers the version's own tab.
  */
 
 import { useId, useState } from 'react';
+import Link from 'next/link';
 
-import type { DocumentVersion, Project, ProjectUid } from '@/shared/api';
-import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
-import { useProjectList } from '@/entities/project';
+import type { DocumentVersion, Project, ProjectUid, VersionUid } from '@/shared/api';
+import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { routes } from '@/shared/lib';
+import { looksLikeProjectUid, useProjectList } from '@/entities/project';
 import {
   COMPARISON_ONLY_START_NOTE,
   ComparisonOnlyMark,
   isComparisonOnly,
+  looksLikeVersionUid,
   useDocumentList,
+  useDocumentVersion,
 } from '@/entities/document-version';
+import { DocumentContext } from '@/widgets/document-context';
 import { PortalBlocks } from '@/widgets/portal-blocks';
 
 import { DEFAULT_BLOCK_TAB } from '../model/tabs';
@@ -66,7 +77,68 @@ import { BlocksTabs } from './blocks-tabs';
 import { TextLines } from './text-lines';
 import styles from './blocks-page.module.css';
 
-export function BlocksPage() {
+export interface BlocksPageProps {
+  /** `R-151m`: the version's tab — both given by the route; absent at the chooser `/blocks`. */
+  readonly projectUid?: string | undefined;
+  readonly versionUid?: string | undefined;
+}
+
+export function BlocksPage({ projectUid, versionUid }: BlocksPageProps) {
+  if (projectUid !== undefined && versionUid !== undefined) {
+    return <VersionBlocksScreen projectUid={projectUid} versionUid={versionUid} />;
+  }
+  return <BlocksChooserScreen />;
+}
+
+/** The version's «Блоки» tab: the version comes from the address, the tabs show at once. */
+function VersionBlocksScreen({ projectUid, versionUid }: { readonly projectUid: string; readonly versionUid: string }) {
+  if (!looksLikeProjectUid(projectUid) || !looksLikeVersionUid(versionUid)) {
+    return (
+      <PageShell title="Блоки" actions={<Link href={routes.projects()}>Все проекты</Link>}>
+        <UnsupportedState
+          title="Это не адрес версии."
+          detail="Версия адресуется идентификаторами проекта и версии. Запроса не было."
+        />
+      </PageShell>
+    );
+  }
+  return <VersionBlocksLoaded projectUid={projectUid} versionUid={versionUid as VersionUid} />;
+}
+
+function VersionBlocksLoaded({ projectUid, versionUid }: { readonly projectUid: string; readonly versionUid: VersionUid }) {
+  const version = useDocumentVersion(versionUid);
+  const [tab, setTab] = useState<BlockTab>(DEFAULT_BLOCK_TAB);
+  let body;
+  if (version.isPending) {
+    body = <LoadingState what="версию" />;
+  } else if (version.isError) {
+    body = <ErrorState title="Версию не удалось прочитать." onRetry={() => void version.refetch()} />;
+  } else if (version.data.project_uid !== projectUid) {
+    body = (
+      <UnsupportedState
+        title="Эта версия из другого проекта."
+        detail={<Link href={routes.versionBlocks(version.data.project_uid, version.data.version_uid)}>Открыть блоки в её проекте</Link>}
+      />
+    );
+  } else if (isComparisonOnly(version.data)) {
+    body = <UnsupportedState title="Блоков нет." detail={COMPARISON_ONLY_START_NOTE} />;
+  } else {
+    body = <VersionBlockViews version={version.data} tab={tab} onTab={setTab} />;
+  }
+  return (
+    <PageShell
+      title="Блоки"
+      subtitle={version.data === undefined ? undefined : (version.data.display_title ?? version.data.source_filename ?? version.data.version_uid)}
+    >
+      <DocumentContext projectUid={projectUid} current="blocks" versionUid={versionUid} />
+      <section className={styles.sectionPanel} aria-label="Блоки версии">
+        {body}
+      </section>
+    </PageShell>
+  );
+}
+
+function BlocksChooserScreen() {
   const [projectUid, setProjectUid] = useState<ProjectUid | null>(null);
   const [version, setVersion] = useState<DocumentVersion | null>(null);
   const [tab, setTab] = useState<BlockTab>(DEFAULT_BLOCK_TAB);
@@ -96,6 +168,10 @@ export function BlocksPage() {
             <div className="am-state__detail">
               <p>
                 <code>{version.version_uid}</code> · страниц {version.page_count}
+              </p>
+              {/* `R-151m`: the same tabs live on the version itself; this address can be kept and shared. */}
+              <p>
+                <Link href={routes.versionBlocks(version.project_uid, version.version_uid)}>Открыть как вкладку версии</Link>
               </p>
             </div>
             <div className="am-state__action">

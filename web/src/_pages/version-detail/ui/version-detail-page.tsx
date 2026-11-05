@@ -109,6 +109,8 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
                 roles={roles}
               />
               <p className="am-note">
+                {/* `R-151m`: «Блоки» is the version's own tab. */}
+                <Link href={routes.versionBlocks(version.data.project_uid, version.data.version_uid)}>Блоки</Link>{' · '}
                 <Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
                 <Link href={routes.stageComparison()}>Сравнение стадий</Link>
                 {' — откройте нужный модуль для сопоставления PDF.'}

@@ -406,6 +406,17 @@ export const SEEDS: readonly Seed[] = [
     discipline: { project_uid: 'refuses', section_code: 'refuses' },
   },
   {
+    // `R-151m`: the version's «Блоки» tab; the screen refuses either malformed identifier itself.
+    address: '/projects/[project_uid]/versions/[version_uid]/blocks',
+    name: 'version-blocks',
+    make: (s) =>
+      createElement(BlocksPage, {
+        projectUid: s['project_uid'] as string,
+        versionUid: s['version_uid'] as string,
+      }),
+    discipline: { project_uid: 'refuses', version_uid: 'refuses' },
+  },
+  {
     address: '/projects/[project_uid]/documents/[document_uid]',
     name: 'document-detail',
     make: (s) =>

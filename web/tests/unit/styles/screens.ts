@@ -605,7 +605,8 @@ export function screens(): Screen[] {
         onClose: () => undefined, onRetry: () => undefined,
       })),
     );
-    for (const pathname of ['/', '/blocks']) {
+    // `R-151m` took «Блоки» out of the menu; «Нормы» is the knowledge item drawn current.
+    for (const pathname of ['/', '/norms']) {
       add(
         `AppFrame, the navigation open, ${pathname} current`,
         inBar(

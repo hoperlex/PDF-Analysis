@@ -90,6 +90,10 @@ export const routes = {
   version: (projectUid: string, versionUid: string): string =>
     `/projects/${projectUid}/versions/${versionUid}`,
 
+  /** The version's «Блоки» tab (`R-151m`): its portal blocks and text lines, the version already chosen. */
+  versionBlocks: (projectUid: string, versionUid: string): string =>
+    `/projects/${projectUid}/versions/${versionUid}/blocks`,
+
   /**
    * The same version screen, scrolled to its stage-and-section panel. Where the run control
    * sends a reader whose run was refused because the version has no confirmed classification,

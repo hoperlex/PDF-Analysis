@@ -22,7 +22,7 @@ import { useProjectList } from '@/entities/project';
 
 import styles from './document-context.module.css';
 
-export type ContextLevel = 'section' | 'document' | 'version' | 'run' | 'review';
+export type ContextLevel = 'section' | 'document' | 'version' | 'blocks' | 'run' | 'review';
 
 /** Identities as the route gave them (already shape-checked by the page). */
 export interface DocumentContextProps {
@@ -73,12 +73,17 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
       href: current === 'document' ? null : routes.document(facts.projectUid, facts.documentUid),
     });
   }
-  if (depth >= 1 && facts.versionUid !== undefined) {
+  if ((depth >= 1 || current === 'blocks') && facts.versionUid !== undefined) {
     steps.push({
       key: 'version',
       label: facts.versionOrdinal === undefined ? 'Версия' : `Версия ${facts.versionOrdinal}`,
       href: current === 'version' ? null : routes.version(facts.projectUid, facts.versionUid),
     });
+  }
+  if (current === 'blocks') {
+    // `R-151m`: the version's «Блоки» tab ends the strip.
+    steps.push({ key: 'blocks', label: 'Блоки', href: null });
+    return steps;
   }
   if (depth >= 2 && facts.runId !== undefined) {
     steps.push({ key: 'run', label: 'Прогон', href: current === 'run' ? null : routes.run(facts.projectUid, facts.runId) });
