@@ -151,6 +151,7 @@ import {
 } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 
 import type { Screen } from './contrast';
+import { QUEUE_WORK } from '../execution/queue-work';
 
 function withRouter(element: ReactElement): string {
   return renderScreen(newClient(), element);
@@ -158,7 +159,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.17.0',
+    contract_version: '1.18.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -668,6 +669,7 @@ export function screens(): Screen[] {
       run_id: RUN_ID, state: 'queued', priority: 2,
       created_at: '2026-10-09T10:00:00Z',
       available_at: '2026-10-09T10:00:00Z',
+      ...QUEUE_WORK,
     }],
     roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
@@ -687,6 +689,7 @@ export function screens(): Screen[] {
       run_id: RUN_ID, state: 'running', priority: 2,
       created_at: '2026-10-09T10:00:00Z',
       available_at: '2026-10-09T10:00:00Z',
+      ...QUEUE_WORK,
     }],
     roles: ['expert'], asOf: Date.parse('2026-10-09T10:05:00Z'),
     busy: false,

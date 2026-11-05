@@ -12,12 +12,31 @@ from sqlalchemy.orm import Session
 
 @dataclass(frozen=True, slots=True)
 class QueueItem:
+    """One job of the queue with what it executes, joined at read time (`UI-PARITY-QUEUE-A`).
+
+    Every job belongs to exactly one audit run (``job.run_id`` is not null and unique), and a run
+    to one version of one document of one project, all by not-null foreign keys. So the six identity
+    and name members are never absent. ``started_at`` (the first attempt's creation), ``finished_at``
+    (the job's terminal time), ``error_code`` (the run's ``terminal_reason``) and ``interrupted_reason``
+    are ``None`` while the database holds none: nothing is guessed in their place.
+    """
+
     job_id: str
     run_id: str
     state: str
     priority: int
     created_at: datetime
     available_at: datetime
+    project_uid: str
+    project_name: str
+    document_uid: str
+    document_name: str
+    version_uid: str
+    version_ordinal: int
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error_code: str | None = None
+    interrupted_reason: str | None = None
 
     @property
     def position(self) -> QueuePosition:
@@ -57,39 +76,75 @@ class DispatchStatus:
     changed_at: datetime
 
 
-_QUEUE = text("""
-    SELECT j.job_id, j.run_id, j.state, j.priority, j.created_at, j.available_at
-      FROM job j
-     WHERE (CAST(:cursor_job_id AS text) IS NULL OR j.job_id <> :cursor_job_id)
-       AND (CAST(:cursor_rank AS integer) IS NULL OR (
-            CASE j.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
-                 WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END > :cursor_rank
-            OR (CASE j.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
-                 WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END = :cursor_rank
-                AND (j.priority < :cursor_priority
-                    OR (j.priority = :cursor_priority
-                        AND ((:cursor_rank = 0 AND (
-                                  j.created_at > CAST(:cursor_created_at AS timestamptz)
-                                  OR (j.created_at = CAST(:cursor_created_at AS timestamptz)
-                                      AND j.job_id > :cursor_job_id)))
-                             OR (:cursor_rank <> 0 AND (
-                                  j.created_at < CAST(:cursor_created_at AS timestamptz)
-                                  OR (j.created_at = CAST(:cursor_created_at AS timestamptz)
-                                      AND j.job_id < :cursor_job_id))))))
-     )))
-     ORDER BY CASE j.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1
-                   WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END,
-              j.priority DESC,
-              CASE WHEN j.state = 'queued' THEN j.created_at END,
-              CASE WHEN j.state <> 'queued' THEN j.created_at END DESC,
-              CASE WHEN j.state = 'queued' THEN j.job_id END,
-              CASE WHEN j.state <> 'queued' THEN j.job_id END DESC
-     LIMIT :fetch
-""")
-_QUEUE_ITEM = text(
-    "SELECT job_id, run_id, state, priority, created_at, available_at "
-    "FROM job WHERE job_id = :job_id"
+#: The queue's order, once: state rank (active work first), priority, then the oldest queued job first and the newest
+#: finished job first. ``{a}`` is the alias of the row source it orders. The page is cut by the inner statement and
+#: put in the same order by the outer one, so the two cannot disagree: they are this one expression.
+_RANK = (
+    "CASE {a}.state WHEN 'queued' THEN 0 WHEN 'leased' THEN 1 "
+    "WHEN 'running' THEN 2 WHEN 'retry_wait' THEN 3 ELSE 4 END"
 )
+_ORDER = (
+    "ORDER BY " + _RANK + ", {a}.priority DESC, "
+    "CASE WHEN {a}.state = 'queued' THEN {a}.created_at END, "
+    "CASE WHEN {a}.state <> 'queued' THEN {a}.created_at END DESC, "
+    "CASE WHEN {a}.state = 'queued' THEN {a}.job_id END, "
+    "CASE WHEN {a}.state <> 'queued' THEN {a}.job_id END DESC"
+)
+#: What a queue row says about the work, joined onto the page of jobs. ``started_at`` is the creation of the job's
+#: first attempt (``ix_attempt_job_id``), absent while no attempt exists; ``finished_at`` is the job's own
+#: ``terminal_at``, read in the same statement as its state so the two cannot be torn apart.
+_ITEM_COLUMNS = """
+       page.job_id, page.run_id, page.state, page.priority, page.created_at, page.available_at,
+       page.terminal_at AS finished_at,
+       r.project_uid, p.name AS project_name,
+       dv.document_uid, d.display_title AS document_name,
+       r.version_uid, dv.version_ordinal,
+       (SELECT min(a.created_at) FROM attempt a WHERE a.job_id = page.job_id) AS started_at,
+       r.terminal_reason AS error_code, r.interrupted_reason"""
+_ITEM_JOINS = """
+  JOIN audit_run r ON r.run_id = page.run_id
+  JOIN project p ON p.project_uid = r.project_uid
+  JOIN document_version dv ON dv.version_uid = r.version_uid
+  JOIN document d ON d.document_uid = dv.document_uid"""
+#: The page of jobs is cut from ``job`` alone, sorted and limited first; only those rows are then joined to the run,
+#: the project and the document, so the cost of a read is the sort it always was plus one lookup per listed row.
+#: The three optional filters bind as ``CAST(:name AS type) IS NULL OR ...``: a state, and the half-open period
+#: ``[created_from, created_to)`` over ``job.created_at`` (the ``created_at`` the item reports).
+_QUEUE = text(f"""
+    SELECT {_ITEM_COLUMNS}
+      FROM (
+        SELECT j.job_id, j.run_id, j.state, j.priority, j.created_at, j.available_at, j.terminal_at
+          FROM job j
+         WHERE (CAST(:state AS text) IS NULL OR j.state = :state)
+           AND (CAST(:created_from AS timestamptz) IS NULL OR j.created_at >= CAST(:created_from AS timestamptz))
+           AND (CAST(:created_to AS timestamptz) IS NULL OR j.created_at < CAST(:created_to AS timestamptz))
+           AND (CAST(:cursor_job_id AS text) IS NULL OR j.job_id <> :cursor_job_id)
+           AND (CAST(:cursor_rank AS integer) IS NULL OR (
+                {_RANK.format(a="j")} > :cursor_rank
+                OR ({_RANK.format(a="j")} = :cursor_rank
+                    AND (j.priority < :cursor_priority
+                        OR (j.priority = :cursor_priority
+                            AND ((:cursor_rank = 0 AND (
+                                      j.created_at > CAST(:cursor_created_at AS timestamptz)
+                                      OR (j.created_at = CAST(:cursor_created_at AS timestamptz)
+                                          AND j.job_id > :cursor_job_id)))
+                                 OR (:cursor_rank <> 0 AND (
+                                      j.created_at < CAST(:cursor_created_at AS timestamptz)
+                                      OR (j.created_at = CAST(:cursor_created_at AS timestamptz)
+                                          AND j.job_id < :cursor_job_id))))))
+         )))
+         {_ORDER.format(a="j")}
+         LIMIT :fetch
+      ) page{_ITEM_JOINS}
+     {_ORDER.format(a="page")}
+""")
+_QUEUE_ITEM = text(f"""
+    SELECT {_ITEM_COLUMNS}
+      FROM (
+        SELECT j.job_id, j.run_id, j.state, j.priority, j.created_at, j.available_at, j.terminal_at
+          FROM job j WHERE j.job_id = :job_id
+      ) page{_ITEM_JOINS}
+""")
 
 # Cursor holds only an event ID. The DB resolves its ordering coordinates;
 # sequence_no is never sent to a client. Run filtering joins indexed aggregate
@@ -153,9 +208,14 @@ _CONTROL = text("SELECT paused, changed_at FROM execution_control WHERE singleto
 
 class ExecutionRepository:
     def list_queue(
-        self, session: Session, *, cursor: QueuePosition | None, limit: int
+        self, session: Session, *, cursor: QueuePosition | None, limit: int,
+        state: str | None = None, created_from: datetime | None = None,
+        created_to: datetime | None = None,
     ) -> tuple[QueueItem, ...]:
+        """One page of the queue in its fixed order. ``state`` keeps the jobs in that state, and
+        ``[created_from, created_to)`` the jobs created in that period; each is ``None`` for no filter."""
         rows = session.execute(_QUEUE, {
+            "state": state, "created_from": created_from, "created_to": created_to,
             "cursor_rank": None if cursor is None else cursor.rank,
             "cursor_priority": None if cursor is None else cursor.priority,
             "cursor_created_at": None if cursor is None else cursor.created_at,

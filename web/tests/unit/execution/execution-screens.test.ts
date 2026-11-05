@@ -13,6 +13,7 @@ import type { RunWorker } from '@/entities/execution';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { QueuePage, intentLabel } from '@/_pages/queue/ui/queue-page';
+import { QUEUE_WORK } from './queue-work';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
 
@@ -22,7 +23,7 @@ const INSTANT = '2026-10-09T10:00:00Z';
 const noop = () => {};
 const queued: ExecutionQueueItem = {
   job_id: JOB_ID, run_id: RUN_ID, state: 'queued', priority: 2,
-  created_at: INSTANT, available_at: INSTANT,
+  created_at: INSTANT, available_at: INSTANT, ...QUEUE_WORK,
 };
 
 function queue(
@@ -38,7 +39,7 @@ function queue(
 
 function envelope(code: 'permission_denied' | 'state_transition_not_allowed' | 'dependency_unavailable') {
   return {
-    contract_version: '1.17.0', error_code: code,
+    contract_version: '1.18.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-execution-1', retryable: false,
   } as const;
 }

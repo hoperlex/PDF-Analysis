@@ -18,13 +18,14 @@ import { newClient } from '../screens/harness';
 import { VERSION_UID, runStatus } from '../review/fixtures';
 import { APPROVE_COST, COST_CONSENT, costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { mountLive } from '../analysis-settings/live-render';
+import { QUEUE_WORK } from './queue-work';
 import type { LiveRender } from '../analysis-settings/live-render';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const OTHER_RUN = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8G';
 const JOB_ID = 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const item = (runId = RUN_ID, state = 'failed'): ExecutionQueueItem => ({
-  run_id: runId, job_id: JOB_ID, state, priority: 0, available_at: '2026-10-30T00:00:00Z', created_at: '2026-10-30T00:00:00Z',
+  run_id: runId, job_id: JOB_ID, state, priority: 0, available_at: '2026-10-30T00:00:00Z', created_at: '2026-10-30T00:00:00Z', ...QUEUE_WORK,
 });
 let live: LiveRender | null = null;
 
@@ -92,7 +93,7 @@ describe('fresh cost consent for repeated paid Runs', () => {
   });
 
   it('a stale digest requires a fresh reading and new agreement', async () => {
-    vi.mocked(reauditRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.17.0',
+    vi.mocked(reauditRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.18.0',
       error_code: 'conflict', message: 'stale', correlation_id: 'reaudit-stale', retryable: false,
       details: { conflict_reason: 'run_cost_estimate_stale' } }, 'reaudit-stale'));
     const { view } = await mount();

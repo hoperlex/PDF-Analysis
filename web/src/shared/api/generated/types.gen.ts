@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.17.0 (OpenAPI 3.1.0)
- *   sha256 c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a
+ *   AuditManager PC-01 API 1.18.0 (OpenAPI 3.1.0)
+ *   sha256 b64fc14b30de32f382e3471f40a6853d0efea0f75f1fb6fedc0c650a8f05041a
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.17.0';
+export const CONTRACT_VERSION = '1.18.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a';
+export const CONTRACT_DIGEST = 'b64fc14b30de32f382e3471f40a6853d0efea0f75f1fb6fedc0c650a8f05041a';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -3818,7 +3818,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.17.0";
+  contract_version: "1.18.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3861,15 +3861,25 @@ export type ExecutionJournalPage = {
   page: PageInfo;
 };
 
-/** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). */
+/** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). `UI-PARITY-QUEUE-A` (contract 1.18.0): the queue names what it lists. Every job executes exactly one audit run of one version of one document (`job.run_id` is not null and unique), so `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and `version_ordinal` are always present; the two names and the ordinal are joined at read time and stored nowhere. `started_at` is the creation time of the job's first attempt and is absent while no attempt exists; `finished_at` is the time the job reached a terminal state and is absent while it has not; `error_code` is the run's `terminal_reason` and `interrupted_reason` the run's own, each absent when the run records none. An absent property is omitted, never sent as null. */
 export type ExecutionQueueItem = {
   available_at: string;
   binding_state?: ExecutorBindingState;
   created_at: string;
+  document_name: string;
+  document_uid: DocumentUid;
+  error_code?: ErrorCode;
+  finished_at?: string;
+  interrupted_reason?: string;
   job_id: JobId;
   priority: number;
+  project_name: string;
+  project_uid: ProjectUid;
   run_id: RunId;
+  started_at?: string;
   state: string;
+  version_ordinal: number;
+  version_uid: VersionUid;
   wait_reason?: RunQueueReason;
 };
 

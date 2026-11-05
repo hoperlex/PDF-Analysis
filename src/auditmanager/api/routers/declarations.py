@@ -8,10 +8,11 @@ contract declares, and the gate compares the result on every run.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Final, Mapping
+import re
+from typing import Annotated, Any, Final, Literal, Mapping
 
 from fastapi import Header, Query
-from pydantic import BeforeValidator, Field, WithJsonSchema
+from pydantic import AwareDatetime, BeforeValidator, Field, WithJsonSchema
 
 from auditmanager.api.schemas.common import DEFAULT_LIMIT
 
@@ -27,6 +28,9 @@ __all__ = [
     "IncludeArchivedParam",
     "LimitParam",
     "ProjectUidFilterParam",
+    "QueueCreatedFromParam",
+    "QueueCreatedToParam",
+    "QueueStateFilterParam",
     "RegistrationStatusFilterParam",
     "STATE_CONFLICT_DESCRIPTION",
     "VerdictFilterParam",
@@ -186,6 +190,72 @@ ProjectUidFilterParam = Annotated[
     BeforeValidator(_absent),
     WithJsonSchema({"$ref": "#/components/schemas/ProjectUid"}),
     Query(json_schema_extra=optional_property),
+]
+
+#: `UI-PARITY-QUEUE-A`. The three optional filters of ``listExecutionQueue``. ``state`` is one of the eight states a
+#: job can be in (the ``job`` state machine; ``ExecutionQueueItem.state`` stays an open string, so the filter is the
+#: only place the set is declared), spelled as an inline enum the way ``compareDocumentVersions``' ``mode`` is. The
+#: period is the half-open interval ``[created_from, created_to)`` over the item's ``created_at``: a lower bound that is
+#: included and an upper bound that is not, so two adjacent periods never count a job twice. Both are RFC 3339
+#: instants with an offset (``AwareDatetime``): a time with no zone is refused as ``validation_failed`` rather than
+#: read in a zone the server chose. As everywhere above, the empty string is the absent parameter.
+_RFC3339_INSTANT: Final[re.Pattern[str]] = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})"
+)
+
+
+def _instant(value: Any) -> Any:
+    """An RFC 3339 date-time with an offset, or the absent parameter.
+
+    Pydantic reads a bare number, or a numeric string, as seconds since 1970 -- so ``?created_from=20261104`` would
+    be accepted and mean an evening in August 1970, a filter that silently selects something else. The shape the
+    contract names is checked first instead, and anything else is ``validation_failed``. (A ``+`` offset in a query
+    string must be written ``%2B``; an unescaped one arrives as a space and is refused for the same reason.)"""
+    value = _absent(value)
+    if isinstance(value, str) and _RFC3339_INSTANT.fullmatch(value) is None:
+        raise ValueError("an RFC 3339 date-time with an offset, such as 2026-11-04T10:00:00Z")
+    return value
+
+
+QUEUE_JOB_STATES: Final[tuple[str, ...]] = (
+    "queued", "leased", "running", "retry_wait", "succeeded", "failed", "cancelled", "dead_letter",
+)
+QueueStateFilterParam = Annotated[
+    Literal["queued", "leased", "running", "retry_wait", "succeeded", "failed", "cancelled", "dead_letter"] | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"type": "string", "enum": list(QUEUE_JOB_STATES)}),
+    Query(
+        description=(
+            "Only the jobs in this state; every state when absent. A cursor is valid only under the filters it was "
+            "issued under: presented with other filters it is refused as `validation_failed` with `constraint: scope`."
+        ),
+        json_schema_extra=optional_property,
+    ),
+]
+QueueCreatedFromParam = Annotated[
+    AwareDatetime | None,
+    BeforeValidator(_instant),
+    WithJsonSchema({"type": "string", "format": "date-time"}),
+    Query(
+        description=(
+            "Only the jobs created at or after this instant (included), an RFC 3339 time with an offset. With "
+            "`created_to` it bounds the half-open period `[created_from, created_to)` over `created_at`; part of the "
+            "filters a cursor is bound to."
+        ),
+        json_schema_extra=optional_property,
+    ),
+]
+QueueCreatedToParam = Annotated[
+    AwareDatetime | None,
+    BeforeValidator(_instant),
+    WithJsonSchema({"type": "string", "format": "date-time"}),
+    Query(
+        description=(
+            "Only the jobs created before this instant (not included), an RFC 3339 time with an offset; part of the "
+            "filters a cursor is bound to."
+        ),
+        json_schema_extra=optional_property,
+    ),
 ]
 
 

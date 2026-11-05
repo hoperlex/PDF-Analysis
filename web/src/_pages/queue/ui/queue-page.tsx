@@ -8,9 +8,10 @@ import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  UpdateTime, canExecute, executionFailure, jobHoldsLease, runWorker, useExecutionQueue, useWorkerLookup,
+  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, runWorker, useExecutionQueue,
+  useWorkerLookup,
 } from '@/entities/execution';
-import type { ExecutionFailure } from '@/entities/execution';
+import type { ExecutionFailure, ExecutionQueueFilter, ExecutionQueueState } from '@/entities/execution';
 import { useCancelRun } from '@/features/cancel-run';
 import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
@@ -55,13 +56,16 @@ export function intentLabel(intent: Intent): string {
 
 export function QueuePage() {
   const [cursors, setCursors] = useState<string[]>([]);
+  // `UI-PARITY-QUEUE-A`: the state the list is narrowed to; '' is every state.
+  const [stateFilter, setStateFilter] = useState<ExecutionQueueState | ''>('');
   const [intent, setIntent] = useState<Intent | null>(null);
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
   const [completed, setCompleted] = useState(false);
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
-  const queue = useExecutionQueue(cursor);
+  const filter: ExecutionQueueFilter = stateFilter === '' ? {} : { state: stateFilter };
+  const queue = useExecutionQueue(cursor, filter);
   // `W54-WORKERS-WEB`: the worker registry is read only while a listed Job holds a Lease.
   const holdsLease = queue.data?.items.some((item) => jobHoldsLease(item.state)) ?? false;
   const workers = useWorkerLookup(holdsLease);
@@ -81,6 +85,14 @@ export function QueuePage() {
   // does not describe. `0` means no read has succeeded yet.
   const asOf = queue.dataUpdatedAt > 0 ? queue.dataUpdatedAt : null;
   const costFailure = reauditCost.error === null ? null : executionFailure(reauditCost.error, false);
+
+  // A cursor belongs to the filter it was issued under (the server refuses it under another), so the
+  // cursors and the filter move together: choosing a state returns to the first page of that state.
+  function chooseState(next: string) {
+    const known = QUEUE_STATE_OPTIONS.find((option) => option.value === next);
+    setStateFilter(known === undefined ? '' : known.value);
+    setCursors([]);
+  }
 
   function select(nextIntent: NewIntent) {
     sequence.current += 1;
@@ -134,6 +146,22 @@ export function QueuePage() {
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>}
     >
       <UpdateTime dataUpdatedAt={queue.dataUpdatedAt} failed={queue.isError} />
+      <p>
+        <label>
+          Состояние задачи{' '}
+          <select
+            name="queue-state"
+            data-queue-state-filter
+            value={stateFilter}
+            onChange={(event) => chooseState(event.currentTarget.value)}
+          >
+            <option value="">Все состояния</option>
+            {QUEUE_STATE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </p>
       {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
       {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
         <button
@@ -171,6 +199,7 @@ export function QueuePage() {
             roles={roles}
             asOf={asOf}
             busy={busy}
+            filtered={stateFilter !== ''}
             workerOf={(runId) => runWorker(workers.data, workers.error !== null, runId)}
             onCancel={(item) => select({ kind: 'cancel', item })}
             onReaudit={(item) => select({ kind: 'reaudit', item })}
