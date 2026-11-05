@@ -35,6 +35,8 @@ import styles from './assignment-board.module.css';
 
 export interface AssignmentBoardProps {
   readonly roles: readonly Role[];
+  /** `R-151m`: the header's project, or `null`/absent for «Все проекты». The list is the server's, filtered. */
+  readonly projectUid?: string | null | undefined;
   /** The viewer's own account identity, or `null` while it is not known. */
   readonly viewerUid: string | null;
   /** Active experts, for an administrator's reassignment. */
@@ -111,13 +113,14 @@ export function AssignmentRows({ items, roles, viewerUid, experts }: AssignmentR
   );
 }
 
-export function AssignmentBoard({ roles, viewerUid, experts }: AssignmentBoardProps) {
+export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }: AssignmentBoardProps) {
   const admin = roles.includes('admin');
   const [status, setStatus] = useState<AssignmentStatus | ''>('');
   const [mine, setMine] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>();
   const query = useAssignments({
     limit: ASSIGNMENT_PAGE_LIMIT,
+    ...(projectUid === null ? {} : { project_uid: projectUid }),
     ...(status === '' ? {} : { status }),
     ...(admin && mine ? { mine: true } : {}),
     ...(cursor === undefined ? {} : { cursor }),

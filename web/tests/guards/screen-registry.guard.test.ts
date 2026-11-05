@@ -336,6 +336,8 @@ function scopeOf(registry: readonly ScreenEntry[], scope: ProjectScope): string[
 /** The ruling (`R-150c`): the screens that follow the header's project. Order is the registry's. */
 const OPTIONAL_SCREENS = [
   '/dashboard',
+  // `R-151m`: «Диспетчер» follows the header.
+  '/dispatcher',
   '/section-optimisation',
   '/version-comparison',
   '/stage-comparison',
@@ -394,15 +396,15 @@ describe('R-150c: every row states how the screen relates to the project', () =>
     expect(REGISTRY.find((row) => row.address === '/projects')?.projectScope).toBe('global');
   });
 
-  it('optional: exactly the six screens that follow the header', () => {
+  it('optional: exactly the seven screens that follow the header', () => {
     expect(scopeOf(REGISTRY, 'optional').sort()).toEqual([...OPTIONAL_SCREENS].sort());
   });
 
-  it('global: every other screen, including /dispatcher and /blocks (R-151m: /blocks is the chooser out of the menu; /dispatcher follows the header once its screen reads ?project=, owed)', () => {
+  it('global: every other screen, including /blocks (R-151m: the chooser out of the menu)', () => {
     const others = REGISTRY.filter((row) => !row.address.includes('[project_uid]') && !OPTIONAL_SCREENS.includes(row.address));
     expect(others.length).toBeGreaterThan(0);
     expect(others.filter((row) => row.projectScope !== 'global').map((row) => row.address)).toEqual([]);
-    for (const address of ['/dispatcher', '/blocks']) {
+    for (const address of ['/blocks']) {
       expect(REGISTRY.find((row) => row.address === address)?.projectScope, address).toBe('global');
     }
     // The three sets partition the registry.

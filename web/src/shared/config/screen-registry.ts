@@ -192,7 +192,8 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: ['expert', 'admin'], // R-150w: not a viewer's screen
     inMenu: true,
-    projectScope: 'global',
+    // `R-151m`: follows the header's project (`?project=`), «Все проекты» without it.
+    projectScope: 'optional',
   },
   /*
    * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
