@@ -28,13 +28,13 @@ import {
   prepareComparisonMatrix,
   undoComparisonMatrixEdit,
 } from '@/shared/api';
+import { MATRIX_BUILD_POLL_MS } from '@/shared/config';
 
 import { revisionKey } from '../model/draft';
 
 import { COMPARISON_KEYS } from './keys';
 import { useKeyedCommand } from './use-keyed-command';
 
-export const MATRIX_BUILD_POLL_MS = 1_500;
 /** The history is read in one page; a set with more edits shows the newest. */
 export const EDIT_HISTORY_LIMIT = 200;
 

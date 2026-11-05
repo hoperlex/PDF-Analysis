@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ComparisonAiEstimate, StageChainBatch, StageChainBatchSelection, StagePair } from '@/shared/api';
 import { ApiError, cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageChainBatch,
   getStageSheetMap, newIdempotencyKey, pauseStageChainBatch, resumeStageChainBatch, startStageChainBatch } from '@/shared/api';
+import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { ErrorState } from '@/shared/ui';
@@ -15,8 +16,6 @@ import type { StageEngine } from '@/widgets/stage-v3-experimental';
 import { IntentKey, RUN_WORDS } from '../model/runs';
 import { StageEstimateConsent } from './estimate-consent';
 import styles from './stage-run-controls.module.css';
-
-export const STAGE_REVIEW_POLL_MS = 1500;
 
 interface PreparedPair { pair: StagePair; revisionId: string; estimate?: ComparisonAiEstimate }
 class MissingStageMap extends Error {

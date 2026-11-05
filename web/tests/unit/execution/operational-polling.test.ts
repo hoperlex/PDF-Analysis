@@ -1,5 +1,5 @@
 /**
- * The polling policy of the queue and the journal.
+ * The polling policy of the queue, the journal and the «Исполнители» worker list.
  *
  * The schedule is asserted on the pure functions, without timers. The wiring is asserted on
  * real React Query `Query` objects: the settled-read counters are what the policy leans on,
@@ -12,7 +12,10 @@ import { describe, expect, it } from 'vitest';
 import {
   OPERATIONAL_LIST_POLLING, OPERATIONAL_LIST_STALE_MS, isOperationalListStale, operationalListInterval,
 } from '@/shared/config';
-import { journalQueryOptions, queueQueryOptions, workersQueryOptions } from '@/entities/execution';
+import {
+  WORKER_LOOKUP_LIMIT, WORKER_PAGE_LIMIT, journalQueryOptions, queueQueryOptions, workersQueryOptions,
+} from '@/entities/execution';
+import { connectionsQueryOptions, routesQueryOptions } from '@/entities/executor-connection';
 import {
   OPERATIONAL_LIST_POLL, advanceLedger, operationalListRefetchInterval,
 } from '@/entities/execution/api/operational-poll';
@@ -144,9 +147,12 @@ describe('the failure streak, kept from the query counters', () => {
   });
 });
 
-describe('what the queue and the journal poll, and what they do not', () => {
-  it('applies the policy to the queue and to every journal variant', () => {
-    for (const options of [queueQueryOptions(), queueQueryOptions('c1'), journalQueryOptions(), journalQueryOptions(RUN_ID, 'c1', false)]) {
+describe('what the operational lists poll, and what they do not', () => {
+  it('applies the policy to the queue, to every journal variant and to every worker-list variant', () => {
+    for (const options of [
+      queueQueryOptions(), queueQueryOptions('c1'), journalQueryOptions(), journalQueryOptions(RUN_ID, 'c1', false),
+      workersQueryOptions(), workersQueryOptions('c1'), workersQueryOptions(undefined, WORKER_LOOKUP_LIMIT, false),
+    ]) {
       expect(options.refetchInterval).toBe(operationalListRefetchInterval);
       expect(options.refetchIntervalInBackground).toBe(false);
     }
@@ -156,12 +162,29 @@ describe('what the queue and the journal poll, and what they do not', () => {
   it('keeps the focus refresh, which is how a hidden tab catches up', () => {
     expect(queueQueryOptions().refetchOnWindowFocus).toBe('always');
     expect(journalQueryOptions().refetchOnWindowFocus).toBe('always');
+    expect(workersQueryOptions().refetchOnWindowFocus).toBe('always');
     expect(queueQueryOptions().staleTime).toBe(0);
+    expect(workersQueryOptions().staleTime).toBe(0);
   });
 
-  it('leaves «Исполнители» alone: that screen belongs to another change', () => {
-    const options: Record<string, unknown> = { ...workersQueryOptions() };
-    expect(options.refetchInterval).toBeUndefined();
-    expect(options.refetchIntervalInBackground).toBeUndefined();
+  it('polls the worker list on the same schedule: 10 s, none while the tab is hidden, backed off after a failure (D-307)', () => {
+    const interval = workersQueryOptions().refetchInterval;
+    expect(interval).toBe(operationalListRefetchInterval);
+    expect(OPERATIONAL_LIST_POLL.refetchInterval).toBe(interval);
+    // The schedule is the policy's own, asserted above on the pure function: nothing of its own here.
+    expect(operationalListInterval({ failures: 0, visible: true })).toBe(10 * SECOND);
+    expect(operationalListInterval({ failures: 1, visible: true })).toBe(20 * SECOND);
+    expect(operationalListInterval({ failures: 0, visible: false })).toBe(false);
+  });
+
+  it('does not poll a worker read that is switched off, which is how the page\'s other tabs keep it quiet', () => {
+    // `useWorkers(cursor, false)` is this read; React Query schedules nothing for a query that is not enabled.
+    expect(workersQueryOptions(undefined, WORKER_PAGE_LIMIT, false).enabled).toBe(false);
+    expect(workersQueryOptions(undefined, WORKER_PAGE_LIMIT).enabled).toBe(true);
+  });
+
+  it('polls nothing it was not told to: the connection list and the routes of «Исполнители» stay on demand', () => {
+    expect(connectionsQueryOptions()).not.toHaveProperty('refetchInterval');
+    expect(routesQueryOptions()).not.toHaveProperty('refetchInterval');
   });
 });

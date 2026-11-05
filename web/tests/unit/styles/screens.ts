@@ -1625,6 +1625,10 @@ export function screens(): Screen[] {
   // `UI-PARITY-P0A`: the place line of a record of a classified version (the rows above carry none).
   add('KnowledgeBase with a place line', render(createElement(KnowledgeBase, { records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })) })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
+  // `D-313`: an empty page under a category, a verdict or a project says so, with both ways out on the surface.
+  add('KnowledgeBase empty under a filter', render(createElement(KnowledgeBase, {
+    records: [], narrowing: { onResetFilters: noop, allProjectsHref: '/knowledge-base' },
+  })));
 
   /*
    * «Дашборд» for one project, and for a project the server does not know (`UI-PARITY-01`,

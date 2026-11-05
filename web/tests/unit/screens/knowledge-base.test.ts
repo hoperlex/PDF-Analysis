@@ -24,6 +24,7 @@ import { join } from 'node:path';
 
 import type { DecisionRecord } from '@/shared/api';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
+import type { KnowledgeBaseNarrowing } from '@/widgets/knowledge-base';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { render } from '../review/fixtures';
@@ -165,6 +166,14 @@ describe('the three states a read can end in are all explicit', () => {
     expect(markup).not.toContain('am-kb__record');
   });
 
+  it('the whole journal being empty is the only place that says the installation has taken no decision', () => {
+    const markup = render(createElement(KnowledgeBase, { records: [] }));
+    expect(markup).toContain('data-knowledge-base-empty="installation"');
+    expect(markup).toContain('В этой установке ещё не принято ни одного решения');
+    expect(markup).not.toContain('По выбранному отбору');
+    expect(markup).not.toContain('Сбросить категорию и вердикт');
+  });
+
   it('a failure renders the refusal it was given, with its correlation id', () => {
     const markup = render(
       createElement(KnowledgeBase, {
@@ -179,6 +188,46 @@ describe('the three states a read can end in are all explicit', () => {
   it('a read in flight is a loading state and never an empty one', () => {
     const markup = render(createElement(KnowledgeBase, { records: [], isLoading: true }));
     expect(markup).not.toContain('Решений пока нет');
+  });
+});
+
+describe('an empty page under a category, a verdict or a project is about that selection (D-313)', () => {
+  const both = { onResetFilters: () => {}, allProjectsHref: '/knowledge-base?foo=bar' };
+  const empty = (narrowing: KnowledgeBaseNarrowing) =>
+    render(createElement(KnowledgeBase, { records: [], narrowing }));
+
+  it('says nothing about the installation, only that nothing fits the selection', () => {
+    const markup = empty(both);
+    expect(markup).toContain('data-knowledge-base-empty="narrowed"');
+    expect(markup).toContain('По выбранному отбору решений нет');
+    expect(markup).not.toContain('ещё не принято ни одного решения');
+    expect(markup).not.toContain('Решений пока нет');
+    expect(markup).not.toContain('data-knowledge-base-empty="installation"');
+  });
+
+  it('offers both ways back when a filter and a project are on: the reset button and «Все проекты»', () => {
+    const markup = empty(both);
+    expect(markup).toMatch(/<button [^>]*class="am-button am-button--quiet"[^>]*>Сбросить категорию и вердикт<\/button>/);
+    expect(markup).toMatch(/<a [^>]*class="am-button am-button--quiet"[^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все проекты<\/a>|<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*class="am-button am-button--quiet"[^>]*>Все проекты<\/a>/);
+  });
+
+  it('offers only the reset when only a filter is on, and only «Все проекты» when only a project is', () => {
+    const filterOnly = empty({ onResetFilters: () => {} });
+    expect(filterOnly).toContain('Сбросить категорию и вердикт');
+    expect(filterOnly).not.toContain('Все проекты');
+    const projectOnly = empty({ allProjectsHref: '/knowledge-base' });
+    expect(projectOnly).toContain('>Все проекты<');
+    expect(projectOnly).not.toContain('Сбросить категорию и вердикт');
+    expect(projectOnly).not.toContain('<button');
+  });
+
+  it('is only for an empty page: a narrowed list that has records shows them, and a read in flight is not an empty one', () => {
+    const rows = render(createElement(KnowledgeBase, { records: [record()], narrowing: both }));
+    expect(rows).toContain('class="am-kb__record"');
+    expect(rows).not.toContain('По выбранному отбору');
+    const loading = render(createElement(KnowledgeBase, { records: [], isLoading: true, narrowing: both }));
+    expect(loading).not.toContain('По выбранному отбору');
+    expect(loading).not.toContain('data-knowledge-base-empty');
   });
 });
 

@@ -5,14 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { ComparisonBox, StageChainRun, StageChangeCard } from '@/shared/api';
 import { failureMessage, getStageChainRun, newIdempotencyKey, recomputeStageTextEvidence } from '@/shared/api';
+import { STAGE_TEXT_POLL_MS } from '@/shared/config';
 import { ErrorState } from '@/shared/ui';
 
 import { fragmentBox, fragmentLookup } from '../model/evidence';
 import type { StageTextEvidenceData } from '../model/evidence';
 import styles from './stage-text-evidence.module.css';
 import { StageReviewRequest } from './stage-review-request';
-
-export const STAGE_TEXT_POLL_MS = 1500;
 
 export interface StageTextEvidenceProps {
   readonly revisionId: string | undefined;

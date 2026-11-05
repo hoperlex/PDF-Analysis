@@ -8,7 +8,10 @@
 
 export { MissingConfigurationError, getApiBaseUrl, getInstanceLabel, getWebBuildId, hasApiBaseUrl } from './env';
 export {
-  OPERATIONAL_LIST_POLLING, OPERATIONAL_LIST_STALE_MS, RUN_POLLING,
+  AGENT_INSTALL_POLL_MS, AGENT_STATUS_POLL_MS, AI_POLL_MS, AI_QUEUE_POLL_MS, MATRIX_BUILD_POLL_MS,
+  OPERATIONAL_LIST_POLLING, OPERATIONAL_LIST_STALE_MS, OVERVIEW_BUSY_POLL_MS, OVERVIEW_IDLE_POLL_MS,
+  PROBE_POLL_MS, RUN_POLLING, SERIES_POLL_MS, SPECIFICATION_POLL_MS, STAGE_REVIEW_POLL_MS,
+  STAGE_TEXT_POLL_MS, UPLOAD_POLL_MS,
   isOperationalListStale, operationalListInterval, pollDelayMs,
 } from './polling';
 export type { OperationalListFreshness, OperationalListPollState } from './polling';

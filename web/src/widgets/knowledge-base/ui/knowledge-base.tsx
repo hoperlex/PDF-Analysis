@@ -43,10 +43,25 @@ import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
+/**
+ * What narrows the list the reader is looking at, and the way back out of it (`D-313`). The page
+ * passes it only while a category, a verdict or a project is chosen; it is then what makes an
+ * empty page say «По выбранному отбору решений нет» instead of claiming that the installation
+ * has taken no decision at all, which an empty filtered page cannot know.
+ */
+export interface KnowledgeBaseNarrowing {
+  /** Clears the category and the verdict. Absent when neither is chosen, so no button does nothing. */
+  readonly onResetFilters?: (() => void) | undefined;
+  /** Where «Все проекты» leads: this screen with the project taken out of the address. Absent when no project is chosen. */
+  readonly allProjectsHref?: string | undefined;
+}
+
 export interface KnowledgeBaseProps {
   readonly records: readonly DecisionRecord[];
   readonly isLoading?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
+  /** Present while the list is narrowed by a category, a verdict or a project; absent for the whole journal. */
+  readonly narrowing?: KnowledgeBaseNarrowing | undefined;
 }
 
 // Category headings come from `CATEGORY_LABELS` in `entities/expert-decision`: the page's
@@ -91,7 +106,7 @@ function hasInvalidVocabulary(record: DecisionRecord): boolean {
   );
 }
 
-export function KnowledgeBase({ records, isLoading, error }: KnowledgeBaseProps) {
+export function KnowledgeBase({ records, isLoading, error, narrowing }: KnowledgeBaseProps) {
   if (isLoading === true) return <LoadingState what="базу знаний" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 
@@ -106,17 +121,52 @@ export function KnowledgeBase({ records, isLoading, error }: KnowledgeBaseProps)
     );
   }
 
+  if (records.length === 0 && narrowing !== undefined) {
+    // An empty page under a filter says nothing about the installation: only the whole journal
+    // can say that no decision was taken. So the sentence is about the selection, and the way out
+    // of it is on the screen.
+    return (
+      <div data-knowledge-base-empty="narrowed">
+        <EmptyState
+          title="По выбранному отбору решений нет"
+          detail={
+            <p>
+              Ни одно решение не подходит под выбранный отбор. Его можно снять и посмотреть, что
+              есть без него.
+            </p>
+          }
+          action={
+            <>
+              {narrowing.onResetFilters === undefined ? null : (
+                <button type="button" className="am-button am-button--quiet" onClick={narrowing.onResetFilters}>
+                  Сбросить категорию и вердикт
+                </button>
+              )}
+              {narrowing.allProjectsHref === undefined ? null : (
+                <Link className="am-button am-button--quiet" href={narrowing.allProjectsHref}>
+                  Все проекты
+                </Link>
+              )}
+            </>
+          }
+        />
+      </div>
+    );
+  }
+
   if (records.length === 0) {
     return (
-      <EmptyState
-        title="Решений пока нет"
-        detail={
-          <p>
-            В этой установке ещё не принято ни одного решения по находкам. Первый приём или
-            отклонение на экране проверки появится здесь.
-          </p>
-        }
-      />
+      <div data-knowledge-base-empty="installation">
+        <EmptyState
+          title="Решений пока нет"
+          detail={
+            <p>
+              В этой установке ещё не принято ни одного решения по находкам. Первый приём или
+              отклонение на экране проверки появится здесь.
+            </p>
+          }
+        />
+      </div>
     );
   }
 

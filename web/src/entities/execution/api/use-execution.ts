@@ -18,8 +18,8 @@ export const EXECUTION_PAGE_LIMIT = 25;
  * the screen an operator opens to see what the runner is doing now.
  *
  * They also refresh themselves on the `OPERATIONAL_LIST_POLLING` cadence (`operational-poll.ts`):
- * while the tab is visible, backing off after a failed read. «Исполнители» does not poll yet;
- * that screen is another change.
+ * while the tab is visible, backing off after a failed read. The worker list of «Исполнители»
+ * follows the same policy (below).
  */
 
 export function queueQueryOptions(cursor?: string) {
@@ -70,9 +70,12 @@ export const WORKER_PAGE_LIMIT = 50;
 export const WORKER_LOOKUP_LIMIT = 200;
 
 /*
- * The same freshness rule as the queue and the journal (`C-26`): a worker's state is the
- * thing an operator opens this screen to see now. Refreshed on focus, after an intake
- * command (`queryKeys.execution.all()`), and by «Обновить».
+ * The same freshness and refresh rule as the queue and the journal (`C-26`, D-307): a worker's
+ * state is the thing an operator opens this screen to see now. Refreshed on the
+ * `OPERATIONAL_LIST_POLLING` cadence while the tab is visible, on focus, after an intake command
+ * (`queryKeys.execution.all()`), and by «Обновить». The larger lookup page that the queue and the
+ * run screen read to name a run's worker is the same query shape, so it follows the same cadence
+ * while one of those screens is open.
  */
 export function workersQueryOptions(cursor?: string, limit = WORKER_PAGE_LIMIT, enabled = true) {
   return {
@@ -80,14 +83,16 @@ export function workersQueryOptions(cursor?: string, limit = WORKER_PAGE_LIMIT, 
     queryFn: async () => (await listWorkers({
       query: { limit, ...(cursor === undefined ? {} : { cursor }) },
     })).data,
+    ...OPERATIONAL_LIST_POLL,
     refetchOnWindowFocus: 'always',
     staleTime: 0,
     enabled,
   } as const;
 }
 
-export function useWorkers(cursor?: string) {
-  return useQuery<ExecutionWorkerPage>(workersQueryOptions(cursor));
+/** One page of the registry. `enabled` is `false` while the screen shows a tab that does not list workers. */
+export function useWorkers(cursor?: string, enabled = true) {
+  return useQuery<ExecutionWorkerPage>(workersQueryOptions(cursor, WORKER_PAGE_LIMIT, enabled));
 }
 
 /** The first `WORKER_LOOKUP_LIMIT` workers, read only while some run can hold one. */

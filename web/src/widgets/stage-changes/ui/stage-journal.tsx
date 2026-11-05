@@ -7,6 +7,7 @@ import {
   failureMessage, getStageChainRun, getStageChangeJournal, streamStageChangeJournalHtml,
   streamStageChangeJournalPdf, streamStageChangeJournalXlsx,
 } from '@/shared/api';
+import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
 import { browserDownloadSink, deliverDownload } from '@/features/export-run';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 
@@ -15,8 +16,6 @@ import { journalGroups } from '../model/journal';
 import { SYSTEM_WORDS } from '../model/cards';
 import type { StageReviewProps } from './stage-changes';
 import styles from './stage-journal.module.css';
-
-export const STAGE_REVIEW_POLL_MS = 1500;
 
 type Grouping = 'designation' | 'section' | 'system';
 type Format = 'xlsx' | 'pdf' | 'html';

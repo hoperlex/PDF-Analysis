@@ -28,12 +28,10 @@ import type {
   ExecutorConnectionId,
 } from '@/shared/api';
 import { getExecutorAgentInstall, queryKeys } from '@/shared/api';
+import { AGENT_INSTALL_POLL_MS, AGENT_STATUS_POLL_MS } from '@/shared/config';
 import { connectionDetailQueryOptions } from '@/entities/executor-connection';
 
 import { agentIsMoving } from './lifecycle';
-
-export const AGENT_INSTALL_POLL_MS = 3000;
-export const AGENT_STATUS_POLL_MS = 5000;
 
 /** An install the worker is still working on: the person has nothing to do, so the page re-reads. */
 export function installIsMoving(install: ExecutorAgentInstall | undefined): boolean {

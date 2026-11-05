@@ -3159,6 +3159,19 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         ],
       }),
   },
+  /*
+   * `D-313`. The knowledge base's empty page under a category, a verdict or a project: a branch the page chooses
+   * from its own state (`filtered`, a project in the address), which a static pass over an address cannot select.
+   * Both ways out are drawn, so the reset button and the «Все проекты» link are judged too.
+   */
+  {
+    name: 'knowledge-base-empty-under-a-selection',
+    make: () =>
+      createElement(KnowledgeBase, {
+        records: [],
+        narrowing: { onResetFilters: () => {}, allProjectsHref: '/knowledge-base' },
+      }),
+  },
   ...BLOCKS_SHAPES,
   /*
    * `W59-SECTION-UI-01`. The stage-and-section panel's shapes an address does not select:

@@ -34,13 +34,13 @@ import {
   resumeComparisonSeries,
   startComparisonSeries,
 } from '@/shared/api';
+import { SERIES_POLL_MS } from '@/shared/config';
 
 import { latestSeries } from '../model/series-words';
 
 import { COMPARISON_KEYS } from './keys';
 import { useKeyedCommand } from './use-keyed-command';
 
-export const SERIES_POLL_MS = 2_000;
 /** Sheet pairs are read in pages of this size, and at most this many pages per transition. */
 export const PAIR_PAGE_LIMIT = 200;
 export const PAIR_PAGE_CAP = 10;
