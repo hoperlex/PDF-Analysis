@@ -58,6 +58,21 @@ def _tokens(module: ModuleType, value: str) -> list[str]:
 # --- the designation fold ---------------------------------------------------------------
 
 
+#: `R-150w` (and the matrix's defaults): reads the viewer may NOT make. Every other product read
+#: is open to «Наблюдатель» (`R-150e`). A literal from the rulings, not read from the seam.
+VIEWER_DENIED_READS = frozenset({
+    "listExecutionQueue", "listExecutionJournal", "listWorkers", "listExecutorConnections",
+    "getExecutorConnection", "listExecutorRoutes", "getComparisonQueueSummary", "getComparisonAiQueue",
+    "estimateStageChainRun", "listAssignments", "getAssignment", "listExecutorGroups",
+    "getExecutorGroup", "getExecutorGroupCapacity", "listExecutorRoutingRules",
+})
+
+
+def _read_roles(name: str) -> frozenset[str]:
+    """Any one role reads; the viewer as well unless `R-150w` keeps the read from it."""
+    return frozenset({"expert", "admin"}) if name in VIEWER_DENIED_READS else frozenset({"expert", "admin", "viewer"})
+
+
 def test_the_fold_is_a_one_to_one_character_map_with_no_case_function() -> None:
     module = _migration()
     assert len(module.FOLD_FROM) == len(module.FOLD_TO)
@@ -230,11 +245,10 @@ def test_a_pinned_run_renders_its_snapshot_after_the_bundle() -> None:
 
 def test_the_norms_reads_need_a_role_and_the_designation_needs_admin() -> None:
     """`R-80` any-role reads; `R-113` the history and the designation for `admin`."""
-    any_role = frozenset({"expert", "admin"})
     for operation in (
         "searchNorms", "getNormDocument", "listNormParagraphs",
         "streamNormDocumentContent", "listNormSnapshots",
     ):
-        assert OPERATION_ROLES[operation] == any_role, operation
+        assert OPERATION_ROLES[operation] == _read_roles(operation), operation
     for operation in ("listNormSnapshotEvents", "setCurrentNormSnapshot"):
         assert OPERATION_ROLES[operation] == frozenset({"admin"}), operation

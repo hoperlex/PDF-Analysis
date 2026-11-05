@@ -1,5 +1,27 @@
 # Current state
 
+**Updated 2026-11-05 by `UI-PARITY-INT-1105` (unverified development candidate, published ahead of its checks by the owner's order).** UI-parity waves 0–3 code on one tree (`docs/program/UI-PARITY-01.md`, `R-150a`…`R-150z`). It holds:
+- the readable queue (contract 1.18.0: work names, start, end, error, state and period filters);
+- document audit-state counters (1.19.0, `UI-PARITY-METRICS.md`);
+- the viewer role «Наблюдатель» (`Role` gains `viewer`; 112 reads open to it; the queue, journal, executors and assignments closed to it; never combined with another role; migration `0050_viewer_role`; the admin forms do not offer it yet, `VIEWER_ROLE_OFFERED = false`), and screens that stop offering expert actions to it;
+- the «Проекты ▾» selector in the top strip with «не запускались» / «нет решений эксперта»; `/projects` leaves the sidebar;
+- the project carried in the address on the comparison screens; the project tab, the chosen finding and the verdict filter in the address;
+- the review's verdict tally and filter;
+- the context strip «Проекты › Проект › Документ › Версия › Прогон › Разбор» with a version choice;
+- «Отменить прогон» and «События прогона» on the run page;
+- a job state badge in the queue; «Обновить» on a project's sections;
+- one source for poll intervals, with the workers list auto-refreshing.
+
+Checks run per branch before the merge:
+- readable queue: contract 559, web 1007 + 327, stand integration 18 + 60 + 37;
+- polling: web 677;
+- counters: contract 706, unit 94, `tsc`, eslint, stand integration (dashboard 184, API 101, composition, characterization 75); its full web battery was voided by host memory;
+- viewer role: contract 543, `tsc`, stand access 309.
+
+**Not run on the merged tree:** the combined check `.local/evidence/ui-parity-int-logs/` was queued at publication; the web branches merged after their own checks were dequeued. No browser journey, no `next build`, no full gate (owner: only on his order). Debt `D-314`. `agent/ui-parity-doc-state-p0d` is postponed (`R-150z`) and not on this tree.
+
+**Updated 2026-11-05 by `UI-PARITY-P0B` (unverified development candidate).** Contract **1.19.0** gives a document an audit state and its counters (`R-150n`…`R-150u`, `docs/program/UI-PARITY-METRICS.md`); the counts are 250 paths / 277 operations / 675 schemas (one new schema, `DocumentAuditCounts`), with no migration and no new error code. A document counts by its current version only; its result run is the latest `published` or `partial` run, and it is `not_run`, `clean`, `awaiting_decision` or `checked`, with a `partial` flag. `listProjects` items carry `audit_counts`, `SectionDocumentCount` carries `audit_counts` and `finding_count`, and `DashboardSummary` carries `awaiting_decision_findings`; all three are tallies of one read model (`dashboard/audit_state.py`). `VerdictCount` is described as every finding of every run, «за всё время». The home tile «Находки, ожидающие решения» reads the new figure and the verdict panel is labelled. The header selector and the new columns are waves 1 and 2. Checks: see the lane's record; the DB-backed tests ran on the lane's own stand.
+
 **Updated 2026-11-04 by `UI-PARITY-P0A` (unverified development candidate).** Contract **1.17.0** is an additive read slice; the counts stay 250 paths / 277 operations / 674 schemas, with no migration and no new error code. `getDashboardSummary` takes an optional `project_uid`: every panel keeps its definition, restricted to that project, and an unknown project is the existing not-found. `listDecisions` takes an optional `project_uid`, a filter where an unknown project gives an empty page. `DecisionRecord` gains `document_uid`, `version_uid`, `project_name` and `document_name`, joined at read time, plus an optional `section` from the current classification. `DecisionRecordPage` gains `total`. Pins, the generated client and `FRONTEND_LOCK.json` are resealed. Checks: contract and unit-api pytest (580 passed on the merged tree); `api:verify`, `tsc` and web contract tests; integration tests on the lane's own stand (the new dashboard, decision and spend tests pass; the reds are the stage-operation ones already red at the base). Pending until the EXEC-2 register repair lands: the 1.17.0 query census in `tests/integration/api/test_query_surface.py` and `getDashboardSummary` in the declared-422 set. No screen consumes the new parameters yet.
 
 **Updated 2026-11-04 by `UI-PARITY-NIGHT-1` (unverified development candidate).** UI/UX parity with the original application starts (`R-150a`…`R-150m`, `docs/program/UI-PARITY-01.md`). «Разбор находок» now reads every finding of a run: `limit` 200, `next_cursor` followed to the end, and no partial list on a failed page. Before this it showed the first 50 silently. The knowledge base pages with «Назад/Далее». «Очередь» and «Журнал выполнения» refresh every 10 s while visible; they back off to 60 s on errors, show «Обновлено ЧЧ:ММ:СС» and mark old data as possibly stale. The screen registry classes every address as `required`/`optional`/`global` for the project context, and pure address helpers implement the path-wins and dependent-reset rules; no screen uses them yet. Owner questions go to debt `D-300`…`D-310`. Checks: focused vitest (97 files / 1589 tests), `tsc`, `eslint` on the touched packages. **No live browser journey and no backend or contract runs** for this web batch.
@@ -19,7 +41,7 @@
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
 - Product `VERSION` is `0.9.0`; this file describes development, not a release.
-- The development API contract is `1.17.0`: **250 paths / 277 operations / 674 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0049_stage_identity_checks`** (`db/migrations/versions/`).
+- The development API contract is `1.19.0`: **250 paths / 277 operations / 675 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0050_viewer_role`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
 Run `infra/deploy/verify-deployed.sh` for the current deployment; this document is no substitute for that probe.

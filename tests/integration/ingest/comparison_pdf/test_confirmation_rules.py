@@ -258,7 +258,7 @@ class TestDecisionElevenNeverTheCurrentVersionOfAPortalDocument:
             if re.search(r"\bcurrent_version_uid\b", path.read_text(encoding="utf-8"))
         )
         assert readers == [
-            "src/auditmanager/dashboard/repository.py",       # the section breakdown (consumer_the_dashboard)
+            "src/auditmanager/dashboard/audit_state.py",      # the audit-state read model the section breakdown tallies (consumer_the_dashboard)
             "src/auditmanager/documents/models.py",           # a docstring
             "src/auditmanager/documents/repository.py",       # the writer and four statements (consumers above)
             "src/auditmanager/ingest/service.py",             # a docstring

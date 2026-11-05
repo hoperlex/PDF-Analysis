@@ -24,6 +24,10 @@
   margin-bottom: 0.4rem;
 }
 
+.work {
+  font-weight: 600;
+}
+
 .identity code {
   white-space: normal;
   overflow-wrap: anywhere;

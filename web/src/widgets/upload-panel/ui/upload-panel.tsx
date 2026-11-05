@@ -26,6 +26,7 @@ import type { ReactNode } from 'react';
 import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
 import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES } from '@/entities/document-version';
 import { UploadDocumentForm, UploadDocumentVersionForm } from '@/features/upload-document';
+import { useMayActAsExpert } from '@/entities/account';
 
 export interface UploadPanelProps {
   readonly projectUid: ProjectUid;
@@ -33,7 +34,7 @@ export interface UploadPanelProps {
   readonly onUploaded?: ((version: DocumentVersion) => void) | undefined;
 }
 
-export function UploadPanel({ projectUid, onUploaded }: UploadPanelProps) {
+function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
   return (
     <section className="am-section">
       <h2>Загрузка</h2>
@@ -65,7 +66,7 @@ export interface UploadVersionPanelProps {
  * stated before the picker in the same words, and what a further version does and does not
  * carry over.
  */
-export function UploadVersionPanel({ projectUid, documentUid, onUploaded }: UploadVersionPanelProps) {
+function UploadVersionPanelInner({ projectUid, documentUid, onUploaded }: UploadVersionPanelProps) {
   return (
     <section className="am-section">
       <h2>Новая версия</h2>
@@ -111,4 +112,24 @@ function EnvelopeNote({ children }: { readonly children: ReactNode }) {
       </div>
     </div>
   );
+}
+
+/**
+ * `R-150e`: offered only to an account that may take an expert's action; the server refuses it
+ * to anyone else. While the account is not known yet the control stays drawn.
+ */
+export function UploadPanel(props: Parameters<typeof UploadPanelInner>[0]) {
+  const mayAct = useMayActAsExpert();
+  if (!mayAct) return <p className="am-note" data-expert-only="UploadPanel">Загружать документы может эксперт.</p>;
+  return <UploadPanelInner {...props} />;
+}
+
+/**
+ * `R-150e`: offered only to an account that may take an expert's action; the server refuses it
+ * to anyone else. While the account is not known yet the control stays drawn.
+ */
+export function UploadVersionPanel(props: Parameters<typeof UploadVersionPanelInner>[0]) {
+  const mayAct = useMayActAsExpert();
+  if (!mayAct) return <p className="am-note" data-expert-only="UploadVersionPanel">Загружать новые версии может эксперт.</p>;
+  return <UploadVersionPanelInner {...props} />;
 }

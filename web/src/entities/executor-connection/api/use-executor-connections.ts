@@ -9,6 +9,7 @@ import type {
   ExecutorRouteList,
 } from '@/shared/api';
 import { getExecutorConnection, listExecutorConnections, listExecutorRoutes, queryKeys } from '@/shared/api';
+import { PROBE_POLL_MS } from '@/shared/config';
 
 /*
  * The same freshness rule as the worker registry (`C-26`): a connection's probe is the thing
@@ -28,9 +29,6 @@ export function connectionsQueryOptions() {
 export function useExecutorConnections() {
   return useQuery<ExecutorConnectionList>(connectionsQueryOptions());
 }
-
-/** How often a connection is read again while one of its probes is still open. */
-export const PROBE_POLL_MS = 3000;
 
 /**
  * A probe is open from the moment it is requested until a worker finishes it, or the server

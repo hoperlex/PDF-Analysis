@@ -1,0 +1,154 @@
+'use client';
+
+/**
+ * `UI-A-22`, `S4`: where a document page sits, as the original's strip «объект › проект › …» does in our
+ * nouns — «Проекты › Проект › Документ › Версия N › Прогон › Разбор». Every step but the current one is a
+ * link built by `routes`; the current one is text with `aria-current="page"`.
+ *
+ * Names come from reads the pages already make or that the query cache shares: the version (title and
+ * number) and the run (its version). A name that is not known yet, or whose read failed, is the generic word
+ * («Проект», «Документ»); the strip never invents a name and never blocks the page.
+ */
+
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+
+import type { DocumentUid, RunId, VersionUid } from '@/shared/api';
+import { routes } from '@/shared/lib';
+import { runStatusQueryOptions } from '@/entities/audit-run';
+import { useDocumentVersion, useVersionList } from '@/entities/document-version';
+import { useProjectList } from '@/entities/project';
+
+import styles from './document-context.module.css';
+
+export type ContextLevel = 'document' | 'version' | 'run' | 'review';
+
+/** Identities as the route gave them (already shape-checked by the page). */
+export interface DocumentContextProps {
+  readonly projectUid: string;
+  readonly current: ContextLevel;
+  readonly documentUid?: string | undefined;
+  readonly versionUid?: string | undefined;
+  readonly runId?: string | undefined;
+}
+
+export interface ContextStep {
+  readonly key: string;
+  readonly label: string;
+  readonly href: string | null;
+}
+
+export interface ContextFacts {
+  readonly projectUid: string;
+  readonly projectName?: string | undefined;
+  readonly documentUid?: string | undefined;
+  readonly documentTitle?: string | undefined;
+  readonly versionUid?: string | undefined;
+  readonly versionOrdinal?: number | undefined;
+  readonly runId?: string | undefined;
+}
+
+const ORDER: readonly ContextLevel[] = ['document', 'version', 'run', 'review'];
+
+/** The steps of the strip, pure: the last reached level is the current one and carries no link. */
+export function contextSteps(facts: ContextFacts, current: ContextLevel): readonly ContextStep[] {
+  const depth = ORDER.indexOf(current);
+  const steps: ContextStep[] = [
+    { key: 'projects', label: 'Проекты', href: routes.projects() },
+    { key: 'project', label: facts.projectName ?? 'Проект', href: routes.project(facts.projectUid) },
+  ];
+  if (facts.documentUid !== undefined) {
+    steps.push({
+      key: 'document',
+      label: facts.documentTitle ?? 'Документ',
+      href: current === 'document' ? null : routes.document(facts.projectUid, facts.documentUid),
+    });
+  }
+  if (depth >= 1 && facts.versionUid !== undefined) {
+    steps.push({
+      key: 'version',
+      label: facts.versionOrdinal === undefined ? 'Версия' : `Версия ${facts.versionOrdinal}`,
+      href: current === 'version' ? null : routes.version(facts.projectUid, facts.versionUid),
+    });
+  }
+  if (depth >= 2 && facts.runId !== undefined) {
+    steps.push({ key: 'run', label: 'Прогон', href: current === 'run' ? null : routes.run(facts.projectUid, facts.runId) });
+  }
+  if (depth >= 3 && facts.runId !== undefined) {
+    steps.push({ key: 'review', label: 'Разбор', href: null });
+  }
+  return steps;
+}
+
+
+/**
+ * `UI-A-24`: on the version page the strip also lets the reader move to another version of the same
+ * document, as the original's V# choice does. It lists the first page of the document's versions; a
+ * longer history says so instead of hiding the rest.
+ */
+function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly projectUid: string; readonly documentUid: string; readonly versionUid: string }) {
+  const router = useRouter();
+  const versions = useVersionList(documentUid as DocumentUid);
+  const items = versions.data?.items ?? [];
+  if (items.length < 2) return null;
+  const more = (versions.data?.page.next_cursor ?? null) !== null;
+  return (
+    <label className={styles.switch}>
+      <span>Версия</span>
+      <select
+        value={versionUid}
+        onChange={(event) => {
+          router.push(routes.version(projectUid, event.target.value));
+        }}
+      >
+        {items.map((item) => (
+          <option key={item.version_uid} value={item.version_uid}>
+            {`Версия ${item.version_ordinal}`}
+          </option>
+        ))}
+      </select>
+      {more ? <span className={styles.more}>показаны первые {items.length}</span> : null}
+    </label>
+  );
+}
+
+export function DocumentContext({ projectUid, current, documentUid, versionUid, runId }: DocumentContextProps) {
+  const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
+  const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
+  const version = useDocumentVersion(knownVersion ?? null);
+  const projects = useProjectList();
+  const projectName = projects.data?.items.find((item) => item.project_uid === projectUid)?.name;
+  const steps = contextSteps(
+    {
+      projectUid,
+      projectName,
+      documentUid: documentUid ?? version.data?.document_uid,
+      documentTitle: version.data?.display_title ?? version.data?.source_filename ?? undefined,
+      versionUid: knownVersion,
+      versionOrdinal: version.data?.version_ordinal,
+      runId,
+    },
+    current,
+  );
+  return (
+    <nav className={styles.strip} aria-label="Где вы находитесь" data-context-level={current}>
+      <ol className={styles.steps}>
+        {steps.map((step) => (
+          <li key={step.key} className={styles.step} data-context-step={step.key}>
+            {step.href === null ? (
+              <span aria-current="page" className={styles.current}>
+                {step.label}
+              </span>
+            ) : (
+              <Link href={step.href}>{step.label}</Link>
+            )}
+          </li>
+        ))}
+      </ol>
+      {current === 'version' && knownVersion !== undefined && (documentUid ?? version.data?.document_uid) !== undefined ? (
+        <VersionSwitch projectUid={projectUid} documentUid={(documentUid ?? version.data?.document_uid) as string} versionUid={knownVersion} />
+      ) : null}
+    </nav>
+  );
+}

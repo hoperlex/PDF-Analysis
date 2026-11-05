@@ -15,6 +15,12 @@
  * `pending` here is wider than it used to be, and the caption is rewritten rather than
  * carried over unchanged.
  *
+ * **The panel is all-time, and says so** (`UI-PARITY-P0B`, `R-150q`). It counts every finding of every
+ * run of every version, so its numbers are history. The findings that still await a decision on the
+ * current versions are another figure (`awaiting_decision_findings`, the home tile), and the two differ
+ * whenever a version was run twice or a document has a second version. The caption and the line under the
+ * heading say «за всё время» so the two are not read as one.
+ *
  * **All four rows, always**, including `needs_manual_review` — which today has no PC-01
  * producer, so it always reads zero, and a computed zero is shown rather than dropped: the
  * non-negotiable both the brief and `R-23`'s addendum state.
@@ -64,15 +70,16 @@ export function VerdictsPanel({ rows }: VerdictsPanelProps) {
   return (
     <div data-panel="findings-by-verdict">
       <p>
-        Находок: <strong>{total}</strong>.
+        Находок за всё время: <strong>{total}</strong>.
       </p>
       <p className="am-state__correlation">
-        Каждая находка системы считана по своему текущему вердикту, включая ту, которую ещё
-        никто не открывал, — «не решено» здесь не то же самое, что «по ней есть
-        отложенное решение».
+        Считаны все находки всех прогонов, в том числе прежних версий документов, каждая по
+        своему текущему вердикту, включая ту, которую ещё никто не открывал, — «не решено»
+        здесь не то же самое, что «по ней есть отложенное решение». Находки, ожидающие
+        решения по текущим версиям, считаются отдельно.
       </p>
       <table>
-        <caption>По вердикту</caption>
+        <caption>По вердикту, за всё время</caption>
         <tbody>
           {VERDICT_VALUES.map((verdict) => (
             <tr key={verdict} data-verdict={verdict}>

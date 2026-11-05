@@ -1027,6 +1027,25 @@ malformed one `validation_failed`, and the operation stays any one role), and `l
 version, and `DecisionRecordPage` gains `total`, the count of entries matching the filters. Neither operation is keyed, and
 the catalogue gains no error code.
 
+`UI-PARITY-QUEUE-A` (contract `1.18.0`, no migration) made the execution queue readable and added no operation:
+`ExecutionQueueItem` gains `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and `version_ordinal`
+(always present, joined at read time: a job belongs to exactly one run, a run to one version of one document of one project) and
+the optional `started_at` (creation of the first attempt), `finished_at` (the job's terminal time), `error_code` (the run's
+`terminal_reason`) and `interrupted_reason`, each omitted rather than sent as `null` when the job has none; `binding_state` and
+`wait_reason` are omitted for an ordinary job as well. `listExecutionQueue` takes the optional `state` filter and the half-open
+period `created_from` / `created_to` over `created_at`; the order is unchanged and a cursor is valid only under the filters it
+was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
+gains no error code.
+
+`UI-PARITY-P0B` (contract `1.19.0`, no migration) added the audit state of a document and its counters and no operation. A new
+schema `DocumentAuditCounts` (`document_count`, `not_run`, `clean`, `awaiting_decision`, `checked`, `partial`,
+`no_expert_decision`) is carried by `listProjects` (the optional `audit_counts` of each `Project`; `createProject` omits it) and
+by `SectionDocumentCount` (`audit_counts` and `finding_count`, required); `DashboardSummary` gains `awaiting_decision_findings`.
+The three are tallies of one read model (`dashboard/audit_state.py`): a document's current version only, its result run being the
+latest `published` or `partial` run in `(created_at, run_id)` order. `VerdictCount` is described as the all-time count of every
+finding of every run. `getDashboardSummary` keeps its optional `project_uid`; `listProjects` and `getDashboardSummary` stay any
+one role, are not keyed, and the catalogue gains no error code. The rules and their rulings are `docs/program/UI-PARITY-METRICS.md`.
+
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the
 identical paragraph, found by `W45-JUDGE-A` on 2026-09-25 and not by the guard. **Both sentences

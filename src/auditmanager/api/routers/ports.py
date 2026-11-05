@@ -29,6 +29,7 @@ one would have taken that decision away from it.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, BinaryIO, Mapping, Protocol, Sequence, runtime_checkable
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
@@ -98,7 +99,18 @@ __all__ = [
 class ExecutionPort(Protocol):
     """W53 execution reads and commands. Implementation is supplied in Stage B."""
 
-    def list_queue(self, *, cursor: str | None, limit: int) -> models.ExecutionQueuePage: ...
+    def list_queue(
+        self, *, cursor: str | None, limit: int, state: str | None,
+        created_from: datetime | None, created_to: datetime | None,
+    ) -> models.ExecutionQueuePage:
+        """One page of the queue, in its fixed order.
+
+        ``state`` keeps the jobs in that state and ``[created_from, created_to)`` the jobs created in that
+        period (`UI-PARITY-QUEUE-A`); each is ``None`` for no filter. **A cursor belongs to the filters it was
+        issued under**: one presented with other filters is ``validation_failed`` with ``constraint: scope``,
+        never a page from the wrong place. An adapter that accepts a filter and ignores it is the defect
+        ``test_every_adapter_accepts_every_parameter_its_port_declares`` exists to catch."""
+        ...
     def list_journal(
         self, *, run_id: str | None, cursor: str | None, limit: int
     ) -> models.ExecutionJournalPage: ...

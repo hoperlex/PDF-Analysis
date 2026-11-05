@@ -136,7 +136,7 @@ def test_the_transport_model_is_closed_and_optional_fields_are_absent_not_null()
 
 
 def test_any_authenticated_role_may_read_it() -> None:
-    assert OPERATION_ROLES["getArV3BetaPackStatus"] == frozenset({ROLE_EXPERT, ROLE_ADMIN})
+    assert OPERATION_ROLES["getArV3BetaPackStatus"] == frozenset({ROLE_EXPERT, ROLE_ADMIN, "viewer"})  # R-150e
     assert OPERATION_ROLES["getArV3BetaPackStatus"] == OPERATION_ROLES["getArV3BetaGroup"]
 
 

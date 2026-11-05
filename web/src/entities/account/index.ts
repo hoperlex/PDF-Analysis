@@ -9,6 +9,9 @@
 export {
   MalformedAccountError,
   ROLE_LABELS,
+  rolesCombinationAllowed,
+  ASSIGNABLE_ROLES,
+  VIEWER_ROLE_OFFERED,
   UnknownRoleError,
   displayLabelOf,
   initialsOf,
@@ -19,3 +22,4 @@ export {
 } from './model/account';
 
 export { meQueryOptions, useMe } from './api/use-me';
+export { mayActAsExpert, useMayActAsExpert } from './api/use-may-act';

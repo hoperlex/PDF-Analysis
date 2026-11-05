@@ -44,7 +44,7 @@ def build_analysis_profile_routes(router: APIRouter, profiles: AnalysisProfilePo
             "and profile hashes and the legacy source of a ported package -- or `null` when "
             "no profile is registered, which run start refuses (АР is such a section: it is "
             "analysed by the six-Run group, not by a text profile). Read-only: no operation "
-            "edits a profile or its status. Any one role, `role:admin|expert`."
+            "edits a profile or its status. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def list_analysis_profiles() -> WireResponse:

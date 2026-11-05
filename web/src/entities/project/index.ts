@@ -34,7 +34,9 @@ export { classifyCreateProjectFailure } from './model/create-failure';
 export type { ProjectListFailure, ProjectListFailureKind } from './model/list-failure';
 export { classifyProjectListFailure } from './model/list-failure';
 
+export type { ProjectListOptions } from './api/use-project-list';
 export { PROJECT_PAGE_LIMIT, useProjectList } from './api/use-project-list';
 
 export type { ProjectRowProps } from './ui/project-row';
 export { ProjectRow } from './ui/project-row';
+export { useAddressProject } from './api/use-address-project';

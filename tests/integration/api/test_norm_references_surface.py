@@ -115,7 +115,7 @@ def test_the_operation_is_served_for_any_one_role_and_declares_no_422() -> None:
     operation = create_documentation_app().openapi()["paths"]["/runs/{run_id}/norm-references"]["get"]
 
     assert operation["operationId"] == "getRunNormReferences"
-    assert OPERATION_ROLES["getRunNormReferences"] == frozenset({"expert", "admin"})
+    assert OPERATION_ROLES["getRunNormReferences"] == frozenset({"expert", "admin", "viewer"})  # R-150e
     assert set(operation["responses"]) == {"200", "401", "403", "404", "500", "503"}
     assert OPERATION_ROLES["getRunNormReferences"] == OPERATION_ROLES["getRunStatus"]
 

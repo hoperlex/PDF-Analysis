@@ -12,21 +12,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MalformedAccountError,
+  ASSIGNABLE_ROLES,
   ROLE_LABELS,
+  VIEWER_ROLE_OFFERED,
   UnknownRoleError,
   displayLabelOf,
   initialsOf,
   meQueryOptions,
   roleLabel,
   roleLabels,
+  rolesCombinationAllowed,
 } from '@/entities/account';
 import { initialsOf as sessionInitialsOf } from '@/app/bff/session/subject';
 import { ROLE_VALUES, queryKeys } from '@/shared/api';
 
 describe('role labels', () => {
-  it('names both contract roles in Russian', () => {
+  it('names every contract role in Russian', () => {
     expect(roleLabel('expert')).toBe('Эксперт');
     expect(roleLabel('admin')).toBe('Администратор');
+    // `R-150x`: the read-only role is «Наблюдатель», code `viewer`.
+    expect(roleLabel('viewer')).toBe('Наблюдатель');
     // Keyed by the contract's own set: a role added to it without a label does not compile,
     // and this asserts the two sets are the same at run time as well.
     expect(Object.keys(ROLE_LABELS).sort()).toEqual([...ROLE_VALUES].sort());
@@ -118,5 +123,21 @@ describe('the account.me query', () => {
     stubMe({ ...ACCOUNT, roles: ['expert', 'superuser'] });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await expect(client.fetchQuery(meQueryOptions())).rejects.toBeInstanceOf(UnknownRoleError);
+  });
+});
+
+describe('the viewer role (R-150e)', () => {
+  it('is the only role of an account that holds it', () => {
+    expect(rolesCombinationAllowed(['viewer'])).toBe(true);
+    expect(rolesCombinationAllowed(['expert', 'admin'])).toBe(true);
+    expect(rolesCombinationAllowed([])).toBe(true);
+    expect(rolesCombinationAllowed(['viewer', 'expert'])).toBe(false);
+    expect(rolesCombinationAllowed(['admin', 'viewer'])).toBe(false);
+  });
+
+  it('is not offered by the administrator forms until every screen hides its actions', () => {
+    // The switch is the rollback: off, the forms offer the two older roles only.
+    expect(VIEWER_ROLE_OFFERED).toBe(false);
+    expect([...ASSIGNABLE_ROLES]).toEqual(['expert', 'admin']);
   });
 });

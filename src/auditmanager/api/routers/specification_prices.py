@@ -80,7 +80,7 @@ def build_specification_price_routes(
             "appear only on a matched row with a numeric quantity; totals are per currency "
             "over those rows only, with every other row counted by its reason. Rows are "
             "paged (`offset`, `limit`, `next_offset`); counts and totals cover every row. "
-            "Nothing is written. Any one role, `role:admin|expert`."
+            "Nothing is written. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def get_specification_prices(

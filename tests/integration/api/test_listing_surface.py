@@ -369,7 +369,7 @@ class _UnusedProjectPort:
 
 
 @pytest.fixture
-def counting_router(ingest: Any, session: Session) -> Surface:
+def counting_router(ingest: Any, session: Session, session_factory: Any) -> Surface:
     """`listProjects` and `listDocuments` on one surface, both over shipped adapters.
 
     `W19-API`, owner ruling `R-10`. The two operations have to agree about what a document
@@ -382,7 +382,7 @@ def counting_router(ingest: Any, session: Session) -> Surface:
 
     return Surface(
         build_router(
-            projects=ProjectAdapter(ingest),
+            projects=ProjectAdapter(ingest, session_factory),
             documents=IngestDocumentAdapter(ingest, session),
             runs=_Unused(),
             findings=_Unused(),
@@ -878,3 +878,41 @@ def test_the_cost_a_listing_shows_is_the_cost_the_run_shows(
     listed = {item["run_id"]: item for item in page["items"]}[run_id]
     assert listed["cost_micros"] == 38_500
     assert listed == ok(get(listing_router, f"/runs/{run_id}"))
+
+
+_AUDIT_COUNT_KEYS = {
+    "document_count", "not_run", "clean", "awaiting_decision", "checked", "partial", "no_expert_decision",
+}
+
+
+def test_every_project_item_carries_the_audit_counts_of_its_documents(
+    counting_router: Surface, catalogue: Catalogue, session: Session
+) -> None:
+    """`UI-PARITY-P0B`: the counters ride on the listing, over the shipped adapter and the real read model.
+
+    The figures of a seeded data set are asserted in ``tests/integration/dashboard/test_audit_state_counters.py``;
+    this is the wire: every item has the seven keys, they add up the way the contract says, they agree with the
+    item's own `document_count`, and a project holding nothing reports zeros and not an absent field.
+    """
+    empty = str(ProjectUid.new())
+    session.execute(
+        text("INSERT INTO project (project_uid, name) VALUES (:p, 'Пустой, со счётчиками')"),
+        {"p": empty},
+    )
+    session.flush()
+
+    items = {item["project_uid"]: item for item in ok(get(counting_router, "/projects?limit=200"))["items"]}
+    assert {catalogue.project_uid, catalogue.other_project_uid, empty} <= set(items)
+    for item in items.values():
+        counts = item["audit_counts"]
+        assert set(counts) == _AUDIT_COUNT_KEYS
+        assert counts["document_count"] == item["document_count"], "one definition of a document, read twice"
+        assert counts["document_count"] == (
+            counts["not_run"] + counts["clean"] + counts["awaiting_decision"] + counts["checked"]
+        )
+        assert counts["no_expert_decision"] == counts["not_run"] + counts["awaiting_decision"]
+        assert counts["partial"] <= counts["document_count"]
+    # No run was ever started in the catalogue: every document is `not_run`, and none is "checked".
+    assert items[catalogue.project_uid]["audit_counts"]["not_run"] == 4
+    assert items[catalogue.other_project_uid]["audit_counts"]["not_run"] == 1
+    assert items[empty]["audit_counts"] == {key: 0 for key in _AUDIT_COUNT_KEYS}

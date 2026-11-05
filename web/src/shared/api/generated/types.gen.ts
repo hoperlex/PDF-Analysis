@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.17.0 (OpenAPI 3.1.0)
- *   sha256 c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a
+ *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
+ *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.17.0';
+export const CONTRACT_VERSION = '1.19.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'c93af19c7bbd6d8621af85777b08b5dcaba644051e87c0239b3d9f8da3205f0a';
+export const CONTRACT_DIGEST = '536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -287,6 +287,7 @@ export const SCHEMA_NAMES = [
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
+  'DocumentAuditCounts',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
@@ -3636,8 +3637,10 @@ export type CreateStageUploadRequest = {
 /** Opaque pagination token. It encodes the sort key of the last item on the page and nothing else; it is never a database row number or sequence value. */
 export type Cursor = string;
 
-/** `getDashboardSummary`'s whole answer. All four panels, one read, one optional filter: the request's `project_uid` (`UI-PARITY-P0A`) restricts every panel to that project and the answer carries no echo of it. */
+/** `getDashboardSummary`'s whole answer. All four panels, one read, one optional filter: the request's `project_uid` (`UI-PARITY-P0A`) restricts every panel to that project and the answer carries no echo of it. It also carries `awaiting_decision_findings`, the findings still awaiting a decision in the result runs of current versions (`R-150q`). */
 export type DashboardSummary = {
+  /** Findings whose current verdict is undecided (`pending` or `needs_manual_review`) in the result runs of current versions (`R-150q`). The figure of the tile «Находки, ожидающие решения». Unlike `findings_by_verdict`, which counts every finding of every run («за всё время»), it follows only the current versions, and it is restricted by `project_uid` like every panel. */
+  awaiting_decision_findings: number;
   documents_by_project: Array<ProjectDocumentCount>;
   findings_by_verdict: Array<VerdictCount>;
   run_activity: RunActivity;
@@ -3738,6 +3741,24 @@ export type DiffHunk = {
   target_start: number;
 };
 
+/** The audit-state counters of a set of documents (`UI-PARITY-P0B`, `R-150n` ... `R-150u`). Every figure counts documents by their **current version only** (`R-150p`) and reads that version's **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as `listRuns` orders them; a newer run still in flight does not displace it, and a `failed` or `cancelled` run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3 six-run groups follow the same per-run rule for now (`R-150t`). A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision + checked`. `partial` is not a fifth state: it counts the documents, in any of the four, whose result run is `partial` (`R-150s`). */
+export type DocumentAuditCounts = {
+  /** Documents with a result run and at least one finding whose current verdict is undecided (`pending` or `needs_manual_review`). The red badge «ждут решения» (`R-150o`). */
+  awaiting_decision: number;
+  /** Documents with a result run in which every finding is decided. */
+  checked: number;
+  /** Documents with a result run that published no finding. A state of its own: neither checked nor awaiting a decision (`R-150n`). */
+  clean: number;
+  /** Documents with a current version. */
+  document_count: number;
+  /** `not_run + awaiting_decision`: the original's column «Нет решений эксперта». Everything not closed, documents never run included, but not `clean` (`R-150o`). */
+  no_expert_decision: number;
+  /** Documents whose current version has no result run: never run, run only to `failed` or `cancelled`, or only in flight (`R-150r`). */
+  not_run: number;
+  /** Documents, in any of the four states, whose result run is `partial` (`R-150s`). */
+  partial: number;
+};
+
 export type DocumentUid = string;
 
 /** The contract pattern for `DocumentUid`. Anchored; use with `new RegExp()`. */
@@ -3818,7 +3839,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.17.0";
+  contract_version: "1.19.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3861,15 +3882,25 @@ export type ExecutionJournalPage = {
   page: PageInfo;
 };
 
-/** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). */
+/** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). `UI-PARITY-QUEUE-A` (contract 1.18.0): the queue names what it lists. Every job executes exactly one audit run of one version of one document (`job.run_id` is not null and unique), so `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and `version_ordinal` are always present; the two names and the ordinal are joined at read time and stored nowhere. `started_at` is the creation time of the job's first attempt and is absent while no attempt exists; `finished_at` is the time the job reached a terminal state and is absent while it has not; `error_code` is the run's `terminal_reason` and `interrupted_reason` the run's own, each absent when the run records none. An absent property is omitted, never sent as null. */
 export type ExecutionQueueItem = {
   available_at: string;
   binding_state?: ExecutorBindingState;
   created_at: string;
+  document_name: string;
+  document_uid: DocumentUid;
+  error_code?: ErrorCode;
+  finished_at?: string;
+  interrupted_reason?: string;
   job_id: JobId;
   priority: number;
+  project_name: string;
+  project_uid: ProjectUid;
   run_id: RunId;
+  started_at?: string;
   state: string;
+  version_ordinal: number;
+  version_uid: VersionUid;
   wait_reason?: RunQueueReason;
 };
 
@@ -5528,6 +5559,8 @@ export type ProductVersion = {
 };
 
 export type Project = {
+  /** The project's documents by audit state (`UI-PARITY-P0B`). Present on a `listProjects` item; absent from `createProject`'s answer, which reads no documents and claims no count. */
+  audit_counts?: DocumentAuditCounts;
   created_at: string;
   document_count?: number;
   name: string;
@@ -5874,10 +5907,11 @@ export type ReviseStageAssemblyRequest = {
   remove_document_uids: Array<DocumentUid>;
 };
 
-/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs one of them (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
+/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. `viewer` (R-150e, R-150x, shown as «Наблюдатель») reads and downloads product data and changes nothing; it does not read the execution queue, journal, workers or executors (R-150w), and it is the only role of an account that holds it: a role set combining it with `expert` or `admin` is refused as `validation_failed` (`constraint: viewer_exclusive`). Reading product data needs one of these roles (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
 export const ROLE_VALUES = [
   'expert',
   'admin',
+  'viewer',
 ] as const;
 
 /** Role - the closed value set above. */
@@ -6158,9 +6192,12 @@ export type SaveAnalysisPresetRequest = {
   name: string;
 };
 
-/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. */
+/** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. `audit_counts` are the section's documents by audit state (`UI-PARITY-P0B`) and `document_count` equals `audit_counts.document_count`; `finding_count` is the number of published findings of those documents' result runs. */
 export type SectionDocumentCount = {
+  audit_counts: DocumentAuditCounts;
   document_count: number;
+  /** Published findings of the result runs of the section's documents. */
+  finding_count: number;
   /** One of the fifteen project sections, or absent when the document has not been classified. */
   section?: ProjectSection;
 };
@@ -7620,7 +7657,7 @@ export const VERDICT_VALUES = [
 /** Verdict - the closed value set above. */
 export type Verdict = (typeof VERDICT_VALUES)[number];
 
-/** How many findings, across every project, currently stand at one verdict. Every member of `Verdict` is present -- a verdict nobody has recorded is `count: 0`, not an absent row. */
+/** How many findings, across every project, currently stand at one verdict -- every finding of every run, «за всё время» (`R-150q`). This is the history of the deployment's verdicts, not the state of the current documents: it counts findings of older versions and of runs that are no longer the result. The findings that still await a decision on current versions are `DashboardSummary.awaiting_decision_findings`, and the two differ whenever a version has more than one run or a document more than one version. Every member of `Verdict` is present -- a verdict nobody has recorded is `count: 0`, not an absent row. */
 export type VerdictCount = {
   count: number;
   verdict: Verdict;

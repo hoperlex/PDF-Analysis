@@ -87,12 +87,27 @@ def _operation(path: str) -> dict[str, Any]:
 # --- the surface --------------------------------------------------------------------------
 
 
+#: `R-150w` (and the matrix's defaults): reads the viewer may NOT make. Every other product read
+#: is open to «Наблюдатель» (`R-150e`). A literal from the rulings, not read from the seam.
+VIEWER_DENIED_READS = frozenset({
+    "listExecutionQueue", "listExecutionJournal", "listWorkers", "listExecutorConnections",
+    "getExecutorConnection", "listExecutorRoutes", "getComparisonQueueSummary", "getComparisonAiQueue",
+    "estimateStageChainRun", "listAssignments", "getAssignment", "listExecutorGroups",
+    "getExecutorGroup", "getExecutorGroupCapacity", "listExecutorRoutingRules",
+})
+
+
+def _read_roles(name: str) -> frozenset[str]:
+    """Any one role reads; the viewer as well unless `R-150w` keeps the read from it."""
+    return frozenset({"expert", "admin"}) if name in VIEWER_DENIED_READS else frozenset({"expert", "admin", "viewer"})
+
+
 def test_both_reads_are_documents_operations_for_any_one_role() -> None:
     for path, operation_id in ((LIST_PATH, "listVersionPortalBlocks"), (CROP_PATH, "streamVersionPortalBlockCrop")):
         operation = _operation(path)
         assert operation["operationId"] == operation_id
         assert operation["tags"] == ["documents"]
-        assert OPERATION_ROLES[operation_id] == frozenset({"expert", "admin"}), operation_id
+        assert OPERATION_ROLES[operation_id] == _read_roles(operation_id), operation_id
 
 
 def test_the_listing_pages_and_can_refuse_a_cursor_and_the_crop_declares_no_422() -> None:

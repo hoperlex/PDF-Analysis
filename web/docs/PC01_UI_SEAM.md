@@ -430,17 +430,27 @@ and inventing a timeout would invent a failure the contract does not define.
 **Nothing else polls the run endpoint.** PC-01 has no WebSocket and no server-sent events,
 and the export endpoint is synchronous — no export resource, no export identity, nothing to
 poll. The export panel holds no polling state. The one other policy this section freezes is
-the operational-list policy below; every other timed refresh in the application is a
-slice-local constant that is not frozen here.
+the operational-list policy below.
+
+**Every polling interval lives in `shared/config/polling.ts`** (`D-307`): the run schedule
+above, `OPERATIONAL_LIST_POLLING`, and one named `*_POLL_MS` constant for each of the other
+timed refreshes of the application (the executor-connection probe and the agent wizard, the
+comparison overview, matrix, series, upload and specification reads, the AI checks, the stage
+review). They are grouped there by what they poll, and a slice imports the value instead of
+declaring its own; those other values are bounded re-reads whose callback returns `false` the
+moment the thing they wait for has happened, and they are not frozen here. A new timed read
+names its interval in that file. `tests/unit/run/polling.test.ts` fails on a `*_POLL_MS`
+defined in any other file, on a `refetchInterval` that carries a number of its own, and on an
+interval named in a `refetchInterval` that the file does not import from the config.
 
 These numbers are `A5`'s, not an upstream owner decision: no P02 document declares a
 polling interval. Changing them is a change to `shared/config/polling.ts` and to this
 section, in one commit.
 
-### 7.1 Operational lists — «Очередь» and «Журнал выполнения»
+### 7.1 Operational lists — «Очередь», «Журнал выполнения» and «Исполнители»
 
-The execution queue and the execution journal refresh themselves under
-`OPERATIONAL_LIST_POLLING` (owner-accepted: polling, not WebSocket or SSE).
+The execution queue, the execution journal and the worker list of «Исполнители» refresh
+themselves under `OPERATIONAL_LIST_POLLING` (owner-accepted: polling, not WebSocket or SSE).
 
 | Value | Setting |
 |---|---|
@@ -456,10 +466,21 @@ test asserts the schedule without timers. The failure count is not React Query's
 `entities/execution` keeps the streak per query from the settled-success and settled-failure
 counters. The first read after a hidden tab returns is the window-focus refetch.
 
-Both screens show «Обновлено ЧЧ:ММ:СС», the time of the last successful read
+All three screens show «Обновлено ЧЧ:ММ:СС», the time of the last successful read
 (`dataUpdatedAt`). When that is older than the stale threshold, or the latest read failed,
 the line reads «Данные могли устареть: последнее обновление ЧЧ:ММ:СС» and the last page stays
-on screen under it. «Исполнители» does not use this policy yet.
+on screen under it.
+
+The policy is written once, as `OPERATIONAL_LIST_POLL` in `entities/execution/api/operational-poll.ts`,
+and spread into exactly three query options: `queueQueryOptions`, `journalQueryOptions` and
+`workersQueryOptions`. The worker list is the «Процессы» tab of «Исполнители»; the page reads
+it (`useWorkers(cursor, enabled)`) only while that tab is open, so the other tabs poll nothing,
+and a failed refresh after a successful read keeps the last list under the out-of-date line and
+says «Исполнители не обновились». The larger first page that the queue and the run screens read
+to name a run's worker (`useWorkerLookup`) is the same query shape and follows the same cadence
+while one of those screens is open. The connection list, the routes, the groups and the rules
+of «Исполнители» are not polled by this policy: they refresh on tab return, after a command and
+by «Обновить», and an open probe or a moving agent has its own bounded re-read (§7).
 
 ## 8. Commands
 

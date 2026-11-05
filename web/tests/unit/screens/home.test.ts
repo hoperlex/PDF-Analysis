@@ -59,6 +59,7 @@ import {
 import tileStyles from '@/widgets/home-tiles/ui/home-tiles.module.css';
 import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 
+import { sectionAudit } from '../dashboard/audit-counts';
 import { newClient, renderScreen, seedError } from './harness';
 
 // ============================================================================ fixtures
@@ -97,9 +98,14 @@ function summary(over: Partial<DashboardSummary> = {}): DashboardSummary {
       by_state: RUN_STATE_VALUES.map((state, index) => ({ state, count: index })),
     },
     section_breakdown: [
-      ...PROJECT_SECTIONS.map((section, index) => ({ section: section.code, document_count: index })),
-      { document_count: 5 },
+      ...PROJECT_SECTIONS.map((section, index) => ({
+        section: section.code,
+        document_count: index,
+        ...sectionAudit(index),
+      })),
+      { document_count: 5, ...sectionAudit(5) },
     ],
+    awaiting_decision_findings: 11,
     ...over,
   };
 }
@@ -167,7 +173,7 @@ const RAW_MESSAGE = 'Сырое сообщение сервера, которо�
 
 function apiError(status: number, code: ErrorCode, retryable = false): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.17.0',
+    contract_version: '1.19.0',
     error_code: code,
     message: RAW_MESSAGE,
     correlation_id: 'cid-home-1',
@@ -472,13 +478,25 @@ describe('the summary tile', () => {
   it('shows four figures from the one dashboard read', () => {
     const markup = draw(home(EXPERT), loaded());
     const data = summary();
-    const pending = data.findings_by_verdict.find((row) => row.verdict === 'pending')!.count;
     const runs = data.run_activity.by_state.reduce((sum, row) => sum + row.count, 0);
     expect(markup).toContain('data-summary-figure="projects">2<');
     expect(markup).toContain('data-summary-figure="documents">5<');
-    expect(markup).toContain(`data-summary-figure="pending-findings">${pending}<`);
+    expect(markup).toContain(`data-summary-figure="awaiting-decision-findings">${data.awaiting_decision_findings}<`);
     expect(markup).toContain(`data-summary-figure="runs">${runs}<`);
     expect(markup).toContain('href="/dashboard"');
+  });
+
+  it('reads the findings that await a decision from awaiting_decision_findings, not from the all-time verdict panel (R-150q)', () => {
+    const data = summary();
+    const pending = data.findings_by_verdict.find((row) => row.verdict === 'pending')!.count;
+    expect(pending).not.toBe(data.awaiting_decision_findings);
+    const markup = draw(home(EXPERT), loaded());
+    expect(markup).toContain(`data-summary-figure="awaiting-decision-findings">${data.awaiting_decision_findings}<`);
+    expect(markup).not.toContain(`data-summary-figure="awaiting-decision-findings">${pending}<`);
+    expect(summaryFigures(summary({ awaiting_decision_findings: 0 }))?.awaitingDecisionFindings).toBe(0);
+    // The tile does not read the verdict breakdown any more: a missing row there cannot blank it.
+    const withoutVerdicts = summary({ findings_by_verdict: [] });
+    expect(summaryFigures(withoutVerdicts)?.awaitingDecisionFindings).toBe(data.awaiting_decision_findings);
   });
 
   it('says when the deployment holds no project', () => {
@@ -490,18 +508,15 @@ describe('the summary tile', () => {
   it('shows no partial count when a breakdown arrives incomplete', () => {
     const whole = summary();
     const incomplete: readonly DashboardSummary[] = [
-      { ...whole, findings_by_verdict: whole.findings_by_verdict.slice(1) },
-      {
-        ...whole,
-        findings_by_verdict: [
-          ...whole.findings_by_verdict.slice(1),
-          { verdict: 'verified' as DashboardSummary['findings_by_verdict'][number]['verdict'], count: 1 },
-        ],
-      },
       {
         ...whole,
         run_activity: { by_state: [...whole.run_activity.by_state.slice(1), whole.run_activity.by_state[1]!] },
       },
+      { ...whole, run_activity: { by_state: whole.run_activity.by_state.slice(1) } },
+      // A findings figure that is not a whole number is no figure; it is never shown as a zero.
+      { ...whole, awaiting_decision_findings: undefined as unknown as number },
+      { ...whole, awaiting_decision_findings: -1 },
+      { ...whole, awaiting_decision_findings: 1.5 },
     ];
     for (const answer of incomplete) {
       expect(summaryFigures(answer)).toBeNull();
@@ -584,7 +599,7 @@ describe('every branch is rendered by some state here, and none carries English'
     {
       name: 'incomplete summary',
       markup: () =>
-        draw(home(EXPERT), loaded({ summary: summary({ findings_by_verdict: [] }) })),
+        draw(home(EXPERT), loaded({ summary: summary({ run_activity: { by_state: [] } }) })),
     },
     { name: 'unknown role', markup: () => draw(home(['auditor'] as unknown as readonly Role[])) },
   ];

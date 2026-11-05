@@ -25,13 +25,14 @@ import {
 } from '@/entities/project';
 
 import { useCreateProject } from '../model/use-create-project';
+import { useMayActAsExpert } from '@/entities/account';
 
 export interface CreateProjectFormProps {
   /** Called with the created project, so the screen can navigate or announce it. */
   readonly onCreated?: ((project: Project) => void) | undefined;
 }
 
-export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
+function CreateProjectFormInner({ onCreated }: CreateProjectFormProps) {
   const [name, setName] = useState('');
   const [localProblem, setLocalProblem] = useState<ProjectNameProblem | null>(null);
   const [created, setCreated] = useState<Project | null>(null);
@@ -125,4 +126,14 @@ export function CreateProjectForm({ onCreated }: CreateProjectFormProps) {
       ) : null}
     </form>
   );
+}
+
+/**
+ * `R-150e`: offered only to an account that may take an expert's action; the server refuses it
+ * to anyone else. While the account is not known yet the control stays drawn.
+ */
+export function CreateProjectForm(props: Parameters<typeof CreateProjectFormInner>[0]) {
+  const mayAct = useMayActAsExpert();
+  if (!mayAct) return <p className="am-note" data-expert-only="CreateProjectForm">Создавать проекты может эксперт.</p>;
+  return <CreateProjectFormInner {...props} />;
 }

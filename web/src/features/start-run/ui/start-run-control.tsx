@@ -82,6 +82,7 @@ import type { PresetListReading } from './preset-select';
 import { PresetSelectView } from './preset-select';
 import { StartRunFailureView } from './start-run-failure';
 import styles from './start-run-control.module.css';
+import { useMayActAsExpert } from '@/entities/account';
 
 export interface StartRunControlProps {
   /** The project the version belongs to, for the link a classification refusal carries. */
@@ -138,7 +139,7 @@ function usePresetListReading(executors: ExecutorListReading, chosen: PresetId |
   return { phase: 'ready', choices: presetChoices(presets.data.items, choices, chosen) };
 }
 
-export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunControlProps) {
+function StartRunControlInner({ projectUid, versionUid, onStarted }: StartRunControlProps) {
   const [mode, setMode] = useState<StartMode>('auto');
   const [chosen, setChosen] = useState<ExecutorConnectionId | null>(null);
   const [chosenPreset, setChosenPreset] = useState<PresetId | null>(null);
@@ -333,4 +334,14 @@ export function StartRunControl({ projectUid, versionUid, onStarted }: StartRunC
       )}
     </div>
   );
+}
+
+/**
+ * `R-150e`: offered only to an account that may take an expert's action; the server refuses it
+ * to anyone else. While the account is not known yet the control stays drawn.
+ */
+export function StartRunControl(props: Parameters<typeof StartRunControlInner>[0]) {
+  const mayAct = useMayActAsExpert();
+  if (!mayAct) return <p className="am-note" data-expert-only="StartRunControl">Запускать анализ может эксперт.</p>;
+  return <StartRunControlInner {...props} />;
 }

@@ -12,7 +12,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { FetchLike, RunState, RunStatus } from '@/shared/api';
 import { ApiError, TERMINAL_RUN_STATES, TransportError, pollRunStatus } from '@/shared/api';
-import { RUN_POLLING, pollDelayMs } from '@/shared/config';
+import {
+  AGENT_INSTALL_POLL_MS, AGENT_STATUS_POLL_MS, AI_POLL_MS, AI_QUEUE_POLL_MS, MATRIX_BUILD_POLL_MS,
+  OVERVIEW_BUSY_POLL_MS, OVERVIEW_IDLE_POLL_MS, PROBE_POLL_MS, RUN_POLLING, SERIES_POLL_MS,
+  SPECIFICATION_POLL_MS, STAGE_REVIEW_POLL_MS, STAGE_TEXT_POLL_MS, UPLOAD_POLL_MS, pollDelayMs,
+} from '@/shared/config';
 import { WEB_ROOT, readText, walkFiles } from '../../guards/lib/repo';
 import { join } from 'node:path';
 
@@ -150,7 +154,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.17.0',
+              contract_version: '1.19.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -179,7 +183,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.17.0',
+            contract_version: '1.19.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',
@@ -235,7 +239,7 @@ describe('this slice adds no second polling loop', () => {
   // connection (`GET /executors/connections/{id}`) and only while a «Проверить» probe on that
   // connection is open, so the outcome shows without the administrator pressing «Обновить».
   // It is bounded three ways, and the assertion further down holds each of them to the source:
-  // the interval is `PROBE_POLL_MS` (3000 ms) and nothing else; it is `false` unless
+  // the interval is `PROBE_POLL_MS` (3000 ms, defined in `shared/config/polling.ts`) and nothing else; it is `false` unless
   // `hasOpenProbe(data)`, which is false once every probe is `finished` (a terminal outcome,
   // `no_worker` included - the server ends an unclaimed probe after 120 s); and the only other
   // timer-shaped token, `setInterval` / `refetchIntervalInBackground`, stays forbidden in it.
@@ -253,7 +257,8 @@ describe('this slice adds no second polling loop', () => {
   // the matrix while it is built, 1.5 s; `:828` the series while it runs, 2 s; the upload while it is read, 2 s). None of them is a run
   // poll and none reaches the run endpoint, which the assertion below still polices. Each is bounded by what the assertion further down
   // holds to the source: no timer of its own, an interval that is a named constant of at least a second, and a callback with an arm
-  // that returns `false`, so a read of something that is not moving schedules nothing.
+  // that returns `false`, so a read of something that is not moving schedules nothing. Since `D-307` the intervals are not defined here:
+  // every `*_POLL_MS` lives in `shared/config/polling.ts` and the file imports it (the sibling assertions below hold both halves).
   const ALLOWED_COMPARISON_POLLS = [
     join('entities', 'version-series', 'api', 'use-overview.ts'),
     join('entities', 'version-series', 'api', 'use-matrix.ts'),
@@ -271,11 +276,59 @@ describe('this slice adds no second polling loop', () => {
     join('widgets', 'stage-run-controls', 'ui', 'stage-run-controls.tsx'),
     // `CMP-SPEC` (`2510d5e3`): the whole-specification list of a series, re-read only while one of its
     // transitions is `running` or `paused` -- the source was `open ? 3000 : false`, a poll with no end
-    // while the panel was open, and now names `SPECIFICATION_POLL_MS` and ends when nothing moves.
+    // while the panel was open, and now names `SPECIFICATION_POLL_MS` (from config) and ends when nothing moves.
     join('widgets', 'version-series', 'ui', 'specification-panel.tsx'),
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));
+
+  // `D-307`: every interval lives in `shared/config/polling.ts`. The values as the config exports them, so the table below is
+  // also a check that the barrel exports what the file declares.
+  const CONFIG_INTERVALS: Readonly<Record<string, number>> = {
+    AGENT_INSTALL_POLL_MS, AGENT_STATUS_POLL_MS, AI_POLL_MS, AI_QUEUE_POLL_MS, MATRIX_BUILD_POLL_MS,
+    OVERVIEW_BUSY_POLL_MS, OVERVIEW_IDLE_POLL_MS, PROBE_POLL_MS, SERIES_POLL_MS, SPECIFICATION_POLL_MS,
+    STAGE_REVIEW_POLL_MS, STAGE_TEXT_POLL_MS, UPLOAD_POLL_MS,
+  };
+
+  /**
+   * The value of every `refetchInterval` option in a file, exactly: from the colon to the comma or the closing bracket at the
+   * option's own depth, so an inline callback, a block callback and a bare function name each come out whole. (Cutting at "the
+   * next option" read to the end of the file for the last use of a query, and the arm it looked for could be anyone's.)
+   * `refetchIntervalInBackground` is a different option and is not matched.
+   */
+  function refetchIntervalValues(text: string): string[] {
+    const values: string[] = [];
+    const option = /\brefetchInterval\b(?!InBackground)\s*:/g;
+    for (let found = option.exec(text); found !== null; found = option.exec(text)) {
+      let depth = 0;
+      let quote: string | null = null;
+      let at = option.lastIndex;
+      for (; at < text.length; at += 1) {
+        const char = text.charAt(at);
+        if (quote !== null) {
+          if (char === '\\') at += 1;
+          else if (char === quote) quote = null;
+        } else if (char === "'" || char === '"' || char === '`') quote = char;
+        else if (char === '(' || char === '[' || char === '{') depth += 1;
+        else if (char === ')' || char === ']' || char === '}') {
+          if (depth === 0) break;
+          depth -= 1;
+        } else if (char === ',' && depth === 0) break;
+      }
+      values.push(text.slice(option.lastIndex, at).trim());
+    }
+    return values;
+  }
+
+  /** A number of three or more digits written into an option's value: an interval that has no name. */
+  const carriesNumberOfItsOwn = (value: string) => /\b\d[\d_]{2,}\b/.test(value);
+  /** A `*_POLL_MS` given a value of its own in this file. */
+  const definesInterval = (text: string) => /\b\w*POLL\w*_MS\s*(?::\s*\w+\s*)?=(?![=>])/.test(text);
+  /** The names a file imports from `@/shared/config`. */
+  const importedFromConfig = (text: string): string[] =>
+    [...text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'@\/shared\/config';/g)].flatMap((match) =>
+      (match[1] ?? '').split(',').map((name) => name.trim()).filter((name) => name !== ''));
+  const intervalNames = (value: string): string[] => [...value.matchAll(/\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_POLL_MS)\b/g)].map((match) => match[1] ?? '');
 
   // The third named exception, `EMERGENCY-ANALYSIS` (`af8c69f7`, `widgets/extended-review`). The section-analysis
   // panel re-reads `getExtendedRunReview` while the base run moves and for a bounded number of reads after it ends.
@@ -289,8 +342,8 @@ describe('this slice adds no second polling loop', () => {
     ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
 
   // The fourth named exception, the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md` §7.1). The
-  // execution queue and journal refresh themselves. The option is written once, in `operational-poll.ts`, and applied by spread
-  // to those two queries only; the assertion further down holds the source to that shape.
+  // execution queue, the execution journal and the «Исполнители» worker list refresh themselves. The option is written once, in
+  // `operational-poll.ts`, and applied by spread to those three queries only; the assertion further down holds the source to that shape.
   const ALLOWED_OPERATIONAL_LIST_POLL = [join('entities', 'execution', 'api', 'operational-poll.ts')];
   const isAllowedOperationalListPoll = ({ path }: { path: string }) =>
     ALLOWED_OPERATIONAL_LIST_POLL.some((allowed) => path.endsWith(allowed));
@@ -307,27 +360,97 @@ describe('this slice adds no second polling loop', () => {
     expect(offenders.map((o) => o.path)).toEqual([]);
   });
 
-  it('lets the comparison reads poll only while something moves, on a named interval, with no timer of their own', () => {
+  it('lets the comparison reads poll only while something moves, on a named interval from the config, with no timer of their own', () => {
     const named = sources.filter(isAllowedComparisonPoll);
     // The allowlist must not rot into a path that no longer exists or no longer polls.
     expect(named.map((f) => f.path)).toHaveLength(ALLOWED_COMPARISON_POLLS.length);
     for (const file of named) {
       const text = code(file);
       expect(text, file.path).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/);
-      expect(text.match(/refetchInterval/g)?.length ?? 0, file.path).toBeGreaterThan(0);
-      const constants = [...text.matchAll(/export const (\w+_POLL_MS) = ([\d_]+);/g)];
-      expect(constants.length, `${file.path} names no interval`).toBeGreaterThan(0);
-      for (const match of constants) expect(Number((match[2] ?? '').replaceAll('_', '')), match[1]).toBeGreaterThanOrEqual(1000);
-      // It can end: each use is a callback with an arm that schedules nothing (`: false`, `? false :` or `return false`).
-      for (const use of text.split('refetchInterval').slice(1)) {
-        // The value of the option only: up to the next option of the same query.
-        const value = use.split(/\n\s*(?:retry|enabled|queryKey|queryFn|staleTime):/)[0] ?? '';
-        expect(value, `${file.path}: a callback`).toMatch(/^:\s*(?:\([^)]*\)|\w+)?\s*=>/);
-        expect(value, `${file.path}: an arm that schedules nothing`).toMatch(/:\s*false\b|\?\s*false\b|return false\b/);
+      const uses = refetchIntervalValues(text);
+      expect(uses.length, `${file.path} polls through no refetchInterval`).toBeGreaterThan(0);
+      // The interval is not defined here: it is a name `shared/config` exports, imported by this file, of at least a second.
+      expect(definesInterval(text), `${file.path} defines an interval of its own`).toBe(false);
+      const imported = importedFromConfig(text);
+      for (const use of uses) {
+        const names = intervalNames(use);
+        expect(names.length, `${file.path}: a named interval in \`${use}\``).toBeGreaterThan(0);
+        for (const name of names) {
+          expect(imported, `${file.path} imports ${name} from @/shared/config`).toContain(name);
+          expect(CONFIG_INTERVALS[name], `${name} is declared in shared/config/polling.ts`).toBeGreaterThanOrEqual(1000);
+        }
+        // It can end: each use is a callback with an arm that schedules nothing (`: false`, `? false :` or `return false`).
+        expect(use, `${file.path}: a callback`).toMatch(/^(?:\([^)]*\)|\w+)?\s*=>/);
+        expect(use, `${file.path}: an arm that schedules nothing`).toMatch(/:\s*false\b|\?\s*false\b|return false\b/);
       }
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
+  });
+
+  // `D-307`: one source for every polling interval. Three halves, each with a case that shows it can fail (below).
+  it('declares every interval in shared/config/polling.ts, once, and exports each of them', () => {
+    const declared = [...readText(join(WEB_ROOT, 'src', 'shared', 'config', 'polling.ts')).matchAll(/^export const (\w+_POLL_MS) = /gm)].map(
+      (match) => match[1] ?? '',
+    );
+    expect(declared.length).toBeGreaterThan(10);
+    expect(new Set(declared).size, 'an interval declared twice').toBe(declared.length);
+    // The barrel exports exactly the declared ones (the table above is built from the barrel).
+    expect([...declared].sort()).toEqual(Object.keys(CONFIG_INTERVALS).sort());
+  });
+
+  it('defines no interval anywhere else in src, and no refetchInterval carries a number of its own', () => {
+    const everywhere = walkFiles(join(WEB_ROOT, 'src'), (p) => /\.(ts|tsx)$/.test(p))
+      .filter((path) => !path.endsWith(join('shared', 'config', 'polling.ts')))
+      .map((path) => ({ path, text: readText(path) }));
+    expect(everywhere.length).toBeGreaterThan(sources.length);
+    expect(everywhere.filter((file) => definesInterval(code(file))).map((file) => file.path)).toEqual([]);
+    const literal = sources.flatMap((file) =>
+      refetchIntervalValues(code(file)).filter(carriesNumberOfItsOwn).map((value) => `${file.path}: ${value}`));
+    expect(literal).toEqual([]);
+    // A name used in a refetchInterval is one the file imports from the config, never one it defines.
+    const unimported = sources.flatMap((file) => {
+      const imported = importedFromConfig(code(file));
+      return refetchIntervalValues(code(file)).flatMap(intervalNames).filter((name) => !imported.includes(name)).map((name) => `${file.path}: ${name}`);
+    });
+    expect(unimported).toEqual([]);
+  });
+
+  it('can tell a local interval, a bare number and a missing import from the real thing', () => {
+    expect(definesInterval('export const STAGE_REVIEW_POLL_MS = 1500;')).toBe(true);
+    expect(definesInterval('const POLL_MS: number = 1500;')).toBe(true);
+    expect(definesInterval("import { STAGE_REVIEW_POLL_MS } from '@/shared/config';\nrefetchInterval: () => STAGE_REVIEW_POLL_MS")).toBe(false);
+    const bare = refetchIntervalValues('useQuery({ refetchInterval: () => (open ? 3000 : false), retry: false })');
+    expect(bare).toEqual(['() => (open ? 3000 : false)']);
+    expect(bare.some(carriesNumberOfItsOwn)).toBe(true);
+    expect(refetchIntervalValues('x({ refetchInterval: (q) => (q.state.data ? 3_000 : false) })').some(carriesNumberOfItsOwn)).toBe(true);
+    expect(refetchIntervalValues('x({ refetchInterval: () => (open ? SPECIFICATION_POLL_MS : false) })').some(carriesNumberOfItsOwn)).toBe(false);
+    // The last use of a query is cut at its own closing bracket, not at the end of the file; the background option is another option.
+    expect(refetchIntervalValues("x({ refetchInterval: (q) => (a ? [1, 2].includes(q) : false) });\nconst y = 'false';\n")).toEqual([
+      '(q) => (a ? [1, 2].includes(q) : false)',
+    ]);
+    expect(refetchIntervalValues('x({ refetchIntervalInBackground: false })')).toEqual([]);
+    expect(importedFromConfig("import { A_POLL_MS, B_POLL_MS } from '@/shared/config';")).toEqual(['A_POLL_MS', 'B_POLL_MS']);
+    expect(importedFromConfig("import { A_POLL_MS } from './local';")).toEqual([]);
+    expect(intervalNames('x ? STAGE_REVIEW_POLL_MS : OVERVIEW_IDLE_POLL_MS')).toEqual(['STAGE_REVIEW_POLL_MS', 'OVERVIEW_IDLE_POLL_MS']);
+  });
+
+  it('keeps every interval at the value it had when it was moved into the config', () => {
+    expect(CONFIG_INTERVALS).toEqual({
+      AGENT_INSTALL_POLL_MS: 3000,
+      AGENT_STATUS_POLL_MS: 5000,
+      AI_POLL_MS: 3000,
+      AI_QUEUE_POLL_MS: 5000,
+      MATRIX_BUILD_POLL_MS: 1500,
+      OVERVIEW_BUSY_POLL_MS: 5000,
+      OVERVIEW_IDLE_POLL_MS: 30000,
+      PROBE_POLL_MS: 3000,
+      SERIES_POLL_MS: 2000,
+      SPECIFICATION_POLL_MS: 3000,
+      STAGE_REVIEW_POLL_MS: 1500,
+      STAGE_TEXT_POLL_MS: 1500,
+      UPLOAD_POLL_MS: 2000,
+    });
   });
 
   it('lets the section-analysis panel poll only through its bounded interval function, with no timer of its own', () => {
@@ -352,7 +475,7 @@ describe('this slice adds no second polling loop', () => {
     }
   });
 
-  it('lets the operational lists poll only through the policy function, only while visible, and only the queue and the journal', () => {
+  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal and the worker list', () => {
     const named = sources.filter(isAllowedOperationalListPoll);
     expect(named.map((f) => f.path)).toHaveLength(ALLOWED_OPERATIONAL_LIST_POLL.length);
     for (const file of named) {
@@ -367,15 +490,20 @@ describe('this slice adds no second polling loop', () => {
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
-    // The spread is in the queue and the journal read, and in nothing else of the entity.
+    // The spread is in the queue, the journal and the worker list read, and in nothing else of the entity.
     const hooks = sources.find((file) => file.path.endsWith(join('entities', 'execution', 'api', 'use-execution.ts')));
     expect(hooks).toBeDefined();
     const body = code(hooks!);
-    expect(body.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g)).toHaveLength(2);
+    expect(body.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g)).toHaveLength(3);
+    expect(body.match(/refetchInterval/g) ?? []).toHaveLength(0);
     const section = (name: string) => body.split(`export function ${name}`)[1]?.split('\nexport ')[0] ?? '';
     expect(section('queueQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
     expect(section('journalQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
-    expect(section('workersQueryOptions')).not.toContain('OPERATIONAL_LIST_POLL');
+    expect(section('workersQueryOptions')).toContain('...OPERATIONAL_LIST_POLL');
+    // The hooks over those options add nothing of their own, and the reads of other things in the entity are not polled.
+    for (const hook of ['useExecutionQueue', 'useExecutionJournal', 'useWorkers', 'useWorkerLookup']) {
+      expect(section(hook), hook).not.toMatch(/OPERATIONAL_LIST_POLL|refetchInterval/);
+    }
   });
 
   it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {
@@ -386,7 +514,10 @@ describe('this slice adds no second polling loop', () => {
     for (const file of named) {
       const text = code(file);
       expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/);
-      expect(text).toMatch(/export const PROBE_POLL_MS = 3000;/);
+      // The interval is the config's, imported; the file defines no interval of its own.
+      expect(importedFromConfig(text)).toContain('PROBE_POLL_MS');
+      expect(definesInterval(text)).toBe(false);
+      expect(CONFIG_INTERVALS.PROBE_POLL_MS).toBe(3000);
       // Exactly one use of `refetchInterval`, and it is the guarded form.
       expect(text.match(/refetchInterval/g)).toHaveLength(1);
       expect(text).toMatch(

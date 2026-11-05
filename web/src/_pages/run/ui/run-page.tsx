@@ -12,9 +12,12 @@ import Link from 'next/link';
 
 import { PageShell } from '@/shared/ui';
 import { routes } from '@/shared/lib';
+import { CancelRunControl } from '@/features/cancel-run';
 
 import { LazyRunProgress } from './lazy-run-progress';
+import { RunEvents } from './run-events';
 import styles from './run-page.module.css';
+import { DocumentContext } from '@/widgets/document-context';
 
 export interface RunPageProps {
   readonly projectUid: string;
@@ -39,8 +42,11 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
         </>
       }
     >
+      <DocumentContext projectUid={projectUid} runId={runId} current="run" />
       <div className={styles.content}>
+        <CancelRunControl runId={runId} />
         <LazyRunProgress projectUid={projectUid} runId={runId} />
+        <RunEvents runId={runId} />
       </div>
     </PageShell>
   );

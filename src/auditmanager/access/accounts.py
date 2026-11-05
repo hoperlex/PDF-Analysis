@@ -53,6 +53,7 @@ from auditmanager.access.models import (
     normalize_email,
     normalize_person_name,
     parse_role,
+    require_exclusive_viewer,
 )
 from auditmanager.access.passwords import hash_password
 from auditmanager.access.policy import enforce_password_policy
@@ -686,6 +687,8 @@ class AccountRepository:
         current = self._lock(session, user_uid)
         if current is None or current.archived:
             raise DomainError(ErrorCode.NOT_FOUND, message="no such active account")
+        # `R-150e`: refused before the first write, against the set the grant would leave.
+        require_exclusive_viewer(self.roles_of(session, user_uid) | {role})
         inserted = session.execute(
             _INSERT_ROLE,
             {"user_uid": user_uid, "role": role, "granted_by": granted_by},
@@ -730,7 +733,7 @@ class AccountRepository:
         only after ``restoreUser`` (`R-62`), so a restore never brings back a role granted
         while it was archived.
         """
-        wanted = frozenset(parse_role(role) for role in roles)
+        wanted = require_exclusive_viewer(frozenset(parse_role(role) for role in roles))
         current = self._lock_admins_then(session, user_uid)
         if current is None or current.archived:
             raise _no_such_account()

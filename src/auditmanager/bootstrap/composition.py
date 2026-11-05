@@ -614,7 +614,7 @@ def build_application(
     tile_renderer = TileRenderer()
 
     router = build_router(
-        projects=ProjectAdapter(ingest),
+        projects=ProjectAdapter(ingest, sessions),
         documents=DocumentAdapter(ingest),
         runs=run_adapter,
         ar_v3_groups=run_adapter,

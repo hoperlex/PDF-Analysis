@@ -20,7 +20,9 @@
  * one is the row it always was.
  */
 
-import type { Finding, FindingCategory } from '@/shared/api';
+import { useState } from 'react';
+
+import type { Finding, FindingCategory, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
@@ -44,7 +46,59 @@ export interface FindingListProps {
   /** Already presented as `ErrorState` props by the page, so `retryable` is decided once. */
   readonly error?: ErrorStateProps | null | undefined;
   readonly integrityFaults?: readonly FindingIntegrityFault[] | undefined;
+  /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own. */
+  readonly verdictFilter?: VerdictFilter | undefined;
+  readonly onVerdictFilterChange?: ((filter: VerdictFilter) => void) | undefined;
 }
+
+/**
+ * `UI-A-70`, `UI-A-71`: the verdicts of the run at a glance and a filter by them, as the original's
+ * «Экспертная оценка» counter and its pending → accepted → rejected order. The page loads every finding of
+ * the run (`R-150i`), so the counts and the filter are over the whole run, never over one page.
+ * `needs_manual_review` waits for the expert like `pending` (`UI-PARITY-METRICS`).
+ */
+export type VerdictFilter = 'all' | 'waiting' | 'accepted' | 'rejected';
+
+const WAITING: ReadonlySet<Verdict> = new Set<Verdict>(['pending', 'needs_manual_review']);
+
+export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all'> {
+  if (WAITING.has(verdict)) return 'waiting';
+  return verdict === 'accepted' ? 'accepted' : 'rejected';
+}
+
+/** A verdict filter read from the address: an absent or unknown value is «Все». */
+export function verdictFilterOf(value: string | null): VerdictFilter {
+  return value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'all';
+}
+
+export interface VerdictTally {
+  readonly waiting: number;
+  readonly accepted: number;
+  readonly rejected: number;
+}
+
+export function tallyVerdicts(groups: readonly FindingGroup<Finding>[]): VerdictTally {
+  const tally = { waiting: 0, accepted: 0, rejected: 0 };
+  for (const group of groups) for (const finding of group.findings) tally[verdictBucket(finding.current_verdict)] += 1;
+  return tally;
+}
+
+export function filterGroups(
+  groups: readonly FindingGroup<Finding>[],
+  filter: VerdictFilter,
+): readonly FindingGroup<Finding>[] {
+  if (filter === 'all') return groups;
+  return groups
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => verdictBucket(f.current_verdict) === filter) }))
+    .filter((group) => group.findings.length > 0);
+}
+
+const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string }[] = [
+  { value: 'all', label: 'Все' },
+  { value: 'waiting', label: 'Ожидают решения' },
+  { value: 'accepted', label: 'Приняты' },
+  { value: 'rejected', label: 'Отклонены' },
+];
 
 /** Category labels. The contract value is what the row carries; this is only the heading. */
 function categoryHeading(category: FindingCategory): string {
@@ -58,7 +112,15 @@ export function FindingList({
   isLoading,
   error,
   integrityFaults,
+  verdictFilter,
+  onVerdictFilterChange,
 }: FindingListProps) {
+  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const filter = verdictFilter ?? ownFilter;
+  const setFilter = (next: VerdictFilter) => {
+    if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
+    else setOwnFilter(next);
+  };
   if (isLoading === true) return <LoadingState what="находки" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
 
@@ -80,8 +142,30 @@ export function FindingList({
     );
   }
 
+  const tally = tallyVerdicts(groups);
+  const shown = filterGroups(groups, filter);
+
   return (
     <div className="am-finding-list" data-finding-count={total}>
+      <div className={styles.verdicts}>
+        <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
+          Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
+        </p>
+        <div className={styles.filter} role="group" aria-label="Отбор по вердикту">
+          {FILTERS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className="am-button am-button--quiet"
+              aria-pressed={filter === option.value}
+              data-verdict-filter={option.value}
+              onClick={() => setFilter(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {faults.length > 0 ? (
         <ErrorState
           title="Нарушение целостности данных"
@@ -95,7 +179,13 @@ export function FindingList({
         />
       ) : null}
 
-      {groups.map((group) => (
+      {shown.length === 0 ? (
+        <p className="am-note" data-verdict-filter-empty={filter}>
+          Находок с таким вердиктом нет.
+        </p>
+      ) : null}
+
+      {shown.map((group) => (
         <section
           key={group.category}
           className="am-finding-group"

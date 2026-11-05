@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from auditmanager.api.schemas.audit_counts import DocumentAuditCountsView, audit_counts_body
+
 __all__ = [
     "DashboardSummaryView",
     "ProjectDocumentCountView",
@@ -47,6 +49,10 @@ class RunActivitySpendView:
 @dataclass(frozen=True, slots=True)
 class SectionDocumentCountView:
     document_count: int
+    #: The section's documents by audit state and the published findings of their result runs
+    #: (`UI-PARITY-P0B`). Required: the read model always computes them, zeros included.
+    audit_counts: DocumentAuditCountsView
+    finding_count: int
     #: ``None`` for the unclassified bucket. Omitted from the wire body, never sent as
     #: ``null`` -- the same convention ``DocumentVersion.section`` already carries, so a
     #: reader of either shape learns "no section" the same way.
@@ -67,10 +73,16 @@ class DashboardSummaryView:
     run_activity: tuple[RunStateCountView, ...]
     run_spend: RunActivitySpendView | None
     section_breakdown: tuple[SectionDocumentCountView, ...]
+    #: Findings still awaiting a decision in the result runs of current versions (`R-150q`).
+    awaiting_decision_findings: int
 
 
 def _section_body(view: SectionDocumentCountView) -> dict[str, Any]:
-    body: dict[str, Any] = {"document_count": view.document_count}
+    body: dict[str, Any] = {
+        "document_count": view.document_count,
+        "audit_counts": audit_counts_body(view.audit_counts),
+        "finding_count": view.finding_count,
+    }
     if view.section is not None:
         body["section"] = view.section
     return body
@@ -109,4 +121,5 @@ def dashboard_summary_body(view: DashboardSummaryView) -> dict[str, Any]:
         ],
         "run_activity": _run_activity_body(view),
         "section_breakdown": [_section_body(row) for row in view.section_breakdown],
+        "awaiting_decision_findings": view.awaiting_decision_findings,
     }

@@ -9,3 +9,25 @@
   align-self: start;
   gap: var(--am-gap-xs);
 }
+
+/* `UI-A-70`, `UI-A-71`: the run's verdicts at a glance and the filter by them. Tokens only. */
+.verdicts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
+}
+
+.tally {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}

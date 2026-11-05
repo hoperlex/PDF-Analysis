@@ -11,13 +11,11 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { ComparisonOverview, ProjectUid } from '@/shared/api';
 import { getComparisonOverview } from '@/shared/api';
+import { OVERVIEW_BUSY_POLL_MS, OVERVIEW_IDLE_POLL_MS } from '@/shared/config';
 
 import { anythingRunning } from '../model/overview-view';
 
 import { COMPARISON_KEYS } from './keys';
-
-export const OVERVIEW_BUSY_POLL_MS = 5_000;
-export const OVERVIEW_IDLE_POLL_MS = 30_000;
 
 export function overviewQueryOptions(projectUid: ProjectUid) {
   return {

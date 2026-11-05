@@ -1158,7 +1158,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
-        "listExecutionQueue": {"cursor", "limit"},
+        # `UI-PARITY-QUEUE-A` (contract 1.18.0): the state and the half-open period over `created_at`.
+        "listExecutionQueue": {"cursor", "limit", "state", "created_from", "created_to"},
         "listExecutionJournal": {"run_id", "cursor", "limit"},
         "listWorkers": {"cursor", "limit"},
         "searchNorms": {"q", "norms_snapshot_id", "cursor", "limit"},
@@ -1470,6 +1471,50 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
                 item["run_id"] for item in filtered["items"]
             } != {own_run}:
                 inert.setdefault(operation_id, []).append("run_id")
+
+        if operation_id == "listExecutionQueue":
+            # `UI-PARITY-QUEUE-A`. The three queued Runs written above are three queued Jobs whose creation
+            # instants differ (`job.created_at` defaults to `clock_timestamp()`), so each new filter has a visible
+            # effect to be inert about. Asserted on those Jobs and never on the whole queue, which a reused lane
+            # database may hold other suites' rows in.
+            from datetime import datetime
+
+            ours = set(execution_runs)
+
+            def runs_of(page: Mapping[str, Any]) -> set[str]:
+                return {item["run_id"] for item in page["items"]}
+
+            def at(item: Mapping[str, Any]) -> datetime:
+                return datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
+
+            queued = ok(get(surface, f"{target}{sep}state=queued&limit=200"))
+            if not ours <= runs_of(queued) or {i["state"] for i in queued["items"]} != {"queued"}:
+                inert.setdefault(operation_id, []).append("state=queued")
+            cancelled = ok(get(surface, f"{target}{sep}state=cancelled&limit=200"))
+            if ours & runs_of(cancelled) or {i["state"] for i in cancelled["items"]} - {"cancelled"}:
+                inert.setdefault(operation_id, []).append("state=cancelled")
+
+            mine = sorted((i for i in baseline["items"] if i["run_id"] in ours), key=at)
+            assert len(mine) == 3 and at(mine[0]) < at(mine[2]), "the three Jobs must differ in creation instant"
+            newest, oldest = mine[-1], mine[0]
+            # `created_from` includes its bound; `created_to` does not.
+            from_newest = ok(get(surface, f"{target}{sep}created_from={quote(newest['created_at'])}&limit=200"))
+            if newest["run_id"] not in runs_of(from_newest) or oldest["run_id"] in runs_of(from_newest):
+                inert.setdefault(operation_id, []).append("created_from")
+            to_newest = ok(get(surface, f"{target}{sep}created_to={quote(newest['created_at'])}&limit=200"))
+            if newest["run_id"] in runs_of(to_newest) or oldest["run_id"] not in runs_of(to_newest):
+                inert.setdefault(operation_id, []).append("created_to")
+            # Nothing was created in the year 2100 or before 2000.
+            future = ok(get(surface, f"{target}{sep}created_from={quote('2100-01-01T00:00:00Z')}&limit=200"))
+            past = ok(get(surface, f"{target}{sep}created_to={quote('2000-01-01T00:00:00Z')}&limit=200"))
+            if future["items"] or past["items"]:
+                inert.setdefault(operation_id, []).append("period")
+            # A cursor belongs to the filter it was issued under: the same cursor under no filter is refused.
+            narrowed = ok(get(surface, f"{target}{sep}state=queued&limit=1"))
+            scoped = narrowed["page"]["next_cursor"]
+            assert scoped, "a truncated filtered page carried no cursor"
+            if get(surface, f"{target}{sep}limit=1&cursor={scoped}").status != 422:
+                inert.setdefault(operation_id, []).append("cursor scope")
 
     assert inert == {}, (
         "the contract declares these query parameters and supplying one changes nothing, "

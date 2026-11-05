@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0049_stage_identity_checks"
+HEAD = "0050_viewer_role"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -61,8 +61,8 @@ TABLES = frozenset((
     # add no table. `0046_executor_capacity_enroll` adds `executor_enrollment` and `executor_agent_install`
     # (listed beside the other executor tables below). `0047_executor_groups_rules` adds `executor_group`,
     # `executor_group_revision`, `executor_group_member`, `executor_routing_rule_revision` and
-    # `executor_routing_mode_event` (`EXEC2-SEAL-2`, also listed there); `0048_dispatch_time_binding` and
-    # `0049_stage_identity_checks` add no table.
+    # `executor_routing_mode_event` (`EXEC2-SEAL-2`, also listed there); `0048_dispatch_time_binding`,
+    # `0049_stage_identity_checks` and `0050_viewer_role` add no table.
     "stage_ai_unit", "stage_ai_review", "stage_ai_classification", "stage_ai_synthesis",
     "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",

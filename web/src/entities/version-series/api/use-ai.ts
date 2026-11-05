@@ -52,13 +52,9 @@ import {
   listComparisonSpecificationChanges,
   listComparisonSpecifications,
 } from '@/shared/api';
+import { AI_POLL_MS, AI_QUEUE_POLL_MS } from '@/shared/config';
 
 import { COMPARISON_KEYS } from './keys';
-
-/** A job or a report that moves is read again every 3 s (`version-comparison.js:865`, `md-report.js:121`). */
-export const AI_POLL_MS = 3_000;
-/** The queues are read every 5 s while something waits (`version-comparison.js:956`). */
-export const AI_QUEUE_POLL_MS = 5_000;
 
 const HINT_PAGE_LIMIT = 200;
 const HINT_PAGE_CAP = 5;

@@ -25,7 +25,7 @@ import type { DocumentUid, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
-import { useProjectList } from '@/entities/project';
+import { useAddressProject, useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
 import { codeOf, useComparisonOverview, versionsModuleOn } from '@/entities/version-series';
 import { ComparisonViewer } from '@/widgets/comparison-viewer';
@@ -58,7 +58,10 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   const projects = useProjectList();
   const me = useMe();
   const product = useProductVersion(true);
-  const [chosen, setChosen] = useState<ProjectUid | null>(initial?.projectUid ?? null);
+  // `R-150c`: the project follows the header, so it lives in the address; `initial` still seeds a static render.
+  const [addressProject, chooseProject] = useAddressProject(routes.versionComparison());
+  const chosen = (addressProject ?? initial?.projectUid ?? null) as ProjectUid | null;
+  const setChosen = (next: ProjectUid | null) => chooseProject(next);
   const [tab, setTab] = useState<CompareTab>(initial?.tab ?? 'projects');
   const [documentUid, setDocumentUid] = useState<DocumentUid | null>(initial?.documentUid ?? null);
   const [upload, setUpload] = useState<UploadMode | null>(initial?.upload ?? null);

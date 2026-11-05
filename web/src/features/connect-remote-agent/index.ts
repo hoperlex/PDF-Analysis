@@ -30,8 +30,7 @@ export {
 export type { AgentIdentity, IdentityReading, InstallReading } from './model/agent-settings';
 export { agentProbeHint, stepSentence } from './model/step-sentences';
 export {
-  AGENT_INSTALL_POLL_MS, AGENT_STATUS_POLL_MS, agentInstallQueryKey, installIsMoving, useAgentInstall,
-  useAgentStatusPoll,
+  agentInstallQueryKey, installIsMoving, useAgentInstall, useAgentStatusPoll,
 } from './model/use-agent-polls';
 export { useEnsureConnection } from './model/use-ensure-connection';
 export type { ConnectionSpec } from './model/use-ensure-connection';

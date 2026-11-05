@@ -41,6 +41,7 @@ import {
 } from '@/entities/document-version';
 import { RunList } from '@/widgets/run-list';
 import { VersionClassification } from '@/widgets/version-classification';
+import { DocumentContext } from '@/widgets/document-context';
 import styles from './version-detail-page.module.css';
 
 export interface VersionDetailPageProps {
@@ -79,6 +80,7 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
         </>
       }
     >
+      <DocumentContext projectUid={ownerProjectUid} versionUid={versionUid} current="version" />
       <div className={styles.stack}>
         <section className={styles.panel} aria-labelledby="version-detail-title">
           <h2 id="version-detail-title">Эта версия</h2>

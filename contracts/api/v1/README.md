@@ -11,7 +11,42 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.17.0` (`UI-PARITY-P0A`)
+## Current contract `1.19.0` (`UI-PARITY-P0B`)
+
+Additive read slice that gives a document an audit state and its counters (the counters the project selector and the section panel of the
+UI parity programme wait for; rulings `R-150n` ... `R-150u`, dictionary `docs/program/UI-PARITY-METRICS.md`). Response fields and one new
+schema only; no migration, no new operation, no new error code.
+A new schema `DocumentAuditCounts` has `document_count`, `not_run`, `clean`, `awaiting_decision`, `checked`, `partial` and
+`no_expert_decision`. `Project` gains the optional `audit_counts` (present on a `listProjects` item, absent from `createProject`, the
+reason `document_count` is optional). `SectionDocumentCount` gains the required `audit_counts` and `finding_count` (the published
+findings of the result runs of the section's documents); `DashboardSummary` gains the required `awaiting_decision_findings` (findings
+whose current verdict is `pending` or `needs_manual_review` in the result runs of current versions; it follows the optional
+`project_uid`). `VerdictCount` and `findings_by_verdict` are now described as counting every finding of every run, «за всё время».
+A document counts by its current version only; its result run is the latest run in state `published` or `partial` ordered by
+`(created_at, run_id)`; a failed, cancelled or still running run is not a result. A document is `not_run`, `clean` (a result with no
+finding), `awaiting_decision` or `checked`, and `partial` flags a partial result. `no_expert_decision` is `not_run +
+awaiting_decision`.
+The API now has 250 paths, 277 operations and 675 schemas; migration head `0050`. The domain catalogs are at candidate revision 37.
+
+## Contract `1.18.0` (`UI-PARITY-QUEUE-A`, historical)
+
+Additive read slice that makes the execution queue readable (items A1 and A2 of the queue group of the UI parity programme).
+Optional query parameters and response fields only; no migration, no new operation, no new error code.
+`ExecutionQueueItem` gains `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and `version_ordinal`
+(required: every job executes exactly one audit run, and a run belongs to one version of one document of one project by
+not-null foreign keys; the two names and the ordinal are joined at read time and stored nowhere; the version has no label other
+than its display number) and the optional `started_at` (the creation of the job's first attempt), `finished_at` (the job's
+terminal time), `error_code` (the run's `terminal_reason`) and `interrupted_reason` (the run's own). A property a job does
+not have is omitted, never sent as `null`; `binding_state` and `wait_reason` are omitted for an ordinary job as well (they
+were sent as `null` until now). `listExecutionQueue` takes the optional `state` (one of the eight job states) and the optional
+period `created_from` (included) / `created_to` (not included) over `created_at`, both RFC 3339 instants with an offset. The
+queue's order is unchanged. A cursor belongs to the filters it was issued under: one presented with other filters is
+`422 validation_failed` with `constraint: scope`, the refusal the comparison stage listings already give. The overview
+(`getExecutionOverview`), an estimate of the end and the attempts of a job are not in this slice.
+The API then still had 250 paths, 277 operations and 674 schemas; migration head `0049`. The domain catalogs were at
+candidate revision 36.
+
+## Contract `1.17.0` (`UI-PARITY-P0A`, historical)
 
 Additive read slice for "the project chosen in the header" on the dashboard and the knowledge base. Optional query
 parameters and response fields only; no migration, no new operation, no new error code.
@@ -25,7 +60,7 @@ nothing was decided in, or one that does not exist, is an empty page). `Decision
 the expert-confirmed section of the finding's version (absent while the version is unclassified); `DecisionRecordPage`
 gains `total`, the number of entries matching the filters on every page of the listing. A record's type (finding or
 proposal) is deliberately not added.
-The current API still has 250 paths, 277 operations and 674 schemas; migration head `0048`. The domain catalogs are at
+The API then still had 250 paths, 277 operations and 674 schemas; migration head `0048`. The domain catalogs were at
 candidate revision 35.
 
 ## Contract `1.16.0` (`EXEC2-SEAL-2`, historical)

@@ -3,12 +3,14 @@ export {
   journalQueryOptions, queueQueryOptions, workersQueryOptions,
   useExecutionJournal, useExecutionQueue, useWorkerLookup, useWorkers,
 } from './api/use-execution';
+export type { ExecutionQueueFilter, ExecutionQueueState } from './api/use-execution';
 export { executionFailure } from './model/failure';
 export type { ExecutionFailure, ExecutionFailureKind } from './model/failure';
 export {
-  canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel, visibleJournal,
+  QUEUE_STATE_OPTIONS, canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel, queueItemError,
+  visibleJournal,
 } from './model/presentation';
-export type { ExecutionAction } from './model/presentation';
+export type { ExecutionAction, QueueItemError } from './model/presentation';
 export {
   groupWorkers, hasUnknownWorkerState, jobHoldsLease, runHoldsLease, runWorker,
   workerIntakeLabel, workerStateLabel,
@@ -17,3 +19,4 @@ export type { RunWorker, WorkerGroups } from './model/workers';
 export { RunWorkerLine } from './ui/run-worker-line';
 export { UpdateTime, updateTimeLabel } from './ui/update-time';
 export type { UpdateTimeProps } from './ui/update-time';
+export { JobStateBadge, jobStateTone } from './ui/job-state-badge';

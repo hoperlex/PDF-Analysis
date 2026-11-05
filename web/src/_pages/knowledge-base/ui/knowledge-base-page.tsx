@@ -38,7 +38,7 @@ import { useState } from 'react';
 import type { ErrorStateProps } from '@/shared/ui';
 import type { FindingCategory, ProjectUid, Verdict } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
-import { readProjectContext } from '@/shared/lib';
+import { readProjectContext, switchProject } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
 import { CATEGORY_LABELS, recordCountLabel, useDecisionJournal } from '@/entities/expert-decision';
 import { useProjectList } from '@/entities/project';
@@ -88,6 +88,9 @@ const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
 
 /** What a render without a mounted router (a one-pass test render) reads as the query string. */
 const NO_PARAMS = new URLSearchParams();
+
+/** This screen's registry address, the one `readProjectContext` classifies. */
+const KNOWLEDGE_BASE_ADDRESS = '/knowledge-base';
 
 /** The scope the screen states when no project is chosen. */
 const ALL_PROJECTS = 'Все проекты';
@@ -158,7 +161,8 @@ function journalFailure(error: unknown, retry: () => void): ErrorStateProps {
 export function KnowledgeBasePage() {
   // `null` only where no router is mounted; the address is then no address and names no project.
   const pathname = usePathname();
-  const { projectUid } = readProjectContext(pathname ?? '', useSearchParams() ?? NO_PARAMS);
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const { projectUid } = readProjectContext(pathname ?? '', searchParams);
 
   const [category, setCategory] = useState<CategoryChoice>('all');
   const [verdict, setVerdict] = useState<VerdictChoice>('all');
@@ -187,6 +191,34 @@ export function KnowledgeBasePage() {
   const total = journal.data?.total;
   const first = journal.data?.items[0];
   const recordedName = first !== undefined && first.project_uid === projectUid ? first.project_name : undefined;
+
+  /*
+   * `D-313`: an empty page under a category, a verdict or a project is about that selection, not
+   * about the installation. The way out is the filters reset, and «Все проекты» built like the
+   * dashboard builds it (`switchProject(…, null)`: every other parameter of the address stays).
+   */
+  const filtered = category !== 'all' || verdict !== 'all';
+  const withoutProject = switchProject(searchParams, null).toString();
+  const narrowing =
+    !filtered && projectUid === null
+      ? undefined
+      : {
+          ...(filtered
+            ? {
+                onResetFilters: () => {
+                  setCategory('all');
+                  setVerdict('all');
+                  setWalk({ project: projectUid, cursors: NO_CURSORS });
+                },
+              }
+            : {}),
+          ...(projectUid === null
+            ? {}
+            : {
+                allProjectsHref:
+                  withoutProject === '' ? KNOWLEDGE_BASE_ADDRESS : `${KNOWLEDGE_BASE_ADDRESS}?${withoutProject}`,
+              }),
+        };
 
   return (
     <PageShell
@@ -247,6 +279,7 @@ export function KnowledgeBasePage() {
         <LazyKnowledgeBase
           records={journal.data?.items ?? []}
           isLoading={journal.isPending}
+          narrowing={narrowing}
           error={
             journal.error === null
               ? null

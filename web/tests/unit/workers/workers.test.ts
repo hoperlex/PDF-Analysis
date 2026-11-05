@@ -24,6 +24,7 @@ import { QueuePage } from '@/_pages/queue/ui/queue-page';
 import { WorkersPage, intakeIntentLabel } from '@/_pages/workers/ui/workers-page';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
+import { QUEUE_WORK } from '../execution/queue-work';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const OTHER_RUN = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8G';
@@ -61,7 +62,7 @@ function list(roles: Role[], items: readonly ExecutionWorker[] = REGISTRY, onPre
 
 function envelope(code: 'permission_denied' | 'dependency_unavailable') {
   return {
-    contract_version: '1.17.0', error_code: code,
+    contract_version: '1.19.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-workers-1', retryable: false,
   } as const;
 }
@@ -229,12 +230,45 @@ describe('the «Исполнители» page', () => {
   it('opens no confirmation until a switch is pressed', () => {
     expect(seeded(['admin'])).not.toContain('Подтвердить');
   });
+
+  // `D-307`: the list refreshes itself as the queue does, and says so the way the queue does.
+  it('says when the list was last read, and nothing before the first read succeeded', () => {
+    const markup = seeded(['admin']);
+    expect(markup).toContain('data-update-state="fresh"');
+    expect(markup).toMatch(/Обновлено <time dateTime="[^"]+">\d\d:\d\d:\d\d<\/time>/);
+    expect(seeded(['admin'], 'failed')).not.toContain('data-update-state');
+  });
+
+  it('keeps the last list on screen under the out-of-date line when a periodic read fails, and says it failed', () => {
+    const client = newClient();
+    const key = queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT);
+    client.setQueryData(key, page(REGISTRY));
+    client.setQueryData(queryKeys.account.me(), { roles: ['admin'] });
+    // A read that succeeded, and then one that failed: the data is the first one's, the status is the second one's.
+    client.getQueryCache().find({ queryKey: key })?.setState({
+      status: 'error', error: new ApiError(503, envelope('dependency_unavailable'), null),
+      fetchStatus: 'idle', errorUpdatedAt: Date.now(), fetchFailureCount: 1,
+    });
+    const markup = renderScreen(client, createElement(WorkersPage));
+    expect(markup).toContain('data-update-state="stale"');
+    expect(markup).toContain('Данные могли устареть');
+    expect(markup).toContain('Исполнители не обновились');
+    expect(markup).toContain('data-workers-read-failure="refusal"');
+    expect(markup).toContain(ONLINE.worker_id);
+    expect(markup).not.toContain('Исполнители не прочитаны');
+  });
+
+  it('says the list refreshes itself, without claiming that of the other tabs', () => {
+    const markup = seeded(['expert']);
+    expect(markup).toContain('Список процессов обновляется автоматически, пока вкладка открыта');
+    expect(markup).toContain('остальные данные');
+  });
 });
 
 describe('the queue names the worker holding a run', () => {
   const running: ExecutionQueueItem = {
     job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', run_id: RUN_ID, state: 'running', priority: 0,
-    created_at: '2026-10-12T10:00:00Z', available_at: '2026-10-12T10:00:00Z',
+    created_at: '2026-10-12T10:00:00Z', available_at: '2026-10-12T10:00:00Z', ...QUEUE_WORK,
   };
 
   function queue(item: ExecutionQueueItem, workers?: ExecutionWorkerPage | 'failed'): string {

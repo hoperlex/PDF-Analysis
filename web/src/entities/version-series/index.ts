@@ -10,11 +10,10 @@
 
 export { COMPARISON_KEYS } from './api/keys';
 export { useKeyedCommand } from './api/use-keyed-command';
-export { OVERVIEW_BUSY_POLL_MS, OVERVIEW_IDLE_POLL_MS, overviewQueryOptions, useComparisonOverview } from './api/use-overview';
+export { overviewQueryOptions, useComparisonOverview } from './api/use-overview';
 export type { ApplyEditsCommand, PrepareCommand, UndoEditCommand } from './api/use-matrix';
 export {
   EDIT_HISTORY_LIMIT,
-  MATRIX_BUILD_POLL_MS,
   applySignature,
   useApplyMatrixEdits,
   useComparisonEdits,
@@ -26,7 +25,6 @@ export type { SeriesAct, SeriesActCommand, StartSeriesCommand } from './api/use-
 export {
   PAIR_PAGE_CAP,
   PAIR_PAGE_LIMIT,
-  SERIES_POLL_MS,
   useLatestSeries,
   useSeriesAct,
   useSheetPair,
@@ -227,7 +225,6 @@ export { ThumbnailStore } from './model/thumbnail-store';
 
 // ------------------------------------------------------------------------------ wave C2 (`CMP-VC-UI-02`): the AI layer
 
-export { AI_POLL_MS, AI_QUEUE_POLL_MS } from './api/use-ai';
 export type { EstimateScope } from './api/use-ai';
 export {
   estimateScopeKey,

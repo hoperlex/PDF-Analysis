@@ -12,7 +12,10 @@ from typing import Annotated
 from fastapi import APIRouter, Body, Path, Query
 from pydantic import WithJsonSchema
 
-from auditmanager.api.routers.declarations import CursorParam, LimitParam, envelope_responses, success
+from auditmanager.api.routers.declarations import (
+    CursorParam, LimitParam, QueueCreatedFromParam, QueueCreatedToParam, QueueStateFilterParam,
+    envelope_responses, success,
+)
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import ExecutionPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
@@ -38,9 +41,18 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
     )
     def list_queue(
         subject: CurrentSubject, cursor: CursorParam = None, limit: LimitParam = 50,
+        state: QueueStateFilterParam = None,  # type: ignore[assignment]
+        created_from: QueueCreatedFromParam = None,  # type: ignore[assignment]
+        created_to: QueueCreatedToParam = None,  # type: ignore[assignment]
     ) -> WireResponse:
-        page = execution.list_queue(cursor=cursor, limit=limit)
-        return json_response(200, encode_json(page.model_dump(mode="json")))
+        page = execution.list_queue(
+            cursor=cursor, limit=limit, state=state,
+            created_from=created_from, created_to=created_to,
+        )
+        # `UI-PARITY-QUEUE-A`: a property an item does not have is omitted, not sent as `null` -- the
+        # contract declares none of them nullable, and `binding_state` / `wait_reason` were sent as
+        # `null` for an ordinary job until now.
+        return json_response(200, encode_json(page.model_dump(mode="json", exclude_unset=True)))
 
     @router.get(
         "/execution/journal", operation_id="listExecutionJournal", tags=["execution"],
@@ -104,7 +116,7 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
             job_id=job_id, priority=body.priority, user_uid=subject.user_uid,
             idempotency_key=idempotency_key,
         )
-        return json_response(200, encode_json(item.model_dump(mode="json")))
+        return json_response(200, encode_json(item.model_dump(mode="json", exclude_unset=True)))
 
     @router.put(
         "/execution/dispatch", operation_id="setExecutionPaused",

@@ -100,7 +100,7 @@ def build_section_specification_routes(
             "(projects scanned, member sets read, rows held) the answer is `200` with "
             "`state: section_too_large`, the bound in `limit_reason`, the membership listed "
             "and no rows; narrow to one project. A section code outside the fifteen is `404`. "
-            "Nothing is written. Any one role, `role:admin|expert`."
+            "Nothing is written. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def get_section_specification(
