@@ -1044,7 +1044,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.18.0"]
+    contract_version: Literal["1.19.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1062,11 +1062,47 @@ class CreateProjectRequest(_Object):
     name: Annotated[str, Field(min_length=1, max_length=200)]
 
 
+class DocumentAuditCounts(_Object):
+    """Documents by audit state: the counters of a project or of a section (`UI-PARITY-P0B`).
+
+    Every figure counts documents by their **current version only** (`R-150p`) and reads that version's
+    **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as
+    `listRuns` orders them. A newer run still in flight does not displace it, and a `failed` or `cancelled`
+    run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3
+    six-run groups follow the same per-run rule for now (`R-150t`).
+
+    A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision
+    + checked`: `not_run` has no result run; `clean` has a result run with no published finding (a state of its
+    own, neither checked nor awaiting, `R-150n`); `awaiting_decision` has a result run with at least one
+    finding whose current verdict is undecided (`pending` or `needs_manual_review`); `checked` has a result
+    run and every finding decided. `partial` is not a fifth state: it counts the documents, in any of the
+    four, whose result run is `partial` (`R-150s`).
+
+    Two figures are derived and named for what they mean (`R-150o`). `awaiting_decision` is the red badge
+    «ждут решения»: documents with a result and undecided findings. `no_expert_decision` is `not_run +
+    awaiting_decision`, the original's column «Нет решений эксперта»: everything not closed, documents never
+    run included, but not `clean`.
+    """
+
+    document_count: Annotated[int, Field(ge=0)]
+    not_run: Annotated[int, Field(ge=0)]
+    clean: Annotated[int, Field(ge=0)]
+    awaiting_decision: Annotated[int, Field(ge=0)]
+    checked: Annotated[int, Field(ge=0)]
+    partial: Annotated[int, Field(ge=0)]
+    no_expert_decision: Annotated[int, Field(ge=0)]
+
+
 class Project(_Object):
     project_uid: ProjectUid
     name: Annotated[str, Field(min_length=1, max_length=200)]
     created_at: datetime
     document_count: Annotated[int, Field(ge=0)] = Field(
+        default=None, json_schema_extra=optional_property
+    )  # type: ignore[assignment]
+    #: Present on a `listProjects` item, absent from `createProject`'s answer (the same reason `document_count`
+    #: is optional): that path reads no documents and claims no count.
+    audit_counts: DocumentAuditCounts = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
 
@@ -2363,7 +2399,13 @@ class ProjectDocumentCount(_Object):
 
 
 class VerdictCount(_Object):
-    """How many findings, across every project, currently stand at one verdict.
+    """How many findings, across every project, currently stand at one verdict -- every finding of every run,
+    «за всё время».
+
+    This is the history of the deployment's verdicts (`R-150q`), not the state of the current documents: it counts
+    findings of older versions and of runs that are no longer the result. The findings that still await a decision
+    on current versions are `DashboardSummary.awaiting_decision_findings`, and the two differ whenever a version has
+    more than one run or a document more than one version.
 
     Every member of ``Verdict`` is present. A verdict nobody has recorded is ``count: 0``,
     not an absent row -- absent is not empty.
@@ -2414,14 +2456,21 @@ class SectionDocumentCount(_Object):
     unclassified bucket, not a sixteenth section. Every one of the fifteen current codes
     is present even at ``document_count: 0`` -- "a section with no documents" is the
     dispatch brief's own example of absent not being empty.
+
+    `audit_counts` are the section's documents by audit state (`UI-PARITY-P0B`; see `DocumentAuditCounts` for the
+    rules) and `document_count` equals `audit_counts.document_count`. `finding_count` is the number of published
+    findings of those documents' result runs.
     """
 
     document_count: Annotated[int, Field(ge=0)]
+    audit_counts: DocumentAuditCounts
+    finding_count: Annotated[int, Field(ge=0)]
     section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DashboardSummary(_Object):
-    """``getDashboardSummary``'s whole answer. All four panels, one read, one optional filter.
+    """``getDashboardSummary``'s whole answer. All four panels and the figure of findings that await a decision,
+    one read, one optional filter.
 
     The filter is the request's ``project_uid`` (`UI-PARITY-P0A`); the answer carries no echo of it.
     """
@@ -2430,6 +2479,10 @@ class DashboardSummary(_Object):
     findings_by_verdict: list[VerdictCount]
     run_activity: RunActivity
     section_breakdown: list[SectionDocumentCount]
+    #: Findings still awaiting a decision -- current verdict `pending` or `needs_manual_review` -- in the result
+    #: runs of current versions (`R-150q`). Unlike `findings_by_verdict` (every finding of every run, all time) this
+    #: is the figure of the tile «Находки, ожидающие решения»; it follows the optional `project_uid` as every panel does.
+    awaiting_decision_findings: Annotated[int, Field(ge=0)]
 
 
 # --- accounts and registration requests ------------------------------------------------

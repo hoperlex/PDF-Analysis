@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.18.0 (OpenAPI 3.1.0)
- *   sha256 b64fc14b30de32f382e3471f40a6853d0efea0f75f1fb6fedc0c650a8f05041a
+ *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
+ *   sha256 4e196c4b0c90330c09539a3ace167e52ce7a7eb8249c98dbbbc5580cd0994732
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2838,7 +2838,7 @@ export type GetComparisonUploadProposalResult = ComparisonUploadProposal;
 /**
  * One aggregate read across the whole deployment: all four dashboard panels.
  *
- * Documents per project, findings by verdict, run activity and spend, and the per-section breakdown -- computed server-side over the whole deployment, never walked client-side (`R-44`). Without a parameter it is the fixed shape of the deployment right now; it is not a filtered query over the data three narrower operations already answer (`listProjects`, `listDecisions`, `listRuns`). The one filter it takes is `project_uid` (`UI-PARITY-P0A`): the product's header names the project the expert is working in, and with it every one of the four panels is restricted to that project **by exactly the definitions it has without it** -- the same joins, the same grouping and the same spend rule (a Run's model calls and the comparison calls made for that project's work), so a count is the whole-deployment count minus every row of every other project. `documents_by_project` is then the one project's row. A `project_uid` naming no project is `not_found`, never a summary of zeros; a malformed one is `validation_failed`. No counter is redefined. Absent is not empty throughout: every `Verdict` and `RunState` is present even at zero, every one of the fifteen sections is present even with no documents, and the unclassified documents are their own row.
+ * Documents per project, findings by verdict, run activity and spend, and the per-section breakdown -- computed server-side over the whole deployment, never walked client-side (`R-44`). Without a parameter it is the fixed shape of the deployment right now; it is not a filtered query over the data three narrower operations already answer (`listProjects`, `listDecisions`, `listRuns`). The one filter it takes is `project_uid` (`UI-PARITY-P0A`): the product's header names the project the expert is working in, and with it every one of the four panels is restricted to that project **by exactly the definitions it has without it** -- the same joins, the same grouping and the same spend rule (a Run's model calls and the comparison calls made for that project's work), so a count is the whole-deployment count minus every row of every other project. `documents_by_project` is then the one project's row. A `project_uid` naming no project is `not_found`, never a summary of zeros; a malformed one is `validation_failed`. No counter is redefined. Absent is not empty throughout: every `Verdict` and `RunState` is present even at zero, every one of the fifteen sections is present even with no documents, and the unclassified documents are their own row. The section panel carries each section's documents by audit state (`audit_counts`) and the findings of their result runs (`finding_count`), and `awaiting_decision_findings` counts the findings still awaiting a decision on the current versions (`UI-PARITY-P0B`); `findings_by_verdict` stays the all-time count of every finding of every run (`R-150q`).
  */
 export type GetDashboardSummaryInput = {
   /** Query string parameters. */
