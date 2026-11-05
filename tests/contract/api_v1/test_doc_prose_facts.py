@@ -560,6 +560,10 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # (the format CHECK on the 43 FK identity columns of 0042), and the file's "Facts of this tree" states the
         # current head; the entry is a record of its day and is kept as written.
         ("docs/program/CURRENT_STATE.md", "migration head `0048_dispatch"),
+        # CURRENT_STATE.md's `UI-PARITY-P0A` entry (2026-11-04) records that contract 1.17.0 kept "250 paths / 277 operations /
+        # 674 schemas". `UI-PARITY-P0B` (1.19.0) added the schema `DocumentAuditCounts` (675), and the file's "Facts of this
+        # tree" and its newest entry state the current triple; the P0A entry is a record of its day and is kept as written.
+        ("docs/program/CURRENT_STATE.md", "250 paths / 277 operations / 674 schemas"),
     }
 )
 

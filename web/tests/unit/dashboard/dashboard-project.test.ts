@@ -30,6 +30,8 @@ import type { ApiResponse, DashboardSummary, ErrorEnvelope } from '@/shared/api'
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { Dashboard } from '@/widgets/dashboard';
 
+import { sectionAudit } from './audit-counts';
+
 import { mountLive } from '../analysis-settings/live-render';
 import type { LiveRender } from '../analysis-settings/live-render';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
@@ -50,9 +52,10 @@ function summaryOf(...projects: readonly { uid: string; name: string; documents:
     ],
     run_activity: { by_state: RUN_STATE_VALUES.map((state) => ({ state, count: 0 })) },
     section_breakdown: [
-      ...PROJECT_SECTIONS.map((section) => ({ section: section.code, document_count: 0 })),
-      { document_count: 0 },
+      ...PROJECT_SECTIONS.map((section) => ({ section: section.code, document_count: 0, ...sectionAudit(0) })),
+      { document_count: 0, ...sectionAudit(0) },
     ],
+    awaiting_decision_findings: 0,
   };
 }
 
@@ -65,7 +68,7 @@ const ONLY_B = summaryOf({ uid: B, name: 'Проект Бета', documents: 5 }
 
 function notFound(): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.18.0',
+    contract_version: '1.19.0',
     error_code: 'not_found',
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-dashboard-404',

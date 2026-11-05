@@ -159,10 +159,14 @@ class _Result:
 
 
 class _Session:
-    """Answers each statement of ``summary`` by its text; the section rows are the subject."""
+    """Answers each statement of ``summary`` by its text; the audit-state groups are the subject.
+
+    A group row is ``(project_uid, section, result_state, has_findings, has_undecided, documents, findings,
+    undecided_findings)``; ``sections`` here are ``(section, documents)`` pairs of documents that were never run.
+    """
 
     def __init__(self, sections: list[tuple[Any, ...]]) -> None:
-        self.sections = sections
+        self.sections = [("prj_x", code, None, False, False, count, 0, 0) for code, count in sections]
 
     def execute(self, statement: Any, parameters: Any = None) -> _Result:
         sql = str(statement)

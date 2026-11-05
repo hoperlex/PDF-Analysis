@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .audit_state import AuditCountsRecord
+
 __all__ = [
     "DashboardSummaryRecord",
     "ProjectDocumentCountRecord",
@@ -39,7 +41,12 @@ class ProjectDocumentCountRecord:
 
 @dataclass(frozen=True, slots=True)
 class VerdictCountRecord:
-    """How many findings currently stand at one verdict, across every project.
+    """How many findings currently stand at one verdict, across every project -- **of every run, all time**.
+
+    This counts every finding of every run of every version (`R-150q`): it is the history of the deployment's
+    verdicts, not the state of the current documents. The figure of findings that still await a decision on
+    the current versions' result runs is ``DashboardSummaryRecord.awaiting_decision_findings``, and the two
+    differ whenever a version has more than one run or a document more than one version.
 
     Every member of the frozen ``Verdict`` enum is present, including one whose count is
     ``0`` -- "a verdict nobody has recorded" is a real, distinguishable answer and is
@@ -95,10 +102,16 @@ class SectionDocumentCountRecord:
     reported, not dropped, because absent is not empty. Every one of the fifteen current
     codes is present even when its count is ``0``: "a section with no documents" is the
     example the dispatch brief itself names.
+
+    ``audit_counts`` is the section's documents by audit state (`UI-PARITY-P0B`, ``audit_state.py``) and
+    ``finding_count`` the published findings of their result runs. ``document_count`` is
+    ``audit_counts.document_count``: one number, read once.
     """
 
     section: str | None
     document_count: int
+    audit_counts: AuditCountsRecord
+    finding_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,3 +131,5 @@ class DashboardSummaryRecord:
     run_activity: tuple[RunStateCountRecord, ...]
     run_spend: RunActivitySpendRecord | None
     section_breakdown: tuple[SectionDocumentCountRecord, ...]
+    #: Findings that still await a decision in the result runs of current versions (`R-150q`).
+    awaiting_decision_findings: int

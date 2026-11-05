@@ -1656,6 +1656,7 @@
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
+      "DocumentAuditCounts",
       "DocumentUid",
       "DocumentVersion",
       "DocumentVersionPage",
@@ -2071,5 +2072,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0049_stage_identity_checks",
-  "contract_version": "1.18.0"
+  "contract_version": "1.19.0"
 }

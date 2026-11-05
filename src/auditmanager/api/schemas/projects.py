@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping
 
+from auditmanager.api.schemas.audit_counts import DocumentAuditCountsView, audit_counts_body
 from auditmanager.api.schemas.common import timestamp
 
 __all__ = ["ProjectView", "project_body"]
@@ -47,6 +48,10 @@ class ProjectView:
     name: str
     created_at: datetime
     document_count: int | None = None
+    #: The project's documents by audit state (`UI-PARITY-P0B`). Present on a ``listProjects`` item, absent from
+    #: ``createProject``'s answer for the reason ``document_count`` is: that path reads no documents and claims no
+    #: count.
+    audit_counts: DocumentAuditCountsView | None = None
 
 
 def project_body(view: ProjectView) -> dict[str, Any]:
@@ -57,4 +62,6 @@ def project_body(view: ProjectView) -> dict[str, Any]:
     }
     if view.document_count is not None:
         body["document_count"] = view.document_count
+    if view.audit_counts is not None:
+        body["audit_counts"] = audit_counts_body(view.audit_counts)
     return body

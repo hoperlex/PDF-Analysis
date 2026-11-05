@@ -206,6 +206,7 @@ import {
 import { CONTRACT_PATH, SEAMS_PATH, readJson, readText, repoRelative, walkFiles } from './lib/repo';
 import { join } from 'node:path';
 import { REPO_ROOT } from './lib/repo';
+import { sectionAudit } from '../unit/dashboard/audit-counts';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { COMPARISON_SHAPES } from '../unit/version-compare/shapes';
 import {
@@ -1077,7 +1078,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.18.0',
+    contract_version: '1.19.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1089,7 +1090,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.18.0',
+    contract_version: '1.19.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1142,9 +1143,11 @@ function dashboardSummary(over: Partial<DashboardSummary> = {}): DashboardSummar
       ...PROJECT_SECTIONS.map((section) => ({
         section: section.code,
         document_count: section.code === 'KM' ? 1 : 0,
+        ...sectionAudit(section.code === 'KM' ? 1 : 0),
       })),
-      { document_count: 1 },
+      { document_count: 1, ...sectionAudit(1) },
     ],
+    awaiting_decision_findings: 0,
     ...over,
   };
 }
@@ -1481,6 +1484,7 @@ function emptyClient(): Client {
       section_breakdown: PROJECT_SECTIONS.map((section) => ({
         section: section.code,
         document_count: 0,
+        ...sectionAudit(0),
       })),
     }),
   );
@@ -1917,7 +1921,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.18.0',
+    contract_version: '1.19.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2125,7 +2129,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.18.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.19.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -4148,7 +4152,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.18.0',
+            contract_version: '1.19.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4170,7 +4174,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.18.0',
+            contract_version: '1.19.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
