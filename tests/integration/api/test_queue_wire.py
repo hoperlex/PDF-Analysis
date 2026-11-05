@@ -54,8 +54,8 @@ def _jobs(session: Session, mixed: MixedRun, count: int) -> tuple[list[str], lis
     for _ in range(count):
         run_id = str(RunId.new())
         repo.create(
-            session, run_id=run_id, project_uid=mixed.run.run.project_uid, version_uid=mixed.run.run.version_uid,
-            analysis_profile_id=mixed.run.run.analysis_profile_id, prompt_bundle_id=mixed.run.run.prompt_bundle_id,
+            session, run_id=run_id, project_uid=mixed.run.project_uid, version_uid=mixed.run.version_uid,
+            analysis_profile_id=mixed.run.analysis_profile_id, prompt_bundle_id=mixed.run.prompt_bundle_id,
             provider_mode="recorded", frozen_input_digest="a" * 64, command_id=None,
         )
         repo.advance(session, run_id=run_id, from_state="created", to_state="queued")
@@ -85,8 +85,8 @@ def test_an_item_names_its_work_and_omits_what_the_job_does_not_have(
     ids, at = _jobs(session, mixed_run, 1)
     body = ok(get(queue_surface, f"{QUEUE}?limit=200&{_bounds(at)}"))
     (item,) = [i for i in body["items"] if i["job_id"] == ids[0]]
-    assert item["project_uid"] == mixed_run.run.run.project_uid
-    assert item["version_uid"] == mixed_run.run.run.version_uid
+    assert item["project_uid"] == mixed_run.run.project_uid
+    assert item["version_uid"] == mixed_run.run.version_uid
     assert item["project_name"] and item["document_name"] and item["version_ordinal"] >= 1
     assert item["document_uid"].startswith("doc_")
     # Not null: absent. The contract declares none of these nullable.
