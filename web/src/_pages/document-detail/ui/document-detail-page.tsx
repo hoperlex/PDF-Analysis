@@ -26,6 +26,7 @@ import { looksLikeProjectUid } from '@/entities/project';
 import { looksLikeDocumentUid } from '@/entities/document-version';
 import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
+import { DocumentContext } from '@/widgets/document-context';
 import styles from './document-detail-page.module.css';
 
 export interface DocumentDetailPageProps {
@@ -64,6 +65,7 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
         </>
       }
     >
+      <DocumentContext projectUid={projectUid} documentUid={documentUid} current="document" />
       <div className={styles.stack}>
         <section className={styles.panel} aria-labelledby="document-versions-title">
           <h2 id="document-versions-title">Опубликованные версии</h2>
