@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-05 by `UI-PARITY-POLL-1105` (records only, no code).** The owner answered the UI-parity open questions in eight direct polls: `R-151a`…`R-151z` in `OWNER_RULINGS_2026-09-17.md` §3.51. The P0 freeze list is answered (archive and rename, explicit multi-file upload, one-dialog batch run, decision import from our export by `finding_uid`, document tags, header pause, our own execution status, both decision kinds in the knowledge base). «Запуск с этапа» is a new run reusing earlier stage outputs; the severity strip counts decided severity with a labelled model row; the section page gets its own address; «Блоки» become a version tab; «График работ» is its own menu item; likeness is layout only, with a card grid for a section's documents. The role matrix and the metrics dictionary are closed except Q-MD-9; P0d stays postponed. Debt: `D-300`, `D-302`, `D-305`, `D-308`, `D-310` closed; `D-301`, `D-303`, `D-304`, `D-306`, `D-309` narrowed. `UI-PARITY-01` updated.
+
 **Updated 2026-11-05 by `UI-PARITY-INT-1105c` (unverified development candidate, third publication).** The administrator forms offer «Наблюдатель» (`VIEWER_ROLE_OFFERED` on). Both the user form and the registration approval refuse it beside another role before sending (`R-150e`); turning the switch off is the rollback.
 
 Stand rerun on `b9a725c5`: 108 passed. It covers the dashboard census, the inventory at `0050`, the `0015` vocabulary and the optimisation viewer capability tests, the three reds of the earlier combined check, now green.
