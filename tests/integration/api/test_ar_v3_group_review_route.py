@@ -73,4 +73,4 @@ def test_group_review_route_returns_six_safe_outcomes() -> None:
     }
     assert b"blob_id" not in response.body
     assert b"sha256" not in response.body
-    assert OPERATION_ROLES["getArV3BetaGroupReview"] == frozenset({ROLE_EXPERT, ROLE_ADMIN})
+    assert OPERATION_ROLES["getArV3BetaGroupReview"] == frozenset({ROLE_EXPERT, ROLE_ADMIN, "viewer"})  # R-150e

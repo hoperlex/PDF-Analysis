@@ -152,6 +152,21 @@ def _client(modules: str | None) -> TestClient:
     return TestClient(create_asgi_app(environ=environ, application=application), raise_server_exceptions=False)
 
 
+#: `R-150w` (and the matrix's defaults): reads the viewer may NOT make. Every other product read
+#: is open to «Наблюдатель» (`R-150e`). A literal from the rulings, not read from the seam.
+VIEWER_DENIED_READS = frozenset({
+    "listExecutionQueue", "listExecutionJournal", "listWorkers", "listExecutorConnections",
+    "getExecutorConnection", "listExecutorRoutes", "getComparisonQueueSummary", "getComparisonAiQueue",
+    "estimateStageChainRun", "listAssignments", "getAssignment", "listExecutorGroups",
+    "getExecutorGroup", "getExecutorGroupCapacity", "listExecutorRoutingRules",
+})
+
+
+def _read_roles(name: str) -> frozenset[str]:
+    """Any one role reads; the viewer as well unless `R-150w` keeps the read from it."""
+    return frozenset({"expert", "admin"}) if name in VIEWER_DENIED_READS else frozenset({"expert", "admin", "viewer"})
+
+
 @pytest.fixture(scope="module")
 def off() -> TestClient:
     assert os.environ.get("DATABASE_URL"), "this suite needs the lane's .env loaded"
@@ -253,7 +268,7 @@ def test_a_write_without_its_idempotency_key_is_refused_not_stubbed(on: TestClie
 def test_the_roles_are_the_ones_the_adr_gives() -> None:
     """Reads are any one role; every write is the expert's act (decision 16). A literal, not a read-back."""
     for name in REQUESTS:
-        expected = frozenset({"expert"}) if name in EXPERT_WRITES else frozenset({"expert", "admin"})
+        expected = frozenset({"expert"}) if name in EXPERT_WRITES else _read_roles(name)
         assert OPERATION_ROLES[name] == expected, name
 
 
@@ -265,7 +280,7 @@ def test_that_check_fails_when_a_write_is_opened_to_an_administrator(monkeypatch
     monkeypatch.setattr(security, "OPERATION_ROLES", widened)
     with pytest.raises(AssertionError):
         for name in REQUESTS:
-            expected = frozenset({"expert"}) if name in EXPERT_WRITES else frozenset({"expert", "admin"})
+            expected = frozenset({"expert"}) if name in EXPERT_WRITES else _read_roles(name)
             assert security.OPERATION_ROLES[name] == expected, name
 
 

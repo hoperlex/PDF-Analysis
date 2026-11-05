@@ -163,7 +163,7 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             "`text_unavailable`, `too_many_citations`), never an empty list; the corpus "
             "documents whose designation the parser cannot read are listed as `unrecognised`; "
             "pages without a text layer are `unread_pages`. An unknown run is `404`. Any one "
-            "role, `role:admin|expert`."
+            "role, `role:admin|expert|viewer`."
         ),
     )
     def get_run_norm_references(run_id: Annotated[models.RunId, Path()]) -> WireResponse:

@@ -1024,6 +1024,7 @@ class Role(str, enum.Enum):
 
     EXPERT = "expert"
     ADMIN = "admin"
+    VIEWER = "viewer"
 
 
 class RegistrationStatus(str, enum.Enum):

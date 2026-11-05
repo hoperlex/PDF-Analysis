@@ -9,6 +9,9 @@
 export {
   MalformedAccountError,
   ROLE_LABELS,
+  rolesCombinationAllowed,
+  ASSIGNABLE_ROLES,
+  VIEWER_ROLE_OFFERED,
   UnknownRoleError,
   displayLabelOf,
   initialsOf,

@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from auditmanager.access.public import ROLE_ADMIN, ROLE_EXPERT
+from auditmanager.access.public import ROLE_ADMIN, ROLE_EXPERT, ROLE_VIEWER
 from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = [
@@ -99,9 +99,9 @@ def _denied(capability: str, aggregate_type: str, message: str | None = None) ->
 
 
 def require_reader(roles: frozenset[str], *, aggregate_type: str) -> None:
-    """`R-80`: an account without a role reads no product data."""
-    if not roles & {ROLE_ADMIN, ROLE_EXPERT}:
-        raise _denied("role:admin|expert", aggregate_type)
+    """`R-80`: an account without a role reads no product data; `R-150e`: the viewer reads it."""
+    if not roles & {ROLE_ADMIN, ROLE_EXPERT, ROLE_VIEWER}:
+        raise _denied("role:admin|expert|viewer", aggregate_type)
 
 
 def require_expert(roles: frozenset[str], *, aggregate_type: str, act: str) -> None:

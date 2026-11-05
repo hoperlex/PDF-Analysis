@@ -15,7 +15,7 @@ import type { FormEvent } from 'react';
 
 import type { RegistrationRequest, Role } from '@/shared/api';
 import { ROLE_VALUES } from '@/shared/api';
-import { roleLabels } from '@/entities/account';
+import { ASSIGNABLE_ROLES, roleLabels } from '@/entities/account';
 import { registrationFailure } from '@/entities/registration-request';
 import { useIntentKey } from '@/shared/lib';
 import { ErrorState } from '@/shared/ui';
@@ -69,7 +69,7 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
       <form className="am-form" onSubmit={approve}>
         <fieldset>
           <legend>Роли новой учётной записи</legend>
-          {ROLE_VALUES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => toggleRole(role, event.target.checked)} /> {roleLabels([role])[0]}</label>)}
+          {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => toggleRole(role, event.target.checked)} /> {roleLabels([role])[0]}</label>)}
         </fieldset>
         <button className="am-button" type="submit" disabled={decision.isPending}>Одобрить заявку</button>
       </form>

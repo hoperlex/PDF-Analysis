@@ -162,7 +162,10 @@ _CYRILLIC_RE: Final[re.Pattern[str]] = re.compile(f"[{_CYRILLIC_LETTERS}]")
 #: The role vocabulary (`W49-PLAN.md` §3.2, P-4): a set per account, never a hierarchy.
 ROLE_EXPERT: Final[str] = "expert"
 ROLE_ADMIN: Final[str] = "admin"
-ROLES: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_ADMIN})
+#: `R-150e`, `R-150x`. «Наблюдатель»: reads and downloads product data and changes nothing. It
+#: is the only role of an account that holds it (:func:`require_exclusive_viewer`).
+ROLE_VIEWER: Final[str] = "viewer"
+ROLES: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_ADMIN, ROLE_VIEWER})
 
 #: ``reg_<ULID>``: a registration request's identity, owned by the shared registry since
 #: ``W49-SEAL-01`` (``request_id`` / ``reg``, entity ``RegistrationRequest``).
@@ -389,6 +392,24 @@ def parse_role(value: object) -> str:
         message=f"a role must be one of {sorted(ROLES)}",
         field="roles",
     )
+
+
+def require_exclusive_viewer(roles: frozenset[str]) -> frozenset[str]:
+    """A role set an account may hold, or a refusal (`R-150e`).
+
+    «Наблюдатель» never shares an account with ``expert`` or ``admin``. Roles combine as "any
+    of" at the gate, so a viewer beside another role would read nothing as a viewer and act on
+    everything as the other role -- the combination is refused where roles are written, never
+    resolved by a precedence rule.
+    """
+    if ROLE_VIEWER in roles and len(roles) > 1:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="the viewer role is the only role of an account that holds it",
+            field="roles",
+            constraint="viewer_exclusive",
+        )
+    return roles
 
 
 @dataclass(frozen=True, slots=True)

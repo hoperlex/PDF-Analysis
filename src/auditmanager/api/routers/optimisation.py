@@ -123,7 +123,7 @@ def build_optimisation_routes(router: APIRouter, optimisation: OptimisationPort)
         },
         description=(
             "Every price-list revision of the project, newest first, the first flagged "
-            "`is_current`. An unknown project is `404`. Any one role, `role:admin|expert`."
+            "`is_current`. An unknown project is `404`. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def list_price_list_revisions(
@@ -149,7 +149,7 @@ def build_optimisation_routes(router: APIRouter, optimisation: OptimisationPort)
             "One page of a price-list revision's positions in source-row order (`offset`, "
             "`limit`, `next_offset`), with the revision and its parse report. Each unit "
             "price is its exact decimal text. An unknown revision is `404`. Any one role, "
-            "`role:admin|expert`."
+            "`role:admin|expert|viewer`."
         ),
     )
     def list_price_list_positions(
@@ -178,7 +178,7 @@ def build_optimisation_routes(router: APIRouter, optimisation: OptimisationPort)
             "order. For each: `source` `project` (the project's own latest revision, mode "
             "`list`), `global` (the administrator's latest) or `none`; the `effective` "
             "revision; and the latest revision of each scope. An unknown project is `404`. "
-            "Any one role, `role:admin|expert`."
+            "Any one role, `role:admin|expert|viewer`."
         ),
     )
     def get_effective_vendor_lists(

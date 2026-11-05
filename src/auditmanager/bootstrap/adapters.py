@@ -75,6 +75,7 @@ from auditmanager.api.schemas.runs import (
 from auditmanager.api.security import (
     ROLE_ADMIN,
     ROLE_EXPERT,
+    ROLE_VIEWER,
     AccountStanding,
     IssuedCredential,
     Subject,
@@ -2686,7 +2687,7 @@ class CredentialAdapter(_SessionHolder):
 #: `W49-SEAL-01`. The ``access`` boundary's role vocabulary to the seam's, written out: the
 #: two spell the same words today, and a table rather than an identity is what keeps a new
 #: role on one side from reaching the other without a decision.
-_SEAM_ROLE_OF: dict[str, str] = {"expert": ROLE_EXPERT, "admin": ROLE_ADMIN}
+_SEAM_ROLE_OF: dict[str, str] = {"expert": ROLE_EXPERT, "admin": ROLE_ADMIN, "viewer": ROLE_VIEWER}
 
 
 def _seam_role(role: str) -> str:

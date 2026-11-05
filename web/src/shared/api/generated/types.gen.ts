@@ -7,7 +7,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 4e196c4b0c90330c09539a3ace167e52ce7a7eb8249c98dbbbc5580cd0994732
+ *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -17,7 +17,7 @@
 export const CONTRACT_VERSION = '1.19.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '4e196c4b0c90330c09539a3ace167e52ce7a7eb8249c98dbbbc5580cd0994732';
+export const CONTRACT_DIGEST = '536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -5907,10 +5907,11 @@ export type ReviseStageAssemblyRequest = {
   remove_document_uids: Array<DocumentUid>;
 };
 
-/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. Reading product data needs one of them (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
+/** One role an account may hold; an account holds a set of them (R-55, R-60). `expert` makes product changes -- projects, uploads, runs, verdicts, comments and the export. `admin` manages accounts and registration requests. `viewer` (R-150e, R-150x, shown as «Наблюдатель») reads and downloads product data and changes nothing; it does not read the execution queue, journal, workers or executors (R-150w), and it is the only role of an account that holds it: a role set combining it with `expert` or `admin` is refused as `validation_failed` (`constraint: viewer_exclusive`). Reading product data needs one of these roles (R-80): an active account whose role set is empty is suspended and reads only its own account, the product version and the release notes. */
 export const ROLE_VALUES = [
   'expert',
   'admin',
+  'viewer',
 ] as const;
 
 /** Role - the closed value set above. */
