@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
+ *   AuditManager PC-01 API 1.20.0 (OpenAPI 3.1.0)
+ *   sha256 8feee46b4882a4763853a9eaf0c268b4cc1284ff2e10e4df4adc9e7d653d56c3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -406,6 +406,7 @@ export const OPERATION_IDS = [
   'getDashboardSummary',
   'getDocumentVersion',
   'getEffectiveVendorLists',
+  'getExecutionDispatch',
   'getExecutorAgentInstall',
   'getExecutorConnection',
   'getExecutorGroup',
@@ -2898,6 +2899,25 @@ export type GetEffectiveVendorListsInput = {
 export type GetEffectiveVendorListsResult = EffectiveVendorLists;
 
 // ------------------------------------------------------------------------------------
+// getExecutionDispatch - GET /execution/dispatch
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Dispatch
+ *
+ * Whether the installation's execution dispatch is paused, and since when: the state `setExecutionPaused` writes. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151f`): the top strip shows the pause state without reading the queue. Readable by `expert` and `admin`; the `viewer` role is refused (`R-150w`), as for the queue.
+ */
+export type GetExecutionDispatchInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutionDispatch` (`application/json`, HTTP 200). */
+export type GetExecutionDispatchResult = ExecutionDispatchStatus;
+
+// ------------------------------------------------------------------------------------
 // getExecutorAgentInstall - GET /executor-connections/{connection_id}/agent-installs/{install_id}
 // ------------------------------------------------------------------------------------
 
@@ -4217,6 +4237,8 @@ export type ListDocumentsInput = {
     cursor?: Cursor;
     /** Page size. */
     limit?: number;
+    /** Only the documents whose current version is confirmed for this section (its `classification.section_code`); every document when absent. A document whose current version has no confirmed classification never matches. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151l`): the section page lists one section's documents without walking the whole project. A cursor resumes after its row in the filtered listing; presented under another filter it yields that listing's continuation or an empty page, never a page from another listing. */
+    section_code?: ProjectSection;
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -9003,6 +9025,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['optimisation'],
   },
+  getExecutionDispatch: {
+    operationId: 'getExecutionDispatch',
+    method: 'GET',
+    path: '/execution/dispatch',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   getExecutorAgentInstall: {
     operationId: 'getExecutorAgentInstall',
     method: 'GET',
@@ -9736,7 +9772,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
-    queryParams: ['cursor', 'limit'],
+    queryParams: ['cursor', 'limit', 'section_code'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

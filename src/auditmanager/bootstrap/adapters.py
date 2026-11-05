@@ -339,6 +339,14 @@ class ExecutionAdapter(_SessionHolder):
             return _queue_item_model(row, _queue_binding_facts(session, [row.run_id]))
         return self._write(write)
 
+    def get_dispatch_status(self) -> models.ExecutionDispatchStatus:
+        from auditmanager.execution.public import ExecutionRepository
+
+        def read(session: Session) -> models.ExecutionDispatchStatus:
+            state = ExecutionRepository().dispatch_status(session)
+            return models.ExecutionDispatchStatus(paused=state.paused, changed_at=state.changed_at)
+        return self._read(read)
+
     def set_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> models.ExecutionDispatchStatus:
         from auditmanager.jobs.public import set_execution_paused
         from auditmanager.execution.public import ExecutionRepository
@@ -890,13 +898,20 @@ class DocumentAdapter:
             chunks=opened.chunks,
         )
 
-    def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
+    def list_documents(
+        self, *, project_uid: str, section_code: str | None = None
+    ) -> Sequence[DocumentVersionView]:
         from auditmanager.shared.identity import ProjectUid
 
-        return tuple(
+        views = tuple(
             _version_view(record)
             for record in self._service.list_documents(ProjectUid.parse(project_uid))
         )
+        if section_code is None:
+            return views
+        # `UI-PARITY-P0E` (`R-151l`): the confirmed classification of the current version decides;
+        # the legacy `section` column and any suggestion never do.
+        return tuple(view for view in views if _classified_section(view) == section_code)
 
     def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
         from auditmanager.shared.identity import DocumentUid
@@ -906,6 +921,15 @@ class DocumentAdapter:
             for record in self._service.list_versions(DocumentUid.parse(document_uid))
         )
 
+
+
+def _classified_section(view: DocumentVersionView) -> str | None:
+    """The section code of a version's confirmed classification, or ``None`` when it has none."""
+    classification = view.classification
+    if classification is None:
+        return None
+    code = getattr(classification, "section_code", None)
+    return getattr(code, "value", code)
 
 class _Uploaded:
     __slots__ = ("_version", "_replayed")

@@ -492,17 +492,25 @@ class IngestDocumentAdapter:
             version_uid=version_uid, byte_range=byte_range
         )
 
-    def list_documents(self, *, project_uid: str) -> tuple[DocumentVersionView, ...]:
+    def list_documents(
+        self, *, project_uid: str, section_code: str | None = None
+    ) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
 
         There is no test query here: the rows, the order and the `404` for an unknown
         project all come from `DocumentRepository`, so a suite driving this adapter is
-        driving the shipped listing and not a second implementation of it.
+        driving the shipped listing and not a second implementation of it. The section
+        filter (`UI-PARITY-P0E`) is the shipped adapter's own predicate.
         """
-        return tuple(
+        from auditmanager.bootstrap.adapters import _classified_section
+
+        views = tuple(
             self._view(record)
             for record in self._ingest.list_documents(ProjectUid(project_uid))
         )
+        if section_code is None:
+            return views
+        return tuple(view for view in views if _classified_section(view) == section_code)
 
     def list_versions(self, *, document_uid: str) -> tuple[DocumentVersionView, ...]:
         return tuple(

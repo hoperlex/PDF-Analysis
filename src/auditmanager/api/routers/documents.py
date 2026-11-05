@@ -17,7 +17,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Final
 
-from fastapi import APIRouter, Depends, Form, Header, Path, Response
+from fastapi import APIRouter, Depends, Form, Header, Path, Query, Response
+from pydantic import WithJsonSchema
 
 from auditmanager.api.routers.declarations import (
     CursorParam,
@@ -32,6 +33,7 @@ from auditmanager.api.routers.multipart import (
     require_a_strict_multipart_body,
 )
 from auditmanager.api.routers.ports import DocumentPort
+from auditmanager.api.schemas.models import optional_property
 from auditmanager.api.routers.wire import (
     StreamingWireResponse,
     WireResponse,
@@ -83,6 +85,14 @@ RangeParam = Annotated[
     ),
 ]
 
+
+
+# `UI-PARITY-P0E` (ruling `R-151l`): the section page reads one section's documents.
+SectionCodeFilterParam = Annotated[
+    models.ProjectSection | None,
+    WithJsonSchema({"$ref": "#/components/schemas/ProjectSection"}),
+    Query(json_schema_extra=optional_property),
+]
 
 def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
 
@@ -194,11 +204,15 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         project_uid: Annotated[models.ProjectUid, Path()],
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,
+        section_code: SectionCodeFilterParam = None,  # type: ignore[assignment]
     ) -> WireResponse:
         # `GET` of the collection `uploadDocument` `POST`s into, returning a page of
         # exactly the resource that `POST` returns -- which is the rule `listProjects`
         # already follows against `createProject`.
-        rows = documents.list_documents(project_uid=project_uid)
+        rows = documents.list_documents(
+            project_uid=project_uid,
+            section_code=None if section_code is None else section_code.value,
+        )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_version_sort_key)
         body = page_body(
             [document_version_body(view) for view in page.items], page.next_cursor

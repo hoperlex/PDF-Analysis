@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
+ *   AuditManager PC-01 API 1.20.0 (OpenAPI 3.1.0)
+ *   sha256 8feee46b4882a4763853a9eaf0c268b4cc1284ff2e10e4df4adc9e7d653d56c3
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -198,6 +198,8 @@ import type {
   GetDocumentVersionResult,
   GetEffectiveVendorListsInput,
   GetEffectiveVendorListsResult,
+  GetExecutionDispatchInput,
+  GetExecutionDispatchResult,
   GetExecutorAgentInstallInput,
   GetExecutorAgentInstallResult,
   GetExecutorConnectionInput,
@@ -1653,6 +1655,18 @@ export function getEffectiveVendorLists(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetEffectiveVendorListsResult>> {
   return request<GetEffectiveVendorListsResult>(OPERATIONS.getEffectiveVendorLists, input, options);
+}
+
+/**
+ * Get Dispatch
+ *
+ * `GET /execution/dispatch`.
+ */
+export function getExecutionDispatch(
+  input: GetExecutionDispatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutionDispatchResult>> {
+  return request<GetExecutionDispatchResult>(OPERATIONS.getExecutionDispatch, input, options);
 }
 
 /**
@@ -3994,6 +4008,7 @@ export const apiClient = {
   getDashboardSummary,
   getDocumentVersion,
   getEffectiveVendorLists,
+  getExecutionDispatch,
   getExecutorAgentInstall,
   getExecutorConnection,
   getExecutorGroup,

@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-277 operations, sealed. `A5` generates the typed client from this document; `B6`
+278 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,12 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0E` (contract `1.20.0`, no migration) added two reads. `listDocuments` takes the optional `section_code`
+filter (a `ProjectSection`): only documents whose current version is confirmed for that section, unclassified ones never; the
+section page of ruling `R-151l` reads it. `getExecutionDispatch` (`GET /execution/dispatch`) returns the durable pause state
+`setExecutionPaused` writes, for the pause indicator of ruling `R-151f`; any one of `expert` and `admin`, `viewer` refused
+(`R-150w`). No error code, no migration.
+
 `UI-PARITY-P0B` (contract `1.19.0`, no migration) added the audit state of a document and its counters and no operation. A new
 schema `DocumentAuditCounts` (`document_count`, `not_run`, `clean`, `awaiting_decision`, `checked`, `partial`,
 `no_expert_decision`) is carried by `listProjects` (the optional `audit_counts` of each `Project`; `createProject` omits it) and
@@ -1111,6 +1117,7 @@ could.
 | `reauditRun` | `POST /runs/{run_id}/reaudit` |
 | `setJobPriority` | `PUT /execution/queue/{job_id}/priority` |
 | `setExecutionPaused` | `PUT /execution/dispatch` |
+| `getExecutionDispatch` | `GET /execution/dispatch` |
 | `listWorkers` | `GET /execution/workers` |
 | `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
 | `searchNorms` | `GET /norms/search` |

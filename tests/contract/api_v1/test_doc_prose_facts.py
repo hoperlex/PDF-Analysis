@@ -564,6 +564,10 @@ KNOWN_HISTORICAL_TRIPLES: frozenset[tuple[str, str]] = frozenset(
         # 674 schemas". `UI-PARITY-P0B` (1.19.0) added the schema `DocumentAuditCounts` (675), and the file's "Facts of this
         # tree" and its newest entry state the current triple; the P0A entry is a record of its day and is kept as written.
         ("docs/program/CURRENT_STATE.md", "250 paths / 277 operations / 674 schemas"),
+        # CURRENT_STATE.md's `UI-PARITY-P0B` entry (2026-11-05) records contract 1.19.0's "250 paths / 277 operations /
+        # 675 schemas". `UI-PARITY-P0E` (1.20.0) added `getExecutionDispatch` (278 operations), and the file's "Facts of
+        # this tree" states the current triple; the P0B entry is a record of its day and is kept as written.
+        ("docs/program/CURRENT_STATE.md", "250 paths / 277 operations / 675 schemas"),
     }
 )
 

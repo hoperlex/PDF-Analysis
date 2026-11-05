@@ -61,7 +61,7 @@ def _tokens(module: ModuleType, value: str) -> list[str]:
 #: `R-150w` (and the matrix's defaults): reads the viewer may NOT make. Every other product read
 #: is open to «Наблюдатель» (`R-150e`). A literal from the rulings, not read from the seam.
 VIEWER_DENIED_READS = frozenset({
-    "listExecutionQueue", "listExecutionJournal", "listWorkers", "listExecutorConnections",
+    "listExecutionQueue", "getExecutionDispatch", "listExecutionJournal", "listWorkers", "listExecutorConnections",
     "getExecutorConnection", "listExecutorRoutes", "getComparisonQueueSummary", "getComparisonAiQueue",
     "estimateStageChainRun", "listAssignments", "getAssignment", "listExecutorGroups",
     "getExecutorGroup", "getExecutorGroupCapacity", "listExecutorRoutingRules",

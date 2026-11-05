@@ -11,7 +11,18 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.19.0` (`UI-PARITY-P0B`)
+## Current contract `1.20.0` (`UI-PARITY-P0E`)
+
+Additive read slice for the UI parity programme (rulings `R-151f`, `R-151l`). One optional query parameter and one operation;
+no migration, no new schema, no new error code.
+`listDocuments` takes the optional `section_code` (a `ProjectSection`): only the documents whose current version is confirmed for
+that section (its `classification.section_code`); a document whose current version is unclassified never matches. The order is
+the unfiltered order with rows removed, and a cursor resumes after its row in the filtered listing.
+`getExecutionDispatch` (`GET /execution/dispatch`) returns the `ExecutionDispatchStatus` `setExecutionPaused` writes, so the top
+strip can show the pause state without reading the queue; readable by `expert` and `admin`, refused to `viewer` (`R-150w`).
+The API now has 250 paths, 278 operations and 675 schemas; migration head `0050`. The domain catalogs are at candidate revision 38.
+
+## Contract `1.19.0` (`UI-PARITY-P0B`, historical)
 
 Additive read slice that gives a document an audit state and its counters (the counters the project selector and the section panel of the
 UI parity programme wait for; rulings `R-150n` ... `R-150u`, dictionary `docs/program/UI-PARITY-METRICS.md`). Response fields and one new
@@ -26,7 +37,7 @@ A document counts by its current version only; its result run is the latest run 
 `(created_at, run_id)`; a failed, cancelled or still running run is not a result. A document is `not_run`, `clean` (a result with no
 finding), `awaiting_decision` or `checked`, and `partial` flags a partial result. `no_expert_decision` is `not_run +
 awaiting_decision`.
-The API now has 250 paths, 277 operations and 675 schemas; migration head `0050`. The domain catalogs are at candidate revision 37.
+The API then had 250 paths, 277 operations and 675 schemas; migration head `0050`. The domain catalogs were at candidate revision 37.
 
 ## Contract `1.18.0` (`UI-PARITY-QUEUE-A`, historical)
 

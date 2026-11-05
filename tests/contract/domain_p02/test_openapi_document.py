@@ -108,6 +108,8 @@ REQUIRED_OPERATIONS = {
     "reauditRun",
     "setJobPriority",
     "setExecutionPaused",
+    # `UI-PARITY-P0E`, `R-151f`. The durable pause state, read without the queue.
+    "getExecutionDispatch",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",
@@ -918,10 +920,12 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # work kind, with the mode) and the cut-over preview each take no identity, no filter and no body.
     # `UI-PARITY-P0A` removes ``getDashboardSummary``: it takes the optional ``project_uid`` filter, so it now
     # declares the ``404`` and ``422`` an input-taking operation must (``listDecisions`` already had its own).
+    # `UI-PARITY-P0E` adds ``getExecutionDispatch``: the installation's pause state addresses no identity.
     {"getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
-     "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting"}
+     "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
+     "getExecutionDispatch"}
 )
 
 

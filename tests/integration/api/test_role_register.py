@@ -75,6 +75,7 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "reauditRun": ("POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
     "setJobPriority": ("PUT", "/execution/queue/job_01M2545JSD15ETSNNV904X991T/priority"),
     "setExecutionPaused": ("PUT", "/execution/dispatch"),
+    "getExecutionDispatch": ("GET", "/execution/dispatch"),
     # `W54-SEAL-01`. The worker registry (R-80 any-role read, administrator intake).
     "listWorkers": ("GET", "/execution/workers"),
     "setWorkerIntake": ("PUT", "/execution/workers/wrk_01M2545JSD15ETSNNV904X991T/intake"),
@@ -479,6 +480,7 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getArV3BetaPackStatus": _READ,
     "getRunNormVerification": _READ,
     "listExecutionQueue": _ANY_ROLE,
+    "getExecutionDispatch": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
     "listWorkers": _ANY_ROLE,
     # `EXEC-SEAL-01`: connections, probes and routes are product reads.

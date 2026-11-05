@@ -127,6 +127,10 @@ class ExecutionPort(Protocol):
     def set_paused(
         self, *, paused: bool, user_uid: str, idempotency_key: str
     ) -> models.ExecutionDispatchStatus: ...
+    def get_dispatch_status(self) -> models.ExecutionDispatchStatus:
+        """`UI-PARITY-P0E` (ruling `R-151f`): the durable pause state ``set_paused`` writes,
+        read without the queue, for the top strip's indicator."""
+        ...
     # `W54-SEAL-01`. The worker registry (plan section 3.7). Sealed as stubs that answer
     # `503 dependency_unavailable`; `W54-WORKER-01` supplies the behaviour.
     def list_workers(
@@ -374,8 +378,15 @@ class DocumentPort(Protocol):
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         """One published version and its input manifest."""
 
-    def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
+    def list_documents(
+        self, *, project_uid: str, section_code: str | None = None
+    ) -> Sequence[DocumentVersionView]:
         """The current version of every document in one project, **newest first**.
+
+        ``section_code`` (`UI-PARITY-P0E`, ruling `R-151l`) keeps the documents whose current
+        version is confirmed for that section (its ``classification.section_code``); ``None``
+        keeps every document. An unclassified current version never matches, and the order is
+        the unfiltered order with rows removed, so the router's cursor stays meaningful.
 
         The order is part of this declaration for the reason ``list_projects`` gives: the
         router pages what this returns and never re-sorts it.

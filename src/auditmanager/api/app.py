@@ -106,7 +106,7 @@ DOCUMENTATION_PATHS: Final[tuple[str, ...]] = (
 #: is the same string.
 _TITLE: Final[str] = "AuditManager API"
 _DESCRIPTION: Final[str] = (
-    "The 277 operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
+    "The 278 operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
     "carrying a catalog `error_code`, and every response carries `X-Correlation-Id`."
 )
 
@@ -155,7 +155,7 @@ def create_asgi_app(
     *,
     application: Application | None = None,
 ) -> FastAPI:
-    """The ASGI application: the 277 operations, the seam, and the four middlewares.
+    """The ASGI application: the 278 operations, the seam, and the four middlewares.
 
     ``application`` lets a caller that has already built one -- a test driving two
     applications in one process, for instance -- avoid building it twice. When it is omitted
@@ -206,7 +206,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **One hundred and eighty-six** of the 277
+    ``ValidationError`` out of ``components.schemas``. **One hundred and eighty-six** of the 278
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before

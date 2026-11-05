@@ -390,6 +390,7 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listVersions": _PRODUCT_READ,
         "listRuns": _PRODUCT_READ,
         "listExecutionQueue": _ANY_ROLE,
+        "getExecutionDispatch": _ANY_ROLE,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
         # `EXEC-SEAL-01` (R-143). Any role reads connections, probes and routes; a secret is
