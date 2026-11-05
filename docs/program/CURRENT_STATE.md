@@ -1,5 +1,11 @@
 # Current state
 
+**Updated 2026-11-05 by `UI-PARITY-INT-1105c` (unverified development candidate, third publication).** The administrator forms offer «Наблюдатель» (`VIEWER_ROLE_OFFERED` on). Both the user form and the registration approval refuse it beside another role before sending (`R-150e`); turning the switch off is the rollback.
+
+Stand rerun on `b9a725c5`: 108 passed. It covers the dashboard census, the inventory at `0050`, the `0015` vocabulary and the optimisation viewer capability tests, the three reds of the earlier combined check, now green.
+
+`test_project_match` `unit_mismatch` stays red and is unrelated to this work (`D-315`). Web checks for the form change: `tsc`, eslint and focused vitest, green.
+
 **Updated 2026-11-05 by `UI-PARITY-INT-1105b` (unverified development candidate, second publication).** New on top of `UI-PARITY-INT-1105`:
 - the dashboard's section rows carry the original's five numbers (`UI-A-35`);
 - the findings table in «Разбор», with the first `shared/ui` `Table` (`UI-A-68`, `R-150f`);
