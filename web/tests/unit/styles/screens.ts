@@ -72,6 +72,7 @@ import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
+import { DocumentContext } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
 import { CropFigureView } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
@@ -710,6 +711,21 @@ export function screens(): Screen[] {
   add('VersionList cold', withRouter(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
   add('RunList cold', withRouter(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
   add('UploadPanel', renderWith(newClient(), createElement(UploadPanel, { projectUid: PROJECT_UID })));
+
+  // `UI-A-24`: the context strip on a version page offers the document's other versions once there are two,
+  // and says the history is longer than the page when it is -- the `.switch` and `.more` rules of the strip.
+  {
+    const client = populatedClient();
+    const second = { ...version(), version_uid: `${VERSION_UID.slice(0, -1)}Z` as DocumentVersion['version_uid'], version_ordinal: 2 };
+    client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), {
+      items: [version(), second],
+      page: { next_cursor: 'Y3Vyc29y' },
+    });
+    add(
+      'DocumentContext, a version of two, with more history',
+      renderScreen(client, createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID, current: 'version' })),
+    );
+  }
   add('ExecutionJournal loaded', withRouter(createElement(ExecutionJournal, {
     entries: [{
       event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',

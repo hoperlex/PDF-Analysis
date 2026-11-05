@@ -5147,6 +5147,10 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'События прогона не открылись',
+    why: 'UI-B-39: the run page shows this only after the run-filtered listExecutionJournal read fails; the run page is censused cold, where that read has not settled. The same ErrorState with this title is the only failure branch of RunEvents.',
+  },
+  {
     label: 'Команда пресету не выполнена',
     why: 'The preset form and the archive control show this only after a createAnalysisPreset, reviseAnalysisPreset or archiveAnalysisPreset mutation settles with a failure. One static render cannot press «Сохранить пресет» or «Убрать в архив» or seed the mutation observer through a query cache (the live tests in tests/unit/analysis-settings press them and read the sentence).',
   },
