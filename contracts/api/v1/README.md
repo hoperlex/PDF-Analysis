@@ -26,7 +26,7 @@ period `created_from` (included) / `created_to` (not included) over `created_at`
 queue's order is unchanged. A cursor belongs to the filters it was issued under: one presented with other filters is
 `422 validation_failed` with `constraint: scope`, the refusal the comparison stage listings already give. The overview
 (`getExecutionOverview`), an estimate of the end and the attempts of a job are not in this slice.
-The current API still has 250 paths, 277 operations and 674 schemas; migration head `0048`. The domain catalogs are at
+The current API still has 250 paths, 277 operations and 674 schemas; migration head `0049`. The domain catalogs are at
 candidate revision 36.
 
 ## Contract `1.17.0` (`UI-PARITY-P0A`, historical)
