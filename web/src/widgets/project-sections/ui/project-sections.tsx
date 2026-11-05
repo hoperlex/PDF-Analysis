@@ -218,7 +218,21 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
 
   return (
     <section className="am-section" data-project-sections={projectUid}>
-      <h2>Разделы проекта</h2>
+      <div className={styles.titleRow}>
+        <h2>Разделы проекта</h2>
+        {/* `UI-A-51`: the original's «Обновить» beside the section list; it re-reads this page. */}
+        <button
+          type="button"
+          className="am-button am-button--quiet"
+          data-project-sections-refresh
+          disabled={query.isFetching}
+          onClick={() => {
+            void query.refetch();
+          }}
+        >
+          {query.isFetching ? 'Обновляется…' : 'Обновить'}
+        </button>
+      </div>
       {body}
     </section>
   );
