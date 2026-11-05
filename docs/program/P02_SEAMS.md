@@ -1043,8 +1043,8 @@ schema `DocumentAuditCounts` (`document_count`, `not_run`, `clean`, `awaiting_de
 by `SectionDocumentCount` (`audit_counts` and `finding_count`, required); `DashboardSummary` gains `awaiting_decision_findings`.
 The three are tallies of one read model (`dashboard/audit_state.py`): a document's current version only, its result run being the
 latest `published` or `partial` run in `(created_at, run_id)` order. `VerdictCount` is described as the all-time count of every
-finding of every run. `getDashboardSummary` keeps its optional `project_uid`; the three operations stay any one role, are not
-keyed, and the catalogue gains no error code. The rules and their rulings are `docs/program/UI-PARITY-METRICS.md`.
+finding of every run. `getDashboardSummary` keeps its optional `project_uid`; `listProjects` and `getDashboardSummary` stay any
+one role, are not keyed, and the catalogue gains no error code. The rules and their rulings are `docs/program/UI-PARITY-METRICS.md`.
 
 *This paragraph read "Fifteen operations, sealed" while the table below listed seventeen.*
 *And then it read "Eighteen" while the table listed nineteen — the identical defect, in the

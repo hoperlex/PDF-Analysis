@@ -4,7 +4,9 @@
 the argument -- what this operation answers, and what it refuses to become.
 
 ``audit_state.py`` is the read model of a document's audit state and its counters (`UI-PARITY-P0B`), shared by this
-operation's section panel and findings tile and by ``listProjects``' ``audit_counts``.
+operation's section panel and findings tile and by ``listProjects``' ``audit_counts``. The classifying function
+``audit_state`` is imported from that module (``auditmanager.dashboard.audit_state``); it is not re-exported here, because
+a package attribute named like its submodule would hide the module.
 """
 
 from __future__ import annotations
@@ -16,7 +18,6 @@ from .audit_state import (
     DocumentAuditReadModel,
     DocumentAuditState,
     SectionAuditRecord,
-    audit_state,
     awaiting_decision_findings,
     counts_by_project,
     counts_by_section,
@@ -40,7 +41,6 @@ __all__ = [
     "DocumentAuditReadModel",
     "DocumentAuditState",
     "SectionAuditRecord",
-    "audit_state",
     "awaiting_decision_findings",
     "counts_by_project",
     "counts_by_section",
