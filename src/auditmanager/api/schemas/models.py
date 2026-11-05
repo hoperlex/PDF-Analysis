@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.25.0"]
+    contract_version: Literal["1.26.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1758,6 +1758,9 @@ class ExecutionQueueItem(_Object):
     #: `R-151v` (contract 1.21.0): who started the job's run, by display label; absent before migration 0051.
     started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `R-151u` (contract 1.26.0): a running job's estimated finish -- its start plus the median duration of similar
+    #: recent runs; absent without enough history or while the job is not running.
+    estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     binding_state: ExecutorBindingState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 

@@ -39,6 +39,9 @@ class QueueItem:
     interrupted_reason: str | None = None
     #: `R-151v` (migration 0051): the account that started the job's run; ``None`` before 0051.
     started_by_user_uid: str | None = None
+    #: `R-151u`: what the ETA compares a running job with -- its run's analysis profile and its version's page count.
+    analysis_profile_id: str | None = None
+    page_count: int | None = None
 
     @property
     def position(self) -> QueuePosition:
@@ -102,7 +105,8 @@ _ITEM_COLUMNS = """
        dv.document_uid, d.display_title AS document_name,
        r.version_uid, dv.version_ordinal,
        (SELECT min(a.created_at) FROM attempt a WHERE a.job_id = page.job_id) AS started_at,
-       r.terminal_reason AS error_code, r.interrupted_reason, r.started_by_user_uid"""
+       r.terminal_reason AS error_code, r.interrupted_reason, r.started_by_user_uid,
+       r.analysis_profile_id, dv.page_count"""
 _ITEM_JOINS = """
   JOIN audit_run r ON r.run_id = page.run_id
   JOIN project p ON p.project_uid = r.project_uid

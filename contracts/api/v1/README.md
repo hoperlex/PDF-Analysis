@@ -11,14 +11,22 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.25.0` (`UI-PARITY-P0J`)
+## Current contract `1.26.0` (`UI-PARITY-P0K`)
+
+Additive slice for ruling `R-151u`: `ExecutionQueueItem` gains the optional `estimated_finish_at` of a running job -- its
+first attempt's start plus the median duration of at least three recent completed runs of the same analysis profile and
+a page count within a quarter of its own (`execution/eta.py`); absent without enough history, never invented. No
+operation, no schema, no migration, no error code.
+The API now has 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs are at candidate revision 44.
+
+## Contract `1.25.0` (`UI-PARITY-P0J`, historical)
 
 Slice for ruling `R-151h`: the knowledge base's «Предложения» half. `listProposalDecisionJournal` (`GET /proposal-decisions`,
 a product read, optional `project_uid` filter, cursor and `total`) lists every expert decision on an optimisation proposal,
 newest first, as `ProposalDecisionRecord` (verdict, comment, actor label, project, document, version, section, the
 specification row and the proposed vendor). `listDecisions` stays the «Замечания» half; the screen switches between them
 with «Тип». No migration, no error code.
-The API now has 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs are at candidate revision 43.
+The API then had 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs were at candidate revision 43.
 
 ## Contract `1.24.0` (`UI-PARITY-P0I`, historical)
 

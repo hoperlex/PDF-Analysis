@@ -195,6 +195,17 @@ def _with_execution_status(session: Session, views: Sequence[Any]) -> list[Any]:
     ]
 
 
+def _estimated_finish(row: Any, samples: Sequence[Any]) -> Any:
+    from auditmanager.execution.eta import estimated_finish
+
+    if getattr(row, "state", None) not in ("leased", "running") or not samples:
+        return None
+    return estimated_finish(
+        samples, started_at=getattr(row, "started_at", None),
+        analysis_profile_id=getattr(row, "analysis_profile_id", None), page_count=getattr(row, "page_count", None),
+    )
+
+
 def _starter_labels(session: Session, rows: Sequence[Any]) -> dict[str, str]:
     """`R-151v`: the display label of each account that started a listed run, each read once."""
     from auditmanager.access.public import AccountRepository
@@ -210,6 +221,7 @@ def _starter_labels(session: Session, rows: Sequence[Any]) -> dict[str, str]:
 
 def _queue_item_model(
     row: Any, facts: Mapping[str, Mapping[str, Any]], labels: Mapping[str, str] | None = None,
+    samples: Sequence[Any] = (),
 ) -> models.ExecutionQueueItem:
     """One queue item of the wire from a read row and the binding facts of its run.
 
@@ -226,6 +238,8 @@ def _queue_item_model(
             error_code=row.error_code, interrupted_reason=row.interrupted_reason,
             # `R-151v`: who started the run, by label; absent for a run created before 0051.
             started_by_label=(labels or {}).get(getattr(row, "started_by_user_uid", None) or ""),
+            # `R-151u`: a running job's estimated finish, from similar past runs; absent without enough history.
+            estimated_finish_at=_estimated_finish(row, samples),
         ),
         **facts.get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
     })
@@ -274,8 +288,12 @@ class ExecutionAdapter(_SessionHolder):
                 next_cursor = None
             facts = _queue_binding_facts(session, [row.run_id for row in items])  # EXEC2-GROUP-RUN-01
             labels = _starter_labels(session, items)  # `R-151v`
+            from auditmanager.execution.eta import history
+
+            # `R-151u`: one read of the recent history serves every running item of the page.
+            samples = history(session) if any(row.state in ("leased", "running") for row in items) else ()
             return models.ExecutionQueuePage(
-                items=[_queue_item_model(row, facts, labels) for row in items],
+                items=[_queue_item_model(row, facts, labels, samples) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
             )

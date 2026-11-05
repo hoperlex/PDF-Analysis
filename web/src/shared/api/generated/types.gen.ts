@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.25.0 (OpenAPI 3.1.0)
- *   sha256 bb30a8829183dbc737e6ef5863cda1c78e916a71e7f178e1f96d76bb8785131d
+ *   AuditManager PC-01 API 1.26.0 (OpenAPI 3.1.0)
+ *   sha256 d28e87d99f7d44c7acb9edff7a9d694610777448c4960f001f58f77b510b2af2
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.25.0';
+export const CONTRACT_VERSION = '1.26.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'bb30a8829183dbc737e6ef5863cda1c78e916a71e7f178e1f96d76bb8785131d';
+export const CONTRACT_DIGEST = 'd28e87d99f7d44c7acb9edff7a9d694610777448c4960f001f58f77b510b2af2';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -3864,7 +3864,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.25.0";
+  contract_version: "1.26.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3915,6 +3915,8 @@ export type ExecutionQueueItem = {
   document_name: string;
   document_uid: DocumentUid;
   error_code?: ErrorCode;
+  /** `R-151u` (contract 1.26.0): a running job's estimated finish -- its first attempt's start plus the median duration of at least three recent completed runs of the same analysis profile and a page count within a quarter of its own; absent without enough history or while the job is not running. Never invented. */
+  estimated_finish_at?: string;
   finished_at?: string;
   interrupted_reason?: string;
   job_id: JobId;

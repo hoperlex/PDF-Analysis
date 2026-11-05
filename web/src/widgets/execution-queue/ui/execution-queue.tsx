@@ -82,6 +82,12 @@ export function ExecutionQueue({
                 ? '—'
                 : <time dateTime={item.started_at}>{formatInstant(item.started_at)}</time>}
             </p>
+            {item.estimated_finish_at === undefined ? null : (
+              // `R-151u`: from similar past runs; never shown without enough history.
+              <p data-queue-eta>
+                Ожидаемое завершение: ≈ <time dateTime={item.estimated_finish_at}>{formatInstant(item.estimated_finish_at)}</time>
+              </p>
+            )}
             <p data-queue-finished>
               Завершён: {item.finished_at === undefined
                 ? '—'
