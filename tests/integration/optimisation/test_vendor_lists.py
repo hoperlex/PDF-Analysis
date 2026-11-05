@@ -255,7 +255,7 @@ def test_history_is_newest_first_with_actors_and_reads_need_a_role(session: Sess
         (list_vendor_list_history, {"section_code": "EOM"}),
     ):
         refused = _refused(ErrorCode.PERMISSION_DENIED, call, session, actor_roles=nobody, **kwargs)
-        assert refused.detail_fields["required_capability"] == "role:admin|expert"
+        assert refused.detail_fields["required_capability"] == "role:admin|expert|viewer"  # R-150e: the viewer reads too
     _refused(ErrorCode.NOT_FOUND, get_effective_vendor_lists, session,
              project_uid="prj_01ARZ3NDEKTSV4RRFFQ69G5FAV", actor_roles=roles)
     _refused(ErrorCode.VALIDATION_FAILED, list_vendor_list_history, session,

@@ -181,7 +181,9 @@ def test_the_migration_restates_the_boundary_patterns_exactly() -> None:
     assert migration.USER_UID_PATTERN == models.USER_UID_PATTERN
     assert migration.MAX_EMAIL_LENGTH == models.MAX_EMAIL_LENGTH
     assert migration.MAX_PERSON_NAME_LENGTH == models.MAX_PERSON_NAME_LENGTH
-    assert set(migration.ROLES) == models.ROLES
+    # `0015` closed the vocabulary to two roles; `0050_viewer_role` (`R-150e`) adds the viewer. The
+    # boundary's vocabulary is the two together, and nothing else.
+    assert set(migration.ROLES) | {"viewer"} == models.ROLES
 
 
 def test_this_revision_precedes_the_release_head() -> None:

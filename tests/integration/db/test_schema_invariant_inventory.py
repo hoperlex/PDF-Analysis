@@ -31,6 +31,10 @@ from collections.abc import Iterable
 from sqlalchemy import Engine, text
 
 
+#: Resealed by `UI-PARITY-VIEWER` for ``0050_viewer_role``, measured on a fresh database upgraded to exactly ``0050``
+#: (stand ``auditmanager-ui-viewer``, 2026-11-05): only the ``constraints`` family moves, and only its digest --
+#: ``ck_app_user_role_role`` keeps its name and now admits ``viewer`` (1900 rows, unchanged count). Every other
+#: family is byte-identical to the ``0049`` seal below.
 #: Resealed by `EXEC2-FIX-CMP-INVENTORY` for ``0049_stage_identity_checks``, measured by the same method (a fresh empty database
 #: upgraded to exactly ``0049``, the eleven families recomputed with ``_inventory`` and diffed row by row against the ``0048``
 #: figures below): one family moved, ``constraints`` +43 -> 1900, every added row a ``ck_<table>_<column>_format`` CHECK of the
@@ -346,7 +350,7 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (1549, "fe2af5e66658dda832e26c8d23b0fe6f3603c35e77c22137c04f72cf1b1c446e"),
     "relations": (141, "ea3f9c4f791bc938db522b27fe80bf1fcaed96eb46f5204df1c5af7f63a55c01"),
-    "constraints": (1900, "e9403d294fbf4accc54246b6e7f46da25e47a0e6e7d21ebbbfff78655dd345cd"),
+    "constraints": (1900, "99e4bb01d742657a25f39054cecfed53b8e49d471fa07e624c443baf0d485e4b"),
     "indexes": (450, "9f32323579a83c0cc5de00b51597a1e42a2ddf72985e398feeaf0212a31630f8"),
     "triggers": (241, "710b638de7200c0e2b57dd9ec4bbc9f237bf1d90f72dbf249cc661d3e83eb8ef"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
