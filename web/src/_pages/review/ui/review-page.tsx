@@ -32,7 +32,7 @@
  */
 
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
@@ -42,6 +42,7 @@ import { ErrorState, LoadingState, PageShell, RunStateBadge } from '@/shared/ui'
 import { routes } from '@/shared/lib';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
+import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList, verdictFilterOf } from '@/widgets/finding-list';
 import type { VerdictFilter } from '@/widgets/finding-list';
@@ -71,10 +72,11 @@ export interface ReviewPageProps {
 const NO_PARAMS = new URLSearchParams();
 
 export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
+  // `R-150e`: recording a decision is an expert's act; the viewer reads the review without the panel.
+  const mayAct = useMayActAsExpert();
   // `UI-PARITY-01` completion scenario 5: the chosen finding and the verdict filter live in the address
   // (`?finding=`, `?verdict=`), so a saved link opens the same finding under the same filter. Outside the
   // app router both hooks answer `null` and the page keeps its first finding and «Все».
-  const router = useRouter();
   const pathname = usePathname() ?? routes.review(projectUid, runId);
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const linkedFinding = searchParams.get('finding');
@@ -87,7 +89,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     if (value === null) params.delete(key);
     else params.set(key, value);
     const query = params.toString();
-    router.replace(query === '' ? pathname : `${pathname}?${query}`, { scroll: false });
+    // Next keeps `usePathname`/`useSearchParams` in step with the native history API, so the address is
+    // written without the app router -- and the page renders where no router is mounted (a static render).
+    window.history.replaceState(window.history.state, '', query === '' ? pathname : `${pathname}?${query}`);
   };
   // Choosing a finding writes it to the address; turning a page inside the same finding does not.
   const setSelection = (next: ReviewSelection | null | ((current: ReviewSelection | null) => ReviewSelection | null)) => {
@@ -267,7 +271,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 })}
               />
 
-              <DecisionPanel
+              {mayAct ? <DecisionPanel
                 currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
                 observationId={detail.observation.finding_observation_id as FindingObservationId}
                 proposedSeverity={detail.observation.proposed_severity}
@@ -296,7 +300,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                     title: 'Комментарий не добавлен',
                   })
                 }
-              />
+              /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
 
               <DecisionHistory
                 events={historyQuery.data?.data.items ?? []}
