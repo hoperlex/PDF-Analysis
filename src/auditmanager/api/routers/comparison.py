@@ -110,7 +110,7 @@ def build_comparison_routes(router: APIRouter, comparisons: ComparisonPort) -> N
             "a seal; when a page's text is no longer the approved one (`text_changed`), the "
             "seal differs (`seal_changed`) or the set exceeds the response budget "
             "(`too_large`) the differences are withheld, never truncated. Any one role, "
-            "`role:admin|expert`."
+            "`role:admin|expert|viewer`."
         ),
     )
     def compare_document_versions(

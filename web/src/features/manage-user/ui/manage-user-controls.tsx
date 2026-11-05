@@ -20,7 +20,7 @@ import type { FormEvent } from 'react';
 import type { Account } from '@/shared/api';
 import { ROLE_VALUES } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { roleLabels } from '@/entities/account';
+import { ASSIGNABLE_ROLES, roleLabels } from '@/entities/account';
 import { userFailure } from '@/entities/user';
 import { ErrorState } from '@/shared/ui';
 
@@ -97,7 +97,7 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
 
       <form className="am-form" key={`roles-${account.roles.join('-')}`} onSubmit={saveRoles}>
         <h2>Роли</h2>
-        {ROLE_VALUES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" name="role" value={role} defaultChecked={account.roles.includes(role)} /> {roleLabels([role])[0]}</label>)}
+        {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" name="role" value={role} defaultChecked={account.roles.includes(role)} /> {roleLabels([role])[0]}</label>)}
         <p className="am-form__hint">При изменении ролей все прежние пропуска этой учётной записи отзываются. Пользователю потребуется войти снова.</p>
         <button className="am-button" type="submit" disabled={manage.isPending}>Сохранить роли</button>
       </form>

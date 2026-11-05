@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 4e196c4b0c90330c09539a3ace167e52ce7a7eb8249c98dbbbc5580cd0994732
+ *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1315,7 +1315,7 @@ export type ClearComparisonLaunchQueueResult = ComparisonLaunchQueue;
 /**
  * Compare Document Versions
  *
- * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match in `sheets`, `sheet_diffs` and `findings` is a proposal; this read writes nothing. `approved_pairs` (null for a refused comparison) lists the sheet pairs an expert approved for exactly this pair of versions (`approveSheetPairing`) and, for approved pairs only, their deterministic line differences, recomputed from the immutable text and bound to the version bytes by a seal; when a page's text is no longer the approved one (`text_changed`), the seal differs (`seal_changed`) or the set exceeds the response budget (`too_large`) the differences are withheld, never truncated. Any one role, `role:admin|expert`.
+ * Compare two versions of one document set: the path names the older (source) version and `target_version_uid` the newer one. Both must be published versions of the named document in the named project with the same confirmed section and, with `mode=version` (the default), the same explicit project stage; with `mode=stage` the source must be classified `P` and the target `R` (design to working documentation of one set). Each needs a published run (the newest one, or the one `source_run_id` / `target_run_id` names). A path that names no such version is `404`; otherwise a pair the rule does not admit is `outcome: refused` with one `refusal.reason`, never relabelled. The answer carries proposed sheet pairs with their evidence, one page of raw line differences (`diff_offset`, `diff_limit`, `next_offset`) and proposed matches between the two runs' findings. Every pairing and match in `sheets`, `sheet_diffs` and `findings` is a proposal; this read writes nothing. `approved_pairs` (null for a refused comparison) lists the sheet pairs an expert approved for exactly this pair of versions (`approveSheetPairing`) and, for approved pairs only, their deterministic line differences, recomputed from the immutable text and bound to the version bytes by a seal; when a page's text is no longer the approved one (`text_changed`), the seal differs (`seal_changed`) or the set exceeds the response budget (`too_large`) the differences are withheld, never truncated. Any one role, `role:admin|expert|viewer`.
  */
 export type CompareDocumentVersionsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison`. */
@@ -2023,7 +2023,7 @@ export type EstimateArV3GroupCostResult = RunCostEstimate;
 /**
  * Estimate the AI check of the doubtful pairs of a document set.
  *
- * The estimate behind «Проверить» of step 4: the questions the latest matrix would ask (`no_pair` for a sheet with no pair whose cell has candidates, `medium_pair` for a pair of medium confidence; a sheet of a multi-sheet table group is never asked), the pairs, the images with their bytes, the prompt size, the routed model and the USD estimate; `reused` of the questions already have a stored answer under the same content key and are never sent again. Computing it calls no model. A matrix that is not `ready` is `409 conflict` (`comparison_matrix_stale`); nothing to ask is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The estimate behind «Проверить» of step 4: the questions the latest matrix would ask (`no_pair` for a sheet with no pair whose cell has candidates, `medium_pair` for a pair of medium confidence; a sheet of a multi-sheet table group is never asked), the pairs, the images with their bytes, the prompt size, the routed model and the USD estimate; `reused` of the questions already have a stored answer under the same content key and are never sent again. Computing it calls no model. A matrix that is not `ready` is `409 conflict` (`comparison_matrix_stale`); nothing to ask is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type EstimateComparisonAiPairCheckInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check/estimate`. */
@@ -2047,7 +2047,7 @@ export type EstimateComparisonAiPairCheckResult = ComparisonAiEstimate;
 /**
  * Estimate the AI description of changes of a series.
  *
- * The estimate behind «Запустить» of step 6: the sheets whose comparison is not `same`, the images with their bytes, the prompt size, the routed model and the USD estimate; `reused` of the sheets keep a stored answer for the same content, prompt version and model. With `only_failed` true it is the estimate of «Повторить листы с ошибкой». Computing it calls no model. A series with no finished transition is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The estimate behind «Запустить» of step 6: the sheets whose comparison is not `same`, the images with their bytes, the prompt size, the routed model and the USD estimate; `reused` of the sheets keep a stored answer for the same content, prompt version and model. With `only_failed` true it is the estimate of «Повторить листы с ошибкой». Computing it calls no model. A series with no finished transition is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown series is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type EstimateComparisonAiSheetChangesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/ai-sheet-changes/estimate`. */
@@ -2074,7 +2074,7 @@ export type EstimateComparisonAiSheetChangesResult = ComparisonAiEstimate;
 /**
  * Estimate the AI description of one sheet.
  *
- * «Описать этот лист…»: the sheets, images with their bytes, prompt size, model and USD estimate of describing one sheet pair, or one added or removed sheet. Computing it calls no model. A sheet pair whose comparison is `same` needs no description and is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «Описать этот лист…»: the sheets, images with their bytes, prompt size, model and USD estimate of describing one sheet pair, or one added or removed sheet. Computing it calls no model. A sheet pair whose comparison is `same` needs no description and is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown sheet pair is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type EstimateComparisonSheetDescriptionInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/estimate`. */
@@ -2097,7 +2097,7 @@ export type EstimateComparisonSheetDescriptionResult = ComparisonAiEstimate;
 /**
  * Estimate the comparison of the whole specifications of a transition.
  *
- * The versions to read, the images, the prompt size, the routed model and the USD estimate; a version whose specification already has a stored extraction under the same content key is `reused`. Computing it calls no model. A transition with no specification sheet is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The versions to read, the images, the prompt size, the routed model and the USD estimate; a version whose specification already has a stored extraction under the same content key is `reused`. Computing it calls no model. A transition with no specification sheet is `409 conflict` (`comparison_ai_nothing_to_do`). An unknown transition is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type EstimateComparisonSpecificationInput = {
   /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification/estimate`. */
@@ -2194,7 +2194,7 @@ export type ExcludeComparisonUploadSetResult = ComparisonProposalSet;
 /**
  * Export Optimisation Proposals Csv
  *
- * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert`.
+ * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ExportOptimisationProposalsCsvInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.csv`. */
@@ -2499,7 +2499,7 @@ export type GetAssignmentResult = AssignmentDetail;
 /**
  * Read the latest AI check of a document set.
  *
- * The latest job of the AI check of the doubtful pairs and its counts «вопросов · пар · подсказок · против». Both are absent until a check was started. Reading starts nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The latest job of the AI check of the doubtful pairs and its counts «вопросов · пар · подсказок · против». Both are absent until a check was started. Reading starts nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonAiPairCheckInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-check`. */
@@ -2542,7 +2542,7 @@ export type GetComparisonAiQueueResult = ComparisonAiQueue;
 /**
  * Read the AI description of changes of a series.
  *
- * The latest job and, per transition, the progress «Листов / Изм. / Вопр. / Ошибок / Проверить / Обращ.», the tokens and the time. Reading starts nothing and calls no model. An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The latest job and, per transition, the progress «Листов / Изм. / Вопр. / Ошибок / Проверить / Обращ.», the tokens and the time. Reading starts nothing and calls no model. An unknown series is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonAiSheetChangesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/ai-sheet-changes`. */
@@ -2565,7 +2565,7 @@ export type GetComparisonAiSheetChangesResult = ComparisonAiSheetChanges;
 /**
  * Read the launch queue of a project.
  *
- * «Очередь запуска»: «готово N из M · пропущено K · ошибок E», its state, and the entries in the order they run. A project has one queue. Reading starts nothing. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «Очередь запуска»: «готово N из M · пропущено K · ошибок E», its state, and the entries in the order they run. A project has one queue. Reading starts nothing. An unknown project is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-QUEUE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_launch_queue`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonLaunchQueueInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/comparison-launch-queue`. */
@@ -2588,7 +2588,7 @@ export type GetComparisonLaunchQueueResult = ComparisonLaunchQueue;
 /**
  * Read the effective matrix of a document set.
  *
- * The effective matrix of the versions of a document set (`ADR-0025` decision 3): rows are sheet identities, columns are the versions in the current comparison order, and a cell is matched (with its confidence `high`, `medium`, `group`, `manual` or `ai` and the flags `split`, `duplicate`, `scan` and `bridge`), unmatched (with candidates and a reason) or absent. The algorithm comes first, then accepted AI links (labelled, never an expert act), then manual edits, and manual wins. `revision` is what an edit batch names as its base. `state` is `absent` while nothing is built, `building` while profiles or the matrix are computed, `stale` when the build no longer matches the current order or profiles (`stale_reasons` says which) and `failed` when the last build failed; `revision`, `columns`, `rows` and `counts` are absent while no build exists. Edits made against another order that no longer apply are listed in `orphaned_edit_ids` and are never applied silently. The read starts nothing and changes nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
+ * The effective matrix of the versions of a document set (`ADR-0025` decision 3): rows are sheet identities, columns are the versions in the current comparison order, and a cell is matched (with its confidence `high`, `medium`, `group`, `manual` or `ai` and the flags `split`, `duplicate`, `scan` and `bridge`), unmatched (with candidates and a reason) or absent. The algorithm comes first, then accepted AI links (labelled, never an expert act), then manual edits, and manual wins. `revision` is what an edit batch names as its base. `state` is `absent` while nothing is built, `building` while profiles or the matrix are computed, `stale` when the build no longer matches the current order or profiles (`stale_reasons` says which) and `failed` when the last build failed; `revision`, `columns`, `rows` and `counts` are absent while no build exists. Edits made against another order that no longer apply are listed in `orphaned_edit_ids` and are never applied silently. The read starts nothing and changes nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type GetComparisonMatrixInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix`. */
@@ -2612,7 +2612,7 @@ export type GetComparisonMatrixResult = ComparisonMatrix;
 /**
  * Read the overview of the comparison of a project.
  *
- * The overview behind «Проекты и этапы»: for every document set of the project («комплект (шифр)»; the designation is metadata and never an identity) the number of versions, the state and figures of the seven steps (`upload`, `profile`, `matrix`, `ai_pairs`, `series`, `ai_changes`, `report`) and the next step the chip proposes; the totals «N версий · M переходов», the counters «Все / Ждут действия / Идут / Ошибки / Готовы» and the batches that are still being uploaded. The steps of waves after the first report `not_started` or `not_applicable`. Reading it starts nothing. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-VC-OVERVIEW-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_overview`) until the lane wired it.
+ * The overview behind «Проекты и этапы»: for every document set of the project («комплект (шифр)»; the designation is metadata and never an identity) the number of versions, the state and figures of the seven steps (`upload`, `profile`, `matrix`, `ai_pairs`, `series`, `ai_changes`, `report`) and the next step the chip proposes; the totals «N версий · M переходов», the counters «Все / Ждут действия / Идут / Ошибки / Готовы» and the batches that are still being uploaded. The steps of waves after the first report `not_started` or `not_applicable`. Reading it starts nothing. An unknown project is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-VC-OVERVIEW-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_overview`) until the lane wired it.
  */
 export type GetComparisonOverviewInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/comparison-overview`. */
@@ -2654,7 +2654,7 @@ export type GetComparisonQueueSummaryResult = ComparisonQueueSummary;
 /**
  * Read a report.
  *
- * State, stage, kind, source, the per-transition progress (for an analytic report «Анализ», «Проверка», «Факты», «Предупреждения»; for a client report «Отбор», «Пунктов», «Вопросов»), the estimate of a draft or the job with the usage of a started one, and the stored files. Reading starts nothing. An unknown report is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * State, stage, kind, source, the per-transition progress (for an analytic report «Анализ», «Проверка», «Факты», «Предупреждения»; for a client report «Отбор», «Пунктов», «Вопросов»), the estimate of a draft or the job with the usage of a started one, and the stored files. Reading starts nothing. An unknown report is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonReportInput = {
   /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}`. */
@@ -2677,7 +2677,7 @@ export type GetComparisonReportResult = ComparisonReport;
 /**
  * Read a series with its transitions.
  *
- * One series with its transitions in the order of the versions: for each, the older and the newer version, the state, the sheet pairs done of the total, the counts (`compared`, `same`, `zones_only`, `different`, `style_only`, `needs_review`, `added`, `removed`, `failed`) and the deterministic verdict as an ordered list of codes. A transition whose pairs rest on an accepted AI link counts them in `ai_dependent` (`ADR-0025` decision 3). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
+ * One series with its transitions in the order of the versions: for each, the older and the newer version, the state, the sheet pairs done of the total, the counts (`compared`, `same`, `zones_only`, `different`, `style_only`, `needs_review`, `added`, `removed`, `failed`) and the deterministic verdict as an ordered list of codes. A transition whose pairs rest on an accepted AI link counts them in `ai_dependent` (`ADR-0025` decision 3). An unknown series is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type GetComparisonSeriesInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}`. */
@@ -2700,7 +2700,7 @@ export type GetComparisonSeriesResult = ComparisonSeries;
 /**
  * Read the AI description of a sheet pair.
  *
- * The stored description behind the panel «Изменения в листе»: the state (one of the eleven labels), the changes with object, «Было» / «стало», place, «Неясно» and the tier of each value, «Требует уточнения», «Заявлено проектировщиком в разрешении», what was left out of the summary, the coverage, the diagnostics and the number of earlier descriptions. It works for an added or removed sheet too. Reading calls no model; a sheet that was never described is `not_processed`, which is not the same as no changes. The description is model output not confirmed by an engineer, and a recorded answer is marked `recorded`. An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The stored description behind the panel «Изменения в листе»: the state (one of the eleven labels), the changes with object, «Было» / «стало», place, «Неясно» and the tier of each value, «Требует уточнения», «Заявлено проектировщиком в разрешении», what was left out of the summary, the coverage, the diagnostics and the number of earlier descriptions. It works for an added or removed sheet too. Reading calls no model; a sheet that was never described is `not_processed`, which is not the same as no changes. The description is model output not confirmed by an engineer, and a recorded answer is marked `recorded`. An unknown sheet pair is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonSheetDescriptionInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description`. */
@@ -2723,7 +2723,7 @@ export type GetComparisonSheetDescriptionResult = ComparisonSheetDescription;
 /**
  * Read one sheet pair with its raw deterministic evidence.
  *
- * One sheet pair of a transition with everything the viewer shows: the channels (`geometry`, `color`, `text`, `text_coverage`, `zones`, `annotations`, `warnings`, `spec_positions`, each `checked` with its difference count, `unchecked` with a reason, or `not_applicable`), the list of differences with their class, layer and box on the canvas of the older page, the text changes with the numbers that changed («было → стало»), the service-zone notes («Исчезновение предупреждения не подтверждает согласования.») and «Как сравнивалось». This is raw evidence: an AI layer never rewrites it (`ADR-0025` decision 3). `result_id` is the content-keyed result the pair uses; pairs of equal content within a project share it (decision 15). A pair with no result yet has `state` `queued`, `computing` or `failed`. An unknown pair is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
+ * One sheet pair of a transition with everything the viewer shows: the channels (`geometry`, `color`, `text`, `text_coverage`, `zones`, `annotations`, `warnings`, `spec_positions`, each `checked` with its difference count, `unchecked` with a reason, or `not_applicable`), the list of differences with their class, layer and box on the canvas of the older page, the text changes with the numbers that changed («было → стало»), the service-zone notes («Исчезновение предупреждения не подтверждает согласования.») and «Как сравнивалось». This is raw evidence: an AI layer never rewrites it (`ADR-0025` decision 3). `result_id` is the content-keyed result the pair uses; pairs of equal content within a project share it (decision 15). A pair with no result yet has `state` `queued`, `computing` or `failed`. An unknown pair is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type GetComparisonSheetPairInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}`. */
@@ -2746,7 +2746,7 @@ export type GetComparisonSheetPairResult = ComparisonSheetPair;
 /**
  * Read the positions that changed on a sheet pair.
  *
- * «Спецификация по позициям»: the position changes that fall on the pages of the sheet pair, deterministic, from the positions of the whole specification of each version (a page change alone is not a change). No model is called. An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «Спецификация по позициям»: the position changes that fall on the pages of the sheet pair, deterministic, from the positions of the whole specification of each version (a page change alone is not a change). No model is called. An unknown sheet pair is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonSheetPairSpecPositionsInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/spec-positions`. */
@@ -2769,7 +2769,7 @@ export type GetComparisonSheetPairSpecPositionsResult = ComparisonSheetPairSpecP
 /**
  * Read the specification comparison of a transition.
  *
- * Method, state and phase, the sheets A and B, the coverage of each side, the totals and the reason a side is incomplete or the comparison failed. Reading starts nothing. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * Method, state and phase, the sheets A and B, the coverage of each side, the totals and the reason a side is incomplete or the comparison failed. Reading starts nothing. An unknown transition is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetComparisonSpecificationInput = {
   /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification`. */
@@ -2792,7 +2792,7 @@ export type GetComparisonSpecificationResult = ComparisonSpecification;
 /**
  * Read an upload batch with its files.
  *
- * The batch, its state and the state of every declared file with the parts staged so far, which is what a resumable client needs: it sends the parts that are missing. An unknown batch is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ * The batch, its state and the state of every declared file with the parts staged so far, which is what a resumable client needs: it sends the parts that are missing. An unknown batch is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
  */
 export type GetComparisonUploadInput = {
   /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}`. */
@@ -2815,7 +2815,7 @@ export type GetComparisonUploadResult = ComparisonUpload;
 /**
  * Read the grouping proposal of an upload batch.
  *
- * The proposed grouping of the batch's files into document sets by designation (the «шифр» read from the stamp, metadata an expert confirms and never an identity), the proposed order in each set, the stage and section proposal and the warnings the reader noticed. Nothing becomes a version until the user confirms a set. A scan without text is compared as an image only and says so as a warning. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ * The proposed grouping of the batch's files into document sets by designation (the «шифр» read from the stamp, metadata an expert confirms and never an identity), the proposed order in each set, the stage and section proposal and the warnings the reader noticed. Nothing becomes a version until the user confirms a set. A scan without text is compared as an image only and says so as a warning. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
  */
 export type GetComparisonUploadProposalInput = {
   /** Path parameters, substituted into `/comparison-uploads/{comparison_upload_id}/proposal`. */
@@ -2881,7 +2881,7 @@ export type GetDocumentVersionResult = DocumentVersion;
 /**
  * Get Effective Vendor Lists
  *
- * All fifteen sections' vendor lists as they apply to the project, in section order. For each: `source` `project` (the project's own latest revision, mode `list`), `global` (the administrator's latest) or `none`; the `effective` revision; and the latest revision of each scope. An unknown project is `404`. Any one role, `role:admin|expert`.
+ * All fifteen sections' vendor lists as they apply to the project, in section order. For each: `source` `project` (the project's own latest revision, mode `list`), `global` (the administrator's latest) or `none`; the `effective` revision; and the latest revision of each scope. An unknown project is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type GetEffectiveVendorListsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/vendor-lists`. */
@@ -3070,7 +3070,7 @@ export type GetMeResult = Account;
 /**
  * Get Norm Document
  *
- * One norm document of a snapshot, with its attribution (NORM-Q04) and whether its source PDF is available through a confirmed custody binding. Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * One norm document of a snapshot, with its attribution (NORM-Q04) and whether its source PDF is available through a confirmed custody binding. Roles: any one role (`role:admin|expert|viewer`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
  */
 export type GetNormDocumentInput = {
   /** Path parameters, substituted into `/norm-documents/{norm_document_id}`. */
@@ -3112,7 +3112,7 @@ export type GetProductVersionResult = ProductVersion;
 /**
  * Get Run Norm References
  *
- * «Нормативные ссылки»: the normative documents (СП, ГОСТ, СНиП, СанПиН, ВСН, federal laws and government acts) cited in the run's saved text, each resolved against the norms snapshot the run pinned as `in_corpus`, `newer_edition`, `older_edition_only` (the corpus holds only an earlier edition than the one cited), `not_in_corpus` or `not_recognised`, with the pages each occurs on and the corpus document it points at. Computed per request by the same resolver the W57b rule uses; publishes no finding, proposes no severity and calls no model. A precondition that does not hold is `state` (`snapshot_not_pinned`, `text_unavailable`, `too_many_citations`), never an empty list; the corpus documents whose designation the parser cannot read are listed as `unrecognised`; pages without a text layer are `unread_pages`. An unknown run is `404`. Any one role, `role:admin|expert`.
+ * «Нормативные ссылки»: the normative documents (СП, ГОСТ, СНиП, СанПиН, ВСН, federal laws and government acts) cited in the run's saved text, each resolved against the norms snapshot the run pinned as `in_corpus`, `newer_edition`, `older_edition_only` (the corpus holds only an earlier edition than the one cited), `not_in_corpus` or `not_recognised`, with the pages each occurs on and the corpus document it points at. Computed per request by the same resolver the W57b rule uses; publishes no finding, proposes no severity and calls no model. A precondition that does not hold is `state` (`snapshot_not_pinned`, `text_unavailable`, `too_many_citations`), never an empty list; the corpus documents whose designation the parser cannot read are listed as `unrecognised`; pages without a text layer are `unread_pages`. An unknown run is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type GetRunNormReferencesInput = {
   /** Path parameters, substituted into `/runs/{run_id}/norm-references`. */
@@ -3181,7 +3181,7 @@ export type GetRunStatusResult = RunStatus;
 /**
  * Get Section Specification
  *
- * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert`.
+ * «Оптимизация разделов»: the Form-7 rows of every project whose document set's current version an expert confirmed in the section, each row priced from its own project's current price list as `matched`, `ambiguous` or `unmatched` with its reason (or `price_list_missing` when the project has none). The section code is a filter, not an identity: every row carries its project, document set, version, page, sheet and line span, rows are never merged across projects, and totals exist per project and per currency only -- there is no section total. A current version nobody classified is listed in `excluded`; one confirmed in another section never appears. `project_uid` narrows the answer to one project (an unknown one is `404`); `q` keeps the rows whose own text contains it and never changes a total; rows are paged (`offset`, `limit`, `next_offset`). A set without a published run or a saved text layer is its own `state`. Over a bound (projects scanned, member sets read, rows held) the answer is `200` with `state: section_too_large`, the bound in `limit_reason`, the membership listed and no rows; narrow to one project. A section code outside the fifteen is `404`. Nothing is written. Any one role, `role:admin|expert|viewer`.
  */
 export type GetSectionSpecificationInput = {
   /** Path parameters, substituted into `/sections/{section_code}/specification`. */
@@ -3214,7 +3214,7 @@ export type GetSectionSpecificationResult = SectionSpecification;
 /**
  * Get Specification Prices
  *
- * «Спецификация и цены»: the specification rows of the document set's current version, read deterministically from its newest published run's saved text layer, each matched to the project's current price-list revision as `matched`, `ambiguous` or `unmatched` with its reason (code or mark first, then the normalised name, in the same unit; never a fuzzy guess). The version must be classified by an expert in one of the fifteen sections; the section is reported in the answer and does not change how the rows are read or priced. A precondition that does not hold is `state` (`version_unclassified`, `price_list_missing`, `analysis_missing`, `text_unavailable`, `specification_too_large`) with the facts read so far; the value `section_not_ar` stays in the enum so that no value is removed, and is no longer produced for a confirmed section; a path naming no such set is `404`. A price and an amount appear only on a matched row with a numeric quantity; totals are per currency over those rows only, with every other row counted by its reason. Rows are paged (`offset`, `limit`, `next_offset`); counts and totals cover every row. Nothing is written. Any one role, `role:admin|expert`.
+ * «Спецификация и цены»: the specification rows of the document set's current version, read deterministically from its newest published run's saved text layer, each matched to the project's current price-list revision as `matched`, `ambiguous` or `unmatched` with its reason (code or mark first, then the normalised name, in the same unit; never a fuzzy guess). The version must be classified by an expert in one of the fifteen sections; the section is reported in the answer and does not change how the rows are read or priced. A precondition that does not hold is `state` (`version_unclassified`, `price_list_missing`, `analysis_missing`, `text_unavailable`, `specification_too_large`) with the facts read so far; the value `section_not_ar` stays in the enum so that no value is removed, and is no longer produced for a confirmed section; a path naming no such set is `404`. A price and an amount appear only on a matched row with a numeric quantity; totals are per currency over those rows only, with every other row counted by its reason. Rows are paged (`offset`, `limit`, `next_offset`); counts and totals cover every row. Nothing is written. Any one role, `role:admin|expert|viewer`.
  */
 export type GetSpecificationPricesInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/specification-prices`. */
@@ -3517,7 +3517,7 @@ export type GetVersionBlocksResult = VersionBlockIndex;
 /**
  * Read the deterministic profile of one page.
  *
- * The profile the worker computed and stored for the page: its status (`ready`, `needs_review` or `refused`, with a typed `reason`), the stamp fields, counts and the content key. The API never calls PDFium (`ADR-0025` decision 9). A profile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ * The profile the worker computed and stored for the page: its status (`ready`, `needs_review` or `refused`, with a typed `reason`), the stamp fields, counts and the content key. The API never calls PDFium (`ADR-0025` decision 9). A profile that does not exist is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
  */
 export type GetVersionPageProfileInput = {
   /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}`. */
@@ -3540,7 +3540,7 @@ export type GetVersionPageProfileResult = VersionPageProfile;
 /**
  * Read the positions of a specification page.
  *
- * Part A, deterministic: whether the page is a specification sheet and, when it is, the positions read from the page's words and vector lines (a table by GOST 21.110: columns by the vertical rules of the header, rows by the horizontal rules; every value verbatim, an ambiguous row flagged and never guessed). No model is called. An unknown page profile is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * Part A, deterministic: whether the page is a specification sheet and, when it is, the positions read from the page's words and vector lines (a table by GOST 21.110: columns by the vertical rules of the header, rows by the horizontal rules; every value verbatim, an ambiguous row flagged and never guessed). No model is called. An unknown page profile is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type GetVersionPageSpecPositionsInput = {
   /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/spec-positions`. */
@@ -3563,7 +3563,7 @@ export type GetVersionPageSpecPositionsResult = ComparisonSpecPage;
 /**
  * Get Version Section Review
  *
- * The fifteen section choices for one version, each with the suggestion evidence its file name and recognised text carry (or `null`) and whether a text profile is registered for it (`executable`), plus the persisted classification or `null`, and the classification's history (`revisions`, oldest first: the original confirmation, then each correction with its expert, time and reason). Display input only: nothing here confirms a section or starts a run. Any one role, `role:admin|expert`.
+ * The fifteen section choices for one version, each with the suggestion evidence its file name and recognised text carry (or `null`) and whether a text profile is registered for it (`executable`), plus the persisted classification or `null`, and the classification's history (`revisions`, oldest first: the original confirmation, then each correction with its expert, time and reason). Display input only: nothing here confirms a section or starts a run. Any one role, `role:admin|expert|viewer`.
  */
 export type GetVersionSectionReviewInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review`. */
@@ -3697,7 +3697,7 @@ export type IssueTokenResult = IssueTokenResponse;
 /**
  * List the analysis presets.
  *
- * The named presets of how a run starts (`R-146av`, `ANALYSIS-PRESETS-01`). A run start selects exactly one setting per run, the executor connection, so a preset is a name plus that connection; the cost ceiling is a process-wide setting and no threshold is an input of a start, so a preset holds neither. Each item is the preset's current revision; every earlier revision is kept and a run records the revision it started with. Archived presets are listed after the active ones. Any one role, `role:admin|expert`.
+ * The named presets of how a run starts (`R-146av`, `ANALYSIS-PRESETS-01`). A run start selects exactly one setting per run, the executor connection, so a preset is a name plus that connection; the cost ceiling is a process-wide setting and no threshold is an input of a start, so a preset holds neither. Each item is the preset's current revision; every earlier revision is kept and a run records the revision it started with. Archived presets are listed after the active ones. Any one role, `role:admin|expert|viewer`.
  */
 export type ListAnalysisPresetsInput = {
   /**
@@ -3716,7 +3716,7 @@ export type ListAnalysisPresetsResult = AnalysisPresetList;
 /**
  * List the analysis profile of every section.
  *
- * The analysis profiles the server routes runs through: all fifteen sections in the project-structure order, each with its registered text profile -- identities, version, status (`draft` or `reviewed`), prompt-bundle and profile hashes and the legacy source of a ported package -- or `null` when no profile is registered, which run start refuses (АР now has a draft original-source text profile). Read-only: no operation edits a profile or its status. Any one role, `role:admin|expert`.
+ * The analysis profiles the server routes runs through: all fifteen sections in the project-structure order, each with its registered text profile -- identities, version, status (`draft` or `reviewed`), prompt-bundle and profile hashes and the legacy source of a ported package -- or `null` when no profile is registered, which run start refuses (АР now has a draft original-source text profile). Read-only: no operation edits a profile or its status. Any one role, `role:admin|expert|viewer`.
  */
 export type ListAnalysisProfilesInput = {
   /**
@@ -3764,7 +3764,7 @@ export type ListAssignmentsResult = AssignmentPage;
 /**
  * List the accepted AI links of a document set.
  *
- * The accepted AI links, newest first (`ADR-0025` decisions 3 and 14): model answers that the validator accepted, shown labelled «ИИ» and never an expert act. Each binds the algorithmic build it answered and the cell state it answered (`unmatched` or `doubtful`) and is `applied` only while that cell is still in that state, otherwise `superseded`. The table is read-only here; wave C2 writes it, so the list is empty until then. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
+ * The accepted AI links, newest first (`ADR-0025` decisions 3 and 14): model answers that the validator accepted, shown labelled «ИИ» and never an expert act. Each binds the algorithmic build it answered and the cell state it answered (`unmatched` or `doubtful`) and is `applied` only while that cell is still in that state, otherwise `superseded`. The table is read-only here; wave C2 writes it, so the list is empty until then. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type ListComparisonAiLinksInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-links`. */
@@ -3795,7 +3795,7 @@ export type ListComparisonAiLinksResult = ComparisonAiLinkList;
 /**
  * List the answers and hints of the AI check of pairs.
  *
- * The answers and hints per matrix cell, newest first: the question, the decision (`link_accepted` or a `hint_*` value, `none`, `answer_mismatch`, `failed`, `medium_*`), the page it concerns, the page «вероятно стр. N», the candidates, the confidence, the accepted link a `link_accepted` decision wrote and whether the question was asked of a matrix build that is no longer the latest. The page is addressed by `cursor` and `limit`. Reading starts nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The answers and hints per matrix cell, newest first: the question, the decision (`link_accepted` or a `hint_*` value, `none`, `answer_mismatch`, `failed`, `medium_*`), the page it concerns, the page «вероятно стр. N», the candidates, the confidence, the accepted link a `link_accepted` decision wrote and whether the question was asked of a matrix build that is no longer the latest. The page is addressed by `cursor` and `limit`. Reading starts nothing. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AIPAIR-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_pairs`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type ListComparisonAiPairHintsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-ai-pair-hints`. */
@@ -3826,7 +3826,7 @@ export type ListComparisonAiPairHintsResult = ComparisonAiPairHintPage;
 /**
  * List the manual edit history of a document set.
  *
- * The append-only history of manual matrix edits, newest event first, each numbered `edit_no` from 1 without a gap. An event is a `link`, an `unlink`, a `mark_absent` or an `undo` that names the edit it reverses; `source` is `expert` for an edit made through `applyComparisonMatrixEdits` and `migrated_sheet_link` for an approved sheet pairing of `approveSheetPairing` that migration `0039` turned into an edit (`ADR-0025` decision 13; the `0035` ids are in `provenance` and the `0035` rows stay as immutable history). `status` is `applied`, `undone` or `orphaned`. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
+ * The append-only history of manual matrix edits, newest event first, each numbered `edit_no` from 1 without a gap. An event is a `link`, an `unlink`, a `mark_absent` or an `undo` that names the edit it reverses; `source` is `expert` for an edit made through `applyComparisonMatrixEdits` and `migrated_sheet_link` for an approved sheet pairing of `approveSheetPairing` that migration `0039` turned into an edit (`ADR-0025` decision 13; the `0035` ids are in `provenance` and the `0035` rows stay as immutable history). `status` is `applied`, `undone` or `orphaned`. An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-MATRIX-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_matrix`) until the lane wired it.
  */
 export type ListComparisonMatrixEditsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits`. */
@@ -3857,7 +3857,7 @@ export type ListComparisonMatrixEditsResult = ComparisonMatrixEditList;
 /**
  * List the reports of a series.
  *
- * The report history of the series, newest first, each with its state, stage, per-transition progress, usage and downloads. A deleted report is not listed. The page is addressed by `cursor` and `limit`. An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The report history of the series, newest first, each with its state, stage, per-transition progress, usage and downloads. A deleted report is not listed. The page is addressed by `cursor` and `limit`. An unknown series is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type ListComparisonReportsInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/reports`. */
@@ -3887,7 +3887,7 @@ export type ListComparisonReportsResult = ComparisonReportPage;
 /**
  * List the sheets of a transition to review.
  *
- * The «Проверить» list: the sheets where the AI found no change but the comparison left marks, and the added and removed single sheets of the transition, each with its description state, in the order of the matrix rows. The page is addressed by `cursor` and `limit`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The «Проверить» list: the sheets where the AI found no change but the comparison left marks, and the added and removed single sheets of the transition, each with its description state, in the order of the matrix rows. The page is addressed by `cursor` and `limit`. An unknown transition is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type ListComparisonReviewSheetsInput = {
   /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/review-sheets`. */
@@ -3917,7 +3917,7 @@ export type ListComparisonReviewSheetsResult = ComparisonReviewSheetPage;
 /**
  * List the series of a document set.
  *
- * The series of a document set, newest first, without their transitions: the state, the order and matrix they ran on, how many transitions have a result and, when the stored input digests no longer match the current order, matrix or profiles, `stale_reasons` («Сохранённая сводка для прежнего порядка версий»). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
+ * The series of a document set, newest first, without their transitions: the state, the order and matrix they ran on, how many transitions have a result and, when the stored input digests no longer match the current order, matrix or profiles, `stale_reasons` («Сохранённая сводка для прежнего порядка версий»). An unknown project, or a document of another project, is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type ListComparisonSeriesInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-series`. */
@@ -3948,7 +3948,7 @@ export type ListComparisonSeriesResult = ComparisonSeriesPage;
 /**
  * List the earlier descriptions of a sheet pair.
  *
- * «История (N)»: the descriptions of the sheet pair, newest first, each with its state, counts, model and prompt version. The page is addressed by `cursor` and `limit`. An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «История (N)»: the descriptions of the sheet pair, newest first, each with its state, counts, model and prompt version. The page is addressed by `cursor` and `limit`. An unknown sheet pair is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type ListComparisonSheetDescriptionHistoryInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description-history`. */
@@ -3978,7 +3978,7 @@ export type ListComparisonSheetDescriptionHistoryResult = ComparisonSheetDescrip
 /**
  * List the sheet pairs of a transition.
  *
- * The sheet pairs of one transition in the order of the matrix rows: the older and the newer page (either absent for an added or removed sheet), the state, the status (`same`, `same_zones_changed`, `different`, `needs_review`, `added`, `removed` or `unmatched`), the link confidence and flags, the forcing reasons, the eight channels, the permit reconciliation and the parts coverage. `status` keeps one status and `only_changes` keeps every status but `same`. The members that carry the raw evidence (`canvas`, `differences`, `text_changes`, `service_notes`, `how_compared`) are absent here and present on `getComparisonSheetPair`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
+ * The sheet pairs of one transition in the order of the matrix rows: the older and the newer page (either absent for an added or removed sheet), the state, the status (`same`, `same_zones_changed`, `different`, `needs_review`, `added`, `removed` or `unmatched`), the link confidence and flags, the forcing reasons, the eight channels, the permit reconciliation and the parts coverage. `status` keeps one status and `only_changes` keeps every status but `same`. The members that carry the raw evidence (`canvas`, `differences`, `text_changes`, `service_notes`, `how_compared`) are absent here and present on `getComparisonSheetPair`. An unknown transition is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-SERIES-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_series`) until the lane wired it.
  */
 export type ListComparisonSheetPairsInput = {
   /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/sheet-pairs`. */
@@ -4010,7 +4010,7 @@ export type ListComparisonSheetPairsResult = ComparisonSheetPairPage;
 /**
  * List the changes of a transition's specification.
  *
- * The changes of the whole-specification comparison in the order it lists them (changed, removed, added, unclear, renumbered), optionally of one `kind`. A group unresolved in either version is not compared line by line and is described by the sheet AI instead. The page is addressed by `cursor` and `limit`. An unknown transition is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The changes of the whole-specification comparison in the order it lists them (changed, removed, added, unclear, renumbered), optionally of one `kind`. A group unresolved in either version is not compared line by line and is described by the sheet AI instead. The page is addressed by `cursor` and `limit`. An unknown transition is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type ListComparisonSpecificationChangesInput = {
   /** Path parameters, substituted into `/comparison-transitions/{comparison_transition_id}/specification/changes`. */
@@ -4041,7 +4041,7 @@ export type ListComparisonSpecificationChangesResult = ComparisonSpecChangePage;
 /**
  * List the specification comparisons of a series.
  *
- * The block «Полные спецификации (СО)»: per transition that has a specification, the method («полное сравнение» or «листовой ИИ»), the specification sheets of the older and the newer version, the coverage, the totals «изменено / +добавлено / −удалено / ?неясно» and the reason. The page is addressed by `cursor` and `limit`. An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * The block «Полные спецификации (СО)»: per transition that has a specification, the method («полное сравнение» or «листовой ИИ»), the specification sheets of the older and the newer version, the coverage, the totals «изменено / +добавлено / −удалено / ?неясно» and the reason. The page is addressed by `cursor` and `limit`. An unknown series is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-SPEC-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_specification`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type ListComparisonSpecificationsInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/specifications`. */
@@ -4071,7 +4071,7 @@ export type ListComparisonSpecificationsResult = ComparisonSpecificationPage;
 /**
  * List the project's upload batches.
  *
- * The project's batches, newest first, without their files, so that an interrupted upload can be found and resumed after a reload. An unknown project is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
+ * The project's batches, newest first, without their files, so that an interrupted upload can be found and resumed after a reload. An unknown project is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-02` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_uploads`) and nothing is read or written.
  */
 export type ListComparisonUploadsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/comparison-uploads`. */
@@ -4101,7 +4101,7 @@ export type ListComparisonUploadsResult = ComparisonUploadPage;
 /**
  * List the revisions of the comparison order of a document set.
  *
- * The revisions, newest first, of the order in which the versions of one document set are compared. The order never changes the documents' ordinal that runs and finding carry-over use (`D-5`). An unknown project or document is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_version_orders`) and nothing is read or written.
+ * The revisions, newest first, of the order in which the versions of one document set are compared. The order never changes the documents' ordinal that runs and finding carry-over use (`D-5`). An unknown project or document is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-INGEST-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_version_orders`) and nothing is read or written.
  */
 export type ListComparisonVersionOrdersInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/comparison-version-orders`. */
@@ -4357,7 +4357,7 @@ export type ListExecutorRoutingRulesResult = ExecutorRoutingRuleList;
 /**
  * List Norm Documents
  *
- * Every document of the current norms snapshot (R-112) as a catalogue, in designation order (natural, case- and homoglyph-folded), then title, then identity. `designation` and `title` are derived for display from the document's stored file name -- dates dotted, designation numbers dotted, a cut edition note closed or shown as `(ред. …)` -- and never alter or replace the stored rows; a name no rule can derive is shown as `getNormDocument` shows it, and `title` is null when the name carries nothing after the designation. `q` (1-200 characters) keeps documents whose designation or title contains it from the start of a word, folded the same way, and a `q` ending in a digit ends a number there; `kind` (1-100 characters) keeps documents whose stored kind equals it, and `kinds` lists every kind of the snapshot with its count. A `q` or `kind` holding a control character or nothing to filter by is `422 validation_failed` (`field` `q` or `kind`, `constraint: format`). The cursor is opaque and bound to `q`, `kind` and the snapshot; another listing refuses it. `total` counts the documents the filters keep. With no current snapshot the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot`, never an empty page. Every row carries its `source_attribution` (NORM-Q04). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
+ * Every document of the current norms snapshot (R-112) as a catalogue, in designation order (natural, case- and homoglyph-folded), then title, then identity. `designation` and `title` are derived for display from the document's stored file name -- dates dotted, designation numbers dotted, a cut edition note closed or shown as `(ред. …)` -- and never alter or replace the stored rows; a name no rule can derive is shown as `getNormDocument` shows it, and `title` is null when the name carries nothing after the designation. `q` (1-200 characters) keeps documents whose designation or title contains it from the start of a word, folded the same way, and a `q` ending in a digit ends a number there; `kind` (1-100 characters) keeps documents whose stored kind equals it, and `kinds` lists every kind of the snapshot with its count. A `q` or `kind` holding a control character or nothing to filter by is `422 validation_failed` (`field` `q` or `kind`, `constraint: format`). The cursor is opaque and bound to `q`, `kind` and the snapshot; another listing refuses it. `total` counts the documents the filters keep. With no current snapshot the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot`, never an empty page. Every row carries its `source_attribution` (NORM-Q04). Roles: any one role (`role:admin|expert|viewer`, R-80); an account whose role set is empty is refused `403`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
  */
 export type ListNormDocumentsInput = {
   /** Query string parameters. */
@@ -4387,7 +4387,7 @@ export type ListNormDocumentsResult = NormCatalogueEntryPage;
 /**
  * List Norm Paragraphs
  *
- * The document's canonical paragraphs in `ordinal` order, each with `page_label` (the 1-based PDF page), `block_ref`, clause and `text_reliability`; unreliable paragraphs are marked, never hidden. Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * The document's canonical paragraphs in `ordinal` order, each with `page_label` (the 1-based PDF page), `block_ref`, clause and `text_reliability`; unreliable paragraphs are marked, never hidden. Roles: any one role (`role:admin|expert|viewer`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
  */
 export type ListNormParagraphsInput = {
   /** Path parameters, substituted into `/norm-documents/{norm_document_id}/paragraphs`. */
@@ -4443,7 +4443,7 @@ export type ListNormSnapshotEventsResult = NormSnapshotEventPage;
 /**
  * List Norm Snapshots
  *
- * Every loaded norms snapshot with its content key, counts, `bge-m3-dense-v1` build state, whether it qualifies to be current (a complete build and a confirmed source binding for every document's PDF) and whether it is current. Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * Every loaded norms snapshot with its content key, counts, `bge-m3-dense-v1` build state, whether it qualifies to be current (a complete build and a confirmed source binding for every document's PDF) and whether it is current. Roles: any one role (`role:admin|expert|viewer`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
  */
 export type ListNormSnapshotsInput = {
   /** Query string parameters. */
@@ -4469,7 +4469,7 @@ export type ListNormSnapshotsResult = NormSnapshotPage;
 /**
  * List Optimisation Passes
  *
- * The project's optimisation passes, newest first (at most `limit`, 100 by default), each with its counts by decision; `document_uid` narrows to one document set of the project. An unknown project or a set of another project is `404`. Any one role, `role:admin|expert`.
+ * The project's optimisation passes, newest first (at most `limit`, 100 by default), each with its counts by decision; `document_uid` narrows to one document set of the project. An unknown project or a set of another project is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ListOptimisationPassesInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/optimisation-passes`. */
@@ -4498,7 +4498,7 @@ export type ListOptimisationPassesResult = OptimisationPassList;
 /**
  * List Optimisation Proposals
  *
- * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert`.
+ * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ListOptimisationProposalsInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/proposals`. */
@@ -4529,7 +4529,7 @@ export type ListOptimisationProposalsResult = OptimisationProposalPage;
 /**
  * List Price List Positions
  *
- * One page of a price-list revision's positions in source-row order (`offset`, `limit`, `next_offset`), with the revision and its parse report. Each unit price is its exact decimal text. An unknown revision is `404`. Any one role, `role:admin|expert`.
+ * One page of a price-list revision's positions in source-row order (`offset`, `limit`, `next_offset`), with the revision and its parse report. Each unit price is its exact decimal text. An unknown revision is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ListPriceListPositionsInput = {
   /** Path parameters, substituted into `/price-lists/{price_list_id}/positions`. */
@@ -4559,7 +4559,7 @@ export type ListPriceListPositionsResult = PriceListPositionPage;
 /**
  * List Price List Revisions
  *
- * Every price-list revision of the project, newest first, the first flagged `is_current`. An unknown project is `404`. Any one role, `role:admin|expert`.
+ * Every price-list revision of the project, newest first, the first flagged `is_current`. An unknown project is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ListPriceListRevisionsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/price-lists`. */
@@ -4604,7 +4604,7 @@ export type ListProjectsResult = ProjectPage;
 /**
  * List Proposal Decisions
  *
- * The proposal's whole append-only decision history, oldest first, each with its verdict, comment, author and time; the last one is current. An unknown proposal is `404`. Any one role, `role:admin|expert`.
+ * The proposal's whole append-only decision history, oldest first, each with its verdict, comment, author and time; the last one is current. An unknown proposal is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ListProposalDecisionsInput = {
   /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
@@ -5178,7 +5178,7 @@ export type ListUsersResult = AccountPage;
 /**
  * List the stored page profiles of a version.
  *
- * The profiles the worker stored for the pages of a version, by page number ascending, each with its `page_number` and its own identity: a page is addressed by that identity and never by its number. A page whose profile has not been computed is absent; the version's `page_count` says how many pages it has. An unknown version is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ * The profiles the worker stored for the pages of a version, by page number ascending, each with its `page_number` and its own identity: a page is addressed by that identity and never by its number. A page whose profile has not been computed is absent; the version's `page_count` says how many pages it has. An unknown version is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
  */
 export type ListVersionPageProfilesInput = {
   /** Path parameters, substituted into `/versions/{version_uid}/page-profiles`. */
@@ -6314,7 +6314,7 @@ export type RevokeRunnerTokenResult = RunnerTokenMetadata;
 /**
  * Search Norms
  *
- * Text search over the canonical paragraphs of the current norms snapshot (R-112, G-5). `q` is 1-200 characters: an optional designation (`ГОСТ 10140`, `СП 54` -- matched on whole leading tokens, so `СП 54` never finds `СП 542`), an optional clause (`п. 7.1.4`, a dotted-segment prefix) and words (Russian morphology, ranked by `ts_rank_cd`). Unreliable paragraphs never appear. With no current snapshot, or an explicit `norms_snapshot_id` that has never been current, the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot` -- never an empty page. A query the statement timeout cancels is `422 validation_failed` with `constraint: norms_search_too_broad`, never an empty or partial page. The cursor is opaque and bound to the query and snapshot; another query or snapshot refuses it, and the result window is capped at 1 000. Every hit carries its `source_attribution` (NORM-Q04); the corpus is internal (D-4.1). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * Text search over the canonical paragraphs of the current norms snapshot (R-112, G-5). `q` is 1-200 characters: an optional designation (`ГОСТ 10140`, `СП 54` -- matched on whole leading tokens, so `СП 54` never finds `СП 542`), an optional clause (`п. 7.1.4`, a dotted-segment prefix) and words (Russian morphology, ranked by `ts_rank_cd`). Unreliable paragraphs never appear. With no current snapshot, or an explicit `norms_snapshot_id` that has never been current, the answer is `422 required_norm_unavailable` with `reference_kind: norms_snapshot` -- never an empty page. A query the statement timeout cancels is `422 validation_failed` with `constraint: norms_search_too_broad`, never an empty or partial page. The cursor is opaque and bound to the query and snapshot; another query or snapshot refuses it, and the result window is capped at 1 000. Every hit carries its `source_attribution` (NORM-Q04); the corpus is internal (D-4.1). Roles: any one role (`role:admin|expert|viewer`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
  */
 export type SearchNormsInput = {
   /** Query string parameters. */
@@ -6974,7 +6974,7 @@ export type StartStageChainRunResult = StageChainRun;
 /**
  * Stream one tile PNG of a sheet pair.
  *
- * One tile of the pair's overlay (`mode` `overlay`: the older and the newer page on one canvas with the difference layers chosen by the `layers` parameter, a comma-separated list of layer names (`main`, `light_elements`, `color_change`, `line_style`, `moved`, `within_tolerance`, `noise`, `service_zones`)) or of the older (`a`) or newer (`b`) page alone, at the pyramid `level`, `column` and `row` (structural bounds 0..12 and 0..4095). When a level is reduced the maximum of the difference masks is kept, so a small change survives zooming. `align_blocks` aligns the recognised blocks of the newer page onto the older one without changing the PDF. The API never loads PDFium: it reduces what the worker stored. A pair, a mask or a tile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Served by `CMP-VIEWER-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_pair_tiles`) until the lane wired it.
+ * One tile of the pair's overlay (`mode` `overlay`: the older and the newer page on one canvas with the difference layers chosen by the `layers` parameter, a comma-separated list of layer names (`main`, `light_elements`, `color_change`, `line_style`, `moved`, `within_tolerance`, `noise`, `service_zones`)) or of the older (`a`) or newer (`b`) page alone, at the pyramid `level`, `column` and `row` (structural bounds 0..12 and 0..4095). When a level is reduced the maximum of the difference masks is kept, so a small change survives zooming. `align_blocks` aligns the recognised blocks of the newer page onto the older one without changing the PDF. The API never loads PDFium: it reduces what the worker stored. A pair, a mask or a tile that does not exist is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Served by `CMP-VIEWER-01`; sealed by `CMP-SEAL-C1` (`ADR-0025`), which left a stub that answered `503 dependency_unavailable` (`details.dependency: comparison_pair_tiles`) until the lane wired it.
  */
 export type StreamComparisonPairTileInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/tile`. */
@@ -7006,7 +7006,7 @@ export type StreamComparisonPairTileResult = Blob;
 /**
  * Download the PDF of a report.
  *
- * «Скачать PDF»: the report's PDF, written by a program with an embedded Cyrillic font; every page carries the label that the text is model output not confirmed by an engineer and the recall line. A report without a PDF is `409 conflict` (`comparison_report_state`). An unknown report is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «Скачать PDF»: the report's PDF, written by a program with an embedded Cyrillic font; every page carries the label that the text is model output not confirmed by an engineer and the recall line. A report without a PDF is `409 conflict` (`comparison_report_state`). An unknown report is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type StreamComparisonReportPdfInput = {
   /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/pdf`. */
@@ -7029,7 +7029,7 @@ export type StreamComparisonReportPdfResult = Blob;
 /**
  * Download the MD a report was built from.
  *
- * «Исходный MD» and «Скачать MD»: the exact bytes of the summary the report was built from. An unknown report is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «Исходный MD» and «Скачать MD»: the exact bytes of the summary the report was built from. An unknown report is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type StreamComparisonReportSourceMdInput = {
   /** Path parameters, substituted into `/comparison-reports/{comparison_report_id}/source-md`. */
@@ -7052,7 +7052,7 @@ export type StreamComparisonReportSourceMdResult = string;
 /**
  * Download the MD summary of a series.
  *
- * «Сводка изменений (MD)»: the deterministic Markdown summary of the series, per transition and per sheet with the pages of both versions, the main change text, the count of open questions and the «Реестр» of categories (computed by the engine, only service zones, described by the AI, whole specification, ambiguous, not processed); the same bytes for the same data. A transition whose pairs depend on an accepted AI link is marked. It is available after a sheet is described or a specification is compared, otherwise `409 conflict` (`comparison_summary_unavailable`). An unknown series is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «Сводка изменений (MD)»: the deterministic Markdown summary of the series, per transition and per sheet with the pages of both versions, the main change text, the count of open questions and the «Реестр» of categories (computed by the engine, only service zones, described by the AI, whole specification, ambiguous, not processed); the same bytes for the same data. A transition whose pairs depend on an accepted AI link is marked. It is available after a sheet is described or a specification is compared, otherwise `409 conflict` (`comparison_summary_unavailable`). An unknown series is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-REPORT-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_reports`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type StreamComparisonSeriesSummaryInput = {
   /** Path parameters, substituted into `/comparison-series/{comparison_series_id}/summary-md`. */
@@ -7075,7 +7075,7 @@ export type StreamComparisonSeriesSummaryResult = string;
 /**
  * Download the AI description of a sheet as Markdown.
  *
- * «MD листа»: the stored description of the sheet pair as UTF-8 Markdown. A sheet with no stored description is `409 conflict` (`comparison_description_missing`). An unknown sheet pair is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
+ * «MD листа»: the stored description of the sheet pair as UTF-8 Markdown. A sheet with no stored description is `409 conflict` (`comparison_description_missing`). An unknown sheet pair is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C2` (`ADR-0025`): until `CMP-VC-AISHEET-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: comparison_ai_sheets`, or `comparison_modules` while the versions module is off) and nothing is read or written.
  */
 export type StreamComparisonSheetDescriptionMdInput = {
   /** Path parameters, substituted into `/comparison-sheet-pairs/{comparison_sheet_pair_id}/description/md`. */
@@ -7149,7 +7149,7 @@ export type StreamDocumentVersionContentResult = Blob;
 /**
  * Stream Norm Document Content
  *
- * The document's source PDF, streamed by the server in chunks; never a redirect or a storage link. One `Range` is honoured with `206` and `Content-Range`; an unsatisfiable range is `422`. Served only through a confirmed custody binding; a document without one is `422 required_norm_unavailable` with `reference_kind: norm_source`. A full read verifies the bytes while streaming and stops short on a mismatch (R-115). Roles: any one role (`role:admin|expert`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
+ * The document's source PDF, streamed by the server in chunks; never a redirect or a storage link. One `Range` is honoured with `206` and `Content-Range`; an unsatisfiable range is `422`. Served only through a confirmed custody binding; a document without one is `422 required_norm_unavailable` with `reference_kind: norm_source`. A full read verifies the bytes while streaming and stops short on a mismatch (R-115). Roles: any one role (`role:admin|expert|viewer`, R-80); an account whose role set is empty is refused `403`. Sealed by W55A-SEAL-01 as a stub answering `503 dependency_unavailable` until W55A-SEARCH-01.
  */
 export type StreamNormDocumentContentInput = {
   /** Path parameters, substituted into `/norm-documents/{norm_document_id}/content`. */
@@ -7234,7 +7234,7 @@ export type StreamStageChangeJournalXlsxResult = Blob;
 /**
  * Stream the stored preview PNG of one page.
  *
- * The bytes the worker stored, with no redirect and no link. A page that has no preview is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ * The bytes the worker stored, with no redirect and no link. A page that has no preview is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
  */
 export type StreamVersionPagePreviewInput = {
   /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/preview`. */
@@ -7257,7 +7257,7 @@ export type StreamVersionPagePreviewResult = Blob;
 /**
  * Stream the stored thumbnail PNG of one page.
  *
- * The bytes the worker stored, with no redirect and no link. A page that has no thumbnail is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ * The bytes the worker stored, with no redirect and no link. A page that has no thumbnail is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
  */
 export type StreamVersionPageThumbnailInput = {
   /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/thumbnail`. */
@@ -7280,7 +7280,7 @@ export type StreamVersionPageThumbnailResult = Blob;
 /**
  * Stream one tile PNG of a page's bounded pyramid.
  *
- * One tile of the bounded pyramid rendered in the worker's child process (`ADR-0025` decision 9), addressed by the query parameters `level`, `column` and `row` (structural bounds 0..12 and 0..4095); whether a level is stored or rendered again on request is `CMP-PROFILE-01`'s to decide, and the address is the same. A tile that does not exist is `404`. Any one role (`role:admin|expert`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
+ * One tile of the bounded pyramid rendered in the worker's child process (`ADR-0025` decision 9), addressed by the query parameters `level`, `column` and `row` (structural bounds 0..12 and 0..4095); whether a level is stored or rendered again on request is `CMP-PROFILE-01`'s to decide, and the address is the same. A tile that does not exist is `404`. Any one role (`role:admin|expert|viewer`, `R-80`). Sealed as a stub by `CMP-SEAL-C0` (`ADR-0025`): until `CMP-PROFILE-01` wires it, every request that passes the credential, the role and the request's own shape answers `503 dependency_unavailable` (`details.dependency: version_pages`) and nothing is read or written.
  */
 export type StreamVersionPageTileInput = {
   /** Path parameters, substituted into `/page-profiles/{comparison_page_profile_id}/tile`. */

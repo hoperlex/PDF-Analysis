@@ -153,7 +153,7 @@ def build_section_routes(router: APIRouter, sections: SectionPort) -> None:
             "`null`, and the classification's history (`revisions`, oldest first: the original "
             "confirmation, then each correction with its expert, time and reason). Display "
             "input only: nothing here confirms a section or starts a run. "
-            "Any one role, `role:admin|expert`."
+            "Any one role, `role:admin|expert|viewer`."
         ),
     )
     def get_version_section_review(

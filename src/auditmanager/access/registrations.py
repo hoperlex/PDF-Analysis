@@ -94,6 +94,7 @@ from auditmanager.access.models import (
     normalize_email,
     normalize_person_name,
     parse_role,
+    require_exclusive_viewer,
 )
 from auditmanager.access.passwords import (
     StoredPassword,
@@ -453,7 +454,7 @@ class RegistrationRepository:
         (``state_transition_not_allowed``, ``registration_request``); an active account
         holds the login by now (``conflict``, ``login_taken``; the request stays pending).
         """
-        chosen = frozenset(parse_role(role) for role in roles)
+        chosen = require_exclusive_viewer(frozenset(parse_role(role) for role in roles))
         if not chosen:
             raise DomainError(
                 ErrorCode.VALIDATION_FAILED,

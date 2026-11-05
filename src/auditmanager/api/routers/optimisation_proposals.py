@@ -151,7 +151,7 @@ def build_optimisation_proposal_routes(
             "The project's optimisation passes, newest first (at most `limit`, 100 by "
             "default), each with its counts by decision; `document_uid` narrows to one "
             "document set of the project. An unknown project or a set of another project is "
-            "`404`. Any one role, `role:admin|expert`."
+            "`404`. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def list_optimisation_passes(
@@ -185,7 +185,7 @@ def build_optimisation_proposal_routes(
             "computable and its current decision. `decision` narrows to the proposals in "
             "one decision state (`pending` for none yet); the pass's `decision_counts` "
             "always count every proposal. An unknown pass is `404`. Any one role, "
-            "`role:admin|expert`."
+            "`role:admin|expert|viewer`."
         ),
     )
     def list_optimisation_proposals(
@@ -253,7 +253,7 @@ def build_optimisation_proposal_routes(
         description=(
             "The proposal's whole append-only decision history, oldest first, each with its "
             "verdict, comment, author and time; the last one is current. An unknown "
-            "proposal is `404`. Any one role, `role:admin|expert`."
+            "proposal is `404`. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def list_proposal_decisions(
@@ -293,7 +293,7 @@ def build_optimisation_proposal_routes(
             "decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; "
             "every cell that a spreadsheet would read as a formula is prefixed with an "
             "apostrophe. Computed on request from the stored rows; separate from the "
-            "findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert`."
+            "findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`."
         ),
     )
     def export_optimisation_proposals_csv(

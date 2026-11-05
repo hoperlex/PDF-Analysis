@@ -23,7 +23,30 @@ import { ROLE_VALUES } from '@/shared/api';
 export const ROLE_LABELS: Readonly<Record<Role, string>> = {
   expert: 'Эксперт',
   admin: 'Администратор',
+  viewer: 'Наблюдатель',
 };
+
+/**
+ * `R-150e`: the administrator's forms offer «Наблюдатель» only once every screen hides the actions
+ * this role may not take. Until then the switch is off and the forms offer the two older roles; an
+ * account given the role by the host command is still shown by its label. Turning the switch off
+ * again is the rollback.
+ */
+export const VIEWER_ROLE_OFFERED = false;
+
+/** The roles an administrator's form offers, in the contract's order. */
+export const ASSIGNABLE_ROLES: readonly Role[] = ROLE_VALUES.filter(
+  (role) => role !== 'viewer' || VIEWER_ROLE_OFFERED,
+);
+
+/**
+ * `R-150e`: «Наблюдатель» is the only role of an account that holds it. The server refuses a set
+ * combining it with another role (`validation_failed`, `viewer_exclusive`); a form asks this first,
+ * so the choice it offers is one the server accepts.
+ */
+export function rolesCombinationAllowed(roles: readonly Role[]): boolean {
+  return !(roles.includes('viewer') && roles.length > 1);
+}
 
 /** A role value outside the contract's closed set. */
 export class UnknownRoleError extends Error {

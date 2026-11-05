@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "4e196c4b0c90330c09539a3ace167e52ce7a7eb8249c98dbbbc5580cd0994732",
-    "content_commit": "6937d818",
-    "content_commit_subject": "merge: integration/ui-parity 64880fdf (R-150v..y, docs only) into agent/ui-parity-counters-p0b",
+    "sha256": "536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac",
+    "content_commit": "1a480de4",
+    "content_commit_subject": "docs(ui-parity): UI-PARITY-METRICS, the dictionary of the P0b counters",
     "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
-    "commit_note": "Resealed 2026-11-05 by UI-PARITY-P0B: contract 1.19.0 (the audit state of a document and its counters: the new schema DocumentAuditCounts, the optional audit_counts of each listProjects item, audit_counts and finding_count of SectionDocumentCount, awaiting_decision_findings of DashboardSummary, and the all-time description of VerdictCount; one schema, no operation or migration added). content_commit names the base commit 6937d818 the seal was made on top of, not a commit that contains the change; the integrator's commit of this seal is the first to carry these bytes. Surface 250/277/675.",
+    "commit_note": "Resealed 2026-11-05 by UI-PARITY-P0B: contract 1.19.0 (the audit state of a document and its counters: the new schema DocumentAuditCounts, the optional audit_counts of each listProjects item, audit_counts and finding_count of SectionDocumentCount, awaiting_decision_findings of DashboardSummary, and the all-time description of VerdictCount; one schema, no operation or migration added). content_commit names the base commit 6937d818 the seal was made on top of, not a commit that contains the change; the integrator's commit of this seal is the first to carry these bytes. Surface 250/277/675. Resealed again 2026-11-05 by UI-PARITY-VIEWER on top of 1a480de4: the Role enum gains `viewer` («Наблюдатель», R-150e/R-150x) and 60 operation descriptions name `role:admin|expert|viewer`; no operation, schema or path added. Surface 250/277/675.",
     "openapi_version": "3.1.0",
     "info_version": "1.19.0",
     "paths": 250,
     "operations": 277,
     "component_schemas": 675,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "4e196c4b0c90330c09539a3ace167e52ce7a7eb8249c98dbbbc5580cd0994732",
+    "snapshot_sha256": "536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "b5ba60d974ac203492393cb3eead9f41a58acd9a9013d8cbb1c7ea9788a8faeb",
-      "index.ts": "f3bbdcd69cf6fe77cc9192ea3bca7a7d1d9f1bded7c132caa0dd44b1bddbbdf4",
-      "operations.gen.ts": "ff7840d1db396596904368a6f9b6dca2e90c40452c55d001751d6190532c9907",
-      "types.gen.ts": "66ac47cb71d48815e84c13bdedd4152499db13529cd137e1e6a890960805badb"
+      "client.gen.ts": "c7fab96dc515def4a982b04208548c8673482b8c8b4a47332a38a9439a8e4dd5",
+      "index.ts": "0101b03549010b4e0e08c1ac4976243fa05b165f2f41d9591466a4a675bd332d",
+      "operations.gen.ts": "400e77115bdabcc54fe3c281375c26cae8b7c31591079942905c26fb71619dc2",
+      "types.gen.ts": "89c764167bbb46ddfbd3d3c2426069fe050e0cdde293b8e6b5bebb905c55ce10"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

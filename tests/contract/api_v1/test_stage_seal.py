@@ -26,6 +26,21 @@ ADAPTERS = (
 )
 
 
+#: `R-150w` (and the matrix's defaults): reads the viewer may NOT make. Every other product read
+#: is open to «Наблюдатель» (`R-150e`). A literal from the rulings, not read from the seam.
+VIEWER_DENIED_READS = frozenset({
+    "listExecutionQueue", "listExecutionJournal", "listWorkers", "listExecutorConnections",
+    "getExecutorConnection", "listExecutorRoutes", "getComparisonQueueSummary", "getComparisonAiQueue",
+    "estimateStageChainRun", "listAssignments", "getAssignment", "listExecutorGroups",
+    "getExecutorGroup", "getExecutorGroupCapacity", "listExecutorRoutingRules",
+})
+
+
+def _read_roles(name: str) -> frozenset[str]:
+    """Any one role reads; the viewer as well unless `R-150w` keeps the read from it."""
+    return frozenset({"expert", "admin"}) if name in VIEWER_DENIED_READS else frozenset({"expert", "admin", "viewer"})
+
+
 def test_all_stage_routes_have_closed_roles_and_keyed_writes() -> None:
     document = create_documentation_app().openapi()
     operations = {operation["operationId"]: (method, operation)
@@ -38,7 +53,7 @@ def test_all_stage_routes_have_closed_roles_and_keyed_writes() -> None:
         assert operation["security"] == [{"bearerAuth": []}]
         keys = [p for p in operation.get("parameters", []) if p.get("name") == "Idempotency-Key"]
         if method == "get":
-            assert OPERATION_ROLES[name] == frozenset({"expert", "admin"})
+            assert OPERATION_ROLES[name] == _read_roles(name)
             assert not keys
         else:
             assert OPERATION_ROLES[name] == frozenset({"expert"})

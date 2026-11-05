@@ -345,6 +345,10 @@ PROFILE_COMPLETED_CAPABILITY: Final[str] = "profile_completed"
 #: translates between the two by an explicit table that refuses a value it does not know.
 ROLE_EXPERT: Final[str] = "expert"
 ROLE_ADMIN: Final[str] = "admin"
+#: `R-150e`, `R-150x`. «Наблюдатель»: reads and downloads product data, changes nothing, starts
+#: nothing and spends nothing. It never shares an account with ``expert`` or ``admin`` (the
+#: account boundary refuses the combination), so every set below is read as "any of".
+ROLE_VIEWER: Final[str] = "viewer"
 
 _ANY_COMPLETE_ACCOUNT: Final[frozenset[str]] = frozenset()
 #: `R-80`. Any one role: an active account whose role set is empty is suspended from product
@@ -352,6 +356,13 @@ _ANY_COMPLETE_ACCOUNT: Final[frozenset[str]] = frozenset()
 _ANY_ROLE: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_ADMIN})
 _EXPERT: Final[frozenset[str]] = frozenset({ROLE_EXPERT})
 _ADMIN: Final[frozenset[str]] = frozenset({ROLE_ADMIN})
+#: `R-150e`. A read of product data the viewer may make as well. ``_ANY_ROLE`` is deliberately
+#: NOT widened: it still holds ``transitionAssignment`` (a POST) and the operational reads
+#: `R-150w` keeps from the viewer (queue, journal, workers, executors, comparison queues).
+_PRODUCT_READ: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_ADMIN, ROLE_VIEWER})
+#: `R-150e` downloads: the run exports were the expert's alone, and an administrator without
+#: ``expert`` still may not download them; the viewer may.
+_EXPERT_OR_VIEWER: Final[frozenset[str]] = frozenset({ROLE_EXPERT, ROLE_VIEWER})
 
 #: `R-60`, `W49-PLAN.md` section 3.2, as `R-80` amends them. What each guarded operation
 #: requires, by ``operationId``: **any of** the roles in its set, and the empty set means any
@@ -369,15 +380,15 @@ _ADMIN: Final[frozenset[str]] = frozenset({ROLE_ADMIN})
 OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
         # Reads of product data: any one role (R-80 amends R-60 and narrows R-78).
-        "listProjects": _ANY_ROLE,
-        "listDocuments": _ANY_ROLE,
-        "getDocumentVersion": _ANY_ROLE,
-        "streamDocumentVersionContent": _ANY_ROLE,
-        "getVersionBlocks": _ANY_ROLE,
-        "listVersionPortalBlocks": _ANY_ROLE,
-        "streamVersionPortalBlockCrop": _ANY_ROLE,
-        "listVersions": _ANY_ROLE,
-        "listRuns": _ANY_ROLE,
+        "listProjects": _PRODUCT_READ,
+        "listDocuments": _PRODUCT_READ,
+        "getDocumentVersion": _PRODUCT_READ,
+        "streamDocumentVersionContent": _PRODUCT_READ,
+        "getVersionBlocks": _PRODUCT_READ,
+        "listVersionPortalBlocks": _PRODUCT_READ,
+        "streamVersionPortalBlockCrop": _PRODUCT_READ,
+        "listVersions": _PRODUCT_READ,
+        "listRuns": _PRODUCT_READ,
         "listExecutionQueue": _ANY_ROLE,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
@@ -388,15 +399,15 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listExecutorRoutes": _ANY_ROLE,
         # `ANALYSIS-PRESETS-01`. Every role that can start a run (and the administrator who sets presets)
         # reads the list.
-        "listAnalysisPresets": _ANY_ROLE,
+        "listAnalysisPresets": _PRODUCT_READ,
         # `CMP-SEAL-C0` (ADR-0025 decisions 9-11, 16): the comparison upload, the order of the
         # versions of a document set, and the page reads. Reads are any one role; every write is
         # an expert's act (`R-60`), like ``uploadDocument``.
         "createComparisonUpload": _EXPERT,
         "importComparisonZip": _EXPERT,
-        "listComparisonUploads": _ANY_ROLE,
-        "getComparisonUpload": _ANY_ROLE,
-        "getComparisonUploadProposal": _ANY_ROLE,
+        "listComparisonUploads": _PRODUCT_READ,
+        "getComparisonUpload": _PRODUCT_READ,
+        "getComparisonUploadProposal": _PRODUCT_READ,
         "uploadComparisonUploadPart": _EXPERT,
         "completeComparisonUploadFile": _EXPERT,
         "confirmComparisonUploadSet": _EXPERT,
@@ -405,59 +416,59 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "pauseComparisonUpload": _EXPERT,
         "resumeComparisonUpload": _EXPERT,
         "cancelComparisonUpload": _EXPERT,
-        "listComparisonVersionOrders": _ANY_ROLE,
+        "listComparisonVersionOrders": _PRODUCT_READ,
         "appendComparisonVersionOrder": _EXPERT,
-        "listVersionPageProfiles": _ANY_ROLE,
-        "getVersionPageProfile": _ANY_ROLE,
-        "streamVersionPagePreview": _ANY_ROLE,
-        "streamVersionPageThumbnail": _ANY_ROLE,
-        "streamVersionPageTile": _ANY_ROLE,
+        "listVersionPageProfiles": _PRODUCT_READ,
+        "getVersionPageProfile": _PRODUCT_READ,
+        "streamVersionPagePreview": _PRODUCT_READ,
+        "streamVersionPageThumbnail": _PRODUCT_READ,
+        "streamVersionPageTile": _PRODUCT_READ,
         # `CMP-SEAL-C1` (ADR-0025 decisions 13, 14, 16, 21): the version comparison core. Reads are any
         # one role; every write is an expert's act (`R-60`), like the comparison upload.
-        "getComparisonMatrix": _ANY_ROLE,
+        "getComparisonMatrix": _PRODUCT_READ,
         "prepareComparisonMatrix": _EXPERT,
-        "listComparisonMatrixEdits": _ANY_ROLE,
+        "listComparisonMatrixEdits": _PRODUCT_READ,
         "applyComparisonMatrixEdits": _EXPERT,
         "undoComparisonMatrixEdit": _EXPERT,
-        "listComparisonAiLinks": _ANY_ROLE,
+        "listComparisonAiLinks": _PRODUCT_READ,
         "startComparisonSeries": _EXPERT,
-        "listComparisonSeries": _ANY_ROLE,
-        "getComparisonSeries": _ANY_ROLE,
+        "listComparisonSeries": _PRODUCT_READ,
+        "getComparisonSeries": _PRODUCT_READ,
         "pauseComparisonSeries": _EXPERT,
         "resumeComparisonSeries": _EXPERT,
         "cancelComparisonSeries": _EXPERT,
         "finishComparisonSeries": _EXPERT,
-        "listComparisonSheetPairs": _ANY_ROLE,
-        "getComparisonSheetPair": _ANY_ROLE,
-        "streamComparisonPairTile": _ANY_ROLE,
-        "getComparisonOverview": _ANY_ROLE,
+        "listComparisonSheetPairs": _PRODUCT_READ,
+        "getComparisonSheetPair": _PRODUCT_READ,
+        "streamComparisonPairTile": _PRODUCT_READ,
+        "getComparisonOverview": _PRODUCT_READ,
         "getComparisonQueueSummary": _ANY_ROLE,
         # `CMP-SEAL-C2` (ADR-0025 decisions 16, 17, 19 and 23): the version comparison AI, specifications, launch
         # queue and reports. Reads are any one role; every write is an expert's act (`R-60`), like the matrix.
-        "estimateComparisonAiPairCheck": _ANY_ROLE,
-        "getComparisonAiPairCheck": _ANY_ROLE,
-        "listComparisonAiPairHints": _ANY_ROLE,
-        "estimateComparisonAiSheetChanges": _ANY_ROLE,
-        "getComparisonAiSheetChanges": _ANY_ROLE,
-        "getComparisonSheetDescription": _ANY_ROLE,
-        "listComparisonSheetDescriptionHistory": _ANY_ROLE,
-        "estimateComparisonSheetDescription": _ANY_ROLE,
-        "streamComparisonSheetDescriptionMd": _ANY_ROLE,
-        "listComparisonReviewSheets": _ANY_ROLE,
-        "getVersionPageSpecPositions": _ANY_ROLE,
-        "getComparisonSheetPairSpecPositions": _ANY_ROLE,
-        "listComparisonSpecifications": _ANY_ROLE,
-        "getComparisonSpecification": _ANY_ROLE,
-        "listComparisonSpecificationChanges": _ANY_ROLE,
-        "estimateComparisonSpecification": _ANY_ROLE,
-        "getComparisonLaunchQueue": _ANY_ROLE,
+        "estimateComparisonAiPairCheck": _PRODUCT_READ,
+        "getComparisonAiPairCheck": _PRODUCT_READ,
+        "listComparisonAiPairHints": _PRODUCT_READ,
+        "estimateComparisonAiSheetChanges": _PRODUCT_READ,
+        "getComparisonAiSheetChanges": _PRODUCT_READ,
+        "getComparisonSheetDescription": _PRODUCT_READ,
+        "listComparisonSheetDescriptionHistory": _PRODUCT_READ,
+        "estimateComparisonSheetDescription": _PRODUCT_READ,
+        "streamComparisonSheetDescriptionMd": _PRODUCT_READ,
+        "listComparisonReviewSheets": _PRODUCT_READ,
+        "getVersionPageSpecPositions": _PRODUCT_READ,
+        "getComparisonSheetPairSpecPositions": _PRODUCT_READ,
+        "listComparisonSpecifications": _PRODUCT_READ,
+        "getComparisonSpecification": _PRODUCT_READ,
+        "listComparisonSpecificationChanges": _PRODUCT_READ,
+        "estimateComparisonSpecification": _PRODUCT_READ,
+        "getComparisonLaunchQueue": _PRODUCT_READ,
         "getComparisonAiQueue": _ANY_ROLE,
-        "streamComparisonSeriesSummary": _ANY_ROLE,
-        "listComparisonReports": _ANY_ROLE,
-        "getComparisonReport": _ANY_ROLE,
-        "streamComparisonReportPdf": _ANY_ROLE,
-        "streamComparisonTechnicalReport": _ANY_ROLE,
-        "streamComparisonReportSourceMd": _ANY_ROLE,
+        "streamComparisonSeriesSummary": _PRODUCT_READ,
+        "listComparisonReports": _PRODUCT_READ,
+        "getComparisonReport": _PRODUCT_READ,
+        "streamComparisonReportPdf": _PRODUCT_READ,
+        "streamComparisonTechnicalReport": _PRODUCT_READ,
+        "streamComparisonReportSourceMd": _PRODUCT_READ,
         "startComparisonAiPairCheck": _EXPERT,
         "pauseComparisonAiPairCheck": _EXPERT,
         "resumeComparisonAiPairCheck": _EXPERT,
@@ -487,22 +498,22 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "prepareComparisonClientReport": _EXPERT,
         # `CMP-SEAL-C3`: stage comparison reads require either product role; every
         # durable expert decision or lifecycle command requires the expert role.
-        "listStageUploads": _ANY_ROLE,
-        "getStageUpload": _ANY_ROLE,
-        "listStagePairs": _ANY_ROLE,
-        "getStagePair": _ANY_ROLE,
-        "listStagePairSuggestions": _ANY_ROLE,
-        "listStageSheetPassports": _ANY_ROLE,
-        "listStageSheetSuggestions": _ANY_ROLE,
-        "getStageSheetMap": _ANY_ROLE,
-        "listStageSheetMapHistory": _ANY_ROLE,
-        "getStageSheetMapRevision": _ANY_ROLE,
-        "listStageTextFragments": _ANY_ROLE,
-        "listStageTextExclusions": _ANY_ROLE,
-        "listStageRawDifferences": _ANY_ROLE,
-        "listStageTextHints": _ANY_ROLE,
-        "listStageChainRuns": _ANY_ROLE,
-        "getStageChainRun": _ANY_ROLE,
+        "listStageUploads": _PRODUCT_READ,
+        "getStageUpload": _PRODUCT_READ,
+        "listStagePairs": _PRODUCT_READ,
+        "getStagePair": _PRODUCT_READ,
+        "listStagePairSuggestions": _PRODUCT_READ,
+        "listStageSheetPassports": _PRODUCT_READ,
+        "listStageSheetSuggestions": _PRODUCT_READ,
+        "getStageSheetMap": _PRODUCT_READ,
+        "listStageSheetMapHistory": _PRODUCT_READ,
+        "getStageSheetMapRevision": _PRODUCT_READ,
+        "listStageTextFragments": _PRODUCT_READ,
+        "listStageTextExclusions": _PRODUCT_READ,
+        "listStageRawDifferences": _PRODUCT_READ,
+        "listStageTextHints": _PRODUCT_READ,
+        "listStageChainRuns": _PRODUCT_READ,
+        "getStageChainRun": _PRODUCT_READ,
         "createStageUpload": _EXPERT,
         "uploadStageUploadPart": _EXPERT,
         "completeStageUploadFile": _EXPERT,
@@ -520,51 +531,51 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "estimateStageChainRun": _ANY_ROLE,
         "resumeStageChainRun": _EXPERT,
         "startStageChainBatch": _EXPERT,
-        "getStageChainBatch": _ANY_ROLE,
+        "getStageChainBatch": _PRODUCT_READ,
         "pauseStageChainBatch": _EXPERT,
         "resumeStageChainBatch": _EXPERT,
         "cancelStageChainBatch": _EXPERT,
-        "listStageAiReviews": _ANY_ROLE,
-        "listStageClassifications": _ANY_ROLE,
-        "getStageSynthesis": _ANY_ROLE,
-        "listStageGraphicEvidence": _ANY_ROLE,
-        "listStageLinkRepairs": _ANY_ROLE,
+        "listStageAiReviews": _PRODUCT_READ,
+        "listStageClassifications": _PRODUCT_READ,
+        "getStageSynthesis": _PRODUCT_READ,
+        "listStageGraphicEvidence": _PRODUCT_READ,
+        "listStageLinkRepairs": _PRODUCT_READ,
         "undoStageLinkRepair": _EXPERT,
-        "listStageChangeCards": _ANY_ROLE,
-        "getStageChangeCard": _ANY_ROLE,
+        "listStageChangeCards": _PRODUCT_READ,
+        "getStageChangeCard": _PRODUCT_READ,
         "applyStageCardVerdicts": _EXPERT,
         "createStageReviewCard": _EXPERT,
-        "listStageCardVerdicts": _ANY_ROLE,
-        "getStageChangeJournal": _ANY_ROLE,
-        "streamStageChangeJournalXlsx": _ANY_ROLE,
-        "streamStageChangeJournalPdf": _ANY_ROLE,
-        "streamStageChangeJournalHtml": _ANY_ROLE,
-        "getStageProfileText": _ANY_ROLE,
-        "getStageAssembly": _ANY_ROLE,
+        "listStageCardVerdicts": _PRODUCT_READ,
+        "getStageChangeJournal": _PRODUCT_READ,
+        "streamStageChangeJournalXlsx": _PRODUCT_READ,
+        "streamStageChangeJournalPdf": _PRODUCT_READ,
+        "streamStageChangeJournalHtml": _PRODUCT_READ,
+        "getStageProfileText": _PRODUCT_READ,
+        "getStageAssembly": _PRODUCT_READ,
         "startStageChainRun": _EXPERT,
         "cancelStageChainRun": _EXPERT,
-        "getRunStatus": _ANY_ROLE,
-        "getExtendedRunReview": _ANY_ROLE,
-        "getArV3BetaGroup": _ANY_ROLE,
-        "getArV3BetaGroupReview": _ANY_ROLE,
-        "getArV3BetaPackStatus": _ANY_ROLE,
-        "getRunNormVerification": _ANY_ROLE,
-        "listRunFindings": _ANY_ROLE,
-        "getFinding": _ANY_ROLE,
-        "listDecisionHistory": _ANY_ROLE,
-        "listDecisions": _ANY_ROLE,
-        "getDashboardSummary": _ANY_ROLE,
+        "getRunStatus": _PRODUCT_READ,
+        "getExtendedRunReview": _PRODUCT_READ,
+        "getArV3BetaGroup": _PRODUCT_READ,
+        "getArV3BetaGroupReview": _PRODUCT_READ,
+        "getArV3BetaPackStatus": _PRODUCT_READ,
+        "getRunNormVerification": _PRODUCT_READ,
+        "listRunFindings": _PRODUCT_READ,
+        "getFinding": _PRODUCT_READ,
+        "listDecisionHistory": _PRODUCT_READ,
+        "listDecisions": _PRODUCT_READ,
+        "getDashboardSummary": _PRODUCT_READ,
         # `W55A-SEAL-01`. The norms reads: text search, documents, paragraphs, the PDF and
         # the snapshot list are product data, so any one role (R-80, plan section A3.6).
-        "searchNorms": _ANY_ROLE,
-        "getNormDocument": _ANY_ROLE,
+        "searchNorms": _PRODUCT_READ,
+        "getNormDocument": _PRODUCT_READ,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The catalogue is product data like the search.
-        "listNormDocuments": _ANY_ROLE,
-        "listNormParagraphs": _ANY_ROLE,
-        "streamNormDocumentContent": _ANY_ROLE,
-        "listNormSnapshots": _ANY_ROLE,
+        "listNormDocuments": _PRODUCT_READ,
+        "listNormParagraphs": _PRODUCT_READ,
+        "streamNormDocumentContent": _PRODUCT_READ,
+        "listNormSnapshots": _PRODUCT_READ,
         # `W59-SECTION-SEAL-01`. A version's fifteen section choices and its classification.
-        "getVersionSectionReview": _ANY_ROLE,
+        "getVersionSectionReview": _PRODUCT_READ,
         # `W61-DISPATCHER-01`. The dispatcher's reads and moves: any one role at the seam; the
         # dispatch context decides in its own transaction who reads which assignment (an
         # expert only their own) and who makes which move (the assignee's three, the
@@ -574,26 +585,26 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "transitionAssignment": _ANY_ROLE,
         # `W59-VERSION-COMPARE-01`. Two versions of one set compared; a read that writes
         # nothing, so any one role.
-        "compareDocumentVersions": _ANY_ROLE,
+        "compareDocumentVersions": _PRODUCT_READ,
         # `W59-ANALYSIS-SETTINGS-01`. The text-profile registry, read-only: any one role.
-        "listAnalysisProfiles": _ANY_ROLE,
+        "listAnalysisProfiles": _PRODUCT_READ,
         # `W60-PRICE-LIST-01`. Price lists and vendor lists are product data: any one role reads.
-        "listPriceListRevisions": _ANY_ROLE,
-        "listPriceListPositions": _ANY_ROLE,
-        "getEffectiveVendorLists": _ANY_ROLE,
+        "listPriceListRevisions": _PRODUCT_READ,
+        "listPriceListPositions": _PRODUCT_READ,
+        "getEffectiveVendorLists": _PRODUCT_READ,
         # `W60-OPT-MATCH-01`. A document set's AR specification priced from the project's
         # price list; a read that writes nothing, so any one role.
-        "getSpecificationPrices": _ANY_ROLE,
+        "getSpecificationPrices": _PRODUCT_READ,
         # `W60-OPT-PROPOSALS-01`. Passes, proposals, their decision history and the CSV are
         # product data: any one role reads and exports.
-        "listOptimisationPasses": _ANY_ROLE,
-        "listOptimisationProposals": _ANY_ROLE,
-        "listProposalDecisions": _ANY_ROLE,
-        "exportOptimisationProposalsCsv": _ANY_ROLE,
+        "listOptimisationPasses": _PRODUCT_READ,
+        "listOptimisationProposals": _PRODUCT_READ,
+        "listProposalDecisions": _PRODUCT_READ,
+        "exportOptimisationProposalsCsv": _PRODUCT_READ,
         # `W63-SECTION-FORM7-01`. A read of current versions' rows across projects.
-        "getSectionSpecification": _ANY_ROLE,
+        "getSectionSpecification": _PRODUCT_READ,
         # `NORM-REFS-RUN-01`. The norms a run's saved text cites, read per request; writes nothing.
-        "getRunNormReferences": _ANY_ROLE,
+        "getRunNormReferences": _PRODUCT_READ,
         # The product version and release notes: any complete account, roles or none
         # (R-80), so a role-less person can still see what the product is.
         "getProductVersion": _ANY_COMPLETE_ACCOUNT,
@@ -643,9 +654,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # commands re-read the role set in their own transaction.
         "startOptimisationPass": _EXPERT,
         "decideOptimisationProposal": _EXPERT,
-        "exportRunCsv": _EXPERT,
+        "exportRunCsv": _EXPERT_OR_VIEWER,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
-        "exportRunXlsx": _EXPERT,
+        "exportRunXlsx": _EXPERT_OR_VIEWER,
         # `W61-DISPATCHER-01`. Assigning work is an administrator's act (R-60); the command
         # re-reads the role set in its own transaction.
         "createAssignment": _ADMIN,

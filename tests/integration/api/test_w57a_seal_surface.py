@@ -17,7 +17,7 @@ def test_operation_is_served_with_any_role_register() -> None:
     app = create_documentation_app()
     operation = app.openapi()['paths']['/runs/{run_id}/norm-verification']['get']
     assert operation['operationId'] == 'getRunNormVerification'
-    assert OPERATION_ROLES['getRunNormVerification'] == frozenset({'expert', 'admin'})
+    assert OPERATION_ROLES['getRunNormVerification'] == frozenset({'expert', 'admin', 'viewer'})  # R-150e
     assert '503' in operation['responses']
 
 
