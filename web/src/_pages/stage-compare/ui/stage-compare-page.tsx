@@ -1,6 +1,5 @@
 'use client';
 
-
 import type { ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
 import { routes } from '@/shared/lib';
