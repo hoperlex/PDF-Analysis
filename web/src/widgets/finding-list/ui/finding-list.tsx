@@ -21,6 +21,7 @@
  */
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { Finding, FindingCategory, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
@@ -50,6 +51,11 @@ export interface FindingListProps {
   /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly verdictFilter?: VerdictFilter | undefined;
   readonly onVerdictFilterChange?: ((filter: VerdictFilter) => void) | undefined;
+  /**
+   * `R-151n`: the quick ✓/✕ of a finding, drawn beside its row and in the table's «Решение» column. The page
+   * passes it only to a session that may decide; without it the list draws no action at all.
+   */
+  readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
 }
 
 /**
@@ -111,10 +117,12 @@ function FindingTable({
   groups,
   selectedFindingUid,
   onSelect,
+  renderRowActions,
 }: {
   readonly groups: readonly FindingGroup<Finding>[];
   readonly selectedFindingUid: string | null;
   readonly onSelect: (findingUid: string) => void;
+  readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
 }) {
   const rows = groups.flatMap((group) => group.findings);
   const numberOf = new Map(rows.map((finding, index) => [finding.finding_uid, index + 1]));
@@ -138,6 +146,7 @@ function FindingTable({
       cell: (finding) => (finding.observation.norm_citations ?? []).length === 0 ? '—' : String((finding.observation.norm_citations ?? []).length),
     },
     { key: 'pages', header: 'Стр.', cell: (finding) => declaredPages(finding.observation).join(', ') },
+    ...(renderRowActions === undefined ? [] : [{ key: 'decision', header: 'Решение', cell: renderRowActions }]),
   ];
   return (
     <Table
@@ -164,6 +173,7 @@ export function FindingList({
   integrityFaults,
   verdictFilter,
   onVerdictFilterChange,
+  renderRowActions,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
   const [view, setView] = useState<'list' | 'table'>('list');
@@ -251,7 +261,12 @@ export function FindingList({
       ) : null}
 
       {view === 'table' && shown.length > 0 ? (
-        <FindingTable groups={shown} selectedFindingUid={selectedFindingUid} onSelect={onSelect} />
+        <FindingTable
+          groups={shown}
+          selectedFindingUid={selectedFindingUid}
+          onSelect={onSelect}
+          renderRowActions={renderRowActions}
+        />
       ) : null}
 
       {view === 'table' ? null : shown.map((group) => (
@@ -269,7 +284,7 @@ export function FindingList({
               const pages = declaredPages(finding.observation);
               const selected = finding.finding_uid === selectedFindingUid;
               return (
-                <li key={finding.finding_uid}>
+                <li key={finding.finding_uid} className={renderRowActions === undefined ? undefined : styles.withActions}>
                   <button
                     type="button"
                     className="am-finding-row am-button"
@@ -298,6 +313,7 @@ export function FindingList({
                       {pages.length === 1 ? `стр. ${pages[0]}` : `стр. ${pages.join(', ')}`}
                     </span>
                   </button>
+                  {renderRowActions === undefined ? null : renderRowActions(finding)}
                 </li>
               );
             })}

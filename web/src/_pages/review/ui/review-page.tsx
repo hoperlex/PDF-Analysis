@@ -62,6 +62,7 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { ReviewRowActions } from './review-row-actions';
 import styles from './review-page.module.css';
 
 export interface ReviewPageProps {
@@ -220,6 +221,16 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             onSelect={(findingUid) => {
               setSelection(selectFinding(findingUid));
             }}
+            // `R-151n`: ✓/✕ in each row, for a session that may decide.
+            renderRowActions={mayAct ? (finding) => (
+              <ReviewRowActions
+                finding={finding}
+                runId={runId}
+                onOpen={(findingUid) => {
+                  setSelection(selectFinding(findingUid));
+                }}
+              />
+            ) : undefined}
             isLoading={findingsQuery.isPending}
             error={presentFindingsFailure(findingsQuery.error, {
               title: 'Не удалось загрузить находки',

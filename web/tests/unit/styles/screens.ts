@@ -67,7 +67,7 @@ import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, r
 import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
-import { FindingList } from '@/widgets/finding-list';
+import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
@@ -92,7 +92,7 @@ import type {
   RunState,
   RunStatus,
 } from '@/shared/api';
-import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
+import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
@@ -1164,6 +1164,27 @@ export function screens(): Screen[] {
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
         integrityFaults: [{ findingUid: FINDINGS[1]?.finding_uid ?? '', refusal: 'отказ' }],
+      }),
+    ),
+  );
+  // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
+  add(
+    'FindingList with row actions, recorded and refused',
+    render(
+      createElement(FindingList, {
+        groups: groupByCategory(FINDINGS),
+        selectedFindingUid: FINDING_UID,
+        onSelect: noop,
+        renderRowActions: (finding: { readonly finding_uid: string; readonly current_verdict: Verdict }) =>
+          createElement(FindingRowActions, {
+            verdict: finding.current_verdict,
+            sending: finding.finding_uid === FINDING_UID ? 'accept' : null,
+            note: finding.finding_uid === FINDING_UID
+              ? { tone: 'ok', text: 'Записано' }
+              : { tone: 'fail', text: 'Перед принятием выберите важность. Ничего не отправлено.' },
+            onAccept: noop,
+            onReject: noop,
+          }),
       }),
     ),
   );

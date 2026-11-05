@@ -16,6 +16,8 @@
  */
 
 import { createElement } from 'react';
+
+import type * as RecordVerdictModule from '@/features/record-verdict';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const seen = vi.hoisted(() => ({
@@ -31,10 +33,14 @@ vi.mock('@/widgets/decision-panel', () => ({
   },
 }));
 
-vi.mock('@/features/record-verdict', () => ({
+// Only the hook is replaced; the module's other exports (the refusal's wording, which the rows' ✓/✕ of
+// `R-151n` also read) stay the real ones.
+vi.mock('@/features/record-verdict', async (importOriginal) => ({
+  ...(await importOriginal<typeof RecordVerdictModule>()),
   useRecordVerdict: () => ({
     record: (...args: unknown[]) => seen.record?.(...args),
     isPending: false,
+    pendingIntent: null,
     error: null,
     refusal: seen.refusal,
     result: null,

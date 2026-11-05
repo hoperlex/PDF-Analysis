@@ -31,3 +31,38 @@
   flex-wrap: wrap;
   gap: var(--am-gap-xs);
 }
+
+/* `R-151n`: ✓/✕ beside a finding's row, and in the table's «Решение» column. Tokens only. */
+.withActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--am-gap-xs);
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.rowAccept:hover {
+  border-color: var(--am-ok);
+  color: var(--am-ok);
+}
+
+.rowReject:hover {
+  border-color: var(--am-failed);
+  color: var(--am-failed);
+}
+
+.rowNote {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.rowNoteFail {
+  color: var(--am-failed);
+  font-size: var(--am-text-xs);
+}
