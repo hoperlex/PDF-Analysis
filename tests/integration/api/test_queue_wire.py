@@ -32,6 +32,12 @@ QUEUE = "/execution/queue"
 
 
 @pytest.fixture
+def mixed_run(session: Session) -> MixedRun:
+    """The same seeded run the query-surface census drives; a fixture of another module is not visible here."""
+    return MixedRun(session)
+
+
+@pytest.fixture
 def queue_surface(shipped_router: Surface, session_factory: sessionmaker[Session]) -> Surface:
     router = Router(credentials=shipped_router.router.credentials)
     build_execution_routes(router, ExecutionAdapter(session_factory, runs=None))  # type: ignore[arg-type]
