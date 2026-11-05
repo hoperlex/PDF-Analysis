@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.26.0 (OpenAPI 3.1.0)
- *   sha256 d28e87d99f7d44c7acb9edff7a9d694610777448c4960f001f58f77b510b2af2
+ *   AuditManager PC-01 API 1.27.0 (OpenAPI 3.1.0)
+ *   sha256 b77ef0d5bda707e48edb092fa9557734f1a3843440f4a72711683d6f7bd8cf6e
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -114,6 +114,7 @@ import type {
   DashboardSummary,
   DecideOptimisationProposalRequest,
   DecisionEventPage,
+  DecisionImportReport,
   DecisionRecordPage,
   DocumentTagList,
   DocumentUid,
@@ -163,6 +164,7 @@ import type {
   GenerateComparisonSummaryRequest,
   GenerateComparisonSummaryResponse,
   IdempotencyKey,
+  ImportRunDecisionsRequest,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
   IssueTokenResponse,
@@ -446,6 +448,7 @@ export const OPERATION_IDS = [
   'getVersionPageSpecPositions',
   'getVersionSectionReview',
   'importComparisonZip',
+  'importRunDecisions',
   'issueExecutorEnrollment',
   'issueRunnerToken',
   'issueToken',
@@ -2260,7 +2263,7 @@ export type ExportRunCsvResult = Blob;
  *
  * Synchronous, like `exportRunCsv`, and with its states and role: nothing is created, there is no export resource or identity, and repeating the request returns byte-identical bytes. An unknown run is `404`; a run whose terminal does not declare `publishes_result: true` is `409 state_transition_not_allowed`, decided on the run before anything else is read. A `partial` run is exported.
  *
- * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий -- and a «также найдено» row per merged member. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
+ * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий | ID замечания -- and a «также найдено» row per merged member. «ID замечания» is the finding's `finding_uid` (contract 1.27.0, `R-151d`), the key `importRunDecisions` reads an edited workbook back by; a «также найдено» row leaves it empty. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
  *
  * «Лист/стр.» comes only from the version's verified portal companion: a version without one, or whose companion does not verify, is `422 storage_integrity_error` with `role: source.structured_companion`; a page number is never shown as a sheet label. The norm columns carry a finding's verified citations when the run has certified citation partitions, read through its pinned retrieval set; when they do not verify the answer is `422 required_norm_unavailable` with `reference_kind: norm_retrieval_set`, never a workbook without them. A run without citation partitions exports with the norm columns empty. Roles: `expert` (`role:expert`), as `exportRunCsv`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
  */
@@ -3643,6 +3646,36 @@ export type ImportComparisonZipInput = {
 
 /** Success body of `importComparisonZip` (`application/json`, HTTP 201). */
 export type ImportComparisonZipResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
+// importRunDecisions - POST /runs/{run_id}/decision-imports
+// ------------------------------------------------------------------------------------
+
+/**
+ * Import Run Decisions
+ *
+ * `UI-PARITY-P0L` (contract 1.27.0, ruling `R-151d`): load back the run's workbook as `exportRunXlsx` produced it, with «Решение эксперта» and «Комментарий» edited, at most 10 MiB. Only our export is read: a workbook without a «Замечания» sheet naming the columns «ID замечания», «Решение эксперта» and «Комментарий» is `422 validation_failed` (`field: file`, `constraint: not_our_export`), as is a file that is not a readable XLSX (`unreadable`), is larger (`too_large`) or has more than 20 000 rows (`too_many_rows`); nothing is recorded then. Rows are matched by `finding_uid`, never by «№». A row whose decision changes appends an `accept` or `reject` event carrying the row's comment, a row whose comment alone changes appends a `comment` event, both authored by the caller exactly as `appendDecision` would; the severity columns are not read and nothing is revoked. Every row naming an ID or a decision is reported, in sheet order, as `recorded`, `unchanged` or `refused` with a `reason`: `no_finding_uid`, `duplicate_finding`, `unknown_finding`, `finding_not_in_run`, `unknown_decision` (not one of the four labels the export writes) or `not_importable` («не решено» or «нужен ручной разбор» over another verdict). `finding_uid` is reported only for a published finding. An unknown run is `404`. An exact repeat of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another file, run or caller is `409 idempotency_key_reuse`. `expert` only.
+ */
+export type ImportRunDecisionsInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/decision-imports`. */
+  path: {
+    run_id: RunId;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: ImportRunDecisionsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `importRunDecisions` (`application/json`, HTTP 200). */
+export type ImportRunDecisionsResult = DecisionImportReport;
 
 // ------------------------------------------------------------------------------------
 // issueExecutorEnrollment - POST /executor-connections/{connection_id}/enrollments
@@ -9677,6 +9710,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
+  },
+  importRunDecisions: {
+    operationId: 'importRunDecisions',
+    method: 'POST',
+    path: '/runs/{run_id}/decision-imports',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['export'],
   },
   issueExecutorEnrollment: {
     operationId: 'issueExecutorEnrollment',

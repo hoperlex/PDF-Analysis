@@ -48,17 +48,22 @@ from auditmanager.exports.serializer import (
     row_values,
 )
 from auditmanager.exports.service import CsvExport, export_run_csv
+from auditmanager.exports.xlsx.decision_import import DecisionImport, ImportedRow, import_run_decisions
 from auditmanager.exports.xlsx.package import ExportAuthorization
+from auditmanager.exports.xlsx.reader import MAX_UPLOAD_BYTES as DECISION_IMPORT_MAX_BYTES
 from auditmanager.exports.xlsx.run_export import XlsxExport, export_run_xlsx
 
 __all__ = [
     "BOM",
     "COLUMNS",
     "CONTENT_TYPE",
+    "DECISION_IMPORT_MAX_BYTES",
     "SORT_KEY",
     "CsvExport",
+    "DecisionImport",
     "ExportAuthorization",
     "ExportRow",
+    "ImportedRow",
     "RunHeader",
     "XlsxExport",
     "assert_exportable",
@@ -66,6 +71,7 @@ __all__ = [
     "export_run_csv",
     "export_run_xlsx",
     "exportable_states",
+    "import_run_decisions",
     "publishes_result",
     "publishes_result_by_state",
     "render_csv",

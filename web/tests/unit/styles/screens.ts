@@ -71,6 +71,7 @@ import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { BatchStartPanelView } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
 import { ExecutionStatusControlView } from '@/features/set-execution-status';
+import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
 import { DocumentCardGrid } from '@/entities/document-version';
@@ -171,7 +172,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.26.0',
+    contract_version: '1.27.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1213,6 +1214,19 @@ export function screens(): Screen[] {
   })));
   add('ExecutionStatusControl with a refusal', render(createElement(ExecutionStatusControlView, {
     status: 'taken_into_account', busy: false, error: 'Статус ставится только принятой находке.', onChange: noop,
+  })));
+  // `R-151d`: the decision import while sending, and its report with refused rows and a file refusal.
+  add('ImportDecisions while sending', render(createElement(ImportDecisionsView, {
+    pending: true, report: null, failure: null, onChoose: noop,
+  })));
+  add('ImportDecisions with a report and a refusal', render(createElement(ImportDecisionsView, {
+    pending: false,
+    report: {
+      run_id: RUN_ID, recorded: 2, unchanged: 40, refused: 1,
+      rows: [{ row: 7, outcome: 'refused', reason: 'unknown_finding' }],
+    },
+    failure: 'Это не наша выгрузка: нужен лист «Замечания» с колонкой «ID замечания». Скачайте Excel заново.',
+    onChoose: noop,
   })));
   // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
   add(

@@ -589,7 +589,8 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-P0G` adds two: `setDocumentArchived` and `renameDocument` address a document by identity.
         # `UI-PARITY-P0H` adds two: `setDocumentTags` and `listDocumentTags` address a document or a project.
         # `UI-PARITY-P0I` adds one: `setFindingExecutionStatus` addresses a finding.
-        assert len(report) == 214, report
+        # `UI-PARITY-P0L` adds one: `importRunDecisions` addresses a run.
+        assert len(report) == 215, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

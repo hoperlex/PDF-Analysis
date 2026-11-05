@@ -229,7 +229,7 @@ def test_a_v1_run_renders_with_labels_and_empty_norm_columns(preflight) -> None:
         assert b"<f>" not in archive.read("xl/worksheets/sheet2.xml")
 
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
-    header = tuple(findings[f"{column}1"] for column in "ABCDEFGHIJK")
+    header = tuple(findings[f"{column}1"] for column in "ABCDEFGHIJKL")
     assert header == FINDING_COLUMNS
     assert [findings["A2"], findings["B2"], findings["D2"]] == ["1", "102", "Замечание fnd_1"]
     assert [findings["A3"], findings["B3"], findings["D3"]] == ["2", "103", "Замечание fnd_2"]
@@ -263,7 +263,7 @@ def test_the_same_run_state_gives_the_same_bytes(preflight) -> None:
 def test_a_run_with_no_findings_is_a_header_only_workbook(preflight) -> None:
     export = _export(_Session(_facts(), findings=[]))
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
-    assert set(findings) == {f"{column}1" for column in "ABCDEFGHIJK"}
+    assert set(findings) == {f"{column}1" for column in "ABCDEFGHIJKL"}
 
 
 def test_the_live_attribution(preflight) -> None:

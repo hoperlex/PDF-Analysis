@@ -151,7 +151,7 @@ def test_a_real_v1_run_exports_with_portal_labels_and_empty_norm_columns(
     assert export.content == _export(session, blob_store, run_id).content
 
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
-    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJK") == FINDING_COLUMNS
+    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJKL") == FINDING_COLUMNS
     rows = sorted({int(address[1:]) for address in findings if address[0] == "A"} - {1})
     expected = published_finding_count(session, run_id)
     assert expected > 0 and rows == list(range(2, expected + 2))

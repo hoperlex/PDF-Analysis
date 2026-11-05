@@ -2646,6 +2646,25 @@ class XlsxExportAdapter(_SessionHolder):
             ).content
         )
 
+    def import_run_decisions(
+        self, *, run_id: str, content: BinaryIO, idempotency_key: str, author_label: str, author_user_uid: str,
+    ) -> models.DecisionImportReport:
+        """`R-151d`: one write transaction; the file is read once, one byte past its bound."""
+        from auditmanager.exports import DECISION_IMPORT_MAX_BYTES, import_run_decisions
+
+        data = content.read(DECISION_IMPORT_MAX_BYTES + 1)
+        report = self._write(lambda s: import_run_decisions(
+            s, run_id=run_id, content=data, idempotency_key=idempotency_key,
+            author_label=author_label, author_user_uid=author_user_uid,
+        ))
+        return models.DecisionImportReport(
+            run_id=report.run_id, recorded=report.count("recorded"), unchanged=report.count("unchanged"),
+            refused=report.count("refused"),
+            rows=[models.DecisionImportRow(**{key: value for key, value in (
+                ("row", row.row), ("outcome", row.outcome), ("finding_uid", row.finding_uid), ("reason", row.reason),
+            ) if value is not None}) for row in report.rows],
+        )
+
 
 class DashboardAdapter(_SessionHolder):
     """``getDashboardSummary``. `R-44`. Reads the same session factory as everything

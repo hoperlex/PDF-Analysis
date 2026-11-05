@@ -31,6 +31,8 @@
  * every screen that shows the panel offers it, and says a refusal in words: a version
  * without verifiable sheet labels and a run whose norm citations do not verify are refused
  * by the server, never answered with an empty file.
+ *
+ * «Загрузить решения из Excel» (`R-151d`) is the way back: the same workbook, edited, for an expert.
  */
 
 import type { ProviderMode, RunId, RunState } from '@/shared/api';
@@ -44,6 +46,7 @@ import {
 } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { useExportRunXlsx } from '@/features/export-run';
+import { ImportDecisions } from '@/features/import-decisions';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
@@ -55,6 +58,8 @@ export interface ExportPanelProps {
   readonly isPending?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
   readonly lastFileName?: string | null | undefined;
+  /** `R-151d`: offer «Загрузить решения из Excel» — an expert's act, so the page says whether the caller is one. */
+  readonly mayImportDecisions?: boolean | undefined;
 }
 
 const UNKNOWN_RUN_STATE_TITLE = 'Прогон содержит неизвестное состояние.';
@@ -112,6 +117,7 @@ export function ExportPanel({
   isPending,
   error,
   lastFileName,
+  mayImportDecisions,
 }: ExportPanelProps) {
   if (!(RUN_STATE_VALUES as readonly unknown[]).includes(runState)) {
     return (
@@ -145,6 +151,7 @@ export function ExportPanel({
             {isPending === true ? 'Готовлю…' : `Скачать ${csvFileName(runId)}`}
           </button>
           <XlsxDownload runId={runId} />
+          {mayImportDecisions === true ? <ImportDecisions runId={runId} /> : null}
           {/*
             `R-18` names the column names printed as a list — "documentation
             standing where an interface should be". They are still here, still taken from

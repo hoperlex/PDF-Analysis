@@ -62,7 +62,7 @@ function list(roles: Role[], items: readonly ExecutionWorker[] = REGISTRY, onPre
 
 function envelope(code: 'permission_denied' | 'dependency_unavailable') {
   return {
-    contract_version: '1.26.0', error_code: code,
+    contract_version: '1.27.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-workers-1', retryable: false,
   } as const;
 }

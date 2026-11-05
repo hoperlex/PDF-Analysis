@@ -401,6 +401,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "setFindingExecutionStatus": _EXPERT,
         # `R-151h`: the knowledge base's proposal half is a product read, like `listDecisions`.
         "listProposalDecisionJournal": _PRODUCT_READ,
+        # `R-151d`: importing decisions appends decision events, so it is `appendDecision`'s role.
+        "importRunDecisions": _EXPERT,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
         # `EXEC-SEAL-01` (R-143). Any role reads connections, probes and routes; a secret is

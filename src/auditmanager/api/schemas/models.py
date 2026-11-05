@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.26.0"]
+    contract_version: Literal["1.27.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1822,6 +1822,53 @@ class FindingExecutionState(_Object):
     finding_uid: FindingUid
     status: FindingExecutionStatus = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     set_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ImportRunDecisionsRequest(_Object):
+    """`R-151d` (contract 1.27.0): the multipart body of ``importRunDecisions``.
+
+    ``file`` is the run's workbook as ``exportRunXlsx`` produced it, edited, at most 10 MiB.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
+
+
+class DecisionImportOutcome(str, enum.Enum):
+    """``recorded``: a decision event was appended; ``unchanged``: the ledger already says it; ``refused``."""
+
+    RECORDED = "recorded"
+    UNCHANGED = "unchanged"
+    REFUSED = "refused"
+
+
+class DecisionImportRefusal(str, enum.Enum):
+    """Why a row of the workbook was refused."""
+
+    NO_FINDING_UID = "no_finding_uid"
+    DUPLICATE_FINDING = "duplicate_finding"
+    UNKNOWN_FINDING = "unknown_finding"
+    FINDING_NOT_IN_RUN = "finding_not_in_run"
+    UNKNOWN_DECISION = "unknown_decision"
+    NOT_IMPORTABLE = "not_importable"
+
+
+class DecisionImportRow(_Object):
+    """`R-151d`: one row of «Замечания» that names an ID or a decision; ``finding_uid`` only for a known finding."""
+
+    row: Annotated[int, Field(ge=2)]
+    outcome: DecisionImportOutcome
+    finding_uid: FindingUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reason: DecisionImportRefusal = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class DecisionImportReport(_Object):
+    """`R-151d`: what an import of edited decisions did, row by row, in sheet order."""
+
+    run_id: RunId
+    recorded: Annotated[int, Field(ge=0)]
+    unchanged: Annotated[int, Field(ge=0)]
+    refused: Annotated[int, Field(ge=0)]
+    rows: list[DecisionImportRow]
 
 
 class SetDocumentTagsRequest(_Object):

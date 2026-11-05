@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-284 operations, sealed. `A5` generates the typed client from this document; `B6`
+285 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,10 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0L` (contract `1.27.0`, no migration) adds `importRunDecisions` (`R-151d`): the run's own workbook, edited,
+loaded back by `finding_uid` (the new «ID замечания» column); each changed row is an ordinary decision event by the
+importer, every row is reported. Keyed, `expert`.
+
 `UI-PARITY-P0J` (contract `1.25.0`, no migration) adds `listProposalDecisionJournal` (`R-151h`): the decisions on
 optimisation proposals as the knowledge base's «Предложения» half, a product read.
 
@@ -1096,6 +1100,7 @@ could.
 | `listDocumentTags` | `GET /projects/{project_uid}/document-tags` |
 | `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `listProposalDecisionJournal` | `GET /proposal-decisions` |
+| `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -1377,6 +1382,7 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
+  `importRunDecisions`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,

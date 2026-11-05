@@ -11,13 +11,26 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.26.0` (`UI-PARITY-P0K`)
+## Current contract `1.27.0` (`UI-PARITY-P0L`)
+
+Slice for ruling `R-151d`: decisions edited in our own Excel export are loaded back. `exportRunXlsx`'s «Замечания» sheet
+gains a last column, «ID замечания», holding the finding's `finding_uid` (empty on a «также найдено» row).
+`importRunDecisions` (`POST /runs/{run_id}/decision-imports`, multipart `file`, keyed, `expert`) reads only that sheet of
+our workbook (`422 validation_failed`, `field: file`, `constraint: not_our_export | unreadable | too_large |
+too_many_rows`, refuses a foreign file whole) and matches rows by `finding_uid`, never by «№». A changed «Решение
+эксперта» appends `accept` or `reject` with the row's comment, a changed «Комментарий» alone a `comment` event, both
+authored by the caller; nothing is revoked and the severity columns are not read. `DecisionImportReport` lists every row
+naming an ID or a decision as `recorded`, `unchanged` or `refused` with a `DecisionImportRefusal` reason. No migration,
+no error code.
+The API now has 257 paths, 285 operations and 690 schemas; migration head `0054`. The domain catalogs are at candidate revision 45.
+
+## Contract `1.26.0` (`UI-PARITY-P0K`, historical)
 
 Additive slice for ruling `R-151u`: `ExecutionQueueItem` gains the optional `estimated_finish_at` of a running job -- its
 first attempt's start plus the median duration of at least three recent completed runs of the same analysis profile and
 a page count within a quarter of its own (`execution/eta.py`); absent without enough history, never invented. No
 operation, no schema, no migration, no error code.
-The API now has 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs are at candidate revision 44.
+The API then had 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs were at candidate revision 44.
 
 ## Contract `1.25.0` (`UI-PARITY-P0J`, historical)
 

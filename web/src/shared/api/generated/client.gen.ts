@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.26.0 (OpenAPI 3.1.0)
- *   sha256 d28e87d99f7d44c7acb9edff7a9d694610777448c4960f001f58f77b510b2af2
+ *   AuditManager PC-01 API 1.27.0 (OpenAPI 3.1.0)
+ *   sha256 b77ef0d5bda707e48edb092fa9557734f1a3843440f4a72711683d6f7bd8cf6e
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -264,6 +264,8 @@ import type {
   GetVersionSectionReviewResult,
   ImportComparisonZipInput,
   ImportComparisonZipResult,
+  ImportRunDecisionsInput,
+  ImportRunDecisionsResult,
   IssueExecutorEnrollmentInput,
   IssueExecutorEnrollmentResult,
   IssueRunnerTokenInput,
@@ -2063,6 +2065,18 @@ export function importComparisonZip(
   options?: RequestOptions,
 ): Promise<ApiResponse<ImportComparisonZipResult>> {
   return request<ImportComparisonZipResult>(OPERATIONS.importComparisonZip, input, options);
+}
+
+/**
+ * Import Run Decisions
+ *
+ * `POST /runs/{run_id}/decision-imports` - a write; carries a required Idempotency-Key.
+ */
+export function importRunDecisions(
+  input: ImportRunDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ImportRunDecisionsResult>> {
+  return request<ImportRunDecisionsResult>(OPERATIONS.importRunDecisions, input, options);
 }
 
 /**
@@ -4125,6 +4139,7 @@ export const apiClient = {
   getVersionPageSpecPositions,
   getVersionSectionReview,
   importComparisonZip,
+  importRunDecisions,
   issueExecutorEnrollment,
   issueRunnerToken,
   issueToken,

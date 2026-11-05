@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 256,
+    "path_count": 257,
     "operations": [
       [
         "DELETE",
@@ -1230,6 +1230,11 @@
       ],
       [
         "POST",
+        "/runs/{run_id}/decision-imports",
+        "importRunDecisions"
+      ],
+      [
+        "POST",
         "/runs/{run_id}/reaudit",
         "reauditRun"
       ],
@@ -1688,6 +1693,10 @@
       "DecisionEventPage",
       "DecisionEventType",
       "DecisionId",
+      "DecisionImportOutcome",
+      "DecisionImportRefusal",
+      "DecisionImportReport",
+      "DecisionImportRow",
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
@@ -1793,6 +1802,7 @@
       "GenerateComparisonSummaryRequest",
       "GenerateComparisonSummaryResponse",
       "IdempotencyKey",
+      "ImportRunDecisionsRequest",
       "InputManifestEntry",
       "IssueRunnerTokenRequest",
       "IssueTokenRequest",
@@ -2117,5 +2127,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0054_finding_execution_status",
-  "contract_version": "1.26.0"
+  "contract_version": "1.27.0"
 }

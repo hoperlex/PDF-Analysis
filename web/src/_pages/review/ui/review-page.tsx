@@ -361,6 +361,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             onExport={exporter.download}
             isPending={exporter.isPending}
             lastFileName={exporter.lastFileName}
+            mayImportDecisions={mayAct}
             error={presentFailureOrNull(exporter.error, {
               title: 'В выгрузке отказано',
             })}

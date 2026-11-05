@@ -22,7 +22,7 @@
     "dispatch_named_commit": "84325e262d8e89e02bbf0ffd2f6a65d3ef15eb1e",
     "commit_note": "Resealed by UI-PARITY-P0K: contract 1.26.0 (the estimated finish of a running audit: ExecutionQueueItem.estimated_finish_at).",
     "openapi_version": "3.1.0",
-    "info_version": "1.26.0",
+    "info_version": "1.27.0",
     "paths": 256,
     "operations": 284,
     "component_schemas": 685,

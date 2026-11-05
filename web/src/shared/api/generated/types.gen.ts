@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.26.0 (OpenAPI 3.1.0)
- *   sha256 d28e87d99f7d44c7acb9edff7a9d694610777448c4960f001f58f77b510b2af2
+ *   AuditManager PC-01 API 1.27.0 (OpenAPI 3.1.0)
+ *   sha256 b77ef0d5bda707e48edb092fa9557734f1a3843440f4a72711683d6f7bd8cf6e
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.26.0';
+export const CONTRACT_VERSION = '1.27.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'd28e87d99f7d44c7acb9edff7a9d694610777448c4960f001f58f77b510b2af2';
+export const CONTRACT_DIGEST = 'b77ef0d5bda707e48edb092fa9557734f1a3843440f4a72711683d6f7bd8cf6e';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -284,6 +284,10 @@ export const SCHEMA_NAMES = [
   'DecisionEventPage',
   'DecisionEventType',
   'DecisionId',
+  'DecisionImportOutcome',
+  'DecisionImportRefusal',
+  'DecisionImportReport',
+  'DecisionImportRow',
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
@@ -389,6 +393,7 @@ export const SCHEMA_NAMES = [
   'GenerateComparisonSummaryRequest',
   'GenerateComparisonSummaryResponse',
   'IdempotencyKey',
+  'ImportRunDecisionsRequest',
   'InputManifestEntry',
   'IssueRunnerTokenRequest',
   'IssueTokenRequest',
@@ -3702,6 +3707,46 @@ export type DecisionId = string;
 /** The contract pattern for `DecisionId`. Anchored; use with `new RegExp()`. */
 export const DECISION_ID_PATTERN = "^dec_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** ``recorded``: a decision event was appended; ``unchanged``: the ledger already says it; ``refused``. */
+export const DECISION_IMPORT_OUTCOME_VALUES = [
+  'recorded',
+  'unchanged',
+  'refused',
+] as const;
+
+/** DecisionImportOutcome - the closed value set above. */
+export type DecisionImportOutcome = (typeof DECISION_IMPORT_OUTCOME_VALUES)[number];
+
+/** Why a row of the workbook was refused. */
+export const DECISION_IMPORT_REFUSAL_VALUES = [
+  'no_finding_uid',
+  'duplicate_finding',
+  'unknown_finding',
+  'finding_not_in_run',
+  'unknown_decision',
+  'not_importable',
+] as const;
+
+/** DecisionImportRefusal - the closed value set above. */
+export type DecisionImportRefusal = (typeof DECISION_IMPORT_REFUSAL_VALUES)[number];
+
+/** `R-151d`: what an import of edited decisions did, row by row, in sheet order. */
+export type DecisionImportReport = {
+  recorded: number;
+  refused: number;
+  rows: Array<DecisionImportRow>;
+  run_id: RunId;
+  unchanged: number;
+};
+
+/** `R-151d`: one row of «Замечания» that names an ID or a decision; ``finding_uid`` only for a known finding. */
+export type DecisionImportRow = {
+  finding_uid?: FindingUid;
+  outcome: DecisionImportOutcome;
+  reason?: DecisionImportRefusal;
+  row: number;
+};
+
 /** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
@@ -3864,7 +3909,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.26.0";
+  contract_version: "1.27.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4819,6 +4864,15 @@ export type IdempotencyKey = string;
 
 /** The contract pattern for `IdempotencyKey`. Anchored; use with `new RegExp()`. */
 export const IDEMPOTENCY_KEY_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
+
+/**
+ * `R-151d` (contract 1.27.0): the multipart body of ``importRunDecisions``.
+ *
+ * ``file`` is the run's workbook as ``exportRunXlsx`` produced it, edited, at most 10 MiB.
+ */
+export type ImportRunDecisionsRequest = {
+  file: Blob;
+};
 
 /** One role of the immutable input manifest. It carries a blob_id and a checksum and never an object key, bucket or URL. */
 export type InputManifestEntry = {

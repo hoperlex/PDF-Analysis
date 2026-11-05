@@ -297,7 +297,8 @@ def test_only_the_enum_cells_differ_from_the_raw_value_rendering(monkeypatch) ->
 #: blanked (``_skeleton``). **Captured from the writer of base commit ``59f976fc``, which printed
 #: the contract values**, and equal to this writer's: the labels moved text and nothing else. A
 #: deliberate layout change (a column, a width, a style, a sheet name, the cell order) changes a
-#: digest and must re-pin it here, in the same change, on purpose.
+#: digest and must re-pin it here, in the same change, on purpose. Re-pinned for «Замечания» by contract 1.27.0
+#: (`R-151d`): the last column «ID замечания» (``finding_uid``, empty on a «также найдено» row) and its width.
 LAYOUT_DIGESTS = {
     "[Content_Types].xml": "de7b6ad03ba57780707e68a38d9b57cb5c95f8cde27469d3aed927a03aa5b93e",
     "_rels/.rels": "f2f3948a1b6f661f2a5169a86b7029166acd4b79d7abfd37fa2b646fe302bfd6",
@@ -305,7 +306,7 @@ LAYOUT_DIGESTS = {
     "xl/_rels/workbook.xml.rels": "2372344717cc04fdf4983d6b5a2a815515cb851c5fcca40de351ff35dfdd63a2",
     "xl/styles.xml": "58fd2aaf6abb52a2eefbea4eedbb452a62cef186b3301c201c69fec7ac6eb126",
     "xl/worksheets/sheet1.xml": "10e015b0e0d9fd99e3f16ebbcec27aaf3373c7a66a839c58525ced6ac08f0ee6",
-    "xl/worksheets/sheet2.xml": "e5ef8607bf2ee9f5e1dcdcd096179c7f653699269dd6fd7c5febcfd4e28acd45",
+    "xl/worksheets/sheet2.xml": "919e74722399693eb80c68e3c9fa55fea9fcfa7be2d1936871c9e53dce3e306e",
 }
 
 
@@ -330,10 +331,11 @@ def _text_digest(archive: zipfile.ZipFile, sheet: str) -> str:
 
 
 #: SHA-256 of every cell's text outside the enum cells (identifiers, headers, counts, free text,
-#: page labels, citations, "также найдено"), captured from the base writer like the digests above.
+#: page labels, citations, "также найдено"), captured from the base writer like the digests above; «Замечания»
+#: re-pinned with the layout for the «ID замечания» column (`R-151d`).
 TEXT_DIGESTS = {
     "xl/worksheets/sheet1.xml": "e25dac707e13425f7849d89d23d2954eade3b7e99f0ec29651ae9e9652b6b5b6",
-    "xl/worksheets/sheet2.xml": "17c4156f0fe83e9fdd8ce520714ebbd5f815bd03fef103bfe7fddcba4c75a47e",
+    "xl/worksheets/sheet2.xml": "9553ccf6ed7a998918977f1ef9cdbaa36066b8bbdaefae9d96fa0e926c190adb",
 }
 
 

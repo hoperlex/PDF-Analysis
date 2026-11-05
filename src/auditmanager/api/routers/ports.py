@@ -930,6 +930,11 @@ class XlsxExportPort(Protocol):
     def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
         """The workbook bytes for one run, for the principal the seam admitted."""
 
+    def import_run_decisions(
+        self, *, run_id: str, content: BinaryIO, idempotency_key: str, author_label: str, author_user_uid: str,
+    ) -> models.DecisionImportReport:
+        """`R-151d`: the edited workbook's decisions appended, and what happened to each row."""
+
 
 @runtime_checkable
 class CredentialPort(Protocol):
