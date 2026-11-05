@@ -113,7 +113,8 @@ export type ScopedScreenEntry = ScreenEntry & { readonly projectScope: ProjectSc
  * Every screen, in menu order within each group.
  *
  * `R-66`: **Работа** — Проекты, Дашборд, «Оптимизация разделов» (and «Диспетчер» since
- * `W61-DISPATCHER-01`, «Сравнение версий» since `CMP-VC-UI-01`); **Знания** — База знаний,
+ * `W61-DISPATCHER-01`, «Сравнение версий» since `CMP-VC-UI-01`); `R-150b` took «Проекты» out of
+ * this group's menu, into the selector of the top strip; **Знания** — База знаний,
  * Блоки, «Нормы»; **Система** — Журнал выполнения, Исполнители, «Настройки анализа»,
  * «Очередь». `/optimisation` left the menu and stayed a registered, reachable screen in
  * `hidden` until project optimisation became a project tab; since `W60-OPT-PROPOSALS-01`
@@ -143,13 +144,19 @@ export const SCREEN_REGISTRY = [
     projectScope: 'global',
   },
 
+  /*
+   * `R-150b` (`UI-PARITY-01` wave 1): «Проекты» left the menu. The project list is chosen from the
+   * «Проекты ▾» selector in the frame's top strip (`widgets/project-switcher`), which replaces this
+   * item of the `R-66` order. The address and the screen stay; the selector's «Новый проект» and,
+   * from a required or global screen, «Все проекты» lead here.
+   */
   {
     address: '/projects',
     label: 'Проекты',
     group: 'work',
     access: 'session',
     roles: 'any-role',
-    inMenu: true,
+    inMenu: false,
     projectScope: 'global',
   },
   {

@@ -14,8 +14,11 @@
  * is composition. The layout is the framework adapter and the only place in `_app` allowed to
  * know there is a request at all.
  *
- * **It makes no API call.** Everything it shows comes from the subject the layout passes; a
- * `getMe` here would add an undeclared call to every route of the live journey.
+ * **It makes no API call of its own.** Everything it shows comes from the subject the layout
+ * passes; a `getMe` here would add an undeclared call to every route of the live journey. The
+ * project selector (`widgets/project-switcher`, `R-150b`) is a client island that reads the
+ * project list only when the address names a project or the reader reaches for it, and mounts
+ * that read after hydration, so a render of the frame with no query client stays request-free.
  *
  * **Every address it links comes from the screen registry** (`@/shared/config`): the menu is
  * `buildNavigation`'s, the brand goes to `HOME_SCREEN`, the way in to `SIGN_IN_SCREEN`, and
@@ -27,6 +30,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { HOME_SCREEN, SIGN_IN_SCREEN, getInstanceLabel } from '@/shared/config';
+import { ProjectSwitcher } from '@/widgets/project-switcher';
 
 import { AccountMenu } from './account-menu';
 import { FrameNavigation } from './frame-navigation';
@@ -34,7 +38,7 @@ import { GuestNavigationPreview } from './guest-navigation-preview';
 import { ReleaseNoticesGate } from './release-notices';
 import { ScreenContext } from './screen-context';
 import { SidebarToggle } from './sidebar-toggle';
-import { buildNavigation } from './navigation';
+import { buildNavigation, offersProjectSwitcher } from './navigation';
 import { ThemeToggle } from './theme-toggle';
 import styles from './app-frame.module.css';
 
@@ -105,6 +109,11 @@ export function AppFrame({ children, session }: AppFrameProps) {
       <div className={styles.content}>
         <div className="am-app__utility">
           <ScreenContext />
+          {/*
+           * `R-150b`: the project selector, beside the screen's own name. It stands where the
+           * sidebar's «Проекты» item stood, and only for a session that may open the list.
+           */}
+          {offersProjectSwitcher(session) ? <ProjectSwitcher /> : null}
           <div className={styles.end}>
             {/* The stand label distinguishes otherwise identical deployments. */}
             {instance !== null ? <span className="am-app__instance" title={instance}>{instance}</span> : null}
