@@ -183,7 +183,7 @@ export const SCREEN_REGISTRY = [
     label: 'Диспетчер',
     group: 'work',
     access: 'session',
-    roles: 'any-role',
+    roles: ['expert', 'admin'], // R-150w: not a viewer's screen
     inMenu: true,
     projectScope: 'global',
   },
@@ -308,7 +308,7 @@ export const SCREEN_REGISTRY = [
     label: 'Журнал выполнения',
     group: 'system',
     access: 'session',
-    roles: 'any-role',
+    roles: ['expert', 'admin'], // R-150w: not a viewer's screen
     inMenu: true,
     projectScope: 'global',
   },
@@ -317,7 +317,7 @@ export const SCREEN_REGISTRY = [
     label: 'Исполнители',
     group: 'system',
     access: 'session',
-    roles: 'any-role',
+    roles: ['expert', 'admin'], // R-150w: not a viewer's screen
     inMenu: true,
     projectScope: 'global',
   },
@@ -335,7 +335,7 @@ export const SCREEN_REGISTRY = [
     label: 'Очередь',
     group: 'system',
     access: 'session',
-    roles: 'any-role',
+    roles: ['expert', 'admin'], // R-150w: not a viewer's screen
     inMenu: true,
     projectScope: 'global',
   },
