@@ -113,3 +113,12 @@
   font-size: var(--am-text-sm);
   line-height: var(--am-leading-base);
 }
+
+/* `UI-A-51`: the title and its «Обновить». */
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+}

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ExecutionQueueItem, Role, RunId } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
 import {
-  RunWorkerLine, canCancel, canExecute, canReaudit, jobHoldsLease, jobStateLabel, queueAgeLabel, queueItemError,
+  JobStateBadge, RunWorkerLine, canCancel, canExecute, canReaudit, jobHoldsLease, jobStateLabel, queueAgeLabel, queueItemError,
 } from '@/entities/execution';
 import type { RunWorker } from '@/entities/execution';
 import { QueueItemWaiting } from '@/entities/audit-run';
@@ -53,7 +53,7 @@ export function ExecutionQueue({
           return (
           <li key={item.job_id} className={styles.row}>
             <div className={styles.heading}>
-              <strong>{jobStateLabel(item.state)}</strong>
+              <JobStateBadge state={item.state} />
               <span>Приоритет: {item.priority}</span>
             </div>
             {/* `UI-PARITY-QUEUE-A`: what the job executes, read from the server and never from a screen's memory. */}
