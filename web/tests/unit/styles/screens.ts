@@ -69,6 +69,8 @@ import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { BatchStartPanelView } from '@/features/start-run';
+import { DocumentLifecycleView } from '@/features/manage-document';
+import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { ProjectList } from '@/widgets/project-list';
@@ -166,7 +168,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.21.0',
+    contract_version: '1.22.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1200,6 +1202,16 @@ export function screens(): Screen[] {
       }),
     ),
   );
+  // `R-151a`: the document's lifecycle controls, archived, renaming with a refusal; and an archived document's card.
+  add('DocumentLifecycle archived, renaming, refused', render(createElement(DocumentLifecycleView, {
+    title: 'Архитектурные решения', archived: true, draft: '', asking: false, busy: false,
+    error: 'Недостаточно прав для этого действия.',
+    onEdit: noop, onDraft: noop, onSave: noop, onCancelEdit: noop, onAsk: noop, onConfirm: noop, onCancelAsk: noop,
+  })));
+  add('DocumentCardGrid with an archived document', render(createElement(DocumentCardGrid, {
+    documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z' }],
+    addresses: () => ({ href: '/projects', documentHref: '/projects' }),
+  })));
   // `R-151c`: the batch start panel -- one estimate ready and started, one ready and refused, one being sent, one
   // without an estimate; the agreement and the total.
   {

@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.21.0 (OpenAPI 3.1.0)
- *   sha256 32ff5bd6206b49e579c2e0930dd314fe98560fdf087adfb9a7f2996ebd75509c
+ *   AuditManager PC-01 API 1.22.0 (OpenAPI 3.1.0)
+ *   sha256 68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -208,6 +208,7 @@ import type {
   RegistrationStatusResponse,
   RejectRegistrationRequest,
   ReleaseList,
+  RenameDocumentRequest,
   ReportRunnerHealthRequest,
   ResetUserPasswordRequest,
   ResumeComparisonAiJobRequest,
@@ -229,6 +230,7 @@ import type {
   SectionSpecification,
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
+  SetDocumentArchivedRequest,
   SetExecutionPausedRequest,
   SetExecutorIntegrationAuthorisationRequest,
   SetExecutorRouteRequest,
@@ -522,6 +524,7 @@ export const OPERATION_IDS = [
   'rejectRegistration',
   'rejectStageUploadCandidate',
   'removeComparisonLaunchEntry',
+  'renameDocument',
   'reportRunnerHealth',
   'requestExecutorProbe',
   'resetUserPassword',
@@ -543,6 +546,7 @@ export const OPERATION_IDS = [
   'revokeRunnerToken',
   'searchNorms',
   'setCurrentNormSnapshot',
+  'setDocumentArchived',
   'setExecutionPaused',
   'setExecutorIntegrationAuthorisation',
   'setExecutorRoute',
@@ -4235,6 +4239,8 @@ export type ListDocumentsInput = {
   query?: {
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
+    /** Include archived accounts. Absent is `false`. */
+    include_archived?: boolean;
     /** Page size. */
     limit?: number;
     /** Only the documents whose current version is confirmed for this section (its `classification.section_code`); every document when absent. A document whose current version has no confirmed classification never matches. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151l`): the section page lists one section's documents without walking the whole project. A cursor resumes after its row in the filtered listing; presented under another filter it yields that listing's continuation or an empty page, never a page from another listing. */
@@ -5823,6 +5829,37 @@ export type RemoveComparisonLaunchEntryInput = {
 export type RemoveComparisonLaunchEntryResult = ComparisonLaunchQueue;
 
 // ------------------------------------------------------------------------------------
+// renameDocument - PUT /projects/{project_uid}/documents/{document_uid}/title
+// ------------------------------------------------------------------------------------
+
+/**
+ * Rename Document
+ *
+ * `UI-PARITY-P0G` (contract 1.22.0, ruling `R-151a`): change the document's display title; `document_uid` stays its identity. The title is trimmed and is 1 to 400 characters. The same title again changes nothing; a change appends `document.renamed` (from, to, actor) to the audit trail. `expert` and `admin`; `viewer` is refused.
+ */
+export type RenameDocumentInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/title`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: RenameDocumentRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `renameDocument` (`application/json`, HTTP 200). */
+export type RenameDocumentResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
 // reportRunnerHealth - POST /runner/health
 // ------------------------------------------------------------------------------------
 
@@ -6378,6 +6415,37 @@ export type SetCurrentNormSnapshotInput = {
 
 /** Success body of `setCurrentNormSnapshot` (`application/json`, HTTP 200). */
 export type SetCurrentNormSnapshotResult = NormCurrentSnapshot;
+
+// ------------------------------------------------------------------------------------
+// setDocumentArchived - PUT /projects/{project_uid}/documents/{document_uid}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Document Archived
+ *
+ * `UI-PARITY-P0G` (contract 1.22.0, ruling `R-151a`): archive (`archived: true`) or restore (`false`) one document of this project. An archived document is left out of `listDocuments` unless `include_archived` is asked; its versions, runs, findings and decisions are unchanged and stay addressable. Nothing is ever deleted. A document already in the asked state is answered as it is. Every change appends `document.archived` or `document.restored` to the audit trail. `expert` and `admin`; `viewer` is refused.
+ */
+export type SetDocumentArchivedInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/archive`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetDocumentArchivedRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setDocumentArchived` (`application/json`, HTTP 200). */
+export type SetDocumentArchivedResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
 // setExecutionPaused - PUT /execution/dispatch
@@ -9772,7 +9840,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
-    queryParams: ['cursor', 'limit', 'section_code'],
+    queryParams: ['cursor', 'include_archived', 'limit', 'section_code'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -10649,6 +10717,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
+  renameDocument: {
+    operationId: 'renameDocument',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/title',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
   reportRunnerHealth: {
     operationId: 'reportRunnerHealth',
     method: 'POST',
@@ -10942,6 +11024,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['norms'],
+  },
+  setDocumentArchived: {
+    operationId: 'setDocumentArchived',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/archive',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
   },
   setExecutionPaused: {
     operationId: 'setExecutionPaused',

@@ -11,13 +11,24 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.21.0` (`UI-PARITY-P0F`)
+## Current contract `1.22.0` (`UI-PARITY-P0G`)
+
+Slice for ruling `R-151a`: a document is archived or renamed, never deleted. Two keyed operations, `setDocumentArchived`
+(`PUT /projects/{project_uid}/documents/{document_uid}/archive`, body `SetDocumentArchivedRequest {archived}`) and
+`renameDocument` (`PUT /projects/{project_uid}/documents/{document_uid}/title`, body `RenameDocumentRequest
+{display_title}`), each answering the document's current `DocumentVersion`. `listDocuments` leaves an archived document out
+unless `include_archived` is asked, and `DocumentVersion` gains the optional `archived_at`. Every change appends
+`document.archived`, `document.restored` or `document.renamed` to the audit trail. `expert` and `admin`; `viewer` refused.
+Migration `0052_document_archive` adds `document.archived_at` and `archived_by_user_uid` (a RESTRICT reference). No error code.
+The API now has 252 paths, 280 operations and 677 schemas; migration head `0052`. The domain catalogs are at candidate revision 40.
+
+## Contract `1.21.0` (`UI-PARITY-P0F`, historical)
 
 Additive slice for ruling `R-151v`: who started a run. `RunStatus` gains the optional `started_by_user_uid` and
 `started_by_label`, `ExecutionQueueItem` the optional `started_by_label` (the account's display label). Both are absent
 for a run created before migration `0051_run_started_by`, which adds `audit_run.started_by_user_uid` (a frozen RESTRICT
 reference to `app_user`; an account that started a run is archived, never purged). No operation, no error code.
-The API now has 250 paths, 278 operations and 675 schemas; migration head `0051`. The domain catalogs are at candidate revision 39.
+The API then had 250 paths, 278 operations and 675 schemas; migration head `0051`. The domain catalogs were at candidate revision 39.
 
 ## Contract `1.20.0` (`UI-PARITY-P0E`, historical)
 

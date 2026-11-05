@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.21.0"]
+    contract_version: Literal["1.22.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1288,6 +1288,8 @@ class DocumentVersion(_Object):
     upload_kind: VersionUploadKind = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use.
+    archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DocumentVersionPage(_Object):
@@ -1784,6 +1786,18 @@ class SetJobPriorityRequest(_Object):
 
 class SetExecutionPausedRequest(_Object):
     paused: bool
+
+
+class SetDocumentArchivedRequest(_Object):
+    """`R-151a` (contract 1.22.0): archive (``true``) or restore (``false``) one document. Nothing is deleted."""
+
+    archived: bool
+
+
+class RenameDocumentRequest(_Object):
+    """`R-151a` (contract 1.22.0): the document's new display title; ``document_uid`` stays its identity."""
+
+    display_title: Annotated[str, Field(min_length=1, max_length=400)]
 
 
 class ExecutionDispatchStatus(_Object):

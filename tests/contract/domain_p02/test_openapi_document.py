@@ -110,6 +110,9 @@ REQUIRED_OPERATIONS = {
     "setExecutionPaused",
     # `UI-PARITY-P0E`, `R-151f`. The durable pause state, read without the queue.
     "getExecutionDispatch",
+    # `UI-PARITY-P0G`, `R-151a`. A document is archived or renamed, never deleted.
+    "setDocumentArchived",
+    "renameDocument",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",
@@ -405,6 +408,9 @@ WRITE_OPERATIONS = {
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
+    "setDocumentArchived",
+    "renameDocument",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
     # `COMPARE-PERSISTED-SUMMARY-01`. Each appends a row of the sheet-link history, so both are keyed.

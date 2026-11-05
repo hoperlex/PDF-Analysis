@@ -22,11 +22,13 @@ from pydantic import WithJsonSchema
 
 from auditmanager.api.routers.declarations import (
     CursorParam,
+    IncludeArchivedParam,
     LimitParam,
     envelope_responses,
     success,
 )
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
+from auditmanager.api.security import CurrentSubject
 from auditmanager.api.routers.multipart import (
     CheckedUpload,
     UploadRoute,
@@ -205,6 +207,7 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         cursor: CursorParam = None,  # type: ignore[assignment]
         limit: LimitParam = 50,
         section_code: SectionCodeFilterParam = None,  # type: ignore[assignment]
+        include_archived: IncludeArchivedParam = False,
     ) -> WireResponse:
         # `GET` of the collection `uploadDocument` `POST`s into, returning a page of
         # exactly the resource that `POST` returns -- which is the rule `listProjects`
@@ -212,12 +215,63 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         rows = documents.list_documents(
             project_uid=project_uid,
             section_code=None if section_code is None else section_code.value,
+            include_archived=include_archived,
         )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_version_sort_key)
         body = page_body(
             [document_version_body(view) for view in page.items], page.next_cursor
         )
         return json_response(200, encode_json(body))
+
+    @router.put(
+        "/projects/{project_uid}/documents/{document_uid}/archive",
+        operation_id="setDocumentArchived",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersion,
+        responses={
+            **success(200, "The document's current version with its archive state."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def set_document_archived(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        body: models.SetDocumentArchivedRequest,
+        idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
+    ) -> WireResponse:
+        # `R-151a`: a reversible flag; nothing of the document's versions, runs or decisions changes.
+        view = documents.set_document_archived(
+            project_uid=project_uid, document_uid=document_uid, archived=body.archived,
+            user_uid=subject.user_uid, idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(document_version_body(view)))
+
+    @router.put(
+        "/projects/{project_uid}/documents/{document_uid}/title",
+        operation_id="renameDocument",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersion,
+        responses={
+            **success(200, "The document's current version under its new display title."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def rename_document(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        body: models.RenameDocumentRequest,
+        idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
+    ) -> WireResponse:
+        # `R-151a`: the title changes, the identity does not.
+        view = documents.rename_document(
+            project_uid=project_uid, document_uid=document_uid, display_title=body.display_title,
+            user_uid=subject.user_uid, idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(document_version_body(view)))
 
     @router.get(
         "/documents/{document_uid}/versions",

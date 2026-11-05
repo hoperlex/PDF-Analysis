@@ -122,3 +122,12 @@
   justify-content: space-between;
   gap: var(--am-gap-sm);
 }
+
+/* `R-151a`: the archive toggle beside «Обновить». */
+.archivedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

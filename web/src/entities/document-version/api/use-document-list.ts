@@ -28,9 +28,11 @@ export const DOCUMENT_PAGE_LIMIT = 50;
  * a dynamic array of query configs, not a fixed number of hook calls — while filling the
  * exact same cache entry `useDocumentList` would. Same key, same `queryFn`, one source.
  */
-export function documentListQueryOptions(projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection) {
+export function documentListQueryOptions(
+  projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection, includeArchived = false,
+) {
   return {
-    queryKey: queryKeys.projects.documents(projectUid, cursor, DOCUMENT_PAGE_LIMIT, sectionCode),
+    queryKey: queryKeys.projects.documents(projectUid, cursor, DOCUMENT_PAGE_LIMIT, sectionCode, includeArchived),
     queryFn: async (): Promise<DocumentVersionPage> => {
       const response = await listDocuments({
         path: { project_uid: projectUid },
@@ -39,6 +41,8 @@ export function documentListQueryOptions(projectUid: ProjectUid, cursor?: string
           limit: DOCUMENT_PAGE_LIMIT,
           // `R-151l`, contract 1.20.0: the server keeps the documents confirmed for this section.
           ...(sectionCode === undefined ? {} : { section_code: sectionCode }),
+          // `R-151a`: an archived document is listed only when asked for.
+          ...(includeArchived ? { include_archived: true } : {}),
         },
       });
       return response.data;
@@ -46,6 +50,8 @@ export function documentListQueryOptions(projectUid: ProjectUid, cursor?: string
   };
 }
 
-export function useDocumentList(projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection) {
-  return useQuery<DocumentVersionPage>(documentListQueryOptions(projectUid, cursor, sectionCode));
+export function useDocumentList(
+  projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection, includeArchived = false,
+) {
+  return useQuery<DocumentVersionPage>(documentListQueryOptions(projectUid, cursor, sectionCode, includeArchived));
 }

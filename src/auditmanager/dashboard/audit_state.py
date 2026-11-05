@@ -101,6 +101,8 @@ _AUDIT_GROUPS = text(
         JOIN document_version v ON v.version_uid = d.current_version_uid
         LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid
         WHERE (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text))
+          -- `R-151a`: an archived document is out of every counter, as the original's deleted one is.
+          AND d.archived_at IS NULL
     ),
     result_run AS (
         SELECT DISTINCT ON (r.version_uid) r.version_uid, r.run_id, r.state

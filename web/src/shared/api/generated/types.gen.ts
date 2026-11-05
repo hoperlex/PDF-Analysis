@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.21.0 (OpenAPI 3.1.0)
- *   sha256 32ff5bd6206b49e579c2e0930dd314fe98560fdf087adfb9a7f2996ebd75509c
+ *   AuditManager PC-01 API 1.22.0 (OpenAPI 3.1.0)
+ *   sha256 68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.21.0';
+export const CONTRACT_VERSION = '1.22.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '32ff5bd6206b49e579c2e0930dd314fe98560fdf087adfb9a7f2996ebd75509c';
+export const CONTRACT_DIGEST = '68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -495,6 +495,7 @@ export const SCHEMA_NAMES = [
   'ReleaseList',
   'ReleaseNoteItem',
   'ReleaseNoteKind',
+  'RenameDocumentRequest',
   'ReportRunnerHealthRequest',
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
@@ -539,6 +540,7 @@ export const SCHEMA_NAMES = [
   'SectionSuggestion',
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
+  'SetDocumentArchivedRequest',
   'SetExecutionPausedRequest',
   'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
@@ -3765,6 +3767,8 @@ export type DocumentUid = string;
 export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 
 export type DocumentVersion = {
+  /** `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use. */
+  archived_at?: string;
   byte_size: number;
   classification?: VersionClassification;
   display_title?: string;
@@ -3839,7 +3843,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.21.0";
+  contract_version: "1.22.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5840,6 +5844,11 @@ export const RELEASE_NOTE_KIND_VALUES = [
 /** ReleaseNoteKind - the closed value set above. */
 export type ReleaseNoteKind = (typeof RELEASE_NOTE_KIND_VALUES)[number];
 
+/** `R-151a` (contract 1.22.0): the document's new display title; `document_uid` stays its identity. */
+export type RenameDocumentRequest = {
+  display_title: string;
+};
+
 /** An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded strings only. */
 export type ReportRunnerHealthRequest = {
   agent_version: string;
@@ -6374,6 +6383,11 @@ export type SectionVendorList = {
 export type SetCurrentNormSnapshotRequest = {
   expected_current: NormsSnapshotId | null;
   norms_snapshot_id: NormsSnapshotId;
+};
+
+/** `R-151a` (contract 1.22.0): archive (`true`) or restore (`false`) one document. Nothing is deleted. */
+export type SetDocumentArchivedRequest = {
+  archived: boolean;
 };
 
 export type SetExecutionPausedRequest = {

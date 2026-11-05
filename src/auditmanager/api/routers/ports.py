@@ -379,7 +379,7 @@ class DocumentPort(Protocol):
         """One published version and its input manifest."""
 
     def list_documents(
-        self, *, project_uid: str, section_code: str | None = None
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False
     ) -> Sequence[DocumentVersionView]:
         """The current version of every document in one project, **newest first**.
 
@@ -387,6 +387,9 @@ class DocumentPort(Protocol):
         version is confirmed for that section (its ``classification.section_code``); ``None``
         keeps every document. An unclassified current version never matches, and the order is
         the unfiltered order with rows removed, so the router's cursor stays meaningful.
+
+        ``include_archived`` (`R-151a`): an archived document is left out unless asked for; when listed it carries
+        its ``archived_at``.
 
         The order is part of this declaration for the reason ``list_projects`` gives: the
         router pages what this returns and never re-sorts it.
@@ -401,6 +404,18 @@ class DocumentPort(Protocol):
         into this same collection. There is no ``Document`` shape in the frozen contract
         and this declaration does not invent one.
         """
+
+    def set_document_archived(
+        self, *, project_uid: str, document_uid: str, archived: bool, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`R-151a`: archive or restore one document; its current version with its archive state. Keyed."""
+        ...
+
+    def rename_document(
+        self, *, project_uid: str, document_uid: str, display_title: str, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`R-151a`: change a document's display title; its identity stays. Keyed."""
+        ...
 
     def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
         """Every published version of one document, **newest first**.

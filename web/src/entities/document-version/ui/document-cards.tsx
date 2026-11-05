@@ -47,12 +47,13 @@ export function DocumentCardGrid({ documents, addresses, select }: DocumentCardG
         return (
           <li
             key={version.document_uid}
-            className={styles.card}
+            className={version.archived_at === undefined ? styles.card : `${styles.card} ${styles.cardArchived}`}
             data-version-uid={version.version_uid}
             data-document-uid={version.document_uid}
           >
             <div className={styles.top}>
               <span className={styles.ordinal} title="Номер текущей версии документа">V{version.version_ordinal}</span>
+              {version.archived_at === undefined ? null : <span className={styles.archived}>В архиве</span>}
               {control === null ? null : <span className={styles.select}>{control}</span>}
             </div>
             <p className={styles.title}>

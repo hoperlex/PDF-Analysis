@@ -114,6 +114,14 @@ _INSERT_DOCUMENT = text(
 _SELECT_DOCUMENT = text(
     "SELECT document_uid, project_uid FROM document WHERE document_uid = :document_uid"
 )
+#: `R-151a` (migration 0052): the archived documents of one project, with when they were archived.
+_SELECT_ARCHIVED = text(
+    "SELECT document_uid, archived_at FROM document WHERE project_uid = :project_uid AND archived_at IS NOT NULL"
+)
+#: `R-151a`: one document's current version and archive state.
+_SELECT_DOCUMENT_STATE = text(
+    "SELECT current_version_uid, archived_at FROM document WHERE document_uid = :document_uid"
+)
 #: `W59-VERSION-UPLOAD-01`. The document row is locked before its next ordinal is read, so
 #: two publications into one document serialise here and the second reads the first's
 #: committed ordinal (each statement under ``READ COMMITTED`` takes a fresh snapshot).
@@ -620,6 +628,18 @@ class DocumentRepository:
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
         return ProjectUid(tuple(row)[1])
+
+    def archived_in(self, session: Session, project_uid: ProjectUid) -> dict[str, Any]:
+        """`R-151a`: ``{document_uid: archived_at}`` of the project's archived documents."""
+        rows = session.execute(_SELECT_ARCHIVED, {"project_uid": str(project_uid)}).all()
+        return {str(row[0]): row[1] for row in rows}
+
+    def document_state(self, session: Session, document_uid: DocumentUid) -> tuple[VersionUid | None, Any]:
+        """`R-151a`: a document's current version and when it was archived (``None`` in use). Unknown is refused."""
+        row = session.execute(_SELECT_DOCUMENT_STATE, {"document_uid": str(document_uid)}).first()
+        if row is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
+        return (None if row[0] is None else VersionUid(str(row[0]))), row[1]
 
     # -- versions ------------------------------------------------------------
 

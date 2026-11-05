@@ -60,6 +60,9 @@ class DocumentVersionView:
     #: `CMP-SEAL-C0`. How the version reached the product (``portal_bundle`` or
     #: ``comparison_pdf``); always emitted.
     upload_kind: str = "portal_bundle"
+    #: `R-151a` (contract 1.22.0, migration 0052): when the document was archived; ``None`` while in use. Rendered only
+    #: when present; an archived document is listed only on request (``include_archived``).
+    archived_at: datetime | None = None
 
 
 def manifest_entry_body(view: ManifestEntryView) -> dict[str, Any]:
@@ -99,4 +102,6 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
         body["section"] = view.section
     if view.classification is not None:
         body["classification"] = view.classification.model_dump(mode="json")
+    if view.archived_at is not None:
+        body["archived_at"] = timestamp(view.archived_at)
     return body

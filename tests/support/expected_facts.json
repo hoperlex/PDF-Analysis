@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 250,
+    "path_count": 252,
     "operations": [
       [
         "DELETE",
@@ -1375,6 +1375,16 @@
       ],
       [
         "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/archive",
+        "setDocumentArchived"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/title",
+        "renameDocument"
+      ],
+      [
+        "PUT",
         "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/classification",
         "classifyDocumentVersion"
       ],
@@ -1869,6 +1879,7 @@
       "ReleaseList",
       "ReleaseNoteItem",
       "ReleaseNoteKind",
+      "RenameDocumentRequest",
       "ReportRunnerHealthRequest",
       "ResetUserPasswordRequest",
       "ResumeComparisonAiJobRequest",
@@ -1913,6 +1924,7 @@
       "SectionSuggestion",
       "SectionVendorList",
       "SetCurrentNormSnapshotRequest",
+      "SetDocumentArchivedRequest",
       "SetExecutionPausedRequest",
       "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
@@ -2076,6 +2088,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0051_run_started_by",
-  "contract_version": "1.21.0"
+  "migration_head": "0052_document_archive",
+  "contract_version": "1.22.0"
 }

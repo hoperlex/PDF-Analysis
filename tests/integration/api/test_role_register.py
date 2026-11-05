@@ -76,6 +76,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "setJobPriority": ("PUT", "/execution/queue/job_01M2545JSD15ETSNNV904X991T/priority"),
     "setExecutionPaused": ("PUT", "/execution/dispatch"),
     "getExecutionDispatch": ("GET", "/execution/dispatch"),
+    "setDocumentArchived": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/archive"),
+    "renameDocument": ("PUT", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/title"),
     # `W54-SEAL-01`. The worker registry (R-80 any-role read, administrator intake).
     "listWorkers": ("GET", "/execution/workers"),
     "setWorkerIntake": ("PUT", "/execution/workers/wrk_01M2545JSD15ETSNNV904X991T/intake"),
@@ -481,6 +483,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "getRunNormVerification": _READ,
     "listExecutionQueue": _ANY_ROLE,
     "getExecutionDispatch": _ANY_ROLE,
+    "setDocumentArchived": _ANY_ROLE,
+    "renameDocument": _ANY_ROLE,
     "listExecutionJournal": _ANY_ROLE,
     "listWorkers": _ANY_ROLE,
     # `EXEC-SEAL-01`: connections, probes and routes are product reads.

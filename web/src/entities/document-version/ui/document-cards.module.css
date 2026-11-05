@@ -65,3 +65,14 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
 }
+
+/* `R-151a`: an archived document, listed only on request, says so and steps back. */
+.cardArchived {
+  border-style: dashed;
+  opacity: 0.8;
+}
+
+.archived {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}

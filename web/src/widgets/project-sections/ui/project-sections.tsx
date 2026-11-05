@@ -182,7 +182,9 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
 
 export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const query = useDocumentList(projectUid, cursor);
+  // `R-151a`: archived documents are out of the lists unless the reader asks to see them.
+  const [showArchived, setShowArchived] = useState(false);
+  const query = useDocumentList(projectUid, cursor, undefined, showArchived);
   const mayAct = useMayActAsExpert();
   // `R-151c`: the chosen cards, by version, and the batch the panel was opened with (fixed for its life).
   const [chosen, setChosen] = useState<ReadonlyMap<string, BatchEntry>>(new Map());
@@ -260,6 +262,17 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
     <section className="am-section" data-project-sections={projectUid}>
       <div className={styles.titleRow}>
         <h2>Разделы проекта</h2>
+        <label className={styles.archivedToggle}>
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => {
+              setShowArchived(event.target.checked);
+              setCursor(undefined);
+            }}
+          />{' '}
+          Показать архивные
+        </label>
         {/* `UI-A-51`: the original's «Обновить» beside the section list; it re-reads this page. */}
         <button
           type="button"

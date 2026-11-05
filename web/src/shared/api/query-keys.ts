@@ -329,8 +329,8 @@ export const queryKeys = {
      * invalidates `projects.detail(project_uid)`; a key under `versions` would not be
      * reached by that invalidation and the screen would show a stale project.
      */
-    documents: (projectUid: ProjectUid, cursor?: string, limit?: number, sectionCode?: string) =>
-      ['projects', 'documents', projectUid, { cursor, limit, section: sectionCode }] as const,
+    documents: (projectUid: ProjectUid, cursor?: string, limit?: number, sectionCode?: string, archived?: boolean) =>
+      ['projects', 'documents', projectUid, { cursor, limit, section: sectionCode, archived: archived === true ? true : undefined }] as const,
   },
   versions: {
     all: () => ['versions'] as const,

@@ -1,0 +1,43 @@
+/* `R-151a`: rename and archive on the document page. Dense, as the original's project card actions. Tokens only. */
+.lifecycle {
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.field {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.archived {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  font-size: var(--am-text-sm);
+}
+
+.error {
+  margin: 0;
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+}

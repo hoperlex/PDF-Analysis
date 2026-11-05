@@ -918,13 +918,19 @@ class DocumentAdapter:
         )
 
     def list_documents(
-        self, *, project_uid: str, section_code: str | None = None
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False
     ) -> Sequence[DocumentVersionView]:
+        from dataclasses import replace
+
         from auditmanager.shared.identity import ProjectUid
 
+        parsed = ProjectUid.parse(project_uid)
+        archived = self._service.archived_documents(parsed) if hasattr(self._service, "archived_documents") else {}
         views = tuple(
-            _version_view(record)
-            for record in self._service.list_documents(ProjectUid.parse(project_uid))
+            replace(view, archived_at=archived.get(view.document_uid))
+            for view in (_version_view(record) for record in self._service.list_documents(parsed))
+            # `R-151a`: an archived document is listed only on request.
+            if include_archived or view.document_uid not in archived
         )
         if section_code is None:
             return views
@@ -932,13 +938,40 @@ class DocumentAdapter:
         # the legacy `section` column and any suggestion never do.
         return tuple(view for view in views if _classified_section(view) == section_code)
 
+    def set_document_archived(
+        self, *, project_uid: str, document_uid: str, archived: bool, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at = self._service.set_document_archived(
+            project_uid=project_uid, document_uid=document_uid, archived=archived,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at)
+
+    def rename_document(
+        self, *, project_uid: str, document_uid: str, display_title: str, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at = self._service.rename_document(
+            project_uid=project_uid, document_uid=document_uid, display_title=display_title,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at)
+
     def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
+        from dataclasses import replace
+
         from auditmanager.shared.identity import DocumentUid
 
-        return tuple(
-            _version_view(record)
-            for record in self._service.list_versions(DocumentUid.parse(document_uid))
+        parsed = DocumentUid.parse(document_uid)
+        records = self._service.list_versions(parsed)
+        # `R-151a`: every version of an archived document says so, so the document's own page knows its state.
+        archived_at = (
+            self._service.document_archived_at(parsed) if hasattr(self._service, "document_archived_at") else None
         )
+        return tuple(replace(_version_view(record), archived_at=archived_at) for record in records)
 
 
 
