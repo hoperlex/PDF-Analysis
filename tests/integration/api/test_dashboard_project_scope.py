@@ -54,7 +54,17 @@ def test_the_scoped_panels_are_each_projects_own(shipped_router: Surface, sessio
         assert sum(_states(body).values()) == 1 and _states(body)["created"] == 1
         assert "spend" not in body["run_activity"], "no provider call in this project: spend is absent, not zero"
         assert len(body["section_breakdown"]) == 16 and sum(r["document_count"] for r in body["section_breakdown"]) == 0
-        assert set(body) == {"documents_by_project", "findings_by_verdict", "run_activity", "section_breakdown"}
+        assert set(body) == {
+            "documents_by_project", "findings_by_verdict", "run_activity", "section_breakdown",
+            "awaiting_decision_findings",
+        }
+        # `UI-PARITY-P0B`, `R-150q`: the project's run is `created`, not a result, so no finding of it awaits a
+        # decision on a current version -- while `findings_by_verdict` above, the all-time count, still sees them.
+        assert body["awaiting_decision_findings"] == 0
+        assert all(
+            row["audit_counts"]["document_count"] == row["document_count"] and row["finding_count"] == 0
+            for row in body["section_breakdown"]
+        )
 
 
 def test_the_unscoped_read_still_covers_every_project_and_an_empty_parameter_is_the_absent_one(

@@ -26,6 +26,12 @@ from auditmanager.documents.public import DocumentRepository
 from auditmanager.shared.identity import ProjectUid
 from auditmanager.shared.errors import DomainError, ErrorCode
 
+from .audit_state import (
+    AuditCountsRecord,
+    DocumentAuditReadModel,
+    awaiting_decision_findings,
+    counts_by_section,
+)
 from .models import (
     DashboardSummaryRecord,
     ProjectDocumentCountRecord,
@@ -83,8 +89,11 @@ PROJECT_SECTIONS: Final[tuple[str, ...]] = (
     "PS",
 )
 
-#: Findings by their current verdict, across every project. One row per finding: the
-#: view already reduces "every verdict-bearing event this finding ever had" to "the one
+#: Findings by their current verdict, across every project **and every run, all time** (`R-150q`): the
+#: panel «Находки по вердикту» is the history of the deployment's verdicts, labelled «за всё время», and it
+#: deliberately is *not* restricted to the current versions' result runs -- that is
+#: ``DashboardSummaryRecord.awaiting_decision_findings``, which comes from the audit-state read model.
+#: One row per finding: the view already reduces "every verdict-bearing event this finding ever had" to "the one
 #: that stands now", so this is not a second projection -- it is a GROUP BY over the one
 #: PostgreSQL already computes.
 #:
@@ -169,26 +178,12 @@ _SPEND_IN_PROJECT = text(
     "             OR (c.state = 'failed' AND c.cost_micros IS NOT NULL))) AS spend"
 )
 
-#: Published documents by the section their **current version** is confirmed in
-#: (`SECTION-READ-MODEL-01`, `W59-SECTION-IDENTITY-DECISION-01`). ``document.current_version_uid``
-#: selects the version -- the same join ``DocumentRepository._LIST_PROJECTS`` counts through,
-#: so "a document" means one with a published current version here as in every other count
-#: this contract publishes -- and that version's row in ``version_classification_current`` is
-#: its confirmed section: the latest revision, so a section an expert corrected
-#: (`CLASSIFICATION-CORRECTION-01`) counts under the corrected one and never under the original.
-#: The ``LEFT JOIN`` is the unclassified rule: a current version no
-#: expert has classified has no row, so ``section_code`` is NULL and ``GROUP BY`` puts every
-#: such document in one NULL group, which SQL already groups together, rather than this query
-#: having to special-case it. The legacy ``document.section`` is **not read at all**: it is
-#: the old document-level label, not an expert's confirmation, and an older version's
-#: classification never counts for the set whose head moved on.
-_DOCUMENTS_BY_SECTION = text(
-    "SELECT c.section_code, count(*) "
-    "FROM document d JOIN document_version v ON v.version_uid = d.current_version_uid "
-    "LEFT JOIN version_classification_current c ON c.version_uid = v.version_uid "
-    "WHERE (CAST(:project_uid AS text) IS NULL OR d.project_uid = CAST(:project_uid AS text)) "
-    "GROUP BY c.section_code"
-)
+#: The section breakdown is a tally of the audit-state read model (`UI-PARITY-P0B`, ``audit_state.py``): documents
+#: by the section their **current version** is confirmed in (`SECTION-READ-MODEL-01`,
+#: `W59-SECTION-IDENTITY-DECISION-01`), a section an expert corrected (`CLASSIFICATION-CORRECTION-01`) counting
+#: under the corrected one, a version nobody classified in the one ``NULL`` bucket, and the legacy
+#: ``document.section`` not read at all. Its ``document_count`` is the sum of the audit states, read once from
+#: the same statement as the counters beside it, so the two cannot disagree.
 
 
 def _filled(
@@ -310,35 +305,35 @@ class DashboardRepository:
             )
         )
 
-        section_rows: dict[str | None, int] = {
-            row[0]: int(row[1])
-            for row in (tuple(r) for r in session.execute(_DOCUMENTS_BY_SECTION, scope).all())
-        }
-        # A code this vocabulary does not list would be dropped by `_filled` and the
-        # breakdown would quietly add up to fewer documents than exist. The database admits
-        # exactly the fifteen (`ck_document_version_classification_section_code`), so this is
-        # unreachable until a sixteenth is added there without being added here -- and then
-        # it is refused out loud rather than under-counted.
-        if any(code is not None and code not in PROJECT_SECTIONS for code in section_rows):
+        # One read of the audit-state model serves the section breakdown and the tile of findings that await a
+        # decision (`R-150q`); `listProjects` tallies the same statement per project.
+        groups = DocumentAuditReadModel().groups(session, project_uid=project_uid)
+        by_section = counts_by_section(groups)
+        # A code this vocabulary does not list would be dropped by the loop below and the breakdown would quietly
+        # add up to fewer documents than exist. The database admits exactly the fifteen
+        # (`ck_document_version_classification_section_code`), so this is unreachable until a sixteenth is added
+        # there without being added here -- and then it is refused out loud rather than under-counted.
+        if any(code is not None and code not in PROJECT_SECTIONS for code in by_section):
             raise DomainError(
                 ErrorCode.INTERNAL_ERROR,
                 message="a confirmed section is missing from the dashboard vocabulary",
             )
-        sections = [
-            SectionDocumentCountRecord(section=section, document_count=count)
-            for section, count in _filled(section_rows, PROJECT_SECTIONS)
-        ]
-        # The unclassified bucket, appended rather than folded into `_filled`: `None` is
-        # not a member of `PROJECT_SECTIONS` and forcing it into that tuple would make the
-        # vocabulary say there are sixteen sections. Appended unconditionally, including
-        # when its count is `0` -- omitting it there would silently say "no unclassified
-        # documents exist as a concept" instead of "there happen to be none right now",
-        # which is exactly the distinction the other fifteen already preserve.
-        sections.append(
-            SectionDocumentCountRecord(
-                section=None, document_count=section_rows.get(None, 0)
+        # Every section is a row, a `0` included; the unclassified bucket is appended rather than folded into
+        # the vocabulary, which would make it say there are sixteen sections. Appended unconditionally,
+        # including when its count is `0`: omitting it would say "no unclassified documents exist as a concept"
+        # instead of "there happen to be none right now", the distinction the other fifteen preserve.
+        sections: list[SectionDocumentCountRecord] = []
+        for section in (*PROJECT_SECTIONS, None):
+            counted = by_section.get(section)
+            counts = counted.counts if counted is not None else AuditCountsRecord()
+            sections.append(
+                SectionDocumentCountRecord(
+                    section=section,
+                    document_count=counts.document_count,
+                    audit_counts=counts,
+                    finding_count=0 if counted is None else counted.finding_count,
+                )
             )
-        )
 
         return DashboardSummaryRecord(
             documents_by_project=projects,
@@ -346,4 +341,5 @@ class DashboardRepository:
             run_activity=activity,
             run_spend=spend,
             section_breakdown=tuple(sections),
+            awaiting_decision_findings=awaiting_decision_findings(groups),
         )

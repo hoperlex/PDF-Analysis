@@ -1066,7 +1066,7 @@ def shipped_router(
     )
 
     return Surface(build_router(
-        projects=ProjectAdapter(ingest),
+        projects=ProjectAdapter(ingest, session_factory),
         documents=IngestDocumentAdapter(ingest, session),
         runs=SeamRunAdapter(session),
         findings=FindingAdapter(session_factory),

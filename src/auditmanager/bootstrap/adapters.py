@@ -25,6 +25,7 @@ from typing import Any, BinaryIO
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
+from auditmanager.api.schemas.audit_counts import DocumentAuditCountsView
 from auditmanager.api.schemas.blocks import (
     PortalBlockIndexView,
     PortalCropContent,
@@ -496,8 +497,11 @@ class ProjectAdapter:
     found by driving the router once before dispatching.
     """
 
-    def __init__(self, service: Any) -> None:
+    def __init__(self, service: Any, sessions: sessionmaker[Session]) -> None:
         self._service = service
+        # `UI-PARITY-P0B`: the audit-state counters are a read of their own over the same database, so the adapter
+        # needs the session factory the service owns the other half of. `list_projects` is the only reader.
+        self._sessions = sessions
 
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         # The key is claimed, not validated and discarded. Until `create_project_under_key`
@@ -523,15 +527,42 @@ class ProjectAdapter:
         # It is never `None` on this path, so `project_body` always emits the field: a
         # project with no documents answers `0`. The `None` default on `ProjectView`
         # remains for `create_project`, which reads no documents and claims no count.
+        #
+        # `UI-PARITY-P0B`: every item also carries `audit_counts`, the project's documents by audit state. They are
+        # the tally of the read model the dashboard's section panel is a tally of (`dashboard.audit_state`), so the
+        # two cannot define a state differently. A project without a current document has no group in that read
+        # and is given the zeros of `AuditCountsRecord`: a measurement, not an omission. The listing and the
+        # counters are two statements, as every panel of the dashboard is; a document published between them is in
+        # one answer and not yet in the other, and the next poll agrees.
+        from auditmanager.dashboard import AuditCountsRecord, DocumentAuditReadModel, counts_by_project
+
+        listing = self._service.list_projects()
+        with self._sessions() as session:
+            counts = counts_by_project(DocumentAuditReadModel().groups(session))
         return tuple(
             ProjectView(
                 project_uid=str(r.project_uid),
                 name=r.name,
                 created_at=r.created_at,
                 document_count=r.document_count,
+                audit_counts=_audit_counts_view(counts.get(str(r.project_uid), AuditCountsRecord())),
             )
-            for r in self._service.list_projects()
+            for r in listing
         )
+
+
+def _audit_counts_view(record: Any) -> DocumentAuditCountsView:
+    """An `AuditCountsRecord` as the wire view, field for field. `no_expert_decision` is the record's derived
+    figure (`not_run + awaiting_decision`, `R-150o`); nothing is computed here."""
+    return DocumentAuditCountsView(
+        document_count=record.document_count,
+        not_run=record.not_run,
+        clean=record.clean,
+        awaiting_decision=record.awaiting_decision,
+        checked=record.checked,
+        partial=record.partial,
+        no_expert_decision=record.no_expert_decision,
+    )
 
 
 def _version_view(record: Any) -> DocumentVersionView:
@@ -2467,10 +2498,14 @@ class DashboardAdapter(_SessionHolder):
             ),
             section_breakdown=tuple(
                 SectionDocumentCountView(
-                    section=row.section, document_count=row.document_count
+                    section=row.section,
+                    document_count=row.document_count,
+                    audit_counts=_audit_counts_view(row.audit_counts),
+                    finding_count=row.finding_count,
                 )
                 for row in record.section_breakdown
             ),
+            awaiting_decision_findings=record.awaiting_decision_findings,
         )
 
 
