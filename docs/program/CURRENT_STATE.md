@@ -1,5 +1,9 @@
 # Current state
 
+**Updated 2026-11-05 by `UI-PARITY-P0E` (unverified development candidate).** Contract **1.20.0** is an additive read slice for rulings `R-151l` and `R-151f`: `listDocuments` takes the optional `section_code` (only documents whose current version is confirmed for that section) and `getExecutionDispatch` (`GET /execution/dispatch`) reads the pause state for the top strip, `viewer` refused. 250 paths / 278 operations / 675 schemas; no migration; domain catalogs at candidate revision 38. Checks: contract suites (`tests/contract/api_v1`, `domain_p02`, `program`), the new adapter unit test, web `tsc`, guards and the 60 web test files the version sweep touched, green. Not run: the stand-backed role sweep (`tests/integration/api/test_role_register.py` needs object storage).
+
+**Updated 2026-11-05 by `RELEASE-0-10-0-0-11-0` (release notes only, no code).** The owner merged `dev` into `main` four times after `0.9.0` (pull requests #39 on 2026-11-03, #40 to #42 on 2026-11-05) while `VERSION` stayed `0.9.0` and no note described them. `release-notes/0.10.0.json` (2026-11-03, pull request #39) and `release-notes/0.11.0.json` (2026-11-05, #40 to #42) now do, one version per deployment day because the form rule wants strictly descending dates; `VERSION` is `0.11.0`. The claim-to-commit trace is in `RELEASES.md`. No check ran (owner: not a code task); no independent note judge.
+
 **Updated 2026-11-05 by `UI-PARITY-POLL-1105` (records only, no code).** The owner answered the UI-parity open questions in eight direct polls: `R-151a`…`R-151z` in `OWNER_RULINGS_2026-09-17.md` §3.51. The P0 freeze list is answered (archive and rename, explicit multi-file upload, one-dialog batch run, decision import from our export by `finding_uid`, document tags, header pause, our own execution status, both decision kinds in the knowledge base). «Запуск с этапа» is a new run reusing earlier stage outputs; the severity strip counts decided severity with a labelled model row; the section page gets its own address; «Блоки» become a version tab; «График работ» is its own menu item; likeness is layout only, with a card grid for a section's documents. The role matrix and the metrics dictionary are closed except Q-MD-9; P0d stays postponed. Debt: `D-300`, `D-302`, `D-305`, `D-308`, `D-310` closed; `D-301`, `D-303`, `D-304`, `D-306`, `D-309` narrowed. `UI-PARITY-01` updated.
 
 **Updated 2026-11-05 by `UI-PARITY-INT-1105c` (unverified development candidate, third publication).** The administrator forms offer «Наблюдатель» (`VIEWER_ROLE_OFFERED` on). Both the user form and the registration approval refuse it beside another role before sending (`R-150e`); turning the switch off is the rollback.
@@ -64,7 +68,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.9.0`; this file describes development, not a release.
+- Product `VERSION` is `0.11.0`; this file describes development, not a release.
 - The development API contract is `1.20.0`: **250 paths / 278 operations / 675 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0050_viewer_role`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 

@@ -1,10 +1,12 @@
-"""The current release note may not quote a profile version range that leaves a profile out.
+"""The newest release note that quotes profile versions may not quote a range that leaves a profile out.
 
 Item 3 of ``release-notes/0.9.0.json`` said the 14 section profiles were at «1.1.0 или 1.2.0» when
 five of them (AI, EOM, ITP, SS, TX) had moved to 1.3.0 (`ACCESS-COMPARE-JUDGE-FIXES-01`, finding 6).
 A reader of the screen «Настройки анализа» sees the real version, so a note that lists others says
 something untrue. This test reads every ``profile.json`` ``profile_version`` of the text profiles and
-the note of the current ``VERSION`` together.
+the newest note that quotes them together. Until 0.10.0 that was always the note of the current
+``VERSION``; the 0.10.0 and 0.11.0 notes do not talk about the profiles, so the judged note is the
+newest one that does (0.9.0 on that tree), and a later note that quotes them takes its place.
 
 How a note quotes versions, and what each form covers (``x`` stands for any patch number):
 
@@ -99,9 +101,24 @@ def uncovered(items: list[dict], versions: dict[str, str]) -> list[tuple[int, st
     return missing
 
 
+def quoting_items(note: dict) -> list[dict]:
+    return [i for i in note["items"] if "профил" in i["text"].lower() and quotes_a_version(i["text"])]
+
+
 def current_note() -> dict:
+    """The newest note at or below ``VERSION`` whose items quote profile versions."""
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    return json.loads((ROOT / "release-notes" / f"{version}.json").read_text(encoding="utf-8"))
+    ceiling = tuple(int(part) for part in version.split("."))
+    notes = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (ROOT / "release-notes").glob("*.json")
+        if path.name not in {"schema.json", "dictionary.json"}
+    ]
+    notes.sort(key=lambda note: tuple(int(part) for part in note["version"].split(".")), reverse=True)
+    for note in notes:
+        if tuple(int(part) for part in note["version"].split(".")) <= ceiling and quoting_items(note):
+            return note
+    raise AssertionError("no release note quotes the profile versions; this test has nothing to judge")
 
 
 def test_there_are_fifteen_profiles_each_with_a_version() -> None:
@@ -115,7 +132,7 @@ def test_there_are_fifteen_profiles_each_with_a_version() -> None:
 def test_the_current_note_quotes_a_range_that_holds_every_profile_version() -> None:
     note = current_note()
     versions = profile_versions()
-    quoting = [i for i in note["items"] if "профил" in i["text"].lower() and quotes_a_version(i["text"])]
+    quoting = quoting_items(note)
     assert quoting, "no item of the current note quotes the profile versions; this test has nothing to judge"
     assert uncovered(note["items"], versions) == [], (
         f"release note {note['version']} quotes profile versions that leave a profile out; "
