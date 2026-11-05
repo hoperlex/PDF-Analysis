@@ -86,6 +86,10 @@ export const routes = {
   document: (projectUid: string, documentUid: string): string =>
     `/projects/${projectUid}/documents/${documentUid}`,
 
+  /** The document's «Оптимизация» tab (`R-151r`): its passes and proposals, the document already chosen. */
+  documentOptimisation: (projectUid: string, documentUid: string): string =>
+    `/projects/${projectUid}/documents/${documentUid}?tab=optimisation`,
+
   /** One published version: its manifest, its runs, and the control that starts one. */
   version: (projectUid: string, versionUid: string): string =>
     `/projects/${projectUid}/versions/${versionUid}`,

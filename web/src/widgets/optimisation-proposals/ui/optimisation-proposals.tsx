@@ -25,6 +25,7 @@
  */
 
 import { useId, useState } from 'react';
+import Link from 'next/link';
 
 import type {
   DocumentUid,
@@ -37,7 +38,7 @@ import type {
 } from '@/shared/api';
 import type { FailureMessage } from '@/shared/api/failure-message';
 import { failureMessage } from '@/shared/api/failure-message';
-import { formatInstant } from '@/shared/lib';
+import { formatInstant, routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
@@ -63,6 +64,11 @@ export interface OptimisationProposalsProps {
   readonly projectUid: ProjectUid;
   /** The session's roles, as the route's guard read them. */
   readonly roles: readonly Role[];
+  /**
+   * `R-151r`: the document whose tab this is. Given, the widget works on that document only and offers no
+   * «Комплект» choice; absent, the reader chooses among the project's classified sets as before.
+   */
+  readonly documentUid?: DocumentUid | undefined;
 }
 
 /** The sets whose current version an expert confirmed in some section, in the order listed. */
@@ -254,7 +260,7 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
   );
 }
 
-export function OptimisationProposals({ projectUid, roles }: OptimisationProposalsProps) {
+export function OptimisationProposals({ projectUid, roles, documentUid }: OptimisationProposalsProps) {
   const documents = useDocumentList(projectUid);
   const sets = classifiedDocumentSets(documents.data?.items ?? []);
   // A comparison-only set is offered disabled, so it is never the default, never started for and
@@ -262,7 +268,8 @@ export function OptimisationProposals({ projectUid, roles }: OptimisationProposa
   const startable = sets.filter((version) => !isComparisonOnly(version));
   const [chosenSet, setChosenSet] = useState<DocumentUid | null>(null);
   const [chosenPass, setChosenPass] = useState<OptimisationPassId | null>(null);
-  const selectedSet = chosenSet ?? startable[0]?.document_uid ?? null;
+  const fixed = documentUid !== undefined;
+  const selectedSet = documentUid ?? chosenSet ?? startable[0]?.document_uid ?? null;
   const passes = useOptimisationPasses(projectUid, selectedSet);
   const list = passes.data?.items ?? [];
   const activePass =
@@ -298,8 +305,8 @@ export function OptimisationProposals({ projectUid, roles }: OptimisationProposa
         измерения и валюты от поставщика из вендор-листа раздела этого комплекта. Цены берутся
         только из прайс-листа, экономия считается только при числовом количестве.
       </p>
-      {documents.isPending ? <LoadingState what="документов проекта" /> : null}
-      {documentsFailure !== null ? (
+      {!fixed && documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {!fixed && documentsFailure !== null ? (
         <ErrorState
           title="Документы проекта не прочитаны"
           detail={documentsFailure.detail}
@@ -307,7 +314,7 @@ export function OptimisationProposals({ projectUid, roles }: OptimisationProposa
           onRetry={() => void documents.refetch()}
         />
       ) : null}
-      {documents.data !== undefined ? (
+      {!fixed && documents.data !== undefined ? (
         <ProposalSetChooser
           sets={sets}
           selected={selectedSet}
@@ -318,7 +325,7 @@ export function OptimisationProposals({ projectUid, roles }: OptimisationProposa
           partial={documents.data.page.next_cursor !== null}
         />
       ) : null}
-      {sets.length > 0 ? (
+      {fixed || sets.length > 0 ? (
         <StartOptimisationPass
           projectUid={projectUid}
           documentUid={selectedSet}
@@ -342,6 +349,52 @@ export function OptimisationProposals({ projectUid, roles }: OptimisationProposa
             <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} />
           ) : null}
         </>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * `R-151r`: the project's summary of optimisation by document. The passes and proposals live on each document's own
+ * «Оптимизация» tab; the project lists its classified documents and links each one there.
+ */
+export function OptimisationByDocument({ projectUid }: { readonly projectUid: ProjectUid }) {
+  const documents = useDocumentList(projectUid);
+  const sets = classifiedDocumentSets(documents.data?.items ?? []);
+  const failure = documents.error === null ? null : failureMessage(documents.error);
+  return (
+    <section className={styles.section} aria-labelledby="optimisation-by-document-heading" data-optimisation-by-document="">
+      <h2 id="optimisation-by-document-heading" className={styles.heading}>Предложения по документам</h2>
+      <p className={styles.rule}>
+        Проходы оптимизации и предложения ведутся у каждого документа на его вкладке «Оптимизация». Здесь —
+        документы проекта с подтверждённым разделом.
+      </p>
+      {documents.isPending ? <LoadingState what="документов проекта" /> : null}
+      {failure !== null ? (
+        <ErrorState
+          title="Документы проекта не прочитаны"
+          detail={failure.detail}
+          correlationId={failure.correlationId}
+          onRetry={() => void documents.refetch()}
+        />
+      ) : null}
+      {documents.data !== undefined && sets.length === 0 ? (
+        <p className="am-note">В проекте нет документов с подтверждённым разделом.</p>
+      ) : null}
+      {sets.length === 0 ? null : (
+        <ul data-optimisation-documents={sets.length}>
+          {sets.map((version) => (
+            <li key={version.document_uid}>
+              <Link href={routes.documentOptimisation(projectUid, version.document_uid)}>
+                {version.display_title ?? version.source_filename ?? 'Комплект без названия'}
+              </Link>
+              {isComparisonOnly(version) ? ' — только для сравнения, оптимизация не запускается' : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {documents.data !== undefined && documents.data.page.next_cursor !== null ? (
+        <p className="am-note">Показаны документы первой страницы проекта.</p>
       ) : null}
     </section>
   );

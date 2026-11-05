@@ -54,7 +54,7 @@ import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import { StartArV3GroupView, classifyArV3GroupStartFailure } from '@/features/start-ar-v3-group';
 import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
-import { ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisation-proposals';
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
@@ -1013,6 +1013,15 @@ export function screens(): Screen[] {
     seedLoadedProposals(client);
     const loaded = proposalShapes().find((shape) => shape.name === 'proposals-loaded');
     if (loaded !== undefined) add('OptimisationProposals loaded', renderScreen(client, loaded.make()));
+  }
+  // `R-151r`: the project's summary, linking each classified document's own «Оптимизация» tab.
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), {
+      items: [{ ...version(), classification: { ...CONFIRMED } }],
+      page: { next_cursor: 'Y3Vyc29y' },
+    });
+    add('OptimisationByDocument loaded', renderScreen(client, createElement(OptimisationByDocument, { projectUid: PROJECT_UID })));
   }
   for (const shape of proposalShapes()) {
     if (shape.name === 'proposals-loaded') continue;

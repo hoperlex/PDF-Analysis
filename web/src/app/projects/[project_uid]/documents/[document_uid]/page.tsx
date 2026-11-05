@@ -45,8 +45,8 @@ export default async function DocumentRoute({
   params: Promise<{ project_uid: string; document_uid: string }>;
   searchParams?: Promise<RouteParams> | undefined;
 }) {
-  await requireScreen('/projects/[project_uid]/documents/[document_uid]', { params, searchParams });
+  const subject = await requireScreen('/projects/[project_uid]/documents/[document_uid]', { params, searchParams });
   const { project_uid, document_uid } = await params;
   if (!looksLikeProjectUid(project_uid) || !looksLikeDocumentUid(document_uid)) notFound();
-  return <DocumentDetailPage projectUid={project_uid} documentUid={document_uid} />;
+  return <DocumentDetailPage projectUid={project_uid} documentUid={document_uid} roles={subject.roles} />;
 }

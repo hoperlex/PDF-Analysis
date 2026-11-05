@@ -21,3 +21,15 @@
     padding: var(--am-gap);
   }
 }
+
+/* `R-151r`: «Версии | Оптимизация», as the project page's tabs. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap-lg);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}

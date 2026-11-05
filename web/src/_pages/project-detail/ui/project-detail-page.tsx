@@ -39,7 +39,7 @@ import type { DocumentVersion, Role } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
-import { OptimisationProposals } from '@/widgets/optimisation-proposals';
+import { OptimisationByDocument } from '@/widgets/optimisation-proposals';
 import { ProjectOptimisation } from '@/widgets/project-optimisation';
 import { ProjectSections } from '@/widgets/project-sections';
 import { UploadPanel } from '@/widgets/upload-panel';
@@ -131,8 +131,9 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
           <section className={styles.panel} aria-label="Прайс-листы и вендор-листы">
             <ProjectOptimisation projectUid={projectUid} roles={roles} />
           </section>
-          <section className={styles.panel} aria-label="Предложения по оптимизации">
-            <OptimisationProposals projectUid={projectUid} roles={roles} />
+          {/* `R-151r`: passes and proposals live on each document's own tab; the project keeps the summary. */}
+          <section className={styles.panel} aria-label="Предложения по документам">
+            <OptimisationByDocument projectUid={projectUid} />
           </section>
         </div>
       )}
