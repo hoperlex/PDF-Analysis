@@ -184,7 +184,7 @@ function FindingTable({
       key: 'number',
       header: '№',
       cell: (finding) => (
-        <button type="button" className="am-button am-button--quiet" data-finding-uid={finding.finding_uid} onClick={() => onSelect(finding.finding_uid)}>
+        <button type="button" className="am-button am-button--quiet am-button--small" data-finding-uid={finding.finding_uid} onClick={() => onSelect(finding.finding_uid)}>
           {numberOf.get(finding.finding_uid)}
         </button>
       ),

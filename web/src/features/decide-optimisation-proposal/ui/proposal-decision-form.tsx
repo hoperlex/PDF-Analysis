@@ -51,7 +51,7 @@ export function ProposalDecisionFormView({
   const sent = normalisedComment(comment);
   const reviseWithoutComment = sent === null;
   return (
-    <div data-proposal-decision={proposalId}>
+    <div className="am-form" data-proposal-decision={proposalId}>
       <label htmlFor={`decision-comment-${proposalId}`}>Комментарий к решению</label>
       <textarea
         id={`decision-comment-${proposalId}`}
@@ -61,7 +61,7 @@ export function ProposalDecisionFormView({
         onChange={(event) => onComment(event.target.value)}
       />
       <p className="am-form__hint">Для решения «На доработку» комментарий обязателен.</p>
-      <div>
+      <div className="am-form__row">
         {VERDICTS.map((verdict) => {
           const repeats = current !== null && current.verdict === verdict && current.comment === sent;
           const blocked = verdict === 'revise' && reviseWithoutComment;
