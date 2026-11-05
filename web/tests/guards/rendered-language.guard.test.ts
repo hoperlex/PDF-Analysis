@@ -1484,6 +1484,7 @@ function emptyClient(): Client {
       section_breakdown: PROJECT_SECTIONS.map((section) => ({
         section: section.code,
         document_count: 0,
+        ...sectionAudit(0),
       })),
     }),
   );

@@ -599,7 +599,7 @@ describe('every branch is rendered by some state here, and none carries English'
     {
       name: 'incomplete summary',
       markup: () =>
-        draw(home(EXPERT), loaded({ summary: summary({ findings_by_verdict: [] }) })),
+        draw(home(EXPERT), loaded({ summary: summary({ run_activity: { by_state: [] } }) })),
     },
     { name: 'unknown role', markup: () => draw(home(['auditor'] as unknown as readonly Role[])) },
   ];
