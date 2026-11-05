@@ -49,10 +49,27 @@ import type { SectionDocumentCount } from '@/shared/api';
 
 import { incompleteBreakdownFailure } from '../model/dashboard-failure';
 import { summarizeSectionBreakdown } from '../model/section-breakdown';
+import type { SectionAuditFigures } from '../model/section-breakdown';
 import styles from './sections-panel.module.css';
 
 export interface SectionsPanelProps {
   readonly rows: readonly SectionDocumentCount[];
+}
+
+
+/** `UI-A-35`: the five numbers of a section row; without `audit_counts` only the document count is shown. */
+function SectionMetrics({ documents, audit }: { readonly documents: number; readonly audit: SectionAuditFigures | undefined }) {
+  return (
+    <span className={styles.metrics}>
+      <span className={styles.metric} title="Не запускались">{audit?.notRun ?? '—'}</span>
+      <span className={styles.metric} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
+        {audit?.noExpertDecision ?? '—'}
+      </span>
+      <span className={styles.metric} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
+      <span className={styles.metric} title="Документы"><strong>{documents}</strong></span>
+      <span className={styles.metric} title="Находок">{audit?.findings ?? '—'}</span>
+    </span>
+  );
 }
 
 export function SectionsPanel({ rows }: SectionsPanelProps) {
@@ -79,7 +96,13 @@ export function SectionsPanel({ rows }: SectionsPanelProps) {
       </p>
       <div className={styles.header} aria-hidden="true">
         <span>Раздел</span>
-        <span>Документы</span>
+        <span className={styles.metrics}>
+          <span>Не запускались</span>
+          <span>Нет решений эксперта</span>
+          <span>Проверено</span>
+          <span>Документы</span>
+          <span>Находок</span>
+        </span>
       </div>
       <ul className={styles.rows} data-section-count={PROJECT_SECTIONS.length}>
         {PROJECT_SECTIONS.map((section) => (
@@ -92,7 +115,7 @@ export function SectionsPanel({ rows }: SectionsPanelProps) {
             >
               <span className={styles.badge}>{section.code}</span>
               <span className={styles.name}>{section.name}</span>
-              <span className={styles.metric}><strong>{summary.byCode[section.code]}</strong></span>
+              <SectionMetrics documents={summary.byCode[section.code]} audit={summary.auditByCode[section.code]} />
               <span className={styles.arrow} aria-hidden="true">›</span>
             </button>
           </li>

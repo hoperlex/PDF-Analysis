@@ -31,8 +31,22 @@ import type { SectionDocumentCount } from '@/shared/api';
 import type { ProjectSectionCode } from '@/entities/project';
 import { PROJECT_SECTIONS } from '@/entities/project';
 
+/**
+ * `UI-A-35`, `R-150n`…`R-150u` (`UI-PARITY-METRICS.md`): the original's five numbers of a section row —
+ * never run, without expert decisions, checked, all, findings — read from the server's `audit_counts`.
+ * «Нет решений эксперта» is `no_expert_decision` (never run plus awaiting a decision; a clean run is not in
+ * it). Absent counts stay absent: the screen shows no number rather than a zero it was not given.
+ */
+export interface SectionAuditFigures {
+  readonly notRun: number;
+  readonly noExpertDecision: number;
+  readonly checked: number;
+  readonly findings: number;
+}
+
 export interface SectionBreakdownSummary {
   readonly byCode: Readonly<Record<ProjectSectionCode, number>>;
+  readonly auditByCode: Readonly<Partial<Record<ProjectSectionCode, SectionAuditFigures>>>;
   /** Documents with no section at all. Never merged into any of the section codes. */
   readonly unclassifiedCount: number;
 }
@@ -50,6 +64,7 @@ export function summarizeSectionBreakdown(
   rows: readonly SectionDocumentCount[],
 ): SectionBreakdownResult {
   const counts = new Map<ProjectSectionCode, number>();
+  const audits: Partial<Record<ProjectSectionCode, SectionAuditFigures>> = {};
   let unclassifiedCount: number | null = null;
 
   for (const row of rows) {
@@ -60,10 +75,18 @@ export function summarizeSectionBreakdown(
     }
     if (!KNOWN_CODES.has(row.section) || counts.has(row.section)) return { ok: false };
     counts.set(row.section, row.document_count);
+    if (row.audit_counts !== undefined) {
+      audits[row.section] = {
+        notRun: row.audit_counts.not_run,
+        noExpertDecision: row.audit_counts.no_expert_decision,
+        checked: row.audit_counts.checked,
+        findings: row.finding_count,
+      };
+    }
   }
 
   if (unclassifiedCount === null || counts.size !== PROJECT_SECTIONS.length) return { ok: false };
 
   const byCode = Object.fromEntries(counts) as Record<ProjectSectionCode, number>;
-  return { ok: true, summary: { byCode, unclassifiedCount } };
+  return { ok: true, summary: { byCode, auditByCode: audits, unclassifiedCount } };
 }
