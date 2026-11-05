@@ -101,6 +101,7 @@ import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
@@ -151,7 +152,7 @@ import {
 } from '../analysis-settings/ar-v3-beta-pack-fixtures';
 
 import type { Screen } from './contrast';
-import { sectionAudit } from '../dashboard/audit-counts';
+import { auditCounts, sectionAudit } from '../dashboard/audit-counts';
 import { QUEUE_WORK } from '../execution/queue-work';
 
 function withRouter(element: ReactElement): string {
@@ -499,6 +500,63 @@ export function screens(): Screen[] {
         }),
       ),
     );
+    /*
+     * `R-150b`, `UI-PARITY-01` wave 1: the project selector OPEN, in the states it has, drawn in the
+     * bar, with the props the widget gives `Menu` (`switcherMenuProps`, not a copy). A global screen draws the muted button with its hint; an optional one the named
+     * project, the rows with their two figures, a long name, and the «показаны первые» note; a failed
+     * read the alert, its detail and its correlation id, and the retry; a read in flight the status line.
+     */
+    {
+      let seedSwitcher = 0;
+      const switcherOpen = (props: MenuProps): ReactElement => {
+        seedSwitcher += 1;
+        return createElement(MenuView, {
+          ...props,
+          state: { open: true, active: 0 },
+          triggerId: `seed-switcher-trigger-${seedSwitcher}`,
+          menuId: `seed-switcher-menu-${seedSwitcher}`,
+        });
+      };
+      // Drawn in the bar the way the account menu above is: the bar and the top strip share one palette scope
+      // (`globals.css`), and a bare `.am-app__utility` would add its own border as a pair of its own.
+      const inStrip = inBar;
+      const SWITCHER_UID = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+      const counted = (uid: string, name: string, over: Partial<ReturnType<typeof auditCounts>> = {}): Project => ({
+        project_uid: uid,
+        name,
+        created_at: '2026-11-03T09:30:00Z',
+        audit_counts: auditCounts(6, { not_run: 2, awaiting_decision: 3, clean: 1, no_expert_decision: 5, ...over }),
+      });
+      const SWITCHER_PAGE = {
+        items: [
+          counted(SWITCHER_UID, 'Мост через Неву'),
+          counted('prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', 'Д'.repeat(200), { not_run: 0, awaiting_decision: 0, checked: 6, no_expert_decision: 0 }),
+          { project_uid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', name: 'Без счётчиков', created_at: '2026-11-03T09:30:00Z' },
+        ],
+        page: { next_cursor: 'cursor-next' },
+      };
+      const seeded = (pathname: string, search: string, data: typeof SWITCHER_PAGE | undefined, error: unknown): string =>
+        inStrip(
+          createElement(ProjectSwitcherView, {
+            model: buildSwitcherModel({ pathname, searchParams: new URLSearchParams(search) }, switcherListOf(data, error)),
+            onRetry: noop,
+            menu: switcherOpen,
+          }),
+        );
+      add(
+        'AppFrame, the project selector open on an optional screen, the project named, rows and the first-page note',
+        seeded('/dashboard', `project=${SWITCHER_UID}`, SWITCHER_PAGE, null),
+      );
+      add('AppFrame, the project selector open on a global screen, muted, the list loading', seeded('/queue', '', undefined, null));
+      add(
+        'AppFrame, the project selector open, the read failed',
+        seeded('/dashboard', `project=${SWITCHER_UID}`, undefined, apiError(503, 'dependency_unavailable', true)),
+      );
+      add(
+        'AppFrame, the project selector open, a refresh failed over a loaded list',
+        seeded('/dashboard', '', SWITCHER_PAGE, apiError(503, 'dependency_unavailable', true)),
+      );
+    }
     add(
       'Release history, loading',
       render(createElement(VersionHistoryView, {

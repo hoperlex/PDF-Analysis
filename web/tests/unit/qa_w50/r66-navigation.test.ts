@@ -13,6 +13,12 @@
  * every graduated screen keeps its ruled place in the menu, asserted by `RULING` below and by
  * the cases that follow it.
  *
+ * **`R-150b` (`UI-PARITY-01` wave 1, 2026-11-05) amends it:** «Проекты» left the menu. The
+ * project list is chosen from the «Проекты ▾» selector in the frame's top strip
+ * (`widgets/project-switcher`), which replaces that item of the order; `/projects` stays a
+ * registered, reachable screen (`inMenu: false`). `RULING` below is the R-66 order **without** it,
+ * and the `R-150b` cases after the menu cases hold the replacement.
+ *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
  * the real frame (`AppFrame` — the one-row bar and the stacked «Меню»), in document order.
@@ -55,7 +61,7 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
   {
     group: 'Работа',
     items: [
-      ['/projects', 'Проекты'],
+      // `R-150b`: ['/projects', 'Проекты'] is no longer here; the selector in the top strip took it.
       ['/dashboard', 'Дашборд'],
       ['/section-optimisation', 'Оптимизация разделов'],
       // `W61-DISPATCHER-01` (roadmap Q-2) adds «Диспетчер» at the end of «Работа».
@@ -406,7 +412,8 @@ describe('the frame’s menu per kind of visitor', () => {
   });
 
   it('the account menu’s items: Профиль, Сменить пароль, and Выйти as a POST', () => {
-    const markup = renderFrame(frameSession());
+    // `R-150b`: the frame holds a second menu button now, the project selector; the account menu is its own region.
+    const markup = region(renderFrame(frameSession()), 'data-account-menu');
     const items = [...markup.matchAll(/<(a|button)[^>]*role="menuitem"[^>]*>([^<]*)<\/(?:a|button)>/g)].map((m) => [
       m[1],
       m[2],
@@ -420,5 +427,68 @@ describe('the frame’s menu per kind of visitor', () => {
     const form = /<form[^>]*>(?=<button type="submit"[^>]*role="menuitem")/.exec(markup)?.[0] ?? '';
     expect(form).toContain('method="post"');
     expect(form).toContain('action="/bff/v1/session/end"');
+  });
+});
+
+// ------------------------------------------------------------------------------------ R-150b
+
+describe('R-150b: «Проекты» left the menu, and the selector in the top strip took its place', () => {
+  const ROLE_SETS = [['expert'], ['admin'], ['admin', 'expert']] as const;
+
+  it('/projects is a registered, open screen that no menu offers', () => {
+    expect(screenAt('/projects')).toEqual({
+      address: '/projects',
+      label: 'Проекты',
+      group: 'work',
+      access: 'session',
+      roles: 'any-role',
+      inMenu: false,
+      projectScope: 'global',
+    });
+    expect(SCREEN_REGISTRY.filter((row) => row.inMenu).map((row) => row.address)).not.toContain('/projects');
+  });
+
+  it('is in no group, as data and in all three rendered states of the bar', () => {
+    for (const roles of ROLE_SETS) {
+      const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
+      const offered = navigation.groups.flatMap((group) => group.items.map((item) => item.address));
+      expect(offered, roles.join(',')).not.toContain('/projects');
+      expect(navigation.groups[0]?.items.map((item) => item.address)[0], roles.join(',')).toBe('/dashboard');
+      const markup = renderFrame(frameSession({ roles }));
+      for (const state of ['row', 'rail', 'stacked']) {
+        expect(region(markup, `data-nav-state="${state}"`), `${roles.join(',')} ${state}`).not.toContain('href="/projects"');
+      }
+    }
+  });
+
+  it('is reached from the selector instead: «Новый проект» and «Все проекты» lead to it', () => {
+    const selector = region(renderFrame(frameSession()), 'data-project-switcher');
+    expect(selector).toContain('data-project-switcher');
+    // The frame renders with no router, so its address is unknown and behaves like a global screen:
+    // both entries are the project list.
+    expect([...selector.matchAll(/<a [^>]*role="menuitem"[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)].map((m) => [m[1], m[2]])).toEqual([
+      ['/projects', 'Все проекты'],
+      ['/projects', 'Новый проект'],
+    ]);
+  });
+
+  it('stands in the top strip, after the screen\'s own name and before the stand, theme and account controls', () => {
+    const markup = renderFrame(frameSession());
+    const strip = markup.slice(markup.indexOf('class="am-app__utility"'), markup.indexOf('<main'));
+    const order = ['aria-label="Текущий раздел"', 'data-project-switcher', 'aria-label="Оформление"', 'data-account-menu'].map((marker) =>
+      strip.indexOf(marker),
+    );
+    expect(order.every((at) => at >= 0), JSON.stringify(order)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('is offered to exactly the sessions that may open the project list', () => {
+    expect(renderFrame(null)).not.toContain('data-project-switcher');
+    for (const changes of [{ isDefaultCredential: true }, { profileComplete: false }, { roles: [] }, { roles: ['auditor'] }]) {
+      expect(renderFrame(frameSession(changes)), JSON.stringify(changes)).not.toContain('data-project-switcher');
+    }
+    for (const roles of ROLE_SETS) {
+      expect(renderFrame(frameSession({ roles })), roles.join(',')).toContain('data-project-switcher');
+    }
   });
 });

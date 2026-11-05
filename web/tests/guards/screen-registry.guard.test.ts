@@ -134,10 +134,14 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
   return findings;
 }
 
-/** The ruling with both later comparison screens, as data. Order matters: it is the menu's order. */
+/**
+ * The ruling with both later comparison screens, as data. Order matters: it is the menu's order.
+ * `R-150b`: «Проекты» is no longer in it; the project selector of the frame's top strip replaced
+ * that item, and `/projects` stays a registered screen with `inMenu: false`.
+ */
 const R66: Partial<Record<ScreenGroup, string[]>> = {
   home: [],
-  work: ['/projects', '/dashboard', '/section-optimisation', '/dispatcher', '/version-comparison', '/stage-comparison'],
+  work: ['/dashboard', '/section-optimisation', '/dispatcher', '/version-comparison', '/stage-comparison'],
   knowledge: ['/knowledge-base', '/blocks', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
   admin: ['/admin/users', '/admin/registrations'],
@@ -255,12 +259,15 @@ describe('R-66: the groups, their members and their order', () => {
     expect(menu(moved).system).not.toEqual(R66.system);
   });
 
-  it('the menu is exactly the ruling, group by group, in order — Проекты first in Работа', () => {
+  it('the menu is exactly the ruling, group by group, in order — Дашборд first in Работа, since R-150b took Проекты out', () => {
     const live = menu(REGISTRY);
     for (const group of SCREEN_GROUPS) {
       expect(live[group], `group ${group}`).toEqual(R66[group] ?? []);
     }
-    expect(live.work[0]).toBe('/projects');
+    expect(live.work[0]).toBe('/dashboard');
+    // R-150b: the screen stays registered and open; only the menu item is gone.
+    expect(live.work).not.toContain('/projects');
+    expect(REGISTRY.find((row) => row.address === '/projects')).toMatchObject({ inMenu: false, access: 'session', roles: 'any-role' });
   });
 
   it('/optimisation is registered, reachable, hidden and out of the menu', () => {

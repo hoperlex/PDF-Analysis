@@ -38,6 +38,9 @@ import {
 const frame = (session: AppFrameSession | null): string =>
   renderToStaticMarkup(createElement(AppFrame, { children: 'экран', session }));
 
+/** The markup from the account menu on. The project selector (`R-150b`) is a menu button too and stands before it. */
+const accountMenuOf = (markup: string): string => markup.slice(markup.indexOf('data-account-menu'));
+
 /** Every `href` in the markup, in document order. */
 const hrefs = (markup: string): string[] => [...markup.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => m[1] as string);
 
@@ -72,7 +75,7 @@ describe('a guest', () => {
 
 describe('the account menu', () => {
   it('opens from a button holding the avatar, named by the account, never from a div', () => {
-    const markup = frame(EXPERT);
+    const markup = accountMenuOf(frame(EXPERT));
     const trigger = /<button\b([^>]*\baria-haspopup="menu"[^>]*)>(.*?)<\/button>/.exec(markup);
     expect(trigger, 'no menu button').not.toBeNull();
     expect(trigger?.[1]).toContain('aria-label="Учётная запись: Экспертова А. С."');
@@ -199,7 +202,10 @@ describe('the content utility row', () => {
     expect(markup.indexOf('am-app__utility')).toBeGreaterThan(markup.indexOf('data-nav-state="stacked"'));
     expect(markup.indexOf('am-app__utility')).toBeLessThan(markup.indexOf('<main'));
     expect(markup.match(/aria-label="Оформление"/g)).toHaveLength(1);
-    expect(markup.match(/aria-haspopup="menu"/g)).toHaveLength(1);
+    // Two menu buttons: the project selector (`R-150b`) and the account menu, each once.
+    expect(markup.match(/aria-haspopup="menu"/g)).toHaveLength(2);
+    expect(markup.match(/data-project-switcher=""/g)).toHaveLength(1);
+    expect(markup.match(/data-account-menu=""/g)).toHaveLength(1);
     expect(frame(null).match(/class="am-app__signin"/g)).toHaveLength(1);
   });
 });

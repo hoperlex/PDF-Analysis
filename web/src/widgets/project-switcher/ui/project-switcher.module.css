@@ -1,0 +1,131 @@
+/*
+ * The project selector of the frame's top strip (`R-150b`). Every colour, length and radius is a
+ * token (`--am-*`); the card follows the screen-context card beside it (`app-frame.module.css`).
+ */
+
+.switcher {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.switcher :global(.am-menu) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.switcher :global(.am-menu__trigger) {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  padding: var(--am-gap-xs) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-1);
+  color: var(--am-ink);
+  text-align: left;
+}
+
+/* Anchored to the button's left edge: the selector sits at the left of the strip, not at its right edge. */
+.switcher :global(.am-menu__popup) {
+  right: auto;
+  left: 0;
+  max-width: min(26rem, calc(100vw - 32px));
+}
+
+.face {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+.caption {
+  grid-column: 1;
+  overflow: hidden;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hint {
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.value {
+  grid-column: 1;
+  min-width: 0;
+  max-width: 16rem;
+  overflow: hidden;
+  color: var(--am-ink);
+  font-size: var(--am-text-base);
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caret {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* A global screen does not follow the selector (`R-150c`): the button is there, but quieter. */
+.muted .value {
+  color: var(--am-ink-muted);
+  font-weight: 500;
+}
+
+/*
+ * A row is its project's name and, under it, the two figures. The item's text is one string with a
+ * line break in it (`Menu` takes no markup in a label), so the break is kept, and a long name wraps
+ * inside the popup instead of widening it.
+ */
+/* A list of fifty projects scrolls inside the popup; the keys move focus and the browser scrolls it into view. */
+.switcher :global(.am-menu__list) {
+  max-height: min(60vh, 28rem);
+  overflow-y: auto;
+}
+
+.switcher :global(.am-menu__item) {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  line-height: 1.35;
+}
+
+.notes {
+  display: grid;
+  gap: var(--am-gap-xs);
+}
+
+.note,
+.noteAlert {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.noteAlert {
+  color: var(--am-failed);
+  font-weight: 650;
+}
+
+.noteDetail {
+  color: var(--am-ink-muted);
+  font-weight: 400;
+}

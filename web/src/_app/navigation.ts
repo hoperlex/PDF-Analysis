@@ -13,7 +13,8 @@
  */
 
 import type { ScreenDecisionSubject, ScreenEntry, ScreenGroup } from '@/shared/config';
-import { SCREEN_REGISTRY, screenDecision, screenMatching } from '@/shared/config';
+import { SCREEN_REGISTRY, screenAt, screenDecision, screenMatching } from '@/shared/config';
+import { routes } from '@/shared/lib';
 
 /** The groups the bar shows as disclosures, in `R-66`'s order. */
 export const MENU_GROUPS = ['work', 'knowledge', 'system', 'admin'] as const satisfies readonly ScreenGroup[];
@@ -79,6 +80,21 @@ export function buildNavigation(
     if (first !== undefined) groups.push({ group, label: MENU_GROUP_LABELS[group], items: [first, ...rest] });
   }
   return { groups };
+}
+
+/**
+ * Whether the frame offers the project selector (`R-150b`) to `subject`: exactly when the
+ * session may open the project list, the screen the selector's «Новый проект» and «Все проекты»
+ * lead to and whose read it shows. A guest, a default credential, an incomplete profile and an
+ * account with no role get no selector, as they get no menu, so the selector never offers a
+ * list the API would refuse.
+ */
+export function offersProjectSwitcher(
+  subject: ScreenDecisionSubject | null,
+  registry: readonly ScreenEntry[] = SCREEN_REGISTRY,
+): boolean {
+  const screen = screenAt(routes.projects(), registry);
+  return screen !== undefined && screenDecision(screen, subject) === 'open';
 }
 
 /** The screen being shown, as the menu marks it: its registry address and its group. */

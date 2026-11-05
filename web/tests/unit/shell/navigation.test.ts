@@ -33,9 +33,13 @@ function outline(navigation: Navigation): string[] {
   );
 }
 
-/** `R-66` with the two comparison modules added in their menu order, written independently of the registry. */
+/**
+ * `R-66` with the two comparison modules added in their menu order, written independently of the
+ * registry — and without «Проекты», which `R-150b` moved out of the menu into the project selector
+ * of the top strip.
+ */
 const R66 = [
-  'Работа: Проекты /projects, Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
+  'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
   'Знания: База знаний /knowledge-base, Блоки /blocks, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];
@@ -115,7 +119,10 @@ describe('navigation disclosure behavior', () => {
 describe('navigation glyph coverage', () => {
   it('has a distinct drawn glyph for every currently offered menu label', () => {
     const labels = buildNavigation(ADMIN_AND_EXPERT).groups.flatMap((group) => group.items.map((item) => item.label));
-    expect([...NAVIGATION_GLYPH_LABELS].sort()).toEqual([...labels].sort());
+    // `R-150b`: «Проекты» left the menu, and its glyph is the one drawing no menu row any more. It is named
+    // here so that it is the only one: every other glyph is a menu row, and every menu row has its glyph.
+    const RETIRED_FROM_THE_MENU = ['Проекты'];
+    expect([...NAVIGATION_GLYPH_LABELS].sort()).toEqual([...labels, ...RETIRED_FROM_THE_MENU].sort());
     for (const label of labels) {
       const markup = renderToStaticMarkup(createElement(NavigationGlyph, { label }));
       expect(markup, label).toContain('<svg');
@@ -123,6 +130,58 @@ describe('navigation glyph coverage', () => {
       expect(markup, label).toContain('aria-hidden="true"');
     }
     expect(renderToStaticMarkup(createElement(NavigationGlyph, { label: 'Новый раздел' }))).toContain('data-nav-glyph="fallback"');
+  });
+});
+
+describe('the project is carried by the frame\'s own links (R-150c)', () => {
+  const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+  const OTHER = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
+
+  /** A menu with one row of each class: optional, global and required. The live menu holds no required row. */
+  const MIXED: Navigation = {
+    groups: [
+      {
+        group: 'work',
+        label: 'Работа',
+        items: [
+          { address: '/dashboard', label: 'Дашборд' },
+          { address: '/queue', label: 'Очередь' },
+          { address: `/projects/${OTHER}`, label: 'Другой проект' },
+          { address: '/dashboard?view=compact', label: 'Компактный дашборд' },
+        ],
+      },
+    ],
+  };
+
+  const hrefsOf = (markup: string): string[] => [...markup.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => (m[1] as string).replace(/&amp;/g, '&'));
+  const draw = (navigation: Navigation, projectUid?: string | null): string =>
+    renderToStaticMarkup(createElement(FrameNavigationView, { navigation, pathname: '/dashboard', projectUid }));
+
+  it('adds ?project= to optional and global targets in the bar, the rail and the stacked menu — and to no required one', () => {
+    const markup = draw(MIXED, PROJECT);
+    const carried = [`/dashboard?project=${PROJECT}`, `/queue?project=${PROJECT}`, `/projects/${OTHER}`, `/dashboard?view=compact&project=${PROJECT}`];
+    // Three states of one menu: the one-row bar, the rail and the stacked menu.
+    expect(hrefsOf(markup)).toEqual([...carried, ...carried, ...carried]);
+    expect(hrefsOf(markup).filter((href) => href.includes(`/projects/${OTHER}`)).every((href) => !href.includes('?'))).toBe(true);
+  });
+
+  it('adds nothing when the address names no project', () => {
+    const plain = ['/dashboard', '/queue', `/projects/${OTHER}`, '/dashboard?view=compact'];
+    for (const projectUid of [undefined, null]) {
+      expect(hrefsOf(draw(MIXED, projectUid)), String(projectUid)).toEqual([...plain, ...plain, ...plain]);
+    }
+  });
+
+  it('every row of the live menu takes the project, since none of them is a required screen', () => {
+    const live = buildNavigation(EXPERT);
+    const addresses = live.groups.flatMap((group) => group.items.map((item) => item.address));
+    const hrefs = hrefsOf(draw(live, PROJECT));
+    expect(hrefs).toHaveLength(addresses.length * 3);
+    for (const href of hrefs) expect(href, href).toMatch(new RegExp(`\\?project=${PROJECT}$`));
+  });
+
+  it('can fail: a project that is not carried leaves the plain address', () => {
+    expect(hrefsOf(draw(MIXED, PROJECT))).not.toEqual(hrefsOf(draw(MIXED, null)));
   });
 });
 

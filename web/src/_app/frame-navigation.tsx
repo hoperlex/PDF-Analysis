@@ -18,6 +18,13 @@
  * renders the frame once sees all three. A hidden state is `display: none`, which also takes it
  * out of the accessibility tree and the tab order.
  *
+ * ## The project is carried (`R-150c`)
+ *
+ * The project the address names (`?project=` on an optional or global screen, the path on a
+ * required one) rides on every link whose target may take it: `withProjectParam` adds it to an
+ * optional or global screen and leaves a required one alone. The address stays the only source
+ * of the project; the links are rewritten from it on each render, so the choice outlives a click.
+ *
  * ## The current page
  *
  * Read here, from `usePathname`, and matched against the registry's address shapes
@@ -28,11 +35,12 @@
  */
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useId, useState } from 'react';
 import type { ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 
+import { readProjectContext, withProjectParam } from '@/shared/lib';
 import type { DisclosureProps } from '@/shared/ui';
 import { Disclosure } from '@/shared/ui';
 
@@ -48,6 +56,8 @@ export interface FrameNavigationProps {
 export interface FrameNavigationViewProps extends FrameNavigationProps {
   /** The browser's pathname; `null` when it is not known, and then nothing is marked. */
   readonly pathname: string | null;
+  /** The project the address names (`R-150c`), carried onto the links that may take it. Absent or `null`: none. */
+  readonly projectUid?: string | null | undefined;
   /**
    * What draws «Меню» and each group. In the shell it is the `Disclosure` island, which holds its
    * own open state. An instrument that renders one static pass cannot click, so it passes a
@@ -56,16 +66,24 @@ export interface FrameNavigationViewProps extends FrameNavigationProps {
   readonly disclosure?: ComponentType<DisclosureProps> | undefined;
 }
 
-function links(group: NavigationGroup, current: CurrentScreen | null) {
+function links(group: NavigationGroup, current: CurrentScreen | null, projectUid: string | null) {
   return group.items.map((item) => ({
-    href: item.address,
+    href: withProjectParam(item.address, projectUid),
     label: item.label,
     icon: <NavigationGlyph label={item.label} />,
     current: current?.address === item.address,
   }));
 }
 
-function RailLink({ item, current }: { readonly item: NavigationItem; readonly current: boolean }) {
+function RailLink({
+  item,
+  current,
+  projectUid,
+}: {
+  readonly item: NavigationItem;
+  readonly current: boolean;
+  readonly projectUid: string | null;
+}) {
   const id = useId();
   const [tooltip, setTooltip] = useState<{ readonly left: number; readonly top: number } | null>(null);
 
@@ -78,7 +96,7 @@ function RailLink({ item, current }: { readonly item: NavigationItem; readonly c
     <>
       <Link
         className={styles.railLink}
-        href={item.address}
+        href={withProjectParam(item.address, projectUid)}
         aria-label={item.label}
         aria-describedby={tooltip === null ? undefined : id}
         aria-current={current ? 'page' : undefined}
@@ -97,7 +115,12 @@ function RailLink({ item, current }: { readonly item: NavigationItem; readonly c
   );
 }
 
-export function FrameNavigationView({ navigation, pathname, disclosure = Disclosure }: FrameNavigationViewProps) {
+export function FrameNavigationView({
+  navigation,
+  pathname,
+  projectUid = null,
+  disclosure = Disclosure,
+}: FrameNavigationViewProps) {
   const Group = disclosure;
   const { groups } = navigation;
   if (groups.length === 0) return null;
@@ -107,13 +130,13 @@ export function FrameNavigationView({ navigation, pathname, disclosure = Disclos
     <nav className={styles.nav} aria-label="Разделы">
       <div className={styles.row} data-nav-state="row">
         {groups.map((group) => (
-          <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current)} layout="inline" defaultOpen closeOnNavigate={false} closeOnOutside={false} />
+          <Group key={group.group} label={group.label} current={inGroup(group)} links={links(group, current, projectUid)} layout="inline" defaultOpen closeOnNavigate={false} closeOnOutside={false} />
         ))}
       </div>
       <div className={styles.rail} data-nav-state="rail">
         {groups.map((group) => (
           <div className={styles.railGroup} key={group.group} role="group" aria-label={group.label} data-current-group={inGroup(group) ? 'true' : undefined}>
-            {group.items.map((item) => <RailLink key={item.address} item={item} current={current?.address === item.address} />)}
+            {group.items.map((item) => <RailLink key={item.address} item={item} current={current?.address === item.address} projectUid={projectUid} />)}
           </div>
         ))}
       </div>
@@ -122,7 +145,7 @@ export function FrameNavigationView({ navigation, pathname, disclosure = Disclos
           <ul className={styles.stackedList}>
             {groups.map((group) => (
               <li className={styles.stackedItem} key={group.group}>
-                <Group label={group.label} layout="inline" current={inGroup(group)} links={links(group, current)} closeOnNavigate={false} />
+                <Group label={group.label} layout="inline" current={inGroup(group)} links={links(group, current, projectUid)} closeOnNavigate={false} />
               </li>
             ))}
           </ul>
@@ -132,6 +155,11 @@ export function FrameNavigationView({ navigation, pathname, disclosure = Disclos
   );
 }
 
+const NO_PARAMS = new URLSearchParams();
+
 export function FrameNavigation({ navigation }: FrameNavigationProps) {
-  return <FrameNavigationView navigation={navigation} pathname={usePathname()} />;
+  const pathname = usePathname();
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const projectUid = pathname === null ? null : readProjectContext(pathname, searchParams).projectUid;
+  return <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} />;
 }
