@@ -68,6 +68,9 @@ import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
+import { BatchStartPanelView } from '@/features/start-run';
+import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
+import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
@@ -1188,6 +1191,40 @@ export function screens(): Screen[] {
       }),
     ),
   );
+  // `R-151c`: the batch start panel -- one estimate ready and started, one ready and refused, one being sent, one
+  // without an estimate; the agreement and the total.
+  {
+    const uid = (n: string) => `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never;
+    const entries = [
+      { versionUid: uid('A1'), title: 'Пояснительная записка' },
+      { versionUid: uid('A2'), title: 'Архитектурные решения' },
+      { versionUid: uid('A3'), title: 'Конструкции железобетонные' },
+      { versionUid: uid('A4'), title: 'Генеральный план' },
+    ];
+    const ready = (n: string) => ({ kind: 'ready' as const, estimate: costEstimate({ version_uid: uid(n) }) });
+    add(
+      'BatchStartPanel, estimates read, outcomes of each kind',
+      render(createElement(BatchStartPanelView, {
+        projectUid: PROJECT_UID,
+        entries,
+        estimates: new Map<never, BatchEstimate>([
+          [uid('A1'), ready('A1')], [uid('A2'), ready('A2')], [uid('A3'), ready('A3')],
+          [uid('A4'), { kind: 'failed' as const, text: 'Сервис оценки недоступен.' }],
+        ]),
+        outcomes: new Map<never, BatchOutcome>([
+          [uid('A1'), { kind: 'started' as const, run: runStatus() }],
+          [uid('A2'), { kind: 'refused' as const, text: 'Версия не классифицирована.' }],
+          [uid('A3'), { kind: 'sending' as const }],
+        ]),
+        estimating: false,
+        starting: false,
+        agreed: true,
+        onAgree: noop,
+        onStart: noop,
+        onClose: noop,
+      })),
+    );
+  }
   add(
     'FindingList failed',
     render(

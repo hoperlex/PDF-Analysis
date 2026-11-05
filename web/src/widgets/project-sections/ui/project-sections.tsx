@@ -27,10 +27,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-import type { DocumentVersion, ProjectUid } from '@/shared/api';
+import type { DocumentVersion, ProjectUid, VersionUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
-import { DocumentCardGrid, useDocumentList } from '@/entities/document-version';
+import { useMayActAsExpert } from '@/entities/account';
+import { DocumentCardGrid, documentCardTitle, isComparisonOnly, useDocumentList } from '@/entities/document-version';
+import type { BatchEntry } from '@/features/start-run';
+import { BatchStartPanel } from '@/features/start-run';
 
 import { projectStructure } from '../model/structure';
 import styles from './project-sections.module.css';
@@ -39,13 +42,28 @@ export interface ProjectSectionsProps {
   readonly projectUid: ProjectUid;
 }
 
+/**
+ * `R-151c`: the cards a reader may start together. Only a version confirmed for a section can be run, and a version
+ * admitted for comparison only cannot; the box is not drawn for either.
+ */
+export interface CardSelection {
+  readonly selected: ReadonlySet<string>;
+  readonly onToggle: (version: DocumentVersion) => void;
+}
+
+export function startable(version: DocumentVersion): boolean {
+  return version.classification !== undefined && !isComparisonOnly(version);
+}
+
 function DocumentRows({
   projectUid,
   documents,
   toClassification = false,
+  selection,
 }: {
   readonly projectUid: ProjectUid;
   readonly documents: readonly DocumentVersion[];
+  readonly selection?: CardSelection | undefined;
   /**
    * Open each version at its stage-and-section panel rather than at the top: the reader of
    * «Не классифицировано» came to confirm a section, and that is where it is done.
@@ -62,6 +80,14 @@ function DocumentRows({
           : routes.version(projectUid, version.version_uid),
         documentHref: routes.document(projectUid, version.document_uid),
       })}
+      select={selection === undefined ? undefined : (version) => startable(version) ? (
+        <input
+          type="checkbox"
+          aria-label={`Выбрать «${documentCardTitle(version)}» для запуска аудита`}
+          checked={selection.selected.has(version.version_uid)}
+          onChange={() => selection.onToggle(version)}
+        />
+      ) : null}
     />
   );
 }
@@ -71,10 +97,12 @@ export interface ProjectStructureViewProps {
   readonly items: readonly DocumentVersion[];
   /** Whether the server has a further page of this project's documents. */
   readonly hasNextPage: boolean;
+  /** `R-151c`: selection boxes on the startable cards, for a reader who may start runs. */
+  readonly selection?: CardSelection | undefined;
 }
 
 /** The grouped structure of one page of documents. Rendered by the static harness. */
-export function ProjectStructureView({ projectUid, items, hasNextPage }: ProjectStructureViewProps) {
+export function ProjectStructureView({ projectUid, items, hasNextPage, selection }: ProjectStructureViewProps) {
   const structure = projectStructure(items);
   return (
     <div data-project-structure="" data-document-count={items.length}>
@@ -116,7 +144,7 @@ export function ProjectStructureView({ projectUid, items, hasNextPage }: Project
                   <p data-section-page-link={section.code}>
                     <Link href={routes.projectSection(projectUid, section.code)}>Открыть раздел</Link>
                   </p>
-                  <DocumentRows projectUid={projectUid} documents={documents} />
+                  <DocumentRows projectUid={projectUid} documents={documents} selection={selection} />
                 </div>
               )}
             </details>
@@ -155,6 +183,19 @@ export function ProjectStructureView({ projectUid, items, hasNextPage }: Project
 export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useDocumentList(projectUid, cursor);
+  const mayAct = useMayActAsExpert();
+  // `R-151c`: the chosen cards, by version, and the batch the panel was opened with (fixed for its life).
+  const [chosen, setChosen] = useState<ReadonlyMap<string, BatchEntry>>(new Map());
+  const [batch, setBatch] = useState<readonly BatchEntry[] | null>(null);
+  const selection: CardSelection | undefined = mayAct && batch === null ? {
+    selected: new Set(chosen.keys()),
+    onToggle: (version) => setChosen((map) => {
+      const next = new Map(map);
+      if (next.has(version.version_uid)) next.delete(version.version_uid);
+      else next.set(version.version_uid, { versionUid: version.version_uid as VersionUid, title: documentCardTitle(version) });
+      return next;
+    }),
+  } : undefined;
 
   let body;
   if (query.isPending) {
@@ -189,6 +230,7 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
           projectUid={projectUid}
           items={query.data.items}
           hasNextPage={nextCursor !== null}
+          selection={selection}
         />
         <div className="am-pager">
           {cursor === undefined ? null : (
@@ -231,6 +273,26 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
           {query.isFetching ? 'Обновляется…' : 'Обновить'}
         </button>
       </div>
+      {mayAct && chosen.size > 0 && batch === null ? (
+        <p className="am-note" data-batch-selection={chosen.size}>
+          <button type="button" className="am-button" onClick={() => setBatch([...chosen.values()])}>
+            Запустить аудит ({chosen.size})
+          </button>{' '}
+          <button type="button" className="am-button am-button--quiet" onClick={() => setChosen(new Map())}>
+            Снять выбор
+          </button>
+        </p>
+      ) : null}
+      {batch === null ? null : (
+        <BatchStartPanel
+          projectUid={projectUid}
+          entries={batch}
+          onClose={() => {
+            setBatch(null);
+            setChosen(new Map());
+          }}
+        />
+      )}
       {body}
     </section>
   );
