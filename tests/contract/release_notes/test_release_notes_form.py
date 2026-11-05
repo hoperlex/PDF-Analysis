@@ -164,13 +164,19 @@ def test_authored_shape_and_form() -> None:
     # «1.1.0 или 1.2.0» while five profiles were at 1.3.0; it now quotes a range that holds every
     # profile.json (test_note_profile_versions.py) and says that five sections report omissions
     # under «Документация»; it too has not reached main.
+    # 0.10.0 and 0.11.0 (RELEASE-0-10-0-0-11-0) describe what the owner's pull requests put on main
+    # while VERSION still said 0.9.0, one version per deployment day (the descending_dates rule):
+    # 0.10.0 is #39 of 2026-11-03 (executor groups and rules, the agent wizard, the review's page
+    # viewer, the restored intake limits), 0.11.0 is #40 to #42 of 2026-11-05 (the project
+    # selector, the viewer role, the findings table, the readable queue).
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2, "0.5.1": 1, "0.5.0": 1,
-        "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
+        "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
+        "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0", "0.3.0", "0.2.0",
+        "0.11.0", "0.10.0", "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0",
+        "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
     assert archive["is_archive"] is True
