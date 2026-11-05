@@ -1,6 +1,9 @@
 import type { ExecutionJournalEntry, ExecutionQueueItem, Role, RunState } from '@/shared/api';
 import { ERROR_CODE_VALUES, RUN_STATE_VALUES } from '@/shared/api';
 import { STATE_LABELS } from '@/shared/ui';
+import { terminalReasonNote } from '@/entities/audit-run';
+
+import type { ExecutionQueueState } from '../api/use-execution';
 
 export type ExecutionAction = 'cancel' | 'reaudit' | 'priority' | 'pause' | 'intake' | 'connections';
 
@@ -19,7 +22,7 @@ export function canReaudit(item: ExecutionQueueItem): boolean {
   return ['succeeded', 'failed', 'cancelled', 'dead_letter'].includes(item.state);
 }
 
-const JOB_STATE_LABELS: Readonly<Record<string, string>> = {
+const JOB_STATE_LABELS: Readonly<Record<ExecutionQueueState, string>> = {
   queued: 'Ожидает',
   leased: 'Назначена',
   running: 'Выполняется',
@@ -31,7 +34,46 @@ const JOB_STATE_LABELS: Readonly<Record<string, string>> = {
 };
 
 export function jobStateLabel(state: string): string | null {
-  return JOB_STATE_LABELS[state] ?? null;
+  return Object.prototype.hasOwnProperty.call(JOB_STATE_LABELS, state)
+    ? JOB_STATE_LABELS[state as ExecutionQueueState]
+    : null;
+}
+
+/**
+ * The states the queue's filter offers, in the order a job passes through them and then ends. Typed against
+ * the contract's own set (`ExecutionQueueState`), so a state the server adds stops this file compiling
+ * instead of silently going unfilterable.
+ */
+export const QUEUE_STATE_OPTIONS: readonly { readonly value: ExecutionQueueState; readonly label: string }[] = [
+  { value: 'queued', label: JOB_STATE_LABELS.queued },
+  { value: 'leased', label: JOB_STATE_LABELS.leased },
+  { value: 'running', label: JOB_STATE_LABELS.running },
+  { value: 'retry_wait', label: JOB_STATE_LABELS.retry_wait },
+  { value: 'succeeded', label: JOB_STATE_LABELS.succeeded },
+  { value: 'failed', label: JOB_STATE_LABELS.failed },
+  { value: 'cancelled', label: JOB_STATE_LABELS.cancelled },
+  { value: 'dead_letter', label: JOB_STATE_LABELS.dead_letter },
+];
+
+/** Why a queue row ended badly: the run's reason as the sentence the run screen gives it, or the bare code. */
+export interface QueueItemError {
+  /** The machine value, always shown beside the sentence so a person can quote it. */
+  readonly code: string;
+  /** The catalog sentence for the code; `null` when this client has none, and then only the code is shown. */
+  readonly sentence: string | null;
+}
+
+/**
+ * What a queue row says about failure, from `error_code` (the run's `terminal_reason`). Nothing is said for a
+ * row without one; a code the client has no sentence for is shown as the code alone, never as a guess.
+ */
+export function queueItemError(item: Pick<ExecutionQueueItem, 'error_code'>): QueueItemError | null {
+  // Widened on purpose: the type says the member is a catalogue code or absent, and a server one reseal
+  // ahead of this client can send what the type cannot name (see `terminalReasonNote`).
+  const code: string | null | undefined = item.error_code;
+  if (code === undefined || code === null || code === '') return null;
+  const note = terminalReasonNote(code);
+  return { code, sentence: note.kind === 'described' ? note.sentence : null };
 }
 
 export function queueAgeLabel(createdAt: string, asOf: number | null): string {

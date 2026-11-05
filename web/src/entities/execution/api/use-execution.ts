@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import type {
-  ExecutionJournalPage, ExecutionQueuePage, ExecutionWorkerPage, RunId,
+  ExecutionJournalPage, ExecutionQueuePage, ExecutionWorkerPage, ListExecutionQueueInput, RunId,
 } from '@/shared/api';
 import { listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
 
@@ -22,11 +22,32 @@ export const EXECUTION_PAGE_LIMIT = 25;
  * that screen is another change.
  */
 
-export function queueQueryOptions(cursor?: string) {
+/** The job states `listExecutionQueue` filters by, as the contract declares them. */
+export type ExecutionQueueState = NonNullable<NonNullable<ListExecutionQueueInput['query']>['state']>;
+
+/**
+ * What narrows the queue (`UI-PARITY-QUEUE-A`). `state` keeps the jobs in one state; the period
+ * `[createdFrom, createdTo)` keeps the jobs accepted in it, both as instants with an offset. Unset means no
+ * filter. The server binds a cursor to the filters it was issued under, so a filter and its cursors
+ * change together (the page resets its cursors when the filter moves) and are one cache key.
+ */
+export interface ExecutionQueueFilter {
+  readonly state?: ExecutionQueueState;
+  readonly createdFrom?: string;
+  readonly createdTo?: string;
+}
+
+export function queueQueryOptions(cursor?: string, filter: ExecutionQueueFilter = {}) {
   return {
-    queryKey: queryKeys.execution.queue(cursor),
+    queryKey: queryKeys.execution.queue(cursor, filter),
     queryFn: async () => (await listExecutionQueue({
-      query: { limit: EXECUTION_PAGE_LIMIT, ...(cursor === undefined ? {} : { cursor }) },
+      query: {
+        limit: EXECUTION_PAGE_LIMIT,
+        ...(cursor === undefined ? {} : { cursor }),
+        ...(filter.state === undefined ? {} : { state: filter.state }),
+        ...(filter.createdFrom === undefined ? {} : { created_from: filter.createdFrom }),
+        ...(filter.createdTo === undefined ? {} : { created_to: filter.createdTo }),
+      },
     })).data,
     ...OPERATIONAL_LIST_POLL,
     refetchOnWindowFocus: 'always',
@@ -34,8 +55,8 @@ export function queueQueryOptions(cursor?: string) {
   } as const;
 }
 
-export function useExecutionQueue(cursor?: string) {
-  return useQuery<ExecutionQueuePage>(queueQueryOptions(cursor));
+export function useExecutionQueue(cursor?: string, filter: ExecutionQueueFilter = {}) {
+  return useQuery<ExecutionQueuePage>(queueQueryOptions(cursor, filter));
 }
 
 export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = true) {

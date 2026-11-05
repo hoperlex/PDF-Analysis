@@ -226,6 +226,7 @@ import {
   UNKNOWN_ROLE,
 } from '../unit/shell/subjects';
 import { yieldToRunnerAfterEachTest } from './lib/yield-to-runner';
+import { QUEUE_WORK } from '../unit/execution/queue-work';
 
 // This file computes for ~40-65 s without awaiting I/O; see the helper for why that aborts a run.
 yieldToRunnerAfterEachTest();
@@ -1076,7 +1077,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.17.0',
+    contract_version: '1.18.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1088,7 +1089,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.17.0',
+    contract_version: '1.18.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1344,7 +1345,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
     items: [{
       job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
       run_id: RUN_ID, state: 'queued', priority: 2,
-      created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z',
+      created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', ...QUEUE_WORK,
     }],
     page, paused: false,
   });
@@ -1913,7 +1914,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.17.0',
+    contract_version: '1.18.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2121,7 +2122,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.17.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.18.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2518,6 +2519,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         priority: 2,
         created_at: '2026-10-09T10:00:00Z',
         available_at: '2026-10-09T10:00:00Z',
+        ...QUEUE_WORK,
       }],
       roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
       busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
@@ -2715,6 +2717,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         priority: 2,
         created_at: '2026-10-09T10:00:00Z',
         available_at: '2026-10-09T10:00:00Z',
+        ...QUEUE_WORK,
       })),
       roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
       busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
@@ -2731,6 +2734,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         priority: 2,
         created_at: '2026-10-09T10:00:00Z',
         available_at: '2026-10-09T10:00:00Z',
+        ...QUEUE_WORK,
       }],
       roles: ['admin'], asOf: null,
       busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
@@ -4119,7 +4123,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.17.0',
+            contract_version: '1.18.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4141,7 +4145,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.17.0',
+            contract_version: '1.18.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

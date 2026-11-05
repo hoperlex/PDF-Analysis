@@ -268,7 +268,17 @@ export const queryKeys = {
   },
   execution: {
     all: () => ['execution'] as const,
-    queue: (cursor?: string) => ['execution', 'queue', { cursor }] as const,
+    /**
+     * One page of `listExecutionQueue`, keyed by its cursor **and its filters** (`UI-PARITY-QUEUE-A`): the
+     * server binds a cursor to the filters it was issued under, so two filters never share a cached page,
+     * and an unset filter hashes exactly as no filter did.
+     */
+    queue: (
+      cursor?: string,
+      filter?: { readonly state?: string; readonly createdFrom?: string; readonly createdTo?: string },
+    ) => ['execution', 'queue', {
+      cursor, state: filter?.state, createdFrom: filter?.createdFrom, createdTo: filter?.createdTo,
+    }] as const,
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
     /**

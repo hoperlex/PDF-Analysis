@@ -24,6 +24,7 @@ import { QueuePage } from '@/_pages/queue/ui/queue-page';
 import { WorkersPage, intakeIntentLabel } from '@/_pages/workers/ui/workers-page';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
+import { QUEUE_WORK } from '../execution/queue-work';
 
 const RUN_ID = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const OTHER_RUN = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8G';
@@ -61,7 +62,7 @@ function list(roles: Role[], items: readonly ExecutionWorker[] = REGISTRY, onPre
 
 function envelope(code: 'permission_denied' | 'dependency_unavailable') {
   return {
-    contract_version: '1.17.0', error_code: code,
+    contract_version: '1.18.0', error_code: code,
     message: 'Безопасный отказ.', correlation_id: 'cid-workers-1', retryable: false,
   } as const;
 }
@@ -234,7 +235,7 @@ describe('the «Исполнители» page', () => {
 describe('the queue names the worker holding a run', () => {
   const running: ExecutionQueueItem = {
     job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', run_id: RUN_ID, state: 'running', priority: 0,
-    created_at: '2026-10-12T10:00:00Z', available_at: '2026-10-12T10:00:00Z',
+    created_at: '2026-10-12T10:00:00Z', available_at: '2026-10-12T10:00:00Z', ...QUEUE_WORK,
   };
 
   function queue(item: ExecutionQueueItem, workers?: ExecutionWorkerPage | 'failed'): string {
