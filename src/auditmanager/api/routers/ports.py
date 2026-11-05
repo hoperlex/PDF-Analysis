@@ -379,7 +379,8 @@ class DocumentPort(Protocol):
         """One published version and its input manifest."""
 
     def list_documents(
-        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
+        tag: str | None = None,
     ) -> Sequence[DocumentVersionView]:
         """The current version of every document in one project, **newest first**.
 
@@ -415,6 +416,16 @@ class DocumentPort(Protocol):
         self, *, project_uid: str, document_uid: str, display_title: str, user_uid: str, idempotency_key: str,
     ) -> DocumentVersionView:
         """`R-151a`: change a document's display title; its identity stays. Keyed."""
+        ...
+
+    def set_document_tags(
+        self, *, project_uid: str, document_uid: str, tags: list[str], user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`R-151e`: replace one document's free tags (at most ten, 1 to 40 characters each). Keyed."""
+        ...
+
+    def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
+        """`R-151e`: each tag of the project's documents in use, with how many carry it."""
         ...
 
     def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:

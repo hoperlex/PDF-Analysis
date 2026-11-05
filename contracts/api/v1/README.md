@@ -11,7 +11,17 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.22.0` (`UI-PARITY-P0G`)
+## Current contract `1.23.0` (`UI-PARITY-P0H`)
+
+Slice for ruling `R-151e`: free tags on a document, and a filter by tag (the original's folders are not built: no order,
+no drag, no group entity). `setDocumentTags` (`PUT /projects/{project_uid}/documents/{document_uid}/tags`, keyed, body
+`SetDocumentTagsRequest {tags}`, at most ten tags of 1 to 40 characters) replaces the set; `listDocumentTags`
+(`GET /projects/{project_uid}/document-tags`, `DocumentTagList` of `DocumentTagCount {tag, document_count}`) is the project's
+catalogue without archived documents; `listDocuments` takes the optional `tag` filter (case-insensitive) and `DocumentVersion`
+gains the optional `tags`. Migration `0053_document_tags` adds `document_tag`. No error code.
+The API now has 254 paths, 282 operations and 680 schemas; migration head `0053`. The domain catalogs are at candidate revision 41.
+
+## Contract `1.22.0` (`UI-PARITY-P0G`, historical)
 
 Slice for ruling `R-151a`: a document is archived or renamed, never deleted. Two keyed operations, `setDocumentArchived`
 (`PUT /projects/{project_uid}/documents/{document_uid}/archive`, body `SetDocumentArchivedRequest {archived}`) and
@@ -20,7 +30,7 @@ Slice for ruling `R-151a`: a document is archived or renamed, never deleted. Two
 unless `include_archived` is asked, and `DocumentVersion` gains the optional `archived_at`. Every change appends
 `document.archived`, `document.restored` or `document.renamed` to the audit trail. `expert` and `admin`; `viewer` refused.
 Migration `0052_document_archive` adds `document.archived_at` and `archived_by_user_uid` (a RESTRICT reference). No error code.
-The API now has 252 paths, 280 operations and 677 schemas; migration head `0052`. The domain catalogs are at candidate revision 40.
+The API then had 252 paths, 280 operations and 677 schemas; migration head `0052`. The domain catalogs were at candidate revision 40.
 
 ## Contract `1.21.0` (`UI-PARITY-P0F`, historical)
 

@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.22.0 (OpenAPI 3.1.0)
- *   sha256 68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f
+ *   AuditManager PC-01 API 1.23.0 (OpenAPI 3.1.0)
+ *   sha256 9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.22.0';
+export const CONTRACT_VERSION = '1.23.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f';
+export const CONTRACT_DIGEST = '9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -288,6 +288,8 @@ export const SCHEMA_NAMES = [
   'DecisionRecordPage',
   'DiffHunk',
   'DocumentAuditCounts',
+  'DocumentTagCount',
+  'DocumentTagList',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
@@ -541,6 +543,7 @@ export const SCHEMA_NAMES = [
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
   'SetDocumentArchivedRequest',
+  'SetDocumentTagsRequest',
   'SetExecutionPausedRequest',
   'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
@@ -3761,6 +3764,17 @@ export type DocumentAuditCounts = {
   partial: number;
 };
 
+/** `R-151e`: one tag of a project's documents in use, and how many documents carry it. */
+export type DocumentTagCount = {
+  document_count: number;
+  tag: string;
+};
+
+/** `R-151e`: the project's tag catalogue, in case-insensitive order; archived documents are not counted. */
+export type DocumentTagList = {
+  items: Array<DocumentTagCount>;
+};
+
 export type DocumentUid = string;
 
 /** The contract pattern for `DocumentUid`. Anchored; use with `new RegExp()`. */
@@ -3781,6 +3795,8 @@ export type DocumentVersion = {
   section?: ProjectSection;
   sha256: Sha256;
   source_filename?: string | null;
+  /** `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them (`listDocuments`, `listVersions` and the document commands). */
+  tags?: Array<string>;
   upload_kind?: VersionUploadKind;
   version_ordinal: number;
   version_uid: VersionUid;
@@ -3843,7 +3859,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.22.0";
+  contract_version: "1.23.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -6388,6 +6404,11 @@ export type SetCurrentNormSnapshotRequest = {
 /** `R-151a` (contract 1.22.0): archive (`true`) or restore (`false`) one document. Nothing is deleted. */
 export type SetDocumentArchivedRequest = {
   archived: boolean;
+};
+
+/** `R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all. */
+export type SetDocumentTagsRequest = {
+  tags: Array<string>;
 };
 
 export type SetExecutionPausedRequest = {

@@ -10,7 +10,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { DocumentLifecycleView, titleProblem } from '@/features/manage-document';
+import { DocumentLifecycleView, cleanTag, tagProblem, titleProblem } from '@/features/manage-document';
 import type { DocumentLifecycleViewProps } from '@/features/manage-document';
 
 const noop = (): void => {};
@@ -48,5 +48,13 @@ describe('the document lifecycle controls', () => {
     expect(view({ draft: '   ' })).toContain('Название не может быть пустым.');
     expect(titleProblem('Новое название')).toBeNull();
     expect(titleProblem('x'.repeat(401))).toBe('Название длиннее 400 символов.');
+  });
+
+  it('keep tags as the server does: trimmed, spaces collapsed, no case duplicate, at most ten (R-151e)', () => {
+    expect(cleanTag('  Корпус   1 ')).toBe('Корпус 1');
+    expect(tagProblem('корпус 1', ['Корпус 1'])).toBe('Такая метка уже есть.');
+    expect(tagProblem('x'.repeat(41), [])).toBe('Метка длиннее 40 символов.');
+    expect(tagProblem('Новая', Array.from({ length: 10 }, (_, n) => `м${n}`))).toBe('У документа не больше 10 меток.');
+    expect(tagProblem('Секция А', ['Корпус 1'])).toBeNull();
   });
 });

@@ -104,6 +104,7 @@ export {
   DOCUMENT_PAGE_LIMIT,
   documentListQueryOptions,
   useDocumentList,
+  useDocumentTags,
 } from './api/use-document-list';
 export { VERSION_PAGE_LIMIT, useVersionList } from './api/use-version-list';
 

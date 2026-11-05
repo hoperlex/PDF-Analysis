@@ -119,3 +119,68 @@ def rename_document(
         session.execute(_RENAME, {"document_uid": document_uid, "title": title})
         _event(session, "document.renamed", document_uid, {"actor_uid": actor_uid, "from": previous, "to": title})
     ledger.succeed(session, claimed.command_id, {"document_uid": document_uid, "display_title": title})
+
+
+# -- tags (`R-151e`, migration 0053) --------------------------------------------------------------------------------
+
+#: At most this many tags on one document, each at most ``TAG_MAX`` characters.
+TAGS_MAX = 10
+TAG_MAX = 40
+
+_TAGS_OF = text("SELECT tag FROM document_tag WHERE document_uid = :document_uid ORDER BY lower(tag), tag")
+_CLEAR_TAGS = text("DELETE FROM document_tag WHERE document_uid = :document_uid")
+_ADD_TAG = text(
+    "INSERT INTO document_tag (document_uid, tag, created_by_user_uid) VALUES (:document_uid, :tag, :actor)"
+)
+
+
+def clean_tags(values: list[str]) -> list[str]:
+    """Trimmed, inner whitespace collapsed, case-insensitive duplicates dropped (first spelling kept), sorted."""
+    seen: dict[str, str] = {}
+    for value in values:
+        tag = " ".join(value.split())
+        if not tag:
+            continue
+        if len(tag) > TAG_MAX:
+            raise DomainError(
+                ErrorCode.VALIDATION_FAILED, field="tags", constraint="length",
+                message=f"a tag is at most {TAG_MAX} characters",
+            )
+        seen.setdefault(tag.casefold(), tag)
+    if len(seen) > TAGS_MAX:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED, field="tags", constraint="max_items",
+            message=f"a document has at most {TAGS_MAX} tags",
+        )
+    return sorted(seen.values(), key=lambda tag: (tag.casefold(), tag))
+
+
+def tags_of(session: Session, document_uid: str) -> list[str]:
+    return [str(row[0]) for row in session.execute(_TAGS_OF, {"document_uid": document_uid}).all()]
+
+
+def set_document_tags(
+    session: Session, *, project_uid: str, document_uid: str, tags: list[str], actor_uid: str,
+    idempotency_key: str, commands: CommandRepository | None = None,
+) -> None:
+    """Replace one document's tags with ``tags``. The same set again changes nothing and records nothing."""
+    DocumentUid.parse(document_uid)
+    wanted = clean_tags(tags)
+    ledger = commands or CommandRepository()
+    claimed = ledger.begin(
+        session, command_type="set_document_tags", idempotency_key=IdempotencyKey(idempotency_key),
+        fingerprint=payload_fingerprint({"document_uid": document_uid, "tags": wanted}),
+    )
+    if isinstance(claimed, CommandReplay):
+        return
+    assert isinstance(claimed, CommandStarted)
+    _lock(session, document_uid, project_uid)
+    current = tags_of(session, document_uid)
+    if current != wanted:
+        session.execute(_CLEAR_TAGS, {"document_uid": document_uid})
+        for tag in wanted:
+            session.execute(_ADD_TAG, {"document_uid": document_uid, "tag": tag, "actor": actor_uid})
+        _event(session, "document.tags_set", document_uid, {
+            "actor_uid": actor_uid, "from": ", ".join(current), "to": ", ".join(wanted),
+        })
+    ledger.succeed(session, claimed.command_id, {"document_uid": document_uid, "tags": wanted})

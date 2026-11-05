@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.22.0 (OpenAPI 3.1.0)
- *   sha256 68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f
+ *   AuditManager PC-01 API 1.23.0 (OpenAPI 3.1.0)
+ *   sha256 9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -115,6 +115,7 @@ import type {
   DecideOptimisationProposalRequest,
   DecisionEventPage,
   DecisionRecordPage,
+  DocumentTagList,
   DocumentUid,
   DocumentVersion,
   DocumentVersionPage,
@@ -231,6 +232,7 @@ import type {
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetDocumentArchivedRequest,
+  SetDocumentTagsRequest,
   SetExecutionPausedRequest,
   SetExecutorIntegrationAuthorisationRequest,
   SetExecutorRouteRequest,
@@ -461,6 +463,7 @@ export const OPERATION_IDS = [
   'listComparisonVersionOrders',
   'listDecisionHistory',
   'listDecisions',
+  'listDocumentTags',
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
@@ -547,6 +550,7 @@ export const OPERATION_IDS = [
   'searchNorms',
   'setCurrentNormSnapshot',
   'setDocumentArchived',
+  'setDocumentTags',
   'setExecutionPaused',
   'setExecutorIntegrationAuthorisation',
   'setExecutorRoute',
@@ -4218,6 +4222,29 @@ export type ListDecisionsInput = {
 export type ListDecisionsResult = DecisionRecordPage;
 
 // ------------------------------------------------------------------------------------
+// listDocumentTags - GET /projects/{project_uid}/document-tags
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Document Tags
+ *
+ * `UI-PARITY-P0H` (contract 1.23.0, ruling `R-151e`): every tag the project's documents in use carry, in case-insensitive order, with how many documents carry it; archived documents are not counted. The tag filter of the project page reads it, so it offers every tag and not those of one page. A product read: `expert`, `admin` and `viewer`.
+ */
+export type ListDocumentTagsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/document-tags`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listDocumentTags` (`application/json`, HTTP 200). */
+export type ListDocumentTagsResult = DocumentTagList;
+
+// ------------------------------------------------------------------------------------
 // listDocuments - GET /projects/{project_uid}/documents
 // ------------------------------------------------------------------------------------
 
@@ -4245,6 +4272,8 @@ export type ListDocumentsInput = {
     limit?: number;
     /** Only the documents whose current version is confirmed for this section (its `classification.section_code`); every document when absent. A document whose current version has no confirmed classification never matches. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151l`): the section page lists one section's documents without walking the whole project. A cursor resumes after its row in the filtered listing; presented under another filter it yields that listing's continuation or an empty page, never a page from another listing. */
     section_code?: ProjectSection;
+    /** `R-151e`: only the documents carrying this tag, regardless of case. */
+    tag?: string;
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -6446,6 +6475,37 @@ export type SetDocumentArchivedInput = {
 
 /** Success body of `setDocumentArchived` (`application/json`, HTTP 200). */
 export type SetDocumentArchivedResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
+// setDocumentTags - PUT /projects/{project_uid}/documents/{document_uid}/tags
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Document Tags
+ *
+ * `UI-PARITY-P0H` (contract 1.23.0, ruling `R-151e`): replace the document's free tags with the given set (at most ten, each 1 to 40 characters after trimming; inner spaces collapse; a case-insensitive duplicate keeps its first spelling). An empty list removes them all. No order and no group: the original's folders are not built. The same set again changes nothing; a change appends `document.tags_set` to the audit trail. `expert` and `admin`; `viewer` is refused.
+ */
+export type SetDocumentTagsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/tags`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetDocumentTagsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setDocumentTags` (`application/json`, HTTP 200). */
+export type SetDocumentTagsResult = DocumentVersion;
 
 // ------------------------------------------------------------------------------------
 // setExecutionPaused - PUT /execution/dispatch
@@ -9835,12 +9895,26 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['decisions'],
   },
+  listDocumentTags: {
+    operationId: 'listDocumentTags',
+    method: 'GET',
+    path: '/projects/{project_uid}/document-tags',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['documents'],
+  },
   listDocuments: {
     operationId: 'listDocuments',
     method: 'GET',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
-    queryParams: ['cursor', 'include_archived', 'limit', 'section_code'],
+    queryParams: ['cursor', 'include_archived', 'limit', 'section_code', 'tag'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -11029,6 +11103,20 @@ export const OPERATIONS = {
     operationId: 'setDocumentArchived',
     method: 'PUT',
     path: '/projects/{project_uid}/documents/{document_uid}/archive',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  setDocumentTags: {
+    operationId: 'setDocumentTags',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/tags',
     pathParams: ['document_uid', 'project_uid'],
     queryParams: [],
     headerParams: [],

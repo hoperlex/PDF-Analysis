@@ -131,3 +131,17 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
+
+/* `R-151e`: the tag filter above the sections. */
+.tagFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.tagFilterLabel {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

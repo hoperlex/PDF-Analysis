@@ -918,7 +918,8 @@ class DocumentAdapter:
         )
 
     def list_documents(
-        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
+        tag: str | None = None,
     ) -> Sequence[DocumentVersionView]:
         from dataclasses import replace
 
@@ -926,11 +927,15 @@ class DocumentAdapter:
 
         parsed = ProjectUid.parse(project_uid)
         archived = self._service.archived_documents(parsed) if hasattr(self._service, "archived_documents") else {}
+        tags = self._service.tags_in_project(parsed) if hasattr(self._service, "tags_in_project") else {}
+        wanted = None if tag is None else " ".join(tag.split()).casefold()
         views = tuple(
-            replace(view, archived_at=archived.get(view.document_uid))
+            replace(view, archived_at=archived.get(view.document_uid), tags=tuple(tags.get(view.document_uid, ())))
             for view in (_version_view(record) for record in self._service.list_documents(parsed))
             # `R-151a`: an archived document is listed only on request.
-            if include_archived or view.document_uid not in archived
+            if (include_archived or view.document_uid not in archived)
+            # `R-151e`: a tag filter keeps the documents carrying that tag, regardless of case.
+            and (wanted is None or wanted in {t.casefold() for t in tags.get(view.document_uid, ())})
         )
         if section_code is None:
             return views
@@ -948,6 +953,23 @@ class DocumentAdapter:
             actor_uid=user_uid, idempotency_key=idempotency_key,
         )
         return replace(_version_view(record), archived_at=archived_at)
+
+    def set_document_tags(
+        self, *, project_uid: str, document_uid: str, tags: list[str], user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at, current = self._service.set_document_tags(
+            project_uid=project_uid, document_uid=document_uid, tags=tags,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at, tags=tuple(current))
+
+    def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
+        from auditmanager.shared.identity import ProjectUid
+
+        rows = self._service.tag_catalogue(ProjectUid.parse(project_uid))
+        return models.DocumentTagList(items=[models.DocumentTagCount(tag=tag, document_count=count) for tag, count in rows])
 
     def rename_document(
         self, *, project_uid: str, document_uid: str, display_title: str, user_uid: str, idempotency_key: str,
@@ -971,7 +993,8 @@ class DocumentAdapter:
         archived_at = (
             self._service.document_archived_at(parsed) if hasattr(self._service, "document_archived_at") else None
         )
-        return tuple(replace(_version_view(record), archived_at=archived_at) for record in records)
+        tags = tuple(self._service.tags_of_document(parsed)) if hasattr(self._service, "tags_of_document") else None
+        return tuple(replace(_version_view(record), archived_at=archived_at, tags=tags) for record in records)
 
 
 

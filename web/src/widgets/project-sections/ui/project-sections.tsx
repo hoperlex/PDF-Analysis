@@ -31,7 +31,9 @@ import type { DocumentVersion, ProjectUid, VersionUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { useMayActAsExpert } from '@/entities/account';
-import { DocumentCardGrid, documentCardTitle, isComparisonOnly, useDocumentList } from '@/entities/document-version';
+import {
+  DocumentCardGrid, documentCardTitle, isComparisonOnly, useDocumentList, useDocumentTags,
+} from '@/entities/document-version';
 import type { BatchEntry } from '@/features/start-run';
 import { BatchStartPanel } from '@/features/start-run';
 
@@ -184,7 +186,10 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   // `R-151a`: archived documents are out of the lists unless the reader asks to see them.
   const [showArchived, setShowArchived] = useState(false);
-  const query = useDocumentList(projectUid, cursor, undefined, showArchived);
+  // `R-151e`: the tag filter, offered from the project's whole catalogue (never from one page of documents).
+  const [tag, setTag] = useState<string | null>(null);
+  const tags = useDocumentTags(projectUid);
+  const query = useDocumentList(projectUid, cursor, undefined, showArchived, tag ?? undefined);
   const mayAct = useMayActAsExpert();
   // `R-151c`: the chosen cards, by version, and the batch the panel was opened with (fixed for its life).
   const [chosen, setChosen] = useState<ReadonlyMap<string, BatchEntry>>(new Map());
@@ -286,6 +291,30 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
           {query.isFetching ? 'Обновляется…' : 'Обновить'}
         </button>
       </div>
+      {(tags.data?.items.length ?? 0) === 0 ? null : (
+        <div className={styles.tagFilter} role="group" aria-label="Отбор по метке" data-tag-filter={tag ?? ''}>
+          <span className={styles.tagFilterLabel}>Метки:</span>
+          <button
+            type="button"
+            className="am-button am-button--quiet am-button--small"
+            aria-pressed={tag === null}
+            onClick={() => { setTag(null); setCursor(undefined); }}
+          >
+            Все
+          </button>
+          {(tags.data?.items ?? []).map((item) => (
+            <button
+              key={item.tag}
+              type="button"
+              className="am-button am-button--quiet am-button--small"
+              aria-pressed={tag === item.tag}
+              onClick={() => { setTag(item.tag); setCursor(undefined); }}
+            >
+              {item.tag} {item.document_count}
+            </button>
+          ))}
+        </div>
+      )}
       {mayAct && chosen.size > 0 && batch === null ? (
         <p className="am-note" data-batch-selection={chosen.size}>
           <button type="button" className="am-button" onClick={() => setBatch([...chosen.values()])}>

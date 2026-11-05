@@ -587,7 +587,8 @@ class TestN1ComponentReferenceResolution:
         # filter, and a project that does not exist is `not_found` and never a summary of zeros (as the
         # unknown `project_uid` filter of `getSectionSpecification` is `404` too).
         # `UI-PARITY-P0G` adds two: `setDocumentArchived` and `renameDocument` address a document by identity.
-        assert len(report) == 211, report
+        # `UI-PARITY-P0H` adds two: `setDocumentTags` and `listDocumentTags` address a document or a project.
+        assert len(report) == 213, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

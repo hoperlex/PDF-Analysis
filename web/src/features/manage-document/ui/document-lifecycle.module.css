@@ -41,3 +41,33 @@
   color: var(--am-failed);
   font-size: var(--am-text-sm);
 }
+
+/* `R-151e`: the document's tags, compact chips with a remove control. */
+.label {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.none {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-pill);
+  color: var(--am-ink-soft);
+  font-size: var(--am-text-xs);
+}
+
+.tagRemove {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--am-ink-muted);
+  cursor: pointer;
+}

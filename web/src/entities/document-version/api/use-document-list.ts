@@ -14,8 +14,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DocumentVersionPage, ProjectSection, ProjectUid } from '@/shared/api';
-import { listDocuments, queryKeys } from '@/shared/api';
+import type { DocumentTagList, DocumentVersionPage, ProjectSection, ProjectUid } from '@/shared/api';
+import { listDocumentTags, listDocuments, queryKeys } from '@/shared/api';
 
 /** Page size. Inside the contract's bound and matching the project list's choice. */
 export const DOCUMENT_PAGE_LIMIT = 50;
@@ -29,10 +29,10 @@ export const DOCUMENT_PAGE_LIMIT = 50;
  * exact same cache entry `useDocumentList` would. Same key, same `queryFn`, one source.
  */
 export function documentListQueryOptions(
-  projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection, includeArchived = false,
+  projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection, includeArchived = false, tag?: string,
 ) {
   return {
-    queryKey: queryKeys.projects.documents(projectUid, cursor, DOCUMENT_PAGE_LIMIT, sectionCode, includeArchived),
+    queryKey: queryKeys.projects.documents(projectUid, cursor, DOCUMENT_PAGE_LIMIT, sectionCode, includeArchived, tag),
     queryFn: async (): Promise<DocumentVersionPage> => {
       const response = await listDocuments({
         path: { project_uid: projectUid },
@@ -43,6 +43,8 @@ export function documentListQueryOptions(
           ...(sectionCode === undefined ? {} : { section_code: sectionCode }),
           // `R-151a`: an archived document is listed only when asked for.
           ...(includeArchived ? { include_archived: true } : {}),
+          // `R-151e`: only the documents carrying this tag.
+          ...(tag === undefined ? {} : { tag }),
         },
       });
       return response.data;
@@ -51,7 +53,15 @@ export function documentListQueryOptions(
 }
 
 export function useDocumentList(
-  projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection, includeArchived = false,
+  projectUid: ProjectUid, cursor?: string, sectionCode?: ProjectSection, includeArchived = false, tag?: string,
 ) {
-  return useQuery<DocumentVersionPage>(documentListQueryOptions(projectUid, cursor, sectionCode, includeArchived));
+  return useQuery<DocumentVersionPage>(documentListQueryOptions(projectUid, cursor, sectionCode, includeArchived, tag));
+}
+
+/** `R-151e`: every tag of the project's documents in use, with counts, for the tag filter. */
+export function useDocumentTags(projectUid: ProjectUid) {
+  return useQuery<DocumentTagList>({
+    queryKey: queryKeys.projects.tags(projectUid),
+    queryFn: async () => (await listDocumentTags({ path: { project_uid: projectUid } })).data,
+  });
 }

@@ -25,7 +25,7 @@ import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import { looksLikeDocumentUid, useVersionList } from '@/entities/document-version';
 import { useMayActAsExpert } from '@/entities/account';
-import { DocumentLifecycle } from '@/features/manage-document';
+import { DocumentLifecycle, DocumentTags } from '@/features/manage-document';
 import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 import { DocumentContext } from '@/widgets/document-context';
@@ -121,6 +121,9 @@ function DocumentScreen({
       ) : archived ? (
         <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
       ) : null}
+      {newest === undefined ? null : (
+        <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
+      )}
       <nav className={styles.tabs} aria-label="Разделы документа" data-document-tabs={tab}>
         {DOCUMENT_TABS.map((entry) => (
           <button

@@ -493,7 +493,8 @@ class IngestDocumentAdapter:
         )
 
     def list_documents(
-        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
+        tag: str | None = None,
     ) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
 

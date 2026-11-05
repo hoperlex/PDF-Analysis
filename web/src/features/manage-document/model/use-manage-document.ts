@@ -13,7 +13,7 @@ import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
-import { newIdempotencyKey, queryKeys, renameDocument, setDocumentArchived } from '@/shared/api';
+import { newIdempotencyKey, queryKeys, renameDocument, setDocumentArchived, setDocumentTags } from '@/shared/api';
 
 export interface DocumentAddress {
   readonly projectUid: ProjectUid;
@@ -76,4 +76,33 @@ export function titleProblem(value: string): string | null {
   if (title === '') return 'Название не может быть пустым.';
   if (title.length > 400) return 'Название длиннее 400 символов.';
   return null;
+}
+
+/** `R-151e`: replace a document's free tags with a whole new set. */
+export function useSetDocumentTags({ projectUid, documentUid }: DocumentAddress) {
+  const keyOf = useIntentKeys();
+  const refresh = useRefresh(documentUid);
+  return useMutation<DocumentVersion, unknown, { readonly tags: readonly string[] }>({
+    mutationFn: async ({ tags }) => (await setDocumentTags({
+      path: { project_uid: projectUid, document_uid: documentUid },
+      body: { tags: [...tags] },
+      idempotencyKey: keyOf(`tags:${documentUid}:${tags.join('\u0000')}`),
+    })).data,
+    retry: false,
+    onSuccess: refresh,
+  });
+}
+
+/** A tag as the server stores it (trimmed, spaces collapsed), or why it cannot be added. */
+export function tagProblem(value: string, current: readonly string[]): string | null {
+  const tag = value.split(/\s+/).filter(Boolean).join(' ');
+  if (tag === '') return 'Метка не может быть пустой.';
+  if (tag.length > 40) return 'Метка длиннее 40 символов.';
+  if (current.some((known) => known.toLocaleLowerCase('ru') === tag.toLocaleLowerCase('ru'))) return 'Такая метка уже есть.';
+  if (current.length >= 10) return 'У документа не больше 10 меток.';
+  return null;
+}
+
+export function cleanTag(value: string): string {
+  return value.split(/\s+/).filter(Boolean).join(' ');
 }

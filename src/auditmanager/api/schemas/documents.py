@@ -63,6 +63,9 @@ class DocumentVersionView:
     #: `R-151a` (contract 1.22.0, migration 0052): when the document was archived; ``None`` while in use. Rendered only
     #: when present; an archived document is listed only on request (``include_archived``).
     archived_at: datetime | None = None
+    #: `R-151e` (contract 1.23.0, migration 0053): the document's free tags; ``None`` where the read does not carry
+    #: them, rendered as a list (possibly empty) otherwise.
+    tags: tuple[str, ...] | None = None
 
 
 def manifest_entry_body(view: ManifestEntryView) -> dict[str, Any]:
@@ -104,4 +107,6 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
         body["classification"] = view.classification.model_dump(mode="json")
     if view.archived_at is not None:
         body["archived_at"] = timestamp(view.archived_at)
+    if view.tags is not None:
+        body["tags"] = list(view.tags)
     return body

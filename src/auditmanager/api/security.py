@@ -394,6 +394,9 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # `R-151a`: archiving and renaming a document are expert or administrator work; a viewer only reads.
         "setDocumentArchived": _ANY_ROLE,
         "renameDocument": _ANY_ROLE,
+        # `R-151e`: tagging is expert or administrator work; the catalogue is a product read.
+        "setDocumentTags": _ANY_ROLE,
+        "listDocumentTags": _PRODUCT_READ,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
         # `EXEC-SEAL-01` (R-143). Any role reads connections, probes and routes; a secret is

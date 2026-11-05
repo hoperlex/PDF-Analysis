@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-280 operations, sealed. `A5` generates the typed client from this document; `B6`
+282 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,10 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0H` (contract `1.23.0`, migration `0053_document_tags`) adds free tags on a document (`R-151e`):
+`setDocumentTags` (keyed, `expert` or `admin`) and the catalogue `listDocumentTags` (a product read); `listDocuments` filters by
+`tag`; `DocumentVersion.tags`.
+
 `UI-PARITY-P0G` (contract `1.22.0`, migration `0052_document_archive`) lets a document be archived or renamed, never deleted
 (`R-151a`): `setDocumentArchived` and `renameDocument`, keyed, `expert` or `admin`; `listDocuments` hides an archived document
 unless `include_archived`; `DocumentVersion.archived_at`. The history is the audit trail of `Document`.
@@ -1082,6 +1086,8 @@ could.
 | `uploadDocumentVersion` | `POST /projects/{project_uid}/documents/{document_uid}/versions` |
 | `setDocumentArchived` | `PUT /projects/{project_uid}/documents/{document_uid}/archive` |
 | `renameDocument` | `PUT /projects/{project_uid}/documents/{document_uid}/title` |
+| `setDocumentTags` | `PUT /projects/{project_uid}/documents/{document_uid}/tags` |
+| `listDocumentTags` | `GET /projects/{project_uid}/document-tags` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -1362,7 +1368,7 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`,
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,

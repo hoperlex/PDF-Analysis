@@ -89,6 +89,13 @@ RangeParam = Annotated[
 
 
 
+# `UI-PARITY-P0H` (ruling `R-151e`): the documents carrying one tag, regardless of case.
+TagFilterParam = Annotated[
+    str | None,
+    WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 40}),
+    Query(json_schema_extra=optional_property),
+]
+
 # `UI-PARITY-P0E` (ruling `R-151l`): the section page reads one section's documents.
 SectionCodeFilterParam = Annotated[
     models.ProjectSection | None,
@@ -208,6 +215,7 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
         limit: LimitParam = 50,
         section_code: SectionCodeFilterParam = None,  # type: ignore[assignment]
         include_archived: IncludeArchivedParam = False,
+        tag: TagFilterParam = None,  # type: ignore[assignment]
     ) -> WireResponse:
         # `GET` of the collection `uploadDocument` `POST`s into, returning a page of
         # exactly the resource that `POST` returns -- which is the rule `listProjects`
@@ -216,6 +224,7 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
             project_uid=project_uid,
             section_code=None if section_code is None else section_code.value,
             include_archived=include_archived,
+            tag=tag,
         )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_version_sort_key)
         body = page_body(
@@ -247,6 +256,46 @@ def build_document_routes(router: APIRouter, documents: DocumentPort) -> None:
             user_uid=subject.user_uid, idempotency_key=idempotency_key,
         )
         return json_response(200, encode_json(document_version_body(view)))
+
+    @router.put(
+        "/projects/{project_uid}/documents/{document_uid}/tags",
+        operation_id="setDocumentTags",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentVersion,
+        responses={
+            **success(200, "The document's current version with its new tags."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+    )
+    def set_document_tags(
+        project_uid: Annotated[models.ProjectUid, Path()],
+        document_uid: Annotated[models.DocumentUid, Path()],
+        body: models.SetDocumentTagsRequest,
+        idempotency_key: RequiredIdempotencyKey,
+        subject: CurrentSubject,
+    ) -> WireResponse:
+        # `R-151e`: the whole set is replaced; no order, no group.
+        view = documents.set_document_tags(
+            project_uid=project_uid, document_uid=document_uid, tags=list(body.tags),
+            user_uid=subject.user_uid, idempotency_key=idempotency_key,
+        )
+        return json_response(200, encode_json(document_version_body(view)))
+
+    @router.get(
+        "/projects/{project_uid}/document-tags",
+        operation_id="listDocumentTags",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.DocumentTagList,
+        responses={
+            **success(200, "The project's tag catalogue with document counts."),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
+    )
+    def list_document_tags(project_uid: Annotated[models.ProjectUid, Path()]) -> WireResponse:
+        catalogue = documents.list_document_tags(project_uid=project_uid)
+        return json_response(200, encode_json(catalogue.model_dump(mode="json")))
 
     @router.put(
         "/projects/{project_uid}/documents/{document_uid}/title",

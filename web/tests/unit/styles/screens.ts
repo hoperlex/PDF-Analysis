@@ -69,7 +69,8 @@ import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
 import { BatchStartPanelView } from '@/features/start-run';
-import { DocumentLifecycleView } from '@/features/manage-document';
+import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
+import { ProjectSections } from '@/widgets/project-sections';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
@@ -168,7 +169,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.22.0',
+    contract_version: '1.23.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1208,8 +1209,25 @@ export function screens(): Screen[] {
     error: 'Недостаточно прав для этого действия.',
     onEdit: noop, onDraft: noop, onSave: noop, onCancelEdit: noop, onAsk: noop, onConfirm: noop, onCancelAsk: noop,
   })));
+  // `R-151e`: tags on the document page (chips with remove, the add field, a refusal) and with none.
+  add('DocumentTags editable, with a refusal', render(createElement(DocumentTagsView, {
+    tags: ['Корпус 1', 'Секция А'], mayEdit: true, draft: 'корпус 1', busy: false, error: 'Метка не сохранена.',
+    onDraft: noop, onAdd: noop, onRemove: noop,
+  })));
+  add('DocumentTags read-only, none', render(createElement(DocumentTagsView, {
+    tags: [], mayEdit: false, draft: '', busy: false, error: null, onDraft: noop, onAdd: noop, onRemove: noop,
+  })));
+  // `R-151e`: the project's tag filter, from its catalogue.
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.tags(PROJECT_UID), { items: [{ tag: 'Корпус 1', document_count: 3 }] });
+    client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), {
+      items: [{ ...version(), tags: ['Корпус 1'] }], page: { next_cursor: null },
+    });
+    add('ProjectSections with a tag filter', renderScreen(client, createElement(ProjectSections, { projectUid: PROJECT_UID })));
+  }
   add('DocumentCardGrid with an archived document', render(createElement(DocumentCardGrid, {
-    documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z' }],
+    documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z', tags: ['Корпус 1'] }],
     addresses: () => ({ href: '/projects', documentHref: '/projects' }),
   })));
   // `R-151c`: the batch start panel -- one estimate ready and started, one ready and refused, one being sent, one

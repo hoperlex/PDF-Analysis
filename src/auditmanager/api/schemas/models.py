@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.22.0"]
+    contract_version: Literal["1.23.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1290,6 +1290,9 @@ class DocumentVersion(_Object):
     )
     #: `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use.
     archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
+    tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class DocumentVersionPage(_Object):
@@ -1792,6 +1795,25 @@ class SetDocumentArchivedRequest(_Object):
     """`R-151a` (contract 1.22.0): archive (``true``) or restore (``false``) one document. Nothing is deleted."""
 
     archived: bool
+
+
+class SetDocumentTagsRequest(_Object):
+    """`R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all."""
+
+    tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)]
+
+
+class DocumentTagCount(_Object):
+    """`R-151e`: one tag of a project's documents in use, and how many documents carry it."""
+
+    tag: Annotated[str, Field(min_length=1, max_length=40)]
+    document_count: Annotated[int, Field(ge=1)]
+
+
+class DocumentTagList(_Object):
+    """`R-151e`: the project's tag catalogue, in case-insensitive order; archived documents are not counted."""
+
+    items: list[DocumentTagCount]
 
 
 class RenameDocumentRequest(_Object):

@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.22.0 (OpenAPI 3.1.0)
- *   sha256 68e40729d996a8fe9a18b1bec079e9785d58794ee16b8543257dc60b2f713e5f
+ *   AuditManager PC-01 API 1.23.0 (OpenAPI 3.1.0)
+ *   sha256 9bbcdaaf32f25162e09e1702dd6e07660aec53340a85d45eb985f7badd4577d7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -304,6 +304,8 @@ import type {
   ListDecisionHistoryResult,
   ListDecisionsInput,
   ListDecisionsResult,
+  ListDocumentTagsInput,
+  ListDocumentTagsResult,
   ListDocumentsInput,
   ListDocumentsResult,
   ListExecutionJournalInput,
@@ -476,6 +478,8 @@ import type {
   SetCurrentNormSnapshotResult,
   SetDocumentArchivedInput,
   SetDocumentArchivedResult,
+  SetDocumentTagsInput,
+  SetDocumentTagsResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
   SetExecutorIntegrationAuthorisationInput,
@@ -2298,6 +2302,18 @@ export function listDecisions(
 }
 
 /**
+ * List Document Tags
+ *
+ * `GET /projects/{project_uid}/document-tags`.
+ */
+export function listDocumentTags(
+  input: ListDocumentTagsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListDocumentTagsResult>> {
+  return request<ListDocumentTagsResult>(OPERATIONS.listDocumentTags, input, options);
+}
+
+/**
  * List the documents of one project, newest first.
  *
  * `GET /projects/{project_uid}/documents`.
@@ -3330,6 +3346,18 @@ export function setDocumentArchived(
 }
 
 /**
+ * Set Document Tags
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/tags` - a write; carries a required Idempotency-Key.
+ */
+export function setDocumentTags(
+  input: SetDocumentTagsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetDocumentTagsResult>> {
+  return request<SetDocumentTagsResult>(OPERATIONS.setDocumentTags, input, options);
+}
+
+/**
  * Set Paused
  *
  * `PUT /execution/dispatch` - a write; carries a required Idempotency-Key.
@@ -4089,6 +4117,7 @@ export const apiClient = {
   listComparisonVersionOrders,
   listDecisionHistory,
   listDecisions,
+  listDocumentTags,
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
@@ -4175,6 +4204,7 @@ export const apiClient = {
   searchNorms,
   setCurrentNormSnapshot,
   setDocumentArchived,
+  setDocumentTags,
   setExecutionPaused,
   setExecutorIntegrationAuthorisation,
   setExecutorRoute,

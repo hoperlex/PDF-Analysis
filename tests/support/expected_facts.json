@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 252,
+    "path_count": 254,
     "operations": [
       [
         "DELETE",
@@ -372,6 +372,11 @@
         "GET",
         "/projects/{project_uid}/comparison-uploads",
         "listComparisonUploads"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/document-tags",
+        "listDocumentTags"
       ],
       [
         "GET",
@@ -1380,6 +1385,11 @@
       ],
       [
         "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/tags",
+        "setDocumentTags"
+      ],
+      [
+        "PUT",
         "/projects/{project_uid}/documents/{document_uid}/title",
         "renameDocument"
       ],
@@ -1672,6 +1682,8 @@
       "DecisionRecordPage",
       "DiffHunk",
       "DocumentAuditCounts",
+      "DocumentTagCount",
+      "DocumentTagList",
       "DocumentUid",
       "DocumentVersion",
       "DocumentVersionPage",
@@ -1925,6 +1937,7 @@
       "SectionVendorList",
       "SetCurrentNormSnapshotRequest",
       "SetDocumentArchivedRequest",
+      "SetDocumentTagsRequest",
       "SetExecutionPausedRequest",
       "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
@@ -2088,6 +2101,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0052_document_archive",
-  "contract_version": "1.22.0"
+  "migration_head": "0053_document_tags",
+  "contract_version": "1.23.0"
 }

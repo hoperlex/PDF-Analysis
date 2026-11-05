@@ -62,6 +62,10 @@ export function DocumentCardGrid({ documents, addresses, select }: DocumentCardG
             <div className={styles.badges}>
               <ClassificationBadges classification={version.classification} />
             </div>
+            {/* `R-151e`: the document's free tags. */}
+            {(version.tags ?? []).length === 0 ? null : (
+              <p className={styles.tags}>{(version.tags ?? []).map((tag) => <span key={tag} className={styles.tag}>{tag}</span>)}</p>
+            )}
             {isComparisonOnly(version) ? <ComparisonOnlyMark version={version} /> : null}
             <p className={styles.meta}>
               страниц {version.page_count} · <Link href={documentHref}>все версии</Link>
