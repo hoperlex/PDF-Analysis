@@ -4,7 +4,7 @@
 
 .header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 118px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--am-gap);
   padding: var(--am-gap-sm) var(--am-gap);
   color: var(--am-ink-muted);
@@ -47,7 +47,7 @@
 .rowButton,
 .unclassified {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 118px 16px;
+  grid-template-columns: 44px minmax(0, 1fr) auto 16px;
   align-items: center;
   gap: var(--am-gap-sm);
   width: 100%;
@@ -199,4 +199,17 @@
   :global([data-dashboard-showcase]) .rows {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* `UI-A-35`: the five numbers of a section row, in the header's order. */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(56px, auto));
+  gap: var(--am-gap-xs);
+  text-align: center;
+}
+
+.metrics [data-attention='true'] {
+  color: var(--am-failed);
+  font-weight: 650;
 }
