@@ -50,6 +50,7 @@ import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
 import { useExportRun } from '@/features/export-run';
 import type { DecisionIntent } from '@/widgets/decision-panel';
+import { DocumentContext } from '@/widgets/document-context';
 import { useRecordVerdict } from '@/features/record-verdict';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
@@ -203,6 +204,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         </>
       }
     >
+      <DocumentContext projectUid={projectUid} runId={runId} current="review" />
       <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
       <div className={`am-review ${styles.layout}`}>
         <div className={`am-review__list ${styles.list}`}>
