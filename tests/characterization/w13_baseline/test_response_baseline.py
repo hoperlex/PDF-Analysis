@@ -41,8 +41,8 @@ label a literal, so a run started by anyone else reddens the comparison.
 (02d) -- as the first records added since the seal. 02c names its `contract_version` by the journey's own
 `{{contract_version}}` token (read from the frozen contract, so it does not move with the next bump and a body naming
 any other version reddens), and the census of version-bearing records is updated deliberately
-(`_contract_version_census`). 02d is the contract-correct `RunCostEstimate`; the six optional properties the served body
-emits as `null` are projected back in memory (`_estimate_nulls_expected`) and the deviation is measured, not hidden.
+(`_contract_version_census`). 02d is the contract-correct `RunCostEstimate`: the route emitted six optional properties as
+`null` until the fix that followed this lane (it now drops them), so the record is compared with the served body as it is.
 """
 
 from __future__ import annotations
@@ -340,54 +340,14 @@ def _run_starter_expected(
     return out
 
 
-# `LANE-W13-COST-01` (`D-322`): the cost estimate (record 02d) and the deviation of the served body from the contract.
-#
-# `RunCostEstimate` declares six properties that are optional and **not nullable** -- `connection_revision_id`,
-# `preset_revision_id`, `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` and `pin_id`, each a
-# plain string schema outside `required` -- and the cost preflight leaves them out when the route does not set them (its
-# public dict holds only the non-null ones). `estimateRunCost` then renders the answer with `model_dump(mode="json")`
-# and no `exclude_unset`, so the wire carries each of them as `null`, where `executors.py` states the surface's rule:
-# "Optional properties are absent, never null". A byte-for-byte record of the served body would freeze that
-# (`characterization-can-freeze-a-defect`), so record 02d is the contract-correct form and the six `null`s are projected
-# back **in memory**, named here, counted, and measured on the live body by
-# `test_the_served_estimate_carries_the_six_nulls_the_contract_forbids`. When the product is fixed that test goes red on
-# purpose: delete this projection and that test, and the record needs no edit.
+# `LANE-W13-COST-01` (`D-322`): the cost estimate, record 02d. Its six optional properties (`connection_revision_id`,
+# `preset_revision_id`, `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id`, `pin_id`) are not
+# nullable; the route rendered them as `null` until it dropped them, and the record was always the contract-correct form.
 _ESTIMATE_CASE = "02d-estimateRunCost.success"
-_ESTIMATE_NULL_PROPERTIES = (
-    "connection_revision_id",
-    "preset_revision_id",
-    "executor_group_id",
-    "executor_group_revision_id",
-    "routing_rule_revision_id",
-    "pin_id",
+_ESTIMATE_OPTIONAL_PROPERTIES = (
+    "connection_revision_id", "preset_revision_id", "executor_group_id", "executor_group_revision_id",
+    "routing_rule_revision_id", "pin_id",
 )
-#: The property they follow (the model emits them right after `model_id`) and the one they precede.
-_ESTIMATE_NULLS_BEFORE = ', "text_characters"'
-
-
-def _estimate_nulls_expected(
-    expected: dict[str, Any], *, names: tuple[str, ...] = _ESTIMATE_NULL_PROPERTIES
-) -> dict[str, Any]:
-    if expected["case"] != _ESTIMATE_CASE:
-        return expected
-    body = expected["response"]["body"]
-    original = body["text"]
-    historical = _historical(_ESTIMATE_CASE)["response"]["body"]["text"]
-    assert body["kind"] == "text" and original == historical, (
-        f"{_ESTIMATE_CASE}: the projection received a changed historical body"
-    )
-    assert not any(f'"{name}"' in original for name in _ESTIMATE_NULL_PROPERTIES), (
-        f"{_ESTIMATE_CASE}: the record already carries one of the six optional properties; "
-        "it is the contract-correct form, without them, that is projected"
-    )
-    assert original.count(_ESTIMATE_NULLS_BEFORE) == 1
-    inserted = "".join(f', "{name}": null' for name in names)
-    projected = original.replace(_ESTIMATE_NULLS_BEFORE, inserted + _ESTIMATE_NULLS_BEFORE, 1)
-    out = json.loads(json.dumps(expected))
-    out["response"]["body"]["text"] = projected
-    # No token sits in the inserted bytes, so the raw length grows by exactly their length.
-    out["response"]["body"]["length"] += len(inserted.encode("utf-8"))
-    return out
 
 
 def _projected(expected: dict[str, Any]) -> dict[str, Any]:
@@ -396,8 +356,7 @@ def _projected(expected: dict[str, Any]) -> dict[str, Any]:
         expected = _csv_compat_expected(expected)
     expected = _schema_compat_expected(expected)
     expected = _audit_counts_expected(expected)
-    expected = _run_starter_expected(expected)
-    return _estimate_nulls_expected(expected)
+    return _run_starter_expected(expected)
 
 
 #: The operationIds this corpus covers, written out rather than read from the contract:
@@ -2091,45 +2050,16 @@ def test_the_contract_check_can_fail() -> None:
         _schema_problems(1, {"type": "integer", "multipleOf": 2})
 
 
-def test_the_served_estimate_carries_the_six_nulls_the_contract_forbids(exchanges: dict[str, Any]) -> None:
-    """The deviation, measured on the live answer and counted (`D-322`).
+def test_the_served_estimate_has_no_null_property_and_meets_its_schema(exchanges: dict[str, Any]) -> None:
+    """`D-322`, fixed: the route drops an optional property it did not set instead of rendering it as `null`.
 
-    The six properties are the ones the contract declares optional and not nullable, the served body renders each as
-    `null`, and nothing else in the body violates the schema. This is the test that fixes the projection in place and
-    that goes red, deliberately, the day the route stops emitting them: then delete `_estimate_nulls_expected`, its entry
-    in `_projected`, and this test -- the record already is the contract-correct form and needs no edit.
+    It rendered the six optional, non-nullable properties of `RunCostEstimate` as `null` until 2026-11-06; record 02d was
+    always the contract-correct form, and now the served body is that form too. A `null` coming back reddens here.
     """
     live = json.loads(exchanges[_ESTIMATE_CASE].body.decode("utf-8"))
-    schema = _contract_schemas()["RunCostEstimate"]
-    optional = {name for name in schema["properties"] if name not in schema["required"]}
-    assert {name for name, value in live.items() if value is None} == set(_ESTIMATE_NULL_PROPERTIES) == optional, (
-        "the set of null properties of the served estimate moved: the product was changed, or the contract was; "
-        "if the nulls are gone, delete the projection (see this test's docstring)"
-    )
-    assert _schema_problems(live, {"$ref": "#/components/schemas/RunCostEstimate"}) == [
-        f"$.{name}: None is not of type string" for name in live if live[name] is None
-    ]
-
-
-def test_the_estimate_nulls_projection_reddens_on_a_wrong_expectation_and_refuses_a_changed_record(
-    exchanges: dict[str, Any],
-) -> None:
-    exchange = exchanges[_ESTIMATE_CASE]
-    record = _historical(_ESTIMATE_CASE)
-    right = _projected(record)
-    assert journey.differences(exchange, right) == []
-    # The projection is what makes the comparison pass: the contract-correct record alone does not match the served body.
-    assert any("body:" in line for line in journey.differences(exchange, record))
-    # One null too few, or none at all, is reported.
-    for names in (_ESTIMATE_NULL_PROPERTIES[:-1], _ESTIMATE_NULL_PROPERTIES[1:], ()):
-        assert any("body:" in line for line in journey.differences(exchange, _estimate_nulls_expected(record, names=names))), names
-    # A record that already carries one of the six, or whose text moved, is refused before it is projected.
-    carrying = json.loads(json.dumps(record))
-    carrying["response"]["body"]["text"] = carrying["response"]["body"]["text"].replace(
-        ', "text_characters"', ', "pin_id": "x", "text_characters"', 1
-    )
-    with pytest.raises(AssertionError, match="changed historical body"):
-        _estimate_nulls_expected(carrying)
+    assert [name for name, value in live.items() if value is None] == []
+    assert _schema_problems(live, {"$ref": "#/components/schemas/RunCostEstimate"}) == []
+    assert not set(_ESTIMATE_OPTIONAL_PROPERTIES) & set(live), "this journey's version sets none of the six"
 
 
 def _tampered(exchange: Any, mutate: Any) -> Any:
@@ -2201,8 +2131,9 @@ def test_the_cost_path_records_redden_on_a_planted_difference(exchanges: dict[st
         "a metered route that is unmetered": set_("billing", "unmetered"),
         "a missing figure": _json_plant(lambda body: body.pop("calls")),
         "a digest that is not the one the journey read": set_("estimate_digest", "0" * 64),
-        "a null fewer": _json_plant(lambda body: body.pop("pin_id")),
-        "a seventh null": _json_plant(lambda body: body.__setitem__("route_id", None)),
+        # The route no longer renders unset optional properties (`D-322`, fixed): one coming back as `null`, or set, is reported.
+        "an optional property back as null": _json_plant(lambda body: body.__setitem__("pin_id", None)),
+        "an optional property set": _json_plant(lambda body: body.__setitem__("preset_revision_id", "apr_x")),
     }
     for what, mutate in figure_plants.items():
         assert any("body:" in line for line in journey.differences(_tampered(estimate, mutate), estimate_expected)), (
@@ -2283,7 +2214,7 @@ def test_the_estimate_follows_from_the_records_around_it() -> None:
     assert estimate["output_tokens"] == estimate["windows"] * 16000
     assert estimate["calls"] == estimate["windows"] == 1
     assert estimate["relaxed_limits"] is False and estimate["scope"] == "run" and estimate["currency"] == "USD"
-    assert not set(_ESTIMATE_NULL_PROPERTIES) & set(estimate), "the record is the contract-correct form"
+    assert not set(_ESTIMATE_OPTIONAL_PROPERTIES) & set(estimate), "the record is the contract-correct form"
 
 
 def test_the_refused_unconsented_start_left_no_run_behind() -> None:

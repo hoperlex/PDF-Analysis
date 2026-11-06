@@ -60,7 +60,9 @@ def build_run_routes(router: APIRouter, runs: RunPort) -> None:
             **({"reaudit_of_run_id": body.reaudit_of_run_id} if body.reaudit_of_run_id is not None else {}),
             **({"executor_group_id": body.executor_group_id} if body.executor_group_id is not None else {}),
             relaxed_limits=body.relaxed_limits is True)
-        return json_response(200, encode_json(estimate.model_dump(mode="json")))
+        # `D-322`: the six optional properties of `RunCostEstimate` are not nullable; one the route did not set is
+        # absent, never `null` (the surface's rule, as `executors.py` states it).
+        return json_response(200, encode_json(estimate.model_dump(mode="json", exclude_none=True)))
 
     @router.post(
         "/runs",

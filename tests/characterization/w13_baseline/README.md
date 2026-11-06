@@ -55,6 +55,10 @@ else in the body fails the schema) and goes red, on purpose, the day the route s
 changed to `exclude_none`, 02d differs at byte 174); then the projection and that test are deleted and the record needs no edit.
 `estimateArV3GroupCost` renders `RunCostEstimate` the same way and is not in the corpus.
 
+**Fixed the same day:** `estimateRunCost` now dumps with `exclude_none`, so the served body is the record's contract-correct form;
+the projection and its tripwire were deleted as described, and `test_the_served_estimate_has_no_null_property_and_meets_its_schema`
+reddens on any `null` coming back. `estimateArV3GroupCost` (AR v3, not touched) still renders the nulls.
+
 *What 02d pins, and how each figure is justified.* Derived, not copied from the server (`test_the_estimate_follows_from_the_records_around_it`):
 `page_count` is the version's (record 13); `output_tokens` is `windows` x 16 000, the allowance the contract gives for
 `relaxed_limits: false` (`StartRunRequest.relaxed_limits`); `calls` equals `windows` for the plain analysis the journey prices;
