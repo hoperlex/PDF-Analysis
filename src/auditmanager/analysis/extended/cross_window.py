@@ -1,4 +1,4 @@
-"""Pure bounded selection of genuine text-piece pairs from different real windows.
+"""Pure consent-bound plans of genuine text pieces from different real windows.
 
 Selection signals nominate a comparison, never establish a discrepancy. Every text
 quote is an exact source slice; no recogniser, provider, storage or runtime is used.
@@ -12,6 +12,8 @@ import re
 import unicodedata
 
 VERSION = 'cross-window-comprehensive-v1'
+FULL_VERSION = 'cross-window-comprehensive-v2'
+FULL_COVERAGE_MODE = 'all-source-pairs-v1'
 WINDOW_SIZE = 16
 MAX_WINDOWS = 63
 MAX_SOURCE_RECORDS = 20_000
@@ -27,6 +29,7 @@ MAX_LINK_EVENTS = 40_000
 MAX_CANDIDATES = 2_048
 MAX_PENDING_RECORDS = 128
 MAX_OMISSION_RECORDS = 128
+FULL_BIN_SOURCES = 64
 _MARK = re.compile(r'(?<!\w)[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_.\-/]{1,63}(?!\w)')
 _WORD = re.compile(r'[A-Za-zА-Яа-яЁё]{4,64}')
 _PARAMETER = re.compile(r'(?<!\w)([+−-]?\d+(?:[.,]\d+)?)\s*(мм|см|м²|м³|м2|м3|кВт|кВА|кВ|Вт|МПа|кПа|Па|кг|шт|л/с|м3/ч|м|т|А|В|°С)(?!\w)', re.IGNORECASE)
@@ -73,16 +76,21 @@ def _missing_ranges(count, present):
 
 def plan_global_cross_window(*, version_uid, text_layer, recognised, windows, sources,
         source_sha256, max_calls=8, piece_characters=20_000,
-        text_layer_sha256=None, recognised_sha256=None):
-    """Return at most8 real two-window pairs; omitted counts are not processing claims.
+        text_layer_sha256=None, recognised_sha256=None, coverage_mode=None):
+    """Plan real two-window comparisons without claiming they were processed.
 
     Native offsets address page.text. Recognised offsets address one actual entry's
     text, preserving its provenance without inventing a joined native-text quote.
     Optional artifact hashes must come from the caller's verified custody references.
+    Legacy mode selects at most eight nominated pairs. Fresh all-source mode covers
+    every indexed cross-window pair in grouped requests; max_calls is not its cap.
     """
-    if (not isinstance(version_uid,str) or not version_uid or len(version_uid)>160
+    full_coverage = coverage_mode == FULL_COVERAGE_MODE
+    if (coverage_mode not in {None, FULL_COVERAGE_MODE}
+            or not isinstance(version_uid,str) or not version_uid or len(version_uid)>160
             or not isinstance(source_sha256,str) or not _SHA.fullmatch(source_sha256)
-            or type(max_calls) is not int or not 0<=max_calls<=8
+            or (not full_coverage and (type(max_calls) is not int or not 0<=max_calls<=8))
+            or (full_coverage and max_calls is not None and (type(max_calls) is not int or max_calls < 0))
             or type(piece_characters) is not int or piece_characters!=20_000
             or not isinstance(text_layer,dict) or recognised is not None and not isinstance(recognised,dict)
             or not isinstance(windows,(list,tuple)) or not isinstance(sources,(list,tuple))):
@@ -188,6 +196,15 @@ def plan_global_cross_window(*, version_uid, text_layer, recognised, windows, so
         if queue:active.append(bucket_key)
     if active and limit_reason is None:
         limit_reason='index_piece_limit' if len(pieces)>=MAX_INDEX_PIECES else 'index_attempt_limit'
+    if full_coverage:
+        return _full_source_pair_plan(version_uid=version_uid, source_sha256=source_sha256,
+            pieces=pieces, origins=origins, actual_window_ids=actual_window_ids,
+            piece_characters=piece_characters, limit_reason=limit_reason,
+            scan={'source_records_total':raw_records, 'source_records_scanned':scanned,
+                'source_records_not_scanned':max(0,raw_records-scanned), 'invalid_source_records':invalid_records,
+                'non_text_records':non_text_records, 'empty_text_origins':empty_origins,
+                'pages_known':len(native_pages|recognised_pages),
+                'window_records_omitted':max(0,len(windows)-MAX_WINDOWS)})
     postings={};term_omissions=0;piece_term_omissions=0
     for index,piece in enumerate(pieces):
         terms,dropped=_terms(piece['quote']);piece_term_omissions+=dropped
@@ -328,5 +345,120 @@ def plan_global_cross_window(*, version_uid, text_layer, recognised, windows, so
         'selection_basis':'shared_literal_marks_subjects_parameter_units; bounded_candidate_selection_not_exhaustive'}
     result['manifest_sha256']=_digest({'version':VERSION,'version_uid':version_uid,'source_sha256':source_sha256,
         'pieces':public_pieces,'batch_keys':[row['batch_key'] for row in batches],
+        'omitted_manifest_sha256':result['omitted_manifest_sha256'],'coverage':coverage,'limits':result['limits']})
+    return result
+
+
+def _full_source_pair_plan(*, version_uid, source_sha256, pieces, origins,
+        actual_window_ids, piece_characters, limit_reason, scan):
+    """Every indexed cross-window piece pair appears in exactly one grouped request.
+
+    Full pieces are packed into disjoint <=20k-character bins per real window.
+    A Cartesian product of bins from different windows supplies all their piece
+    pairs together, with at most40k characters in one model request. No lexical
+    nomination, term reservoir or fixed call count can remove a pair in this mode.
+    """
+    by_window=defaultdict(list)
+    for piece in sorted(pieces, key=lambda row:(row['window_id'],row['page_number'],row['source_id'])):
+        by_window[piece['window_id']].append(piece)
+    bins={}
+    for window_id, rows in sorted(by_window.items()):
+        window_bins=[];current=[];characters=0
+        for row in rows:
+            if current and (characters+len(row['quote'])>piece_characters
+                    or len(current)>=FULL_BIN_SOURCES):
+                window_bins.append(current);current=[];characters=0
+            current.append(row);characters+=len(row['quote'])
+        if current:window_bins.append(current)
+        bins[window_id]=window_bins
+    batches=[];selected_sources=set();selected_windows=set()
+    window_ids=sorted(bins)
+    for left_index,left_window in enumerate(window_ids):
+        for right_window in window_ids[left_index+1:]:
+            for left in bins[left_window]:
+                for right in bins[right_window]:
+                    rows=[*left,*right]
+                    groups=[[row['source_id'] for row in group] for group in (left,right)]
+                    pair_count=len(left)*len(right)
+                    sha=_digest({'version':FULL_VERSION,'source_sha256':source_sha256,
+                        'pair_source_groups':groups,'sources':rows})
+                    contexts=[{'source_id':row['source_id'],'page_number':row['page_number'],
+                        'window_id':row['window_id'],'source_type':row['source_type'],
+                        'character_field':row['character_field'],'character_start':row['character_start'],
+                        'character_end':row['character_end'],'character_offset_unit':'unicode_code_points',
+                        'text':row['quote'] if row['source_type']=='native_text' else '',
+                        'recognised_context':row['quote'] if row['source_type']=='recognised_text' else '',
+                        'text_sha256':row['text_sha256']} for row in rows]
+                    batches.append({'index':len(batches),'batch_key':'gcwb_'+sha[:32],
+                        'batch_sha256':sha,'coverage_mode':FULL_COVERAGE_MODE,
+                        'source_ids':[row['source_id'] for row in rows],
+                        'window_ids':[left_window,right_window],
+                        'page_numbers':sorted({row['page_number'] for row in rows}),
+                        'pair_source_groups':groups,'pair_count':pair_count,
+                        'relation':{'kind':FULL_COVERAGE_MODE,'pair_count':pair_count},
+                        'sources':rows,'native_context':contexts,
+                        'input_characters':sum(len(row['quote']) for row in rows)})
+                    selected_sources.update(row['source_id'] for row in rows)
+                    selected_windows.update((left_window,right_window))
+    omitted=[];omitted_digest=hashlib.sha256();omission_counts=defaultdict(int);omitted_origins=0
+    for origin in origins:
+        missing=origin['pieces_total']-len(origin['indexed'])
+        if not missing:continue
+        reason=origin['reason'] or limit_reason or 'index_resource_limit'
+        omission_counts[reason]+=missing;omitted_origins+=1
+        ranges=_missing_ranges(origin['pieces_total'],origin['indexed'])
+        row={'origin_id':origin['origin_id'],'page_number':origin['page_number'],
+            'version_uid':version_uid,'artifact_sha256':origin['artifact_sha256'],
+            'origin_artifact_role':origin['origin_artifact_role'],'source_sha256':source_sha256,
+            'window_id':origin['window_id'],'source_type':origin['source_type'],
+            'character_field':origin['character_field'],'characters_total':len(origin['text']),
+            'pieces_omitted':missing,'piece_index_ranges':ranges,
+            'character_ranges':[[start*piece_characters,min(end*piece_characters,len(origin['text']))]
+                for start,end in ranges], 'character_offset_unit':'unicode_code_points',
+            'range_convention':'start_inclusive_end_exclusive','reason':reason}
+        omitted_digest.update(json.dumps(row,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode())
+        if len(omitted)<MAX_OMISSION_RECORDS:omitted.append(row)
+    possible=sum(len(by_window[left])*len(by_window[right])
+        for index,left in enumerate(window_ids) for right in window_ids[index+1:])
+    planned_pairs=sum(batch['pair_count'] for batch in batches)
+    if planned_pairs!=possible:
+        raise ValueError('global_cross_window_pair_partition_invalid')
+    known_pieces=sum(origin['pieces_total'] for origin in origins)
+    coverage={**scan,'text_origins_known':len(origins),'windows_in_plan':len(actual_window_ids),
+        'windows_indexed':len(by_window),'windows_selected':len(selected_windows),
+        'characters_total_known':sum(len(origin['text']) for origin in origins),
+        'characters_indexed':sum(len(row['quote']) for row in pieces),
+        'characters_selected':sum(len(row['quote']) for row in pieces if row['source_id'] in selected_sources),
+        'pieces_total_known':known_pieces,'pieces_indexed':len(pieces),
+        'pieces_selected':len(selected_sources),'pieces_omitted_from_index':known_pieces-len(pieces),
+        'pieces_not_selected':known_pieces-len(selected_sources),'pairs_possible_in_index':possible,
+        'candidate_pairs_considered':possible,'candidate_pairs_eligible':possible,
+        'pairs_selected':planned_pairs,'pairs_pending':0,'pairs_planned':planned_pairs,
+        'batches_planned':len(batches),'pair_link_events_considered':possible,
+        'candidate_pair_events_omitted':0,'index_terms':0,'index_term_events_omitted':0,
+        'piece_terms_omitted':0,'postings_omitted':0,'unexpanded_terms':0,
+        'omitted_origin_records':omitted_origins,'omitted_manifest_truncated':omitted_origins>len(omitted),
+        'pending_manifest_truncated':False,'local_observation_sources_used_for_identity':False,
+        'max_calls':len(batches),'piece_characters':piece_characters,'request_characters':2*piece_characters,
+        'all_pairs_complete':False,'all_indexed_pairs_planned':True,
+        'complete_input_scan':scan['source_records_scanned']==scan['source_records_total'],
+        'omission_reason_counts':dict(omission_counts),'complete_document_claim':False}
+    coverage['truncated']=bool(scan['invalid_source_records'] or scan['source_records_not_scanned']
+        or coverage['pieces_omitted_from_index'] or scan['window_records_omitted'])
+    public_pieces=[{key:value for key,value in row.items() if key!='quote'} for row in pieces]
+    result={'version':FULL_VERSION,'coverage_mode':FULL_COVERAGE_MODE,'version_uid':version_uid,
+        'source_sha256':source_sha256,'range_convention':'start_inclusive_end_exclusive',
+        'character_offset_unit':'unicode_code_points','sources':[row for row in pieces
+            if row['source_id'] in selected_sources], 'pieces':public_pieces,'batches':batches,
+        'pending_batches':[],'omitted':omitted,'omitted_manifest_sha256':omitted_digest.hexdigest(),
+        'coverage':coverage,'selection_basis':'all_indexed_cross_window_source_piece_pairs',
+        'limits':{'source_records':MAX_SOURCE_RECORDS,'index_pieces':MAX_INDEX_PIECES,
+            'index_characters':MAX_INDEX_CHARACTERS,'origin_hash_characters':MAX_ORIGIN_HASH_CHARACTERS,
+            'origin_characters':MAX_ORIGIN_CHARACTERS,'request_characters':2*piece_characters,
+            'request_sources':2*FULL_BIN_SOURCES,
+            'omission_records':MAX_OMISSION_RECORDS}}
+    result['manifest_sha256']=_digest({'version':FULL_VERSION,'version_uid':version_uid,
+        'source_sha256':source_sha256,'pieces':public_pieces,
+        'batch_keys':[row['batch_key'] for row in batches],
         'omitted_manifest_sha256':result['omitted_manifest_sha256'],'coverage':coverage,'limits':result['limits']})
     return result

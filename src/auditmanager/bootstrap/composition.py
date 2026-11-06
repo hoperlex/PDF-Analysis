@@ -206,6 +206,9 @@ class Application:
     #: `W54-WORKER-01` (R-105). ``all`` claims in-process (W53); ``api`` claims nothing
     #: and its carrier only reclaims expired leases, because the worker service claims.
     execution_role: str = "all"
+    #: The same configured run-control port used by the API, for host operator
+    #: commands. No alternate route, model configuration or provider is assembled.
+    run_control: Any = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -779,6 +782,7 @@ def build_application(
         provider_config=provider_config,
         carrier=carrier,
         execution_role=resolved.execution_role,
+        run_control=run_adapter,
     )
 
 

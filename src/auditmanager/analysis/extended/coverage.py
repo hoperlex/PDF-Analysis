@@ -11,17 +11,26 @@ ITEM_CHARACTERS = 24_000
 MAX_BATCH_ITEMS = 20
 
 
-def cross_window_policy():
+def cross_window_policy(*, full_coverage=False):
     """Separate run-global authority; these calls are never multiplied by windows."""
-    return {'version': 'cross-window-comprehensive-v1', 'piece_characters': 20_000,
+    if type(full_coverage) is not bool:
+        raise ValueError('extended_cross_window_coverage_mode_invalid')
+    policy = {'version': 'cross-window-comprehensive-v1', 'piece_characters': 20_000,
         'call_limits': {'comprehensive_analysis': 8, 'norm_verification': 8,
             'finding_review': 8, 'finding_correction': 8}}
+    if full_coverage:
+        # These counts remain an initial estimate. Fresh consent explicitly permits
+        # the source-sized plan, with every actual call still journaled and metered.
+        policy.update(version='cross-window-comprehensive-v2', coverage_mode='all-source-pairs-v1',
+            source_sized_calls=True, request_characters=TEXT_CHARACTERS)
+    return policy
 
 
 def validate_cross_window_policy(value):
     if value is None:
         return False
-    expected = cross_window_policy()
+    full = isinstance(value, dict) and value.get('version') == 'cross-window-comprehensive-v2'
+    expected = cross_window_policy(full_coverage=full)
     if (not isinstance(value, dict) or set(value) != set(expected)
             or value.get('version') != expected['version']
             or type(value.get('piece_characters')) is not int
@@ -29,7 +38,11 @@ def validate_cross_window_policy(value):
             or not isinstance(value.get('call_limits'), dict)
             or set(value['call_limits']) != set(expected['call_limits'])
             or any(type(count) is not int for count in value['call_limits'].values())
-            or value['call_limits'] != expected['call_limits']):
+            or value['call_limits'] != expected['call_limits']
+            or full and (value.get('coverage_mode') != expected['coverage_mode']
+                or value.get('source_sized_calls') is not True
+                or type(value.get('request_characters')) is not int
+                or value['request_characters'] != expected['request_characters'])):
         raise ValueError('extended_cross_window_authority_invalid')
     return True
 

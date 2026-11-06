@@ -1,0 +1,65 @@
+name: run-hotfix-diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        required: true
+        default: status
+        options: [status, reaudit-unmetered]
+      run_id:
+        type: string
+        required: true
+
+concurrency:
+  group: auditmanager-alpha-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  operator:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect or repeat the run through the configured application
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          OPERATION: ${{ inputs.operation }}
+          RUN_ID: ${{ inputs.run_id }}
+          CHECKED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          umask 077
+          case "$OPERATION" in status|reaudit-unmetered) ;; *) exit 2 ;; esac
+          [[ "$RUN_ID" =~ ^run_[0-9A-HJKMNP-TV-Z]{26}$ ]]
+          [[ "$CHECKED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          case "$VPS_HOST" in 135.106.164.147|audit.135.106.164.147.sslip.io) ;; *) exit 2 ;; esac
+          test -n "$SSH_KEY"
+          mkdir -p "$HOME/.ssh"
+          trap 'rm -f "$HOME/.ssh/hotfix_key" "$HOME/.ssh/hotfix_hosts"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/hotfix_key"
+          printf '%s\n' '135.106.164.147 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' 'audit.135.106.164.147.sslip.io ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' > "$HOME/.ssh/hotfix_hosts"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/hotfix_hosts" -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i "$HOME/.ssh/hotfix_key" \
+            "${VPS_USER}@${VPS_HOST}" bash -s -- "$CHECKED_SHA" "$OPERATION" "$RUN_ID" <<'REMOTE'
+          set -euo pipefail
+          cd /srv/auditmanager
+          test "$(git rev-parse HEAD)" = "$1"
+          operation="$2"
+          run_id="$3"
+          args=("$operation" "$run_id")
+          if [ "$operation" = reaudit-unmetered ]; then
+            args+=(--key HOTFIX-RUN-COMPLETE-1106)
+          fi
+          docker compose --env-file infra/deploy/env/alpha.env \
+            -f infra/deploy/compose.server.yml exec -T api \
+            python -m auditmanager.runs.hotfix_operator "${args[@]}" </dev/null
+          REMOTE

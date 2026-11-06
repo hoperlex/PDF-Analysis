@@ -262,7 +262,7 @@ def build_request(*, model_id: str, run_id: str, phase: str, section: str, paylo
     return ModelRequest(model_id, body, idempotency_scope=f"{run_id}:{phase}:{digest(payload)}")
 
 
-def parse_reply(text: str, *, allowed_sources: set[str], expected_inputs: dict[str, dict] | None = None) -> list[dict]:
+def _reply_document(text):
     def pairs(items):
         result = {}
         for k, v in items:
@@ -270,11 +270,149 @@ def parse_reply(text: str, *, allowed_sources: set[str], expected_inputs: dict[s
                 raise ValueError("duplicate_key")
             result[k] = v
         return result
-    value = json.loads(text, object_pairs_hook=pairs, parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite")))
+    return json.loads(text, object_pairs_hook=pairs, parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite")))
+
+
+def parse_reply(text: str, *, allowed_sources: set[str], expected_inputs: dict[str, dict] | None = None,
+                rejected: list[dict] | None = None) -> list[dict]:
+    """Validate every observation, optionally retaining per-record refusal evidence.
+
+    The collector never repairs a source reference or publishes a refused record. The
+    caller must account for these refusals separately from complete batch coverage.
+    """
+    value = _reply_document(text)
     if not isinstance(value, dict) or set(value) != {"observations"} or not isinstance(value["observations"], list) or len(value["observations"]) > MAX_ITEMS:
         raise ValueError("reply_shape_invalid")
+    if rejected is None:
+        return _parse_observations(value["observations"], allowed_sources=allowed_sources,
+            expected_inputs=expected_inputs)
+    output = []
+    for ordinal, item in enumerate(value["observations"]):
+        try:
+            output.extend(_parse_observations([item], allowed_sources=allowed_sources,
+                expected_inputs=expected_inputs))
+        except ValueError as error:
+            rejected.append({"reply_ordinal": ordinal, "reason": str(error),
+                "record": deepcopy(item)})
+    return output
+
+
+def build_semantic_repair_request(request: ModelRequest, *, rejected: list[dict],
+                                  reply_sha256: str, procedure: str,
+                                  attempt: int = 1,
+                                  accepted_records: list[dict] | None = None) -> ModelRequest:
+    """Ask once for a complete corrected answer to a received, invalid reply.
+
+    The original sources, schema and attachments remain byte-for-byte present. This
+    is a new metered question after a known response, never a retry of an unknown
+    provider outcome. The caller owns consent, the attempt allowance and validation
+    of the entire replacement answer; this helper cannot declare a record valid.
+    """
+    if type(attempt) is not int or attempt != 1:
+        raise ValueError("semantic_repair_attempt_invalid")
+    if (not isinstance(reply_sha256, str) or len(reply_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in reply_sha256)):
+        raise ValueError("semantic_repair_reply_identity_invalid")
+    if (not isinstance(procedure, str) or not procedure or len(procedure) > 128
+            or not isinstance(rejected, list) or not 1 <= len(rejected) <= 128):
+        raise ValueError("semantic_repair_feedback_invalid")
+    if accepted_records is not None and (not isinstance(accepted_records, list)
+            or len(accepted_records) > 128):
+        raise ValueError("semantic_repair_feedback_invalid")
+    feedback = []
+    record_budget = 48_000
+    for row in rejected:
+        if not isinstance(row, dict):
+            raise ValueError("semantic_repair_feedback_invalid")
+        reason = row.get("reason")
+        if not isinstance(reason, str) or not reason.isidentifier() or len(reason) > 160:
+            reason = "reply_validation_failed"
+        item = {"reason": reason}
+        ordinal = row.get("reply_ordinal")
+        if type(ordinal) is int and ordinal >= 0:
+            item["reply_ordinal"] = ordinal
+        input_id = row.get("input_id")
+        if isinstance(input_id, str) and len(input_id) <= 160:
+            item["input_id"] = input_id
+        if "record" in row:
+            record = row["record"]
+            encoded = canonical(record)
+            if len(encoded) <= min(record_budget, 4_000):
+                item["record"] = deepcopy(record)
+                record_budget -= len(encoded)
+            else:
+                item.update(record_omitted=True, record_characters=len(encoded),
+                    record_sha256=digest(record))
+        feedback.append(item)
+    accepted_feedback = []
+    accepted_budget = 48_000
+    for ordinal, record in enumerate(accepted_records or []):
+        encoded = canonical(record)
+        item = {"ordinal": ordinal}
+        if len(encoded) <= min(accepted_budget, 4_000):
+            item["record"] = deepcopy(record)
+            accepted_budget -= len(encoded)
+        else:
+            item.update(record_omitted=True, record_characters=len(encoded),
+                record_sha256=digest(record))
+        accepted_feedback.append(item)
+    origin = {"origin_request_sha256": request.request_sha256,
+              "origin_reply_sha256": reply_sha256,
+              "procedure": procedure, "attempt": attempt}
+    payload = {"semantic_repair": origin, "rejected_records": feedback,
+        "accepted_records": accepted_feedback,
+        "instruction": (
+            "Предыдущий полученный ответ не прошёл проверку. Верни ПОЛНЫЙ исправленный ответ по исходной "
+            "JSON-схеме: сохрани все корректные записи и исправь перечисленные отказы. Сведения об отказах — "
+            "диагностика, а не новый источник. Пользуйся только исходными источниками и их точными source_id. "
+            "Не исправляй источник, не выдумывай цитату, число, марку или нормативную ссылку. Каждая цитата "
+            "должна дословно принадлежать указанному источнику; сохраняй знаки и десятичные разделители. "
+            "Для observations/facts откажись от неподтверждённого нового утверждения. Для reviews/corrections "
+            "сохрани обязательный полный набор input_id, при нехватке данных укажи неопределённость по схеме. "
+            "propose_revision допустим только с дословным подтверждением всех чисел и марок. Иначе retain "
+            "или needs_context сохраняют исходные title/description/source_ids без изменений. При record_omitted "
+            "исходная запись не передана полностью: не достраивай её по хешу, проверь исходный запрос заново. "
+            "Без пояснений вне JSON.")}
+    body = deepcopy(dict(request.body))
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        raise ValueError("semantic_repair_request_invalid")
+    body["messages"] = [*messages, {"role": "user", "content": canonical(payload)}]
+    scope = request.idempotency_scope or request.request_sha256
+    return ModelRequest(request.model_id, body,
+        idempotency_scope=f"{scope}:semantic-repair:{attempt}",
+        image_bytes=request.image_bytes, images_bytes=request.images_bytes)
+
+
+def semantic_repair_metadata(request: ModelRequest) -> dict:
+    """Allowlist the repair identities for the durable provider-call parameters."""
+    messages = request.body.get("messages", [])
+    if not messages or not isinstance(messages[-1], dict):
+        return {}
+    content = messages[-1].get("content")
+    if not isinstance(content, str):
+        return {}
+    try:
+        value = json.loads(content)
+    except (TypeError, ValueError):
+        return {}
+    origin = value.get("semantic_repair") if isinstance(value, dict) else None
+    if not isinstance(origin, dict) or origin.get("attempt") != 1:
+        return {}
+    result = {}
+    for key in ("origin_request_sha256", "origin_reply_sha256"):
+        identity = origin.get(key)
+        if (not isinstance(identity, str) or len(identity) != 64
+                or any(character not in "0123456789abcdef" for character in identity)):
+            return {}
+        result["semantic_repair_" + key] = identity
+    result["semantic_repair_attempt"] = 1
+    return result
+
+
+def _parse_observations(observations, *, allowed_sources, expected_inputs):
     items = []
-    for item in value["observations"]:
+    for item in observations:
         keys = {"title", "description", "source_ids", "norm_queries"}
         if expected_inputs is not None:
             keys.update({"input_ids", "norm_assessment"})
@@ -365,4 +503,15 @@ def build_request_v3(*, model_id, run_id, phase, section, payload, window_id):
         "rules_sha256":review_bundle_digest(section)}
     request=build_request(model_id=model_id,run_id=run_id,phase=phase,section=section,payload=bound)
     body={**request.body,"system":request.body["system"]+"\n\n"+rubric}
+    # These are generation constraints, not a replacement for the source-binding
+    # validator. Parameter/context IDs in the same prompt are not visual evidence.
+    allowed = sorted({source["source_id"] for source in payload.get("sources", [])})
+    if allowed:
+        schema = deepcopy(body["output_config"]["format"]["schema"])
+        schema["properties"]["observations"]["items"]["properties"]["source_ids"]["items"]["enum"] = allowed
+        body["output_config"] = {**body["output_config"], "format": {
+            **body["output_config"]["format"], "schema": schema}}
+    body["system"] += ("\nsource_ids каждой записи копируй только из sources этого пакета. "
+        "Не используй context_fact_id, fact_id, text_id или идентификаторы из соседнего пакета. "
+        "Не повторяй source_id внутри одной записи. Если проверяемого наблюдения нет, верни пустой observations.")
     return ModelRequest(model_id,body,idempotency_scope=f"{run_id}:v3:{window_id}:{phase}:{digest(bound)}")

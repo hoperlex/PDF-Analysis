@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BatchProgress } from './batch-progress';
+import { BatchProgress, ReplyRepairSummary } from './batch-progress';
 import { ObservationList } from './observation-list';
 import { SourceInspector, sourcePage } from './source-inspector';
 import { extendedExecutionReason } from './execution-reason';
@@ -47,7 +47,7 @@ function MetadataRecords({ value, title, sourceIndex, fallbackVersion, onSource 
       const record = object(value);
       const source = sourceIndex.get(text(record?.source_id)) ?? record;
       return <li key={text(record?.batch_key) || text(record?.pair_id) || text(record?.source_id) || index}>
-        {text(record?.reason) ? <p>{REASON[text(record?.reason)] ?? extendedExecutionReason(record?.reason, record?.dependency)}</p> : null}
+        {text(record?.reason) && record?.status !== 'completed' ? <p>{REASON[text(record?.reason)] ?? extendedExecutionReason(record?.reason, record?.dependency, record?.status, record?.error_code)}</p> : null}
         {source !== null && sourcePage(source) !== null && (text(source.version_uid) || fallbackVersion) ? <button type="button" className="am-button am-button--quiet" onClick={() => onSource(source)}>Открыть исходную страницу {sourcePage(source)}</button> : null}
         <pre>{JSON.stringify(value, null, 2)}</pre>
       </li>;
@@ -73,18 +73,19 @@ export function CrossWindowReview({ value, observations, sources, fallbackVersio
   return <section id="extended-global-cross-window" className={styles.batchPanel} aria-label="Сверка источников между окнами" data-global-cross-window={text(body.status)}>
     <h3>Сверка источников между окнами</h3>
     <p><strong>{STATUS[text(body.status)] ?? 'Состояние ещё не передано'}</strong>. Проверяются выбранные сочетания источников из разных локальных окон. Это отдельный проход по закреплённому плану; он не доказывает проверку всех возможных сочетаний страниц или отсутствие проблем.</p>
-    <p>Лимиты ниже относятся к этому проходу <strong>на весь прогон</strong>, а не к каждому локальному окну. Они не расширяют сохранённые согласия исторических запусков.</p>
-    {limits === null ? <p>Лимиты межоконного прохода ещё не переданы.</p> : <dl className={styles.coverageGrid}>{Object.entries(limits).filter(([phase]) => PHASE[phase] !== undefined).map(([phase, value]) => <div key={phase}><dt>{PHASE[phase]}</dt><dd>до {count(value)} обращений на прогон</dd></div>)}</dl>}
+    {policy?.source_sized_calls === true ? <p>План включает все сочетания учтённых текстовых фрагментов из разных окон. Число обращений определяется этим объёмом и ограничено согласованным денежным бюджетом.</p> : <><p>Лимиты ниже относятся к этому проходу <strong>на весь прогон</strong>, а не к каждому локальному окну. Они не расширяют сохранённые согласия исторических запусков.</p>
+      {limits === null ? <p>Лимиты межоконного прохода ещё не переданы.</p> : <dl className={styles.coverageGrid}>{Object.entries(limits).filter(([phase]) => PHASE[phase] !== undefined).map(([phase, value]) => <div key={phase}><dt>{PHASE[phase]}</dt><dd>до {count(value)} обращений на прогон</dd></div>)}</dl>}</>}
     {typeof policy?.piece_characters === 'number' ? <p>Граница одного текстового фрагмента принятой политики: {count(policy.piece_characters)} символов.</p> : null}
     {coverage === null ? <p>Покрытие сочетаний источников ещё не получено.</p> : <dl className={styles.coverageGrid}>{Object.entries(coverage).filter(([key, value]) => COVERAGE[key] !== undefined && typeof value === 'number').map(([key, value]) => <div key={key}><dt>{COVERAGE[key]}</dt><dd>{count(value)}</dd></div>)}</dl>}
     {coverage?.all_pairs_complete === false || coverage?.global_semantic_complete === false ? <p>Все возможные сочетания и глобальная смысловая полнота не подтверждены. Необработанные источники и пропуски сохраняются отдельно.</p> : null}
     {coverage?.complete_input_scan === false ? <p>Исходные записи прочитаны не полностью: не просмотрено {count(coverage.source_records_not_scanned)} записей. Известный объём не обозначает весь исходный документ.</p> : null}
     {coverage?.truncated === true ? <p>Отбор ограничен ресурсными границами и принятым числом обращений; часть фрагментов или сочетаний осталась вне сверки.</p> : null}
     {coverage?.pending_manifest_truncated === true || coverage?.omitted_manifest_truncated === true ? <p>Сохранённые списки необработанных сочетаний или пропусков сокращены до границ манифеста. Общие счётчики и признаки ограничения приведены отдельно; показанный список не является полным перечнем всех возможных пропусков.</p> : null}
-    {text(body.reason) ? <p role="status">{REASON[text(body.reason)] ?? extendedExecutionReason(body.reason, body.dependency)}</p> : null}
-    {objects(body.procedures).length > 0 ? <ol className={styles.procedures} aria-label="Процедуры межоконного прохода">{objects(body.procedures).map((procedure, index) => <li key={text(procedure.id) || index}><strong>{text(procedure.title) || PHASE[text(procedure.id)] || 'Сохранённая процедура'}</strong> · {STATUS[text(procedure.status)] ?? 'Состояние не передано'}{text(procedure.reason) ? <p>{REASON[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency)}</p> : null}</li>)}</ol> : null}
+    {text(body.reason) && body.status !== 'completed' ? <p role="status">{REASON[text(body.reason)] ?? extendedExecutionReason(body.reason, body.dependency, body.status)}</p> : null}
+    <ReplyRepairSummary value={body.reply_refusals} />
+    {objects(body.procedures).length > 0 ? <ol className={styles.procedures} aria-label="Процедуры межоконного прохода">{objects(body.procedures).map((procedure, index) => <li key={text(procedure.id) || index}><strong>{text(procedure.title) || PHASE[text(procedure.id)] || 'Сохранённая процедура'}</strong> · {STATUS[text(procedure.status)] ?? 'Состояние не передано'}{text(procedure.reason) && procedure.status !== 'completed' ? <p>{REASON[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency, procedure.status, procedure.error_code)}</p> : null}</li>)}</ol> : null}
     <details><summary>Политика и происхождение межоконного прохода</summary><p>Версия: <code>{text(body.version) || text(policy?.version) || 'Не передана'}</code>.</p>{text(body.source_sha256) ? <p>SHA256 источника: <code>{text(body.source_sha256)}</code>.</p> : null}{text(body.manifest_sha256) ? <p>SHA256 манифеста: <code>{text(body.manifest_sha256)}</code>.</p> : null}<pre>{JSON.stringify({ policy: body.policy, coverage: body.coverage, reason: body.reason }, null, 2)}</pre></details>
-    <BatchProgress batches={body.batches} coverage={body.phase_coverage} title="Квитанции межоконного прохода" />
+    <BatchProgress batches={body.batches} coverage={body.phase_coverage} sourceSized={policy?.source_sized_calls} title="Квитанции межоконного прохода" />
     {selected === null ? null : <SourceInspector key={`${text(selected.source_id) || text(selected.origin_id)}:${sourcePage(selected)}:${text(selected.version_uid) || fallbackVersion}`} source={selected} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} onClose={() => setSelectedSource(null)} />}
     <MetadataRecords value={body.pieces} title="Учтённые текстовые фрагменты" sourceIndex={sourceIndex} fallbackVersion={fallbackVersion} onSource={setSelectedSource} />
     <MetadataRecords value={body.pending_batches} title="Необработанные сочетания источников" sourceIndex={sourceIndex} fallbackVersion={fallbackVersion} onSource={setSelectedSource} />
