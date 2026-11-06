@@ -24,17 +24,16 @@ function screen(overrides: Partial<RunStatus> = {}): string {
 
 describe('the live line of an open run', () => {
   it('names the first scheduled stage the run has not reported, and none when all are reported', () => {
-    const open = stageRows({ stages: [{ stage_id: 'source_preparation', status: 'succeeded', error_code: null }], analysis_profile_id: undefined });
+    const open = stageRows({ stages: [{ stage_id: 'source_preparation', status: 'succeeded', error_code: null }] });
     expect(liveStageOf(open)?.stageId).toBe('page_geometry_extraction');
     const done = stageRows({
       stages: open.map((row) => ({ stage_id: row.stageId, status: 'succeeded' as const, error_code: null })),
-      analysis_profile_id: undefined,
     });
     expect(liveStageOf(done)).toBeNull();
   });
 
   it('says the stage and the elapsed time, and «—» before the clock is read', () => {
-    const rows = stageRows({ stages: [], analysis_profile_id: undefined });
+    const rows = stageRows({ stages: [] });
     const markup = renderToStaticMarkup(createElement(RunLiveLineView, { stage: liveStageOf(rows), elapsed: '—' }));
     expect(markup).toContain('data-run-live="source_preparation"');
     expect(markup).toContain('Сейчас:');

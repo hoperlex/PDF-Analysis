@@ -235,7 +235,7 @@ export function FindingList({
   const shown = filterBySeverity(filterGroups(groups, filter), severity);
 
   return (
-    <div className="am-finding-list" data-finding-count={total}>
+    <div className={`am-finding-list ${styles.root}`} data-finding-count={total}>
       <div className={styles.verdicts} data-finding-toolbar="">
         <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
           <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>

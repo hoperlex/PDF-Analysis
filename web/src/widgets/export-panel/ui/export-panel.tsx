@@ -193,7 +193,7 @@ export function ExportPanel({
           </details>
           {lastFileName !== undefined && lastFileName !== null ? (
             <p className={bar ? `am-export__last ${styles.barLast}` : 'am-export__last'} data-last-file={lastFileName}>
-              Downloaded {lastFileName}
+              Скачан {lastFileName}
             </p>
           ) : null}
         </>

@@ -284,9 +284,9 @@
   font-size: var(--am-text-lg);
 }
 
-/* The reading the user came for. It was one paragraph among twelve. */
+/* The reading the user came for. It was one paragraph among twelve. Set tight (`UI-PARITY-DENSE`): two lines, not a card. */
 .outcome {
-  padding: var(--am-gap) var(--am-gap-lg);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-left: 4px solid var(--am-inert);
   border-radius: var(--am-radius);
@@ -296,6 +296,10 @@
 
 .outcome > *:last-child {
   margin-bottom: 0;
+}
+
+.outcome p {
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .outcome[data-run-outcome='published'] {

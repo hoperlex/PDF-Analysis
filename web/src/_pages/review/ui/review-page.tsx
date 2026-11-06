@@ -65,6 +65,7 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { OpenedFinding } from './opened-finding';
 import { ReviewPageBlocks } from './page-blocks';
 import { ReviewRowActions } from './review-row-actions';
 import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
@@ -417,7 +418,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
               // A second press on the open row of the table closes it, as the original's strip does.
               setSelection(view === 'table' && findingUid === selectedUid ? null : selectFinding(findingUid));
             }}
-            renderExpansion={() => <div className={styles.expansion}>{detailContent}</div>}
+            renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
             sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
             // `R-151n`: ✓/✕ in each row, for a session that may decide.
             renderRowActions={mayAct ? (finding) => (

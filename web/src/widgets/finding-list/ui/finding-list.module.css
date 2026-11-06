@@ -10,14 +10,18 @@
   gap: var(--am-gap-xs);
 }
 
+/* The list's own rhythm: the rows of the toolbar and the groups stand 8px apart (the global gap is 16px). */
+.root.root {
+  gap: var(--am-gap-sm);
+}
+
 /* `UI-A-70`, `UI-A-71`: the run's verdicts at a glance and the filter by them. Tokens only. */
 .verdicts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--am-gap-sm);
-  margin-bottom: var(--am-gap);
+  gap: var(--am-gap-xs) var(--am-gap-sm);
 }
 
 .tally {
@@ -92,9 +96,10 @@
 
 /* `R-151j`: the severity strip -- the expert's decided severity as a filter, the model's proposal labelled apart. */
 .severities {
-  display: grid;
-  gap: var(--am-gap-xs);
-  margin-bottom: var(--am-gap);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
 }
 
 .stripLabel {
@@ -123,4 +128,27 @@
 .mergedMark {
   color: var(--am-ink);
   font-weight: 700;
+}
+
+/*
+ * The severity chips carry the original's colours as a bar on their left border (critical red, economic amber,
+ * operational blue, the rest grey), so the strip reads at a glance without the colour being the only statement:
+ * the name and the count stand in every chip.
+ */
+.severities [data-severity-filter='critical'] {
+  border-left: 3px solid var(--am-failed);
+}
+
+.severities [data-severity-filter='economic'] {
+  border-left: 3px solid var(--am-degraded);
+}
+
+.severities [data-severity-filter='operational'] {
+  border-left: 3px solid var(--am-accent);
+}
+
+.severities [data-severity-filter='recommendation'],
+.severities [data-severity-filter='check_adjacent'],
+.severities [data-severity-filter='undetermined'] {
+  border-left: 3px solid var(--am-inert);
 }
