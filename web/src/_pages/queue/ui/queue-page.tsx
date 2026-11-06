@@ -1,11 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
 import { ApiError, newIdempotencyKey } from '@/shared/api';
-import { routes } from '@/shared/lib';
+import { routes, useAddressState } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
   QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueOverviewLine, queueStateCount,
@@ -19,6 +19,8 @@ import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
 import { ComparisonQueueBlock, ExecutionQueue } from '@/widgets/execution-queue';
 import { CostApproval, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
+import type { QueueAddress } from '../model/address';
 import { QUEUE_PERIOD_OPTIONS, isQueuePeriod, queuePeriodStart } from '../model/period';
 import type { QueuePeriod } from '../model/period';
 import styles from './queue-page.module.css';
@@ -57,12 +59,31 @@ export function intentLabel(intent: Intent): string {
   }
 }
 
-export function QueuePage() {
-  const [cursors, setCursors] = useState<string[]>([]);
-  // `UI-PARITY-QUEUE-A`: the state the list is narrowed to; '' is every state.
-  const [stateFilter, setStateFilter] = useState<ExecutionQueueState | ''>('');
-  // The period and the instant it began at when it was chosen (it does not slide while the page is read).
-  const [period, setPeriod] = useState<{ readonly value: QueuePeriod; readonly from: string | undefined }>({ value: 'all', from: undefined });
+export interface QueuePageProps {
+  /**
+   * The filter the address named, read on the server by the route, so the first read of the queue is already the filtered one.
+   * Inside the app router the address itself is the source and this is what it said; a static render starts from it.
+   */
+  readonly initialAddress?: QueueAddress | undefined;
+}
+
+export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePageProps = {}) {
+  // The state and the period are in the address (`?state=&period=`), so a link opens the queue filtered, a reload keeps the filter and
+  // the side menu's «Очередь» (no query) clears it. A choice REPLACES the entry: a filter is not a place to go Back to.
+  const [address, setAddress] = useAddressState(readQueueAddress, writeQueueAddress, initialAddress);
+  const stateFilter = address.state;
+  const filterKey = `${address.state}|${address.period}`;
+  // A cursor belongs to the filter it was issued under (the server refuses it under another), so the pages walked are held with
+  // the filter they were walked under and forgotten when the filter is anything else -- including a change the address made.
+  const [paging, setPaging] = useState<{ readonly key: string; readonly cursors: readonly string[] }>({ key: filterKey, cursors: [] });
+  const cursors = paging.key === filterKey ? paging.cursors : [];
+  const setCursors = (update: readonly string[] | ((current: readonly string[]) => readonly string[])) => {
+    setPaging({ key: filterKey, cursors: typeof update === 'function' ? update(cursors) : update });
+  };
+  // The instant the period begins at, taken when the period is chosen (or the page opened on it) and held: the filter, its cursors
+  // and its cache key do not slide under a person who is reading a page.
+  const periodFrom = useMemo(() => queuePeriodStart(address.period, new Date()), [address.period]);
+  const period = { value: address.period, from: periodFrom };
   const [intent, setIntent] = useState<Intent | null>(null);
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
@@ -94,18 +115,14 @@ export function QueuePage() {
   const asOf = queue.dataUpdatedAt > 0 ? queue.dataUpdatedAt : null;
   const costFailure = reauditCost.error === null ? null : executionFailure(reauditCost.error, false);
 
-  // A cursor belongs to the filter it was issued under (the server refuses it under another), so the
-  // cursors and the filter move together: choosing a state returns to the first page of that state.
   function chooseState(next: string) {
     const known = QUEUE_STATE_OPTIONS.find((option) => option.value === next);
-    setStateFilter(known === undefined ? '' : known.value);
-    setCursors([]);
+    setAddress({ state: known === undefined ? '' : known.value, period: address.period }, 'replace');
   }
 
   function choosePeriod(chosen: string) {
     const value: QueuePeriod = isQueuePeriod(chosen) ? chosen : 'all';
-    setPeriod({ value, from: queuePeriodStart(value, new Date()) });
-    setCursors([]);
+    setAddress({ state: address.state, period: value }, 'replace');
   }
 
   function select(nextIntent: NewIntent) {
