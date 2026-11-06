@@ -850,9 +850,13 @@
         "roles on a cold route. The intake switch requires explicit administrator intent and",
         "a confirmation, and is not emitted by this read journey.",
         "",
-        "EXEC-HTTP-01 gave the screen three tabs: «Подключения», «Процессы», «Назначения». The cold",
-        "route opens «Процессы» -- the worker list above, unchanged -- and a closed tab mounts",
-        "nothing, so `expects_api` is as it was. The two other tabs are opened by a click or by",
+        "EXEC-HTTP-01 gave the screen three tabs: «Подключения», «Процессы», «Назначения». Since the",
+        "second UX pass (2026-11-07) the cold route opens «Обзор», as the original's dispatcher does:",
+        "it reads the worker registry's first page (as «Процессы» did) and the queue's first page for its",
+        "tiles and blocks (`listExecutionQueue`, the entry the side menu's counter already holds, so the",
+        "queue read is declared required and costs no request the menu did not make). «Процессы» is one",
+        "click or `?tab=processes` away and the steps that press its switches stand there. A closed tab mounts",
+        "nothing. The other tabs are opened by a click or by",
         "`?tab=`, which this walk does not carry, and read `listExecutorConnections`,",
         "`getExecutorConnection` (one per listed connection) and `listExecutorRoutes`; they are",
         "declared `optional_api` so the claim names every read the screen can make without",
@@ -876,15 +880,15 @@
       ],
       "expects_api": [
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue"},
         {"method": "GET", "path": "/me", "operationId": "getMe"}
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01); the cold route opens «Процессы» and a closed tab mounts nothing"},
+        {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01); the cold route opens «Обзор» and a closed tab mounts nothing"},
         {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection on the «Подключения» and «Назначения» tabs, and polled every 3 s while a probe is open (EXEC-HTTP-01)"},
         {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01)"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
-        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
         {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
@@ -8691,11 +8695,11 @@
       },
       {
         "name": "workers-list-the-worker",
-        "at": "/workers",
+        "at": "/workers?tab=processes",
         "page_module": "web/src/app/workers/page.tsx",
         "control_module": "web/src/widgets/worker-list/ui/worker-list.tsx",
         "$comment": [
-          "Исполнители. The lane runs one worker beside the API (EXECUTION_ROLE=worker); it is registered, active and takes new work."
+          "Исполнители, «Процессы» (`?tab=processes`: the screen opens on «Обзор» since the second UX pass). The lane runs one worker beside the API (EXECUTION_ROLE=worker); it is registered, active and takes new work."
         ],
         "captures": [
           {
@@ -8728,7 +8732,7 @@
       {
         "name": "worker-intake-is-an-administrators-act",
         "as": "expert_only",
-        "at": "/workers",
+        "at": "/workers?tab=processes",
         "page_module": "web/src/app/workers/page.tsx",
         "control_module": "web/src/widgets/worker-list/ui/worker-list.tsx",
         "$comment": [
@@ -8762,7 +8766,7 @@
       },
       {
         "name": "worker-stops-taking-new-work",
-        "at": "/workers",
+        "at": "/workers?tab=processes",
         "page_module": "web/src/app/workers/page.tsx",
         "control_module": "web/src/_pages/workers/ui/workers-page.tsx",
         "$comment": [
@@ -8802,7 +8806,7 @@
       },
       {
         "name": "worker-takes-new-work-again",
-        "at": "/workers",
+        "at": "/workers?tab=processes",
         "page_module": "web/src/app/workers/page.tsx",
         "control_module": "web/src/_pages/workers/ui/workers-page.tsx",
         "$comment": [
