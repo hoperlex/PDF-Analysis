@@ -181,6 +181,8 @@ describe('the seam operations', () => {
       'generateComparisonSummary',
       'generateExecutorSshKey',
       'importComparisonZip',
+      // `UI-B-15` (contract 1.35.0): the decisions of a proposals workbook are appended under one key, like `importRunDecisions`.
+      'importOptimisationProposalDecisions',
       'importRunDecisions',
       'issueExecutorEnrollment',
       // `EXEC-PULL-01`: issuing and revoking a runner token are administrator commands, keyed like

@@ -352,6 +352,12 @@ from sqlalchemy import Engine, text
 #: ``finding_execution_status``), columns +11 (``audit_run.started_by_user_uid``; ``document.archived_at`` and
 #: ``archived_by_user_uid``; four in each new table), constraints +15 (their keys, references and checks), indexes +4,
 #: triggers the same 241 with a new digest (0051 re-created ``audit_run``'s frozen-column trigger with the starter).
+#: Resealed 2026-11-06 for ``0056_optimisation_decisions`` (`UI-PARITY-OPT-DECISIONS`, `UI-B-12`), measured on a throwaway
+#: PostgreSQL (the project image, stand ``am-lane-c1-pg``) upgraded to ``0056``, down to ``0055`` and up again: the table
+#: ``optimisation_proposal_decision`` keeps ``ck_optimisation_proposal_decision_verdict`` under its name and widens it by
+#: ``revoke``, so only the ``constraints`` family moves, and only its digest (the count stays 1945). Columns, relations,
+#: indexes, triggers, functions, views, extensions, sequences, policies and the state topology are byte-identical to the
+#: ``0055`` seal.
 #: Resealed 2026-11-06 for ``0055_work_schedule`` (`UI-PARITY-P0P`, `D-318`), measured on a throwaway PostgreSQL (the project
 #: image) upgraded to ``0055``, down to ``0054`` and up again: relations +5 (the five journals), columns +27 (5 + 6 + 5 + 6 + 5),
 #: constraints +30 (five primary keys, five event-id format checks, six account references with their six format checks,
@@ -361,7 +367,7 @@ from sqlalchemy import Engine, text
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (1587, "90d4879ffe720164570454cc276ad68c0445acd63be44019cd1f6e594b48235f"),
     "relations": (148, "2bef8303c7c1cc9481b938e72e8c241fd9b3e391f55d8c3a4fdde713d60e3384"),
-    "constraints": (1945, "e243bf0b93a2d5ebf0b5d20e4c12ea7c41d429d8dd79eb2b34c2aaacd11e6bdf"),
+    "constraints": (1945, "f8843b03111a923ee1a8c28290153916c95b163547236c5cfa602795e2bcbaf8"),
     "indexes": (463, "be0cefd13614ed68b79f3ffb75a69cc038deb7ca7345520fab93ee546acf600f"),
     "triggers": (246, "d74c3af6c99e6d5fc8f5d06e6ec2f38918b5f8ea6fb5686d5533e5bb6cc1fc36"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),

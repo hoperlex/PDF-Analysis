@@ -7,6 +7,10 @@ contracted (phase B). Nothing outside this package imports its other modules.
 
 from __future__ import annotations
 
+from auditmanager.optimisation.proposals.accepted import (
+    AcceptedProposal,
+    list_accepted_proposals,
+)
 from auditmanager.optimisation.proposals.commands import (
     PassStart,
     ProposalDecision,
@@ -58,7 +62,9 @@ from auditmanager.optimisation.proposals.policy import (
     MAX_PASS_PAGE,
     MAX_PROPOSAL_PAGE,
     PASS_REFUSAL_REASONS,
+    REFUSAL_NOTHING_TO_REVOKE,
     REFUSAL_VENDOR_LIST_MISSING,
+    STORED_VERDICTS,
     VERDICTS,
 )
 from auditmanager.optimisation.proposals.queries import (
@@ -101,8 +107,11 @@ __all__ = [
     "PROPOSAL_DECISION_ID_PREFIX",
     "PROPOSAL_TYPES",
     "PROPOSAL_TYPE_CHEAPER_ANALOG",
+    "REFUSAL_NOTHING_TO_REVOKE",
     "REFUSAL_VENDOR_LIST_MISSING",
+    "STORED_VERDICTS",
     "VERDICTS",
+    "AcceptedProposal",
     "GeneratorOutcome",
     "OptimisationPassId",
     "OptimisationPassRecord",
@@ -121,6 +130,7 @@ __all__ = [
     "export_optimisation_proposals_csv",
     "generate_cheaper_analogs",
     "get_optimisation_pass",
+    "list_accepted_proposals",
     "list_optimisation_passes",
     "list_optimisation_proposals",
     "list_proposal_decisions",

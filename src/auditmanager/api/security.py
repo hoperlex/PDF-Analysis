@@ -629,6 +629,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listOptimisationProposals": _PRODUCT_READ,
         "listProposalDecisions": _PRODUCT_READ,
         "exportOptimisationProposalsCsv": _PRODUCT_READ,
+        # `UI-B-27` (contract 1.35.0): the accepted list is a product read like the journal.
+        "listAcceptedOptimisationProposals": _PRODUCT_READ,
+        # `UI-B-15`: the workbook of a pass's proposals is a product download like the CSV.
+        "exportOptimisationProposalsXlsx": _PRODUCT_READ,
         # `W63-SECTION-FORM7-01`. A read of current versions' rows across projects.
         "getSectionSpecification": _PRODUCT_READ,
         # `NORM-REFS-RUN-01`. The norms a run's saved text cites, read per request; writes nothing.
@@ -682,6 +686,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         # commands re-read the role set in their own transaction.
         "startOptimisationPass": _EXPERT,
         "decideOptimisationProposal": _EXPERT,
+        # `UI-B-15`: loading edited decisions back appends decisions, so it is an expert's act like `decideOptimisationProposal`.
+        "importOptimisationProposalDecisions": _EXPERT,
         "exportRunCsv": _EXPERT_OR_VIEWER,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
         "exportRunXlsx": _EXPERT_OR_VIEWER,

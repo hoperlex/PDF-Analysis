@@ -122,6 +122,11 @@ REQUIRED_OPERATIONS = {
     "listProposalDecisionJournal",
     # `UI-PARITY-KB-ALL`, `R-151h`, `D-317`. The knowledge base's «Все», both journals merged.
     "listKnowledgeBaseEntries",
+    # `UI-PARITY-OPT-DECISIONS`, `UI-B-27`. The accepted optimisation proposals of a section's projects.
+    "listAcceptedOptimisationProposals",
+    # `UI-PARITY-OPT-DECISIONS`, `UI-B-15`. The pass's proposals as a workbook, and the decisions loaded back from it.
+    "exportOptimisationProposalsXlsx",
+    "importOptimisationProposalDecisions",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
     # `UI-PARITY-P0N`. One project as the listing gives it.
@@ -442,6 +447,8 @@ WRITE_OPERATIONS = {
     "setEngineerAbsences",
     "scheduleAssignments",
     # `UI-PARITY-P0L`. Appends decision events, so it is keyed like `appendDecision`; a replay answers the stored report.
+    # `UI-B-15` (1.35.0): the decisions of a proposals workbook are appended under one key, like `importRunDecisions`.
+    "importOptimisationProposalDecisions",
     "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",

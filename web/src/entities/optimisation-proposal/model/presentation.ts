@@ -36,6 +36,19 @@ export const VERDICT_LABELS: Readonly<Record<ProposalVerdict, string>> = {
   accept: 'Принять',
   reject: 'Отклонить',
   revise: 'На доработку',
+  revoke: 'Снять решение',
+};
+
+/**
+ * What a recorded decision event says, in the past: a history line, the proposal's decision line, the knowledge base.
+ * `revoke` (`UI-B-12`) is the withdrawal of the decision before it; it is an event, never a state of a proposal, which
+ * stands `pending` again.
+ */
+export const DECISION_EVENT_LABELS: Readonly<Record<ProposalVerdict, string>> = {
+  accept: 'принято',
+  reject: 'отклонено',
+  revise: 'на доработку',
+  revoke: 'решение снято',
 };
 
 export const MATCH_BASIS_LABELS: Readonly<Record<ProposalMatchBasis, string>> = {
@@ -103,4 +116,9 @@ export function describeCounts(pass: OptimisationPass): string {
 /** The suggested download name; the server's `Content-Disposition` wins if it sends one. */
 export function proposalsCsvFileName(passId: string): string {
   return `${passId}-proposals.csv`;
+}
+
+/** The suggested name of the pass's workbook (`UI-B-15`), from the pass identity alone. */
+export function proposalsXlsxFileName(passId: string): string {
+  return `${passId}-proposals.xlsx`;
 }

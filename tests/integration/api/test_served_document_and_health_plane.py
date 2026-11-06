@@ -104,7 +104,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         # FastAPI's own validation schema by the assertions above. Contract 1.17.0 (`UI-PARITY-P0A`) adds one, `getDashboardSummary`,
         # whose optional `project_uid` query parameter can be refused: 186. Contracts 1.22.0 to 1.27.0 (`UI-PARITY-P0G` to
         # `P0L`) add six: `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-        # `listProposalDecisionJournal` and `importRunDecisions`: 192 of 285; 1.29.0 adds `getProject`: 193 of 286; 1.30.0 adds `listVersionSheetLabels`: 194 of 287; 1.31.0 adds the seven of «График работ»: 201 of 294; 1.32.0 adds `listKnowledgeBaseEntries`: 202 of 295.
+        # `listProposalDecisionJournal` and `importRunDecisions`: 192 of 285; 1.29.0 adds `getProject`: 193 of 286; 1.30.0 adds `listVersionSheetLabels`: 194 of 287; 1.31.0 adds the seven of «График работ»: 201 of 294; 1.32.0 adds `listKnowledgeBaseEntries`: 202 of 295; 1.35.0 adds `listAcceptedOptimisationProposals` and `importOptimisationProposalDecisions`: 204 of 298.
         assert declared_422 == {
             "appendComparisonVersionOrder",
             "appendDecision",
@@ -173,10 +173,12 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "getWorkSchedule",
             "getWorkScheduleReserve",
             "importComparisonZip",
+            "importOptimisationProposalDecisions",
             "importRunDecisions",
             "issueExecutorEnrollment",
             "issueRunnerToken",
             "issueToken",
+            "listAcceptedOptimisationProposals",
             "listAssignments",
             "listComparisonAiLinks",
             "listComparisonAiPairHints",

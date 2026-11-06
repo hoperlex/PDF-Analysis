@@ -17,6 +17,7 @@ import { formatInstant } from '@/shared/lib';
 import { pdfPageUrl } from '@/features/open-evidence';
 import {
   ANALOG_BASIS_LABELS,
+  DECISION_EVENT_LABELS,
   DECISION_STATE_LABELS,
   MATCH_BASIS_LABELS,
   VERDICT_LABELS,
@@ -61,14 +62,17 @@ export interface ProposalDecisionLineProps {
   readonly decision: ProposalDecision | null;
 }
 
-/** «Решение: принято, Фамилия И., 2026-10-20 09:30:00 UTC» and its comment, or «не решено». */
+/**
+ * «Решение: принято, Фамилия И., 2026-10-20 09:30:00 UTC» and its comment, or «не решено». A withdrawn decision
+ * (`UI-B-12`) says so — «решение снято», by whom and when — and the proposal is `pending` again.
+ */
 export function ProposalDecisionLine({ decision }: ProposalDecisionLineProps) {
   if (decision === null) {
     return <p className={styles.decision}>Решение: {DECISION_STATE_LABELS.pending}.</p>;
   }
   return (
     <p className={styles.decision}>
-      Решение: <strong>{DECISION_STATE_LABELS[decision.verdict]}</strong>, {decision.actor_label},{' '}
+      Решение: <strong>{DECISION_EVENT_LABELS[decision.verdict]}</strong>, {decision.actor_label},{' '}
       {formatInstant(decision.decided_at)}
       {decision.comment !== null ? <> — {decision.comment}</> : null}
     </p>

@@ -7,14 +7,15 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.34.0 (OpenAPI 3.1.0)
- *   sha256 3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad
+ *   AuditManager PC-01 API 1.35.0 (OpenAPI 3.1.0)
+ *   sha256 c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 import type {
+  AcceptedOptimisationProposalPage,
   Account,
   AccountPage,
   AgentPackageVersion,
@@ -164,6 +165,7 @@ import type {
   GenerateComparisonSummaryRequest,
   GenerateComparisonSummaryResponse,
   IdempotencyKey,
+  ImportProposalDecisionsRequest,
   ImportRunDecisionsRequest,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
@@ -201,6 +203,7 @@ import type {
   ProjectPage,
   ProjectSection,
   ProjectUid,
+  ProposalDecisionImportReport,
   ProposalDecisionList,
   ProposalDecisionRecordPage,
   ProposalDecisionResult,
@@ -394,6 +397,7 @@ export const OPERATION_IDS = [
   'estimateStageChainRun',
   'excludeComparisonUploadSet',
   'exportOptimisationProposalsCsv',
+  'exportOptimisationProposalsXlsx',
   'exportRunCsv',
   'exportRunXlsx',
   'extendExecutorTaskClaim',
@@ -460,10 +464,12 @@ export const OPERATION_IDS = [
   'getWorkSchedule',
   'getWorkScheduleReserve',
   'importComparisonZip',
+  'importOptimisationProposalDecisions',
   'importRunDecisions',
   'issueExecutorEnrollment',
   'issueRunnerToken',
   'issueToken',
+  'listAcceptedOptimisationProposals',
   'listAnalysisPresets',
   'listAnalysisProfiles',
   'listAssignments',
@@ -1899,7 +1905,7 @@ export type CreateStageUploadResult = StageUpload;
 /**
  * Decide Optimisation Proposal
  *
- * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters). Decisions are only appended, never changed; the latest one is current, and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
+ * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters), or `revoke` -- the withdrawal of the decision in force («Снять решение»), an event like any other that takes the proposal back to `pending`, with an optional comment, refused with `409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has no decision in force. Decisions are only appended, never changed; the latest one is current (unless it is a `revoke`), and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
  */
 export type DecideOptimisationProposalInput = {
   /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
@@ -2245,6 +2251,29 @@ export type ExportOptimisationProposalsCsvInput = {
 
 /** Success body of `exportOptimisationProposalsCsv` (`text/csv`, HTTP 200). */
 export type ExportOptimisationProposalsCsvResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// exportOptimisationProposalsXlsx - GET /optimisation-passes/{optimisation_pass_id}/export.xlsx
+// ------------------------------------------------------------------------------------
+
+/**
+ * Export Optimisation Proposals Xlsx
+ *
+ * `UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never `0`), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ */
+export type ExportOptimisationProposalsXlsxInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.xlsx`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `exportOptimisationProposalsXlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, HTTP 200). */
+export type ExportOptimisationProposalsXlsxResult = Blob;
 
 // ------------------------------------------------------------------------------------
 // exportRunCsv - GET /runs/{run_id}/export.csv
@@ -3740,6 +3769,36 @@ export type ImportComparisonZipInput = {
 export type ImportComparisonZipResult = ComparisonUpload;
 
 // ------------------------------------------------------------------------------------
+// importOptimisationProposalDecisions - POST /optimisation-passes/{optimisation_pass_id}/decision-imports
+// ------------------------------------------------------------------------------------
+
+/**
+ * Import Optimisation Proposal Decisions
+ *
+ * `UI-B-15` (contract 1.35.0): load back the pass's workbook as `exportOptimisationProposalsXlsx` produced it, with «Решение эксперта» and «Комментарий» edited, at most 10 MiB. Only our export is read: a workbook without a «Предложения» sheet naming the columns «ID предложения», «Решение эксперта» and «Комментарий» is `422 validation_failed` (`field: file`, `constraint: not_our_export`), as is a file that is not a readable XLSX (`unreadable`), is larger (`too_large`) or has more than 20 000 rows (`too_many_rows`); nothing is recorded then. Rows are matched by the proposal's identity, never by «№», and only proposals of this pass. A row whose decision differs from the one in force appends an `accept`, `reject` or `revise` event carrying the row's comment (`revise` requires one), authored by the caller exactly as `decideOptimisationProposal` would; «не решено» over a decision in force appends its withdrawal (`revoke`); the same decision with a new comment appends a new event; a blank decision cell keeps the decision in force. Every row naming an ID or a decision is reported, in sheet order, as `recorded`, `unchanged` or `refused` with a `reason`: `no_proposal_id`, `duplicate_proposal`, `unknown_proposal`, `unknown_decision` (not one of the four labels the export writes), `comment_required` or `comment_too_long`. The proposal's identity is reported only for a proposal of the pass. An unknown pass is `404`. An exact repeat of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another file, pass or caller is `409 idempotency_key_reuse`. `expert` only (`admin` alone is `permission_denied`).
+ */
+export type ImportOptimisationProposalDecisionsInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/decision-imports`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: ImportProposalDecisionsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `importOptimisationProposalDecisions` (`application/json`, HTTP 200). */
+export type ImportOptimisationProposalDecisionsResult = ProposalDecisionImportReport;
+
+// ------------------------------------------------------------------------------------
 // importRunDecisions - POST /runs/{run_id}/decision-imports
 // ------------------------------------------------------------------------------------
 
@@ -3847,6 +3906,32 @@ export type IssueTokenInput = {
 
 /** Success body of `issueToken` (`application/json`, HTTP 200). */
 export type IssueTokenResult = IssueTokenResponse;
+
+// ------------------------------------------------------------------------------------
+// listAcceptedOptimisationProposals - GET /optimisation-proposals/accepted
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Accepted Optimisation Proposals
+ *
+ * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. Any one role, `role:admin|expert|viewer`.
+ */
+export type ListAcceptedOptimisationProposalsInput = {
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+    project_uid?: ProjectUid;
+    section_code?: ProjectSection;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAcceptedOptimisationProposals` (`application/json`, HTTP 200). */
+export type ListAcceptedOptimisationProposalsResult = AcceptedOptimisationProposalPage;
 
 // ------------------------------------------------------------------------------------
 // listAnalysisPresets - GET /analysis/presets
@@ -9101,6 +9186,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['optimisation'],
   },
+  exportOptimisationProposalsXlsx: {
+    operationId: 'exportOptimisationProposalsXlsx',
+    method: 'GET',
+    path: '/optimisation-passes/{optimisation_pass_id}/export.xlsx',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['optimisation'],
+  },
   exportRunCsv: {
     operationId: 'exportRunCsv',
     method: 'GET',
@@ -10025,6 +10124,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  importOptimisationProposalDecisions: {
+    operationId: 'importOptimisationProposalDecisions',
+    method: 'POST',
+    path: '/optimisation-passes/{optimisation_pass_id}/decision-imports',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
+  },
   importRunDecisions: {
     operationId: 'importRunDecisions',
     method: 'POST',
@@ -10080,6 +10193,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 422, 500, 503],
     tags: ['auth'],
+  },
+  listAcceptedOptimisationProposals: {
+    operationId: 'listAcceptedOptimisationProposals',
+    method: 'GET',
+    path: '/optimisation-proposals/accepted',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'project_uid', 'section_code'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['optimisation'],
   },
   listAnalysisPresets: {
     operationId: 'listAnalysisPresets',

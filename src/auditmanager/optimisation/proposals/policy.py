@@ -4,14 +4,18 @@
 decide an expert's work; `R-80`: an account with no role reads no product data):
 
 * start an optimisation pass -- ``expert``;
-* append a decision to a proposal -- ``expert`` (an account holding only ``admin`` is
-  ``permission_denied``);
+* append a decision to a proposal, or withdraw the standing one -- ``expert`` (an account holding
+  only ``admin`` is ``permission_denied``);
 * read passes, proposals and the CSV export -- ``admin`` or ``expert``.
 
-**Decisions** are append-only events with one of three verdicts: ``accept``, ``reject`` or
-``revise``. ``revise`` means "the analog is right in principle, the proposal needs changing"
-and therefore **requires** a comment; the comment is optional on the other two. The current
-decision of a proposal is its latest event; a proposal without one is ``pending``. Nothing
+**Decisions** are append-only events with one of four verdicts: ``accept``, ``reject``,
+``revise`` or ``revoke``. ``revise`` means "the analog is right in principle, the proposal needs
+changing" and therefore **requires** a comment; the comment is optional on the other three.
+``revoke`` withdraws the standing decision (`UI-B-12`, «Снять решение»): it is itself an appended
+event, never a deletion or an update, it takes the proposal back to ``pending`` and it is refused
+(``conflict``, :data:`REFUSAL_NOTHING_TO_REVOKE`) when nothing stands -- the proposal has no
+decision yet, or its latest event is already a ``revoke``. The current decision of a proposal is
+its latest event unless that event is a ``revoke``; a proposal without one is ``pending``. Nothing
 here, and nothing in the generator, ever writes a decision: a verdict is what an expert said
 (``AGENTS.md`` §4).
 
@@ -52,11 +56,14 @@ __all__ = [
     "MAX_PASS_PAGE",
     "MAX_PROPOSAL_PAGE",
     "PASS_REFUSAL_REASONS",
+    "REFUSAL_NOTHING_TO_REVOKE",
     "REFUSAL_VENDOR_LIST_MISSING",
+    "STORED_VERDICTS",
     "VERDICTS",
     "VERDICT_ACCEPT",
     "VERDICT_REJECT",
     "VERDICT_REVISE",
+    "VERDICT_REVOKE",
     "normalize_comment",
     "parse_decision_filter",
     "parse_verdict",
@@ -74,9 +81,13 @@ COMMAND_TYPE_DECIDE_PROPOSAL: Final[str] = "decide_optimisation_proposal"
 VERDICT_ACCEPT: Final[str] = "accept"
 VERDICT_REJECT: Final[str] = "reject"
 VERDICT_REVISE: Final[str] = "revise"
-#: Restated by migration ``0027`` (``ck_optimisation_proposal_decision_verdict``); the unit
-#: suite holds both equal.
+VERDICT_REVOKE: Final[str] = "revoke"
+#: The verdicts that stand as a decision: what a proposal's current decision, its counts and the
+#: ``decision`` filter are made of. Migration ``0027`` restated these three.
 VERDICTS: Final[tuple[str, ...]] = (VERDICT_ACCEPT, VERDICT_REJECT, VERDICT_REVISE)
+#: Every verdict an event may carry: the three above and the withdrawal. Restated by migration
+#: ``0056`` (``ck_optimisation_proposal_decision_verdict``); the unit suite holds both equal.
+STORED_VERDICTS: Final[tuple[str, ...]] = (*VERDICTS, VERDICT_REVOKE)
 #: The current decision of a proposal nobody has decided yet. Not a stored verdict.
 DECISION_PENDING: Final[str] = "pending"
 #: What a proposal listing may be filtered by: no decision yet, or one current verdict.
@@ -90,6 +101,8 @@ MAX_PROPOSAL_PAGE: Final[int] = 200
 MAX_PASS_PAGE: Final[int] = 100
 
 REFUSAL_VENDOR_LIST_MISSING: Final[str] = "vendor_list_missing"
+#: The ``conflict_reason`` of a ``revoke`` over a proposal with no standing decision.
+REFUSAL_NOTHING_TO_REVOKE: Final[str] = "no_decision_to_revoke"
 #: Every ``conflict_reason`` a refused pass can carry, in the order the preconditions are
 #: checked.
 PASS_REFUSAL_REASONS: Final[tuple[str, ...]] = (
@@ -125,7 +138,7 @@ def require_expert(roles: frozenset[str], *, aggregate_type: str, act: str) -> N
 
 
 def parse_verdict(value: Any) -> str:
-    if not isinstance(value, str) or value not in VERDICTS:
+    if not isinstance(value, str) or value not in STORED_VERDICTS:
         raise DomainError(ErrorCode.VALIDATION_FAILED, field="verdict", constraint="enum")
     return value
 

@@ -2,6 +2,8 @@
 
 export type { ExportProposalsCsvApi, ExportProposalsCsvArgs } from './model/use-export-proposals-csv';
 export { useExportProposalsCsv } from './model/use-export-proposals-csv';
+export type { ExportProposalsXlsxApi, ExportProposalsXlsxArgs } from './model/use-export-proposals-xlsx';
+export { useExportProposalsXlsx } from './model/use-export-proposals-xlsx';
 export type {
   ExportProposalsViewProps,
   OptimisationProposalsProps,

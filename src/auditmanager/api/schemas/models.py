@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.34.0"]
+    contract_version: Literal["1.35.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1941,6 +1941,45 @@ class DecisionImportReport(_Object):
     unchanged: Annotated[int, Field(ge=0)]
     refused: Annotated[int, Field(ge=0)]
     rows: list[DecisionImportRow]
+
+
+class ImportProposalDecisionsRequest(_Object):
+    """`UI-B-15` (contract 1.35.0): the multipart body of ``importOptimisationProposalDecisions``.
+
+    ``file`` is the pass's workbook as ``exportOptimisationProposalsXlsx`` produced it, edited, at most 10 MiB.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
+
+
+class ProposalDecisionImportRefusal(str, enum.Enum):
+    """Why a row of the proposals workbook was refused."""
+
+    NO_PROPOSAL_ID = "no_proposal_id"
+    DUPLICATE_PROPOSAL = "duplicate_proposal"
+    UNKNOWN_PROPOSAL = "unknown_proposal"
+    UNKNOWN_DECISION = "unknown_decision"
+    COMMENT_REQUIRED = "comment_required"
+    COMMENT_TOO_LONG = "comment_too_long"
+
+
+class ProposalDecisionImportRow(_Object):
+    """`UI-B-15`: one row of «Предложения» that names an ID or a decision; the proposal's identity only for a proposal of the pass."""
+
+    row: Annotated[int, Field(ge=2)]
+    outcome: DecisionImportOutcome
+    optimisation_proposal_id: OptimisationProposalId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reason: ProposalDecisionImportRefusal = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ProposalDecisionImportReport(_Object):
+    """`UI-B-15`: what an import of edited proposal decisions did, row by row, in sheet order."""
+
+    optimisation_pass_id: OptimisationPassId
+    recorded: Annotated[int, Field(ge=0)]
+    unchanged: Annotated[int, Field(ge=0)]
+    refused: Annotated[int, Field(ge=0)]
+    rows: list[ProposalDecisionImportRow]
 
 
 class SetDocumentTagsRequest(_Object):
@@ -4172,11 +4211,15 @@ class ProposalAnalogBasis(str, enum.Enum):
 
 class ProposalVerdict(str, enum.Enum):
     """An expert's verdict on a proposal. ``revise`` says the analog is right in principle
-    and the proposal needs changing; its comment is required."""
+    and the proposal needs changing; its comment is required. ``revoke`` (`UI-B-12`, contract
+    1.35.0, «Снять решение») withdraws the decision in force: it is one more appended event, it
+    takes the proposal back to ``pending``, and it is refused (``409 conflict``,
+    ``conflict_reason`` ``no_decision_to_revoke``) when no decision stands."""
 
     ACCEPT = "accept"
     REJECT = "reject"
     REVISE = "revise"
+    REVOKE = "revoke"
 
 
 class ProposalDecisionState(str, enum.Enum):
@@ -4245,7 +4288,8 @@ class ProposalPosition(_Object):
 
 
 class ProposalDecision(_Object):
-    """One appended expert decision. Never changed; the proposal's latest one is current."""
+    """One appended expert decision. Never changed; the proposal's latest one is current -- unless
+    that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``."""
 
     proposal_decision_id: ProposalDecisionId
     optimisation_proposal_id: OptimisationProposalId
@@ -4333,6 +4377,49 @@ class ProposalDecisionList(_Object):
     """Every decision of one proposal, oldest first; the last is current."""
 
     items: list[ProposalDecision]
+
+
+class AcceptedOptimisationProposal(_Object):
+    """`UI-B-27` (contract 1.35.0): one proposal whose decision in force is an acceptance, with where it belongs
+    (project, document set, version, the version's section) and the acceptance itself.
+
+    A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
+    locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
+    text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number."""
+
+    optimisation_proposal_id: OptimisationProposalId
+    optimisation_pass_id: OptimisationPassId
+    proposal_decision_id: ProposalDecisionId
+    proposal_type: OptimisationProposalType
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    document_name: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    page_number: Annotated[int, Field(ge=1)]
+    row_position: Annotated[str, Field(min_length=1, max_length=100)] | None
+    row_text: Annotated[str, Field(min_length=1, max_length=8000)]
+    matched_name: Annotated[str, Field(min_length=1, max_length=2000)]
+    proposed_name: Annotated[str, Field(min_length=1, max_length=2000)]
+    proposed_vendor: Annotated[str, Field(min_length=1, max_length=500)]
+    unit: Annotated[str, Field(min_length=1, max_length=50)]
+    quantity: Annotated[str, Field(pattern=_EXACT_DECIMAL)] | None
+    current_unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    proposed_unit_price: Annotated[str, Field(pattern=_UNIT_PRICE)]
+    currency: Annotated[str, Field(pattern=_CURRENCY)]
+    saving: Annotated[str, Field(pattern=_EXACT_DECIMAL)] | None
+    comment: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    decided_at: datetime
+
+
+class AcceptedOptimisationProposalPage(_Object):
+    """`UI-B-27`: one page of the accepted proposals, newest acceptance first, and how many match the filters."""
+
+    items: list[AcceptedOptimisationProposal]
+    page: PageInfo
+    total: Annotated[int, Field(ge=0)]
 # --- the section's combined specification (`W63-SECTION-FORM7-01`) ---------------------------
 #
 # «Оптимизация разделов»: for one section code, the Form-7 rows of every project whose document

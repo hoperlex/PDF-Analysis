@@ -23,8 +23,9 @@ import type {
   ProposalDecisionState,
 } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { PASS_REFUSAL_TEXT, PROPOSAL_PAGE_LIMIT } from '@/entities/optimisation-proposal';
+import { NOTHING_TO_REVOKE_TEXT, PASS_REFUSAL_TEXT, PROPOSAL_PAGE_LIMIT } from '@/entities/optimisation-proposal';
 import { ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
+import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
 import { StartOptimisationPassView } from '@/features/start-optimisation-pass';
 import {
   ExportProposalsView,
@@ -40,6 +41,7 @@ import type { SheetDocument } from '@/widgets/optimisation-proposals';
 
 import { seedError } from '../screens/harness';
 import { OPT_PROJECT_UID, optimisationApiError } from '../optimisation/fixtures';
+import { acceptedShapes } from '../section-optimisation/fixtures';
 
 export const PROPOSALS_PROJECT_UID = OPT_PROJECT_UID;
 export const AR_DOCUMENT_UID = 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8H';
@@ -531,6 +533,55 @@ export function proposalShapes(): readonly ProposalShape[] {
       }),
     },
     {
+      name: 'decision-form-withdrawn',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: decision({ verdict: 'revoke', comment: 'Ошибся, пересмотрю.' }),
+        comment: '', pending: false, failure: null, onComment: noop, onDecide: noop,
+      }),
+    },
+    {
+      name: 'decision-form-refused-nothing-to-revoke',
+      make: () => createElement(ProposalDecisionFormView, {
+        proposalId: DOOR_PROPOSAL, current: null, comment: '', pending: false,
+        failure: failure(NOTHING_TO_REVOKE_TEXT), onComment: noop, onDecide: noop,
+      }),
+    },
+    // `UI-B-15`: «Загрузить решения» idle, loading, answered with a refused row of each kind, and refused whole.
+    {
+      name: 'proposal-import-idle',
+      make: () => createElement(ImportProposalDecisionsView, { pending: false, report: null, failure: null, onChoose: noop }),
+    },
+    {
+      name: 'proposal-import-pending',
+      make: () => createElement(ImportProposalDecisionsView, { pending: true, report: null, failure: null, onChoose: noop }),
+    },
+    {
+      name: 'proposal-import-reported',
+      make: () => createElement(ImportProposalDecisionsView, {
+        pending: false, failure: null, onChoose: noop,
+        report: {
+          optimisation_pass_id: PASS_ID, recorded: 1, unchanged: 1, refused: 6,
+          rows: [
+            { row: 2, outcome: 'recorded', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 3, outcome: 'unchanged', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 4, outcome: 'refused', reason: 'no_proposal_id' },
+            { row: 5, outcome: 'refused', reason: 'duplicate_proposal', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 6, outcome: 'refused', reason: 'unknown_proposal' },
+            { row: 7, outcome: 'refused', reason: 'unknown_decision', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 8, outcome: 'refused', reason: 'comment_required', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 9, outcome: 'refused', reason: 'comment_too_long', optimisation_proposal_id: DOOR_PROPOSAL },
+          ],
+        },
+      }),
+    },
+    {
+      name: 'proposal-import-refused',
+      make: () => createElement(ImportProposalDecisionsView, {
+        pending: false, report: null, onChoose: noop,
+        failure: 'Это не наша выгрузка: нужен лист «Предложения» с колонкой идентификаторов предложений. Выгрузите таблицу решений заново.',
+      }),
+    },
+    {
       name: 'decision-form-revise-ready',
       make: () => createElement(ProposalDecisionFormView, {
         proposalId: DOOR_PROPOSAL, current: null, comment: 'Заменить марку.', pending: false, failure: null,
@@ -545,5 +596,7 @@ export function proposalShapes(): readonly ProposalShape[] {
         onComment: noop, onDecide: noop,
       }),
     },
+    // `UI-B-27`: «Принято» in every branch its container has.
+    ...acceptedShapes(),
   ];
 }

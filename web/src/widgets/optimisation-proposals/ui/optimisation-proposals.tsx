@@ -25,6 +25,7 @@
  */
 
 import { useId, useState } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 
 import type {
@@ -54,9 +55,11 @@ import {
   useOptimisationProposals,
 } from '@/entities/optimisation-proposal';
 import { useEvidenceDocument } from '@/features/open-evidence';
+import { ImportProposalDecisions } from '@/features/import-proposal-decisions';
 import { StartOptimisationPass } from '@/features/start-optimisation-pass';
 
 import { useExportProposalsCsv } from '../model/use-export-proposals-csv';
+import { useExportProposalsXlsx } from '../model/use-export-proposals-xlsx';
 import styles from './optimisation-proposals.module.css';
 import { PassSummary } from './pass-summary';
 import { ProposalList } from './proposal-list';
@@ -200,17 +203,30 @@ export interface ExportProposalsViewProps {
   readonly pending: boolean;
   readonly failure: FailureMessage | null;
   readonly onDownload: () => void;
+  /** `UI-B-15`: the workbook an expert edits and loads back; absent, the table is not offered. */
+  readonly onDownloadXlsx?: (() => void) | undefined;
+  /** `UI-B-15`: «Загрузить решения», offered to an expert only. */
+  readonly importControl?: ReactNode;
 }
 
-/** «Выгрузить CSV» and its refusal, from state already in hand. Rendered by the harness. */
-export function ExportProposalsView({ pending, failure, onDownload }: ExportProposalsViewProps) {
+/** «Выгрузить CSV», «Выгрузить таблицу решений» and «Загрузить решения» with the refusal, from state already in hand. Rendered by the harness. */
+export function ExportProposalsView({ pending, failure, onDownload, onDownloadXlsx, importControl }: ExportProposalsViewProps) {
   return (
     <div data-proposals-export="">
       <p>
         <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownload}>
           Выгрузить CSV предложений
         </button>
+        {onDownloadXlsx === undefined ? null : (
+          <>
+            {' '}
+            <button type="button" className="am-button am-button--quiet" disabled={pending} onClick={onDownloadXlsx}>
+              Выгрузить таблицу решений (.xlsx)
+            </button>
+          </>
+        )}
       </p>
+      {importControl ?? null}
       {failure !== null ? (
         <ErrorState
           title="Файл не выгружен"
@@ -233,8 +249,10 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
   const [offset, setOffset] = useState(0);
   const proposals = useOptimisationProposals(passId, decision, offset);
   const exporter = useExportProposalsCsv({ passId });
+  const workbook = useExportProposalsXlsx({ passId });
   const failure = proposals.error === null ? null : failureMessage(proposals.error);
-  const exportFailure = exporter.error === null ? null : failureMessage(exporter.error);
+  const exportError = exporter.error ?? workbook.error;
+  const exportFailure = exportError === null || exportError === undefined ? null : failureMessage(exportError);
   // `UI-B-09`: the pass's version PDF is read once for every card's «Открыть лист», as the review screen reads its own;
   // the bytes are asked for only for a pass that has proposals, so an empty pass costs no download.
   const pass = proposals.data?.optimisation_pass;
@@ -260,9 +278,11 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
         <>
           <PassSummary pass={proposals.data.optimisation_pass} />
           <ExportProposalsView
-            pending={exporter.isPending}
+            pending={exporter.isPending || workbook.isPending}
             failure={exportFailure}
             onDownload={exporter.download}
+            onDownloadXlsx={workbook.download}
+            importControl={canDecide ? <ImportProposalDecisions passId={passId} /> : null}
           />
           <ProposalList
             page={proposals.data}

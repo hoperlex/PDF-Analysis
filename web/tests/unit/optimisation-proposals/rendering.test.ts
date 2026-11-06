@@ -8,10 +8,10 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { OPTIMISATION_MOVED_TO, OptimisationPage } from '@/_pages/optimisation';
-import { ProposalCard, classifiedDocumentSets } from '@/widgets/optimisation-proposals';
+import { ProposalCard, ProposalHistoryView, classifiedDocumentSets } from '@/widgets/optimisation-proposals';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { arVersion, otherSectionVersion, proposal, proposalShapes, SHEET_URL, unclassifiedVersion } from './fixtures';
+import { arVersion, decision, otherSectionVersion, proposal, proposalShapes, SHEET_URL, unclassifiedVersion } from './fixtures';
 
 function rendered(name: string): string {
   const shape = proposalShapes().find((entry) => entry.name === name);
@@ -156,6 +156,46 @@ describe('the decision form', () => {
 
   it('says a refusal in Russian', () => {
     expect(rendered('decision-form-refused')).toContain('Решение по предложению не записано.');
+  });
+
+  /** `UI-B-12`: «Снять решение» is offered while a decision is in force and not otherwise. */
+  it('offers «Снять решение» only while a decision is in force', () => {
+    expect(rendered('decision-form-idle')).toMatch(/<button[^>]*disabled=""[^>]*data-revoke-decision=[^>]*>Снять решение<\/button>|<button[^>]*data-revoke-decision=[^>]*disabled=""[^>]*>Снять решение<\/button>/);
+    expect(rendered('decision-form-withdrawn')).toMatch(/<button[^>]*(disabled=""[^>]*data-revoke-decision|data-revoke-decision[^>]*disabled="")[^>]*>Снять решение<\/button>/);
+    const standing = rendered('decision-form-repeat-blocked');
+    expect(standing).toContain('data-revoke-decision=');
+    expect(standing).not.toMatch(/<button[^>]*(disabled=""[^>]*data-revoke-decision|data-revoke-decision[^>]*disabled="")[^>]*>Снять решение<\/button>/);
+  });
+
+  it('lets a withdrawn proposal be decided again: no verdict is blocked as a repeat', () => {
+    const withdrawn = rendered('decision-form-withdrawn');
+    expect(withdrawn).not.toMatch(/<button[^>]*disabled=""[^>]*>Принять<\/button>/);
+    expect(withdrawn).not.toMatch(/<button[^>]*disabled=""[^>]*>Отклонить<\/button>/);
+  });
+
+  it('says that nothing stands to be withdrawn, in words', () => {
+    expect(rendered('decision-form-refused-nothing-to-revoke')).toContain('Снимать нечего');
+  });
+});
+
+describe('a withdrawn decision (`UI-B-12`)', () => {
+  it('is said as withdrawn, by whom and when, and the proposal is «не решено» again', () => {
+    const withdrawn = decision({ verdict: 'revoke', comment: 'Ошибся, пересмотрю.' });
+    const markup = renderScreen(newClient(), createElement(ProposalCard, {
+      proposal: proposal({ current_verdict: 'pending', current_decision: withdrawn }), controls: null, history: null,
+    }));
+    expect(markup).toContain('data-decision="pending"');
+    expect(markup).toContain('решение снято');
+    expect(markup).toContain('Петрова А.');
+    expect(markup).toContain('Ошибся, пересмотрю.');
+  });
+
+  it('keeps the withdrawal in the history as an event, after the decision it withdrew', () => {
+    const markup = renderScreen(newClient(), createElement(ProposalHistoryView, {
+      items: [decision({ verdict: 'accept', comment: null }), decision({ proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8W', verdict: 'revoke', comment: null })],
+    }));
+    expect(markup).toContain('data-proposal-history="2"');
+    expect(markup.indexOf('Принять')).toBeLessThan(markup.indexOf('Снять решение'));
   });
 });
 

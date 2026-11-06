@@ -6,21 +6,23 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.34.0 (OpenAPI 3.1.0)
- *   sha256 3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad
+ *   AuditManager PC-01 API 1.35.0 (OpenAPI 3.1.0)
+ *   sha256 c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.34.0';
+export const CONTRACT_VERSION = '1.35.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad';
+export const CONTRACT_DIGEST = 'c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
+  'AcceptedOptimisationProposal',
+  'AcceptedOptimisationProposalPage',
   'Account',
   'AccountPage',
   'AgentPackageVersion',
@@ -397,6 +399,7 @@ export const SCHEMA_NAMES = [
   'GenerateComparisonSummaryRequest',
   'GenerateComparisonSummaryResponse',
   'IdempotencyKey',
+  'ImportProposalDecisionsRequest',
   'ImportRunDecisionsRequest',
   'InputManifestEntry',
   'IssueRunnerTokenRequest',
@@ -491,6 +494,9 @@ export const SCHEMA_NAMES = [
   'ProposalDecision',
   'ProposalDecisionCounts',
   'ProposalDecisionId',
+  'ProposalDecisionImportRefusal',
+  'ProposalDecisionImportReport',
+  'ProposalDecisionImportRow',
   'ProposalDecisionList',
   'ProposalDecisionRecord',
   'ProposalDecisionRecordPage',
@@ -734,6 +740,49 @@ export const SCHEMA_NAMES = [
   'WorkerId',
   'WorkerState',
 ] as const;
+
+/**
+ * `UI-B-27` (contract 1.35.0): one proposal whose decision in force is an acceptance, with where it belongs
+ * (project, document set, version, the version's section) and the acceptance itself.
+ *
+ * A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
+ * locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
+ * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number.
+ */
+export type AcceptedOptimisationProposal = {
+  actor_label: string;
+  comment: string | null;
+  currency: string;
+  current_unit_price: string;
+  decided_at: string;
+  document_name: string;
+  document_uid: DocumentUid;
+  matched_name: string;
+  optimisation_pass_id: OptimisationPassId;
+  optimisation_proposal_id: OptimisationProposalId;
+  page_number: number;
+  project_name: string;
+  project_uid: ProjectUid;
+  proposal_decision_id: ProposalDecisionId;
+  proposal_type: OptimisationProposalType;
+  proposed_name: string;
+  proposed_unit_price: string;
+  proposed_vendor: string;
+  quantity: string | null;
+  row_position: string | null;
+  row_text: string;
+  saving: string | null;
+  section?: ProjectSection;
+  unit: string;
+  version_uid: VersionUid;
+};
+
+/** `UI-B-27`: one page of the accepted proposals, newest acceptance first, and how many match the filters. */
+export type AcceptedOptimisationProposalPage = {
+  items: Array<AcceptedOptimisationProposal>;
+  page: PageInfo;
+  total: number;
+};
 
 /** One account, as the account itself reads it through `getMe` and an administrator reads it through the account operations. No credential material. */
 export type Account = {
@@ -3971,7 +4020,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.34.0";
+  contract_version: "1.35.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4937,6 +4986,15 @@ export type IdempotencyKey = string;
 export const IDEMPOTENCY_KEY_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
 
 /**
+ * `UI-B-15` (contract 1.35.0): the multipart body of ``importOptimisationProposalDecisions``.
+ *
+ * ``file`` is the pass's workbook as ``exportOptimisationProposalsXlsx`` produced it, edited, at most 10 MiB.
+ */
+export type ImportProposalDecisionsRequest = {
+  file: Blob;
+};
+
+/**
  * `R-151d` (contract 1.27.0): the multipart body of ``importRunDecisions``.
  *
  * ``file`` is the run's workbook as ``exportRunXlsx`` produced it, edited, at most 10 MiB.
@@ -5840,7 +5898,10 @@ export const PROPOSAL_ANALOG_BASIS_VALUES = [
 /** ProposalAnalogBasis - the closed value set above. */
 export type ProposalAnalogBasis = (typeof PROPOSAL_ANALOG_BASIS_VALUES)[number];
 
-/** One appended expert decision. Never changed; the proposal's latest one is current. */
+/**
+ * One appended expert decision. Never changed; the proposal's latest one is current -- unless
+ * that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``.
+ */
 export type ProposalDecision = {
   actor_label: string;
   actor_user_uid: UserUid;
@@ -5866,6 +5927,36 @@ export type ProposalDecisionId = string;
 
 /** The contract pattern for `ProposalDecisionId`. Anchored; use with `new RegExp()`. */
 export const PROPOSAL_DECISION_ID_PATTERN = "^opd_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/** Why a row of the proposals workbook was refused. */
+export const PROPOSAL_DECISION_IMPORT_REFUSAL_VALUES = [
+  'no_proposal_id',
+  'duplicate_proposal',
+  'unknown_proposal',
+  'unknown_decision',
+  'comment_required',
+  'comment_too_long',
+] as const;
+
+/** ProposalDecisionImportRefusal - the closed value set above. */
+export type ProposalDecisionImportRefusal = (typeof PROPOSAL_DECISION_IMPORT_REFUSAL_VALUES)[number];
+
+/** `UI-B-15`: what an import of edited proposal decisions did, row by row, in sheet order. */
+export type ProposalDecisionImportReport = {
+  optimisation_pass_id: OptimisationPassId;
+  recorded: number;
+  refused: number;
+  rows: Array<ProposalDecisionImportRow>;
+  unchanged: number;
+};
+
+/** `UI-B-15`: one row of «Предложения» that names an ID or a decision; the proposal's identity only for a proposal of the pass. */
+export type ProposalDecisionImportRow = {
+  optimisation_proposal_id?: OptimisationProposalId;
+  outcome: DecisionImportOutcome;
+  reason?: ProposalDecisionImportRefusal;
+  row: number;
+};
 
 /** Every decision of one proposal, oldest first; the last is current. */
 export type ProposalDecisionList = {
@@ -5944,12 +6035,16 @@ export type ProposalPosition = {
 
 /**
  * An expert's verdict on a proposal. ``revise`` says the analog is right in principle
- * and the proposal needs changing; its comment is required.
+ * and the proposal needs changing; its comment is required. ``revoke`` (`UI-B-12`, contract
+ * 1.35.0, «Снять решение») withdraws the decision in force: it is one more appended event, it
+ * takes the proposal back to ``pending``, and it is refused (``409 conflict``,
+ * ``conflict_reason`` ``no_decision_to_revoke``) when no decision stands.
  */
 export const PROPOSAL_VERDICT_VALUES = [
   'accept',
   'reject',
   'revise',
+  'revoke',
 ] as const;
 
 /** ProposalVerdict - the closed value set above. */

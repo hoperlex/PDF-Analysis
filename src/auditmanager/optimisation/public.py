@@ -63,6 +63,8 @@ from auditmanager.optimisation.project_match import RunCandidate, SavedPageText,
 from auditmanager.optimisation.proposals.public import (
     DECISION_PENDING,
     GENERATOR_VERSION,
+    MAX_COMMENT_LENGTH,
+    AcceptedProposal,
     OptimisationPassRecord,
     OptimisationProposalRecord,
     ProposalDecisionRecord,
@@ -71,6 +73,7 @@ from auditmanager.optimisation.proposals.public import (
     decide_optimisation_proposal,
     export_optimisation_proposals_csv,
     get_optimisation_pass,
+    list_accepted_proposals,
     list_optimisation_passes,
     list_optimisation_proposals,
     list_proposal_decisions,
@@ -147,6 +150,7 @@ from auditmanager.optimisation.uploads import (
 )
 
 __all__ = [
+    "AcceptedProposal",
     "AGGREGATE_PRICE_LIST",
     "AGGREGATE_SECTION_SPECIFICATION",
     "AGGREGATE_VENDOR_LIST",
@@ -156,6 +160,7 @@ __all__ = [
     "DECISION_PENDING",
     "DEFAULT_POSITION_PAGE",
     "GENERATOR_VERSION",
+    "MAX_COMMENT_LENGTH",
     "FIELD_ORDER",
     "DEFAULT_ROW_PAGE",
     "EXCLUSION_REASONS",
@@ -255,6 +260,7 @@ __all__ = [
     "decide_optimisation_proposal",
     "export_optimisation_proposals_csv",
     "get_optimisation_pass",
+    "list_accepted_proposals",
     "list_optimisation_passes",
     "list_optimisation_proposals",
     "list_proposal_decisions",

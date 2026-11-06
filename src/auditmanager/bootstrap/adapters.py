@@ -5528,6 +5528,104 @@ class OptimisationProposalAdapter(_SessionHolder):
 
         return self._read(read)
 
+    def export_optimisation_proposals_xlsx(self, *, optimisation_pass_id: str, user_uid: str) -> bytes:
+        """`UI-B-15`: the pass's workbook, computed from the stored rows."""
+        from auditmanager.exports import export_proposals_xlsx
+
+        return self._read(
+            lambda s: export_proposals_xlsx(
+                s, optimisation_pass_id=optimisation_pass_id, actor_roles=self._roles(s, user_uid)
+            )
+        )
+
+    def import_optimisation_proposal_decisions(
+        self, *, optimisation_pass_id: str, content: BinaryIO, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionImportReport:
+        """`UI-B-15`: one write transaction; the file is read once, one byte past its bound."""
+        from auditmanager.exports import DECISION_IMPORT_MAX_BYTES, import_proposal_decisions
+
+        data = content.read(DECISION_IMPORT_MAX_BYTES + 1)
+        report = self._write(
+            lambda s: import_proposal_decisions(
+                s,
+                optimisation_pass_id=optimisation_pass_id,
+                content=data,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=self._roles(s, user_uid),
+            )
+        )
+        return models.ProposalDecisionImportReport(
+            optimisation_pass_id=report.optimisation_pass_id,
+            recorded=report.count("recorded"),
+            unchanged=report.count("unchanged"),
+            refused=report.count("refused"),
+            rows=[
+                models.ProposalDecisionImportRow(
+                    **{
+                        key: value
+                        for key, value in (
+                            ("row", row.row),
+                            ("outcome", row.outcome),
+                            ("optimisation_proposal_id", row.optimisation_proposal_id),
+                            ("reason", row.reason),
+                        )
+                        if value is not None
+                    }
+                )
+                for row in report.rows
+            ],
+        )
+
+    def list_accepted_optimisation_proposals(
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+    ) -> Sequence[models.AcceptedOptimisationProposal]:
+        """`UI-B-27`: the accepted proposals, each acceptance's author named by the account's display label."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.public import list_accepted_proposals
+
+        def read(session: Session) -> Sequence[models.AcceptedOptimisationProposal]:
+            accounts = AccountRepository()
+            rows = list_accepted_proposals(
+                session,
+                actor_roles=accounts.roles_of(session, user_uid),
+                project_uid=project_uid,
+                section=section_code,
+            )
+            labels = _Labels(session, accounts)
+            return tuple(
+                models.AcceptedOptimisationProposal(
+                    optimisation_proposal_id=row.optimisation_proposal_id,
+                    optimisation_pass_id=row.optimisation_pass_id,
+                    proposal_decision_id=row.proposal_decision_id,
+                    proposal_type=models.OptimisationProposalType(row.proposal_type),
+                    project_uid=row.project_uid,
+                    project_name=row.project_name,
+                    document_uid=row.document_uid,
+                    document_name=row.document_name,
+                    version_uid=row.version_uid,
+                    **({} if row.section is None else {"section": models.ProjectSection(row.section)}),
+                    page_number=row.page_number,
+                    row_position=row.row_position,
+                    row_text=row.row_text,
+                    matched_name=row.matched_name,
+                    proposed_name=row.proposed_name,
+                    proposed_vendor=row.proposed_vendor,
+                    unit=row.unit,
+                    quantity=_optional_decimal(row.quantity),
+                    current_unit_price=_plain_decimal(row.current_unit_price),
+                    proposed_unit_price=_plain_decimal(row.proposed_unit_price),
+                    currency=row.currency,
+                    saving=_optional_decimal(row.saving),
+                    comment=row.comment,
+                    actor_label=labels.of(row.actor_user_uid),
+                    decided_at=row.decided_at,
+                )
+                for row in rows
+            )
+
+        return self._read(read)
+
 
 class _ProposalTextReader:
     """The optimisation context's ``SavedTextReader`` over the comparison's run reader."""
