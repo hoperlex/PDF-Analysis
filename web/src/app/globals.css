@@ -797,8 +797,9 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
-  min-height: 42px;
-  padding: 8px 11px;
+  /* As tall as a button (34px), so a field and its button line up in one row, as in the original. */
+  min-height: 34px;
+  padding: 5px 10px;
   color: var(--am-ink);
   background: var(--am-paper);
   border: 1px solid var(--am-line-strong);
