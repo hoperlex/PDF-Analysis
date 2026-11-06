@@ -22,7 +22,9 @@ import { LoadingState } from '@/shared/ui';
 
 const EvidenceViewerChunk = dynamic(
   () => import('@/widgets/evidence-viewer').then((widget) => widget.EvidenceViewer),
-  { loading: () => <LoadingState /> },
+  // `ssr: false` like every wrapper (`D-329`, argued in `_pages/dashboard/ui/lazy-dashboard.tsx`); this
+  // one is mounted only after a finding's detail has arrived, so the server never rendered it anyway.
+  { ssr: false, loading: () => <LoadingState /> },
 );
 
 type EvidenceViewerProps = ComponentProps<typeof EvidenceViewerChunk>;
