@@ -618,6 +618,24 @@ export function screens(): Screen[] {
       })),
     );
     add(
+      'Whats New dialog, two versions',
+      render(createElement(WhatsNewView, {
+        newest: '0.3.1', onClose: () => undefined,
+        listing: { whats_new: ['0.3.1', '0.3.0'], items: [{
+          version: '0.3.1', revision: 1, date: '2026-10-09', title: 'Небольшие улучшения',
+          is_archive: false, range_label: null,
+          items: [
+            { kind: 'improved', screen: 'home', where: 'Работа › Главная', text: 'Плитки главной стали плотнее.' },
+            { kind: 'fixed', screen: 'home', where: 'Работа › Главная', text: 'Счётчик на плитке больше не прыгает.' },
+          ],
+        }, {
+          version: '0.3.0', revision: 1, date: '2026-10-08', title: 'Новые возможности',
+          is_archive: false, range_label: null,
+          items: [{ kind: 'new', screen: 'home', where: 'Работа › Главная', text: 'Открыта история версий.' }],
+        }] },
+      })),
+    );
+    add(
       'Release history, long item at narrow width',
       render(createElement(VersionHistoryView, {
         version: '0.3.0', loading: false, error: null,

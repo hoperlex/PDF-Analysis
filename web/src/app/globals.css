@@ -260,6 +260,9 @@
   --am-gap: 16px;
   --am-gap-lg: 24px;
   --am-gap-xl: 32px;
+
+  /* The frame's sticky top strip (`.am-app__utility`); a pinned panel below it starts at this plus a gap. */
+  --am-strip-height: 44px;
 }
 
 /*
@@ -994,7 +997,7 @@ input[type='file']::file-selector-button:hover {
   display: flex;
   align-items: center;
   gap: var(--am-gap-md);
-  min-height: 44px;
+  min-height: var(--am-strip-height);
   min-width: 0;
   padding: var(--am-gap-xs) var(--am-gap-lg);
   border-bottom: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
@@ -1452,7 +1455,7 @@ input[type='file']::file-selector-button:hover {
 
   .am-app__utility {
     position: relative;
-    min-height: 44px;
+    min-height: var(--am-strip-height);
     padding: var(--am-gap-xs) var(--am-gap);
   }
 
@@ -1861,8 +1864,8 @@ li.am-state .am-state__detail {
 .am-review__list {
   min-width: 0;
   position: sticky;
-  top: 86px;
-  max-height: calc(100vh - 86px - var(--am-gap-lg));
+  top: calc(var(--am-strip-height) + var(--am-gap-md));
+  max-height: calc(100vh - var(--am-strip-height) - var(--am-gap-md) - var(--am-gap-lg));
   overflow-y: auto;
   overscroll-behavior: contain;
 }
