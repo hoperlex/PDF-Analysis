@@ -7,6 +7,7 @@ import type { ComparisonAiEstimate, StageChainBatch, StageChainBatchSelection, S
 import { ApiError, cancelStageChainBatch, estimateStageChainRun, failureMessage, getStageChainBatch,
   getStageSheetMap, newIdempotencyKey, pauseStageChainBatch, resumeStageChainBatch, startStageChainBatch } from '@/shared/api';
 import { STAGE_REVIEW_POLL_MS } from '@/shared/config';
+import { documentCaption, useStageDocumentNames, useStagePairs } from '@/entities/stage-pair';
 import { agreementStands, comparisonFailure, consentOf, isBlocked } from '@/entities/version-series';
 import { formatInstant } from '@/shared/lib';
 import { ErrorState } from '@/shared/ui';
@@ -47,6 +48,14 @@ export function StageBatchControls(props: StageBatchControlsProps) {
 }
 
 function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId: suppliedBatchId, onBatchChange }: StageBatchControlsProps) {
+  // `UI-B-85`: a pair is named by its documents (the reads are the catalog's own), and by its identifier only while they are unknown.
+  const documentNames = useStageDocumentNames(projectUid).data;
+  const knownPairs = useStagePairs(projectUid).data?.items ?? [];
+  const pairLabel = (pairId: string): string => {
+    const known = [...selectedPairs, ...knownPairs].find((item) => item.pair_id === pairId);
+    return known === undefined ? pairId
+      : `${documentCaption(documentNames, known.left_document_uid)} → ${known.right_document_uid === undefined ? 'сборка Р' : documentCaption(documentNames, known.right_document_uid)}`;
+  };
   const [withAi, setWithAi] = useState(true);
   const [engine, setEngine] = useState<StageEngine>('classic');
   const [preparing, setPreparing] = useState(false);
@@ -106,13 +115,13 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
       <StageEngineSelector value={engine} disabled={busy} onChange={(value) => { setEngine(value); if (value === 'v3_native_text_experimental') setWithAi(true); setAgreed({}); setPreparing(false); setError(null); held.current.clear(); }} />
       <label><input type="checkbox" checked={withAi} disabled={busy || engine === 'v3_native_text_experimental'} onChange={(event) => { setWithAi(event.target.checked); setAgreed({}); setPreparing(false); held.current.clear(); }} />С описанием изменений ИИ</label>
       <button type="button" className="am-button" disabled={busy || selectedPairs.length === 0 || selectedPairs.length > 100}
-        onClick={() => { setPreparing(true); setAgreed({}); setError(null); void prepared.refetch(); }}>Подготовить запуск</button>
+        onClick={() => { setPreparing(true); setAgreed({}); setError(null); void prepared.refetch(); }}>Запустить анализ выбранных ({selectedPairs.length})</button>
     </div> : null}
     {selectedPairs.length > 100 ? <p role="alert">Выберите не более 100 пар.</p> : null}
     {preparing ? <div>
       {prepared.isFetching ? <p role="status">Читаем карты и оцениваем объём…</p> : null}
       {prepared.data?.map((item) => <div key={item.pair.pair_id} className={styles.selection}>
-        <p>Пара <code>{item.pair.pair_id}</code></p>
+        <p>Пара {pairLabel(item.pair.pair_id)}</p>
         {item.estimate === undefined ? <p>Без обращений к ИИ.</p> : <StageEstimateConsent estimate={item.estimate} engine={engine}
           agreedDigest={agreed[item.pair.pair_id] ?? null} disabled={busy || !mayAct}
           onAgree={(digest) => setAgreed((prior) => ({ ...prior, [item.pair.pair_id]: digest }))} />}
@@ -125,7 +134,7 @@ function StageBatchBody({ projectUid, selectedPairs, mayAct, onOpenRun, batchId:
     {batch === null ? null : <div>
       <p>{RUN_WORDS[batch.state]} · {formatInstant(batch.created_at)}</p>
       <dl>{Object.entries(batch.counts).map(([name, count]) => <div key={name}><dt>{name}</dt><dd>{count}</dd></div>)}</dl>
-      <ol>{batch.items.map((item) => <li key={item.item_id}><code>{item.pair_id}</code> · {RUN_WORDS[item.state]}
+      <ol>{batch.items.map((item) => <li key={item.item_id}>{pairLabel(item.pair_id)} · {RUN_WORDS[item.state]}
         {item.run_id === undefined || onOpenRun === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenRun(item.run_id!, item.pair_id)}>Открыть сравнение</button>}</li>)}</ol>
       {mayAct ? <div className={styles.actions}>
         {batch.state === 'queued' || batch.state === 'running' ? <button type="button" className="am-button" disabled={busy} onClick={() => void change('pause')}>Остановить очередь</button> : null}
