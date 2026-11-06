@@ -147,6 +147,10 @@ READ_WRITE = frozenset((
     "executor_secret",
     "executor_task",
     "finding",
+    # `0053_document_tags`: replacing a document's tags deletes rows; `0054_finding_execution_status`: a status is
+    # set, replaced and removed when cleared. Both take UPDATE and DELETE.
+    "document_tag",
+    "finding_execution_status",
     "job",
     "lease",
     "norm_current_snapshot",          # INSERT, UPDATE (norms/current_snapshot.py)
