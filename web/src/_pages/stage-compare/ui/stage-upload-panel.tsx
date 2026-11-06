@@ -161,11 +161,12 @@ function FileRow({ file }: { readonly file: StageUploadFile }) {
  * «Загрузить проекты» at the right of the steps bar; here the same button opens this panel, which stays closed until it is asked for
  * — except that a set with documents waiting for the expert's word opens it once, since those decisions would otherwise hide.
  */
-export function StageUploadPanel({ projectUid, mayAct, open, onOpenChange }: {
+export function StageUploadPanel({ projectUid, mayAct, open = true, onOpenChange = () => undefined }: {
   readonly projectUid: ProjectUid;
   readonly mayAct: boolean;
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
+  /** Drawn when true (the default, for a panel mounted alone); the workspace closes it until «Загрузить проекты» asks. */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
 }) {
   const cache = useQueryClient();
   const [cursor, setCursor] = useState('');
