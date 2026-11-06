@@ -23,8 +23,15 @@ import type {
   ProposalDecisionState,
 } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
-import { NOTHING_TO_REVOKE_TEXT, PASS_REFUSAL_TEXT, PROPOSAL_PAGE_LIMIT } from '@/entities/optimisation-proposal';
+import {
+  CARRYOVER_REFUSAL_TEXT,
+  NOTHING_TO_REVOKE_TEXT,
+  PASS_REFUSAL_TEXT,
+  PROPOSAL_PAGE_LIMIT,
+  carrySources,
+} from '@/entities/optimisation-proposal';
 import { ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
+import { CarryOverProposalDecisionsView } from '@/features/carry-over-proposal-decisions';
 import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
 import { StartOptimisationPassView } from '@/features/start-optimisation-pass';
 import {
@@ -109,6 +116,7 @@ export function pass(overrides: Partial<OptimisationPass> = {}): OptimisationPas
     project_uid: PROPOSALS_PROJECT_UID,
     document_uid: AR_DOCUMENT_UID,
     version_uid: VERSION_UID,
+    version_ordinal: 2,
     run_id: RUN_ID,
     text_layer_sha256: 'e'.repeat(64),
     price_list_id: 'prl_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
@@ -138,8 +146,18 @@ export function decision(overrides: Partial<ProposalDecision> = {}): ProposalDec
     actor_user_uid: EXPERT_UID,
     actor_label: 'Петрова А.',
     decided_at: '2026-10-20T09:30:00Z',
+    carried_from: null,
     ...overrides,
   };
+}
+
+/** The sources the carry-over control offers for the pass `pass()` makes: version 1's, which holds decisions. */
+function carryOverSources() {
+  const target = pass({ version_ordinal: 2 });
+  return carrySources(
+    [target, pass({ optimisation_pass_id: OLDER_PASS_ID, version_ordinal: 1, decision_counts: { pending: 2, accept: 3, reject: 1, revise: 2 } })],
+    target,
+  );
 }
 
 export function proposal(overrides: Partial<OptimisationProposal> = {}): OptimisationProposal {
@@ -579,6 +597,47 @@ export function proposalShapes(): readonly ProposalShape[] {
       make: () => createElement(ImportProposalDecisionsView, {
         pending: false, report: null, onChoose: noop,
         failure: 'Это не наша выгрузка: нужен лист «Предложения» с колонкой идентификаторов предложений. Выгрузите таблицу решений заново.',
+      }),
+    },
+    // `UI-B-14`: «Перенести решения из V#» offered, asking for confirmation, working, answered, and refused.
+    {
+      name: 'proposal-carryover-offered',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: null, pending: false, report: null, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carryover-confirming',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: carryOverSources()[0] ?? null, pending: false, report: null, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carryover-working',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: carryOverSources()[0] ?? null, pending: true, report: null, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carryover-reported',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: null, pending: false, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+        report: {
+          optimisation_pass_id: PASS_ID, source_optimisation_pass_id: OLDER_PASS_ID, source_version_ordinal: 1,
+          source_decided: 8, carried: 5, target_decided: 1, ambiguous: 1, unmatched: 1,
+        },
+      }),
+    },
+    {
+      name: 'proposal-carryover-refused',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: null, pending: false, report: null,
+        failure: CARRYOVER_REFUSAL_TEXT['carryover_source_not_earlier'] ?? null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
       }),
     },
     {

@@ -21,6 +21,10 @@ export {
   MATCH_BASIS_LABELS,
   VENDOR_LIST_SCOPE_LABELS,
   VERDICT_LABELS,
+  carriedFromLabel,
+  carrySources,
+  decidedCount,
+  describeCarryover,
   describeCounts,
   describeProvenance,
   describeQuantity,
@@ -30,7 +34,10 @@ export {
   proposalsCsvFileName,
   proposalsXlsxFileName,
 } from './model/presentation';
+export type { CarrySource } from './model/presentation';
 export {
+  CARRYOVER_REFUSAL_TEXT,
+  carryOverFailureMessage,
   COMMENT_REQUIRED_TEXT,
   COMMENT_TOO_LONG_TEXT,
   NOTHING_TO_REVOKE_TEXT,
