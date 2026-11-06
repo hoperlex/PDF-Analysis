@@ -134,6 +134,9 @@ import { MY_TASKS_LIMIT } from '@/widgets/my-tasks';
 import NotFound from '@/app/not-found';
 import ErrorBoundary from '@/app/error';
 import { DecisionHistory } from '@/widgets/decision-history';
+import { ExportPanel } from '@/widgets/export-panel';
+import { FindingList, FindingRowActions } from '@/widgets/finding-list';
+import { groupByCategory } from '@/entities/finding';
 import { ArV3BetaReview, RunFindings } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import {
@@ -2200,6 +2203,52 @@ function seedPresets(items: readonly Record<string, unknown>[]): (client: Return
 }
 
 const EXTRA_SHAPES: readonly ScreenCase[] = [
+  // `UI-A-68`: the findings table at full width -- a decided severity beside a proposal, a verified norm with its
+  // clause, a merged count, the verdict on each row and a finding opened under its row -- and the export bar over it.
+  {
+    name: 'finding-table-and-export-bar',
+    make: () => createElement('div', null,
+      createElement(ExportPanel, {
+        layout: 'bar', runId: RUN_ID, runState: 'published', providerMode: 'recorded', onExport: () => undefined, mayImportDecisions: true,
+      }),
+      createElement(FindingList, {
+        view: 'table',
+        groups: groupByCategory([
+          finding({
+            current_verdict: 'accepted',
+            decided_severity: 'critical',
+            merged_observations: [finding().observation, finding().observation],
+            observation: {
+              ...finding().observation,
+              proposed_severity: 'critical',
+              norm_citations: [{
+                clause_number: '7.1.4',
+                designation: 'СП 1.13130.2020',
+                norm_document_id: `ndoc_${ULID}`,
+                norm_paragraph_id: `npar_${ULID}`,
+                norms_snapshot_id: `ns_${ULID}`,
+                page_label: 12,
+                quote: 'Ширина эвакуационного выхода должна быть не менее 0,8 м.',
+                source_attribution: 'consultant_plus',
+                state: 'rebound',
+                title: 'Эвакуационные пути и выходы',
+              }],
+            },
+          }),
+          finding({
+            finding_uid: `fnd_${ULID.slice(0, -1)}9`,
+            category: 'explicit_placeholder',
+            current_verdict: 'rejected',
+            observation: { ...finding().observation, category: 'explicit_placeholder', proposed_severity: 'economic', norm_citations: [] },
+          }),
+        ]),
+        selectedFindingUid: FINDING_UID,
+        onSelect: () => undefined,
+        renderRowActions: (row: { readonly current_verdict: Finding['current_verdict'] }) =>
+          createElement(FindingRowActions, { verdict: row.current_verdict, sending: null, note: null, onAccept: () => undefined, onReject: () => undefined }),
+        renderExpansion: () => createElement('p', null, 'Открытая находка.'),
+      })),
+  },
   {
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),

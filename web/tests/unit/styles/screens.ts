@@ -814,6 +814,19 @@ export function screens(): Screen[] {
     runScreen('partial', { degradation_set: ['text_analysis'], published_finding_count: 1 }),
   );
   add('RunProgress failed', runScreen('failed', { terminal_reason: 'analysis_failed' as ErrorCode }));
+  // `UI-A-65`: the rail states how long each stage took, and an open run draws its live line (below).
+  add(
+    'RunProgress published with stage times',
+    runScreen('published', {
+      published_finding_count: 2,
+      stages: [
+        { stage_id: 'source_preparation', status: 'succeeded', error_code: null, started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:00.030Z' },
+        { stage_id: 'page_geometry_extraction', status: 'succeeded', error_code: null, started_at: '2026-09-10T08:00:00.030Z', finished_at: '2026-09-10T08:00:01.400Z' },
+        { stage_id: 'document_context_build', status: 'partial', error_code: 'analysis_input_budget_exceeded', started_at: '2026-09-10T08:00:01.400Z', finished_at: '2026-09-10T08:01:12.000Z' },
+        { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:01:12.000Z', finished_at: '2026-09-10T08:01:13.250Z' },
+      ],
+    }),
+  );
   add('RunProgress validating', runScreen('validating'));
   add('RunProgress queued', runScreen('queued'));
   add('RunProgress cancelled', runScreen('cancelled'));
@@ -1464,8 +1477,8 @@ export function screens(): Screen[] {
   // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
   add('FindingList with an execution status', render(createElement(FindingList, {
     groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
-      ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const }
-      : finding)),
+      ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const, merged_observations: [V2_OBSERVATION, V2_SIBLING] }
+      : { ...finding, current_verdict: 'rejected' as const })),
     selectedFindingUid: null,
     onSelect: noop,
   })));
@@ -1486,6 +1499,41 @@ export function screens(): Screen[] {
     onChoose: noop,
   })));
   // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
+  // `UI-A-68`: the full-width table -- verdict tints, a decided severity beside a proposal, norms, merged count -- with
+  // the selected finding opened under its row.
+  add(
+    'FindingList, table view with an opened row',
+    render(
+      createElement(FindingList, {
+        view: 'table',
+        groups: groupByCategory([
+          finding({
+            finding_uid: FINDING_UID,
+            category: 'internal_contradiction',
+            current_verdict: 'accepted',
+            decided_severity: 'critical',
+            execution_status: 'amended',
+            observation: V2_OBSERVATION,
+            merged_observations: [V2_OBSERVATION, V2_SIBLING],
+          }),
+          finding({ finding_uid: `${FINDING_UID.slice(0, -1)}C`, category: 'explicit_placeholder', current_verdict: 'rejected' }),
+          finding({
+            finding_uid: `${FINDING_UID.slice(0, -1)}D`,
+            category: 'explicit_placeholder',
+            current_verdict: 'pending',
+            observation: observation({ proposed_severity: 'economic', norm_citations: [] }),
+          }),
+        ]),
+        selectedFindingUid: FINDING_UID,
+        onSelect: noop,
+        renderRowActions: (row: { readonly current_verdict: Verdict }) =>
+          createElement(FindingRowActions, {
+            verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,
+          }),
+        renderExpansion: () => createElement('p', null, 'Открытая находка: цитата на странице и решение эксперта.'),
+      }),
+    ),
+  );
   add(
     'FindingList with row actions, recorded and refused',
     render(

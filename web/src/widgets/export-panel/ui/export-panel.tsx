@@ -50,6 +50,8 @@ import { ImportDecisions } from '@/features/import-decisions';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
+import styles from './export-panel.module.css';
+
 export interface ExportPanelProps {
   readonly runId: RunId;
   readonly runState: RunState;
@@ -60,6 +62,11 @@ export interface ExportPanelProps {
   readonly lastFileName?: string | null | undefined;
   /** `R-151d`: offer «Загрузить решения из Excel» — an expert's act, so the page says whether the caller is one. */
   readonly mayImportDecisions?: boolean | undefined;
+  /**
+   * `card` (the default) is the panel as it always was. `bar` is the original's toolbar: the title, the state and
+   * the three file actions in one row over the findings, the file description beside them.
+   */
+  readonly layout?: 'card' | 'bar' | undefined;
 }
 
 const UNKNOWN_RUN_STATE_TITLE = 'Прогон содержит неизвестное состояние.';
@@ -118,7 +125,9 @@ export function ExportPanel({
   error,
   lastFileName,
   mayImportDecisions,
+  layout,
 }: ExportPanelProps) {
+  const bar = layout === 'bar';
   if (!(RUN_STATE_VALUES as readonly unknown[]).includes(runState)) {
     return (
       <section className="am-export" data-export-fault="closed-vocabulary">
@@ -133,8 +142,12 @@ export function ExportPanel({
   const exportable = isExportableRunState(runState);
 
   return (
-    <section className="am-export" data-run-id={runId} data-exportable={exportable ? 'true' : 'false'}>
-      <header className="am-export__header">
+    <section
+      className={bar ? `am-export ${styles.bar}` : 'am-export'}
+      data-run-id={runId}
+      data-exportable={exportable ? 'true' : 'false'}
+    >
+      <header className={bar ? `am-export__header ${styles.barHeader}` : 'am-export__header'}>
         <h3>Выгрузка</h3>
         <RunStateBadge state={runState} providerMode={providerMode} />
       </header>
@@ -162,14 +175,26 @@ export function ExportPanel({
             that describes them. The summary is the sentence this panel already had; no
             string is invented, and the disclosure is closed until a reader asks.
           */}
-          <details className="am-export__disclosure">
+          <details className={bar ? `am-export__disclosure ${styles.barDisclosure}` : 'am-export__disclosure'}>
             <summary>
-              <span className="am-export__encoding">
+              {bar ? (
+                // The bar keeps to one row: the summary names the file, the whole description opens with the columns.
+                <span className="am-export__encoding">О файле: колонок {CSV_COLUMNS.length}</span>
+              ) : (
+                <span className="am-export__encoding">
+                  Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
+                  {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
+                  RFC 4180; одна строка на свидетельство.
+                </span>
+              )}
+            </summary>
+            {bar ? (
+              <p className="am-export__encoding">
                 Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
                 {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
                 RFC 4180; одна строка на свидетельство.
-              </span>
-            </summary>
+              </p>
+            ) : null}
             <ol className="am-export__columns">
               {CSV_COLUMNS.map((column) => (
                 <li key={column} data-csv-column={column}>
@@ -179,8 +204,8 @@ export function ExportPanel({
             </ol>
           </details>
           {lastFileName !== undefined && lastFileName !== null ? (
-            <p className="am-export__last" data-last-file={lastFileName}>
-              Downloaded {lastFileName}
+            <p className={bar ? `am-export__last ${styles.barLast}` : 'am-export__last'} data-last-file={lastFileName}>
+              Скачан {lastFileName}
             </p>
           ) : null}
         </>

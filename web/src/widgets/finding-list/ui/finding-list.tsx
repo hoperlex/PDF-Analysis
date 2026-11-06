@@ -23,16 +23,21 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import type { Finding, FindingCategory, Severity, Verdict } from '@/shared/api';
+import type { Finding, FindingCategory, Severity } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
-import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
-import type { TableColumn } from '@/shared/ui';
+import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
 import { EXECUTION_STATUS_LABELS, SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
 import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
+import { findingNumbers, pagesLabel, verdictBucket } from '../model/presentation';
+import type { VerdictFilter } from '../model/presentation';
+import { FindingTable } from './finding-table';
 import styles from './finding-list.module.css';
+
+export { pagesLabel, verdictBucket } from '../model/presentation';
+export type { VerdictFilter } from '../model/presentation';
 
 /** A finding that was admitted and then found structurally impossible. */
 export interface FindingIntegrityFault {
@@ -61,6 +66,27 @@ export interface FindingListProps {
   /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly severityFilter?: SeverityFilter | undefined;
   readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
+  /** The way the findings are drawn, when the page keeps it (in the address, `?view=`). Absent, the list keeps its own. */
+  readonly view?: FindingView | undefined;
+  readonly onViewChange?: ((view: FindingView) => void) | undefined;
+  /**
+   * What opens under the selected row of the table: the finding itself, as the original opens a strip under its
+   * row. In the list the finding is read beside it, so the list ignores this.
+   */
+  readonly renderExpansion?: ((finding: Finding) => ReactNode) | undefined;
+  /**
+   * Where the toolbar stands: `inside` (the default) at the head of the list; `outside` when the page draws
+   * `FindingToolbar` itself, across the whole width over the list and the open finding.
+   */
+  readonly toolbar?: 'inside' | 'outside' | undefined;
+}
+
+/** The two ways to read the findings: the list beside the open finding, or the full-width table of the original. */
+export type FindingView = 'list' | 'table';
+
+/** A view read from the address: an absent or unknown value is the list. */
+export function findingViewOf(value: string | null): FindingView {
+  return value === 'table' ? 'table' : 'list';
 }
 
 /**
@@ -113,21 +139,6 @@ function hasSeverity(tally: SeverityTally): boolean {
   return SEVERITY_ORDER.some((severity) => tally.decided[severity] > 0 || tally.proposed[severity] > 0);
 }
 
-/**
- * `UI-A-70`, `UI-A-71`: the verdicts of the run at a glance and a filter by them, as the original's
- * «Экспертная оценка» counter and its pending → accepted → rejected order. The page loads every finding of
- * the run (`R-150i`), so the counts and the filter are over the whole run, never over one page.
- * `needs_manual_review` waits for the expert like `pending` (`UI-PARITY-METRICS`).
- */
-export type VerdictFilter = 'all' | 'waiting' | 'accepted' | 'rejected';
-
-const WAITING: ReadonlySet<Verdict> = new Set<Verdict>(['pending', 'needs_manual_review']);
-
-export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all'> {
-  if (WAITING.has(verdict)) return 'waiting';
-  return verdict === 'accepted' ? 'accepted' : 'rejected';
-}
-
 /** A verdict filter read from the address: an absent or unknown value is «Все». */
 export function verdictFilterOf(value: string | null): VerdictFilter {
   return value === 'waiting' || value === 'accepted' || value === 'rejected' ? value : 'all';
@@ -163,74 +174,129 @@ const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string 
 ];
 
 
-/**
- * `UI-A-68`: the original's table of findings — №, verdict, category, the finding, the recommendation, the
- * norms it cites and the pages — over the same filtered findings as the list. A row's number opens the
- * finding beside the table, as a row of the list does.
- */
-/**
- * `UI-PARITY-P0O`: a finding's pages as the original states them, with the sheet first («Лист 3 · стр. 5») when the
- * portal geometry names a sheet for every page; otherwise the PDF pages alone, never a page number passed off as a sheet.
- */
-export function pagesLabel(pages: readonly number[], sheetOf?: (page: number) => number | undefined): string {
-  const sheets = sheetOf === undefined ? [] : pages.map((page) => sheetOf(page));
-  const known = pages.length > 0 && sheets.length === pages.length && sheets.every((sheet) => sheet !== undefined);
-  const pageText = `стр. ${pages.join(', ')}`;
-  if (!known) return pageText;
-  return `${pages.length === 1 ? 'Лист' : 'Листы'} ${sheets.join(', ')} · ${pageText}`;
-}
-
-function FindingTable({
-  groups,
-  selectedFindingUid,
-  onSelect,
-  renderRowActions,
-  sheetOf,
-}: {
-  readonly groups: readonly FindingGroup<Finding>[];
-  readonly selectedFindingUid: string | null;
-  readonly onSelect: (findingUid: string) => void;
-  readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
-  readonly sheetOf?: ((page: number) => number | undefined) | undefined;
-}) {
-  const rows = groups.flatMap((group) => group.findings);
-  const numberOf = new Map(rows.map((finding, index) => [finding.finding_uid, index + 1]));
-  const columns: readonly TableColumn<Finding>[] = [
-    {
-      key: 'number',
-      header: '№',
-      cell: (finding) => (
-        <button type="button" className="am-button am-button--quiet am-button--small" data-finding-uid={finding.finding_uid} onClick={() => onSelect(finding.finding_uid)}>
-          {numberOf.get(finding.finding_uid)}
-        </button>
-      ),
-    },
-    { key: 'verdict', header: 'Вердикт', cell: (finding) => <VerdictBadge verdict={finding.current_verdict} /> },
-    { key: 'category', header: 'Категория', cell: (finding) => categoryHeading(finding.observation.category) },
-    { key: 'finding', header: 'Находка', cell: (finding) => finding.observation.finding_text },
-    { key: 'recommendation', header: 'Рекомендация', cell: (finding) => finding.observation.recommendation_text },
-    {
-      key: 'norms',
-      header: 'Нормы',
-      cell: (finding) => (finding.observation.norm_citations ?? []).length === 0 ? '—' : String((finding.observation.norm_citations ?? []).length),
-    },
-    { key: 'pages', header: 'Лист / стр.', cell: (finding) => pagesLabel(declaredPages(finding.observation), sheetOf) },
-    ...(renderRowActions === undefined ? [] : [{ key: 'decision', header: 'Решение', cell: renderRowActions }]),
-  ];
-  return (
-    <Table
-      caption="Находки прогона"
-      columns={columns}
-      rows={rows}
-      rowKey={(finding) => finding.finding_uid}
-      currentKey={selectedFindingUid}
-    />
-  );
-}
-
 /** Category labels. The contract value is what the row carries; this is only the heading. */
 function categoryHeading(category: FindingCategory): string {
   return CATEGORY_LABELS[category];
+}
+
+/** The props of the toolbar over the findings: the whole run's groups and the three choices the address keeps. */
+export interface FindingToolbarProps {
+  readonly groups: readonly FindingGroup<Finding>[];
+  readonly verdictFilter: VerdictFilter;
+  readonly onVerdictFilterChange: (filter: VerdictFilter) => void;
+  readonly severityFilter: SeverityFilter;
+  readonly onSeverityFilterChange: (filter: SeverityFilter) => void;
+  readonly view: FindingView;
+  readonly onViewChange: (view: FindingView) => void;
+  /** What stands at the right end of the first row: the file actions, in the original. */
+  readonly actions?: ReactNode | undefined;
+}
+
+/** What the model proposed, by severity, naming only the severities it proposed anything for. */
+function proposedSummary(tally: SeverityTally): string | null {
+  const parts = SEVERITY_ORDER.filter((value) => tally.proposed[value] > 0).map((value) => `${SEVERITY_LABELS[value]} ${tally.proposed[value]}`);
+  return parts.length === 0 ? null : parts.join(' · ');
+}
+
+/**
+ * The strip over the findings, as the original's top row: the run's total and the verdicts' tally, the filter by
+ * verdict, the way to read the findings, and the severity chips. The page may stand it across the whole width
+ * above the list and the open finding (`toolbar="outside"` on the list); by default it stands inside the list.
+ * Counts and filters are over the whole run (`R-150i`), never over what is on screen.
+ */
+export function FindingToolbar({
+  groups,
+  verdictFilter: filter,
+  onVerdictFilterChange: setFilter,
+  severityFilter: severity,
+  onSeverityFilterChange: setSeverity,
+  view,
+  onViewChange: setView,
+  actions,
+}: FindingToolbarProps) {
+  const total = countGrouped(groups);
+  if (total === 0) return null;
+  const tally = tallyVerdicts(groups);
+  const severities = tallySeverity(groups);
+  const proposedText = proposedSummary(severities);
+  return (
+    <div className={styles.toolbar}>
+      {/* The original's top row: the total and the severity chips on the left, the file actions on the right. */}
+      <div className={styles.top}>
+        <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
+        {hasSeverity(severities) ? (
+          <div className={styles.severities} data-severity-strip="">
+            <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
+              <span className={styles.stripLabel}>Важность (решение эксперта):</span>
+              <button
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={severity === 'all'}
+                data-severity-filter="all"
+                onClick={() => setSeverity('all')}
+              >
+                Все
+              </button>
+              {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="am-button am-button--quiet am-button--small"
+                  aria-pressed={severity === value}
+                  data-severity-filter={value}
+                  onClick={() => setSeverity(value)}
+                >
+                  {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
+                </button>
+              ))}
+            </div>
+            {proposedText === null ? null : (
+              <p className={styles.proposed} data-proposed-severity="">
+                Предложено моделью (не решение эксперта):{' '}
+                {proposedText}
+              </p>
+            )}
+          </div>
+        ) : null}
+        {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
+      </div>
+      <div className={styles.verdicts} data-finding-toolbar="">
+        <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
+          Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
+        </p>
+        <div className={styles.controls}>
+          <div className={styles.filter} role="group" aria-label="Отбор по вердикту">
+            {FILTERS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={filter === option.value}
+                data-verdict-filter={option.value}
+                onClick={() => setFilter(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div className={styles.filter} role="group" aria-label="Вид списка находок">
+            {(['list', 'table'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={view === mode}
+                data-finding-view={mode}
+                onClick={() => setView(mode)}
+              >
+                {mode === 'list' ? 'Список' : 'Таблица'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function FindingList({
@@ -246,6 +312,10 @@ export function FindingList({
   sheetOf,
   severityFilter,
   onSeverityFilterChange,
+  view: viewFromPage,
+  onViewChange,
+  renderExpansion,
+  toolbar,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
   const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
@@ -254,7 +324,12 @@ export function FindingList({
     if (onSeverityFilterChange !== undefined) onSeverityFilterChange(next);
     else setOwnSeverity(next);
   };
-  const [view, setView] = useState<'list' | 'table'>('list');
+  const [ownView, setOwnView] = useState<FindingView>('list');
+  const view = viewFromPage ?? ownView;
+  const setView = (next: FindingView) => {
+    if (onViewChange !== undefined) onViewChange(next);
+    else setOwnView(next);
+  };
   const filter = verdictFilter ?? ownFilter;
   const setFilter = (next: VerdictFilter) => {
     if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
@@ -281,77 +356,21 @@ export function FindingList({
     );
   }
 
-  const tally = tallyVerdicts(groups);
-  const severities = tallySeverity(groups);
   const shown = filterBySeverity(filterGroups(groups, filter), severity);
 
   return (
-    <div className="am-finding-list" data-finding-count={total}>
-      <div className={styles.verdicts}>
-        <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
-          Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
-        </p>
-        <div className={styles.filter} role="group" aria-label="Вид списка находок">
-          {(['list', 'table'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className="am-button am-button--quiet"
-              aria-pressed={view === mode}
-              data-finding-view={mode}
-              onClick={() => setView(mode)}
-            >
-              {mode === 'list' ? 'Список' : 'Таблица'}
-            </button>
-          ))}
-        </div>
-        <div className={styles.filter} role="group" aria-label="Отбор по вердикту">
-          {FILTERS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className="am-button am-button--quiet"
-              aria-pressed={filter === option.value}
-              data-verdict-filter={option.value}
-              onClick={() => setFilter(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {hasSeverity(severities) ? (
-        <div className={styles.severities} data-severity-strip="">
-          <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
-            <span className={styles.stripLabel}>Важность (решение эксперта):</span>
-            <button
-              type="button"
-              className="am-button am-button--quiet am-button--small"
-              aria-pressed={severity === 'all'}
-              data-severity-filter="all"
-              onClick={() => setSeverity('all')}
-            >
-              Все
-            </button>
-            {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className="am-button am-button--quiet am-button--small"
-                aria-pressed={severity === value}
-                data-severity-filter={value}
-                onClick={() => setSeverity(value)}
-              >
-                {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
-              </button>
-            ))}
-          </div>
-          <p className={styles.proposed} data-proposed-severity="">
-            Предложено моделью (не решение эксперта):{' '}
-            {SEVERITY_ORDER.map((value) => `${SEVERITY_LABELS[value]} ${severities.proposed[value]}`).join(' · ')}
-          </p>
-        </div>
-      ) : null}
+    <div className={`am-finding-list ${styles.root}`} data-finding-count={total}>
+      {toolbar === 'outside' ? null : (
+        <FindingToolbar
+          groups={groups}
+          verdictFilter={filter}
+          onVerdictFilterChange={setFilter}
+          severityFilter={severity}
+          onSeverityFilterChange={setSeverity}
+          view={view}
+          onViewChange={setView}
+        />
+      )}
       {faults.length > 0 ? (
         <ErrorState
           title="Нарушение целостности данных"
@@ -373,10 +392,12 @@ export function FindingList({
 
       {view === 'table' && shown.length > 0 ? (
         <FindingTable
-          groups={shown}
+          findings={shown.flatMap((group) => group.findings)}
+          numberOf={findingNumbers(groups)}
           selectedFindingUid={selectedFindingUid}
           onSelect={onSelect}
           renderRowActions={renderRowActions}
+          renderExpansion={renderExpansion}
           sheetOf={sheetOf}
         />
       ) : null}
@@ -396,7 +417,11 @@ export function FindingList({
               const pages = declaredPages(finding.observation);
               const selected = finding.finding_uid === selectedFindingUid;
               return (
-                <li key={finding.finding_uid} className={renderRowActions === undefined ? undefined : styles.withActions}>
+                <li
+                  key={finding.finding_uid}
+                  className={renderRowActions === undefined ? styles.item : `${styles.item} ${styles.withActions}`}
+                  data-verdict-bucket={verdictBucket(finding.current_verdict)}
+                >
                   <button
                     type="button"
                     className="am-finding-row am-button"
@@ -429,6 +454,16 @@ export function FindingList({
                     )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
                       {pagesLabel(pages, sheetOf)}
+                      {(finding.merged_observations?.length ?? 0) > 1 ? (
+                        // The original's «×N» on a finding that stands for several observations.
+                        <span
+                          className={styles.mergedMark}
+                          title={`Объединённых наблюдений: ${finding.merged_observations?.length ?? 0}`}
+                          data-merged-observations={finding.merged_observations?.length ?? 0}
+                        >
+                          {' '}×{finding.merged_observations?.length ?? 0}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                   {renderRowActions === undefined ? null : renderRowActions(finding)}

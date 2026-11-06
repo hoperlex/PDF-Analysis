@@ -1,0 +1,39 @@
+/*
+ * The export panel as a bar (`layout="bar"`): the original's toolbar over the table, one row, not a card under it.
+ * Tokens only. The global `.am-export__*` rules keep the card; every rule here is doubled on the bar's own class so
+ * it wins over them whichever sheet loaded last.
+ */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
+.bar .barHeader {
+  margin: 0;
+  gap: var(--am-gap-sm);
+}
+
+.bar .barHeader h3 {
+  font-size: var(--am-text-md);
+}
+
+/* The file's description is one short line beside the buttons; it opens into the whole sentence and the columns. */
+.bar .barDisclosure {
+  flex: 0 1 auto;
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  font-size: var(--am-text-xs);
+}
+
+.bar .barLast {
+  flex-basis: 100%;
+  margin: 0;
+}

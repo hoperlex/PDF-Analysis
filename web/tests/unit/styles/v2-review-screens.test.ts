@@ -26,7 +26,7 @@ describe('the census holds a review screen with a v2 finding in it', () => {
   const markup = markupOf('ReviewPage loaded, v2 finding');
 
   it('is the loaded screen, not a spinner', () => {
-    expect(markup).toContain('class="am-review__finding"');
+    expect(markup).toMatch(/class="am-review__finding[ "]/);
     expect(markup).toContain('Ширина выхода указана как 0,7 м.');
   });
 

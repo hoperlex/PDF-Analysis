@@ -1,30 +1,62 @@
+/* A run with no findings: its file actions stand alone over the empty list. */
+.exportAlone {
+  margin-bottom: var(--am-gap-sm);
+}
+
 .layout {
   min-width: 0;
+  margin-top: var(--am-gap-sm);
 }
 
 .list,
-.detail,
-.export {
+.detail {
   min-width: 0;
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);
   box-shadow: var(--am-shadow-1);
 }
 
-.list,
-.detail {
-  padding: var(--am-gap);
+/*
+ * `UI-A-68`: the table view is one column. The global grid keeps a 360px list column beside the open finding;
+ * the table needs the page's width and opens the finding under its row, so the list loses its pinned column
+ * and its own scroll. Doubled selectors so the rule does not depend on which sheet loaded last.
+ */
+.layout.layoutTable {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.export {
-  padding: var(--am-gap);
+.list.listTable {
+  position: static;
+  max-height: none;
+  overflow-y: visible;
 }
 
-@media (max-width: 900px) {
-  .list,
-  .detail,
-  .export {
-    padding: var(--am-gap);
-  }
+/* The finding opened under its row of the table: the same panels as beside the list, on the strip's width. */
+.expansion {
+  min-width: 0;
+}
+
+/* The page viewer's own top margin separates it from a heading that the table's row has already said. */
+.expansion > :first-child {
+  margin-top: 0;
+}
+
+/*
+ * The open finding in the list view, set smaller (`UI-PARITY-DENSE`): the original's strip reads at table size, and a
+ * 19px heading with a padded quotation block spent a quarter of the screen before the page was in sight.
+ */
+article.finding {
+  margin-bottom: var(--am-gap-sm);
+}
+
+.finding .findingTitle {
+  font-size: var(--am-text-lg);
+}
+
+.finding .recommendation {
+  margin-top: var(--am-gap-xs);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  font-size: var(--am-text-base);
 }

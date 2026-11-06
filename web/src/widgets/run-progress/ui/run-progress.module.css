@@ -284,9 +284,9 @@
   font-size: var(--am-text-lg);
 }
 
-/* The reading the user came for. It was one paragraph among twelve. */
+/* The reading the user came for. It was one paragraph among twelve. Set tight (`UI-PARITY-DENSE`): two lines, not a card. */
 .outcome {
-  padding: var(--am-gap) var(--am-gap-lg);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-left: 4px solid var(--am-inert);
   border-radius: var(--am-radius);
@@ -296,6 +296,10 @@
 
 .outcome > *:last-child {
   margin-bottom: 0;
+}
+
+.outcome p {
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .outcome[data-run-outcome='published'] {
@@ -326,6 +330,69 @@
   padding: var(--am-gap-sm) 12px;
   border-radius: var(--am-radius-sm);
   background: var(--am-surface-sunken);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The time a stage took, under its status on the rail (the original's status list states it). */
+.pipelineTook {
+  color: var(--am-ink-muted);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the live line of an open run (`UI-A-65`) --------------------------------------------- */
+
+.live {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+.live strong {
+  font-weight: 700;
+}
+
+.liveElapsed {
+  margin-left: auto;
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pulse {
+  width: var(--am-gap-sm);
+  height: var(--am-gap-sm);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulse {
+    animation: livePulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.notesSummary {
+  cursor: pointer;
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }

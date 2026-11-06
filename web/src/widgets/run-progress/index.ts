@@ -2,3 +2,5 @@
 
 export type { RunProgressProps } from './ui/run-progress';
 export { RunProgress } from './ui/run-progress';
+export type { RunLiveLineViewProps } from './ui/run-live-line';
+export { RunLiveLineView, liveStageOf } from './ui/run-live-line';

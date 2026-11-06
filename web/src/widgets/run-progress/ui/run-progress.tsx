@@ -80,6 +80,7 @@ import {
 } from '@/shared/ui';
 import styles from './run-progress.module.css';
 import { PdfPrecheckProgress } from './pdf-precheck-progress';
+import { RunLiveLine } from './run-live-line';
 import { ExtendedReview } from '@/widgets/extended-review';
 
 import {
@@ -141,6 +142,12 @@ function PipelineRail({ rows }: { readonly rows: readonly StageRow[] }) {
             <span className={styles.pipelineStatus}>
               {row.status === null ? 'Не начинался' : <StageStatusBadge status={row.status} errorCode={row.errorCode} />}
             </span>
+            {/* The time the stage took, as the original's status list states it; nothing when an end is missing. */}
+            {elapsedMs(row.startedAt, row.finishedAt) === null ? null : (
+              <span className={styles.pipelineTook} data-pipeline-took={formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}>
+                {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
+              </span>
+            )}
           </div>
           {index === rows.length - 1 ? null : <span className={styles.pipelineArrow} aria-hidden="true">→</span>}
         </div>
@@ -471,6 +478,8 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
                 : 'Опрос остановлен, показание окончательное.'}
           </p>
         </div>
+        {/* `UI-A-65`: the open run's live line -- the stage it is on and how long it has been going. */}
+        {animating ? <RunLiveLine status={status} rows={stageRows(status)} /> : null}
         <div className={styles.headBody}>
           <PipelineRail rows={stageRows(status)} />
           {reviewable || actions !== undefined ? (
@@ -587,8 +596,16 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
           would be a claim about a run that has not got that far. */}
       {isTerminalRunState(status.state) ? <NormReferencesSection runId={status.run_id} /> : null}
 
+      {/*
+        The sentences that qualify the figures stay on the screen and are read when asked for, as the CSV columns are
+        on the export bar (`R-18`). They open by themselves when the cost cannot be read, because that sentence is
+        the only place the screen says why no figure is shown.
+      */}
       <section className={styles.notes} aria-label="Пояснения к цифрам">
-        <Recorded status={status} />
+        <details open={runCost(status).kind === 'unreadable'} data-run-notes="">
+          <summary className={styles.notesSummary}>Пояснения к цифрам</summary>
+          <Recorded status={status} />
+        </details>
       </section>
 
       {failure !== null ? (

@@ -1,0 +1,215 @@
+/*
+ * The findings table of «Разбор» (`UI-A-68`), dense as the original's: rows of 4px/8px cells, the head in small
+ * capitals, the finding, its norms and its recommendation side by side, and the opened finding in a strip under
+ * its row. Tokens only; the verdict reads on the row as a tint, the badge in the last cell says it in words.
+ */
+
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
+.table {
+  width: 100%;
+  min-width: 60rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--am-text-xs);
+  line-height: var(--am-leading-tight);
+}
+
+.colNumber {
+  width: 5%;
+}
+
+.colSeverity {
+  width: 9%;
+}
+
+.colPages {
+  width: 8%;
+}
+
+.colText {
+  width: 26%;
+}
+
+.colNorms {
+  width: 17%;
+}
+
+.colRecommendation {
+  width: 21%;
+}
+
+.colDecision {
+  width: 14%;
+}
+
+.head {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink);
+  font-size: var(--am-text-xs);
+  font-weight: 700;
+  letter-spacing: var(--am-tracking-caps);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A row brought to the top of the screen when its finding opens stops below the page's pinned header. */
+.row {
+  scroll-margin-top: 6rem;
+}
+
+.row > td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+/* The verdict on the row: the original's green and red rows. A waiting row keeps the page's paper. */
+.row[data-verdict-bucket='accepted'] > td {
+  background: var(--am-ok-light);
+}
+
+.row[data-verdict-bucket='rejected'] > td {
+  background: var(--am-failed-light);
+}
+
+.row[aria-current='true'] > td {
+  border-bottom-color: var(--am-accent);
+}
+
+.row[aria-current='true'] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--am-accent);
+}
+
+.number {
+  text-align: center;
+}
+
+.merged {
+  display: inline-block;
+  margin-left: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+  color: var(--am-ink);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+}
+
+.severity {
+  text-align: center;
+}
+
+.proposal {
+  color: var(--am-ink-muted);
+  font-style: italic;
+}
+
+.none {
+  color: var(--am-ink-muted);
+}
+
+.pages {
+  text-align: center;
+}
+
+.sheet,
+.page {
+  display: block;
+}
+
+.page {
+  color: var(--am-ink-muted);
+}
+
+.text {
+  font-size: var(--am-text-sm);
+}
+
+.category {
+  display: block;
+  margin-top: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.execution {
+  display: inline-block;
+  margin-top: var(--am-gap-xs);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-ok);
+  border-radius: var(--am-radius-pill);
+  color: var(--am-ok);
+  font-size: var(--am-text-xs);
+}
+
+.recommendation {
+  font-size: var(--am-text-sm);
+}
+
+.normCell {
+  font-size: var(--am-text-xs);
+}
+
+.norms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.norm {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+}
+
+.normHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--am-gap-sm);
+}
+
+.normState {
+  color: var(--am-ink-muted);
+}
+
+/* The quotation is the original's «…» under the designation, cut at two lines; the whole of it opens with the finding. */
+.quote {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--am-ink-muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.decision {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+}
+
+/* The opened finding: a strip across the table under its row, on the page's own surface. */
+.expansion > td {
+  padding: var(--am-gap);
+  border-bottom: 1px solid var(--am-accent);
+  background: var(--am-surface);
+  font-size: var(--am-text-base);
+  line-height: var(--am-leading-base);
+  overflow-wrap: break-word;
+}

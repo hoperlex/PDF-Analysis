@@ -45,8 +45,8 @@ import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
 import { sheetOfPage, useSheetLabels } from '@/entities/block';
-import { FindingList, filterBySeverity, filterGroups, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
-import type { SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
+import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import type { FindingView, SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
@@ -65,6 +65,7 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { OpenedFinding } from './opened-finding';
 import { ReviewPageBlocks } from './page-blocks';
 import { ReviewRowActions } from './review-row-actions';
 import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
@@ -89,10 +90,12 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const verdictFilter = verdictFilterOf(searchParams.get('verdict'));
   // `R-151j`: the severity filter lives in the address too (`?severity=`).
   const severityFilter = severityFilterOf(searchParams.get('severity'));
+  // `UI-A-68`: the findings as the list beside the open finding, or as the original's full-width table (`?view=table`).
+  const view = findingViewOf(searchParams.get('view'));
   const [selection, setSelectionState] = useState<ReviewSelection | null>(
     linkedFinding === null ? null : selectFinding(linkedFinding),
   );
-  const writeAddress = (key: 'finding' | 'verdict' | 'severity', value: string | null) => {
+  const writeAddress = (key: 'finding' | 'verdict' | 'severity' | 'view', value: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === null) params.delete(key);
     else params.set(key, value);
@@ -103,10 +106,17 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   };
   // Choosing a finding writes it to the address; turning a page inside the same finding does not.
   const setSelection = (next: ReviewSelection | null | ((current: ReviewSelection | null) => ReviewSelection | null)) => {
-    if (typeof next !== 'function' && next !== null && next.findingUid !== selection?.findingUid) {
-      writeAddress('finding', next.findingUid);
+    if (typeof next !== 'function') {
+      if (next === null) {
+        if (selection !== null) writeAddress('finding', null);
+      } else if (next.findingUid !== selection?.findingUid) {
+        writeAddress('finding', next.findingUid);
+      }
     }
     setSelectionState(next);
+  };
+  const setView = (next: FindingView) => {
+    writeAddress('view', next === 'list' ? null : next);
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
     writeAddress('verdict', filter === 'all' ? null : filter);
@@ -138,7 +148,11 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     [admitted.findings],
   );
 
-  const resolved = resolveSelection(selection, findingUids);
+  // The list shows the first finding until one is chosen; the table opens a row only when it is asked to, as the
+  // original's does, so it neither draws a page under its first row nor reads a finding nobody opened.
+  const resolved = view === 'table'
+    ? (selection !== null && findingUids.includes(selection.findingUid) ? selection : null)
+    : resolveSelection(selection, findingUids);
   const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
 
   // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters.
@@ -243,6 +257,109 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       ? `${SEVERITY_LABELS[detail.observation.proposed_severity]} — предложено моделью`
       : null;
 
+  // The open finding, once: beside the list, or under its row of the table.
+  const detailContent = (
+    <>
+      {selectedUid === null ? null : detailQuery.isPending ? (
+        <LoadingState what="выбранная находка" />
+      ) : detailFailure !== null ? (
+        detailFailure
+      ) : detail === null ? null : (
+        <>
+          {/* The table's row already says the finding and its recommendation whole; only the list needs them again here. */}
+          {view === 'table' ? null : (
+            <article className={`am-review__finding ${styles.finding}`} data-finding-uid={detail.finding_uid}>
+              <h2 className={styles.findingTitle}>{detail.observation.finding_text}</h2>
+              <p className={`am-review__recommendation ${styles.recommendation}`}>
+                {detail.observation.recommendation_text}
+              </p>
+            </article>
+          )}
+
+          {expanded ? (
+            // One page drawn once: while the full-screen view is open it is the only viewer.
+            <p className="am-note" data-evidence-expanded="">
+              Страница открыта во весь экран.
+            </p>
+          ) : evidenceProps === null ? null : (
+            <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
+          )}
+
+          {expanded ? null : pageBlocks}
+
+          {mayAct ? <DecisionPanel
+            currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
+            observationId={detail.observation.finding_observation_id as FindingObservationId}
+            proposedSeverity={detail.observation.proposed_severity}
+            decidedSeverity={detail.decided_severity}
+            severityRefusal={verdict.refusal}
+            onSeverityChosen={verdict.clearRefusal}
+            onAccept={(observationId, decided) => {
+              verdict.record('accept', observationId, {
+                proposed: detail.observation.proposed_severity,
+                decided,
+              });
+            }}
+            onReject={(observationId) => {
+              verdict.record('reject', observationId);
+            }}
+            onComment={(text, observationId) => {
+              comment.append(text, observationId);
+            }}
+            pendingIntent={pendingIntent}
+            refusal={comment.refusal}
+            error={
+              presentFailureOrNull(verdict.error, {
+                title: 'Вердикт не записан',
+              }) ??
+              presentFailureOrNull(comment.error, {
+                title: 'Комментарий не добавлен',
+              })
+            }
+          /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
+          {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
+          {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
+            <ExecutionStatusControl
+              key={detail.finding_uid}
+              findingUid={detail.finding_uid as FindingUid}
+              runId={runId}
+              status={detail.execution_status ?? null}
+            />
+          ) : null}
+
+          <DecisionHistory
+            events={historyQuery.data?.data.items ?? []}
+            isLoading={historyQuery.isPending}
+            error={presentFailureOrNull(historyQuery.error, {
+              title: 'Не удалось загрузить историю решений',
+              onRetry: () => {
+                void historyQuery.refetch();
+              },
+            })}
+          />
+        </>
+      )}
+    </>
+  );
+
+  const exportPanel = run === null ? (
+    <LoadingState what="прогон" />
+  ) : (
+    <ExportPanel
+      layout="bar"
+      runId={runId}
+      runState={run.state}
+      providerMode={run.provider_mode}
+      onExport={exporter.download}
+      isPending={exporter.isPending}
+      lastFileName={exporter.lastFileName}
+      mayImportDecisions={mayAct}
+      error={presentFailureOrNull(exporter.error, {
+        title: 'В выгрузке отказано',
+      })}
+    />
+  );
+
   return (
     <PageShell
       title="Разбор"
@@ -284,18 +401,39 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     >
       <DocumentContext projectUid={projectUid} runId={runId} current="review" />
       <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
-      <div className={`am-review ${styles.layout}`}>
-        <div className={`am-review__list ${styles.list}`}>
+      {/*
+        The filters, the tally and the file actions across the whole width over the list and the open finding, as the
+        original's top row: the total and the severity chips at the left, the file actions at the right. A run with no
+        findings has no toolbar, and its file actions stand on their own.
+      */}
+      {admitted.findings.length === 0 ? <div className={styles.exportAlone}>{exportPanel}</div> : null}
+      <FindingToolbar
+        groups={groups}
+        verdictFilter={verdictFilter}
+        onVerdictFilterChange={setVerdictFilter}
+        severityFilter={severityFilter}
+        onSeverityFilterChange={setSeverityFilter}
+        view={view}
+        onViewChange={setView}
+        actions={admitted.findings.length === 0 ? undefined : exportPanel}
+      />
+      <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
+        <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>
           <FindingList
             groups={groups}
             verdictFilter={verdictFilter}
             onVerdictFilterChange={setVerdictFilter}
             severityFilter={severityFilter}
             onSeverityFilterChange={setSeverityFilter}
+            view={view}
+            onViewChange={setView}
+            toolbar="outside"
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
-              setSelection(selectFinding(findingUid));
+              // A second press on the open row of the table closes it, as the original's strip does.
+              setSelection(view === 'table' && findingUid === selectedUid ? null : selectFinding(findingUid));
             }}
+            renderExpansion={() => <OpenedFinding>{detailContent}</OpenedFinding>}
             sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
             // `R-151n`: ✓/✕ in each row, for a session that may decide.
             renderRowActions={mayAct ? (finding) => (
@@ -321,84 +459,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           />
         </div>
 
-        <div className={`am-review__detail ${styles.detail}`}>
-          {selectedUid === null ? null : detailQuery.isPending ? (
-            <LoadingState what="выбранная находка" />
-          ) : detailFailure !== null ? (
-            detailFailure
-          ) : detail === null ? null : (
-            <>
-              <article className="am-review__finding" data-finding-uid={detail.finding_uid}>
-                <h2>{detail.observation.finding_text}</h2>
-                <p className="am-review__recommendation">
-                  {detail.observation.recommendation_text}
-                </p>
-              </article>
-
-              {expanded ? (
-                // One page drawn once: while the full-screen view is open it is the only viewer.
-                <p className="am-note" data-evidence-expanded="">
-                  Страница открыта во весь экран.
-                </p>
-              ) : evidenceProps === null ? null : (
-                <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
-              )}
-
-              {expanded ? null : pageBlocks}
-
-              {mayAct ? <DecisionPanel
-                currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
-                observationId={detail.observation.finding_observation_id as FindingObservationId}
-                proposedSeverity={detail.observation.proposed_severity}
-                decidedSeverity={detail.decided_severity}
-                severityRefusal={verdict.refusal}
-                onSeverityChosen={verdict.clearRefusal}
-                onAccept={(observationId, decided) => {
-                  verdict.record('accept', observationId, {
-                    proposed: detail.observation.proposed_severity,
-                    decided,
-                  });
-                }}
-                onReject={(observationId) => {
-                  verdict.record('reject', observationId);
-                }}
-                onComment={(text, observationId) => {
-                  comment.append(text, observationId);
-                }}
-                pendingIntent={pendingIntent}
-                refusal={comment.refusal}
-                error={
-                  presentFailureOrNull(verdict.error, {
-                    title: 'Вердикт не записан',
-                  }) ??
-                  presentFailureOrNull(comment.error, {
-                    title: 'Комментарий не добавлен',
-                  })
-                }
-              /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
-              {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
-              {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
-                <ExecutionStatusControl
-                  key={detail.finding_uid}
-                  findingUid={detail.finding_uid as FindingUid}
-                  runId={runId}
-                  status={detail.execution_status ?? null}
-                />
-              ) : null}
-
-              <DecisionHistory
-                events={historyQuery.data?.data.items ?? []}
-                isLoading={historyQuery.isPending}
-                error={presentFailureOrNull(historyQuery.error, {
-                  title: 'Не удалось загрузить историю решений',
-                  onRetry: () => {
-                    void historyQuery.refetch();
-                  },
-                })}
-              />
-            </>
-          )}
-        </div>
+        {view === 'table' ? null : <div className={`am-review__detail ${styles.detail}`}>{detailContent}</div>}
       </div>
 
       {expanded ? (
@@ -447,29 +508,6 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         </ReviewViewerDialog>
       ) : null}
 
-      {/*
-        Outside `.am-review` on purpose: the list is `position: sticky`, and a sticky box is
-        bounded by its parent, not by its grid row. While the export sat in the same grid,
-        the list slid down over it on scroll.
-      */}
-      <div className={`am-review__export ${styles.export}`}>
-        {run === null ? (
-          <LoadingState what="прогон" />
-        ) : (
-          <ExportPanel
-            runId={runId}
-            runState={run.state}
-            providerMode={run.provider_mode}
-            onExport={exporter.download}
-            isPending={exporter.isPending}
-            lastFileName={exporter.lastFileName}
-            mayImportDecisions={mayAct}
-            error={presentFailureOrNull(exporter.error, {
-              title: 'В выгрузке отказано',
-            })}
-          />
-        )}
-      </div>
     </PageShell>
   );
 }
