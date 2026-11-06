@@ -1,5 +1,7 @@
 # Current state
 
+**Updated 2026-11-06 by `HOTFIX-RUN-COMPLETE-1106` (0.12.5 candidate).** Preparatory passport progress is visible above the seven procedures; the runner retains ready answers through transient delivery failures until the server deadline. Run RJPR covered all47blocks/30pages, but one critic input failed exact quote validation twice. Critic repair now uses its own valid uncertainty fields rather than corrector action enums. Strict evidence guards and old artifacts remain unchanged. This changes the frozen rule digest and requires a fresh unmetered estimate/consent after deployment. The real full green outcome is still pending; source/build evidence is in the task receipt. Main publication waits for the active run to end.
+
 **Updated 2026-11-06 by `HOTFIX-RUN-COMPLETE-1106` follow-up (candidate; green live run still pending).** The observed live repeat found a local stdin deadlock: after a 0.2s communicate timeout, remaining input was not sent; Codex waited for EOF and emitted zero events before its deadline. Both runner layers now use private file-backed stdin. Fresh passport v3 separates explicit validator rejection of unsupported candidates from execution completion; invalid facts remain excluded, structural/transport/source-coverage failures remain incomplete. Full normative contexts retain exact per-input variants of one paragraph. Product 0.12.3 gives the changed runner package its own version. Contract 1.33.0 / migration0055 unchanged; build-only verification as ordered.
 
 **Updated 2026-11-06 by `HOTFIX-RUN-COMPLETE-1106` (candidate; live complete run still pending).** Fresh consent opts into all-source passport and all-pair cross-window plans, separate journalled semantic repair after received invalid replies, literal norm-query provenance, complete review context and truthful execution statuses. Negative norm searches and valid needs-context recommendations retain their meaning without masquerading as execution failures. Old partial artifacts and frozen call limits stay unchanged. API 1.33.0 / migration 0055 unchanged; 0.12.2 note revision 2. Owner-authorized deployment build checks only; no behavioral suites or full gate.
@@ -86,7 +88,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.12.4`; this file describes development, not a release.
+- Product `VERSION` is `0.12.5`; this file describes development, not a release.
 - The development API contract is `1.33.0`: **267 paths / 295 operations / 711 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0055_work_schedule`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 
