@@ -387,6 +387,16 @@ export function FindingList({
                     )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
                       {pagesLabel(pages, sheetOf)}
+                      {(finding.merged_observations?.length ?? 0) > 1 ? (
+                        // The original's «×N» on a finding that stands for several observations.
+                        <span
+                          className={styles.mergedMark}
+                          title={`Объединённых наблюдений: ${finding.merged_observations?.length ?? 0}`}
+                          data-merged-observations={finding.merged_observations?.length ?? 0}
+                        >
+                          {' '}×{finding.merged_observations?.length ?? 0}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                   {renderRowActions === undefined ? null : renderRowActions(finding)}

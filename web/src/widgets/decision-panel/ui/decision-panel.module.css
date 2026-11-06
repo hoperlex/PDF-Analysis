@@ -25,3 +25,38 @@
 .decided {
   margin-left: var(--am-gap-sm);
 }
+
+/*
+ * Dense panel (`UI-PARITY-DENSE`): on a wide screen the choice -- importance and the two verdicts -- stands beside the
+ * comment, as the original's decision and its reason stand in one row, and the panel is half as tall. A narrow
+ * screen keeps the single column. Doubled on the panel's class so the rules win over the global `.am-decision__*`.
+ */
+@media (min-width: 900px) {
+  .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 var(--am-gap);
+    align-items: start;
+  }
+
+  .panel .header,
+  .panel .full {
+    grid-column: 1 / -1;
+  }
+
+  .panel .severity,
+  .panel .verdicts {
+    grid-column: 1;
+  }
+
+  .panel .comment {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .panel .comment textarea {
+    min-height: 0;
+  }
+}

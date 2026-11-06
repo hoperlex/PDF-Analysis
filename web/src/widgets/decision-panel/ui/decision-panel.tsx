@@ -105,8 +105,8 @@ export function DecisionPanel({
   const busy = pendingIntent !== undefined && pendingIntent !== null;
 
   return (
-    <section className="am-decision" data-observation-id={observationId}>
-      <header className="am-decision__header">
+    <section className={`am-decision ${styles.panel}`} data-observation-id={observationId}>
+      <header className={`am-decision__header ${styles.header}`}>
         <h3>Решение</h3>
         <span className="am-decision__current">
           текущий вердикт <VerdictBadge verdict={currentVerdict} />
@@ -160,7 +160,7 @@ export function DecisionPanel({
         </div>
       )}
 
-      <div className="am-decision__verdicts">
+      <div className={`am-decision__verdicts ${styles.verdicts}`}>
         <button
           type="button"
           className="am-button"
@@ -185,7 +185,7 @@ export function DecisionPanel({
         </button>
       </div>
 
-      <div className="am-decision__comment">
+      <div className={`am-decision__comment ${styles.comment}`}>
         <label htmlFor="am-decision-comment">Добавить комментарий</label>
         <textarea
           id="am-decision-comment"
@@ -219,7 +219,11 @@ export function DecisionPanel({
         ) : null}
       </div>
 
-      {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
+      {error !== undefined && error !== null ? (
+        <div className={styles.full}>
+          <ErrorState {...error} />
+        </div>
+      ) : null}
     </section>
   );
 }

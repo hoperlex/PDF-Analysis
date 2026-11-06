@@ -118,3 +118,9 @@
   color: var(--am-ok);
   font-size: var(--am-text-xs);
 }
+
+/* The merged count of a finding, beside its pages: the original's «×N». */
+.mergedMark {
+  color: var(--am-ink);
+  font-weight: 700;
+}

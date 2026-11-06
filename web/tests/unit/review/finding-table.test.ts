@@ -130,6 +130,8 @@ describe('the findings table', () => {
     const list = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {} }));
     expect(list).not.toContain('data-finding-table');
     expect(list).toContain('data-verdict-bucket="accepted"');
+    // The merged count shows on the list row too, beside its pages.
+    expect(list).toContain('data-merged-observations="2"');
   });
 });
 

@@ -267,9 +267,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         <>
           {/* The table's row already says the finding and its recommendation whole; only the list needs them again here. */}
           {view === 'table' ? null : (
-            <article className="am-review__finding" data-finding-uid={detail.finding_uid}>
-              <h2>{detail.observation.finding_text}</h2>
-              <p className="am-review__recommendation">
+            <article className={`am-review__finding ${styles.finding}`} data-finding-uid={detail.finding_uid}>
+              <h2 className={styles.findingTitle}>{detail.observation.finding_text}</h2>
+              <p className={`am-review__recommendation ${styles.recommendation}`}>
                 {detail.observation.recommendation_text}
               </p>
             </article>

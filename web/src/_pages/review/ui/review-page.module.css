@@ -31,3 +31,21 @@
 .expansion {
   min-width: 0;
 }
+
+/*
+ * The open finding in the list view, set smaller (`UI-PARITY-DENSE`): the original's strip reads at table size, and a
+ * 19px heading with a padded quotation block spent a quarter of the screen before the page was in sight.
+ */
+article.finding {
+  margin-bottom: var(--am-gap-sm);
+}
+
+.finding .findingTitle {
+  font-size: var(--am-text-lg);
+}
+
+.finding .recommendation {
+  margin-top: var(--am-gap-xs);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  font-size: var(--am-text-base);
+}
