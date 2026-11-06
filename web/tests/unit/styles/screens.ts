@@ -25,6 +25,7 @@ import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { MarkFaultView, UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
+import { menuBadgesOf } from '@/_app/menu-badges';
 import { buildNavigation } from '@/_app/navigation';
 import { sectionNavigationOf } from '@/_app/section-navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
@@ -674,6 +675,35 @@ export function screens(): Screen[] {
         ),
       );
     }
+
+    /*
+     * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside the items -- the section's red number of documents no expert has
+     * checked next to its count, and the pills of «Очередь», «База знаний» and «Заявки на регистрацию» in the bar, on the
+     * rail's glyphs and in the stacked menu (`.itemBadges`, `.badge`, `.badgeCount`, `.badgeAlert`, `.railBadges`). One
+     * figure is past two digits, so the `99+` form is measured too.
+     */
+    const waitingRows = PROJECT_SECTIONS.map((section) => {
+      const documents = section.code === 'AR' ? 4 : section.code === 'KJ' ? 120 : 0;
+      const waiting = section.code === 'AR' ? 3 : section.code === 'KJ' ? 120 : 0;
+      return { section: section.code, document_count: documents, ...sectionAudit(documents, { awaiting_decision: waiting }) };
+    });
+    add(
+      'AppFrame, the navigation open, the counters beside the items and the sections\' red number',
+      inBar(
+        createElement(FrameNavigationView, {
+          navigation: buildNavigation(FRAME_ADMIN),
+          pathname: sectionPage,
+          projectUid: PROJECT_UID,
+          sections: sectionNavigationOf(waitingRows, PROJECT_UID, sectionPage),
+          badges: menuBadgesOf({
+            queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
+            knowledgeBaseTotal: 140,
+            pendingRegistrations: 5,
+          }),
+          disclosure: drawnOpen,
+        }),
+      ),
+    );
   }
 
   /*

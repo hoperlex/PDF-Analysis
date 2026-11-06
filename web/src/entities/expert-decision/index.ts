@@ -18,6 +18,8 @@ export {
 
 export { decisionCacheKeys } from './model/cache';
 
+export { KNOWLEDGE_BASE_SCREEN } from './model/knowledge-base-screen';
+
 export type { DecisionJournalQuery, DecisionVerdictTotals } from './api/use-decision-journal';
 export {
   JOURNAL_PAGE_LIMIT, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal, useProposalDecisionJournal,

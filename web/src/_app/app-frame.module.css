@@ -222,6 +222,7 @@
 }
 
 .railLink {
+  position: relative;
   display: grid;
   place-items: center;
   width: 40px;
@@ -317,6 +318,50 @@
   font-variant-numeric: tabular-nums;
   line-height: var(--am-leading-base);
   text-align: center;
+}
+
+/*
+ * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside a menu item -- the section's red number of documents no expert has
+ * checked, the jobs of «Очередь», the entries of «База знаний», the pending «Заявки на регистрацию». A count is the accent
+ * tint, the red one is the failed tint (the tokens of `.am-badge--*`), and both read as numbers whose name the link carries.
+ */
+.itemBadges {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin-left: auto;
+}
+
+.badge {
+  min-width: 2ch;
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid transparent;
+  border-radius: var(--am-radius-pill);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--am-leading-base);
+  text-align: center;
+}
+
+.badgeCount {
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+.badgeAlert {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+}
+
+/* In the compact rail the number rides the corner of the glyph; the link's name and tooltip carry the words. */
+.railBadges {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  pointer-events: none;
 }
 
 .sectionNote {

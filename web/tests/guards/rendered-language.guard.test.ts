@@ -110,6 +110,7 @@ import { AppFrame } from '@/_app';
 import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
+import { menuBadgesOf } from '@/_app/menu-badges';
 import { buildNavigation } from '@/_app/navigation';
 import { sectionNavigationOf } from '@/_app/section-navigation';
 import { SectionNeighboursView } from '@/widgets/document-context';
@@ -2473,6 +2474,31 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
           createElement(DisclosureView, { ...props, open: true, panelId: `language-sections-${state}-${props.label}` }),
       }),
   })),
+  /*
+   * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside the menu's items and the section's red number, as an administrator's
+   * menu draws them -- the names the links carry (aria-label) and the tooltips (title) are the sentences this judges.
+   */
+  {
+    name: 'app-frame-navigation-badges',
+    make: () =>
+      createElement(FrameNavigationView, {
+        navigation: buildNavigation(ADMIN_AND_EXPERT),
+        pathname: `/projects/${PROJECT_UID}/sections/KJ`,
+        projectUid: PROJECT_UID,
+        sections: sectionNavigationOf(
+          PROJECT_SECTIONS.map((section) => ({ section: section.code, document_count: 3, ...sectionAudit(3, { awaiting_decision: 2 }) })),
+          PROJECT_UID,
+          `/projects/${PROJECT_UID}/sections/KJ`,
+        ),
+        badges: menuBadgesOf({
+          queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
+          knowledgeBaseTotal: 140,
+          pendingRegistrations: 5,
+        }),
+        disclosure: (props: DisclosureProps) =>
+          createElement(DisclosureView, { ...props, open: true, panelId: `language-badges-${props.label}` }),
+      }),
+  },
   /*
    * `UI-A-28`: «‹ Предыдущий · N из M · Следующий ›» between the documents of a section. The document page draws it only
    * once the whole section has been read, which one static pass never reaches, so the strip is rendered from a position.

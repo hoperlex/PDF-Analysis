@@ -18,12 +18,20 @@
  *
  * The labels are the section page's own: the Cyrillic mark a designer writes on a title block (`АР`) and, as the
  * link's name and tooltip, the section's name. The Latin code reaches the markup only as a data attribute.
+ *
+ * **The red badge (`UI-A-05`).** Beside the count, a section whose documents wait for an expert shows how many:
+ * `audit_counts.awaiting_decision` of the same row, the documents of the section whose result run has a finding
+ * nobody has decided (`docs/program/UI-PARITY-METRICS.md` §2, `R-150o`). It is the server's figure, in the answer the
+ * group already reads, so there is no second read; a row that carries no counts has no figure (`null`), which draws no
+ * badge, and zero draws none either.
  */
 
 import type { SectionDocumentCount } from '@/shared/api';
 import type { ProjectSectionCode } from '@/entities/project';
 import { PROJECT_SECTIONS, findProjectSection, sectionsInStructureOrder } from '@/entities/project';
 import { routes } from '@/shared/lib';
+
+import { uncheckedClause } from './menu-badges';
 
 /** One sub-item: a section of the current project that holds documents. */
 export interface SectionNavigationEntry {
@@ -34,6 +42,11 @@ export interface SectionNavigationEntry {
   readonly name: string;
   /** Documents in the section, from the server's count. Always at least 1. */
   readonly count: number;
+  /**
+   * `UI-A-05`: the documents of the section no expert has checked (`audit_counts.awaiting_decision`); `null` when the
+   * row carried no counts. A figure of at least 1 is the red badge.
+   */
+  readonly awaitingDecision: number | null;
   readonly href: string;
   /** The section page being shown: the link carries `aria-current="page"`. */
   readonly current: boolean;
@@ -53,9 +66,14 @@ export const SECTIONS_LOADING_NOTE = 'Разделы проекта загруж
 export const SECTIONS_FAILED_NOTE = 'Разделы проекта не удалось прочитать.';
 export const SECTIONS_EMPTY_NOTE = 'В проекте пока нет разделов с документами.';
 
-/** The accessible name of a sub-item: the mark, the name and the count, which the visible badge shortens to a number. */
-export function sectionEntryLabel(entry: Pick<SectionNavigationEntry, 'abbr' | 'name' | 'count'>): string {
-  return `${entry.abbr} ${entry.name}, документов: ${entry.count}`;
+/**
+ * The accessible name of a sub-item: the mark, the name and the count, which the visible badge shortens to a number,
+ * and, when there is a red badge, what it counts.
+ */
+export function sectionEntryLabel(entry: Pick<SectionNavigationEntry, 'abbr' | 'name' | 'count' | 'awaitingDecision'>): string {
+  const base = `${entry.abbr} ${entry.name}, документов: ${entry.count}`;
+  const unchecked = uncheckedClause(entry.awaitingDecision);
+  return unchecked === null ? base : `${base}, ${unchecked}`;
 }
 
 /**
@@ -68,17 +86,28 @@ export function sectionNavigationOf(
   pathname: string | null,
 ): SectionNavigation {
   const counts = new Map<ProjectSectionCode, number>();
+  const awaiting = new Map<ProjectSectionCode, number | null>();
   for (const row of rows) {
     if (row.section === undefined) continue; // the «Без раздела» bucket is not a section
     if (findProjectSection(row.section) === null || counts.has(row.section)) return { status: 'failed' };
     counts.set(row.section, row.document_count);
+    // A row that carries no counts has no figure: unknown is not zero, and neither draws a badge.
+    awaiting.set(row.section, row.audit_counts !== undefined ? row.audit_counts.awaiting_decision : null);
   }
   if (counts.size !== PROJECT_SECTIONS.length) return { status: 'failed' };
   const entries = sectionsInStructureOrder().flatMap((section): SectionNavigationEntry[] => {
     const count = counts.get(section.code) ?? 0;
     if (count < 1) return [];
     const href = routes.projectSection(projectUid, section.code);
-    return [{ code: section.code, abbr: section.abbr, name: section.name, count, href, current: pathname === href }];
+    return [{
+      code: section.code,
+      abbr: section.abbr,
+      name: section.name,
+      count,
+      awaitingDecision: awaiting.get(section.code) ?? null,
+      href,
+      current: pathname === href,
+    }];
   });
   return { status: 'ready', entries };
 }
