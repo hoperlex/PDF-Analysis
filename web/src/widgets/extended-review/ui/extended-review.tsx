@@ -86,6 +86,26 @@ const warningLabels: Record<string, string> = {
   merge_context_truncated: 'Для свода использованы сокращённые описания; подробные источники требуют экспертной сверки.',
 };
 
+function ParameterActivity({ value }: { readonly value: unknown }) {
+  const parameters = object(value);
+  if (parameters === null || !['queued', 'running'].includes(text(parameters.status))) return null;
+  const running = parameters.status === 'running';
+  const batches = objects(parameters.batches);
+  const completed = batches.filter((batch) => batch.status === 'completed').length;
+  const repairResponses = batches.filter((batch) => object(batch.repair)?.response_received === true).length;
+  const savedResponses = batches.filter((batch) => batch.response_received === true).length + repairResponses;
+  const repairing = batches.find((batch) => object(batch.repair)?.status === 'running');
+  const current = repairing ?? batches.find((batch) => batch.status === 'running');
+  const currentIndex = typeof current?.index === 'number' && Number.isSafeInteger(current.index) && current.index >= 0 ? current.index + 1 : null;
+  return <div role="status" data-extended-parameter-activity="">
+    <p><strong>Извлечение параметров проекта · {running ? 'выполняется' : 'запланировано'}</strong></p>
+    {running ? batches.length === 0 ? <p>Подготавливается план обработки исходных фрагментов.</p> : <>
+      <p>Пакетов завершено: {completed} из {batches.length}. Сохранено ответов исполнителя: {savedResponses}, из них на исправление: {repairResponses}.</p>
+      {currentIndex === null ? null : <p>{repairing === undefined ? 'Текущий пакет' : 'Исправляется ответ для пакета'}: {currentIndex} из {batches.length}.</p>}
+    </> : null}
+  </div>;
+}
+
 function ReportDownloads({ reading }: { readonly reading: ExtendedRunReview }) {
   const [failure, setFailure] = useState<string | null>(null);
   const download = (format: ExtendedReportFormat) => {
@@ -173,6 +193,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     {typeof result?.reason === 'string' && reading.status !== 'completed' ? <p role="status">{reasonLabels[result.reason] ?? extendedExecutionReason(result.reason, result.dependency, reading.status)}</p> : null}
     <ReplyRepairSummary value={result?.reply_refusals} />
     {full ? <>
+      <ParameterActivity value={result?.project_parameters} />
       <p>Продолжение базовых этапов. Ход расширенных процедур показан ниже.</p>
       {procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol className={styles.procedures} aria-label="План полного анализа" data-extended-procedure-plan="">
         {procedures.map((procedure, index) => <li key={text(procedure.id) || index} data-extended-procedure={text(procedure.id)} data-procedure-status={text(procedure.status)}>
@@ -194,7 +215,7 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
       <NormativeContext key={`norm-context:${reading.run_id}`} policy={result?.norm_paragraph_context_policy} receipts={result?.normative_context_receipts} />
       <NormativeSearches key={`norm-searches:${reading.run_id}`} value={result?.norm_lookup_receipts} />
     </details>
-    {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
+    {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё не завершён. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}
     {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
