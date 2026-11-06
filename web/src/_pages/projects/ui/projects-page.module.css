@@ -39,7 +39,7 @@
 
   .create {
     position: sticky;
-    top: 76px;
+    top: calc(var(--am-strip-height) + var(--am-gap-md));
   }
 }
 

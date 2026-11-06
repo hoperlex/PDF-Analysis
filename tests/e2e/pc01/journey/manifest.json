@@ -300,7 +300,8 @@
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
-        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "«N из M» reads the section's documents, only when the version has a confirmed section (lane D2)"}
       ],
       "follow": {
         "capture": "run_id",
@@ -428,7 +429,9 @@
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
-        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"},
+        {"method": "GET", "path": "/versions/{version_uid}/runs", "operationId": "listRuns", "$why_optional": "the version tabs («Разбор (N)») read the version's runs once the version is read (lane D2)"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "«N из M» reads the section's documents, only when the version has a confirmed section (lane D2)"}
       ],
       "follow": null
     },
@@ -505,7 +508,9 @@
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
-        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"},
+        {"method": "GET", "path": "/versions/{version_uid}/runs", "operationId": "listRuns", "$why_optional": "the version tabs («Разбор (N)») read the version's runs once the version is read (lane D2)"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "«N из M» reads the section's documents, only when the version has a confirmed section (lane D2)"}
       ],
       "follow": {
         "capture": "section_code",
@@ -544,7 +549,8 @@
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
-        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"},
+        {"method": "GET", "path": "/projects/{project_uid}/document-tags", "operationId": "listDocumentTags", "$why_optional": "the section page's tag filter (lane D2)"}
       ],
       "follow": null
     },
@@ -595,7 +601,8 @@
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "only for an IMAGE block with a crop, loaded lazily by the browser as it is scrolled to"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
-        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "«N из M» reads the section's documents, only when the version has a confirmed section (lane D2)"}
       ],
       "follow": null
     },
