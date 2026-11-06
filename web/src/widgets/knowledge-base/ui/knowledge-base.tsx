@@ -215,7 +215,7 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
       <p className="am-kb__meta">
         <span className="am-kb__author">{record.actor_label}</span>
         <time dateTime={record.decided_at}>{formatInstant(record.decided_at)}</time>
-        <Link className="am-kb__link" href={routes.documentOptimisation(record.project_uid, record.document_uid)}>
+        <Link className="am-kb__link" href={routes.documentOptimisation(record.project_uid, record.document_uid, record.optimisation_pass_id)}>
           Открыть оптимизацию
         </Link>
       </p>
