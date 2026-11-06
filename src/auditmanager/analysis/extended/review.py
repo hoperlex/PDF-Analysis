@@ -6,6 +6,7 @@ proposed rewrite is an expert act; original observations remain immutable.
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -219,8 +220,55 @@ def _original_signals(key, item, indexed):
             "semantic_source_confirmation": False}
 
 
+def _complete_normative_view(observations):
+    """Bind every exact candidate variant to the inputs that actually received it."""
+    variants, references, priority = {}, {}, []
+    for input_id, item in observations.items():
+        references[input_id] = []
+        by_paragraph = {}
+        for row in item.get("norm_candidates", []):
+            paragraph = row["paragraph_id"]
+            quote = row.get("quote")
+            if not isinstance(quote, str):
+                raise ValueError("review_normative_candidate_invalid")
+            # A paragraph can legitimately yield different exact search excerpts.
+            # Retain metadata variants as well; neither the quote nor another
+            # input's candidate may overwrite the candidate bound to this input.
+            quote_sha256 = hashlib.sha256(quote.encode("utf-8")).hexdigest()
+            context_key = paragraph + ":" + quote_sha256 + ":" + digest(row)
+            variant = variants.setdefault(context_key, {"candidate": row, "input_ids": []})
+            if input_id not in variant["input_ids"]:
+                variant["input_ids"].append(input_id)
+            references[input_id].append({field: row[field] for field in
+                ("paragraph_id", "designation", "clause_number") if field in row}
+                | {"norm_context_key": context_key})
+            by_paragraph.setdefault(paragraph, []).append(context_key)
+        assessment = item.get("norm_assessment")
+        if isinstance(assessment, dict):
+            for citation in assessment.get("citations", []):
+                matches = [key for key in by_paragraph.get(citation["paragraph_id"], [])
+                    if variants[key]["candidate"]["quote"] == citation["quote"]]
+                if not matches:
+                    raise ValueError("review_normative_citation_unavailable")
+                priority.extend(matches)
+    supplied = []
+    for key in dict.fromkeys([*priority, *variants]):
+        variant = variants[key]
+        row = deepcopy(variant["candidate"])
+        # These two fields describe this request, never the canonical corpus row.
+        if "norm_context_key" in row or "input_ids" in row:
+            raise ValueError("review_normative_metadata_conflict")
+        row.update(norm_context_key=key, input_ids=list(variant["input_ids"]))
+        supplied.append(row)
+    characters = sum(len(canonical(row)) for row in supplied)
+    return references, supplied, {"limit_characters": characters,
+        "characters_provided": characters, "truncated": False, "omitted_paragraph_ids": []}
+
+
 def _normative_view(observations, *, full_context=False):
     """Deduplicate real corpus excerpts without mutating saved observations."""
+    if full_context:
+        return _complete_normative_view(observations)
     candidates, priority, references = {}, [], {}
     for key, item in observations.items():
         rows = item.get("norm_candidates", [])
@@ -287,6 +335,11 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         "Полные нормативные кандидаты переданы один раз в norm_context; ссылки наблюдений сами по себе "
         "не являются текстом нормы. Учитывай norm_context_coverage и пропущенные параграфы. "
         "Не выдумывай прочитанные пиксели или цитаты. При недостатке данных отметь потребность в контексте. " + instruction)
+    if full_context:
+        system += (" Разные norm_context_key могут обозначать разные дословные цитаты одного paragraph_id. "
+            "Для каждого наблюдения используй только варианты, перечисленные в его norm_candidates по "
+            "norm_context_key и связанные с его input_id в input_ids. Само совпадение paragraph_id не даёт "
+            "права подменять цитату вариантом другого наблюдения. Исходные norm_assessment и citations сохраняются.")
     schema = deepcopy(schema)
     collection = "reviews" if phase == "finding_review" else "corrections"
     properties = schema["properties"][collection]["items"]["properties"]

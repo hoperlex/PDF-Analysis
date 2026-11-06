@@ -11,6 +11,8 @@ const EXECUTION_REASONS: Readonly<Record<string, string>> = {
   project_parameters_value_not_in_quote: 'Значение параметра не подтверждено его исходной цитатой.',
   project_parameters_facts_rejected: 'Часть параметров не прошла проверку по источникам. Подтверждённые записи сохранены.',
   project_parameters_reply_partially_rejected: 'Часть ответов с параметрами не прошла проверку по источникам. Подтверждённые записи сохранены.',
+  unsupported_parameter_candidates_rejected: 'Неподтверждённые кандидаты отклонены и сохранены в истории проверки. В параметры проекта они не включены.',
+  rejected_unsupported_candidate: 'Кандидат отклонён: его значение или цитата не подтверждены исходным текстом.',
   extended_reply_or_source_invalid: 'Ответ модели получен, но его структура или ссылки на исходные материалы не прошли проверку.',
   comprehensive_analysis_reply_refused: 'Ответ комплексной сверки получен, но не прошёл проверку по источникам.',
   norm_verification_reply_refused: 'Ответ нормативной сверки получен, но не прошёл проверку цитат и источников.',

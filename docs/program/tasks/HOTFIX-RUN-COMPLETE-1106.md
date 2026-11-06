@@ -26,6 +26,9 @@ Allowed paths and ownership:
 - Passport lane: `analysis/extended/project_parameters.py`, `runs/project_parameters.py`.
 - Global lane: `analysis/extended/{coverage.py,cross_window.py,cross_window_review.py}`.
 - Semantic lane: `analysis/extended/{core.py,review.py}`, `runs/norm_queries.py` until handoff.
+- Runner lane: `tools/executor-runner/{agent.py,codex_answer.py}`; repair incomplete stdin
+  writes across subprocess timeouts. Integrator installs reviewed scripts atomically on
+  the already authorized local service; restart only after its active task finishes.
 - Integrator owns narrowly scoped operator diagnostics/reaudit CLI and deployment workflow
   invocation if needed to inspect the production result without an interactive SSH key.
 - Integration/composition slot: integrator alone owns exposing the existing configured

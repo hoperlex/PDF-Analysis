@@ -18,7 +18,9 @@ from .section_rules import ROOT, _section, rules_digest
 
 VERSION = "source-bound-project-parameters-v1"
 FULL_VERSION = "source-bound-project-parameters-v2"
+REFUSAL_VERSION = "source-bound-project-parameters-v3"
 FULL_COVERAGE_MODE = "all-source-pieces-v1"
+CANDIDATE_REFUSALS = "reject-unsupported-v1"
 TYPES = ("object_type", "storeys", "area", "level", "dimensions", "loads", "flows",
     "temperature", "pressure", "equipment", "materials", "system", "other")
 PROVENANCE = {"repository": "SU10KAZ/PDF-proverka", "commit": "3c99481719218b9cfa7560886529916646c61939",
@@ -33,30 +35,38 @@ _SIGNALS = ("основные показатели", "технико-эконо�
     "нагрузк", "мощност", "расход", "оборудован", "спецификац", "объект", "систем", "давлен", "температур")
 
 
-def policy(section, *, full_coverage=False):
+def policy(section, *, full_coverage=False, candidate_refusals=False):
+    if (type(full_coverage) is not bool or type(candidate_refusals) is not bool
+            or candidate_refusals and not full_coverage):
+        raise ValueError("project_parameters_candidate_refusals_policy_invalid")
     root = Path(__file__).parent
     files = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
         for name in ("project_parameters.py", "core.py", "review.py", "section_rules.py")}
-    result = {"version": FULL_VERSION if full_coverage else VERSION,
+    result = {"version": REFUSAL_VERSION if candidate_refusals else FULL_VERSION if full_coverage else VERSION,
         "bundle_sha256": digest({"files": files, "section_rules": rules_digest(section)}),
         "max_calls": 8, "piece_characters": 20_000, "facts_per_call": 24, "output_tokens": 8_000}
     if full_coverage:
         result.update(coverage_mode=FULL_COVERAGE_MODE, source_sized_calls=True,
             semantic_repair_attempts=1)
+    if candidate_refusals:
+        result["candidate_refusals"] = CANDIDATE_REFUSALS
     return result
 
 
 def validate_policy(value, *, section, compare_bundle=True):
     if value is None:
         return False
-    full_coverage = isinstance(value, dict) and value.get("version") == FULL_VERSION
-    expected = policy(section, full_coverage=full_coverage) if compare_bundle else {
-        "version": FULL_VERSION if full_coverage else VERSION,
+    candidate_refusals = isinstance(value, dict) and value.get("version") == REFUSAL_VERSION
+    full_coverage = isinstance(value, dict) and value.get("version") in {FULL_VERSION, REFUSAL_VERSION}
+    expected = policy(section, full_coverage=full_coverage, candidate_refusals=candidate_refusals) if compare_bundle else {
+        "version": REFUSAL_VERSION if candidate_refusals else FULL_VERSION if full_coverage else VERSION,
         "bundle_sha256": value.get("bundle_sha256") if isinstance(value, dict) else None,
         "max_calls": 8, "piece_characters": 20_000, "facts_per_call": 24, "output_tokens": 8_000}
     if full_coverage and not compare_bundle:
         expected.update(coverage_mode=FULL_COVERAGE_MODE, source_sized_calls=True,
             semantic_repair_attempts=1)
+    if candidate_refusals and not compare_bundle:
+        expected["candidate_refusals"] = CANDIDATE_REFUSALS
     if (not isinstance(value, dict) or set(value) != set(expected) or value != expected
             or not isinstance(value.get("bundle_sha256"), str) or len(value["bundle_sha256"]) != 64
             or any(character not in "0123456789abcdef" for character in value["bundle_sha256"])

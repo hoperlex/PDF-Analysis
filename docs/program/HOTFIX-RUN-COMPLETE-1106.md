@@ -47,3 +47,33 @@ Publication/deployment/live-run evidence is recorded against the exact committed
 `.local/handoff/HOTFIX-RUN-COMPLETE-1106-receipt.md`. Build success alone is not evidence
 of a complete live run. Old partial results are never rewritten. Rollback is a forward
 revert; no migration or tag is involved.
+
+## Observed follow-up: local stdin and validation outcomes
+
+The first live repeat `run_01M6RCQC0B0VJ8MFM0S58A61A5` read all 86 passport pieces,
+30 pages and 165373 characters. It retained 261 strictly validated facts, but five batches
+were partial after grounding refusals. Its later visual task then failed locally after
+529.3 seconds with zero CLI events and zero answer bytes. Provider ambiguity was retained;
+the task was not blindly retried and the run remains an immutable failure.
+
+Both runner layers polled `communicate(input=payload if first else None, timeout=0.2)`.
+The installed Python implementation registers a remaining stdin write only when its
+current `input` argument is nonempty; after the first timeout the remaining bytes could
+be stranded and the child waited for EOF. Both layers now stage the entire input in a
+private temporary file before launch. The wrapper uses `wait`, and the agent collects
+stdout with `communicate` without an input argument. Deadlines/cancellation still apply.
+The reviewed local scripts were installed atomically and the idle service was restarted.
+
+Passport v3 separately freezes `candidate_refusals=reject-unsupported-v1`. A schema-valid
+unsupported candidate can receive an explicit terminal validator rejection after its
+bounded repair. It never enters accepted facts and never counts as model-repaired.
+Completed execution requires all source pieces and all candidate outcomes accounted for;
+it does not assert a complete expert passport. Malformed/truncated answers, transport
+failures, unresolved records and missing source coverage still prevent completion.
+Historical v1/v2 consent and artifacts keep their original outcomes.
+
+Full normative context also preserves exact per-input excerpt variants of one paragraph,
+preventing a false identity conflict in the critic. Operator diagnostics now expose
+controlled refusal counts and avoid applying the local schema to global replies.
+Product 0.12.3 gives the changed runner package its own version. Build and exact SHA/live
+evidence for this follow-up are in the same external task receipt.

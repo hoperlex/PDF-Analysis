@@ -14,6 +14,16 @@ const TYPE: Readonly<Record<string, string>> = { object_type: 'Тип объек
   loads: 'Нагрузки и мощности', flows: 'Расходы', temperature: 'Температуры', pressure: 'Давления', equipment: 'Оборудование', materials: 'Материалы', system: 'Системы', other: 'Другие параметры' };
 const STATUS: Readonly<Record<string, string>> = { queued: 'Запланировано', running: 'Выполняется', completed: 'Завершено в рамках входного плана', partial: 'Частичный охват', failed: 'Ошибка извлечения', skipped: 'Пропущено', unavailable: 'Нет пригодного текстового источника' };
 
+function RejectionHistory({ records, title }: { readonly records: readonly RecordValue[]; readonly title: string }) {
+  if (records.length === 0) return null;
+  return <details><summary>{title} · {records.length}</summary><ul>{records.map((fact, index) => {
+    const rejected = fact.disposition === 'rejected_unsupported_candidate' || fact.rejected_by_validator === true;
+    return <li key={`${text(fact.batch_key)}:${count(fact.reply_ordinal)}:${index}`}>
+      {rejected ? 'Кандидат отклонён проверкой; в параметры не включён. ' : fact.resolved_by_repair === true ? 'Устранено отдельным исправлением. ' : 'Отказ не устранён. '}{extendedExecutionReason(fact.reason)}
+    </li>;
+  })}</ul><pre>{JSON.stringify(records, null, 2)}</pre></details>;
+}
+
 function ReviewParameterContext({ body }: { readonly body: RecordValue }) {
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(0);
@@ -57,6 +67,9 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
   const currentContextPage = Math.min(contextPage, contextPages - 1);
   const facts = objects(body.facts);
   const rejectedFacts = objects(body.rejected_facts);
+  const rejectsUnsupported = policy?.candidate_refusals === 'reject-unsupported-v1';
+  const originalRejections = rejectedFacts.filter((fact) => fact.attempt !== 1);
+  const repairRejections = rejectedFacts.filter((fact) => fact.attempt === 1);
   const sources = new Map(objects(body.sources).map((entry) => [text(entry.source_id), entry] as const));
   const needle = search.trim().toLocaleLowerCase('ru');
   const filtered = facts.filter((fact) => (kind === 'all' || fact.parameter_type === kind) && (!needle ||
@@ -65,12 +78,15 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
   const current = Math.min(page, pages - 1);
   return <section id="extended-project-parameters" className={styles.batchPanel} aria-label="Параметры проекта из источников">
     <h3>Параметры проекта из источников</h3>
-    <p><strong>{STATUS[text(body.status)] ?? 'Состояние ещё не получено'}</strong>. Это предварительно извлечённые значения, а не утверждённый паспорт или проверка норм. Разные объекты и значения сохраняются отдельно; единицы не пересчитывались.</p>
+    <p><strong>{rejectsUnsupported && body.status === 'completed' ? 'Обработка фрагментов и проверка кандидатов завершены' : STATUS[text(body.status)] ?? 'Состояние ещё не получено'}</strong>. Это предварительно извлечённые значения, а не утверждённый паспорт или проверка норм. Разные объекты и значения сохраняются отдельно; единицы не пересчитывались.</p>
+    {rejectsUnsupported ? <p>Завершение этапа означает обработку всех фрагментов принятого плана и учёт результатов проверки каждого предложенного кандидата. Неподтверждённые кандидаты остаются отклонёнными; полнота сведений о проекте этим не подтверждается.</p> : null}
     {policy?.source_sized_calls === true ? <p>План включает все учтённые текстовые фрагменты. Число обращений определяется их объёмом и ограничено согласованным денежным бюджетом.</p> : <p>Обращений по принятому плану: до {count(policy?.max_calls)} на весь прогон.</p>}
-    <p>Основных пакетов завершено: {count(coverage?.calls_completed)}. Сохранено кандидатов: {facts.length}.</p>
+    <p>Основных пакетов завершено: {count(coverage?.calls_completed)}. Кандидатов, прошедших проверку по исходным цитатам: {facts.length}.</p>
+    {rejectsUnsupported && typeof coverage?.rejected_candidate_count === 'number' && coverage.rejected_candidate_count > 0 ? <p data-parameter-candidates-rejected=""><strong>Отклонены неподтверждённые кандидаты.</strong> Отклонённых записей: {count(coverage.rejected_candidate_count)}. Они сохранены в истории проверки и отсутствуют в параметрах проекта.</p> : null}
     {typeof coverage?.repair_calls_completed === 'number' && coverage.repair_calls_completed > 0 ? <p>Отдельных обращений для исправления ответа завершено: {count(coverage.repair_calls_completed)}. Результаты повторно проверены по исходным источникам.</p> : null}
-    {typeof coverage?.facts_rejected === 'number' ? <p>Записей с отказом при проверке источников: {count(coverage.facts_rejected)}.{typeof coverage.facts_rejections_unresolved === 'number' ? ` Неустранённых отказов: ${count(coverage.facts_rejections_unresolved)}.` : ''} Неподтверждённые записи не включены в параметры проекта.</p> : null}
-    {rejectedFacts.length > 0 ? <details><summary>История отказов при проверке параметров · {rejectedFacts.length}</summary><ul>{rejectedFacts.map((fact, index) => <li key={`${text(fact.batch_key)}:${count(fact.reply_ordinal)}:${index}`}>{fact.resolved_by_repair === true ? 'Устранено отдельным исправлением. ' : 'Отказ не устранён. '}{extendedExecutionReason(fact.reason)}</li>)}</ul><pre>{JSON.stringify(rejectedFacts, null, 2)}</pre></details> : null}
+    {typeof coverage?.facts_rejected === 'number' ? <p>Записей с отказом в истории проверки источников: {count(coverage.facts_rejected)}.{typeof coverage.facts_rejections_unresolved === 'number' ? ` Ожидают разрешения: ${count(coverage.facts_rejections_unresolved)}.` : ''} Неподтверждённые записи не включены в параметры проекта.</p> : null}
+    <RejectionHistory records={originalRejections} title="История отказов в первоначальных ответах" />
+    <RejectionHistory records={repairRejections} title="История отказов после исправления ответа" />
     {contextPolicy === null ? null : <section aria-label="Контекст параметров для изображений"><p>По принятой политике параметры подготавливаются перед визуальным проходом. В один запрос изображений может войти до {count(contextPolicy.max_facts)} полных кандидатов, в пределах {count(contextPolicy.max_characters)} символов контекста. Новые модельные шаги ради передачи контекста не добавляются.</p><p>Подготовлено квитанций контекста: {contextReceipts.length}; сохранён ответ на запрос: {contextReceipts.filter((receipt) => receipt.response_received === true).length}. Переданный контекст не является визуальным подтверждением или решением эксперта.</p><details onToggle={(event) => setShowContext(event.currentTarget.open)}><summary>Фактически подготовленный контекст и ответы</summary>{showContext ? <><p>Квитанции {currentContextPage + 1} из {contextPages}; до25 на странице. Все записи доступны в полной выгрузке.</p><pre>{JSON.stringify(contextReceipts.slice(currentContextPage * 25, (currentContextPage + 1) * 25), null, 2)}</pre>{contextReceipts.length > 25 ? <nav className={styles.toolbar} aria-label="Страницы визуального контекста"><button type="button" className="am-button am-button--quiet" disabled={currentContextPage === 0} onClick={() => setContextPage(currentContextPage - 1)}>Предыдущие</button><button type="button" className="am-button am-button--quiet" disabled={currentContextPage + 1 >= contextPages} onClick={() => setContextPage(currentContextPage + 1)}>Следующие</button></nav> : null}</> : null}</details></section>}
     <ReviewParameterContext body={body} />
     <dl className={styles.coverageGrid}>
