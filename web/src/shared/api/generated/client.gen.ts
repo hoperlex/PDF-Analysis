@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
- *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
+ *   AuditManager PC-01 API 1.31.0 (OpenAPI 3.1.0)
+ *   sha256 07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -264,6 +264,10 @@ import type {
   GetVersionPageSpecPositionsResult,
   GetVersionSectionReviewInput,
   GetVersionSectionReviewResult,
+  GetWorkScheduleInput,
+  GetWorkScheduleResult,
+  GetWorkScheduleReserveInput,
+  GetWorkScheduleReserveResult,
   ImportComparisonZipInput,
   ImportComparisonZipResult,
   ImportRunDecisionsInput,
@@ -480,6 +484,8 @@ import type {
   ReviseStageAssemblyResult,
   RevokeRunnerTokenInput,
   RevokeRunnerTokenResult,
+  ScheduleAssignmentsInput,
+  ScheduleAssignmentsResult,
   SearchNormsInput,
   SearchNormsResult,
   SetCurrentNormSnapshotInput,
@@ -488,6 +494,8 @@ import type {
   SetDocumentArchivedResult,
   SetDocumentTagsInput,
   SetDocumentTagsResult,
+  SetEngineerAbsencesInput,
+  SetEngineerAbsencesResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
   SetExecutorIntegrationAuthorisationInput,
@@ -510,6 +518,12 @@ import type {
   SetProjectVendorListResult,
   SetStagePairCompletenessInput,
   SetStagePairCompletenessResult,
+  SetWorkCalendarDaysInput,
+  SetWorkCalendarDaysResult,
+  SetWorkSchedulePlansInput,
+  SetWorkSchedulePlansResult,
+  SetWorkScheduleSettingsInput,
+  SetWorkScheduleSettingsResult,
   SetWorkerIntakeInput,
   SetWorkerIntakeResult,
   StartArV3BetaGroupInput,
@@ -2072,6 +2086,30 @@ export function getVersionSectionReview(
 }
 
 /**
+ * Get Work Schedule
+ *
+ * `GET /work-schedule`.
+ */
+export function getWorkSchedule(
+  input: GetWorkScheduleInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetWorkScheduleResult>> {
+  return request<GetWorkScheduleResult>(OPERATIONS.getWorkSchedule, input, options);
+}
+
+/**
+ * Get Work Schedule Reserve
+ *
+ * `GET /work-schedule/reserve`.
+ */
+export function getWorkScheduleReserve(
+  input: GetWorkScheduleReserveInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetWorkScheduleReserveResult>> {
+  return request<GetWorkScheduleReserveResult>(OPERATIONS.getWorkScheduleReserve, input, options);
+}
+
+/**
  * Import Comparison Zip
  *
  * `POST /projects/{project_uid}/comparison-zip-uploads` - a write; carries a required Idempotency-Key.
@@ -3368,6 +3406,18 @@ export function revokeRunnerToken(
 }
 
 /**
+ * Schedule Assignments
+ *
+ * `POST /work-schedule/reserve/moves` - a write; carries a required Idempotency-Key.
+ */
+export function scheduleAssignments(
+  input: ScheduleAssignmentsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ScheduleAssignmentsResult>> {
+  return request<ScheduleAssignmentsResult>(OPERATIONS.scheduleAssignments, input, options);
+}
+
+/**
  * Search Norms
  *
  * `GET /norms/search`.
@@ -3413,6 +3463,18 @@ export function setDocumentTags(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetDocumentTagsResult>> {
   return request<SetDocumentTagsResult>(OPERATIONS.setDocumentTags, input, options);
+}
+
+/**
+ * Set Engineer Absences
+ *
+ * `PUT /work-schedule/absences` - a write; carries a required Idempotency-Key.
+ */
+export function setEngineerAbsences(
+  input: SetEngineerAbsencesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetEngineerAbsencesResult>> {
+  return request<SetEngineerAbsencesResult>(OPERATIONS.setEngineerAbsences, input, options);
 }
 
 /**
@@ -3545,6 +3607,42 @@ export function setStagePairCompleteness(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetStagePairCompletenessResult>> {
   return request<SetStagePairCompletenessResult>(OPERATIONS.setStagePairCompleteness, input, options);
+}
+
+/**
+ * Set Work Calendar Days
+ *
+ * `PUT /work-calendar/days` - a write; carries a required Idempotency-Key.
+ */
+export function setWorkCalendarDays(
+  input: SetWorkCalendarDaysInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetWorkCalendarDaysResult>> {
+  return request<SetWorkCalendarDaysResult>(OPERATIONS.setWorkCalendarDays, input, options);
+}
+
+/**
+ * Set Work Schedule Plans
+ *
+ * `PUT /work-schedule/plans` - a write; carries a required Idempotency-Key.
+ */
+export function setWorkSchedulePlans(
+  input: SetWorkSchedulePlansInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetWorkSchedulePlansResult>> {
+  return request<SetWorkSchedulePlansResult>(OPERATIONS.setWorkSchedulePlans, input, options);
+}
+
+/**
+ * Set Work Schedule Settings
+ *
+ * `PUT /work-schedule/settings` - a write; carries a required Idempotency-Key.
+ */
+export function setWorkScheduleSettings(
+  input: SetWorkScheduleSettingsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetWorkScheduleSettingsResult>> {
+  return request<SetWorkScheduleSettingsResult>(OPERATIONS.setWorkScheduleSettings, input, options);
 }
 
 /**
@@ -4167,6 +4265,8 @@ export const apiClient = {
   getVersionPageProfile,
   getVersionPageSpecPositions,
   getVersionSectionReview,
+  getWorkSchedule,
+  getWorkScheduleReserve,
   importComparisonZip,
   importRunDecisions,
   issueExecutorEnrollment,
@@ -4275,10 +4375,12 @@ export const apiClient = {
   reviseExecutorGroup,
   reviseStageAssembly,
   revokeRunnerToken,
+  scheduleAssignments,
   searchNorms,
   setCurrentNormSnapshot,
   setDocumentArchived,
   setDocumentTags,
+  setEngineerAbsences,
   setExecutionPaused,
   setExecutorIntegrationAuthorisation,
   setExecutorRoute,
@@ -4290,6 +4392,9 @@ export const apiClient = {
   setJobPriority,
   setProjectVendorList,
   setStagePairCompleteness,
+  setWorkCalendarDays,
+  setWorkSchedulePlans,
+  setWorkScheduleSettings,
   setWorkerIntake,
   startArV3BetaGroup,
   startComparisonAiPairCheck,

@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
- *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
+ *   AuditManager PC-01 API 1.31.0 (OpenAPI 3.1.0)
+ *   sha256 07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.30.0';
+export const CONTRACT_VERSION = '1.31.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470';
+export const CONTRACT_DIGEST = '07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -64,6 +64,7 @@ export const SCHEMA_NAMES = [
   'AssignmentDetail',
   'AssignmentEvent',
   'AssignmentEventKind',
+  'AssignmentMove',
   'AssignmentPage',
   'AssignmentStatus',
   'AssignmentTransitionKind',
@@ -298,6 +299,7 @@ export const SCHEMA_NAMES = [
   'DocumentVersion',
   'DocumentVersionPage',
   'EffectiveVendorLists',
+  'EngineerAbsenceChange',
   'EnqueueComparisonLaunchRequest',
   'ErrorCode',
   'ErrorEnvelope',
@@ -540,6 +542,7 @@ export const SCHEMA_NAMES = [
   'RunnerImageBlobId',
   'RunnerTokenMetadata',
   'SaveAnalysisPresetRequest',
+  'ScheduleAssignmentsRequest',
   'SectionDocumentCount',
   'SectionReview',
   'SectionReviewOption',
@@ -554,6 +557,7 @@ export const SCHEMA_NAMES = [
   'SetCurrentNormSnapshotRequest',
   'SetDocumentArchivedRequest',
   'SetDocumentTagsRequest',
+  'SetEngineerAbsencesRequest',
   'SetExecutionPausedRequest',
   'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
@@ -565,6 +569,8 @@ export const SCHEMA_NAMES = [
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
   'SetStagePairCompletenessRequest',
+  'SetWorkCalendarDaysRequest',
+  'SetWorkSchedulePlansRequest',
   'SetWorkerIntakeRequest',
   'Severity',
   'Sha256',
@@ -712,6 +718,16 @@ export const SCHEMA_NAMES = [
   'VersionUid',
   'VersionUploadKind',
   'WithdrawSheetPairingRequest',
+  'WorkCalendarDayChange',
+  'WorkScheduleDay',
+  'WorkScheduleDoneDocument',
+  'WorkScheduleEngineer',
+  'WorkScheduleMonth',
+  'WorkSchedulePlan',
+  'WorkScheduleReserve',
+  'WorkScheduleReserveEngineer',
+  'WorkScheduleReserveItem',
+  'WorkScheduleSettings',
   'WorkerId',
   'WorkerState',
 ] as const;
@@ -1116,6 +1132,12 @@ export const ASSIGNMENT_EVENT_KIND_VALUES = [
 
 /** AssignmentEventKind - the closed value set above. */
 export type AssignmentEventKind = (typeof ASSIGNMENT_EVENT_KIND_VALUES)[number];
+
+export type AssignmentMove = {
+  assignee_user_uid?: UserUid;
+  assignment_uid: AssignmentUid;
+  planned_on?: string;
+};
 
 export type AssignmentPage = {
   items: Array<Assignment>;
@@ -3866,6 +3888,11 @@ export type EffectiveVendorLists = {
   project_uid: ProjectUid;
 };
 
+export type EngineerAbsenceChange = {
+  absent: boolean;
+  day: string;
+};
+
 /**
  * «Запустить выбранные по очереди» / «Поставить в очередь». The ``upload`` step cannot be queued
  * (``422 validation_failed``, ``comparison_step_not_queueable``). ``restart`` is «Заново» for the
@@ -3912,7 +3939,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.30.0";
+  contract_version: "1.31.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -6346,6 +6373,14 @@ export type SaveAnalysisPresetRequest = {
   name: string;
 };
 
+/**
+ * `R-152g`, `R-152h`: move one or several assignments to a day (``planned_on`` absent: «без даты»), and to another
+ * engineer when ``assignee_user_uid`` names one (a reassignment).
+ */
+export type ScheduleAssignmentsRequest = {
+  moves: Array<AssignmentMove>;
+};
+
 /** How many published documents carry one project section (`R-40`, `D-56`). `section` absent means this row is the unclassified bucket, not a sixteenth section. Every one of the fifteen current codes is present even at `document_count: 0`. `audit_counts` are the section's documents by audit state (`UI-PARITY-P0B`) and `document_count` equals `audit_counts.document_count`; `finding_count` is the number of published findings of those documents' result runs. */
 export type SectionDocumentCount = {
   audit_counts: DocumentAuditCounts;
@@ -6535,6 +6570,12 @@ export type SetDocumentTagsRequest = {
   tags: Array<string>;
 };
 
+/** `R-152d`: one engineer's absent days, marked (``absent``) or cleared. */
+export type SetEngineerAbsencesRequest = {
+  days: Array<EngineerAbsenceChange>;
+  user_uid: UserUid;
+};
+
 export type SetExecutionPausedRequest = {
   paused: boolean;
 };
@@ -6602,6 +6643,17 @@ export type SetProjectVendorListRequest = {
 
 export type SetStagePairCompletenessRequest = {
   completeness: "full" | "partial";
+};
+
+/** `R-152d`: days made days off or working days; ``default`` returns a day to the week's rule. */
+export type SetWorkCalendarDaysRequest = {
+  days: Array<WorkCalendarDayChange>;
+};
+
+/** `R-151x`: the administrator's plans for one month; an engineer not named keeps the plan they have. */
+export type SetWorkSchedulePlansRequest = {
+  month: string;
+  plans: Array<WorkSchedulePlan>;
 };
 
 export type SetWorkerIntakeRequest = {
@@ -7977,6 +8029,81 @@ export type WithdrawSheetPairingRequest = {
   mode: "version" | "stage";
   source_run_id?: RunId;
   target_run_id?: RunId;
+};
+
+export type WorkCalendarDayChange = {
+  day: string;
+  kind: "day_off" | "workday" | "default";
+};
+
+/** One day of the schedule; ``override`` says the administrator decided it (`R-152d`), absent for the week's rule. */
+export type WorkScheduleDay = {
+  day: string;
+  day_off: boolean;
+  override?: "day_off" | "workday";
+};
+
+/** `R-151x`: a document that became «Проверено экспертом» on ``day``, credited to the author of its last verdict. */
+export type WorkScheduleDoneDocument = {
+  day: string;
+  document_title: string;
+  document_uid: DocumentUid;
+  project_name: string;
+  project_uid: ProjectUid;
+};
+
+/** One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences. */
+export type WorkScheduleEngineer = {
+  absences: Array<string>;
+  done: Array<WorkScheduleDoneDocument>;
+  fact: number;
+  label: string;
+  plan: number;
+  plan_is_default: boolean;
+  user_uid: UserUid;
+};
+
+/** `UI-PARITY-P0P`: «Выполнено» for one month: an administrator reads every active expert, an expert their own. */
+export type WorkScheduleMonth = {
+  days: Array<WorkScheduleDay>;
+  engineers: Array<WorkScheduleEngineer>;
+  month: string;
+  settings: WorkScheduleSettings;
+};
+
+export type WorkSchedulePlan = {
+  planned: number;
+  user_uid: UserUid;
+};
+
+/** `R-150y`, `R-152e`…`R-152h`: «Календарь запаса» -- open assignments by engineer over the days from ``start``. */
+export type WorkScheduleReserve = {
+  days: Array<WorkScheduleDay>;
+  engineers: Array<WorkScheduleReserveEngineer>;
+  start: string;
+};
+
+export type WorkScheduleReserveEngineer = {
+  items: Array<WorkScheduleReserveItem>;
+  label: string;
+  user_uid: UserUid;
+};
+
+/** `R-152e`: an open assignment of «Диспетчер» and its planned date; ``planned_on`` absent is «без даты». */
+export type WorkScheduleReserveItem = {
+  assignment_uid: AssignmentUid;
+  document_title?: string;
+  document_uid?: DocumentUid;
+  planned_on?: string;
+  project_name: string;
+  project_uid: ProjectUid;
+  status: AssignmentStatus;
+};
+
+/** `R-152b`: the default monthly plan of an engineer without one (initially 20) and the time zone of the days. */
+export type WorkScheduleSettings = {
+  default_monthly_plan: number;
+  time_zone: string;
 };
 
 export type WorkerId = string;

@@ -22,7 +22,7 @@
     "dispatch_named_commit": "1d6b93a92af75c5b2898d6207f0460e0dc259945",
     "commit_note": "Resealed by UI-PARITY-P0O: contract 1.30.0 (contract 1.30.0 adds listVersionSheetLabels.).",
     "openapi_version": "3.1.0",
-    "info_version": "1.30.0",
+    "info_version": "1.31.0",
     "paths": 259,
     "operations": 287,
     "component_schemas": 693,

@@ -551,6 +551,14 @@ GUARDED = (
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
+    # `UI-PARITY-P0P` (contract 1.31.0): «График работ».
+    ("getWorkSchedule", "GET", "/work-schedule?month=2026-11"),
+    ("getWorkScheduleReserve", "GET", "/work-schedule/reserve?start=2026-11-02"),
+    ("setWorkScheduleSettings", "PUT", "/work-schedule/settings"),
+    ("setWorkSchedulePlans", "PUT", "/work-schedule/plans"),
+    ("setWorkCalendarDays", "PUT", "/work-calendar/days"),
+    ("setEngineerAbsences", "PUT", "/work-schedule/absences"),
+    ("scheduleAssignments", "POST", "/work-schedule/reserve/moves"),
 )
 
 #: `EXEC-PULL-01`. The four operations a runner calls with a runner token, and the fifth that

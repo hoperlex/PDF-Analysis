@@ -1146,6 +1146,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # `UI-PARITY-P0J`. Its rows are decisions on optimisation proposals, which this sweep has none of: the journal and
         # its project filter are driven in `tests/integration/optimisation/proposals/test_decisions.py`.
         "listProposalDecisionJournal": "/proposal-decisions",
+        # `UI-PARITY-P0P`. «График работ»: a month and a run of days, not pages. Not driven yet: debt `D-318`.
+        "getWorkSchedule": "/work-schedule?month=2026-11",
+        "getWorkScheduleReserve": "/work-schedule/reserve?start=2026-11-02",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1184,6 +1187,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "getDashboardSummary": {"project_uid"},
         # `UI-PARITY-P0J` (1.25.0): the proposal decision journal, optionally of one project.
         "listProposalDecisionJournal": {"project_uid", "cursor", "limit"},
+        # `UI-PARITY-P0P` (1.31.0): the month of «Выполнено»; the reserve's first day and length.
+        "getWorkSchedule": {"month"},
+        "getWorkScheduleReserve": {"start", "days"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1327,6 +1333,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "listPriceListPositions",
             "getDashboardSummary",
             "listProposalDecisionJournal",
+            "getWorkSchedule",
+            "getWorkScheduleReserve",
         ):
             continue  # driven by its own test below
         target = targets[operation_id]

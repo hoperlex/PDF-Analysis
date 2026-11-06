@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.30.0"]
+    contract_version: Literal["1.31.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2575,6 +2575,129 @@ class ProposalDecisionRecordPage(_Object):
     items: list[ProposalDecisionRecord]
     page: PageInfo
     total: Annotated[int, Field(ge=0)]
+
+
+# --- «График работ» (`UI-PARITY-P0P`, contract 1.31.0) ------------------------------------
+
+class WorkScheduleSettings(_Object):
+    """`R-152b`: the default monthly plan of an engineer without one (initially 20) and the time zone of the days."""
+
+    default_monthly_plan: Annotated[int, Field(ge=0, le=999)]
+    time_zone: Annotated[str, Field(min_length=1, max_length=64)]
+
+
+class WorkScheduleDay(_Object):
+    """One day of the schedule; ``override`` says the administrator decided it (`R-152d`), absent for the week's rule."""
+
+    day: date
+    day_off: bool
+    override: Literal["day_off", "workday"] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class WorkScheduleDoneDocument(_Object):
+    """`R-151x`: a document that became «Проверено экспертом» on ``day``, credited to the author of its last verdict."""
+
+    day: date
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    document_title: Annotated[str, Field(min_length=1, max_length=400)]
+
+
+class WorkScheduleEngineer(_Object):
+    """One engineer's month: the plan (``plan_is_default`` when the stored default applies), done work and absences."""
+
+    user_uid: UserUid
+    label: Annotated[str, Field(min_length=1, max_length=254)]
+    plan: Annotated[int, Field(ge=0, le=999)]
+    plan_is_default: bool
+    fact: Annotated[int, Field(ge=0)]
+    done: list[WorkScheduleDoneDocument]
+    absences: list[date]
+
+
+class WorkScheduleMonth(_Object):
+    """`UI-PARITY-P0P`: «Выполнено» for one month: an administrator reads every active expert, an expert their own."""
+
+    month: Annotated[str, Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")]
+    settings: WorkScheduleSettings
+    days: list[WorkScheduleDay]
+    engineers: list[WorkScheduleEngineer]
+
+
+class WorkScheduleReserveItem(_Object):
+    """`R-152e`: an open assignment of «Диспетчер» and its planned date; ``planned_on`` absent is «без даты»."""
+
+    assignment_uid: AssignmentUid
+    status: AssignmentStatus
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    document_title: Annotated[str, Field(min_length=1, max_length=400)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    planned_on: date = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class WorkScheduleReserveEngineer(_Object):
+    user_uid: UserUid
+    label: Annotated[str, Field(min_length=1, max_length=254)]
+    items: list[WorkScheduleReserveItem]
+
+
+class WorkScheduleReserve(_Object):
+    """`R-150y`, `R-152e`…`R-152h`: «Календарь запаса» -- open assignments by engineer over the days from ``start``."""
+
+    start: date
+    days: list[WorkScheduleDay]
+    engineers: list[WorkScheduleReserveEngineer]
+
+
+class SetWorkSchedulePlansRequest(_Object):
+    """`R-151x`: the administrator's plans for one month; an engineer not named keeps the plan they have."""
+
+    month: Annotated[str, Field(pattern=r"^[0-9]{4}-(0[1-9]|1[0-2])$")]
+    plans: Annotated[list["WorkSchedulePlan"], Field(min_length=1, max_length=500)]
+
+
+class WorkSchedulePlan(_Object):
+    user_uid: UserUid
+    planned: Annotated[int, Field(ge=0, le=999)]
+
+
+class SetWorkCalendarDaysRequest(_Object):
+    """`R-152d`: days made days off or working days; ``default`` returns a day to the week's rule."""
+
+    days: Annotated[list["WorkCalendarDayChange"], Field(min_length=1, max_length=400)]
+
+
+class WorkCalendarDayChange(_Object):
+    day: date
+    kind: Literal["day_off", "workday", "default"]
+
+
+class SetEngineerAbsencesRequest(_Object):
+    """`R-152d`: one engineer's absent days, marked (``absent``) or cleared."""
+
+    user_uid: UserUid
+    days: Annotated[list["EngineerAbsenceChange"], Field(min_length=1, max_length=400)]
+
+
+class EngineerAbsenceChange(_Object):
+    day: date
+    absent: bool
+
+
+class ScheduleAssignmentsRequest(_Object):
+    """`R-152g`, `R-152h`: move one or several assignments to a day (``planned_on`` absent: «без даты»), and to another
+    engineer when ``assignee_user_uid`` names one (a reassignment)."""
+
+    moves: Annotated[list["AssignmentMove"], Field(min_length=1, max_length=200)]
+
+
+class AssignmentMove(_Object):
+    assignment_uid: AssignmentUid
+    planned_on: date = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    assignee_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 # --- dashboard -----------------------------------------------------------------------

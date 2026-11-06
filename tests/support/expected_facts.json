@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 259,
+    "path_count": 266,
     "operations": [
       [
         "DELETE",
@@ -734,6 +734,16 @@
         "listVersionSheetLabels"
       ],
       [
+        "GET",
+        "/work-schedule",
+        "getWorkSchedule"
+      ],
+      [
+        "GET",
+        "/work-schedule/reserve",
+        "getWorkScheduleReserve"
+      ],
+      [
         "PATCH",
         "/me",
         "updateMyProfile"
@@ -1359,6 +1369,11 @@
         "restoreUser"
       ],
       [
+        "POST",
+        "/work-schedule/reserve/moves",
+        "scheduleAssignments"
+      ],
+      [
         "PUT",
         "/comparison-uploads/{comparison_upload_id}/files/{comparison_upload_file_id}/parts",
         "uploadComparisonUploadPart"
@@ -1437,6 +1452,26 @@
         "PUT",
         "/vendor-lists/{section_code}",
         "setGlobalVendorList"
+      ],
+      [
+        "PUT",
+        "/work-calendar/days",
+        "setWorkCalendarDays"
+      ],
+      [
+        "PUT",
+        "/work-schedule/absences",
+        "setEngineerAbsences"
+      ],
+      [
+        "PUT",
+        "/work-schedule/plans",
+        "setWorkSchedulePlans"
+      ],
+      [
+        "PUT",
+        "/work-schedule/settings",
+        "setWorkScheduleSettings"
       ]
     ],
     "schema_names": [
@@ -1483,6 +1518,7 @@
       "AssignmentDetail",
       "AssignmentEvent",
       "AssignmentEventKind",
+      "AssignmentMove",
       "AssignmentPage",
       "AssignmentStatus",
       "AssignmentTransitionKind",
@@ -1717,6 +1753,7 @@
       "DocumentVersion",
       "DocumentVersionPage",
       "EffectiveVendorLists",
+      "EngineerAbsenceChange",
       "EnqueueComparisonLaunchRequest",
       "ErrorCode",
       "ErrorEnvelope",
@@ -1959,6 +1996,7 @@
       "RunnerImageBlobId",
       "RunnerTokenMetadata",
       "SaveAnalysisPresetRequest",
+      "ScheduleAssignmentsRequest",
       "SectionDocumentCount",
       "SectionReview",
       "SectionReviewOption",
@@ -1973,6 +2011,7 @@
       "SetCurrentNormSnapshotRequest",
       "SetDocumentArchivedRequest",
       "SetDocumentTagsRequest",
+      "SetEngineerAbsencesRequest",
       "SetExecutionPausedRequest",
       "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
@@ -1984,6 +2023,8 @@
       "SetJobPriorityRequest",
       "SetProjectVendorListRequest",
       "SetStagePairCompletenessRequest",
+      "SetWorkCalendarDaysRequest",
+      "SetWorkSchedulePlansRequest",
       "SetWorkerIntakeRequest",
       "Severity",
       "Sha256",
@@ -2131,6 +2172,16 @@
       "VersionUid",
       "VersionUploadKind",
       "WithdrawSheetPairingRequest",
+      "WorkCalendarDayChange",
+      "WorkScheduleDay",
+      "WorkScheduleDoneDocument",
+      "WorkScheduleEngineer",
+      "WorkScheduleMonth",
+      "WorkSchedulePlan",
+      "WorkScheduleReserve",
+      "WorkScheduleReserveEngineer",
+      "WorkScheduleReserveItem",
+      "WorkScheduleSettings",
       "WorkerId",
       "WorkerState"
     ]
@@ -2139,6 +2190,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0054_finding_execution_status",
-  "contract_version": "1.30.0"
+  "migration_head": "0055_work_schedule",
+  "contract_version": "1.31.0"
 }

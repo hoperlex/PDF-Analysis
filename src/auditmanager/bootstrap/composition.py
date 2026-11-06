@@ -52,6 +52,7 @@ from auditmanager.bootstrap.adapters import (
     BlockAdapter,
     ComparisonAdapter,
     DispatchAdapter,
+    ScheduleAdapter,
     CredentialAdapter,
     CsvExportAdapter,
     DashboardAdapter,
@@ -739,6 +740,8 @@ def build_application(
         # `W61-DISPATCHER-01`. «Диспетчер» over the same session factory; the role set
         # and the people's labels are read through `access` in each transaction.
         dispatch=DispatchAdapter(sessions),
+        # `UI-PARITY-P0P`. «График работ» over the same session factory.
+        schedule=ScheduleAdapter(sessions),
         # `W60-PRICE-LIST-01`. Project price lists (the uploaded file kept as a Blob in the
         # same store) and vendor lists, over the same sessions.
         optimisation=OptimisationAdapter(sessions, blob_store=store),

@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-287 operations, sealed. `A5` generates the typed client from this document; `B6`
+294 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1036,6 +1036,11 @@ the optional `started_at` (creation of the first attempt), `finished_at` (the jo
 period `created_from` / `created_to` over `created_at`; the order is unchanged and a cursor is valid only under the filters it
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
+
+`UI-PARITY-P0P` (contract `1.31.0`, migration `0055_work_schedule`) adds «График работ» (`R-152a`…`R-152h`), the bounded
+context `schedule`: the month read (plan and fact per active expert, fact from the last verdict of a checked document), the
+reserve read over `work_assignment_current`, and five keyed administrator commands. Every table is an append-only journal;
+moving an assignment to another expert goes through `dispatch`'s `transition_assignment`.
 
 `UI-PARITY-P0O` (contract `1.30.0`, no migration) adds `listVersionSheetLabels`: each page's sheet label from the
 version's portal geometry, so a finding's page is shown with its sheet as in the original.

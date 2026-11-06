@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
- *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
+ *   AuditManager PC-01 API 1.31.0 (OpenAPI 3.1.0)
+ *   sha256 07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -231,12 +231,14 @@ import type {
   RunnerImageBlobId,
   RunnerTokenMetadata,
   SaveAnalysisPresetRequest,
+  ScheduleAssignmentsRequest,
   SectionReview,
   SectionSpecification,
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
   SetDocumentArchivedRequest,
   SetDocumentTagsRequest,
+  SetEngineerAbsencesRequest,
   SetExecutionPausedRequest,
   SetExecutorIntegrationAuthorisationRequest,
   SetExecutorRouteRequest,
@@ -248,6 +250,8 @@ import type {
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
   SetStagePairCompletenessRequest,
+  SetWorkCalendarDaysRequest,
+  SetWorkSchedulePlansRequest,
   SetWorkerIntakeRequest,
   SheetLinkId,
   SheetPairingEvent,
@@ -321,6 +325,9 @@ import type {
   VersionSheetLabelList,
   VersionUid,
   WithdrawSheetPairingRequest,
+  WorkScheduleMonth,
+  WorkScheduleReserve,
+  WorkScheduleSettings,
   WorkerId,
 } from './types.gen';
 
@@ -449,6 +456,8 @@ export const OPERATION_IDS = [
   'getVersionPageProfile',
   'getVersionPageSpecPositions',
   'getVersionSectionReview',
+  'getWorkSchedule',
+  'getWorkScheduleReserve',
   'importComparisonZip',
   'importRunDecisions',
   'issueExecutorEnrollment',
@@ -557,10 +566,12 @@ export const OPERATION_IDS = [
   'reviseExecutorGroup',
   'reviseStageAssembly',
   'revokeRunnerToken',
+  'scheduleAssignments',
   'searchNorms',
   'setCurrentNormSnapshot',
   'setDocumentArchived',
   'setDocumentTags',
+  'setEngineerAbsences',
   'setExecutionPaused',
   'setExecutorIntegrationAuthorisation',
   'setExecutorRoute',
@@ -572,6 +583,9 @@ export const OPERATION_IDS = [
   'setJobPriority',
   'setProjectVendorList',
   'setStagePairCompleteness',
+  'setWorkCalendarDays',
+  'setWorkSchedulePlans',
+  'setWorkScheduleSettings',
   'setWorkerIntake',
   'startArV3BetaGroup',
   'startComparisonAiPairCheck',
@@ -3644,6 +3658,56 @@ export type GetVersionSectionReviewInput = {
 export type GetVersionSectionReviewResult = SectionReview;
 
 // ------------------------------------------------------------------------------------
+// getWorkSchedule - GET /work-schedule
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Work Schedule
+ *
+ * `UI-PARITY-P0P` (contract 1.31.0, rulings `R-151x`, `R-152a`…`R-152d`): one month of «График работ» -- the days (Saturday and Sunday off unless the administrator decided otherwise), and for each active expert the month's plan (`plan_is_default` when the stored default applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict (`done`, `fact`) and the absent days. An administrator reads every active expert; an expert reads their own row. `role:admin|expert`.
+ */
+export type GetWorkScheduleInput = {
+  /** Query string parameters. */
+  query: {
+    /** The month, `YYYY-MM`. */
+    month: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getWorkSchedule` (`application/json`, HTTP 200). */
+export type GetWorkScheduleResult = WorkScheduleMonth;
+
+// ------------------------------------------------------------------------------------
+// getWorkScheduleReserve - GET /work-schedule/reserve
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Work Schedule Reserve
+ *
+ * `UI-PARITY-P0P` (rulings `R-150y`, `R-152e`, `R-152f`): «Календарь запаса» -- each active expert's open assignments of «Диспетчер» with their planned date (absent: «без даты»), over `days` days from `start`, and the calendar of those days. No daily limit. An administrator reads every expert; an expert their own. `role:admin|expert`.
+ */
+export type GetWorkScheduleReserveInput = {
+  /** Query string parameters. */
+  query: {
+    /** How many days from `start`. */
+    days?: number;
+    /** The first day of the reserve shown. */
+    start: string;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getWorkScheduleReserve` (`application/json`, HTTP 200). */
+export type GetWorkScheduleReserveResult = WorkScheduleReserve;
+
+// ------------------------------------------------------------------------------------
 // importComparisonZip - POST /projects/{project_uid}/comparison-zip-uploads
 // ------------------------------------------------------------------------------------
 
@@ -6511,6 +6575,32 @@ export type RevokeRunnerTokenInput = {
 export type RevokeRunnerTokenResult = RunnerTokenMetadata;
 
 // ------------------------------------------------------------------------------------
+// scheduleAssignments - POST /work-schedule/reserve/moves
+// ------------------------------------------------------------------------------------
+
+/**
+ * Schedule Assignments
+ *
+ * `R-152g`, `R-152h`: move one or several open assignments to a day (`planned_on` absent: «без даты») and, with `assignee_user_uid`, to another active expert (a reassignment in the assignment's history). Each move is a new event with its author; an unchanged date records nothing. Keyed; `role:admin`.
+ */
+export type ScheduleAssignmentsInput = {
+  /** Request body, sent as `application/json`. */
+  body: ScheduleAssignmentsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `scheduleAssignments`. */
+export type ScheduleAssignmentsResult = void;
+
+// ------------------------------------------------------------------------------------
 // searchNorms - GET /norms/search
 // ------------------------------------------------------------------------------------
 
@@ -6621,6 +6711,32 @@ export type SetDocumentTagsInput = {
 
 /** Success body of `setDocumentTags` (`application/json`, HTTP 200). */
 export type SetDocumentTagsResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
+// setEngineerAbsences - PUT /work-schedule/absences
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Engineer Absences
+ *
+ * `R-152d`: an administrator marks an active expert's days absent or clears them. Every change is kept. Keyed; `role:admin`.
+ */
+export type SetEngineerAbsencesInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetEngineerAbsencesRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setEngineerAbsences`. */
+export type SetEngineerAbsencesResult = void;
 
 // ------------------------------------------------------------------------------------
 // setExecutionPaused - PUT /execution/dispatch
@@ -6914,6 +7030,84 @@ export type SetStagePairCompletenessInput = {
 
 /** Success body of `setStagePairCompleteness` (`application/json`, HTTP 200). */
 export type SetStagePairCompletenessResult = StagePair;
+
+// ------------------------------------------------------------------------------------
+// setWorkCalendarDays - PUT /work-calendar/days
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Work Calendar Days
+ *
+ * `R-152d`: the administrator makes days days off (`day_off`) or working days (`workday`), or returns them to the week's rule (`default`). Every change is kept. Keyed; `role:admin`.
+ */
+export type SetWorkCalendarDaysInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetWorkCalendarDaysRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setWorkCalendarDays`. */
+export type SetWorkCalendarDaysResult = void;
+
+// ------------------------------------------------------------------------------------
+// setWorkSchedulePlans - PUT /work-schedule/plans
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Work Schedule Plans
+ *
+ * `R-151x`, `R-152a`: an administrator sets engineers' plans (0..999) for one month; each change is kept in the plan's history, an unchanged plan records nothing, a user who is not an active expert is `422` (`constraint: active_expert`). Answers the month. Keyed; `role:admin`.
+ */
+export type SetWorkSchedulePlansInput = {
+  /** Request body, sent as `application/json`. */
+  body: SetWorkSchedulePlansRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setWorkSchedulePlans` (`application/json`, HTTP 200). */
+export type SetWorkSchedulePlansResult = WorkScheduleMonth;
+
+// ------------------------------------------------------------------------------------
+// setWorkScheduleSettings - PUT /work-schedule/settings
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Work Schedule Settings
+ *
+ * `R-152b`: the default monthly plan of an engineer without one (0..999, initially 20) and the IANA time zone the schedule's days are cut in (`constraint: unknown_zone` for another). Keyed; `role:admin`.
+ */
+export type SetWorkScheduleSettingsInput = {
+  /** Request body, sent as `application/json`. */
+  body: WorkScheduleSettings;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setWorkScheduleSettings` (`application/json`, HTTP 200). */
+export type SetWorkScheduleSettingsResult = WorkScheduleSettings;
 
 // ------------------------------------------------------------------------------------
 // setWorkerIntake - PUT /execution/workers/{worker_id}/intake
@@ -9760,6 +9954,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 500, 503],
     tags: ['documents'],
   },
+  getWorkSchedule: {
+    operationId: 'getWorkSchedule',
+    method: 'GET',
+    path: '/work-schedule',
+    pathParams: [],
+    queryParams: ['month'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['schedule'],
+  },
+  getWorkScheduleReserve: {
+    operationId: 'getWorkScheduleReserve',
+    method: 'GET',
+    path: '/work-schedule/reserve',
+    pathParams: [],
+    queryParams: ['days', 'start'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['schedule'],
+  },
   importComparisonZip: {
     operationId: 'importComparisonZip',
     method: 'POST',
@@ -11272,6 +11494,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
   },
+  scheduleAssignments: {
+    operationId: 'scheduleAssignments',
+    method: 'POST',
+    path: '/work-schedule/reserve/moves',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: null,
+    successStatuses: [204],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['schedule'],
+  },
   searchNorms: {
     operationId: 'searchNorms',
     method: 'GET',
@@ -11327,6 +11563,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['documents'],
+  },
+  setEngineerAbsences: {
+    operationId: 'setEngineerAbsences',
+    method: 'PUT',
+    path: '/work-schedule/absences',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: null,
+    successStatuses: [204],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['schedule'],
   },
   setExecutionPaused: {
     operationId: 'setExecutionPaused',
@@ -11481,6 +11731,48 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
+  },
+  setWorkCalendarDays: {
+    operationId: 'setWorkCalendarDays',
+    method: 'PUT',
+    path: '/work-calendar/days',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: null,
+    successStatuses: [204],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['schedule'],
+  },
+  setWorkSchedulePlans: {
+    operationId: 'setWorkSchedulePlans',
+    method: 'PUT',
+    path: '/work-schedule/plans',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['schedule'],
+  },
+  setWorkScheduleSettings: {
+    operationId: 'setWorkScheduleSettings',
+    method: 'PUT',
+    path: '/work-schedule/settings',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 409, 422, 500, 503],
+    tags: ['schedule'],
   },
   setWorkerIntake: {
     operationId: 'setWorkerIntake',

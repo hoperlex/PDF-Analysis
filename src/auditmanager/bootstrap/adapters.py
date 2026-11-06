@@ -4787,6 +4787,131 @@ class DispatchAdapter(_SessionHolder):
         return self._write(work)
 
 
+class ScheduleAdapter(_SessionHolder):
+    """«График работ» (`UI-PARITY-P0P`): opens the session, reads the caller's roles inside it, resolves the people's
+    labels through ``access`` and maps ``auditmanager.schedule``'s records into the frozen shapes."""
+
+    @staticmethod
+    def _month(value: str) -> Any:
+        from datetime import date as _date
+
+        year, month = value.split("-")
+        return _date(int(year), int(month), 1)
+
+    @staticmethod
+    def _day(day: Any) -> models.WorkScheduleDay:
+        return models.WorkScheduleDay(**{"day": day.day, "day_off": day.day_off,
+                                         **({} if day.override is None else {"override": day.override})})
+
+    def _month_view(self, session: Session, record: Any) -> models.WorkScheduleMonth:
+        from auditmanager.access.public import AccountRepository
+
+        labels = _Labels(session, AccountRepository())
+        return models.WorkScheduleMonth(
+            month=record.month.strftime("%Y-%m"),
+            settings=models.WorkScheduleSettings(default_monthly_plan=record.settings.default_monthly_plan,
+                                                 time_zone=record.settings.time_zone),
+            days=[self._day(day) for day in record.days],
+            engineers=sorted((models.WorkScheduleEngineer(
+                user_uid=engineer.user_uid, label=labels.of(engineer.user_uid), plan=engineer.plan,
+                plan_is_default=engineer.plan_is_default, fact=engineer.fact,
+                done=[models.WorkScheduleDoneDocument(
+                    day=item.day, project_uid=item.project_uid, project_name=item.project_name,
+                    document_uid=item.document_uid, document_title=item.document_title,
+                ) for item in engineer.done],
+                absences=list(engineer.absences),
+            ) for engineer in record.engineers), key=lambda view: (view.label.casefold(), view.user_uid)),
+        )
+
+    def _roles(self, session: Session, user_uid: str) -> frozenset[str]:
+        from auditmanager.access.public import AccountRepository
+
+        return AccountRepository().roles_of(session, user_uid)
+
+    def read_month(self, *, month: str, user_uid: str) -> models.WorkScheduleMonth:
+        from auditmanager.schedule.public import read_schedule_month
+
+        def work(session: Session) -> models.WorkScheduleMonth:
+            record = read_schedule_month(session, month=self._month(month), viewer_uid=user_uid,
+                                         viewer_roles=self._roles(session, user_uid))
+            return self._month_view(session, record)
+        return self._read(work)
+
+    def read_reserve(self, *, start: Any, days: int, user_uid: str) -> models.WorkScheduleReserve:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.schedule.public import read_reserve
+
+        def work(session: Session) -> models.WorkScheduleReserve:
+            record = read_reserve(session, start=start, days=days, viewer_uid=user_uid,
+                                  viewer_roles=self._roles(session, user_uid))
+            labels = _Labels(session, AccountRepository())
+            engineers = [models.WorkScheduleReserveEngineer(
+                user_uid=uid, label=labels.of(uid),
+                items=[models.WorkScheduleReserveItem(**{
+                    "assignment_uid": item.assignment_uid, "status": item.status, "project_uid": item.project_uid,
+                    "project_name": item.project_name,
+                    **_unset_none(document_uid=item.document_uid, document_title=item.document_title,
+                                  planned_on=item.planned_on),
+                }) for item in items],
+            ) for uid, items in record.engineers]
+            return models.WorkScheduleReserve(
+                start=record.start, days=[self._day(day) for day in record.days],
+                engineers=sorted(engineers, key=lambda view: (view.label.casefold(), view.user_uid)),
+            )
+        return self._read(work)
+
+    def set_settings(
+        self, *, default_monthly_plan: int, time_zone: str, user_uid: str, idempotency_key: str,
+    ) -> models.WorkScheduleSettings:
+        from auditmanager.schedule.public import set_settings
+
+        def work(session: Session) -> models.WorkScheduleSettings:
+            settings = set_settings(session, default_monthly_plan=default_monthly_plan, time_zone=time_zone,
+                                    actor_uid=user_uid, actor_roles=self._roles(session, user_uid),
+                                    idempotency_key=idempotency_key)
+            return models.WorkScheduleSettings(default_monthly_plan=settings.default_monthly_plan,
+                                               time_zone=settings.time_zone)
+        return self._write(work)
+
+    def set_plans(
+        self, *, month: str, plans: Sequence[tuple[str, int]], user_uid: str, idempotency_key: str,
+    ) -> models.WorkScheduleMonth:
+        from auditmanager.schedule.public import read_schedule_month, set_plans
+
+        def work(session: Session) -> models.WorkScheduleMonth:
+            roles = self._roles(session, user_uid)
+            set_plans(session, month=self._month(month), plans=plans, actor_uid=user_uid, actor_roles=roles,
+                      idempotency_key=idempotency_key)
+            return self._month_view(session, read_schedule_month(
+                session, month=self._month(month), viewer_uid=user_uid, viewer_roles=roles))
+        return self._write(work)
+
+    def set_calendar_days(self, *, days: Sequence[tuple[Any, str]], user_uid: str, idempotency_key: str) -> None:
+        from auditmanager.schedule.public import set_calendar_days
+
+        self._write(lambda session: set_calendar_days(
+            session, days=days, actor_uid=user_uid, actor_roles=self._roles(session, user_uid),
+            idempotency_key=idempotency_key))
+
+    def set_absences(
+        self, *, engineer_uid: str, days: Sequence[tuple[Any, bool]], user_uid: str, idempotency_key: str,
+    ) -> None:
+        from auditmanager.schedule.public import set_absences
+
+        self._write(lambda session: set_absences(
+            session, engineer_uid=engineer_uid, days=days, actor_uid=user_uid,
+            actor_roles=self._roles(session, user_uid), idempotency_key=idempotency_key))
+
+    def schedule_assignments(
+        self, *, moves: Sequence[tuple[str, Any, str | None]], user_uid: str, idempotency_key: str,
+    ) -> None:
+        from auditmanager.schedule.public import schedule_assignments
+
+        self._write(lambda session: schedule_assignments(
+            session, moves=moves, actor_uid=user_uid, actor_roles=self._roles(session, user_uid),
+            idempotency_key=idempotency_key))
+
+
 class _Labels:
     """Display labels of the accounts one answer names, each read once per session.
 

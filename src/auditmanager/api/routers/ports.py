@@ -2325,3 +2325,30 @@ class ExecutorGroupPort(Protocol):
 
 
 __all__ += ["ExecutorGroupPort"]
+
+
+@runtime_checkable
+class SchedulePort(Protocol):
+    """«График работ» (`UI-PARITY-P0P`): every rule is ``auditmanager.schedule``'s; the subject is handed on."""
+
+    def read_month(self, *, month: str, user_uid: str) -> models.WorkScheduleMonth: ...
+
+    def read_reserve(self, *, start: Any, days: int, user_uid: str) -> models.WorkScheduleReserve: ...
+
+    def set_settings(
+        self, *, default_monthly_plan: int, time_zone: str, user_uid: str, idempotency_key: str,
+    ) -> models.WorkScheduleSettings: ...
+
+    def set_plans(
+        self, *, month: str, plans: Sequence[tuple[str, int]], user_uid: str, idempotency_key: str,
+    ) -> models.WorkScheduleMonth: ...
+
+    def set_calendar_days(self, *, days: Sequence[tuple[Any, str]], user_uid: str, idempotency_key: str) -> None: ...
+
+    def set_absences(
+        self, *, engineer_uid: str, days: Sequence[tuple[Any, bool]], user_uid: str, idempotency_key: str,
+    ) -> None: ...
+
+    def schedule_assignments(
+        self, *, moves: Sequence[tuple[str, Any, str | None]], user_uid: str, idempotency_key: str,
+    ) -> None: ...

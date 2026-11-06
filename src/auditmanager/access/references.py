@@ -123,6 +123,48 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "this account changed a vendor list (W60-PRICE-LIST-01)",
     ),
     AccountReference(
+        "schedule_setting_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account changed the schedule's default plan or time zone (R-152b, migration 0055)",
+    ),
+    AccountReference(
+        "schedule_plan_event",
+        "engineer_user_uid",
+        "RESTRICT",
+        "this account was given a monthly plan (R-151x, migration 0055)",
+    ),
+    AccountReference(
+        "schedule_plan_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account set a monthly plan (R-151x, migration 0055)",
+    ),
+    AccountReference(
+        "work_calendar_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account changed the work calendar (R-152d, migration 0055)",
+    ),
+    AccountReference(
+        "engineer_absence_event",
+        "engineer_user_uid",
+        "RESTRICT",
+        "this account was marked absent (R-152d, migration 0055)",
+    ),
+    AccountReference(
+        "engineer_absence_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account marked an absence (R-152d, migration 0055)",
+    ),
+    AccountReference(
+        "work_assignment_schedule_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account planned an assignment's date (R-152h, migration 0055)",
+    ),
+    AccountReference(
         "finding_execution_status",
         "set_by_user_uid",
         "RESTRICT",
