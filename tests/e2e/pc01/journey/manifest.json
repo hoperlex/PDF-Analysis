@@ -143,7 +143,11 @@
         },
         {"method": "GET", "path": "/assignments", "operationId": "listAssignments", "$why_optional": "only a session holding `expert` reads its own open work for «Мои задачи» (W61-DISPATCHER-01)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "PUT", "path": "/me/release-notes", "operationId": "markReleaseNotesRead", "$why_optional": "only when What’s New is dismissed"}
+        {"method": "PUT", "path": "/me/release-notes", "operationId": "markReleaseNotesRead", "$why_optional": "only when What’s New is dismissed"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"}
       ],
       "follow": null
     },
@@ -159,7 +163,12 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": {
         "capture": "project_uid",
@@ -175,11 +184,34 @@
           "method": "GET",
           "path": "/projects/{project_uid}/documents",
           "operationId": "listDocuments"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}/document-tags",
+          "operationId": "listDocumentTags",
+          "$why": "R-151e: the tag filter is offered from the project's whole catalogue, read with the document cards"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe",
+          "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
         }
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"}
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": {
         "capture": "document_uid",
@@ -195,11 +227,29 @@
           "method": "GET",
           "path": "/documents/{document_uid}/versions",
           "operationId": "listVersions"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe",
+          "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
         }
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"}
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "UI-A-28: the document's neighbours inside its section (SectionNeighbours) read the project's documents, only once the document's newest version has a confirmed section"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": {
         "capture": "version_uid",
@@ -226,11 +276,31 @@
           "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/section-review",
           "operationId": "getVersionSectionReview",
           "$why": "W59-SECTION-UI-01: the stage-and-section panel reads the review once the version has answered, in every state the version has -- confirmed, unconfirmed, expert or not -- at the address the version's own body names. The walk reaches this version from the document it captured, so {document_uid} is that version's document."
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions",
+          "$why": "UI-A-24: the context strip lets the reader move to another version of the same document (VersionSwitch)"
         }
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"}
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "the run-start form offers the executors a run may start on, drawn for a session that may act as an expert"},
+        {"method": "GET", "path": "/analysis/presets", "operationId": "listAnalysisPresets", "$why_optional": "the run-start form offers the saved presets beside the executors, drawn for a session that may act as an expert"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": {
         "capture": "run_id",
@@ -299,7 +369,12 @@
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/versions/{version_uid}/comparison", "operationId": "compareDocumentVersions", "$why_optional": "asked only when the set has another published version; the journey's set has one"},
-        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"}
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -318,12 +393,42 @@
           "path": "/runs/{run_id}/norm-references",
           "operationId": "getRunNormReferences",
           "$why": "NORM-REFS-RUN-01: a terminal run's page reads the normative documents its saved text cites; the walked run is published"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion",
+          "$why": "the context strip names the document and the version of the run it shows, read once the run has answered"
+        },
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}/extended-review",
+          "operationId": "getExtendedRunReview",
+          "$why": "the preliminary extended-analysis summary is read for every run the screen shows, whatever the run's state"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe",
+          "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
         }
       ],
       "optional_api": [
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while the run is running or validating, to name the worker holding it (W54-WORKERS-WEB)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"}
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/execution/journal", "operationId": "listExecutionJournal", "$why_optional": "«События прогона» (RunEvents) reads the run's journal only for a session holding `expert` or `admin`"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -341,6 +446,36 @@
           "method": "GET",
           "path": "/runs/{run_id}/findings",
           "operationId": "listRunFindings"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion",
+          "$why": "the context strip names the document and the version of the run it shows, read once the run has answered"
+        },
+        {
+          "method": "GET",
+          "path": "/runs/{run_id}/extended-review",
+          "operationId": "getExtendedRunReview",
+          "$why": "the preliminary extended-analysis summary is read for every run the screen shows, whatever the run's state"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe",
+          "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/sheet-labels",
+          "operationId": "listVersionSheetLabels",
+          "$why": "UI-PARITY-P0O: each page's drawing-sheet label, read as soon as the run has named its version"
         }
       ],
       "optional_api": [
@@ -363,7 +498,104 @@
           "$why_optional": "the document pane fetches the PDF only once a finding is open"
         },
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
-        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"}
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/versions/{version_uid}/portal-blocks", "operationId": "listVersionPortalBlocks", "$why_optional": "the evidence viewer's block index, read only for a version whose run read portal blocks"},
+        {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "the evidence viewer's text-line index, read only for a version a run has read"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+      ],
+      "follow": {
+        "capture": "section_code",
+        "href_pattern": "^/projects/prj_%ID%/sections/([A-Z]+)$"
+      }
+    },
+    {
+      "name": "section",
+      "path": "/projects/{project_uid}/sections/{section_code}",
+      "page_module": "web/src/app/projects/[project_uid]/sections/[section_code]/page.tsx",
+      "$comment": [
+        "One section of one project (R-151l, UI-PARITY-P0E): the section's documents as cards, under the context strip.",
+        "`{section_code}` is captured from the side menu's «Разделы» link of the current project, rendered by the previous",
+        "route (`review` follows `^/projects/prj_%ID%/sections/([A-Z]+)$`): the section the journey's own document was",
+        "confirmed for. The documents are read with the section as a query, which a path match does not see."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}/documents",
+          "operationId": "listDocuments",
+          "$why": "the section's documents (`useSectionDocumentList`), read on mount"
+        }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "version-blocks",
+      "path": "/projects/{project_uid}/versions/{version_uid}/blocks",
+      "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/blocks/page.tsx",
+      "$comment": [
+        "The version's «Блоки» tab (R-151m): `/blocks` with the version already chosen, under the context strip.",
+        "The tab opens on «Блоки портала». The page reads the version, the first page of its runs (to tie the blocks to",
+        "findings, `use-page-findings`), the portal blocks, and one crop per IMAGE block as the reader scrolls to it;",
+        "the newest run's status and its findings only once a run exists / is published."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}",
+          "operationId": "getDocumentVersion",
+          "$why": "the version named by the address, read on mount"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/portal-blocks",
+          "operationId": "listVersionPortalBlocks",
+          "$why": "«Блоки портала» is the tab the page opens on (a comparison-only version has no blocks and this walk's version is a bundle)"
+        },
+        {
+          "method": "GET",
+          "path": "/versions/{version_uid}/runs",
+          "operationId": "listRuns",
+          "$why": "the first page of the version's runs, read to learn which run the blocks are tied to"
+        }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
+        {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "the top strip's project selector (R-150b) reads the project list when the address names a project, only for a session that may open the project list"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/runs/{run_id}", "operationId": "getRunStatus", "$why_optional": "only once the version has a run"},
+        {"method": "GET", "path": "/runs/{run_id}/findings", "operationId": "listRunFindings", "$why_optional": "only for a run that published a result"},
+        {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "only for an IMAGE block with a crop, loaded lazily by the browser as it is scrolled to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -418,7 +650,11 @@
           "$why_optional": "only a session holding `admin` reads the pending-request count"
         },
         {"method": "GET", "path": "/assignments", "operationId": "listAssignments", "$why_optional": "only a session holding `expert` reads its own open work for «Мои задачи» (W61-DISPATCHER-01); the walk lands on the home page, which `root` declares the same way"},
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"}
       ],
       "follow": null
     },
@@ -443,7 +679,12 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -476,7 +717,12 @@
       ],
       "expects_api": [],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -524,7 +770,12 @@
         {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "only after the reader chooses a project"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks", "operationId": "listVersionPortalBlocks", "$why_optional": "only after the reader chooses a version; «Блоки портала» is the tab it opens on"},
         {"method": "GET", "path": "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop", "operationId": "streamVersionPortalBlockCrop", "$why_optional": "only for an IMAGE block with a crop, loaded lazily by the browser as it is scrolled to"},
-        {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "only after the reader opens «Строки текста»"}
+        {"method": "GET", "path": "/versions/{version_uid}/blocks", "operationId": "getVersionBlocks", "$why_optional": "only after the reader opens «Строки текста»"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -547,7 +798,12 @@
         {"method": "GET", "path": "/projects", "operationId": "listProjects"}
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -560,10 +816,21 @@
         "A run filter is optional; the cold route requests the first page."
       ],
       "expects_api": [
-        {"method": "GET", "path": "/execution/journal", "operationId": "listExecutionJournal"}
+        {"method": "GET", "path": "/execution/journal", "operationId": "listExecutionJournal"},
+        {
+          "method": "GET",
+          "path": "/projects",
+          "operationId": "listProjects",
+          "$why": "«Журнал выполнения» opens with the run chooser, whose first step lists the projects (RunPicker)"
+        }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -608,7 +875,11 @@
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01); the cold route opens «Процессы» and a closed tab mounts nothing"},
         {"method": "GET", "path": "/executor-connections/{connection_id}", "operationId": "getExecutorConnection", "$why_optional": "read once per listed connection on the «Подключения» and «Назначения» tabs, and polled every 3 s while a probe is open (EXEC-HTTP-01)"},
-        {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01)"}
+        {"method": "GET", "path": "/executor-routes", "operationId": "listExecutorRoutes", "$why_optional": "read only on the «Подключения» and «Назначения» tabs (EXEC-HTTP-01)"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -641,7 +912,12 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -657,7 +933,12 @@
       ],
       "expects_api": [],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -678,7 +959,11 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -701,7 +986,12 @@
         {"method": "GET", "path": "/sections/{section_code}/specification", "operationId": "getSectionSpecification"}
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -723,7 +1013,12 @@
         {"method": "GET", "path": "/norms/snapshots/events", "operationId": "listNormSnapshotEvents"}
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -746,7 +1041,12 @@
       ],
       "expects_api": [],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -760,10 +1060,38 @@
         "the profile each runs with. Read-only: the screen emits no write."
       ],
       "expects_api": [
-        {"method": "GET", "path": "/analysis/profiles", "operationId": "listAnalysisProfiles"}
+        {"method": "GET", "path": "/analysis/profiles", "operationId": "listAnalysisProfiles"},
+        {
+          "method": "GET",
+          "path": "/ar-v3-beta/pack",
+          "operationId": "getArV3BetaPackStatus",
+          "$why": "the AR v3 pack panel is part of the page, read on mount"
+        },
+        {
+          "method": "GET",
+          "path": "/analysis/presets",
+          "operationId": "listAnalysisPresets",
+          "$why": "«Пресеты запуска» is part of the page, read on mount"
+        },
+        {
+          "method": "GET",
+          "path": "/executor-connections",
+          "operationId": "listExecutorConnections",
+          "$why": "«Пресеты запуска» judges each preset against the executors, read on mount"
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "operationId": "getMe",
+          "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
+        }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -777,11 +1105,26 @@
       ],
       "expects_api": [
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue"},
-        {"method": "GET", "path": "/me", "operationId": "getMe"}
+        {"method": "GET", "path": "/me", "operationId": "getMe"},
+        {
+          "method": "GET",
+          "path": "/execution/comparison-queue",
+          "operationId": "getComparisonQueueSummary",
+          "$why": "the comparison summary block is part of the page (a deployment with the module off answers 4xx, which this walk reports)"
+        },
+        {
+          "method": "GET",
+          "path": "/execution/comparison-ai-queue",
+          "operationId": "getComparisonAiQueue",
+          "$why": "the AI-description queue sits under the comparison summary and is read once it has answered"
+        }
       ],
       "optional_api": [
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while a listed job is leased or running, to name the worker holding its run (W54-WORKERS-WEB)"},
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -802,7 +1145,45 @@
       "optional_api": [
         {"method": "GET", "path": "/users", "operationId": "listUsers", "$why_optional": "only a session holding `admin` reads the experts a creation or a reassignment may name"},
         {"method": "GET", "path": "/projects", "operationId": "listProjects", "$why_optional": "only a session holding `admin` reads the projects of the creation form"},
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+      ],
+      "follow": null
+    },
+    {
+      "name": "schedule",
+      "path": "/schedule",
+      "page_module": "web/src/app/schedule/page.tsx",
+      "$comment": [
+        "«График работ» (UI-PARITY-P0P, contract 1.31.0): checked documents per engineer and day against the month's plan.",
+        "The cold route opens the month tab, which reads the month's schedule and the reserve from today (for the overdue",
+        "figure). The reserve tab («Календарь запаса») is opened by `?tab=reserve`, so it is walked by the write steps",
+        "`schedule-*`, as an expert and as an administrator."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/work-schedule",
+          "operationId": "getWorkSchedule",
+          "$why": "the month tab, which the cold route opens on"
+        },
+        {
+          "method": "GET",
+          "path": "/work-schedule/reserve",
+          "operationId": "getWorkScheduleReserve",
+          "$why": "the month tab reads the reserve from today for the overdue figure"
+        }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -823,7 +1204,12 @@
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "the shell reads release notes for an active complete session"},
         {"method": "GET", "path": "/system/version", "operationId": "getProductVersion", "$why_optional": "the screen checks whether the stages module is on"},
         {"method": "GET", "path": "/projects/{project_uid}/stage-pairs", "operationId": "listStagePairs", "$why_optional": "read after a project is selected, automatically for exactly one project"},
-        {"method": "GET", "path": "/projects/{project_uid}/stage-pair-suggestions", "operationId": "listStagePairSuggestions", "$why_optional": "read after a project is selected, automatically for exactly one project"}
+        {"method": "GET", "path": "/projects/{project_uid}/stage-pair-suggestions", "operationId": "listStagePairSuggestions", "$why_optional": "read after a project is selected, automatically for exactly one project"},
+        {"method": "GET", "path": "/projects/{project_uid}/stage-uploads", "operationId": "listStageUploads", "$why_optional": "only once a project is chosen: the page opens on the first project the list offers"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -855,7 +1241,13 @@
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits", "operationId": "listComparisonMatrixEdits", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-series", "operationId": "listComparisonSeries", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-version-orders", "operationId": "listComparisonVersionOrders", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
-        {"method": "GET", "path": "/documents/{document_uid}/versions", "operationId": "listVersions", "$why_optional": "the tab «Сравнение листов» is opened by a click"}
+        {"method": "GET", "path": "/documents/{document_uid}/versions", "operationId": "listVersions", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
+        {"method": "GET", "path": "/projects/{project_uid}/comparison-launch-queue", "operationId": "getComparisonLaunchQueue", "$why_optional": "only once a project is chosen: the page opens on the first project the list offers"},
+        {"method": "GET", "path": "/execution/comparison-ai-queue", "operationId": "getComparisonAiQueue", "$why_optional": "the AI-description queue of the comparison module, read beside the launch queue once a project is chosen"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -868,7 +1260,12 @@
       ],
       "expects_api": [],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -881,7 +1278,12 @@
       ],
       "expects_api": [],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -902,7 +1304,12 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": {
         "capture": "user_uid",
@@ -925,7 +1332,12 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
       ],
       "follow": null
     },
@@ -946,7 +1358,11 @@
         }
       ],
       "optional_api": [
-        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"}
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"}
       ],
       "follow": null
     }
@@ -2355,6 +2771,12 @@
             "bound_ms": 120000
           },
           {
+            "do": "wait_for",
+            "selector": "[data-upload-dialog=\"single\"] button",
+            "text_contains": "Подтвердить группировку и порядок",
+            "bound_ms": 120000
+          },
+          {
             "do": "click",
             "selector": "[data-upload-dialog=\"single\"] button",
             "text": "Подтвердить группировку и порядок"
@@ -3452,10 +3874,10 @@
           }
         ],
         "forbids_rendered": [
-          ".am-page__body input",
-          ".am-page__body textarea",
-          ".am-page__body select",
-          ".am-page__body form"
+          "table[aria-label=\"Профили анализа по разделам\"] input",
+          "table[aria-label=\"Профили анализа по разделам\"] textarea",
+          "table[aria-label=\"Профили анализа по разделам\"] select",
+          "table[aria-label=\"Профили анализа по разделам\"] form"
         ],
         "screen": "analysis-settings",
         "case": "action"
@@ -3484,8 +3906,8 @@
           }
         ],
         "forbids_rendered": [
-          ".am-page__body input",
-          ".am-page__body form"
+          "table[aria-label=\"Профили анализа по разделам\"] input",
+          "table[aria-label=\"Профили анализа по разделам\"] form"
         ],
         "screen": "analysis-settings",
         "case": "refused"
@@ -8246,7 +8668,7 @@
         "captures": [
           {
             "kind": "text",
-            "selector": "ol[data-worker-group=\"active\"] > li > p > code",
+            "selector": "ol[data-worker-group=\"active\"] > li > div > p > code",
             "as": [
               "worker_id"
             ],
@@ -8385,6 +8807,180 @@
         ],
         "screen": "workers",
         "case": "action"
+      },
+      {
+        "name": "schedule-month-for-an-expert",
+        "as": "expert_only",
+        "at": "/schedule",
+        "page_module": "web/src/app/schedule/page.tsx",
+        "control_module": "web/src/_pages/work-schedule/ui/work-schedule-page.tsx",
+        "reads_only": true,
+        "$comment": [
+          "«График работ» (UI-PARITY-P0P, D-318), the month tab as an expert who is not an administrator reads it:",
+          "the month's figures and the table per engineer, and NO plan or absence controls -- those are drawn for `admin` only."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/work-schedule",
+            "operationId": "getWorkSchedule",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/work-schedule/reserve",
+            "operationId": "getWorkScheduleReserve",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-screen=\"work-schedule\"] [data-schedule-month]"
+          },
+          {
+            "selector": "[data-schedule-tiles]"
+          },
+          {
+            "selector": "[data-schedule-stats]"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-screen=\"work-schedule\"] button",
+            "text": "Изменить план"
+          },
+          {
+            "selector": "[data-screen=\"work-schedule\"] button",
+            "text": "Выходные и отсутствия"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-schedule-failure]"
+        ],
+        "screen": "schedule",
+        "case": "refused"
+      },
+      {
+        "name": "schedule-month-for-an-administrator",
+        "as": "admin_only",
+        "at": "/schedule",
+        "page_module": "web/src/app/schedule/page.tsx",
+        "control_module": "web/src/_pages/work-schedule/ui/work-schedule-page.tsx",
+        "reads_only": true,
+        "$comment": [
+          "The same month tab as an administrator who is not an expert: the same figures, and the controls that change the",
+          "plan and the absences, which only `admin` is drawn."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/work-schedule",
+            "operationId": "getWorkSchedule",
+            "expect_status": 200
+          },
+          {
+            "method": "GET",
+            "path": "/work-schedule/reserve",
+            "operationId": "getWorkScheduleReserve",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-screen=\"work-schedule\"] [data-schedule-month]"
+          },
+          {
+            "selector": "[data-screen=\"work-schedule\"] button",
+            "text_contains": "Изменить план"
+          },
+          {
+            "selector": "[data-screen=\"work-schedule\"] button",
+            "text_contains": "Выходные и отсутствия"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-schedule-failure]"
+        ],
+        "screen": "schedule",
+        "case": "action",
+        "no_negative_case": "a read of the month: the refusal of the plan controls to an expert is `schedule-month-for-an-expert`"
+      },
+      {
+        "name": "schedule-reserve-calendar-for-an-expert",
+        "as": "expert_only",
+        "at": "/schedule?tab=reserve",
+        "page_module": "web/src/app/schedule/page.tsx",
+        "control_module": "web/src/_pages/work-schedule/ui/work-schedule-page.tsx",
+        "reads_only": true,
+        "$comment": [
+          "«Календарь запаса» (the reserve tab, opened by the address) as an expert: the four weeks from this week's Monday,",
+          "read once, and the month tab is not mounted -- a closed tab reads nothing."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/work-schedule/reserve",
+            "operationId": "getWorkScheduleReserve",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-schedule-reserve]"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/work-schedule",
+            "why": "only the open tab is mounted; the month tab is closed"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-reserve-failure]",
+          "[data-schedule-failure]"
+        ],
+        "screen": "schedule",
+        "case": "action",
+        "no_negative_case": "a read of the reserve calendar: a reader who is not an administrator is offered no other engineer's filter, which `schedule-month-for-an-expert` already holds"
+      },
+      {
+        "name": "schedule-reserve-calendar-for-an-administrator",
+        "as": "admin_only",
+        "at": "/schedule?tab=reserve",
+        "page_module": "web/src/app/schedule/page.tsx",
+        "control_module": "web/src/_pages/work-schedule/ui/work-schedule-page.tsx",
+        "reads_only": true,
+        "$comment": [
+          "The reserve tab as an administrator who is not an expert: the same read of the same four weeks."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/work-schedule/reserve",
+            "operationId": "getWorkScheduleReserve",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-schedule-reserve]"
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "GET",
+            "path": "/work-schedule",
+            "why": "only the open tab is mounted; the month tab is closed"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-reserve-failure]",
+          "[data-schedule-failure]"
+        ],
+        "screen": "schedule",
+        "case": "action",
+        "no_negative_case": "a read of the reserve calendar; the drag, the multi-select and the moves are a later step of D-318"
       },
       {
         "name": "profile-needs-a-surname",

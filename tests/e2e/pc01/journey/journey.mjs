@@ -149,12 +149,21 @@ function fill(template, captured, samples = {}) {
  * never declared here; it is captured from a link the application rendered.
  */
 function concreteApi(expectation, captured, constants = {}) {
-  return `${expectation.method} ${API_PREFIX}${fill(expectation.path, { ...constants, ...captured })}`;
+  // A route's own declared constant wins over an identifier an earlier route captured under the same name: the
+  // section page captures `section_code` from the side menu, and `/section-optimisation` still opens on AR.
+  return `${expectation.method} ${API_PREFIX}${fill(expectation.path, { ...captured, ...constants })}`;
 }
 
-/** `GET /bff/v1/findings/fnd_01.../decisions` -> `GET /bff/v1/findings/{id}/decisions`. */
+/**
+ * `GET /bff/v1/findings/fnd_01.../decisions` -> `GET /bff/v1/findings/{id}/decisions`.
+ *
+ * A portal block is addressed by the portal's own identifier, `blk_` and 32 lowercase hexadecimal digits (contract
+ * `PortalBlockId`), not by a ULID, so it is collapsed by its own shape.
+ */
 function shapeOf(call) {
-  return call.replace(new RegExp(`[a-z]{3,4}_${ID}`, 'g'), '{id}');
+  return call
+    .replace(new RegExp(`[a-z]{3,4}_${ID}`, 'g'), '{id}')
+    .replace(/\bblk_[0-9a-f]{32}\b/g, '{id}');
 }
 
 const failures = [];
