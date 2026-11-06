@@ -18,11 +18,6 @@
   margin-top: 0;
 }
 
-.list :global(li.am-state) {
-  margin-bottom: 6px !important;
-  padding: 10px 14px;
-}
-
 .create:focus-within,
 .list:focus-within {
   border-color: var(--am-line-strong);

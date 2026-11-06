@@ -14,6 +14,13 @@
  * address the dashboard's «Не запускались» links to) asks for `audit_state=not_run` and says so above the list, with
  * «Показать все» to lift it (`UI-A-38`). Each card carries the chip of its audit state (`UI-A-46`).
  *
+ * **The original's section page, in full** (`UI-A-35`, `UI-A-38`, `UI-A-51`, `UI-A-52`, `UI-A-53`). The row under the title is
+ * the original's row of numbers (documents, not started, awaiting a decision, checked, findings), counted over the
+ * documents the page holds, with no further request. The cards open with the Σ card «Оптимизация раздела». «Выбрать
+ * все» and «Запустить аудит (N)» start the section's documents together, one consent for the batch (`R-151c`); the
+ * tag filter and «Показать архивные» are the project page's (`R-151e`, `R-151a`); «Добавить документ» leads to the
+ * project's upload.
+ *
  * The route answers a malformed address with not-found; the screen refuses one as well (a project uid without
  * the contract's shape, a section code outside the fifteen), without a request, so it never throws on one.
  */
@@ -24,13 +31,17 @@ import Link from 'next/link';
 import type { ProjectSection as ProjectSectionCode, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
+import { useMayActAsExpert } from '@/entities/account';
 import {
-  DocumentCardGrid, NOT_RUN_EMPTY_TITLE, SHOW_ALL_LABEL, notRunFilterSentence, parseSectionAuditFilter, useSectionDocumentList,
+  AuditTallyLine, DocumentCardGrid, NOT_RUN_EMPTY_TITLE, SHOW_ALL_LABEL, auditTally, notRunFilterSentence,
+  parseSectionAuditFilter, useSectionDocumentList, withNotRunFilter,
 } from '@/entities/document-version';
 import type { SectionAuditFilter } from '@/entities/document-version';
 import type { ProjectSection } from '@/entities/project';
 import { findProjectSection, looksLikeProjectUid, projectSectionTitle } from '@/entities/project';
 import { DocumentContext } from '@/widgets/document-context';
+import { ArchivedToggle, BatchBar, TagFilter, selectionSlot, useBatchSelection } from '@/widgets/project-sections';
+import styles from './section-detail-page.module.css';
 
 export interface SectionDetailPageProps {
   readonly projectUid: string;
@@ -72,9 +83,17 @@ function SectionDetail({
   const sectionCode = section.code as ProjectSectionCode;
   const [cursors, setCursors] = useState<readonly string[]>([]);
   const cursor = cursors.at(-1);
+  // `R-151a`, `R-151e`: archived documents on request, and one tag; either starts the listing from its first page.
+  const [showArchived, setShowArchived] = useState(false);
+  const [tag, setTag] = useState<string | null>(null);
   // The listing and its order are the entity's, so the document page's «n из m» walks the same one.
-  const query = useSectionDocumentList(projectUid, sectionCode, cursor, auditFilter);
+  const query = useSectionDocumentList(projectUid, sectionCode, cursor, auditFilter, {
+    includeArchived: showArchived,
+    ...(tag === null ? {} : { tag }),
+  });
   const wholeSection = routes.projectSection(projectUid, sectionCode);
+  // `R-151c`: the cards a reader chose to start together.
+  const batch = useBatchSelection(useMayActAsExpert());
 
   let body;
   if (query.isPending) {
@@ -117,6 +136,18 @@ function SectionDetail({
         )}
         <DocumentCardGrid
           documents={query.data.items}
+          classification="stage"
+          leading={
+            // `UI-A-53`: the original's Σ card, the section's own control and not a document.
+            <>
+              <span className={`am-badge am-badge--active ${styles.sigmaBadge}`}>Σ сводная</span>
+              <Link href={routes.sectionOptimisation(section.code, projectUid)} data-section-optimisation-link={section.code}>
+                Оптимизация раздела
+              </Link>
+              <span className={styles.sigmaNote}>спецификация, кандидаты на замену, принятое</span>
+            </>
+          }
+          select={selectionSlot(batch.selection)}
           addresses={(version) => ({
             href: routes.version(projectUid, version.version_uid),
             documentHref: routes.document(projectUid, version.document_uid),
@@ -139,18 +170,45 @@ function SectionDetail({
     );
   }
 
+  // `UI-A-35`: the original's row of numbers, counted over the documents this page holds.
+  const partialList = query.data !== undefined && (cursors.length > 0 || query.data.page.next_cursor !== null);
   return (
     <PageShell
       title={sectionPageTitle(section)}
-      subtitle="Документы проекта, чья текущая версия подтверждена для этого раздела."
+      subtitle={query.data === undefined ? undefined : (
+        <AuditTallyLine
+          tally={auditTally(query.data.items)}
+          partial={partialList}
+          label={`${section.abbr} ${section.name}`}
+          // `UI-A-38`: «не запускались N» narrows the page to those documents; narrowed already, it is plain.
+          notRunHref={auditFilter === null ? withNotRunFilter(wholeSection) : undefined}
+        />
+      )}
       actions={(
-        <button type="button" className="am-button am-button--quiet" disabled={query.isFetching} onClick={() => void query.refetch()}>
-          {query.isFetching ? 'Обновляется…' : 'Обновить'}
-        </button>
+        <>
+          {/* `UI-A-56`: the original's «+ Добавить»; the upload form is the project page's. */}
+          <Link className="am-button am-button--quiet" href={`${routes.project(projectUid)}#upload`} data-section-add="">
+            Добавить документ
+          </Link>{' '}
+          <button type="button" className="am-button am-button--quiet" disabled={query.isFetching} onClick={() => void query.refetch()}>
+            {query.isFetching ? 'Обновляется…' : 'Обновить'}
+          </button>
+        </>
       )}
     >
       <DocumentContext projectUid={projectUid} current="section" sectionLabel={`${section.abbr} ${section.name}`} />
       <section className="am-section" data-section-page={section.code}>
+        <div className={styles.filters}>
+          <ArchivedToggle
+            checked={showArchived}
+            onChange={(checked) => {
+              setShowArchived(checked);
+              setCursors([]);
+            }}
+          />
+          <TagFilter projectUid={projectUid} tag={tag} onTag={(next) => { setTag(next); setCursors([]); }} />
+        </div>
+        {query.data === undefined ? null : <BatchBar projectUid={projectUid} selection={batch} documents={query.data.items} />}
         {body}
       </section>
     </PageShell>

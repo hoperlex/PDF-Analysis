@@ -38,6 +38,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { DocumentVersion, Role } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
+import { AuditTallyLine, tallyOfCounts } from '@/entities/document-version';
 import { looksLikeProjectUid, useProject } from '@/entities/project';
 import { OptimisationByDocument } from '@/widgets/optimisation-proposals';
 import { ProjectOptimisation } from '@/widgets/project-optimisation';
@@ -105,12 +106,18 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
       subtitle={<code>{projectUid}</code>}
       actions={<Link href={routes.projects()}>Все проекты</Link>}
     >
+      {/* `UI-A-35`: the original's row of numbers for the whole project, from the counters `getProject` carries. */}
+      {project.data?.audit_counts === undefined ? null : (
+        <div className={styles.summary}>
+          <AuditTallyLine tally={tallyOfCounts(project.data.audit_counts)} label={project.data.name} />
+        </div>
+      )}
       <nav className={styles.tabs} aria-label="Разделы проекта" data-project-tabs={tab}>
         {TABS.map((entry) => (
           <button
             key={entry.tab}
             type="button"
-            className={entry.tab === tab ? 'am-button' : 'am-button am-button--quiet'}
+            className={styles.tab}
             aria-pressed={entry.tab === tab}
             onClick={() => setTab(entry.tab)}
           >
@@ -124,7 +131,7 @@ export function ProjectDetailPage({ projectUid, roles = [] }: ProjectDetailPageP
           <section className={styles.panel} aria-label="Документы по разделам">
             <ProjectSections projectUid={projectUid} />
           </section>
-          <section className={styles.panel} aria-label="Добавить документ">
+          <section className={styles.panel} id="upload" aria-label="Добавить документ">
             <UploadPanel projectUid={projectUid} onUploaded={goToVersion} />
           </section>
         </div>

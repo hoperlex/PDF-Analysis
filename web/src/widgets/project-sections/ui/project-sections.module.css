@@ -80,6 +80,13 @@
   padding: 0 var(--am-gap) var(--am-gap);
 }
 
+/* The section's name and, under it, its row of figures. */
+.headText {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
 .heading {
   margin: 0;
   min-width: 0;
@@ -99,6 +106,15 @@
   font-size: var(--am-text-sm);
 }
 
+/* `R-151c`: «Выбрать все» and the batch start, under the filters. */
+.batchBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0 0 var(--am-gap-sm);
+}
+
 @media (max-width: 780px) {
   .sections {
     grid-template-columns: minmax(0, 1fr);
@@ -106,9 +122,10 @@
 }
 
 .rule {
-  margin: 0 0 var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
   max-width: 82ch;
-  font-size: var(--am-text-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
   line-height: var(--am-leading-base);
 }
 
@@ -116,9 +133,14 @@
 .titleRow {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap-xs);
+}
+
+/* The title takes the row; the toggle and «Обновить» sit at its end. */
+.titleRow > h2 {
+  margin: 0 auto 0 0;
 }
 
 /* `R-151a`: the archive toggle beside «Обновить». */

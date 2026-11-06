@@ -100,12 +100,16 @@ describe('the structure as a reader sees it', () => {
     expect(group(markup, 'GP')).not.toMatch(/<details[^>]*open=""/);
   });
 
-  it('carries the stage on every classified row, and «Раздел не подтверждён» on the rest', () => {
+  it('carries the stage on every classified row; the group, not each card, says what the rest lack', () => {
     const kj = group(markup, 'KJ');
     expect(kj).toContain('Стадия: Р');
     expect(kj).toContain('Стадия: П');
     expect(group(markup, 'AR')).toContain('data-version-classification="P:AR"');
-    expect(group(markup, 'unclassified')).toContain('Раздел не подтверждён');
+    // `UI-A-45` (density): inside its section's group a card does not repeat the section, and the group of
+    // documents with no classification does not repeat «Раздел не подтверждён» on every card.
+    expect(group(markup, 'AR')).not.toContain('data-section-code=');
+    expect(group(markup, 'unclassified')).toContain('Не классифицировано');
+    expect(group(markup, 'unclassified')).not.toContain('Раздел не подтверждён');
     expect(group(markup, 'unclassified')).not.toContain('Стадия:');
   });
 

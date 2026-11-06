@@ -38,15 +38,26 @@ export interface DocumentCardGridProps {
    * (`audit` is on `listDocuments` items only); with this, the chip of a document that was run links to the review.
    */
   readonly reviewAddress?: ((runId: string) => string) | undefined;
+  /**
+   * `UI-A-53`: a card that opens the grid, as the original's Σ card «Оптимизация раздела» does. It is the section's
+   * own control and not a document, so it is drawn in the grid's first cell and counted in no figure.
+   */
+  readonly leading?: ReactNode | undefined;
+  /**
+   * What the badges say of the classification. Inside a section's group the section is the group's heading, so the
+   * cards pass `'stage'` and keep the line short (`'none'` for the group of documents with no classification).
+   */
+  readonly classification?: 'both' | 'stage' | 'none' | undefined;
 }
 
 export function documentCardTitle(version: DocumentVersion): string {
   return version.display_title ?? version.source_filename ?? version.version_uid;
 }
 
-export function DocumentCardGrid({ documents, addresses, select, reviewAddress }: DocumentCardGridProps) {
+export function DocumentCardGrid({ documents, addresses, select, reviewAddress, leading, classification = 'both' }: DocumentCardGridProps) {
   return (
     <ul className={styles.grid} data-document-cards={documents.length}>
+      {leading === undefined || leading === null ? null : <li className={styles.leading} data-grid-leading="">{leading}</li>}
       {documents.map((version) => {
         const { href, documentHref } = addresses(version);
         const control = select?.(version) ?? null;
@@ -59,18 +70,20 @@ export function DocumentCardGrid({ documents, addresses, select, reviewAddress }
           >
             <div className={styles.top}>
               <span className={styles.ordinal} title="Номер текущей версии документа">V{version.version_ordinal}</span>
+              <span className={styles.pages}>{version.page_count} стр.</span>
               {version.archived_at === undefined ? null : <span className={styles.archived}>В архиве</span>}
-              {control === null ? null : <span className={styles.select}>{control}</span>}
+              <span className={styles.topEnd}>
+                <Link href={documentHref} title="История версий документа">все версии</Link>
+                {control === null ? null : <span className={styles.select}>{control}</span>}
+              </span>
             </div>
             <p className={styles.title}>
               <Link href={href}>{documentCardTitle(version)}</Link>
             </p>
+            {/* The stage, and `UI-A-46` the audit state the server read for the page: one row, as the original's pills. */}
             <div className={styles.badges}>
-              <ClassificationBadges classification={version.classification} />
-            </div>
-            {/* `UI-A-46`: the audit state of the current version, read by the server for the page. */}
-            {version.audit === undefined ? null : (
-              <div className={styles.badges}>
+              <ClassificationBadges classification={version.classification} shown={classification} />
+              {version.audit === undefined ? null : (
                 <AuditChip
                   audit={version.audit}
                   reviewHref={
@@ -79,16 +92,13 @@ export function DocumentCardGrid({ documents, addresses, select, reviewAddress }
                       : reviewAddress(version.audit.result_run_id)
                   }
                 />
-              </div>
-            )}
+              )}
+            </div>
             {/* `R-151e`: the document's free tags. */}
             {(version.tags ?? []).length === 0 ? null : (
               <p className={styles.tags}>{(version.tags ?? []).map((tag) => <span key={tag} className={styles.tag}>{tag}</span>)}</p>
             )}
             {isComparisonOnly(version) ? <ComparisonOnlyMark version={version} /> : null}
-            <p className={styles.meta}>
-              страниц {version.page_count} · <Link href={documentHref}>все версии</Link>
-            </p>
           </li>
         );
       })}

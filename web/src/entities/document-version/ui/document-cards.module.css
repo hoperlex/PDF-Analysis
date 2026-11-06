@@ -31,9 +31,34 @@
 
 .top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--am-gap-xs);
+  font-size: var(--am-text-xs);
+}
+
+.pages {
+  color: var(--am-ink-muted);
+}
+
+/* The history link and the selection box sit at the row's end; the row wraps on a narrow card. */
+.topEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin-left: auto;
+}
+
+/* `UI-A-53`: the Σ card that opens the grid, a control of the section and not a document. */
+.leading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+  padding: var(--am-gap-sm);
+  border: 1px dashed var(--am-accent);
+  border-radius: var(--am-radius);
+  background: var(--am-accent-light);
 }
 
 .ordinal {
@@ -53,17 +78,21 @@
 .title {
   margin: 0;
   overflow-wrap: anywhere;
+  font-size: var(--am-text-md);
   font-weight: 600;
+  line-height: var(--am-leading-tight);
 }
 
 .badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
   min-width: 0;
 }
 
-.meta {
-  margin: 0;
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-xs);
+.badges:empty {
+  display: none;
 }
 
 /* `R-151a`: an archived document, listed only on request, says so and steps back. */

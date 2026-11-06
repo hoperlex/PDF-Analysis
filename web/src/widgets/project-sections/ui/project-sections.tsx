@@ -32,35 +32,27 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
-import type { DocumentVersion, ProjectUid, VersionUid } from '@/shared/api';
+import type { DocumentVersion, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import { useMayActAsExpert } from '@/entities/account';
 import {
-  DocumentCardGrid, documentCardTitle, isComparisonOnly, useDocumentList, useDocumentTags,
+  AuditTallyLine, DocumentCardGrid, auditTally, useDocumentList,
 } from '@/entities/document-version';
-import type { BatchEntry } from '@/features/start-run';
-import { BatchStartPanel } from '@/features/start-run';
 
 import { projectStructure } from '../model/structure';
+import type { CardSelection } from '../model/use-batch-selection';
+import { startable, useBatchSelection } from '../model/use-batch-selection';
+import { BatchBar, selectionSlot } from './batch-bar';
+import { ArchivedToggle, TagFilter } from './document-filters';
 import styles from './project-sections.module.css';
 
 export interface ProjectSectionsProps {
   readonly projectUid: ProjectUid;
 }
 
-/**
- * `R-151c`: the cards a reader may start together. Only a version confirmed for a section can be run, and a version
- * admitted for comparison only cannot; the box is not drawn for either.
- */
-export interface CardSelection {
-  readonly selected: ReadonlySet<string>;
-  readonly onToggle: (version: DocumentVersion) => void;
-}
-
-export function startable(version: DocumentVersion): boolean {
-  return version.classification !== undefined && !isComparisonOnly(version);
-}
+export type { CardSelection };
+export { startable };
 
 function DocumentRows({
   projectUid,
@@ -81,6 +73,8 @@ function DocumentRows({
   return (
     <DocumentCardGrid
       documents={documents}
+      // The group says the section (or that there is none), so the cards say only the stage.
+      classification={toClassification ? 'none' : 'stage'}
       addresses={(version) => ({
         href: toClassification
           ? routes.versionClassification(projectUid, version.version_uid)
@@ -88,14 +82,7 @@ function DocumentRows({
         documentHref: routes.document(projectUid, version.document_uid),
       })}
       reviewAddress={(runId) => routes.review(projectUid, runId)}
-      select={selection === undefined ? undefined : (version) => startable(version) ? (
-        <input
-          type="checkbox"
-          aria-label={`Выбрать «${documentCardTitle(version)}» для запуска аудита`}
-          checked={selection.selected.has(version.version_uid)}
-          onChange={() => selection.onToggle(version)}
-        />
-      ) : null}
+      select={selectionSlot(selection)}
     />
   );
 }
@@ -115,9 +102,8 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
   return (
     <div data-project-structure="" data-document-count={items.length}>
       <p className={styles.rule} data-section-rule="confirmed">
-        Документ стоит в разделе, который эксперт подтвердил для его текущей версии на экране
-        версии. Пока раздел не подтверждён, документ находится в группе «Не классифицировано», и
-        прогон по нему не запускается.
+        Документ стоит в разделе, который эксперт подтвердил для его текущей версии; до этого он в группе
+        «Не классифицировано», и прогон по нему не запускается.
       </p>
       {hasNextPage ? (
         <p className="am-note" data-structure-page="partial">
@@ -136,14 +122,16 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
             <details className={styles.card} open={documents.length > 0}>
               <summary className={styles.cardHeader}>
                 <span className={styles.code}>{section.code}</span>
-                <h3 className={styles.heading}>
-                  <span className={styles.abbr}>{section.abbr}</span> {section.name}
-                  {documents.length === 0 ? (
-                    <span className={styles.count}> — документов нет</span>
-                  ) : (
-                    <span className={styles.count}> — документов: {documents.length}</span>
+                <span className={styles.headText}>
+                  <h3 className={styles.heading}>
+                    <span className={styles.abbr}>{section.abbr}</span> {section.name}
+                    {documents.length === 0 ? <span className={styles.count}> — документов нет</span> : null}
+                  </h3>
+                  {documents.length === 0 ? null : (
+                    // `UI-A-35`: the original's row of numbers, from the page's own documents.
+                    <AuditTallyLine tally={auditTally(documents)} partial={hasNextPage} label={`${section.abbr} ${section.name}`} />
                   )}
-                </h3>
+                </span>
                 <span className={styles.chevron} aria-hidden="true">›</span>
               </summary>
               {documents.length === 0 ? null : (
@@ -171,14 +159,15 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
           <details className={styles.card} open={structure.unclassified.length > 0}>
             <summary className={styles.cardHeader}>
               <span className={styles.code}>—</span>
-              <h3 className={styles.heading}>
-                Не классифицировано
-                {structure.unclassified.length === 0 ? (
-                  <span className={styles.count}> — документов нет</span>
-                ) : (
-                  <span className={styles.count}> — документов: {structure.unclassified.length}</span>
+              <span className={styles.headText}>
+                <h3 className={styles.heading}>
+                  Не классифицировано
+                  {structure.unclassified.length === 0 ? <span className={styles.count}> — документов нет</span> : null}
+                </h3>
+                {structure.unclassified.length === 0 ? null : (
+                  <AuditTallyLine tally={auditTally(structure.unclassified)} partial={hasNextPage} label="Не классифицировано" />
                 )}
-              </h3>
+              </span>
               <span className={styles.chevron} aria-hidden="true">›</span>
             </summary>
             {structure.unclassified.length === 0 ? null : (
@@ -199,21 +188,10 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   const [showArchived, setShowArchived] = useState(false);
   // `R-151e`: the tag filter, offered from the project's whole catalogue (never from one page of documents).
   const [tag, setTag] = useState<string | null>(null);
-  const tags = useDocumentTags(projectUid);
   const query = useDocumentList(projectUid, cursor, undefined, showArchived, tag ?? undefined, { order: 'audit' });
   const mayAct = useMayActAsExpert();
-  // `R-151c`: the chosen cards, by version, and the batch the panel was opened with (fixed for its life).
-  const [chosen, setChosen] = useState<ReadonlyMap<string, BatchEntry>>(new Map());
-  const [batch, setBatch] = useState<readonly BatchEntry[] | null>(null);
-  const selection: CardSelection | undefined = mayAct && batch === null ? {
-    selected: new Set(chosen.keys()),
-    onToggle: (version) => setChosen((map) => {
-      const next = new Map(map);
-      if (next.has(version.version_uid)) next.delete(version.version_uid);
-      else next.set(version.version_uid, { versionUid: version.version_uid as VersionUid, title: documentCardTitle(version) });
-      return next;
-    }),
-  } : undefined;
+  // `R-151c`: the chosen cards, and the batch the panel was opened with (fixed for its life).
+  const batch = useBatchSelection(mayAct);
 
   let body;
   if (query.isPending) {
@@ -248,7 +226,7 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
           projectUid={projectUid}
           items={query.data.items}
           hasNextPage={nextCursor !== null}
-          selection={selection}
+          selection={batch.selection}
         />
         <div className="am-pager">
           {cursor === undefined ? null : (
@@ -278,21 +256,17 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
     <section className="am-section" data-project-sections={projectUid}>
       <div className={styles.titleRow}>
         <h2>Разделы проекта</h2>
-        <label className={styles.archivedToggle}>
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(event) => {
-              setShowArchived(event.target.checked);
-              setCursor(undefined);
-            }}
-          />{' '}
-          Показать архивные
-        </label>
+        <ArchivedToggle
+          checked={showArchived}
+          onChange={(checked) => {
+            setShowArchived(checked);
+            setCursor(undefined);
+          }}
+        />
         {/* `UI-A-51`: the original's «Обновить» beside the section list; it re-reads this page. */}
         <button
           type="button"
-          className="am-button am-button--quiet"
+          className="am-button am-button--quiet am-button--small"
           data-project-sections-refresh
           disabled={query.isFetching}
           onClick={() => {
@@ -302,50 +276,8 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
           {query.isFetching ? 'Обновляется…' : 'Обновить'}
         </button>
       </div>
-      {(tags.data?.items.length ?? 0) === 0 ? null : (
-        <div className={styles.tagFilter} role="group" aria-label="Отбор по метке" data-tag-filter={tag ?? ''}>
-          <span className={styles.tagFilterLabel}>Метки:</span>
-          <button
-            type="button"
-            className="am-button am-button--quiet am-button--small"
-            aria-pressed={tag === null}
-            onClick={() => { setTag(null); setCursor(undefined); }}
-          >
-            Все
-          </button>
-          {(tags.data?.items ?? []).map((item) => (
-            <button
-              key={item.tag}
-              type="button"
-              className="am-button am-button--quiet am-button--small"
-              aria-pressed={tag === item.tag}
-              onClick={() => { setTag(item.tag); setCursor(undefined); }}
-            >
-              {item.tag} <span className={styles.tagCount}>{item.document_count}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {mayAct && chosen.size > 0 && batch === null ? (
-        <p className="am-note" data-batch-selection={chosen.size}>
-          <button type="button" className="am-button" onClick={() => setBatch([...chosen.values()])}>
-            Запустить аудит ({chosen.size})
-          </button>{' '}
-          <button type="button" className="am-button am-button--quiet" onClick={() => setChosen(new Map())}>
-            Снять выбор
-          </button>
-        </p>
-      ) : null}
-      {batch === null ? null : (
-        <BatchStartPanel
-          projectUid={projectUid}
-          entries={batch}
-          onClose={() => {
-            setBatch(null);
-            setChosen(new Map());
-          }}
-        />
-      )}
+      <TagFilter projectUid={projectUid} tag={tag} onTag={(next) => { setTag(next); setCursor(undefined); }} />
+      {query.data === undefined ? null : <BatchBar projectUid={projectUid} selection={batch} documents={query.data.items} />}
       {body}
     </section>
   );
