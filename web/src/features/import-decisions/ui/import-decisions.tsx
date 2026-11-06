@@ -34,11 +34,14 @@ export const IMPORT_REFUSAL_LABELS: Readonly<Record<DecisionImportRefusal, strin
   not_importable: 'решение не отзывается через Excel',
 };
 
+const TOO_LARGE = 'Файл больше 10 MiB.';
+const EMPTY = 'Файл пуст.';
+
 /** The file refusals the server names by `constraint`, in words. */
 const FILE_REFUSALS: Readonly<Record<string, string>> = {
   not_our_export: 'Это не наша выгрузка: нужен лист «Замечания» с колонкой «ID замечания». Скачайте Excel заново.',
   unreadable: 'Файл не читается как книга Excel (.xlsx).',
-  too_large: 'Файл больше 10 MiB.',
+  too_large: TOO_LARGE,
   too_many_rows: 'В листе больше 20 000 строк.',
 };
 
@@ -107,7 +110,7 @@ export function ImportDecisions({ runId }: { readonly runId: RunId }) {
       failure={precheck ?? (importer.error !== null ? importFailure(importer.error) : null)}
       onChoose={(file) => {
         if (file.size === 0 || file.size > DECISION_IMPORT_MAX_BYTES) {
-          setPrecheck(file.size === 0 ? 'Файл пуст.' : FILE_REFUSALS.too_large ?? null);
+          setPrecheck(file.size === 0 ? EMPTY : TOO_LARGE);
           return;
         }
         setPrecheck(null);

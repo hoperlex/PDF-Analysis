@@ -1143,6 +1143,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listPriceListPositions": "/price-lists/prl_01M2545JSD15ETSNNV904X991N/positions",
         # `UI-PARITY-P0A`. An aggregate and not a page: driven by its own test below.
         "getDashboardSummary": "/dashboard",
+        # `UI-PARITY-P0J`. Its rows are decisions on optimisation proposals, which this sweep has none of: the journal and
+        # its project filter are driven in `tests/integration/optimisation/proposals/test_decisions.py`.
+        "listProposalDecisionJournal": "/proposal-decisions",
     }
     assert set(targets) == set(declared), (
         "an operation declaring query parameters is not driven here: "
@@ -1152,7 +1155,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listProjects": {"cursor", "limit"},
         "listRunFindings": {"category", "cursor", "limit", "verdict"},
         "listDecisionHistory": {"cursor", "limit"},
-        "listDocuments": {"cursor", "limit"},
+        # `UI-PARITY-P0E`, `P0G`, `P0H` (1.20.0, 1.22.0, 1.23.0): the section, archive and tag filters.
+        "listDocuments": {"cursor", "limit", "section_code", "include_archived", "tag"},
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
         "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
@@ -1178,6 +1182,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         },
         "listPriceListPositions": {"offset", "limit"},
         "getDashboardSummary": {"project_uid"},
+        # `UI-PARITY-P0J` (1.25.0): the proposal decision journal, optionally of one project.
+        "listProposalDecisionJournal": {"project_uid", "cursor", "limit"},
     }, f"the contract's query surface moved: {declared}"
 
     accounts_and_requests = _seed_accounts_and_requests(session, shipped_router)
@@ -1320,6 +1326,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "compareDocumentVersions",
             "listPriceListPositions",
             "getDashboardSummary",
+            "listProposalDecisionJournal",
         ):
             continue  # driven by its own test below
         target = targets[operation_id]
@@ -1385,7 +1392,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
                 if carried != {status}:
                     inert.setdefault(operation_id, []).append(f"status={status}")
 
-        if "include_archived" in names:
+        if "include_archived" in names and operation_id == "listUsers":
             # One account was archived above: absent by default, present when asked for.
             archived_uid = accounts_and_requests["archived"]
             default = ok(get(surface, f"{target}{sep}limit=200"))
@@ -1515,6 +1522,35 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             assert scoped, "a truncated filtered page carried no cursor"
             if get(surface, f"{target}{sep}limit=1&cursor={scoped}").status != 422:
                 inert.setdefault(operation_id, []).append("cursor scope")
+
+    # `UI-PARITY-P0E`, `P0G`, `P0H`: `listDocuments`' section, archive and tag filters over the catalogue's three
+    # documents -- one confirmed for АР, one archived, one tagged -- written after the sweep, which pages them all.
+    from auditmanager.access.public import UserRepository
+    from auditmanager.ingest.lifecycle import set_document_archived, set_document_tags
+    from auditmanager.sections.public import classify_document_version
+
+    actor = str(UserRepository().create_user(
+        session, "qs-documents@example.com", "qs-documents-passphrase-0123456789").user_uid)
+    classified, archived, tagged = paged.documents
+    classify_document_version(
+        session, project_uid=paged.project_uid, document_uid=classified, version_uid=paged.current_versions[0],
+        project_stage="P", section_code="AR", actor_uid=actor, actor_roles=frozenset({"expert"}),
+    )
+    set_document_archived(session, project_uid=paged.project_uid, document_uid=archived, archived=True,
+                          actor_uid=actor, idempotency_key="qs-documents-archive")
+    set_document_tags(session, project_uid=paged.project_uid, document_uid=tagged, tags=["Корпус 1"],
+                      actor_uid=actor, idempotency_key="qs-documents-tags")
+
+    def listed(query: str) -> set[str]:
+        page = ok(get(shipped_router, f"/projects/{paged.project_uid}/documents?{query}limit=200"))
+        return {item["document_uid"] for item in page["items"]}
+
+    if listed("section_code=AR&") != {classified}:
+        inert.setdefault("listDocuments", []).append("section_code")
+    if archived in listed("") or archived not in listed("include_archived=true&"):
+        inert.setdefault("listDocuments", []).append("include_archived")
+    if listed(f"tag={quote('Корпус 1')}&") != {tagged}:
+        inert.setdefault("listDocuments", []).append("tag")
 
     assert inert == {}, (
         "the contract declares these query parameters and supplying one changes nothing, "

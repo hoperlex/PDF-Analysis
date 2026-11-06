@@ -500,18 +500,16 @@ class IngestDocumentAdapter:
 
         There is no test query here: the rows, the order and the `404` for an unknown
         project all come from `DocumentRepository`, so a suite driving this adapter is
-        driving the shipped listing and not a second implementation of it. The section
-        filter (`UI-PARITY-P0E`) is the shipped adapter's own predicate.
+        driving the shipped listing and not a second implementation of it. The filters -- the
+        section (`UI-PARITY-P0E`), the archive (`P0G`) and the tag (`P0H`) -- are the shipped
+        adapter's own: this delegates to it, as a copy here once kept the section filter and
+        missed the other two.
         """
-        from auditmanager.bootstrap.adapters import _classified_section
+        from auditmanager.bootstrap.adapters import DocumentAdapter
 
-        views = tuple(
-            self._view(record)
-            for record in self._ingest.list_documents(ProjectUid(project_uid))
-        )
-        if section_code is None:
-            return views
-        return tuple(view for view in views if _classified_section(view) == section_code)
+        return tuple(DocumentAdapter(self._ingest).list_documents(
+            project_uid=project_uid, section_code=section_code, include_archived=include_archived, tag=tag,
+        ))
 
     def list_versions(self, *, document_uid: str) -> tuple[DocumentVersionView, ...]:
         return tuple(

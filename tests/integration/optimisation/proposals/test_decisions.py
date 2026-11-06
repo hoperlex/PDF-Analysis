@@ -214,3 +214,25 @@ def test_the_export_is_escaped_complete_and_separate_from_findings(unit, factory
              optimisation_pass_id=started["pass"].optimisation_pass_id, actor_roles=frozenset())
     _refused(ErrorCode.NOT_FOUND, unit, export_optimisation_proposals_csv,
              optimisation_pass_id="opp_01M2545JSD15ETSNNV904XA001", actor_roles=frozenset({"admin"}))
+
+
+def test_the_decision_journal_lists_every_decision_newest_first_and_narrows_to_a_project(
+    unit, cast, started, ready: World
+) -> None:
+    """`R-151h` (contract 1.25.0): the knowledge base's «Предложения» half -- every decision on a proposal, newest first,
+    with where it belongs; a project filter keeps that project's, and a project nothing was decided in yields nothing."""
+    from auditmanager.optimisation.proposals.journal import proposal_decision_journal
+
+    door, window, *_ = started["proposals"]
+    _decide(unit, cast, door, "accept", "j-1")
+    _decide(unit, cast, window, "reject", "j-2", "аналог хуже")
+    _decide(unit, cast, door, "revise", "j-3", "уточнить марку")
+
+    journal = unit(proposal_decision_journal, project_uid=ready.project)
+    assert [(entry.optimisation_proposal_id, entry.verdict) for entry in journal] == [
+        (door, "revise"), (window, "reject"), (door, "accept"),
+    ]
+    assert {entry.project_uid for entry in journal} == {ready.project}
+    assert journal[0].document_uid == ready.document and journal[0].comment == "уточнить марку"
+    assert unit(proposal_decision_journal, project_uid=cast.other_project) == ()
+    assert len(unit(proposal_decision_journal)) >= 3
