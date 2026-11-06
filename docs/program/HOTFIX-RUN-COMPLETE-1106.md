@@ -160,7 +160,7 @@ explicit terminal validator dispositions. Memory-only local answers still do not
 a process restart; active workers require coordinated deployment/draining.
 
 Integrator: runtime deployment is complete; leave main at the verified SHA. Closure
-records are development-only. Dev also contains unrelated API1.34/features requiring their
+records are development-only. Dev also contains later unrelated contract/features requiring their
 own reviewed release; do not promote its entire tree as this hotfix. No tag/checkpoint.
 Full build logs and safe terminal evidence are in the workspace task receipt and
 `.local/handoff/HOTFIX-RUN-COMPLETE-1106-green.json`.
