@@ -36,3 +36,34 @@ describe('the five numbers of a section row', () => {
     expect(result.summary.auditByCode[PROJECT_SECTIONS[0]!.code]).toBeUndefined();
   });
 });
+
+describe('the total row (UI-A-36)', () => {
+  it('is the column sums of the fifteen section rows, and leaves the unclassified row out', () => {
+    const result = summarizeSectionBreakdown(rows(true));
+    if (!result.ok) throw new Error('the fixture is a whole breakdown');
+    const count = PROJECT_SECTIONS.length;
+    const indexes = Array.from({ length: count }, (_, i) => i);
+    const sum = (read: (i: number) => number): number => indexes.reduce((acc, i) => acc + read(i), 0);
+    expect(result.summary.totals).toEqual({
+      documents: sum((i) => i),
+      audit: { notRun: count, noExpertDecision: 3 * count, checked: 3 * count, findings: sum((i) => i * 2) },
+    });
+    // The unclassified row's own four documents are not in it.
+    expect(result.summary.unclassifiedCount).toBe(4);
+  });
+
+  it('has no audit sums where the server sent no counts, and still sums the documents', () => {
+    const result = summarizeSectionBreakdown(rows(false));
+    if (!result.ok) throw new Error('the fixture is a whole breakdown');
+    expect(result.summary.totals.audit).toBeUndefined();
+    expect(result.summary.totals.documents).toBe(PROJECT_SECTIONS.reduce((acc, _, i) => acc + i, 0));
+  });
+
+  it('has no audit sums where one row lacks them: a missing row is not a smaller sum', () => {
+    const all = rows(true);
+    const lacking = all.map((row, i) => (i === 3 ? ({ ...row, audit_counts: undefined } as unknown as SectionDocumentCount) : row));
+    const result = summarizeSectionBreakdown(lacking);
+    if (!result.ok) throw new Error('the fixture is a whole breakdown');
+    expect(result.summary.totals.audit).toBeUndefined();
+  });
+});
