@@ -280,23 +280,26 @@ def answer(task: dict, *, codex: str | None = None) -> str:
             # and would take a trailing ``-`` as one more file.
             "--output-last-message", str(answer_path), "-", *image_args,
         ]
-        with events_path.open("wb") as output:
+        with events_path.open("wb") as output, tempfile.TemporaryFile(mode="w+b") as command_input:
+            # A regular file delivers the entire prompt and EOF independently of
+            # timeout polling. Retrying communicate(input=None) after a partial
+            # stdin-pipe write can leave the CLI waiting for bytes forever.
+            command_input.write(prompt.encode("utf-8"))
+            command_input.seek(0)
             if time.monotonic() >= deadline:
                 raise TaskError("codex_timeout")
             process = subprocess.Popen(
-                command, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.DEVNULL,
+                command, stdin=command_input, stdout=output, stderr=subprocess.DEVNULL,
                 cwd=root, env=_environment(), start_new_session=True,
             )
             started = time.monotonic()
-            first = True
             try:
                 while True:
                     try:
-                        process.communicate(input=prompt.encode("utf-8") if first else None,
-                                            timeout=0.2)
+                        process.wait(timeout=0.2)
                         break
                     except subprocess.TimeoutExpired:
-                        first = False
+                        pass
                     if time.monotonic() >= deadline:
                         _timeout_diagnostics(events_path, answer_path, started)
                         raise TaskError("codex_timeout")

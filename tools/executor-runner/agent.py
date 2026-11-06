@@ -21,8 +21,8 @@ Rules kept here:
 
 * the token (and an endpoint key) come from environment variables named in the config, never
   from the command line or the config file, and are removed from every log line;
-* the task payload (document text) is never logged and is written to disk only if the
-  configured command does so;
+* the task payload (document text) is never logged; command stdin uses a private
+  temporary file held only for the child process's lifetime;
 * a model other than the one declared in the config is never claimed to have answered: a task
   that pins another model is failed with ``model_mismatch`` before any work starts;
 * a schema-invalid answer is failed with a typed reason, never retried silently;
@@ -291,46 +291,50 @@ def run_command(cfg: Config, task: dict, budget: float, should_stop: Any) -> Ans
     # before the supervisor expires; never replace the stand's clock-adjusted budget.
     environment["PDF_ANALYSIS_COMMAND_DEADLINE_MONOTONIC"] = str(
         deadline - min(1.0, allowance / 10.0))
-    try:
-        process = subprocess.Popen(
-            cfg.command_argv,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            cwd=cfg.command_cwd,
-            env=environment,
-            start_new_session=True,  # so that only this command's own process group is ever signalled
-        )
-    except OSError as error:
-        raise ExecutorFailure("command_failed", f"cannot start: {type(error).__name__}") from None
-    stdout: bytes = b""
-    first = True
-    try:
-        while True:
-            try:
-                stdout, _ = process.communicate(input=payload if first else None, timeout=0.2)
-                break
-            except subprocess.TimeoutExpired:
-                first = False
-            except (BrokenPipeError, OSError):
-                # the command closed its stdin early; collect what it produced
-                first = False
+    with tempfile.TemporaryFile(mode="w+b") as command_input:
+        # All bytes and EOF are available before polling begins. A partially
+        # written stdin pipe must not depend on a later communicate(input=None),
+        # which can stop registering that pipe after its first timeout.
+        command_input.write(payload)
+        command_input.seek(0)
+        try:
+            process = subprocess.Popen(
+                cfg.command_argv,
+                stdin=command_input,
+                stdout=subprocess.PIPE,
+                cwd=cfg.command_cwd,
+                env=environment,
+                start_new_session=True,  # so that only this command's own process group is ever signalled
+            )
+        except OSError as error:
+            raise ExecutorFailure("command_failed", f"cannot start: {type(error).__name__}") from None
+        stdout: bytes = b""
+        try:
+            while True:
                 try:
-                    stdout, _ = process.communicate(timeout=1.0)
+                    stdout, _ = process.communicate(timeout=0.2)
                     break
                 except subprocess.TimeoutExpired:
                     pass
-            reason = should_stop()
-            if reason:
-                raise Interrupted(reason)
-            if time.monotonic() >= deadline:
-                raise ExecutorFailure("timeout", "the command did not finish within its time budget")
-    finally:
-        if process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)  # our own child's group, by its confirmed PID
-            except (ProcessLookupError, PermissionError, OSError):
-                process.kill()
-            process.wait()
+                except (BrokenPipeError, OSError):
+                    # Collect any answer already produced if the output pipe closed.
+                    try:
+                        stdout, _ = process.communicate(timeout=1.0)
+                        break
+                    except subprocess.TimeoutExpired:
+                        pass
+                reason = should_stop()
+                if reason:
+                    raise Interrupted(reason)
+                if time.monotonic() >= deadline:
+                    raise ExecutorFailure("timeout", "the command did not finish within its time budget")
+        finally:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)  # our own child's group, by its confirmed PID
+                except (ProcessLookupError, PermissionError, OSError):
+                    process.kill()
+                process.wait()
     if process.returncode == 124:
         raise ExecutorFailure("codex_timeout", "the CLI exhausted its task time budget; see the runner's safe diagnostics")
     if process.returncode != 0:

@@ -41,6 +41,7 @@ _COUNTS = frozenset({
     "pages_total", "pages_selected", "pages_processed", "pages_remaining", "pages_known",
     "characters_total", "characters_selected", "characters_processed", "characters_remaining",
     "characters_total_known", "characters_indexed", "facts_received", "facts_rejected",
+    "facts_rejections_unresolved", "rejected_candidate_count", "repair_calls_completed", "calls_completed", "calls_partial", "calls_failed",
     "pieces_total", "pieces_selected", "pieces_processed", "pieces_remaining",
     "pieces_total_known", "pieces_indexed", "pieces_omitted_from_index", "pieces_not_selected",
     "source_records_total", "source_records_scanned", "source_records_not_scanned",
@@ -83,9 +84,15 @@ def _procedures(value):
 def _part(value):
     if not isinstance(value, dict):
         return {}
+    refusals = value.get("reply_refusals", [])
+    unresolved = [row for row in refusals if row.get("status") != "resolved"]
     return {"status": _code(value.get("status")), "coverage": _counts(value.get("coverage")),
         "procedures": _procedures(value.get("procedures")),
         "batch_reasons": _reasons(value.get("batches", [])),
+        "reply_refusals": {"resolved": len(refusals) - len(unresolved), "unresolved": len(unresolved),
+            "original_codes": _reasons([record for row in refusals for record in row.get("rejected_records", [])]),
+            "unresolved_codes": _reasons([record for row in unresolved
+                for record in row.get("repair_rejected_records", row.get("rejected_records", []))])},
         "reason": _code(value.get("reason")) if value.get("reason") else None}
 
 
@@ -107,6 +114,7 @@ def _raw_refusals(store, rows, receipts):
     for row in rows:
         receipt = receipts.get(row["request_sha256"])
         if (receipt is None or receipt.get("procedure") not in {"block_analysis", "comprehensive_analysis"}
+                or receipt.get("window_id") == "global-cross-window"
                 or receipt.get("status") not in {"failed", "partial"} or not row["blob_id"]):
             continue
         item = {"request_sha256": row["request_sha256"], "procedure": _code(receipt.get("procedure"))}
@@ -181,7 +189,13 @@ def status(run_id):
         "global_cross_window": _part(result.get("global_cross_window"))}
     parameters = result.get("project_parameters", {})
     output["review"]["project_parameters"] = {**_part(parameters),
-        "rejection_codes": _reasons(parameters.get("rejected_facts", []))}
+        "rejection_codes": _reasons(parameters.get("rejected_facts", [])),
+        "unresolved_rejection_codes": _reasons([row for row in parameters.get("rejected_facts", [])
+            if not row.get("resolved_by_repair")]),
+        "unresolved_rejection_fields": dict(Counter(_code(field)
+            for row in parameters.get("rejected_facts", []) if not row.get("resolved_by_repair")
+            for field in row.get("invalid_fields", []))),
+        "reply_rejection_codes": _reasons(parameters.get("rejected_replies", []))}
     output["review"]["norm_lookup_reasons"] = _reasons(result.get("norm_lookup_receipts", []))
     output["review"]["saved_reply_validation"] = _raw_refusals(store, replies, _receipt_index(result))
     return output

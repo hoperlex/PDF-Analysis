@@ -374,7 +374,7 @@ class RunCostPreflight:
                     raise _invalid("analysis_coverage", "unsupported_plan")
                 if chars > 0 and os.environ.get("AUDITMANAGER_PROJECT_PARAMETERS", "1").strip().lower() not in {"0", "false", "off"}:
                     from auditmanager.analysis.public import project_parameters_policy
-                    parameters = project_parameters_policy(section, full_coverage=True)
+                    parameters = project_parameters_policy(section, full_coverage=True, candidate_refusals=True)
                     extended["project_parameters_policy"] = parameters
                     extra_calls += parameters["max_calls"]
                     input_tokens += parameters["max_calls"] * 100_000

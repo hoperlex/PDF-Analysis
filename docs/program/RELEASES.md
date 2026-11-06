@@ -15,6 +15,16 @@ after host verification.
 | `v0.6.0` | `37393a979a430e490843d7f410e9eca9491a4ea1` | `bf03d913bde596a77` (computed from tagged tree) | not measured (stand environment) | `1.0.0-draft.1` | `0021_portal_bundles` | `934705c04a71…` | `30053740f569…` | `W55B-INT-MAIN-PREP-03.md` (R-125 same-SHA gate completion); deploy run `38897018419`, owner-run host verification in `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md`; five live checks waived in `W55B-INT-TAG-01.md` | — (not promoted) |
 | `v0.7.0` — on `origin/main`, **host verification owed**, not tagged | `48c8e34ccd08a58ae61cbd09ecdba49066a5ad46` (the owner's pull request #3) | `bbbab3c0dfb856a39` computed from `git archive` of that SHA (`compute_build_id()`) | not measured (stand environment) | `1.0.0-draft.1` | `0028_classification_corrections` | `934705c04a71…` (builtin AR profile, unchanged since `v0.6.0`) | `30053740f569…` (builtin AR profile, unchanged since `v0.6.0`) | **none on this tree.** The owner merged pull requests #2 and #3 into `main` without a gate (`R-141e`); `NIGHT-1020-GATE-0-7-0-01.md` is an `R-125` completion of an earlier lineage and covers neither the classification correction, the normative references nor the hardening slices; light checks only (`RELEASE-0-7-0-RECORD-01.md`). Deploy workflow run `39571427597`, success, reported by the integrator and not re-read here; `infra/deploy/verify-deployed.sh` on the host: **pending** | none — the normative corpus is not imported on the stand |
 
+## `v0.12.3` candidate — local stdin delivery and validation outcomes
+
+`HOTFIX-RUN-COMPLETE-1106` follow-up repairs both interrupted subprocess stdin pipes,
+versions the changed runner package separately, preserves normative quote variants per
+input and adds a fresh passport policy for explicit rejection of unsupported candidates.
+Only strictly validated facts are accepted; structural, transport and source-coverage
+failures remain incomplete. The observed failed repeat is run_01M6RCQC0B0VJ8MFM0S58A61A5;
+its timeout had zero CLI events and zero answer bytes. No behavioral suites/full gate;
+build verification and a new unmetered live repeat are recorded in the task receipt.
+
 ## `v0.12.2` candidate — full source plans and execution statuses
 
 Revision 1 repairs missing word spaces in newly extracted PDF text. Revision 2 carries
