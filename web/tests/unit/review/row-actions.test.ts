@@ -54,6 +54,14 @@ describe('the row’s ✓ and ✕', () => {
     expect(rejectOnRejected?.props.disabled).toBe(true);
   });
 
+  it('marks the button of the verdict the finding already has as pressed, as the original lights its ✓ or ✕', () => {
+    const state = (verdict: FindingRowActionsProps['verdict']) =>
+      buttons(FindingRowActions(props({ verdict }))).map((button) => (button.props as { 'aria-pressed'?: boolean })['aria-pressed']);
+    expect(state('accepted')).toEqual([true, false]);
+    expect(state('rejected')).toEqual([false, true]);
+    expect(state('pending')).toEqual([false, false]);
+  });
+
   it('holds both while a press is on its way, and shows the note the press left', () => {
     const sending = buttons(FindingRowActions(props({ sending: 'reject' })));
     expect(sending.map((button) => button.props.disabled)).toEqual([true, true]);

@@ -35,6 +35,7 @@ export function FindingRowActions({ verdict, sending, note, onAccept, onReject }
         type="button"
         className={`am-button am-button--small ${styles.rowAccept}`}
         aria-label="Принять"
+        aria-pressed={verdict === 'accepted'}
         title="Принять: замечание подтверждено"
         disabled={busy || verdict === 'accepted'}
         onClick={onAccept}
@@ -45,6 +46,7 @@ export function FindingRowActions({ verdict, sending, note, onAccept, onReject }
         type="button"
         className={`am-button am-button--small ${styles.rowReject}`}
         aria-label="Отклонить"
+        aria-pressed={verdict === 'rejected'}
         title="Отклонить: замечание не подтверждено"
         disabled={busy || verdict === 'rejected'}
         onClick={onReject}

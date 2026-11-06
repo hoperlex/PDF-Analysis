@@ -74,6 +74,18 @@
   gap: var(--am-gap-xs);
 }
 
+.rowAccept[aria-pressed='true'] {
+  border-color: var(--am-ok);
+  background: var(--am-ok-light);
+  color: var(--am-ok);
+}
+
+.rowReject[aria-pressed='true'] {
+  border-color: var(--am-failed);
+  background: var(--am-failed-light);
+  color: var(--am-failed);
+}
+
 .rowAccept:hover {
   border-color: var(--am-ok);
   color: var(--am-ok);
