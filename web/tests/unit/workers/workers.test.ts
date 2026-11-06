@@ -19,7 +19,7 @@ import {
   workersQueryOptions,
 } from '@/entities/execution';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList } from '@/widgets/worker-list';
+import { CopyDiagnosticsView, WorkerList, copyToClipboard, workerDiagnosticText } from '@/widgets/worker-list';
 import { QueuePage } from '@/_pages/queue/ui/queue-page';
 import { WorkersPage, intakeIntentLabel } from '@/_pages/workers/ui/workers-page';
 
@@ -180,6 +180,66 @@ describe('the worker list', () => {
     const markup = list(['admin'], [worker({ state: 'draining' as ExecutionWorker['state'] })]);
     expect(markup).toContain('Неизвестное состояние исполнителя');
     expect(markup).not.toContain('wrk_');
+  });
+});
+
+describe('«Скопировать диагностику» on a worker’s row (UI-B-68)', () => {
+  it('is on every row, for every role, and is not a command', () => {
+    for (const roles of [[], ['expert'], ['admin']] as Role[][]) {
+      const markup = list(roles);
+      expect(markup.match(/data-worker-copy=""/g)?.length, roles.join()).toBe(REGISTRY.length);
+      expect(markup.match(/>Скопировать диагностику</g)?.length).toBe(REGISTRY.length);
+      expect(markup).not.toContain('data-worker-copy-result');
+    }
+  });
+
+  it('copies the facts the row prints, in its words', () => {
+    const text = workerDiagnosticText(ONLINE);
+    expect(text.split('\n')).toEqual([
+      'Диагностика исполнителя',
+      `Исполнитель: ${ONLINE.worker_id}`,
+      'Состояние: На связи',
+      'Приём: Берёт новые прогоны',
+      'Слотов: 1',
+      'Версия: 0.5.0',
+      'Запущен: 2026-10-12 10:00:00 UTC',
+      'Последний сигнал: 2026-10-12 10:05:00 UTC',
+      `Текущие прогоны: ${RUN_ID}`,
+    ]);
+  });
+
+  it('follows the worker: its state, its intake and its runs change the text, and no runs say «нет»', () => {
+    expect(workerDiagnosticText(STALE)).toContain('Состояние: Не отвечает');
+    expect(workerDiagnosticText(STALE)).toContain('Приём: Не берёт новые прогоны');
+    expect(workerDiagnosticText(STALE)).toContain('Текущие прогоны: нет');
+    const two = workerDiagnosticText(worker({ current_run_ids: [RUN_ID, OTHER_RUN] }));
+    expect(two).toContain(`Текущие прогоны: ${RUN_ID}, ${OTHER_RUN}`);
+  });
+
+  it('carries nothing but what the registry sends a row, so a token or a key has nowhere to come from', () => {
+    // A field the row does not print never reaches the text, even if a record carries it.
+    const extra = { ...ONLINE, token: 'секретный-токен', api_key: 'секретный-ключ' } as ExecutionWorker;
+    const text = workerDiagnosticText(extra);
+    expect(text).not.toContain('секретный');
+    expect(text).toBe(workerDiagnosticText(ONLINE));
+  });
+
+  it('draws what a press leaves: «Скопировано», or the refusal with the way out, never silence', () => {
+    const view = (outcome: boolean | null) => renderToStaticMarkup(createElement(CopyDiagnosticsView, { outcome, onCopy: noop }));
+    expect(view(null)).not.toContain('data-worker-copy-result');
+    expect(view(true)).toContain('data-worker-copy-result="copied"');
+    expect(view(true)).toContain('>Скопировано<');
+    expect(view(false)).toContain('data-worker-copy-result="refused"');
+    expect(view(false)).toContain('Не удалось скопировать: браузер не дал доступ к буферу обмена.');
+    expect(view(false)).not.toContain('Скопировано');
+  });
+
+  it('puts the text on the clipboard, and says false for a refusing clipboard and for none', async () => {
+    const written: string[] = [];
+    expect(await copyToClipboard('текст', { writeText: async (text) => { written.push(text); } })).toBe(true);
+    expect(written).toEqual(['текст']);
+    expect(await copyToClipboard('текст', { writeText: async () => { throw new Error('refused'); } })).toBe(false);
+    expect(await copyToClipboard('текст', undefined)).toBe(false);
   });
 });
 

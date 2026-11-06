@@ -94,9 +94,12 @@ describe('the knowledge base shows events, not findings', () => {
 });
 
 describe('a row addresses its finding by the identities the record carries', () => {
-  it('links to the run through project_uid and run_id and nothing else', () => {
+  it('links to «Разбор» on the finding through project_uid, run_id and finding_uid and nothing else (UI-B-38)', () => {
     const markup = render(createElement(KnowledgeBase, { records: [record()] }));
-    expect(markup).toContain(`href="/projects/${PROJECT_UID}/runs/${RUN_ID}/review"`);
+    expect(markup).toContain(`href="/projects/${PROJECT_UID}/runs/${RUN_ID}/review?finding=${FINDING_UID}"`);
+    expect(markup).toContain('class="am-kb__link"');
+    expect(markup).toContain('Открыть находку');
+    expect(markup).not.toContain('Открыть прогон');
     expect(markup).toContain(`data-finding-uid="${FINDING_UID}"`);
   });
 
@@ -106,7 +109,15 @@ describe('a row addresses its finding by the identities the record carries', () 
         records: [record({ project_uid: 'prj_01M2545JSD15ETSNNV904X999Z' })],
       }),
     );
-    expect(markup).not.toContain(`href="/projects/${PROJECT_UID}/runs/${RUN_ID}/review"`);
+    expect(markup).not.toContain(`href="/projects/${PROJECT_UID}/runs/${RUN_ID}/review?finding=${FINDING_UID}"`);
+  });
+
+  it('can fail: a row of another finding addresses another finding', () => {
+    const markup = render(
+      createElement(KnowledgeBase, { records: [record({ finding_uid: 'fnd_01M2545JSD15ETSNNV904X999Z' })] }),
+    );
+    expect(markup).toContain(`/review?finding=fnd_01M2545JSD15ETSNNV904X999Z"`);
+    expect(markup).not.toContain(`/review?finding=${FINDING_UID}"`);
   });
 });
 

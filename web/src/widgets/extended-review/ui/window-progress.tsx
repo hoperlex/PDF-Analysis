@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import styles from './extended-review.module.css';
 import { ObservationList } from './observation-list';
-import { BatchProgress } from './batch-progress';
+import { BatchProgress, ReplyRepairSummary } from './batch-progress';
 import { extendedExecutionReason } from './execution-reason';
 
 type RecordValue = Record<string, unknown>;
@@ -19,7 +19,7 @@ function WindowObservations({ window, fallbackVersion, projectUid }: { readonly 
 }
 function WindowBatches({ window, number }: { readonly window: RecordValue; readonly number: number }) {
   const [open, setOpen] = useState(false);
-  return objects(window.batches).length === 0 && object(window.phase_coverage) === null ? null : <details onToggle={(event) => setOpen(event.currentTarget.open)}><summary>Квитанции пакетов этого окна</summary>{open ? <BatchProgress batches={window.batches} coverage={window.phase_coverage} title={`Пакеты окна ${number}`} /> : null}</details>;
+  return objects(window.batches).length === 0 && object(window.phase_coverage) === null ? null : <details onToggle={(event) => setOpen(event.currentTarget.open)}><summary>Квитанции пакетов этого окна</summary>{open ? <BatchProgress batches={window.batches} coverage={window.phase_coverage} sourceSized={window.source_sized_calls} title={`Пакеты окна ${number}`} /> : null}</details>;
 }
 
 export function WindowProgress({ windows: value, progress: reading, fallbackVersion = '', projectUid }: {
@@ -48,11 +48,15 @@ export function WindowProgress({ windows: value, progress: reading, fallbackVers
           <summary>Окно {typeof window.index === 'number' ? window.index + 1 : index + 1} · {STATUS[text(window.status)] ?? 'Состояние не передано'}</summary>
           {window.visual_phase_complete === true && window.status !== 'completed' ? <p>Визуальный проход сохранён. Остальные процедуры окна показаны отдельно ниже.</p> : null}
           {coverage === null ? null : <p>Исследовано источников: {count(coverage.blocks_processed)} из {count(coverage.blocks_selected ?? coverage.blocks_total)}.</p>}
-          {text(window.reason) ? <p>{extendedExecutionReason(window.reason, window.dependency)}</p> : null}
+          {text(window.reason) && window.status !== 'completed' ? <p>{extendedExecutionReason(window.reason, window.dependency, window.status)}</p> : null}
+          <ReplyRepairSummary value={window.reply_refusals} />
+          {objects(window.batches).filter((batch) => batch.status === 'failed' || batch.status === 'partial').map((batch, batchIndex) => <p key={text(batch.batch_key) || batchIndex}>
+            {text(objects(window.procedures).find((procedure) => procedure.id === batch.procedure)?.title) || 'Проверка'} · пакет {typeof batch.index === 'number' ? batch.index + 1 : '—'}: {extendedExecutionReason(batch.reason, batch.dependency, batch.status, batch.error_code)}
+          </p>)}
           <WindowBatches window={window} number={typeof window.index === 'number' ? window.index + 1 : index + 1} />
           <ol>{objects(window.procedures).map((procedure, number) => <li key={text(procedure.id) || number} data-window-procedure={text(procedure.id)}>
             {text(procedure.title) || 'Название не передано'} · {STATUS[text(procedure.status)] ?? 'Состояние не передано'}
-            {text(procedure.reason) ? <p>{extendedExecutionReason(procedure.reason, procedure.dependency)}</p> : null}
+            {text(procedure.reason) && procedure.status !== 'completed' ? <p>{extendedExecutionReason(procedure.reason, procedure.dependency, procedure.status, procedure.error_code)}</p> : null}
           </li>)}</ol>
           <p>Сохранённых наблюдений окна: {objects(window.observations).length}. Все записи доступны в выгрузке, включая рекомендации и исправленные кандидаты.</p>
           {objects(window.observations).length === 0 ? null : <WindowObservations window={window} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} />}

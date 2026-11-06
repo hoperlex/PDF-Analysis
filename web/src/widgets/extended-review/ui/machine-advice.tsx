@@ -41,6 +41,7 @@ export function MachineAdvice({ review, correction, reviewStatus, reviewReason }
     </aside>}
     {fixed === null ? null : <section data-machine-correction={text(fixed.action)}>
       <p><strong>{ACTION[text(fixed.action)] ?? 'Исправление требует проверки'}</strong>{correctionReason(fixed.reason) ? ` · ${correctionReason(fixed.reason)}` : ''}</p>
+      {fixed.action === 'needs_context' ? <p>Модель сохранила исходное наблюдение и запросила дополнительные материалы. Завершение обработки ответа не означает разрешения этого вопроса.</p> : null}
       <div className={styles.evidence}>
         <section aria-label="Исходное наблюдение"><h5>Исходное наблюдение</h5>
           {original === null ? <p>Отдельный снимок исходной записи не передан; исходная запись показана выше.</p> : <><strong>{text(original.title)}</strong><p>{text(original.description)}</p></>}

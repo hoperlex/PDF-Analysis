@@ -9,11 +9,20 @@ function object(value: unknown): RecordValue | null { return typeof value === 'o
 function objects(value: unknown): RecordValue[] { return Array.isArray(value) ? value.flatMap((item) => { const row = object(item); return row === null ? [] : [row]; }) : []; }
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function count(value: unknown): string { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : '—'; }
-const STATUS: Readonly<Record<string, string>> = { queued: 'Запланировано', running: 'Выполняется', completed: 'Завершено', partial: 'Частично', failed: 'Ошибка', unavailable: 'Недоступно', skipped: 'Пропущено' };
+const STATUS: Readonly<Record<string, string>> = { queued: 'Запланировано', running: 'Выполняется', repairing: 'Исправляется ответ', completed: 'Завершено', partial: 'Частично', failed: 'Ошибка', unavailable: 'Недоступно', skipped: 'Пропущено' };
 const PHASE: Readonly<Record<string, string>> = { block_analysis: 'Анализ изображений', comprehensive_analysis: 'Комплексная сверка', finding_merge: 'Свод наблюдений', norm_verification: 'Сверка нормативных цитат', finding_review: 'Машинная критика', finding_correction: 'Предложения уточнения', report_generation: 'Подготовка отчёта' };
 
-export function BatchProgress({ batches: value, coverage: reading, title = 'Пакеты обработки' }: {
-  readonly batches: unknown; readonly coverage: unknown; readonly title?: string;
+export function ReplyRepairSummary({ value }: { readonly value: unknown }) {
+  const receipts = objects(value);
+  if (receipts.length === 0) return null;
+  const resolved = receipts.filter((receipt) => receipt.status === 'resolved').length;
+  const repairing = receipts.filter((receipt) => receipt.status === 'repairing').length;
+  const unresolved = receipts.length - resolved - repairing;
+  return <p data-extended-reply-repairs="">Ответов с замечаниями при проверке: {receipts.length}; исправлено отдельным ответом и повторно проверено: {resolved}; исправление выполняется: {repairing}; осталось неустранёнными: {unresolved}. Исходные ответы и причины отказов сохранены в полной выгрузке.</p>;
+}
+
+export function BatchProgress({ batches: value, coverage: reading, title = 'Пакеты обработки', sourceSized }: {
+  readonly batches: unknown; readonly coverage: unknown; readonly title?: string; readonly sourceSized?: unknown;
 }) {
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(0);
@@ -21,7 +30,7 @@ export function BatchProgress({ batches: value, coverage: reading, title = 'Па
   const phases = Object.entries(object(reading) ?? {}).flatMap(([phase, value]) => { const counters = object(value); return counters === null ? [] : [{ phase, counters }]; });
   if (batches.length === 0 && phases.length === 0) return null;
   const matches = batches.filter((batch) => filter === 'all' || (filter === 'active'
-    ? batch.reason !== 'approved_phase_call_limit' && (batch.status === 'running' || batch.status === 'queued')
+    ? batch.reason !== 'approved_phase_call_limit' && (batch.status === 'running' || batch.status === 'queued' || batch.status === 'repairing')
     : batch.reason === 'approved_phase_call_limit' || batch.status === 'failed' || batch.status === 'partial' || batch.status === 'unavailable'));
   const pages = Math.max(1, Math.ceil(matches.length / 25));
   const current = Math.min(page, pages - 1);
@@ -33,7 +42,7 @@ export function BatchProgress({ batches: value, coverage: reading, title = 'Па
       <h4>{PHASE[phase] ?? 'Процедура обработки'}</h4>
       <p>Пакетов завершено: <strong>{count(counters.completed)}</strong> из {count(counters.planned)} известных в плане. Осталось: {count(counters.remaining)}.</p>
       {typeof counters.completed === 'number' && typeof counters.planned === 'number' && counters.planned > 0 && counters.completed >= 0 && counters.completed <= counters.planned ? <progress value={counters.completed} max={counters.planned} aria-label={`${PHASE[phase] ?? 'Процедура'}: завершённые пакеты`} /> : null}
-      <p>Обработано элементов: {count(counters.processed_items)} из {count(counters.total_items)}. Лимит пакетов процедуры в принятом плане: {count(counters.limit)}.</p>
+      <p>Обработано элементов: {count(counters.processed_items)} из {count(counters.total_items)}.{sourceSized === true ? ' Число пакетов определяется всем объёмом учтённых источников.' : ` Лимит пакетов процедуры в принятом плане: ${count(counters.limit)}.`}</p>
       {typeof counters.characters_total === 'number' ? <p>Обработано символов: {count(counters.characters_processed)} из {count(counters.characters_total)}.</p> : null}
     </section>)}</div>
     {batches.length === 0 ? <p>Отдельные квитанции пакетов ещё не переданы.</p> : <>
@@ -42,9 +51,10 @@ export function BatchProgress({ batches: value, coverage: reading, title = 'Па
         <strong>{PHASE[text(batch.procedure)] ?? 'Процедура обработки'}</strong> · {batch.reason === 'approved_phase_call_limit' ? 'Не обработано: лимит принятого плана' : STATUS[text(batch.status)] ?? 'Состояние не передано'}
         <p>{text(batch.window_id) ? <>Окно <code>{text(batch.window_id)}</code>. </> : null}Пакет {typeof batch.index === 'number' ? batch.index + 1 : '—'}. Входных элементов: {count(batch.input_count)}. Символов на входе: {count(batch.input_characters)}.</p>
         {batch.reason === 'approved_phase_call_limit' ? <p>Этот остаток не обработан: достигнут лимит вызовов процедуры в принятом плане. Дополнительное обращение к модели не подтверждено.</p> : null}
-        {text(batch.reason) && batch.reason !== 'approved_phase_call_limit' ? <p>{extendedExecutionReason(batch.reason, batch.dependency)}</p> : null}
+        {(text(batch.reason) || text(batch.error_code)) && batch.reason !== 'approved_phase_call_limit' && batch.status !== 'completed' ? <p>{extendedExecutionReason(batch.reason, batch.dependency, batch.status, batch.error_code)}</p> : null}
+        {objects(batch.repair_attempts).length > 0 ? <p>Отдельных обращений для исправления ответа: {objects(batch.repair_attempts).length}. Результат повторной проверки учтён в состоянии пакета.</p> : null}
         {Array.isArray(batch.page_numbers) ? <p>Физические страницы PDF: {batch.page_numbers.filter((page): page is number => typeof page === 'number' && Number.isSafeInteger(page) && page > 0).join(', ') || 'Не переданы'}.</p> : null}
-        <details><summary>Происхождение пакета</summary><p>Ключ: <code>{text(batch.batch_key)}</code>.</p><p>Входные записи: {Array.isArray(batch.input_ids) ? batch.input_ids.filter((id): id is string => typeof id === 'string').join(', ') || 'Не переданы' : 'Не переданы'}.</p><p>Источники: {Array.isArray(batch.source_ids) ? batch.source_ids.filter((id): id is string => typeof id === 'string').join(', ') || 'Не переданы' : 'Не переданы'}.</p>{objects(batch.context_ranges).length > 0 ? <ul>{objects(batch.context_ranges).map((range, number) => <li key={number}>Стр. {count(range.page_number)} · {range.character_field === 'recognised_context' ? 'распознанный слой' : 'текстовый контекст'}: символы {count(range.character_start)}–{count(range.character_end)}, источник <code>{text(range.source_id)}</code>. Это границы текстового фрагмента, не координаты на PDF.</li>)}</ul> : null}{text(batch.reason) ? <p>Сервер сохранил ограничение; код доступен в полной выгрузке. Полнота обработки этого пакета не подтверждена.</p> : null}</details>
+        <details><summary>Происхождение пакета</summary><p>Ключ: <code>{text(batch.batch_key)}</code>.</p><p>Входные записи: {Array.isArray(batch.input_ids) ? batch.input_ids.filter((id): id is string => typeof id === 'string').join(', ') || 'Не переданы' : 'Не переданы'}.</p><p>Источники: {Array.isArray(batch.source_ids) ? batch.source_ids.filter((id): id is string => typeof id === 'string').join(', ') || 'Не переданы' : 'Не переданы'}.</p>{objects(batch.context_ranges).length > 0 ? <ul>{objects(batch.context_ranges).map((range, number) => <li key={number}>Стр. {count(range.page_number)} · {range.character_field === 'recognised_context' ? 'распознанный слой' : 'текстовый контекст'}: символы {count(range.character_start)}–{count(range.character_end)}, источник <code>{text(range.source_id)}</code>. Это границы текстового фрагмента, не координаты на PDF.</li>)}</ul> : null}{text(batch.reason) && batch.status !== 'completed' ? <p>{extendedExecutionReason(batch.reason, batch.dependency, batch.status, batch.error_code)}</p> : null}</details>
       </li>)}</ol>}
       {matches.length > 25 ? <nav className={styles.toolbar} aria-label="Страницы квитанций пакетов"><button type="button" className="am-button am-button--quiet" disabled={current === 0} onClick={() => setPage(current - 1)}>Предыдущие пакеты</button><span>{current + 1} из {pages}</span><button type="button" className="am-button am-button--quiet" disabled={current + 1 >= pages} onClick={() => setPage(current + 1)}>Следующие пакеты</button></nav> : null}
     </>}

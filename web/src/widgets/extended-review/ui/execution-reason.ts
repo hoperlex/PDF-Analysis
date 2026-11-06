@@ -11,10 +11,49 @@ const EXECUTION_REASONS: Readonly<Record<string, string>> = {
   project_parameters_value_not_in_quote: 'Значение параметра не подтверждено его исходной цитатой.',
   project_parameters_facts_rejected: 'Часть параметров не прошла проверку по источникам. Подтверждённые записи сохранены.',
   project_parameters_reply_partially_rejected: 'Часть ответов с параметрами не прошла проверку по источникам. Подтверждённые записи сохранены.',
+  unsupported_parameter_candidates_rejected: 'Неподтверждённые кандидаты отклонены и сохранены в истории проверки. В параметры проекта они не включены.',
+  rejected_unsupported_candidate: 'Кандидат отклонён: его значение или цитата не подтверждены исходным текстом.',
+  extended_reply_or_source_invalid: 'Ответ модели получен, но его структура или ссылки на исходные материалы не прошли проверку.',
+  comprehensive_analysis_reply_refused: 'Ответ комплексной сверки получен, но не прошёл проверку по источникам.',
+  norm_verification_reply_refused: 'Ответ нормативной сверки получен, но не прошёл проверку цитат и источников.',
+  finding_review_reply_refused: 'Ответ критика получен, но не прошёл проверку по исходным наблюдениям.',
+  finding_correction_reply_refused: 'Ответ корректора получен, но предложенные уточнения не прошли проверку.',
+  corrector_proposal_invents_number: 'Корректор предложил число, не подтверждённое переданными источниками. Предложение отклонено.',
+  candidate_context_unavailable: 'Для модельной нормативной сверки не подготовлены подходящие цитаты. Нормативное основание этих наблюдений не подтверждено.',
+  corpus_unavailable: 'Нормативный корпус недоступен; нормативная сверка не выполнена.',
+  query_not_proposed: 'Для этого наблюдения модель не предложила нормативный поисковый запрос.',
+  no_normative_question: 'В наблюдении нет нормативного вопроса. Поиск нормативного основания для него не требуется.',
+  explicit_normative_claim_without_query: 'В наблюдении есть нормативный вопрос, но нет пригодного поискового запроса. Нормативное основание не проверено.',
+  literal_standard_reference: 'Поиск подготовлен по точному обозначению нормативного документа из наблюдения.',
+  literal_normative_claim: 'Поиск подготовлен по дословной формулировке нормативного вопроса из наблюдения.',
+  no_norm_candidates_found: 'Поиск выполнен; нормативное основание не найдено. Это не подтверждает отсутствие требования.',
+  context_window_truncated: 'Для части выводов требуется дополнительный контекст. Подробности сохранены в рекомендациях и квитанциях.',
+  additional_context_required: 'Для части выводов требуется дополнительный контекст источников.',
+  reply_records_rejected: 'Часть полученного ответа не прошла проверку. Корректные записи сохранены; подробности отказов доступны в выгрузке.',
+  reply_semantic_repair_failed: 'Дополнительный ответ получен, но часть замечаний проверки осталась неустранённой.',
+  primary_text_observations_outside_review_window: 'Часть наблюдений основного текстового анализа не прошла расширенную проверку. Исходные записи сохранены.',
+  approved_phase_call_limit: 'Часть пакетов осталась за пределами согласованного плана обращений.',
+  approved_global_phase_call_limit: 'Часть межоконных пакетов осталась за пределами согласованного плана обращений.',
+  accepted_pair_call_limit: 'Это сочетание источников не вошло в согласованный план межоконных обращений.',
+  approved_global_phase_call_limit_or_source_selection: 'Часть межоконных сочетаний источников не вошла в согласованный план проверки.',
+  accepted_call_limit: 'Этот фрагмент не вошёл в согласованный план извлечения параметров.',
+  accepted_input_selection_limit: 'Не все известные фрагменты вошли в согласованный план извлечения параметров.',
+  no_corrections_requested: 'По сохранённым рекомендациям критика дополнительные исправления не требовались.',
+  no_observations: 'Для этой процедуры нет входных наблюдений.',
 };
 
-export function extendedExecutionReason(reason: unknown, dependency?: unknown): string {
+function safeCode(value: unknown): string {
+  return typeof value === 'string' && /^[a-z][a-z0-9_.:-]{0,159}$/i.test(value) ? value : '';
+}
+
+export function extendedExecutionReason(reason: unknown, dependency?: unknown, status?: unknown, errorCode?: unknown): string {
   const code = typeof reason === 'string' ? reason : '';
-  const detail = typeof dependency === 'string' ? EXECUTION_REASONS[dependency] : undefined;
-  return detail ?? EXECUTION_REASONS[code] ?? 'Сохранена причина неполного выполнения; подробности доступны в исходной записи и полной выгрузке.';
+  const detailCode = safeCode(errorCode) || safeCode(dependency);
+  const codes = Array.from(new Set([safeCode(reason), detailCode].filter(Boolean)));
+  const detail = EXECUTION_REASONS[detailCode];
+  const partialDependency = status === 'partial' && (code === 'dependency_failed' || code === 'dependency_unavailable');
+  const explanation = detail ?? (partialDependency
+    ? 'Часть окон или пакетов не завершилась из-за ошибки предыдущей процедуры. Выполненные результаты сохранены.'
+    : EXECUTION_REASONS[code]) ?? 'Сервер сохранил причину неполного выполнения. Исходная запись доступна в полной выгрузке.';
+  return `${explanation}${codes.length > 0 ? ` Код: ${codes.join(', ')}.` : ''}`;
 }

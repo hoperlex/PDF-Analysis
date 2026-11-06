@@ -29,6 +29,10 @@
  * {@link PortalBlockListView} is the loaded list without the query, exported so the
  * instruments that render one static pass (the language guard, the contrast census) render
  * the markup this widget renders rather than a copy of it.
+ *
+ * **The page chosen above the tiles can live in the address.** The widget keeps the choice in its own
+ * state; a page that wants it kept (the version's tab: `?page=N` or `?page=all`) hands the starting choice
+ * in (`initialPage`) and hears every change (`onPageChange`), and owns the address itself.
  */
 
 import { useState } from 'react';
@@ -52,7 +56,7 @@ import {
 } from '@/entities/block';
 import type { PageSelection } from '@/entities/block';
 
-import { NO_PAGE_FINDINGS, pageReading } from '../model/page-findings';
+import { NO_PAGE_FINDINGS, pageReading, runSourcePhrase } from '../model/page-findings';
 import type { PageFindingsReading } from '../model/page-findings';
 import { usePageFindings } from '../model/use-page-findings';
 import { PageSelector } from './page-selector';
@@ -79,6 +83,8 @@ export interface PortalBlockListViewProps {
   readonly pageFindings?: PageFindingsReading | undefined;
   /** The page selector's starting choice (a render that cannot press a chip says it here). */
   readonly initialPage?: PageSelection | undefined;
+  /** Told each time the reader chooses «Все блоки» or a page, so a page can keep the choice in the address. */
+  readonly onPageChange?: ((selection: PageSelection) => void) | undefined;
   /** The block view's starting place in the selection; absent, the view is closed. */
   readonly initialOpen?: number | undefined;
   /** The census and the unit suite: the block view is drawn open without `showModal`. */
@@ -89,9 +95,11 @@ export interface PortalBlockListViewProps {
 function FindingsNote({ reading }: { readonly reading: PageFindingsReading }) {
   if (reading.kind === 'none') return null;
   if (reading.kind === 'read') {
+    const source = runSourcePhrase(reading.runAt);
     return (
-      <p className="am-note" data-page-findings="read">
-        Число на плитке — это число замечаний прогона <code>{reading.runId}</code>, у которых есть цитата с
+      <p className="am-note" data-page-findings="read" {...(reading.runAt === undefined ? {} : { 'data-page-findings-run-at': reading.runAt })}>
+        Число на плитке — это число замечаний прогона <code>{reading.runId}</code>
+        {source === null ? null : <> ({source})</>}, у которых есть цитата с
         этой страницы PDF. Замечание указывает страницу, а не блок, поэтому у всех плиток одной страницы число
         одно; у страниц без таких замечаний числа нет.
       </p>
@@ -120,6 +128,7 @@ export function PortalBlockListView({
   onMore,
   pageFindings = NO_PAGE_FINDINGS,
   initialPage = 'all',
+  onPageChange,
   initialOpen,
   staticOpen = false,
 }: PortalBlockListViewProps) {
@@ -131,6 +140,7 @@ export function PortalBlockListView({
   const walk = blocksOfSelection(sections, selection);
   let position = -1;
   const runId = pageFindings.kind === 'none' ? null : pageFindings.runId;
+  const runAt = pageFindings.kind === 'read' ? pageFindings.runAt : undefined;
 
   return (
     <div className={styles.portal} data-portal-blocks-loaded={blocks.length} data-portal-block-count={blockCount}>
@@ -162,6 +172,7 @@ export function PortalBlockListView({
         onSelect={(next) => {
           setChoice(next);
           setOpenAt(null);
+          onPageChange?.(next);
         }}
       />
 
@@ -184,6 +195,7 @@ export function PortalBlockListView({
                     block={block}
                     versionUid={versionUid}
                     pageFindings={pageReading(pageFindings, block.page_number)}
+                    runAt={runAt}
                     onOpen={() => {
                       setOpenAt(at);
                     }}
@@ -207,6 +219,7 @@ export function PortalBlockListView({
           }}
           pageFindings={pageReading(pageFindings, (walk[openAt] as PortalBlock).page_number)}
           runId={runId}
+          runAt={runAt}
           staticOpen={staticOpen}
         />
       )}
@@ -239,13 +252,18 @@ export function PortalBlockListView({
 
 export interface PortalBlocksProps {
   readonly version: Pick<DocumentVersion, 'version_uid' | 'project_uid' | 'input_manifest'>;
+  /** The page chosen when the list opens, from the address; absent, «Все блоки». */
+  readonly page?: PageSelection | undefined;
+  /** Told each time the reader chooses «Все блоки» or a page, so the page layer can write the address. */
+  readonly onPage?: ((selection: PageSelection) => void) | undefined;
 }
 
-export function PortalBlocks({ version }: PortalBlocksProps) {
+export function PortalBlocks({ version, page, onPage }: PortalBlocksProps) {
   const query = usePortalBlocks(version.version_uid);
-  // The run that read the bundle is the run in scope; its findings, if it published any, number the tiles.
-  const runInScope = query.data?.pages[0]?.produced_by_run_id ?? null;
-  const pageFindings = usePageFindings(runInScope);
+  // The findings that number the tiles are the version's latest run that published a result; only when
+  // there is none is it the run that read the bundle (`scopeRunId`), and the tiles say which run it is.
+  const geometryRunId = query.data?.pages[0]?.produced_by_run_id ?? null;
+  const pageFindings = usePageFindings(version.version_uid, geometryRunId);
 
   if (query.isPending) return <LoadingState what="блоки портала" />;
   if (query.data === undefined) {
@@ -301,6 +319,8 @@ export function PortalBlocks({ version }: PortalBlocksProps) {
       }
       onMore={() => void query.fetchNextPage()}
       pageFindings={pageFindings}
+      {...(page === undefined ? {} : { initialPage: page })}
+      {...(onPage === undefined ? {} : { onPageChange: onPage })}
     />
   );
 }

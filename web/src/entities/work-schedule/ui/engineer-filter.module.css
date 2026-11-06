@@ -1,0 +1,25 @@
+/* «Инженер: Все / <имя>» (`D-319`): a label and a select in the toolbar of the month and of the reserve. */
+
+.filter {
+  display: grid;
+  gap: calc(var(--am-gap-xs) / 2);
+  min-width: 0;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--am-gap-sm) * 0.75);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.field select {
+  max-width: 240px;
+  min-width: 0;
+}
+
+.unknown {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}

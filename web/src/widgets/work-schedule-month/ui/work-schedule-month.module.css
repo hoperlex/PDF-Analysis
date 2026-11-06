@@ -48,6 +48,11 @@
   background: var(--am-paper);
 }
 
+/* «Просрочки» with late work in it reads as a warning, as the plan ring does below half. */
+.tileLate .tileValue {
+  color: var(--am-failed);
+}
+
 .tileRing {
   padding-right: calc(var(--am-gap-xl) * 2 - var(--am-gap-xs));
 }

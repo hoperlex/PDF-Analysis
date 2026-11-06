@@ -169,14 +169,15 @@ function FindingRecordItem({ record, kindLabel = false }: { readonly record: Dec
         </span>
         {/*
          * The way back to the finding. `ADR-0010`: the link is built from
-         * `project_uid` and `run_id`, both identities the record carries, and never
-         * from a display number or a path the server did not send.
+         * `project_uid`, `run_id` and `finding_uid`, the identities the record carries, and
+         * never from a display number or a path the server did not send. `UI-B-38`: «Разбор»
+         * reads `?finding=` and opens on that finding, as the original opens the object.
          */}
         <Link
           className="am-kb__link"
-          href={`/projects/${record.project_uid}/runs/${record.run_id}/review`}
+          href={`${routes.review(record.project_uid, record.run_id)}?finding=${encodeURIComponent(record.finding_uid)}`}
         >
-          Открыть прогон
+          Открыть находку
         </Link>
       </p>
     </li>
@@ -214,7 +215,7 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
       <p className="am-kb__meta">
         <span className="am-kb__author">{record.actor_label}</span>
         <time dateTime={record.decided_at}>{formatInstant(record.decided_at)}</time>
-        <Link className="am-kb__link" href={routes.documentOptimisation(record.project_uid, record.document_uid)}>
+        <Link className="am-kb__link" href={routes.documentOptimisation(record.project_uid, record.document_uid, record.optimisation_pass_id)}>
           Открыть оптимизацию
         </Link>
       </p>

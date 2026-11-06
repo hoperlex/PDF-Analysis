@@ -18,7 +18,7 @@ import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
 import { ProjectsPage } from '@/_pages/projects';
-import { ReviewPage, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
+import { PageBlocksStrip, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
@@ -77,6 +77,7 @@ import { ProjectSections } from '@/widgets/project-sections';
 import { SectionDetailPage } from '@/_pages/section-detail';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
+import { NO_ENGINEER_FILTER } from '@/entities/work-schedule';
 import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from '../work-schedule/fixtures';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
@@ -152,7 +153,8 @@ import {
 } from '../norms/fixtures';
 
 import {
-  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksOnFivePages, blocksVersion, everyKindOfBlock, portalPage, runFindings,
+  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blockId, blocksOnFivePages, blocksVersion, everyKindOfBlock,
+  imageBlock, portalPage, runFindings, stampBlock, textBlock,
 } from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
@@ -1947,6 +1949,105 @@ export function screens(): Screen[] {
   }
 
   /*
+   * `UI-A-74`: «Блоки страницы N» under the page on «Разбор», inline and in the full-screen view's side column. The
+   * default finding cites page 7, so the version's blocks are seeded under the key the «Блоки» tab fills, with
+   * another cursor page waiting (the footer that offers it), and the strip is drawn through the screen itself. The
+   * side column and the block view are drawn open (`staticOpen`) over a complete list; the page past the loaded
+   * blocks and the unreadable blocks are their own views. The crop's address is read from the API base, set for
+   * these renders only and restored.
+   */
+  {
+    const before = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+    try {
+      const onPage7 = [
+        imageBlock({ portal_block_id: blockId(61), page_number: 7, page_label: 7, ordinal: 1 }),
+        textBlock({ portal_block_id: blockId(62), page_number: 7, page_label: 7, ordinal: 2 }),
+        stampBlock({ portal_block_id: blockId(63), page_number: 7, page_label: 7 }),
+      ];
+      const withBlocks = (more: boolean) => {
+        const client = populatedClient();
+        const page = { next_cursor: null } as { next_cursor: null };
+        client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: { items: FINDINGS, page } });
+        client.setQueryData(queryKeys.findings.detail(FINDING_UID), {
+          data: findingDetail({ finding_uid: FINDING_UID, decision_event_count: 2 }),
+        });
+        client.setQueryData(queryKeys.findings.decisions(FINDING_UID), {
+          data: { items: [decisionEvent({ verdict: 'accepted' })], page },
+        });
+        client.setQueryData(portalBlocksQueryOptions(VERSION_UID).queryKey, {
+          pages: [portalPage(onPage7, more ? { block_count: 300, page: { next_cursor: 'c1' } } : {})],
+          pageParams: [undefined],
+        });
+        return client;
+      };
+      add(
+        'ReviewPage loaded, with the cited page’s blocks',
+        renderScreen(withBlocks(true), createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
+      );
+      const strip = (page: number, over: Partial<Parameters<typeof ReviewPageBlocks>[0]> = {}) =>
+        createElement(ReviewPageBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, page, ...over });
+      add(
+        'ReviewViewerDialog open with the cited page’s blocks in the side column',
+        renderScreen(
+          withBlocks(false),
+          createElement(ReviewViewerDialog, {
+            position: 1,
+            total: 1,
+            onClose: noop,
+            title: 'Не указан класс огнестойкости перекрытия',
+            staticOpen: true,
+            children: createElement(ReviewViewerAside, {
+              findingUid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z',
+              meta: 'Критическое · Лист 3 · стр. 7',
+              text: 'Не указан класс огнестойкости перекрытия',
+              recommendation: 'Указать предел огнестойкости REI 45 по СП 2.13130.',
+              blocks: strip(7),
+            }),
+          }),
+        ),
+      );
+      add(
+        'Block view open from the strip on «Разбор»',
+        renderScreen(withBlocks(false), strip(7, { initialOpen: 0, staticOpen: true })),
+      );
+      add(
+        'PageBlocksStrip, the page lies past the loaded blocks, the next portion failed',
+        renderScreen(
+          newClient(),
+          createElement(PageBlocksStrip, {
+            reading: { kind: 'not-loaded', page: 12 }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: false, moreFailed: true,
+          }),
+        ),
+      );
+      add(
+        'PageBlocksStrip, the next portion on its way',
+        renderScreen(
+          newClient(),
+          createElement(PageBlocksStrip, {
+            reading: { kind: 'blocks', page: 7, blocks: onPage7, complete: false }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: true, moreFailed: false,
+          }),
+        ),
+      );
+      add(
+        'PageBlocksStrip, the blocks could not be read',
+        renderScreen(
+          newClient(),
+          createElement(PageBlocksStrip, {
+            reading: { kind: 'unreadable', page: 7 }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: false, moreFailed: false,
+          }),
+        ),
+      );
+    } finally {
+      if (before === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = before;
+    }
+  }
+
+  /*
    * `WEB-REVIEW-FOLLOWUPS-01`, item 6: the review screen WITH A v2 FINDING.
    *
    * `REVIEW-V2-UI-01` could not add this (the file is outside its paths), so its severity
@@ -2364,17 +2465,38 @@ export function screens(): Screen[] {
   /*
    * `UI-PARITY-P0P`: «График работ». The month in each mode an administrator opens (the plan's inputs and settings, the
    * calendar's day and absence toggles) with a cell's «+N» list open, and «Календарь запаса» with a selection and a drop
-   * target, so every rule of `work-schedule-month.module.css` and `reserve-calendar.module.css` is reached.
+   * target, so every rule of `work-schedule-month.module.css` and `reserve-calendar.module.css` is reached. `D-319`: the
+   * month with late work in «Просрочки» (the red number), narrowed to one engineer while the count is read and failed, and
+   * with an engineer the read does not carry; the reserve narrowed, and with the same unknown engineer, so the filter's
+   * select and its note (`engineer-filter.module.css`) are measured.
    */
   for (const initialMode of ['view', 'plan', 'calendar'] as const) {
     add(`WorkSchedule month ${initialMode}`, renderScreen(newClient(), createElement(WorkScheduleMonthView, {
       schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode,
+      filter: NO_ENGINEER_FILTER, onEngineer: noop, overdue: { kind: 'ready', count: 2 },
       initialPopover: initialMode === 'view' ? `${EXPERT_A}|2026-11-03` : null,
     })));
   }
+  add('WorkSchedule month narrowed to one engineer, late work still being counted', renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+    schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode: 'view',
+    filter: { uid: EXPERT_A, unknown: false }, onEngineer: noop, overdue: { kind: 'pending' },
+  })));
+  add('WorkSchedule month with an engineer the read does not carry, late work not loaded', renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+    schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode: 'view',
+    filter: { uid: null, unknown: true }, onEngineer: noop, overdue: { kind: 'failed' },
+  })));
   add('WorkSchedule reserve', renderScreen(newClient(), createElement(ReserveCalendarView, {
     reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    filter: NO_ENGINEER_FILTER, onEngineer: noop,
     initialSelection: [assignmentUid(1), assignmentUid(3)], initialOver: `${EXPERT_B}|2026-11-05`,
+  })));
+  add('WorkSchedule reserve narrowed to one engineer', renderScreen(newClient(), createElement(ReserveCalendarView, {
+    reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    filter: { uid: EXPERT_B, unknown: false }, onEngineer: noop,
+  })));
+  add('WorkSchedule reserve with an engineer the read does not carry', renderScreen(newClient(), createElement(ReserveCalendarView, {
+    reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    filter: { uid: null, unknown: true }, onEngineer: noop,
   })));
   // The plan met (≥ 100 %, `ok`) and half met (≥ 50 %, `warn`), and the month and the reserve with nobody in them.
   {
@@ -2389,13 +2511,16 @@ export function screens(): Screen[] {
         ],
       },
       admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+      filter: NO_ENGINEER_FILTER, onEngineer: noop, overdue: { kind: 'ready', count: 0 },
     })));
     add('WorkSchedule month and reserve with no engineers', renderScreen(newClient(), createElement('div', null,
       createElement(WorkScheduleMonthView, {
         schedule: { ...month, engineers: [] }, admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+        filter: NO_ENGINEER_FILTER, onEngineer: noop, overdue: { kind: 'ready', count: 0 },
       }),
       createElement(ReserveCalendarView, {
         reserve: { ...reserveFixture(), engineers: [] }, admin: false, onStart: noop, today: '2026-11-03',
+        filter: NO_ENGINEER_FILTER, onEngineer: noop,
         initialSelection: [], initialOver: null,
       }),
     )));

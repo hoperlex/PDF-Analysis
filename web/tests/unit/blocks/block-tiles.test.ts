@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Finding, PortalBlock, RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
+import { AR_V3_BETA_PROFILE_ID, runListQueryOptions } from '@/entities/audit-run';
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -26,6 +27,8 @@ import {
   effectiveSelection,
   isZoomed,
   pageChips,
+  pageSelectionOf,
+  pageSelectionParam,
   panBy,
   portalBlocksQueryOptions,
   sectionsByPage,
@@ -42,7 +45,10 @@ import {
   PortalBlocks,
   completeFindingsOf,
   findingsByPage,
+  latestPublishedRunId,
   pageReading,
+  runSourcePhrase,
+  scopeRunId,
   severityTone,
   worstDecided,
 } from '@/widgets/portal-blocks';
@@ -159,6 +165,23 @@ describe('the page selection and the walk through it', () => {
     expect(effectiveSelection(sections, 3)).toBe(3);
   });
 
+  it('reads the address’s ?page=N and ?page=all, and takes anything else for «Все блоки»', () => {
+    expect(pageSelectionOf('3')).toBe(3);
+    expect(pageSelectionOf('12')).toBe(12);
+    expect(pageSelectionOf('all')).toBe('all');
+    for (const other of [null, undefined, '', '0', '-2', '2.5', '1e3', ' 2', '2 ', 'три', 'ALL', '99999999']) {
+      expect(pageSelectionOf(other), String(other)).toBe('all');
+    }
+  });
+
+  it('writes a selection as the value the address reads back', () => {
+    for (const selection of ['all', 1, 3, 40] as const) {
+      expect(pageSelectionOf(pageSelectionParam(selection))).toBe(selection);
+    }
+    expect(pageSelectionParam('all')).toBe('all');
+    expect(pageSelectionParam(7)).toBe('7');
+  });
+
   it('stops at either end and does not wrap', () => {
     expect(stepIndex(0, 7, -1)).toBeNull();
     expect(stepIndex(0, 7, 1)).toBe(1);
@@ -229,6 +252,37 @@ describe('the findings a tile counts are those that cite its PAGE', () => {
     expect(pageReading(read, 5)).toEqual({ count: 0, worst: null, findings: [] });
   });
 
+  it('takes the version’s latest run that published a result, in the order the list came', () => {
+    const newest = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9A', state: 'failed' });
+    const published = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9B', state: 'published' });
+    const older = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9C', state: 'published' });
+    expect(latestPublishedRunId([newest, published, older])).toBe(published.run_id);
+    expect(latestPublishedRunId([older, published])).toBe(older.run_id);
+    expect(latestPublishedRunId([newest])).toBeNull();
+    expect(latestPublishedRunId([])).toBeNull();
+    // A run of the AR v3 beta profile publishes no canonical findings, so it is not the run in scope.
+    const beta = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9D', state: 'published', analysis_profile_id: AR_V3_BETA_PROFILE_ID });
+    expect(latestPublishedRunId([beta, published])).toBe(published.run_id);
+  });
+
+  it('prefers that run to the one that read the bundle, and falls back to the latter only when none published', () => {
+    const published = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9B', state: 'published' });
+    const failed = runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9A', state: 'failed' });
+    expect(scopeRunId([failed, published], BLOCKS_RUN_ID)).toBe(published.run_id);
+    expect(scopeRunId([failed], BLOCKS_RUN_ID)).toBe(BLOCKS_RUN_ID);
+    expect(scopeRunId([], BLOCKS_RUN_ID)).toBe(BLOCKS_RUN_ID);
+    expect(scopeRunId([failed], null)).toBeNull();
+    // A list that failed does not hide the numbers; the tiles still name the run they are from.
+    expect(scopeRunId('unreadable', BLOCKS_RUN_ID)).toBe(BLOCKS_RUN_ID);
+    // A list still on its way guesses no run, so the wrong run's findings are not fetched and replaced.
+    expect(scopeRunId('pending', BLOCKS_RUN_ID)).toBeNull();
+  });
+
+  it('says which run a count is from in the words «по прогону от <time>», or nothing when the start is unknown', () => {
+    expect(runSourcePhrase(RUN_AT)).toBe('по прогону от 2026-09-10 08:00:00 UTC');
+    expect(runSourcePhrase(undefined)).toBeNull();
+  });
+
   it('reads the findings only from the envelope the key holds, and never turns another shape into an empty list', () => {
     const items = runFindings();
     expect(completeFindingsOf({ data: { items, page: { next_cursor: null } } })).toBe(items);
@@ -247,7 +301,8 @@ describe('the findings a tile counts are those that cite its PAGE', () => {
 
 // ============================================================================== the markup
 
-const READ: PageFindingsReading = { kind: 'read', runId: BLOCKS_RUN_ID, byPage: findingsByPage(runFindings()) };
+const RUN_AT = '2026-09-10T08:00:00.000Z';
+const READ: PageFindingsReading = { kind: 'read', runId: BLOCKS_RUN_ID, byPage: findingsByPage(runFindings()), runAt: RUN_AT };
 
 function list(
   blocks: readonly PortalBlock[],
@@ -318,6 +373,21 @@ describe('the page selector', () => {
   it('takes a page that is not loaded for «Все блоки»', () => {
     const markup = list(everyKindOfBlock(), { initialPage: 9 });
     expect(count(markup, 'data-portal-page=')).toBe(3);
+  });
+
+  it('opens on the page the address names when the widget is given it (?page=N), and on «Все блоки» otherwise', () => {
+    const client = newClient();
+    client.setQueryData(portalBlocksQueryOptions(BLOCKS_VERSION_UID).queryKey, {
+      pages: [portalPage(everyKindOfBlock())],
+      pageParams: [undefined],
+    });
+    const open = (page?: Parameters<typeof PortalBlocks>[0]['page']) =>
+      renderScreen(client, createElement(PortalBlocks, { version: blocksVersion(true), ...(page === undefined ? {} : { page }) }));
+    const third = open(pageSelectionOf('3'));
+    expect(count(third, 'data-portal-page=')).toBe(1);
+    expect(buttons(third, 'data-page-chip').find((chip) => chip.includes('data-page-chip="3"'))).toContain('aria-pressed="true"');
+    expect(count(open(pageSelectionOf('all')), 'data-portal-page=')).toBe(3);
+    expect(count(open(), 'data-portal-page=')).toBe(3);
   });
 
   it('says the count is of what has arrived while another page of blocks is waiting', () => {
@@ -421,7 +491,7 @@ describe('the number on a tile is the run’s findings on its page, and only whe
     for (const tile of badge(1)) {
       expect(tile).toContain('data-tile-badge="2"');
       expect(tile).toContain('am-badge--failed');
-      expect(tile).toContain('title="Замечаний на странице 1: 2"');
+      expect(tile).toContain('title="Замечаний на странице 1: 2 (по прогону от 2026-09-10 08:00:00 UTC)"');
       expect(tile).toContain('data-has-findings="true"');
     }
     for (const tile of badge(2)) expect(tile).toContain('am-badge--degraded');
@@ -442,6 +512,15 @@ describe('the number on a tile is the run’s findings on its page, and only whe
     expect(markup).toContain('data-page-findings="read"');
     expect(visibleText(markup)).toContain('Замечание указывает страницу, а не блок');
     expect(markup).toContain(`<code>${BLOCKS_RUN_ID}</code>`);
+    // And when that run started: the note and every badge's title say «по прогону от <time>».
+    expect(visibleText(markup)).toContain('(по прогону от 2026-09-10 08:00:00 UTC)');
+    expect(markup).toContain(`data-page-findings-run-at="${RUN_AT}"`);
+  });
+
+  it('draws the title without the run’s time when the reading does not carry it', () => {
+    const markup = list(blocks, { pageFindings: { ...READ, runAt: undefined } as PageFindingsReading });
+    expect(markup).toContain('title="Замечаний на странице 1: 2"');
+    expect(markup).not.toContain('по прогону от');
   });
 
   it('draws no number, and says why, for a run with no findings or findings that could not be read', () => {
@@ -546,6 +625,7 @@ describe('the block view', () => {
     expect(panel).toContain('data-page-findings-panel="2"');
     expect(visibleText(panel)).toContain('Замечания на странице 1 (2)');
     expect(visibleText(panel)).toContain('Замечание указывает страницу PDF, а не блок');
+    expect(visibleText(panel)).toContain('(по прогону от 2026-09-10 08:00:00 UTC)');
     expect(visibleText(panel)).toContain('Не указан класс огнестойкости перекрытия.');
     expect(visibleText(panel)).toContain('Объём бетона в ведомости и на плане различается.');
     expect(count(panel, 'data-finding-uid=')).toBe(2);
@@ -588,12 +668,25 @@ describe('the widget reads the run in scope and numbers the tiles from its findi
     return renderScreen(client, createElement(PortalBlocks, { version: blocksVersion(true) }));
   }
 
-  function seeded(options: { status?: RunStatus | 'error'; findings?: readonly Finding[] } = {}) {
+  /**
+   * The cache the widget reads: the blocks, the version's first page of runs (by default one run, the one
+   * that read the bundle, newest first; `runs: null` leaves the list unread, still on its way), and the
+   * status and findings of `run`.
+   */
+  function seeded(
+    options: { status?: RunStatus | 'error'; findings?: readonly Finding[]; runs?: readonly RunStatus[] | null } = {},
+  ) {
     const client = newClient();
     client.setQueryData(portalBlocksQueryOptions(BLOCKS_VERSION_UID).queryKey, {
       pages: [portalPage(blocksOnFivePages())],
       pageParams: [undefined],
     });
+    if (options.runs !== null) {
+      client.setQueryData(runListQueryOptions(BLOCKS_VERSION_UID).queryKey, {
+        items: [...(options.runs ?? [runStatus({ run_id: run, version_uid: BLOCKS_VERSION_UID })])],
+        page: { next_cursor: null },
+      });
+    }
     if (options.status !== undefined && options.status !== 'error') {
       client.setQueryData(queryKeys.runs.detail(run), options.status);
     }
@@ -631,14 +724,63 @@ describe('the widget reads the run in scope and numbers the tiles from its findi
     expect(markup).toContain('data-page-findings="no-result"');
   });
 
-  it('shows no number and no sentence when the geometry run is not named', () => {
+  it('shows no number and no sentence when the geometry run is not named and no run of the version published', () => {
     const client = newClient();
     client.setQueryData(portalBlocksQueryOptions(BLOCKS_VERSION_UID).queryKey, {
       pages: [portalPage(blocksOnFivePages(), { produced_by_run_id: null })],
       pageParams: [undefined],
     });
+    client.setQueryData(runListQueryOptions(BLOCKS_VERSION_UID).queryKey, {
+      items: [runStatus({ run_id: run, state: 'failed' })],
+      page: { next_cursor: null },
+    });
     const markup = widget(client);
     expect(markup).not.toContain('data-tile-badge');
     expect(markup).not.toContain('data-page-findings=');
+  });
+
+  it('numbers the tiles from the version’s latest published run, not from the run that read the bundle', () => {
+    const latest = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9B';
+    const client = seeded({
+      // Newest first: a failed run, then the latest published one, then the run that read the bundle.
+      runs: [
+        runStatus({ run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q9A', state: 'failed', created_at: '2026-09-12T08:00:00.000Z' }),
+        runStatus({ run_id: latest, created_at: '2026-09-11T08:00:00.000Z' }),
+        runStatus({ run_id: run, created_at: '2026-09-10T08:00:00.000Z' }),
+      ],
+      // The geometry run's own cache says «failed»: were it the run in scope, the sentence would be «no-result».
+      status: runStatus({ run_id: run, state: 'failed' }),
+    });
+    client.setQueryData(queryKeys.runs.detail(latest as typeof run), runStatus({ run_id: latest, created_at: '2026-09-11T08:00:00.000Z' }));
+    client.setQueryData(queryKeys.runs.findings(latest as typeof run), {
+      data: { items: [...runFindings()], page: { next_cursor: null } },
+    });
+    const markup = widget(client);
+    expect(markup).toContain('data-page-findings="read"');
+    expect(markup).toContain(`<code>${latest}</code>`);
+    expect(markup).toContain('data-tile-badge="2"');
+    // The tile’s title and the note say which run, and when it started.
+    expect(markup).toContain('title="Замечаний на странице 1: 2 (по прогону от 2026-09-11 08:00:00 UTC)"');
+    expect(visibleText(markup)).toContain('(по прогону от 2026-09-11 08:00:00 UTC)');
+    expect(markup).not.toContain('data-page-findings="no-result"');
+  });
+
+  it('falls back to the run that read the bundle when no run of the version published, and says what that run did', () => {
+    const markup = widget(
+      seeded({
+        runs: [runStatus({ run_id: run, state: 'failed' })],
+        status: runStatus({ run_id: run, state: 'failed' }),
+      }),
+    );
+    expect(markup).toContain('data-page-findings="no-result"');
+    expect(markup).toContain(`<code>${run}</code>`);
+    expect(markup).not.toContain('data-tile-badge');
+  });
+
+  it('guesses no run while the version’s runs are still on their way', () => {
+    const markup = widget(seeded({ runs: null, status: runStatus({ run_id: run }), findings: runFindings() }));
+    expect(markup).not.toContain('data-tile-badge');
+    expect(markup).not.toContain('data-page-findings=');
+    expect(markup).toContain('data-portal-block-type');
   });
 });

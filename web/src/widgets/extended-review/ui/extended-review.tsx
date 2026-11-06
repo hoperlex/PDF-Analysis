@@ -7,7 +7,7 @@ import { LoadingState } from '@/shared/ui';
 import { formatExtendedRunReport } from '@/entities/audit-run';
 import type { ExtendedReportFormat } from '@/entities/audit-run';
 import { WindowProgress } from './window-progress';
-import { BatchProgress } from './batch-progress';
+import { BatchProgress, ReplyRepairSummary } from './batch-progress';
 import { ObservationList } from './observation-list';
 import { ReadableReport } from './readable-report';
 import { ReportPackage } from './report-package';
@@ -170,13 +170,14 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     {v2 ? <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Новые критика, исправление и подготовка отчёта V3 ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
     {v3 ? <p>Рубрики учитывают специфику раздела. Числовые пороги и ссылки из исторических материалов — контекст, а не подтверждённые действующие нормы. Критика и исправление — рекомендации модели, решение остаётся за экспертом.</p> : null}
     {text(result?.rules_sha256) ? <details><summary>Происхождение рубрик раздела</summary><p>Отпечаток набора: <code>{text(result?.rules_sha256)}</code>.</p>{object(result?.source_provenance) ? <pre>{JSON.stringify(result?.source_provenance, null, 2)}</pre> : null}</details> : null}
-    {typeof result?.reason === 'string' ? <p role="status">{reasonLabels[result.reason] ?? extendedExecutionReason(result.reason, result.dependency)}</p> : null}
+    {typeof result?.reason === 'string' && reading.status !== 'completed' ? <p role="status">{reasonLabels[result.reason] ?? extendedExecutionReason(result.reason, result.dependency, reading.status)}</p> : null}
+    <ReplyRepairSummary value={result?.reply_refusals} />
     {full ? <>
       <p>Продолжение базовых этапов. Ход расширенных процедур показан ниже.</p>
       {procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol className={styles.procedures} aria-label="План полного анализа" data-extended-procedure-plan="">
         {procedures.map((procedure, index) => <li key={text(procedure.id) || index} data-extended-procedure={text(procedure.id)} data-procedure-status={text(procedure.status)}>
           <strong>{text(procedure.title) || 'Название процедуры не передано'}</strong> · {procedureLabels[text(procedure.status)] ?? 'Состояние не передано'}
-          {text(procedure.reason) ? <p>{reasonLabels[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency)}</p> : null}
+          {text(procedure.reason) && procedure.status !== 'completed' ? <p>{reasonLabels[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency, procedure.status, procedure.error_code)}</p> : null}
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}
@@ -186,8 +187,8 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     <details data-extended-plan-details="">
       <summary>Подробности плана: окна, межоконная сверка, параметры и нормативный контекст</summary>
       {v3 ? <WindowProgress windows={result?.windows} progress={result?.window_progress} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} /> : null}
-      {result?.coverage_version === 'batched-v1' ? <BatchProgress batches={result?.batches} coverage={result?.phase_coverage} /> : null}
-      {result?.coverage_version === 'batched-v1' ? <CoverageBudget mode={result?.coverage_budget_mode} limits={result?.phase_call_limits} estimatedText={result?.estimated_text_characters} pieceCharacters={result?.comprehensive_piece_characters} /> : null}
+      {result?.coverage_version === 'batched-v1' ? <BatchProgress batches={result?.batches} coverage={result?.phase_coverage} sourceSized={result?.source_sized_calls} /> : null}
+      {result?.coverage_version === 'batched-v1' ? <CoverageBudget mode={result?.coverage_budget_mode} limits={result?.phase_call_limits} estimatedText={result?.estimated_text_characters} pieceCharacters={result?.comprehensive_piece_characters} sourceSized={result?.source_sized_calls} /> : null}
       <CrossWindowReview key={`cross-window:${reading.run_id}`} value={result?.global_cross_window} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
       <ProjectParameters key={`parameters:${reading.run_id}`} value={result?.project_parameters} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
       <NormativeContext key={`norm-context:${reading.run_id}`} policy={result?.norm_paragraph_context_policy} receipts={result?.normative_context_receipts} />

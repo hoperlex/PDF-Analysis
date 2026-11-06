@@ -125,6 +125,37 @@ export function ProposalHistory({ proposal }: ProposalHistoryProps) {
   );
 }
 
+/** `UI-B-09`: the pass's version PDF as the cards' «Открыть лист» needs it. */
+export interface SheetDocument {
+  /** The object URL once the PDF is fetched; `null` before and on a refusal. */
+  readonly url: string | null;
+  readonly isLoading: boolean;
+  readonly failure: FailureMessage | null;
+  readonly onRetry: () => void;
+}
+
+/** What the list says while the PDF is on its way or was refused; nothing once it is there. */
+function SheetDocumentNote({ sheet }: { readonly sheet: SheetDocument }) {
+  if (sheet.isLoading) {
+    return (
+      <p className="am-note" role="status" data-proposal-sheet="loading">
+        Загружается PDF версии: ссылки «Открыть лист» появятся после загрузки.
+      </p>
+    );
+  }
+  if (sheet.failure !== null) {
+    return (
+      <ErrorState
+        title="PDF версии не получен: ссылок «Открыть лист» нет"
+        detail={sheet.failure.detail}
+        correlationId={sheet.failure.correlationId}
+        onRetry={sheet.onRetry}
+      />
+    );
+  }
+  return null;
+}
+
 export interface ProposalListViewProps {
   readonly page: OptimisationProposalPage;
   /** Whether the session holds `expert`; the API checks again. */
@@ -135,6 +166,8 @@ export interface ProposalListViewProps {
   /** Draw the controls of one proposal; the container passes the live form. */
   readonly controlsFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   readonly historyFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
+  /** `UI-B-09`: the pass's version PDF; absent, the cards offer no «Открыть лист». */
+  readonly sheet?: SheetDocument | undefined;
 }
 
 export function ProposalListView({
@@ -144,6 +177,7 @@ export function ProposalListView({
   onPage,
   controlsFor,
   historyFor,
+  sheet,
 }: ProposalListViewProps) {
   const pass = page.optimisation_pass;
   return (
@@ -154,6 +188,7 @@ export function ProposalListView({
         total={pass.proposal_count}
         onSelect={onDecision}
       />
+      {sheet === undefined ? null : <SheetDocumentNote sheet={sheet} />}
       {page.items.length === 0 ? (
         <EmptyState
           title={
@@ -174,6 +209,7 @@ export function ProposalListView({
             proposal={proposal}
             controls={canDecide ? (controlsFor?.(proposal) ?? null) : null}
             history={historyFor?.(proposal) ?? null}
+            documentUrl={sheet?.url ?? null}
           />
         ))
       )}
@@ -207,16 +243,19 @@ export interface ProposalListProps {
   readonly canDecide: boolean;
   readonly onDecision: (state: ProposalDecisionState | null) => void;
   readonly onPage: ((offset: number) => void) | null;
+  /** `UI-B-09`: the pass's version PDF; the container reads it once for every card. */
+  readonly sheet?: SheetDocument | undefined;
 }
 
 /** The live list: decision forms for an expert and a lazily read history under each card. */
-export function ProposalList({ page, canDecide, onDecision, onPage }: ProposalListProps) {
+export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: ProposalListProps) {
   return (
     <ProposalListView
       page={page}
       canDecide={canDecide}
       onDecision={onDecision}
       onPage={onPage}
+      sheet={sheet}
       controlsFor={(proposal) => (
         <ProposalDecisionForm passId={page.optimisation_pass.optimisation_pass_id} proposal={proposal} />
       )}

@@ -99,6 +99,12 @@ def read_run_cost_policy(session, *, run_id: str, default_ceiling_usd: float,
                     from auditmanager.analysis.public import validate_extended_coverage_policy
                     if not validate_extended_coverage_policy(extended):
                         raise ValueError()
+                if "completion_policy" in extended or "semantic_repair_attempts" in extended:
+                    if (extended.get("completion_policy") != "source-complete-v1"
+                            or type(extended.get("semantic_repair_attempts")) is not int
+                            or extended["semantic_repair_attempts"] != 1
+                            or extended.get("coverage_version") != "batched-v1"):
+                        raise ValueError()
                 if "global_cross_window_policy" in extended:
                     from auditmanager.analysis.public import validate_extended_cross_window_policy
                     if (extended.get("coverage_version") != "batched-v1"

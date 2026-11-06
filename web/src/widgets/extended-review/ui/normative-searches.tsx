@@ -10,9 +10,9 @@ function object(value: unknown): RecordValue | null { return typeof value === 'o
 function objects(value: unknown): RecordValue[] { return Array.isArray(value) ? value.flatMap((entry) => { const row = object(entry); return row === null ? [] : [row]; }) : []; }
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function count(value: unknown): string { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : '—'; }
-const STATUS: Readonly<Record<string, string>> = { candidates: 'Кандидаты найдены', not_found: 'Поиск не вернул попаданий', unavailable: 'Поиск недоступен или не выполнен', running: 'Поиск выполняется' };
+const STATUS: Readonly<Record<string, string>> = { candidates: 'Кандидаты найдены', not_found: 'Поиск выполнен; нормативное основание не найдено', not_applicable: 'В наблюдении нет нормативного вопроса', unavailable: 'Поиск недоступен или не выполнен', running: 'Поиск выполняется' };
 const QUERY_STATUS: Readonly<Record<string, string>> = { completed: 'Ответ поиска получен', failed: 'Ошибка поиска', not_searched: 'Запрос не выполнен' };
-const REASON: Readonly<Record<string, string>> = { corpus_unavailable: 'Нормативный корпус не закреплён за прогоном.', query_not_proposed: 'Поисковый запрос для наблюдения не был предложен.', lookup_window_exhausted: 'Запрос находится вне принятого окна поиска.', lookup_unavailable: 'Поиск завершился отказом или ошибкой. Это не отсутствие документа.' };
+const REASON: Readonly<Record<string, string>> = { corpus_unavailable: 'Нормативный корпус не закреплён за прогоном.', query_not_proposed: 'Поисковый запрос для наблюдения не был предложен.', no_normative_question: 'Для этого наблюдения нормативный поиск не требуется. Это не оценка соответствия проекта нормам.', explicit_normative_claim_without_query: 'Нормативный вопрос остался без пригодного запроса; нормативное основание не проверено.', literal_standard_reference: 'Поиск использует точное обозначение нормативного документа из наблюдения.', literal_normative_claim: 'Поиск использует дословный фрагмент нормативного вопроса из наблюдения.', lookup_window_exhausted: 'Запрос находится вне принятого окна поиска.', lookup_unavailable: 'Поиск завершился отказом или ошибкой. Это не отсутствие документа.' };
 
 export function NormativeSearches({ value }: { readonly value: unknown }) {
   const [expanded, setExpanded] = useState(false);
@@ -21,7 +21,7 @@ export function NormativeSearches({ value }: { readonly value: unknown }) {
   const [page, setPage] = useState(0);
   if (!Array.isArray(value)) return null;
   const records = objects(value);
-  const needsAttention = (row: RecordValue) => row.status !== 'candidates' || row.search_tail_not_read === true
+  const needsAttention = (row: RecordValue) => !['candidates', 'not_applicable'].includes(text(row.status)) || row.search_tail_not_read === true
     || (typeof row.queries_without_answer === 'number' && row.queries_without_answer > 0)
     || objects(row.queries).some((query) => objects(query.hits).some((hit) => hit.candidate_quote_truncated === true));
   const needle = search.trim().toLocaleLowerCase('ru');

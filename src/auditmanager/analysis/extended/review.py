@@ -6,6 +6,7 @@ proposed rewrite is an expert act; original observations remain immutable.
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -81,10 +82,8 @@ def corrector_schema():
 
 def _document(raw):
     if isinstance(raw, bytes):
-        if len(raw) > 2_097_152:
-            raise ValueError("review_reply_too_large")
         raw = raw.decode("utf-8")
-    if not isinstance(raw, str) or len(raw.encode("utf-8")) > 2_097_152:
+    if not isinstance(raw, str):
         raise ValueError("review_reply_invalid")
     def unique(pairs):
         result = {}
@@ -175,8 +174,11 @@ def _source_index(sources, context=None):
     return indexed, texts
 
 
-def _source_view(indexed, texts):
-    budget = MAX_CONTEXT_CHARACTERS
+def _source_view(indexed, texts, *, full_context=False):
+    limit = (sum(len(value) for value in dict.fromkeys(
+        value for values in texts.values() for value in values))
+        if full_context else MAX_CONTEXT_CHARACTERS)
+    budget = limit
     output, passages, shown = [], [], {}
     truncated = False
     for key in sorted(indexed):
@@ -199,8 +201,8 @@ def _source_view(indexed, texts):
             ("source_id", "kind", "source_type", "page_number", "version_uid", "bbox_norm", "crop_sha256", "text_sha256")
             if field in source} | {"text_refs": list(dict.fromkeys(references))})
     return {"sources": output, "source_text": passages,
-            "context_coverage": {"limit_characters": MAX_CONTEXT_CHARACTERS,
-                "characters_provided": MAX_CONTEXT_CHARACTERS - budget, "truncated": truncated,
+            "context_coverage": {"limit_characters": limit,
+                "characters_provided": limit - budget, "truncated": truncated,
                 "raw_images_reattached": False}}
 
 
@@ -218,8 +220,55 @@ def _original_signals(key, item, indexed):
             "semantic_source_confirmation": False}
 
 
-def _normative_view(observations):
+def _complete_normative_view(observations):
+    """Bind every exact candidate variant to the inputs that actually received it."""
+    variants, references, priority = {}, {}, []
+    for input_id, item in observations.items():
+        references[input_id] = []
+        by_paragraph = {}
+        for row in item.get("norm_candidates", []):
+            paragraph = row["paragraph_id"]
+            quote = row.get("quote")
+            if not isinstance(quote, str):
+                raise ValueError("review_normative_candidate_invalid")
+            # A paragraph can legitimately yield different exact search excerpts.
+            # Retain metadata variants as well; neither the quote nor another
+            # input's candidate may overwrite the candidate bound to this input.
+            quote_sha256 = hashlib.sha256(quote.encode("utf-8")).hexdigest()
+            context_key = paragraph + ":" + quote_sha256 + ":" + digest(row)
+            variant = variants.setdefault(context_key, {"candidate": row, "input_ids": []})
+            if input_id not in variant["input_ids"]:
+                variant["input_ids"].append(input_id)
+            references[input_id].append({field: row[field] for field in
+                ("paragraph_id", "designation", "clause_number") if field in row}
+                | {"norm_context_key": context_key})
+            by_paragraph.setdefault(paragraph, []).append(context_key)
+        assessment = item.get("norm_assessment")
+        if isinstance(assessment, dict):
+            for citation in assessment.get("citations", []):
+                matches = [key for key in by_paragraph.get(citation["paragraph_id"], [])
+                    if variants[key]["candidate"]["quote"] == citation["quote"]]
+                if not matches:
+                    raise ValueError("review_normative_citation_unavailable")
+                priority.extend(matches)
+    supplied = []
+    for key in dict.fromkeys([*priority, *variants]):
+        variant = variants[key]
+        row = deepcopy(variant["candidate"])
+        # These two fields describe this request, never the canonical corpus row.
+        if "norm_context_key" in row or "input_ids" in row:
+            raise ValueError("review_normative_metadata_conflict")
+        row.update(norm_context_key=key, input_ids=list(variant["input_ids"]))
+        supplied.append(row)
+    characters = sum(len(canonical(row)) for row in supplied)
+    return references, supplied, {"limit_characters": characters,
+        "characters_provided": characters, "truncated": False, "omitted_paragraph_ids": []}
+
+
+def _normative_view(observations, *, full_context=False):
     """Deduplicate real corpus excerpts without mutating saved observations."""
+    if full_context:
+        return _complete_normative_view(observations)
     candidates, priority, references = {}, [], {}
     for key, item in observations.items():
         rows = item.get("norm_candidates", [])
@@ -234,7 +283,8 @@ def _normative_view(observations):
         assessment = item.get("norm_assessment")
         if isinstance(assessment, dict):
             priority.extend(citation["paragraph_id"] for citation in assessment.get("citations", []))
-    budget, supplied, omitted = MAX_CONTEXT_CHARACTERS, [], []
+    limit = sum(len(canonical(row)) for row in candidates.values()) if full_context else MAX_CONTEXT_CHARACTERS
+    budget, supplied, omitted = limit, [], []
     for paragraph in dict.fromkeys([*priority, *candidates]):
         if paragraph not in candidates:
             raise ValueError("review_normative_citation_unavailable")
@@ -245,13 +295,13 @@ def _normative_view(observations):
             continue
         supplied.append(deepcopy(row))
         budget -= size
-    return references, supplied, {"limit_characters": MAX_CONTEXT_CHARACTERS,
-        "characters_provided": MAX_CONTEXT_CHARACTERS - budget,
+    return references, supplied, {"limit_characters": limit,
+        "characters_provided": limit - budget,
         "truncated": bool(omitted), "omitted_paragraph_ids": omitted}
 
 
 def _request(*, model_id, run_id, section, observations, sources, window_id, context,
-             phase, schema, instruction, critiques=None):
+             phase, schema, instruction, critiques=None, full_context=False):
     from .section_rules import section_instructions
     selected = _input_items(observations)
     indexed, texts = _source_index(sources, context)
@@ -259,8 +309,10 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         raise ValueError("review_input_source_unavailable")
     if not isinstance(window_id, str) or not window_id or len(window_id) > 128:
         raise ValueError("review_window_identity_invalid")
-    payload = _source_view(indexed, texts)
-    norm_references, norm_context, norm_coverage = _normative_view(selected)
+    if type(full_context) is not bool:
+        raise ValueError("review_context_policy_invalid")
+    payload = _source_view(indexed, texts, full_context=full_context)
+    norm_references, norm_context, norm_coverage = _normative_view(selected, full_context=full_context)
     payload.update(workflow_version=WORKFLOW_V3, window_id=window_id,
         rules_sha256=review_bundle_digest(section), procedure=phase,
         norm_context=norm_context, norm_context_coverage=norm_coverage,
@@ -283,6 +335,21 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         "Полные нормативные кандидаты переданы один раз в norm_context; ссылки наблюдений сами по себе "
         "не являются текстом нормы. Учитывай norm_context_coverage и пропущенные параграфы. "
         "Не выдумывай прочитанные пиксели или цитаты. При недостатке данных отметь потребность в контексте. " + instruction)
+    if full_context:
+        system += (" Разные norm_context_key могут обозначать разные дословные цитаты одного paragraph_id. "
+            "Для каждого наблюдения используй только варианты, перечисленные в его norm_candidates по "
+            "norm_context_key и связанные с его input_id в input_ids. Само совпадение paragraph_id не даёт "
+            "права подменять цитату вариантом другого наблюдения. Исходные norm_assessment и citations сохраняются.")
+    schema = deepcopy(schema)
+    collection = "reviews" if phase == "finding_review" else "corrections"
+    properties = schema["properties"][collection]["items"]["properties"]
+    properties["input_id"]["enum"] = list(selected)
+    allowed_ids = sorted(indexed)
+    if allowed_ids:
+        properties["source_ids"]["items"]["enum"] = allowed_ids
+        properties["source_evidence"]["items"]["properties"]["source_id"]["enum"] = allowed_ids
+        if "proposed_source_ids" in properties:
+            properties["proposed_source_ids"]["items"]["enum"] = allowed_ids
     body = {"model": model_id, "max_tokens": REVIEW_OUTPUT_TOKENS if phase == "finding_review" else CORRECTION_OUTPUT_TOKENS,
         "system": system, "messages": [{"role": "user", "content": canonical(payload)}],
         "thinking": {"type": "adaptive"}, "output_config": {"effort": "high",
@@ -293,11 +360,13 @@ def _request(*, model_id, run_id, section, observations, sources, window_id, con
         idempotency_scope=f"{run_id}:v3:{window_id}:{phase}:{digest(body)}")
 
 
-def build_critic_request(*, model_id, run_id, section, observations, sources, window_id, context=None):
+def build_critic_request(*, model_id, run_id, section, observations, sources, window_id, context=None,
+                         full_context=False):
     if not _input_items(observations):
         return None
     return _request(model_id=model_id, run_id=run_id, section=section, observations=observations,
         sources=sources, window_id=window_id, context=context, phase="finding_review", schema=critic_schema(),
+        full_context=full_context,
         instruction=("Верни объект reviews: ровно одна запись для КАЖДОГО input_id, без добавлений и пропусков. "
             "source_ids повторяют полный исходный набор. llm_decision — только совет модели. Для reject нужны "
             "confidence>=0.75, enough_source, evidence_checked=true и конкретные source_evidence с ДОСЛОВНЫМИ "
@@ -339,7 +408,7 @@ def _downgraded_to_human(row):
         "program_downgrade": "rejection_below_thresholds", "explanation": note + row["explanation"]}
 
 
-def parse_critic_reply(text, *, observations, sources, allowed_sources=None, context=None):
+def _parse_critic_reply_strict(text, *, observations, sources, allowed_sources=None, context=None):
     expected = _input_items(observations)
     indexed, texts = _source_index(sources, context)
     allowed = set(indexed) if allowed_sources is None else set(allowed_sources) & set(indexed)
@@ -391,6 +460,47 @@ def parse_critic_reply(text, *, observations, sources, allowed_sources=None, con
     return result
 
 
+def parse_critic_reply(text, *, observations, sources, allowed_sources=None, context=None, rejected=None):
+    """Account for each critic input while retaining separately valid reviews."""
+    if rejected is None:
+        return _parse_critic_reply_strict(text, observations=observations, sources=sources,
+            allowed_sources=allowed_sources, context=context)
+    expected = _input_items(observations)
+    value = _document(text)
+    schema = critic_schema()
+    envelope = deepcopy(schema)
+    envelope["properties"]["reviews"]["items"] = {}
+    _validate(value, envelope)
+    output, accounted = [], set()
+    counts = {}
+    for row in value["reviews"]:
+        key = row.get("input_id") if isinstance(row, dict) else None
+        if isinstance(key, str):
+            counts[key] = counts.get(key, 0) + 1
+    for ordinal, row in enumerate(value["reviews"]):
+        key = row.get("input_id") if isinstance(row, dict) else None
+        if isinstance(key, str) and key in expected:
+            accounted.add(key)
+        try:
+            _validate(row, schema["properties"]["reviews"]["items"])
+            if key not in expected or counts.get(key) != 1:
+                raise ValueError("critic_input_partition_invalid")
+            output.extend(_parse_critic_reply_strict(json.dumps({"reviews": [row]}, ensure_ascii=False),
+                observations={key: expected[key]}, sources=sources,
+                allowed_sources=allowed_sources, context=context))
+        except ValueError as error:
+            reason = str(error)
+            if not reason.startswith(("critic_", "review_")) or not reason.isidentifier():
+                reason = "critic_record_schema_invalid"
+            rejected.append({"input_id": key if isinstance(key, str) else None,
+                "reply_ordinal": ordinal, "reason": reason, "record": deepcopy(row)})
+    for key in expected:
+        if key not in accounted:
+            rejected.append({"input_id": key, "reply_ordinal": None,
+                "reason": "critic_input_partition_invalid", "record": None})
+    return output
+
+
 def _targets(observations, critiques):
     expected = _input_items(observations)
     if not isinstance(critiques, list):
@@ -412,14 +522,15 @@ def _targets(observations, critiques):
     return targets
 
 
-def build_corrector_request(*, model_id, run_id, section, observations, critiques, sources, window_id, context=None):
+def build_corrector_request(*, model_id, run_id, section, observations, critiques, sources, window_id, context=None,
+                            full_context=False):
     targets = _targets(observations, critiques)
     if not targets:
         return None
     selected = [row for row in critiques if row["input_id"] in targets]
     return _request(model_id=model_id, run_id=run_id, section=section, observations=targets,
         sources=sources, window_id=window_id, context=context, phase="finding_correction",
-        schema=corrector_schema(), critiques=selected,
+        schema=corrector_schema(), critiques=selected, full_context=full_context,
         instruction=("Верни объект corrections: ровно одна запись для каждого переданного input_id, без новых наблюдений. "
             "Следуй консервативному corrector исходного проекта: НИЧЕГО НЕ УДАЛЯТЬ, исходные данные сохранить. "
             "source_ids повторяют исходный набор. action=retain или needs_context сохраняют proposed_title/description "
@@ -428,6 +539,11 @@ def build_corrector_request(*, model_id, run_id, section, observations, critique
             "proposed_source_ids и ДОСЛОВНЫЕ source_evidence этих источников. Не добавляй чисел, марок и нормативных "
             "утверждений, которых нет в переданных источниках; не выводи физическую замену объекта из одной смены подписи. "
             "Если доказательств для безопасного исправления нет, выбери needs_context, не выдумывай исправление. "
+            "Для propose_revision каждое число, знак, десятичный разделитель и буквенно-цифровая марка "
+            "во ВСЁМ proposed_title и proposed_description должны дословно подтверждаться source_evidence "
+            "либо переданной нормативной цитатой; это относится и к значениям, оставленным из исходного текста. "
+            "Не добавляй вычисленные значения, даже если расчёт кажется очевидным. Расширь дословную цитату "
+            "до подтверждающего фрагмента или выбери needs_context с неизменённым оригиналом. "
             "Никакого одобрения/отклонения эксперта, изменения важности или подтверждения действующей нормы."))
 
 
@@ -442,7 +558,7 @@ def _identifiers(value):
     return set(_IDENTIFIER.findall(unicodedata.normalize("NFKC", value).casefold()))
 
 
-def parse_corrector_reply(text, *, observations, critiques, sources, allowed_sources=None, context=None):
+def _parse_corrector_reply_strict(text, *, observations, critiques, sources, allowed_sources=None, context=None):
     targets = _targets(observations, critiques)
     indexed, texts = _source_index(sources, context)
     allowed = set(indexed) if allowed_sources is None else set(allowed_sources) & set(indexed)
@@ -497,3 +613,50 @@ def parse_corrector_reply(text, *, observations, critiques, sources, allowed_sou
     if seen != set(targets):
         raise ValueError("corrector_input_partition_invalid")
     return result
+
+
+def parse_corrector_reply(text, *, observations, critiques, sources, allowed_sources=None, context=None,
+                          rejected=None):
+    """Preserve valid corrections while making refused or missing records explicit.
+
+    Strict callers retain their previous all-or-nothing behavior. Collector callers
+    must account for the refused proposals; they are never converted into candidates.
+    """
+    if rejected is None:
+        return _parse_corrector_reply_strict(text, observations=observations, critiques=critiques,
+            sources=sources, allowed_sources=allowed_sources, context=context)
+    targets = _targets(observations, critiques)
+    by_id = {row["input_id"]: row for row in critiques}
+    value = _document(text)
+    schema = corrector_schema()
+    envelope = deepcopy(schema)
+    envelope["properties"]["corrections"]["items"] = {}
+    _validate(value, envelope)
+    output, accounted = [], set()
+    counts = {}
+    for row in value["corrections"]:
+        key = row.get("input_id") if isinstance(row, dict) else None
+        if isinstance(key, str):
+            counts[key] = counts.get(key, 0) + 1
+    for ordinal, row in enumerate(value["corrections"]):
+        key = row.get("input_id") if isinstance(row, dict) else None
+        if isinstance(key, str) and key in targets:
+            accounted.add(key)
+        try:
+            _validate(row, schema["properties"]["corrections"]["items"])
+            if key not in targets or counts.get(key) != 1:
+                raise ValueError("corrector_input_partition_invalid")
+            output.extend(_parse_corrector_reply_strict(json.dumps({"corrections": [row]}, ensure_ascii=False),
+                observations={key: targets[key]}, critiques=[by_id[key]], sources=sources,
+                allowed_sources=allowed_sources, context=context))
+        except ValueError as error:
+            reason = str(error)
+            if not reason.startswith("corrector_") or not reason.isidentifier():
+                reason = "corrector_record_schema_invalid"
+            rejected.append({"input_id": key if isinstance(key, str) else None,
+                "reply_ordinal": ordinal, "reason": reason, "record": deepcopy(row)})
+    for key in targets:
+        if key not in accounted:
+            rejected.append({"input_id": key, "reply_ordinal": None,
+                "reason": "corrector_input_partition_invalid", "record": None})
+    return output

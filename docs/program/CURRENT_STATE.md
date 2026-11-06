@@ -1,5 +1,9 @@
 # Current state
 
+**Updated 2026-11-06 by `HOTFIX-RUN-COMPLETE-1106` follow-up (candidate; green live run still pending).** The observed live repeat found a local stdin deadlock: after a 0.2s communicate timeout, remaining input was not sent; Codex waited for EOF and emitted zero events before its deadline. Both runner layers now use private file-backed stdin. Fresh passport v3 separates explicit validator rejection of unsupported candidates from execution completion; invalid facts remain excluded, structural/transport/source-coverage failures remain incomplete. Full normative contexts retain exact per-input variants of one paragraph. Product 0.12.3 gives the changed runner package its own version. Contract 1.33.0 / migration0055 unchanged; build-only verification as ordered.
+
+**Updated 2026-11-06 by `HOTFIX-RUN-COMPLETE-1106` (candidate; live complete run still pending).** Fresh consent opts into all-source passport and all-pair cross-window plans, separate journalled semantic repair after received invalid replies, literal norm-query provenance, complete review context and truthful execution statuses. Negative norm searches and valid needs-context recommendations retain their meaning without masquerading as execution failures. Old partial artifacts and frozen call limits stay unchanged. API 1.33.0 / migration 0055 unchanged; 0.12.2 note revision 2. Owner-authorized deployment build checks only; no behavioral suites or full gate.
+
 **Updated 2026-11-06 by `HOTFIX-RUN-PARTIAL-1106`.** Repairs partial parameter replies, preserves completed visual windows after a later provider failure, removes Codex answer delivery limits and the hidden CLI deadline, and distinguishes successful windows from stopped ones. Contract 1.33.0 removes the runner answer-text ceiling; no migration, dependency or composition change. Release note 0.12.1 revision 2. Owner-authorized fast hotfix: deployment build checks only; behavioral suites and full gate are deliberately not run. Publication is through dev to main, with deployment verification recorded separately.
 
 **Updated 2026-11-06 by `UI-PARITY-KB-ALL` (unverified development candidate; the slice is 9ee8d019 on `origin/dev`, this record 0f0f15f8).** Contract **1.32.0** adds `listKnowledgeBaseEntries` (`GET /knowledge-base/entries`): the knowledge base's «Все», the decisions on findings and on optimisation proposals as one journal, newest first, each entry naming its kind and carrying that journal's own record (`D-317` closed). No migration. Release note `0.12.0` is at revision 4 (AGENTS §6.1): the same day's «Во весь экран», «Открыть PDF», «Все» and the run screen's head joined its items. Checks: the contract suites, the web knowledge-base, guard and census tests, and on a throwaway stand the query-surface, role-register, served-document, release-loader (135) and authorization (36) suites; no browser pass.
@@ -82,7 +86,7 @@ Checks run per branch before the merge:
 
 Each is re-measured by `tests/contract/api_v1/test_doc_prose_facts.py` against the tree, so a stale one is a red test and not a habit.
 
-- Product `VERSION` is `0.12.2`; this file describes development, not a release.
+- Product `VERSION` is `0.12.3`; this file describes development, not a release.
 - The development API contract is `1.34.0`: **267 paths / 295 operations / 712 schemas** (`contracts/api/v1/openapi.json`); the error catalogue has **27** codes; the migration head is **`0055_work_schedule`** (`db/migrations/versions/`).
 - The surface of each earlier seal, and the head it left, are stated in the entries above (the stage-1 entry names the `1.15.0` triple) and in [the 2026-11-03 state archive](history/CURRENT_STATE_2026-11-03_51183a75.md); they are records of their day and not claims about this tree.
 

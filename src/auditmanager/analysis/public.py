@@ -554,9 +554,9 @@ def consolidate_extended_observations(observations, *, sources, version_uid):
 __all__.append("consolidate_extended_observations")
 
 
-def extended_cross_window_policy():
+def extended_cross_window_policy(**kwargs):
     from auditmanager.analysis.extended.coverage import cross_window_policy
-    return cross_window_policy()
+    return cross_window_policy(**kwargs)
 
 
 def validate_extended_cross_window_policy(value):
@@ -585,9 +585,22 @@ def parse_global_cross_window_reply(text, **kwargs):
 __all__.extend(["plan_global_cross_window", "build_global_cross_window_request", "parse_global_cross_window_reply"])
 
 
-def project_parameters_policy(section):
+def project_parameters_policy(section, **kwargs):
     from auditmanager.analysis.extended.project_parameters import policy
-    return policy(section)
+    return policy(section, **kwargs)
+
+
+def build_semantic_repair_request(request, **kwargs):
+    from auditmanager.analysis.extended.core import build_semantic_repair_request as build
+    return build(request, **kwargs)
+
+
+def semantic_repair_metadata(request):
+    from auditmanager.analysis.extended.core import semantic_repair_metadata as metadata
+    return metadata(request)
+
+
+__all__.extend(["build_semantic_repair_request", "semantic_repair_metadata"])
 
 
 def validate_project_parameters_policy(value, *, section, compare_bundle=True):

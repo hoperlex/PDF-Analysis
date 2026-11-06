@@ -329,6 +329,10 @@ class RunCostPreflight:
                     from auditmanager.analysis.public import extended_coverage_policy
                     extended.update(extended_coverage_policy(**({"text_characters": chars,
                         "unbounded_stats": relaxed_limits} if coverage_mode == "batched-v1" else {})))
+                    # Fresh consent names complete source-sized processing and one
+                    # separate semantic repair after a received invalid answer.
+                    # Historical frozen plans never acquire these permissions.
+                    extended.update(completion_policy="source-complete-v1", semantic_repair_attempts=1)
                     limits = extended["phase_call_limits"]
                     per_window_calls = sum(limits.values())
                     per_window_output = sum(limits[phase] * tokens for phase, tokens in (
@@ -343,7 +347,7 @@ class RunCostPreflight:
                     cross_window_mode = os.environ.get("AUDITMANAGER_EXTENDED_CROSS_WINDOW", "1").strip().lower()
                     if visual["text_page_limit"] > 16 and cross_window_mode not in {"0", "false", "off"}:
                         from auditmanager.analysis.public import extended_cross_window_policy
-                        global_policy = extended_cross_window_policy()
+                        global_policy = extended_cross_window_policy(full_coverage=True)
                         extended["global_cross_window_policy"] = global_policy
                         global_limits = global_policy["call_limits"]
                         global_calls = sum(global_limits.values())
@@ -370,7 +374,7 @@ class RunCostPreflight:
                     raise _invalid("analysis_coverage", "unsupported_plan")
                 if chars > 0 and os.environ.get("AUDITMANAGER_PROJECT_PARAMETERS", "1").strip().lower() not in {"0", "false", "off"}:
                     from auditmanager.analysis.public import project_parameters_policy
-                    parameters = project_parameters_policy(section)
+                    parameters = project_parameters_policy(section, full_coverage=True, candidate_refusals=True)
                     extended["project_parameters_policy"] = parameters
                     extra_calls += parameters["max_calls"]
                     input_tokens += parameters["max_calls"] * 100_000
@@ -392,6 +396,13 @@ class RunCostPreflight:
                             review_calls += sum(extended.get("global_cross_window_policy", {}).get("call_limits", {}).get(phase, 0)
                                 for phase in review_context["scopes"])
                             input_tokens += review_calls * review_context["input_tokens_per_call"]
+                if extended.get("semantic_repair_attempts") == 1:
+                    # Reserve one additional received-reply repair for every
+                    # initial extended call; actual source-sized work is still
+                    # bounded by the accepted monetary ceiling and checkpoints.
+                    input_tokens += extra_calls * 100_000
+                    output_tokens += extra_calls * 12_000
+                    extra_calls *= 2
                 source["visual_scope"] = visual
             elif requested in {"v2", "extended-review-v2"}:
                 extended = {"enabled": True, "max_blocks": "all", "plan_version": "extended-review-v2"}

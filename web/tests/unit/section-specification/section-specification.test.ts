@@ -32,6 +32,7 @@ import { SectionPicker, SectionSpecificationAnswer, SectionSpecificationSection 
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
 import {
+  SECTION_DOCUMENT_A,
   SECTION_DOCUMENT_B,
   SECTION_NO_ROWS,
   SECTION_PROJECT_A,
@@ -144,6 +145,23 @@ describe('rows are addressed and never merged', () => {
     expect(text(other)).toContain('с. 9');
     expect(other).toContain(`/projects/${SECTION_PROJECT_B}/documents/${SECTION_DOCUMENT_B}`);
     expect(SECTION_VERSION_B).toMatch(/^ver_/);
+  });
+
+  it('links each row’s set, each source and each project to their «Оптимизация» tab (`UI-B-30`)', () => {
+    // `&` and `?` are plain in the address; the document's tab is `?tab=optimisation` and a row names no pass.
+    expect(rowMarkup(markup, B_FIRST)).toContain(
+      `href="/projects/${SECTION_PROJECT_B}/documents/${SECTION_DOCUMENT_B}?tab=optimisation"`,
+    );
+    expect(rowMarkup(markup, B_FIRST)).toContain(`href="/projects/${SECTION_PROJECT_B}/documents/${SECTION_DOCUMENT_B}"`);
+    expect(rowMarkup(markup, A_COUNTED)).toContain(
+      `href="/projects/${SECTION_PROJECT_A}/documents/${SECTION_DOCUMENT_A}?tab=optimisation"`,
+    );
+    const panel = markup.slice(markup.indexOf(`data-section-project="${SECTION_PROJECT_B}"`));
+    expect(panel).toContain(`href="/projects/${SECTION_PROJECT_B}?tab=optimisation"`);
+    expect(panel).toContain('вкладка «Оптимизация» проекта');
+    expect(panel).toContain('оптимизация комплекта');
+    // The project and the set keep their own links: the new ones are added, not substituted.
+    expect(panel).toContain(`href="/projects/${SECTION_PROJECT_B}"`);
   });
 
   it('shows the same product of two projects as two rows, each under its own project', () => {

@@ -25,3 +25,8 @@ export { ReviewRowActions, acceptNeedsSeverity } from './ui/review-row-actions';
 export { ReviewViewerAside, ReviewViewerDialog } from './ui/review-viewer-dialog';
 export type { ReviewViewerAsideProps, ReviewViewerDialogProps } from './ui/review-viewer-dialog';
 export type { ReviewRowActionsProps } from './ui/review-row-actions';
+/** «Блоки страницы N» under the page (`UI-A-74`), exported so the styling census renders its view. */
+export { PageBlocksStrip, ReviewPageBlocks } from './ui/page-blocks';
+export type { PageBlocksShown, PageBlocksStripProps, ReviewPageBlocksProps } from './ui/page-blocks';
+export { readPageBlocks, stripPageOf } from './model/page-blocks';
+export type { PageBlocksReading, PageBlocksSource } from './model/page-blocks';

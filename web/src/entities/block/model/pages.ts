@@ -87,6 +87,21 @@ export function pageChips(sections: readonly PortalPageSection[]): readonly Page
   }));
 }
 
+/**
+ * The selection an address names: `?page=N` (a PDF page number, from 1) or `?page=all`. Anything else --
+ * no parameter, `0`, a negative or fractional number, text -- is the whole list rather than an error: a
+ * link a person edited by hand opens «Все блоки».
+ */
+export function pageSelectionOf(param: string | null | undefined): PageSelection {
+  if (param === null || param === undefined || !/^[1-9][0-9]{0,6}$/.test(param)) return 'all';
+  return Number(param);
+}
+
+/** The `page` value that names a selection in the address; the inverse of `pageSelectionOf`. */
+export function pageSelectionParam(selection: PageSelection): string {
+  return selection === 'all' ? 'all' : String(selection);
+}
+
 /** A selection of a page that is no longer among the loaded sections is the whole list again. */
 export function effectiveSelection(sections: readonly PortalPageSection[], selection: PageSelection): PageSelection {
   if (selection === 'all') return 'all';
