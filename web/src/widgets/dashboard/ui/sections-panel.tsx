@@ -160,7 +160,19 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
               audit={summary.auditByCode[section.code]}
               notRunHref={projectUid === null ? null : withNotRunFilter(routes.projectSection(projectUid, section.code))}
             />
-            <span className={styles.arrow} aria-hidden="true">›</span>
+            {projectUid === null ? (
+              <span className={styles.arrow} aria-hidden="true">›</span>
+            ) : (
+              /* The original's row opens the section in one click; with a project to open it in, so does the arrow. */
+              <Link
+                className={styles.arrow}
+                href={routes.projectSection(projectUid, section.code)}
+                aria-label={`Открыть раздел «${section.name}»`}
+                data-section-open={section.code}
+              >
+                ›
+              </Link>
+            )}
           </li>
         ))}
         <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified">

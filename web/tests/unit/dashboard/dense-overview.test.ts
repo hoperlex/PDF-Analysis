@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import type { DashboardSummary } from '@/shared/api';
+import type { DashboardSummary, ProjectUid } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { PROJECT_SECTIONS } from '@/entities/project';
 import { Dashboard } from '@/widgets/dashboard';
@@ -117,5 +117,26 @@ describe('the front door is compact', () => {
     expect(declarations(home, '.greeting').get('font-size')).toBe('var(--am-text-2xl)');
     expect(declarations(home, '.hero').get('padding')).toBe('var(--am-gap)');
     expect(declarations(home, '.hero').get('border-radius')).toBe('var(--am-radius)');
+  });
+});
+
+describe("a section's arrow opens the section in one click when a project is chosen", () => {
+  const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' as ProjectUid;
+  const render = (projectUid: ProjectUid | null): string => {
+    const client = newClient();
+    client.setQueryData(queryKeys.dashboard.summary(projectUid), SUMMARY);
+    return renderWith(client, createElement(Dashboard, { projectUid }));
+  };
+
+  it('is a link to the project’s section page for every section', () => {
+    const markup = render(PROJECT);
+    for (const section of PROJECT_SECTIONS) {
+      expect(markup, section.code).toContain(`data-section-open="${section.code}"`);
+      expect(markup, section.code).toContain(`href="/projects/${PROJECT}/sections/${section.code}"`);
+    }
+  });
+
+  it('is only an arrow across all projects, where there is no one section page to open', () => {
+    expect(render(null)).not.toContain('data-section-open');
   });
 });
