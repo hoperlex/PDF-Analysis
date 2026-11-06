@@ -4,8 +4,10 @@
  * «Календарь запаса» of «График работ» (`UI-PARITY-P0P`, `R-150y`, `R-152e`…`R-152h`): each active expert's open
  * assignments of «Диспетчер» on the days they are planned for, and a «Без даты» column for the rest. No daily limit.
  *
- * An administrator moves work as in the original: drag an assignment (or the selection it belongs to) to another day or
- * another engineer's row; Ctrl/Cmd+click adds to the selection; «Раньше» and «Позже» move the selection a working day.
+ * A click on an assignment opens its document (its project when it has none), as the original's click on a dot opens the
+ * project. An administrator moves work as in the original: drag an assignment (or the selection it belongs to) to another
+ * day or another engineer's row; Ctrl/Cmd+click (or the space bar) adds it to the selection and Esc clears the selection;
+ * «Раньше» and «Позже» move the selection a working day.
  * Every move is one keyed `scheduleAssignments` command and an event of the assignment's history; a move to another
  * expert is a reassignment in «Диспетчер». An expert reads their own row and moves nothing.
  *
@@ -13,11 +15,13 @@
  * never carries work the screen has stopped showing.
  */
 
-import { useState } from 'react';
-import type { DragEvent, MouseEvent } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent } from 'react';
 
 import type { WorkScheduleDay, WorkScheduleReserve, WorkScheduleReserveItem } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
+import { routes } from '@/shared/lib';
 import { ASSIGNMENT_STATUS_LABELS } from '@/entities/assignment';
 import type { EngineerFilter } from '@/entities/work-schedule';
 import {
@@ -59,6 +63,11 @@ const UNDATED = 'none';
 
 function itemLabel(item: WorkScheduleReserveItem): string {
   return item.document_title ?? item.project_name;
+}
+
+/** Where an assignment's dot leads: its document, or its project when the assignment names no document. */
+function itemHref(item: WorkScheduleReserveItem): string {
+  return item.document_uid === undefined ? routes.project(item.project_uid) : routes.document(item.project_uid, item.document_uid);
 }
 
 function itemTitle(item: WorkScheduleReserveItem): string {
@@ -156,17 +165,35 @@ export function ReserveCalendarView({
       })));
   };
 
-  const click = (item: WorkScheduleReserveItem, event: MouseEvent<HTMLButtonElement>) => {
-    if (!admin) return;
-    const uid = item.assignment_uid;
-    if (event.ctrlKey || event.metaKey) {
-      setSelected(selected.includes(uid) ? selected.filter((entry) => entry !== uid) : [...selected, uid]);
-    } else {
-      setSelected(selected.length === 1 && selected[0] === uid ? [] : [uid]);
-    }
+  const toggle = (uid: string) => {
+    setSelected(selected.includes(uid) ? selected.filter((entry) => entry !== uid) : [...selected, uid]);
   };
 
-  const dragStart = (item: WorkScheduleReserveItem, event: DragEvent<HTMLButtonElement>) => {
+  // A plain click follows the link, as the original's click on a dot opens the project; Ctrl/Cmd+click selects.
+  const click = (item: WorkScheduleReserveItem, event: MouseEvent<HTMLAnchorElement>) => {
+    if (!admin || !(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    toggle(item.assignment_uid);
+  };
+
+  // The space bar selects the focused dot, so the selection does not depend on a modifier key and a mouse.
+  const keyDown = (item: WorkScheduleReserveItem, event: ReactKeyboardEvent<HTMLAnchorElement>) => {
+    if (!admin || event.key !== ' ') return;
+    event.preventDefault();
+    toggle(item.assignment_uid);
+  };
+
+  // Esc clears the selection, as in the original.
+  useEffect(() => {
+    if (selected.length === 0) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected([]);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selected.length]);
+
+  const dragStart = (item: WorkScheduleReserveItem, event: DragEvent<HTMLAnchorElement>) => {
     const uid = item.assignment_uid;
     if (!selected.includes(uid)) setSelected([uid]);
     event.dataTransfer.effectAllowed = 'move';
@@ -211,7 +238,8 @@ export function ReserveCalendarView({
       </div>
       {admin ? (
         <p className="am-note">
-          Перетащите работу на другой день или другому инженеру; Ctrl/Cmd + щелчок добавляет к выбору.
+          Щелчок открывает документ. Перетащите работу на другой день или другому инженеру; Ctrl/Cmd + щелчок или пробел
+          добавляет её к выбору, Esc снимает выбор.
         </p>
       ) : null}
       {admin && chosen.length > 0 ? (
@@ -342,19 +370,20 @@ export function ReserveCalendarView({
                         onDrop={admin ? (event) => drop(engineer.user_uid, day === null ? null : day.day, event) : undefined}
                       >
                         {items.map((item) => (
-                          <button
+                          <Link
                             key={item.assignment_uid}
-                            type="button"
+                            href={itemHref(item)}
                             className={styles.point}
                             data-status={item.status}
-                            aria-pressed={admin ? selected.includes(item.assignment_uid) : undefined}
+                            aria-current={admin && selected.includes(item.assignment_uid) ? 'true' : undefined}
                             title={itemTitle(item)}
                             draggable={admin && !move.isPending}
                             onClick={(event) => click(item, event)}
+                            onKeyDown={(event) => keyDown(item, event)}
                             onDragStart={(event) => dragStart(item, event)}
                           >
                             {itemLabel(item)}
-                          </button>
+                          </Link>
                         ))}
                       </td>
                     );
