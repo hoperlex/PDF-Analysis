@@ -45,7 +45,7 @@ import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
 import { sheetOfPage, useSheetLabels } from '@/entities/block';
-import { FindingList, filterBySeverity, filterGroups, findingViewOf, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
 import type { FindingView, SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
@@ -403,6 +403,16 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
       {/* The file actions stand over the findings, as the original's toolbar does, not under the last of a long list. */}
       {exportPanel}
+      {/* The filters and the tally across the whole width over the list and the open finding, as the original's top row. */}
+      <FindingToolbar
+        groups={groups}
+        verdictFilter={verdictFilter}
+        onVerdictFilterChange={setVerdictFilter}
+        severityFilter={severityFilter}
+        onSeverityFilterChange={setSeverityFilter}
+        view={view}
+        onViewChange={setView}
+      />
       <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
         <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>
           <FindingList
@@ -413,6 +423,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             onSeverityFilterChange={setSeverityFilter}
             view={view}
             onViewChange={setView}
+            toolbar="outside"
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
               // A second press on the open row of the table closes it, as the original's strip does.

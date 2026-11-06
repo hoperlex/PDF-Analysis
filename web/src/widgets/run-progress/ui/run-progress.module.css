@@ -345,6 +345,7 @@
 /* ---- the live line of an open run (`UI-A-65`) --------------------------------------------- */
 
 .live {
+  align-self: stretch;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

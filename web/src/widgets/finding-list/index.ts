@@ -1,8 +1,8 @@
 /** Public API of the `finding-list` widget. */
 
-export type { FindingIntegrityFault, FindingListProps, FindingView } from './ui/finding-list';
+export type { FindingIntegrityFault, FindingListProps, FindingToolbarProps, FindingView } from './ui/finding-list';
 export {
-  FindingList, filterBySeverity, filterGroups, findingViewOf, pagesLabel, severityFilterOf, tallySeverity, tallyVerdicts, verdictBucket, verdictFilterOf,
+  FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, pagesLabel, severityFilterOf, tallySeverity, tallyVerdicts, verdictBucket, verdictFilterOf,
 } from './ui/finding-list';
 export type { SeverityFilter, SeverityTally, VerdictFilter, VerdictTally } from './ui/finding-list';
 export { findingNumbers, pagesParts } from './model/presentation';

@@ -74,6 +74,11 @@ export interface FindingListProps {
    * row. In the list the finding is read beside it, so the list ignores this.
    */
   readonly renderExpansion?: ((finding: Finding) => ReactNode) | undefined;
+  /**
+   * Where the toolbar stands: `inside` (the default) at the head of the list; `outside` when the page draws
+   * `FindingToolbar` itself, across the whole width over the list and the open finding.
+   */
+  readonly toolbar?: 'inside' | 'outside' | undefined;
 }
 
 /** The two ways to read the findings: the list beside the open finding, or the full-width table of the original. */
@@ -174,68 +179,45 @@ function categoryHeading(category: FindingCategory): string {
   return CATEGORY_LABELS[category];
 }
 
-export function FindingList({
+/** The props of the toolbar over the findings: the whole run's groups and the three choices the address keeps. */
+export interface FindingToolbarProps {
+  readonly groups: readonly FindingGroup<Finding>[];
+  readonly verdictFilter: VerdictFilter;
+  readonly onVerdictFilterChange: (filter: VerdictFilter) => void;
+  readonly severityFilter: SeverityFilter;
+  readonly onSeverityFilterChange: (filter: SeverityFilter) => void;
+  readonly view: FindingView;
+  readonly onViewChange: (view: FindingView) => void;
+}
+
+/** What the model proposed, by severity, naming only the severities it proposed anything for. */
+function proposedSummary(tally: SeverityTally): string | null {
+  const parts = SEVERITY_ORDER.filter((value) => tally.proposed[value] > 0).map((value) => `${SEVERITY_LABELS[value]} ${tally.proposed[value]}`);
+  return parts.length === 0 ? null : parts.join(' · ');
+}
+
+/**
+ * The strip over the findings, as the original's top row: the run's total and the verdicts' tally, the filter by
+ * verdict, the way to read the findings, and the severity chips. The page may stand it across the whole width
+ * above the list and the open finding (`toolbar="outside"` on the list); by default it stands inside the list.
+ * Counts and filters are over the whole run (`R-150i`), never over what is on screen.
+ */
+export function FindingToolbar({
   groups,
-  selectedFindingUid,
-  onSelect,
-  isLoading,
-  error,
-  integrityFaults,
-  verdictFilter,
-  onVerdictFilterChange,
-  renderRowActions,
-  sheetOf,
-  severityFilter,
-  onSeverityFilterChange,
-  view: viewFromPage,
-  onViewChange,
-  renderExpansion,
-}: FindingListProps) {
-  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
-  const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
-  const severity = severityFilter ?? ownSeverity;
-  const setSeverity = (next: SeverityFilter) => {
-    if (onSeverityFilterChange !== undefined) onSeverityFilterChange(next);
-    else setOwnSeverity(next);
-  };
-  const [ownView, setOwnView] = useState<FindingView>('list');
-  const view = viewFromPage ?? ownView;
-  const setView = (next: FindingView) => {
-    if (onViewChange !== undefined) onViewChange(next);
-    else setOwnView(next);
-  };
-  const filter = verdictFilter ?? ownFilter;
-  const setFilter = (next: VerdictFilter) => {
-    if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
-    else setOwnFilter(next);
-  };
-  if (isLoading === true) return <LoadingState what="находки" />;
-  if (error !== undefined && error !== null) return <ErrorState {...error} />;
-
+  verdictFilter: filter,
+  onVerdictFilterChange: setFilter,
+  severityFilter: severity,
+  onSeverityFilterChange: setSeverity,
+  view,
+  onViewChange: setView,
+}: FindingToolbarProps) {
   const total = countGrouped(groups);
-  const faults = integrityFaults ?? [];
-
-  if (total === 0 && faults.length === 0) {
-    return (
-      <EmptyState
-        title="Находок нет"
-        detail={
-          <p>
-            Прогон не опубликовал ни одной находки. Элементы модели, чьи цитаты не
-            разрешились по заявленным якорям, находками не являются и сохраняются только
-            как диагностика прогона.
-          </p>
-        }
-      />
-    );
-  }
-
+  if (total === 0) return null;
   const tally = tallyVerdicts(groups);
   const severities = tallySeverity(groups);
-  const shown = filterBySeverity(filterGroups(groups, filter), severity);
-
+  const proposedText = proposedSummary(severities);
   return (
-    <div className={`am-finding-list ${styles.root}`} data-finding-count={total}>
+    <div className={styles.toolbar}>
       <div className={styles.verdicts} data-finding-toolbar="">
         <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
           <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
@@ -298,12 +280,90 @@ export function FindingList({
               </button>
             ))}
           </div>
-          <p className={styles.proposed} data-proposed-severity="">
-            Предложено моделью (не решение эксперта):{' '}
-            {SEVERITY_ORDER.map((value) => `${SEVERITY_LABELS[value]} ${severities.proposed[value]}`).join(' · ')}
-          </p>
+          {proposedText === null ? null : (
+            <p className={styles.proposed} data-proposed-severity="">
+              Предложено моделью (не решение эксперта):{' '}
+              {proposedText}
+            </p>
+          )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function FindingList({
+  groups,
+  selectedFindingUid,
+  onSelect,
+  isLoading,
+  error,
+  integrityFaults,
+  verdictFilter,
+  onVerdictFilterChange,
+  renderRowActions,
+  sheetOf,
+  severityFilter,
+  onSeverityFilterChange,
+  view: viewFromPage,
+  onViewChange,
+  renderExpansion,
+  toolbar,
+}: FindingListProps) {
+  const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
+  const severity = severityFilter ?? ownSeverity;
+  const setSeverity = (next: SeverityFilter) => {
+    if (onSeverityFilterChange !== undefined) onSeverityFilterChange(next);
+    else setOwnSeverity(next);
+  };
+  const [ownView, setOwnView] = useState<FindingView>('list');
+  const view = viewFromPage ?? ownView;
+  const setView = (next: FindingView) => {
+    if (onViewChange !== undefined) onViewChange(next);
+    else setOwnView(next);
+  };
+  const filter = verdictFilter ?? ownFilter;
+  const setFilter = (next: VerdictFilter) => {
+    if (onVerdictFilterChange !== undefined) onVerdictFilterChange(next);
+    else setOwnFilter(next);
+  };
+  if (isLoading === true) return <LoadingState what="находки" />;
+  if (error !== undefined && error !== null) return <ErrorState {...error} />;
+
+  const total = countGrouped(groups);
+  const faults = integrityFaults ?? [];
+
+  if (total === 0 && faults.length === 0) {
+    return (
+      <EmptyState
+        title="Находок нет"
+        detail={
+          <p>
+            Прогон не опубликовал ни одной находки. Элементы модели, чьи цитаты не
+            разрешились по заявленным якорям, находками не являются и сохраняются только
+            как диагностика прогона.
+          </p>
+        }
+      />
+    );
+  }
+
+  const shown = filterBySeverity(filterGroups(groups, filter), severity);
+
+  return (
+    <div className={`am-finding-list ${styles.root}`} data-finding-count={total}>
+      {toolbar === 'outside' ? null : (
+        <FindingToolbar
+          groups={groups}
+          verdictFilter={filter}
+          onVerdictFilterChange={setFilter}
+          severityFilter={severity}
+          onSeverityFilterChange={setSeverity}
+          view={view}
+          onViewChange={setView}
+        />
+      )}
       {faults.length > 0 ? (
         <ErrorState
           title="Нарушение целостности данных"

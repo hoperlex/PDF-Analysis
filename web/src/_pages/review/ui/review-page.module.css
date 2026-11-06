@@ -1,5 +1,6 @@
 .layout {
   min-width: 0;
+  margin-top: var(--am-gap-sm);
 }
 
 .list,

@@ -177,12 +177,24 @@ export function ExportPanel({
           */}
           <details className={bar ? `am-export__disclosure ${styles.barDisclosure}` : 'am-export__disclosure'}>
             <summary>
-              <span className="am-export__encoding">
+              {bar ? (
+                // The bar keeps to one row: the summary names the file, the whole description opens with the columns.
+                <span className="am-export__encoding">О файле: колонок {CSV_COLUMNS.length}</span>
+              ) : (
+                <span className="am-export__encoding">
+                  Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
+                  {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
+                  RFC 4180; одна строка на свидетельство.
+                </span>
+              )}
+            </summary>
+            {bar ? (
+              <p className="am-export__encoding">
                 Колонок: {CSV_COLUMNS.length}; кодировка {CSV_ENCODING.charset}
                 {CSV_ENCODING.byteOrderMark ? ' с меткой порядка байтов' : ''}; экранирование по
                 RFC 4180; одна строка на свидетельство.
-              </span>
-            </summary>
+              </p>
+            ) : null}
             <ol className="am-export__columns">
               {CSV_COLUMNS.map((column) => (
                 <li key={column} data-csv-column={column}>

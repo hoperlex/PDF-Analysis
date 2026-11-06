@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import type { NormCitation } from '@/shared/api';
 import { groupByCategory } from '@/entities/finding';
 import { ExportPanel } from '@/widgets/export-panel';
-import { FindingList, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
+import { FindingList, FindingToolbar, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
 
 import { newClient, renderWith } from '../screens/harness';
 import { findingDetail, observation, RUN_ID } from './fixtures';
@@ -160,5 +160,39 @@ describe('the export bar', () => {
       expect(markup).toContain('Колонок:');
     }
     expect(bar).not.toBe(card);
+  });
+});
+
+describe('the toolbar over the findings', () => {
+  const toolbar = (groups = GROUPS) => renderToStaticMarkup(createElement(FindingToolbar, {
+    groups, verdictFilter: 'all', onVerdictFilterChange: () => {}, severityFilter: 'all', onSeverityFilterChange: () => {},
+    view: 'list', onViewChange: () => {},
+  }));
+
+  it('is drawn on its own for a page that stands it across the width, and not twice', () => {
+    expect(toolbar()).toContain('data-finding-toolbar');
+    expect(toolbar()).toContain('Всего: 3');
+    const outside = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {}, toolbar: 'outside' }));
+    expect(outside).not.toContain('data-finding-toolbar');
+    expect(outside).not.toContain('data-severity-strip');
+    expect(outside).toContain('am-finding-group');
+    const inside = renderToStaticMarkup(createElement(FindingList, { groups: GROUPS, selectedFindingUid: null, onSelect: () => {} }));
+    expect((inside.match(/data-finding-toolbar/g) ?? []).length).toBe(1);
+  });
+
+  it('is nothing for a run without findings', () => {
+    expect(toolbar([])).toBe('');
+  });
+
+  it('names only the severities the model proposed anything for, and says nothing when it proposed none', () => {
+    const markup = toolbar();
+    expect(markup).toContain('Предложено моделью (не решение эксперта): Экономическое 1');
+    expect(markup).not.toContain('Эксплуатационное 0 ·');
+    const decidedOnly = groupByCategory([
+      findingDetail({ finding_uid: A, decided_severity: 'critical', observation: observation({}) }),
+    ]);
+    const bare = toolbar(decidedOnly);
+    expect(bare).toContain('data-severity-strip');
+    expect(bare).not.toContain('data-proposed-severity');
   });
 });
