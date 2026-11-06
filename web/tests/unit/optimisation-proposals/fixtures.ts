@@ -25,6 +25,7 @@ import type {
 import { queryKeys } from '@/shared/api';
 import { NOTHING_TO_REVOKE_TEXT, PASS_REFUSAL_TEXT, PROPOSAL_PAGE_LIMIT } from '@/entities/optimisation-proposal';
 import { ProposalDecisionFormView } from '@/features/decide-optimisation-proposal';
+import { ImportProposalDecisionsView } from '@/features/import-proposal-decisions';
 import { StartOptimisationPassView } from '@/features/start-optimisation-pass';
 import {
   ExportProposalsView,
@@ -543,6 +544,41 @@ export function proposalShapes(): readonly ProposalShape[] {
       make: () => createElement(ProposalDecisionFormView, {
         proposalId: DOOR_PROPOSAL, current: null, comment: '', pending: false,
         failure: failure(NOTHING_TO_REVOKE_TEXT), onComment: noop, onDecide: noop,
+      }),
+    },
+    // `UI-B-15`: «Загрузить решения» idle, loading, answered with a refused row of each kind, and refused whole.
+    {
+      name: 'proposal-import-idle',
+      make: () => createElement(ImportProposalDecisionsView, { pending: false, report: null, failure: null, onChoose: noop }),
+    },
+    {
+      name: 'proposal-import-pending',
+      make: () => createElement(ImportProposalDecisionsView, { pending: true, report: null, failure: null, onChoose: noop }),
+    },
+    {
+      name: 'proposal-import-reported',
+      make: () => createElement(ImportProposalDecisionsView, {
+        pending: false, failure: null, onChoose: noop,
+        report: {
+          optimisation_pass_id: PASS_ID, recorded: 1, unchanged: 1, refused: 6,
+          rows: [
+            { row: 2, outcome: 'recorded', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 3, outcome: 'unchanged', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 4, outcome: 'refused', reason: 'no_proposal_id' },
+            { row: 5, outcome: 'refused', reason: 'duplicate_proposal', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 6, outcome: 'refused', reason: 'unknown_proposal' },
+            { row: 7, outcome: 'refused', reason: 'unknown_decision', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 8, outcome: 'refused', reason: 'comment_required', optimisation_proposal_id: DOOR_PROPOSAL },
+            { row: 9, outcome: 'refused', reason: 'comment_too_long', optimisation_proposal_id: DOOR_PROPOSAL },
+          ],
+        },
+      }),
+    },
+    {
+      name: 'proposal-import-refused',
+      make: () => createElement(ImportProposalDecisionsView, {
+        pending: false, report: null, onChoose: noop,
+        failure: 'Это не наша выгрузка: нужен лист «Предложения» с колонкой идентификаторов предложений. Выгрузите таблицу решений заново.',
       }),
     },
     {
