@@ -84,7 +84,6 @@ HEALTH_REPORT_SECONDS = 600.0
 HEALTH_DETECT_SECONDS = 120.0
 UNVERSIONED = "unversioned"
 DEADLINE_MARGIN_SECONDS = 5.0
-SUBMIT_RETRY_BUDGET_SECONDS = 120.0
 #: After the stand hands back a task this process is still working on (a token whose limit is one is
 #: given its held task again), wait this long before claiming again: RUNNER_API.md 2.1's floor between
 #: claims that do not wait.
@@ -614,7 +613,7 @@ class Agent:
                 self._interrupted(task_id, state["lost"])
                 return
             self.log(f"{task_id}: answer ready in {time.monotonic() - started:.1f}s ({len(answer.output_text)} chars)")
-            self._submit(task_id, answer)
+            self._submit(task, answer, should_stop)
         except Exception as error:  # noqa: BLE001 - one task must not take the agent down
             self.log(f"{task_id}: internal error {type(error).__name__}")
             self._fail(task_id, f"agent_error: {type(error).__name__}")
@@ -677,10 +676,23 @@ class Agent:
     def _interval(self, claim_expires_at: str) -> float:
         return max(self.cfg.extend_floor_seconds, self.client.seconds_until(claim_expires_at) / 3.0)
 
-    def _submit(self, task_id: str, answer: Answer) -> None:
-        started = time.monotonic()
+    def _submit(self, task: dict, answer: Answer, should_stop: Any) -> None:
+        """Deliver the same answer while its claim and server deadline allow it.
+
+        Keep the worker's answer, slot and claim extender alive across temporary
+        delivery failures. Re-sending this answer is idempotent on the stand and
+        must never turn into another model invocation after a local retry cap.
+        """
+        task_id = task["task_id"]
         backoff = Backoff(self.cfg.backoff_min_seconds, self.cfg.backoff_max_seconds)
         while True:
+            reason = should_stop()
+            if reason:
+                self.log(f"{task_id}: answer delivery stopped ({reason})")
+                return
+            if self.client.seconds_until(task["deadline_at"]) <= 0:
+                self.log(f"{task_id}: answer delivery stopped (deadline)")
+                return
             try:
                 reply = self.client.answer(task_id, answer.output_text, self.cfg.declared_model, answer.input_tokens, answer.output_tokens)
                 self.log(f"{task_id}: answer accepted (state={reply.get('state')})")
@@ -705,11 +717,13 @@ class Agent:
                 return
             except (RunnerThrottled, RunnerUnavailable) as error:
                 pause = throttle_delay(error) if isinstance(error, RunnerThrottled) else backoff.next_delay()
-                if time.monotonic() - started + pause > SUBMIT_RETRY_BUDGET_SECONDS or self.abort.is_set():
-                    self.log(f"{task_id}: could not deliver the answer ({error.message}); the claim will lapse")
+                remaining = self.client.seconds_until(task["deadline_at"])
+                if remaining <= 0:
+                    self.log(f"{task_id}: answer delivery stopped (deadline)")
                     return
+                pause = min(pause, remaining)
                 self.log(f"{task_id}: submit will retry in {pause:.1f}s ({error.message})")
-                time.sleep(pause)
+                self.abort.wait(pause)
 
     def _fail(self, task_id: str, reason: str) -> None:
         try:

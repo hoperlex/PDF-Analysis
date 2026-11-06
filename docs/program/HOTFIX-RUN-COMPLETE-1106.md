@@ -77,3 +77,30 @@ preventing a false identity conflict in the critic. Operator diagnostics now exp
 controlled refusal counts and avoid applying the local schema to global replies.
 Product 0.12.3 gives the changed runner package its own version. Build and exact SHA/live
 evidence for this follow-up are in the same external task receipt.
+
+
+## Visible preparation and delivery follow-up (0.12.5 candidate)
+
+The owner observed all seven procedure rows queued in run_01M6RFHQS62S01NXXCHX1CQDV4
+while its passport was executing. Saves and polling worked, but its panel was inside
+closed plan details. An open activity indicator now shows completed preparatory batches
+and saved initial/repair responses above the actual seven procedure statuses. No procedure
+is falsely marked running. Publication waits for the active run to finish.
+
+A separate deployment of 0730b6179 interrupted delivery of that earlier run's ready answer:
+local logs show HTTP 502 from 13:52 to 13:56 UTC and the 120-second submit budget exhausted.
+The old result and unknown-effect fence remain immutable. The owner started
+run_01M6RJPRWTC1ER59JXJZN2C76H; read-only snapshots run from dev independently of deployment
+and never admit a new analysis or hold the production deployment lock.
+
+The runner now keeps the same ready answer, occupied slot and claim extender until its
+server deadline, definitive rejection/claim loss or shutdown. Backoff is bounded by the
+remaining deadline and interruptible. It makes no extra model call. Answer storage remains
+in memory: this fixes transient delivery outages, not process-restart recovery. A request
+already in flight retains the client's existing 30-second HTTP timeout.
+
+Production candidate starts at main 0730b6179, preserving its calendar and prior release
+notes. Later unpublished dev API 1.34 changes are not part of this hotfix. The main-based
+candidate is merged into dev, then its exact checked production SHA is published to main
+after the live run is terminal. Version 0.12.5 identifies the updated runner package.
+Only deployment buildability checks run under the owner's explicit exception.
