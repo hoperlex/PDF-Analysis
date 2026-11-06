@@ -2558,6 +2558,11 @@ li.am-state .am-state__detail {
   max-width: 44rem;
 }
 
+/* A button in a form is as wide as its label, as the original's: a grid item would stretch it to 44rem. */
+.am-form > button {
+  justify-self: start;
+}
+
 .am-form__row {
   display: flex;
   flex-wrap: wrap;
@@ -2631,6 +2636,19 @@ li.am-state .am-state__detail {
 
 .am-note em {
   font-style: normal;
+}
+
+/*
+ * A note inside a line (a table cell, a status strip) is muted small text, not a block: on a span the
+ * block's padding, left rule and tint drew a bar through the text around it (the vendor lists' «редакция
+ * … от …», the comparison strips).
+ */
+span.am-note {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 
 /* ---- odds and ends --------------------------------------------------------------- */
