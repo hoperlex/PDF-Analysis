@@ -41,7 +41,7 @@ function requirement(requiredRoles: readonly Role[] | null): string {
 
 export function ForbiddenPage({ requiredRoles }: ForbiddenPageProps) {
   return (
-    <PageShell title="Доступ закрыт" actions={<Link href={HOME_SCREEN}>На главную</Link>}>
+    <PageShell title="Доступ закрыт" actions={<Link href={HOME_SCREEN}>На главную</Link>} surface="canvas">
       <div className={styles.card}>
         <UnsupportedState
           title={requirement(requiredRoles)}

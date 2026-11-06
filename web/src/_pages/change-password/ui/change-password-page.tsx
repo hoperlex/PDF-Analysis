@@ -43,6 +43,7 @@ export function ChangePasswordPage({ outcome, mustChange, next }: ChangePassword
     <PageShell
       title="Смена пароля"
       subtitle="Смена пароля отзывает все ранее выданные пропуска этой учётной записи."
+      surface="canvas"
     >
       <div className={styles.card}>
         {mustChange === true ? (

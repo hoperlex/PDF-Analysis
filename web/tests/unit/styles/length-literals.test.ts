@@ -64,7 +64,9 @@ function countOf(path: string): number {
  * raising it needs a reason a reader can check.
  */
 // 2026-11-06: the schedule modules and the second density pass replaced their literals with tokens (628 -> 442).
-const CEILING = 442;
+// 2026-11-07 (lane D5): the application frame, the sign-in page and the release notices read tokens (442 -> 306 measured);
+// the ceiling is 320 so the lanes merged beside this one keep a little room, and it is lowered again when they settle.
+const CEILING = 320;
 
 describe('the CSS modules spell no more lengths than they did on 2026-11-02', () => {
   it('reads the modules of the whole tree', () => {

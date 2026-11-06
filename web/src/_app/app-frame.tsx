@@ -131,8 +131,11 @@ export function AppFrame({ children, session }: AppFrameProps) {
             )}
           </div>
         </div>
-        <main className="am-app__main">{children}</main>
-        {session !== null && session.profileComplete && !session.isDefaultCredential ? <ReleaseNoticesGate /> : null}
+        <main className="am-app__main">
+          {/* The release notices are strips in the page's flow above the screen, never cards over it. */}
+          {session !== null && session.profileComplete && !session.isDefaultCredential ? <ReleaseNoticesGate /> : null}
+          {children}
+        </main>
         <footer className="am-app__footer">{FRAME_FOOTER}</footer>
       </div>
     </div>

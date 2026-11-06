@@ -234,7 +234,7 @@ describe('the three layout states, and the width at the 780 px floor', () => {
   });
 
   it('gives desktop content a bounded sidebar and lets the compact bar wrap', () => {
-    expect(declarations(GLOBALS, '.am-app')).toMatch(/grid-template-columns\s*:\s*224px minmax\(0, 1fr\)/);
+    expect(declarations(GLOBALS, '.am-app')).toMatch(/grid-template-columns\s*:\s*214px minmax\(0, 1fr\)/);
     expect(declarations(GLOBALS, ".am-app[data-sidebar='compact']")).toMatch(/grid-template-columns\s*:\s*68px minmax\(0, 1fr\)/);
     expect(declarations(FRAME_CSS, '.row')).toMatch(/display\s*:\s*grid/);
     expect(declarations(FRAME_CSS, '.nav')).toMatch(/min-width\s*:\s*0/);

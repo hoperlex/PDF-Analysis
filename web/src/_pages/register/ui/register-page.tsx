@@ -8,7 +8,7 @@ export function RegisterPage({ refusal, unknownRefusal = false }: {
   readonly unknownRefusal?: boolean;
 }) {
   return (
-    <PageShell title="Регистрация" subtitle="Отправьте заявку на учётную запись. Решение принимает администратор.">
+    <PageShell title="Регистрация" subtitle="Отправьте заявку на учётную запись. Решение принимает администратор." surface="canvas">
       <div className={styles.card}>
         <RegisterForm refusal={refusal ?? null} unknownRefusal={unknownRefusal} />
       </div>
