@@ -25,6 +25,11 @@
  * `?project=` is «Все проекты». The screen says which of the two it shows, and how many entries
  * match (`total` of the page, not the length of the page on screen).
  *
+ * **The verdict chips** (`UI-B-32`) above the list -- «Принято», «Отклонено», «Не решено», «Все» -- set the same `verdict` the
+ * select below them sets, and carry the server's count of that verdict (`useDecisionVerdictTotals`: `total` of
+ * `listDecisions` read with `limit=1`, under the same project and category). The page counts nothing itself; a count the
+ * server has not answered is drawn «—», not a zero.
+ *
  * The two filters are the contract's own `category` and `verdict`, and they mean what the
  * contract says they mean: the **finding's** category, and the verdict that now stands for
  * it. Neither filters the event, so a comment left on a finding that was later accepted is
@@ -40,8 +45,10 @@ import type { FindingCategory, ProjectUid, Verdict } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
 import { readProjectContext, switchProject } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
+import type { DecisionVerdictTotals } from '@/entities/expert-decision';
 import {
-  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useKnowledgeBaseJournal, useProposalDecisionJournal,
+  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal,
+  useProposalDecisionJournal,
 } from '@/entities/expert-decision';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { useProjectList } from '@/entities/project';
@@ -83,6 +90,18 @@ const VERDICT_CHOICE_LABELS: Readonly<Record<VerdictChoice, string>> = {
   rejected: 'Отклонено',
   needs_manual_review: 'Нужен ручной разбор',
 };
+
+/**
+ * `UI-B-32`: the verdict chips above the list, in the order of the original's cards -- decided for, decided against,
+ * undecided, everything. A chip sets the same verdict the «Вердикт» select sets; its number is the server's count of
+ * that verdict over the journal (`useDecisionVerdictTotals`), never the length of the page on screen.
+ */
+const VERDICT_CHIPS: readonly { readonly choice: VerdictChoice; readonly label: string; readonly total: keyof DecisionVerdictTotals }[] = [
+  { choice: 'accepted', label: 'Принято', total: 'accepted' },
+  { choice: 'rejected', label: 'Отклонено', total: 'rejected' },
+  { choice: 'pending', label: 'Не решено', total: 'pending' },
+  { choice: 'all', label: 'Все', total: 'all' },
+];
 
 const CATEGORY_CHOICE_LABELS: Readonly<Record<CategoryChoice, string>> = {
   all: 'Любая категория',
@@ -216,6 +235,14 @@ export function KnowledgeBasePage() {
     ...(verdict === 'all' ? {} : { verdict }),
     ...(cursor === undefined ? {} : { cursor }),
   });
+  // `UI-B-32`: the chips' numbers follow the project and the category, and are read only where the chips are drawn.
+  const verdictTotals = useDecisionVerdictTotals(
+    {
+      ...(projectUid === null ? {} : { project_uid: projectUid }),
+      ...(category === 'all' ? {} : { category }),
+    },
+    kind === 'findings',
+  );
   const next = journal.data?.page.next_cursor ?? null;
   const total = journal.data?.total;
   const first = journal.data?.items[0];
@@ -390,6 +417,29 @@ export function KnowledgeBasePage() {
         </div>
       ) : null}
       {kind !== 'findings' ? null : <div className={styles.results}>
+        {/* `UI-B-32`: the original's verdict cards as chips with the server's counts; a chip sets the «Вердикт» filter. */}
+        <div className={styles.chips} role="group" aria-label="Решения по вердикту" data-kb-verdict-chips="">
+          {VERDICT_CHIPS.map(({ choice, label, total: figure }) => {
+            const count = verdictTotals[figure];
+            return (
+              <button
+                key={choice}
+                type="button"
+                className={verdict === choice ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+                aria-pressed={verdict === choice}
+                data-kb-verdict={choice}
+                data-kb-verdict-total={count}
+                onClick={() => {
+                  // A cursor belongs to the filter it was issued under: a new verdict starts at the first page.
+                  setVerdict(choice);
+                  setWalk({ project: projectUid, cursors: NO_CURSORS });
+                }}
+              >
+                {label} <span className={styles.chipCount}>{count ?? '—'}</span>
+              </button>
+            );
+          })}
+        </div>
         <p className={styles.scope} data-journal-scope={projectUid === null ? 'all' : 'project'}>
           <span className={styles.scopeKey}>Охват</span>
           <strong className={styles.scopeValue}>

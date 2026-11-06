@@ -17,6 +17,20 @@
   overflow-x: auto;
 }
 
+/* `UI-B-32`: the verdict chips above the list, each a button with the server's count beside its name. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0 0 var(--am-gap);
+}
+
+.chipCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
 /* The scope the list is read over: «Все проекты» or one project, and how many entries match. */
 .scope {
   display: flex;

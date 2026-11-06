@@ -89,7 +89,12 @@ async function change(view: LiveRender, label: string, value: string): Promise<b
 type Query = { category?: string; verdict?: string; cursor?: string; limit?: number };
 
 const journal = vi.mocked(listDecisions);
-const queries = (): Query[] => journal.mock.calls.map((call) => (call[0] as { query: Query }).query);
+const everyQuery = (): Query[] => journal.mock.calls.map((call) => (call[0] as { query: Query }).query);
+/**
+ * The journal's own pages. The verdict chips (`UI-B-32`) read `total` with `limit=1` beside them; those four reads are
+ * asserted in `knowledge-base-verdict-chips.test.ts`, and are left out here so these tests keep naming the list's reads.
+ */
+const queries = (): Query[] => everyQuery().filter((query) => query.limit !== 1);
 
 beforeEach(() => {
   journal.mockReset();
