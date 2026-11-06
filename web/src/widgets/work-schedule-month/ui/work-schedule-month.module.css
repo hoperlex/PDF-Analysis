@@ -1,0 +1,473 @@
+/*
+ * «Выполнено» of «График работ» (`UI-PARITY-P0P`): the original's month — tiles, a sticky engineers × days grid with
+ * narrow days off, two document chips a cell and «+N», and the plan and fact table under it. Dense: 40px cells, 11px
+ * chips, 6px table padding.
+ */
+
+.month {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.period {
+  min-width: 128px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.tile {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.tileRing {
+  padding-right: 60px;
+}
+
+.tileLabel {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.tileValue {
+  font-size: var(--am-text-xl);
+  font-weight: 700;
+  line-height: var(--am-leading-tight);
+}
+
+.tileSub {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.ring {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  transform: translateY(-50%) rotate(-90deg);
+}
+
+.ringTrack,
+.ringFill {
+  fill: none;
+  stroke-width: 5;
+}
+
+.ringTrack {
+  stroke: var(--am-line-soft);
+}
+
+.ringFill {
+  stroke: var(--am-accent);
+  stroke-linecap: round;
+}
+
+.tileRing[data-tone='ok'] .ringFill {
+  stroke: var(--am-ok);
+}
+
+.tileRing[data-tone='low'] .ringFill {
+  stroke: var(--am-failed);
+}
+
+.tileRing[data-tone='warn'] .ringFill {
+  stroke: var(--am-degraded);
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+}
+
+.setting {
+  display: grid;
+  gap: 2px;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.setting input {
+  width: 160px;
+}
+
+.gridWrap,
+.statsWrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.grid {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.grid th,
+.grid td {
+  border-right: 1px solid var(--am-line-soft);
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
+.grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 4px 2px;
+  background: var(--am-surface);
+  font-weight: 600;
+  text-align: center;
+}
+
+.engineerColumn {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 168px;
+  background: var(--am-paper);
+  text-align: left;
+}
+
+.grid thead th.engineerColumn {
+  z-index: 3;
+  padding-left: 10px;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  letter-spacing: var(--am-tracking-caps);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.dayColumn[data-day-off] {
+  width: 20px;
+  background: var(--am-surface-sunken);
+}
+
+.dayColumn[data-today] {
+  background: var(--am-accent-light);
+}
+
+.dayColumn[data-override] {
+  box-shadow: inset 0 -2px 0 var(--am-degraded);
+}
+
+.weekday,
+.dayNumber {
+  display: block;
+  line-height: 1.15;
+}
+
+.weekday {
+  color: var(--am-ink-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.dayNumber {
+  font-size: var(--am-text-sm);
+}
+
+.dayColumn[data-day-off] .weekday,
+.dayColumn[data-day-off] .dayNumber {
+  font-size: 9px;
+}
+
+.dayToggle {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.engineer {
+  padding: 4px 8px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.engineerName {
+  display: inline-block;
+  max-width: 124px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.cell {
+  position: relative;
+  height: 40px;
+  padding: 3px;
+  vertical-align: top;
+}
+
+.cell[data-day-off] {
+  padding: 3px 1px;
+  background: var(--am-surface-sunken);
+}
+
+.cell[data-today] {
+  background: var(--am-accent-light);
+}
+
+.cell[data-absent] {
+  background: repeating-linear-gradient(135deg, var(--am-failed-light) 0 4px, transparent 4px 8px);
+}
+
+.absenceToggle {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--am-failed);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.absenceToggle:hover {
+  outline: 1px dashed var(--am-line-strong);
+  outline-offset: -2px;
+}
+
+.stack {
+  display: grid;
+  gap: 2px;
+}
+
+.chip {
+  display: block;
+  overflow: hidden;
+  padding: 1px 4px;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-ok-light);
+  color: var(--am-ink);
+  font-size: 11px;
+  line-height: 1.35;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: var(--am-accent-light);
+}
+
+.more {
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 5;
+  display: grid;
+  gap: 2px;
+  width: 260px;
+  padding: 6px;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  box-shadow: var(--am-shadow-2);
+}
+
+.popoverHead {
+  padding: 0 2px 4px;
+  border-bottom: 1px solid var(--am-line-soft);
+  font-weight: 600;
+}
+
+.popoverItem {
+  display: grid;
+  padding: 3px 4px;
+  border-radius: var(--am-radius-sm);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+  text-decoration: none;
+}
+
+.popoverItem:hover {
+  background: var(--am-surface);
+}
+
+.popoverProject {
+  color: var(--am-ink-muted);
+  font-size: 11px;
+}
+
+.empty {
+  padding: 12px;
+  color: var(--am-ink-muted);
+  text-align: center;
+}
+
+.stats {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats th,
+.stats td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--am-line-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stats thead th {
+  background: var(--am-surface);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 700;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+.stats .statsName {
+  font-weight: 600;
+  text-align: left;
+}
+
+.stats .statsPercent {
+  width: 200px;
+}
+
+.stats td[data-low] {
+  color: var(--am-failed);
+}
+
+.stats [data-default] {
+  color: var(--am-ink-muted);
+}
+
+.total th,
+.total td {
+  border-bottom: 0;
+  background: var(--am-surface);
+}
+
+.planInput {
+  width: 72px;
+  text-align: right;
+}
+
+.percent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.percentNumber {
+  min-width: 38px;
+  font-weight: 600;
+}
+
+.bar {
+  position: relative;
+  overflow: hidden;
+  width: 110px;
+  height: 6px;
+  border-radius: var(--am-radius-pill);
+  background: var(--am-line-soft);
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--am-accent);
+}
+
+.percent[data-tone='ok'] .percentNumber {
+  color: var(--am-ok);
+}
+
+.percent[data-tone='ok'] .barFill {
+  background: var(--am-ok);
+}
+
+.percent[data-tone='warn'] .percentNumber {
+  color: var(--am-degraded);
+}
+
+.percent[data-tone='warn'] .barFill {
+  background: var(--am-degraded);
+}
+
+.percent[data-tone='low'] .percentNumber {
+  color: var(--am-failed);
+}
+
+.percent[data-tone='low'] .barFill {
+  background: var(--am-failed);
+}

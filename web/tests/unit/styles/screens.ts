@@ -74,6 +74,9 @@ import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
+import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
+import { ReserveCalendarView } from '@/widgets/reserve-calendar';
+import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from '../work-schedule/fixtures';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
@@ -2185,6 +2188,22 @@ export function screens(): Screen[] {
     shape.seedClient?.(client);
     add(`Comparison: ${shape.name}`, renderScreen(client, shape.make()));
   }
+
+  /*
+   * `UI-PARITY-P0P`: «График работ». The month in each mode an administrator opens (the plan's inputs and settings, the
+   * calendar's day and absence toggles) with a cell's «+N» list open, and «Календарь запаса» with a selection and a drop
+   * target, so every rule of `work-schedule-month.module.css` and `reserve-calendar.module.css` is reached.
+   */
+  for (const initialMode of ['view', 'plan', 'calendar'] as const) {
+    add(`WorkSchedule month ${initialMode}`, renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+      schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode,
+      initialPopover: initialMode === 'view' ? `${EXPERT_A}|2026-11-03` : null,
+    })));
+  }
+  add('WorkSchedule reserve', renderScreen(newClient(), createElement(ReserveCalendarView, {
+    reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    initialSelection: [assignmentUid(1), assignmentUid(3)], initialOver: `${EXPERT_B}|2026-11-05`,
+  })));
 
   /*
    * A screen carrying `UnsupportedState`, which is the `warning` tone.

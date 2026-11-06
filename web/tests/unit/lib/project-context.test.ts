@@ -40,6 +40,8 @@ const OPTIONAL_PATHS = [
   '/optimisation',
   '/version-comparison',
   '/stage-comparison',
+  // `R-151m`: «Диспетчер» follows the header's project.
+  '/dispatcher',
 ];
 const GLOBAL_PATHS = [
   '/',
@@ -52,9 +54,10 @@ const GLOBAL_PATHS = [
   '/norms/document',
   '/admin/users',
   '/account',
-  // Undecided (debt D-305): global for now, because that is their behaviour today.
-  '/dispatcher',
+  // `R-151m`: «Блоки» is a version's tab; its address is a chooser for every project.
   '/blocks',
+  // `UI-PARITY-P0P`: «График работ» spans every project.
+  '/schedule',
 ];
 
 describe('projectScopeOf: the registry class of the screen an address is', () => {
