@@ -145,7 +145,7 @@ import {
 import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewSections } from '@/widgets/worker-list';
 import { WorkersPage } from '@/_pages/workers';
 import type { WorkersPageProps } from '@/_pages/workers';
 import {
@@ -2704,6 +2704,44 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
       busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
       onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    // `UI-PARITY-QUEUE-A`: the queue's one-line job with its timing and its reason.
+    name: 'execution-queue-finished-with-timing',
+    make: () => createElement(ExecutionQueue, {
+      items: [{
+        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+        run_id: RUN_ID,
+        state: 'failed',
+        priority: 0,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+        started_at: '2026-10-09T10:01:00Z',
+        finished_at: '2026-10-09T10:09:30Z',
+        error_code: 'analysis_failed',
+        ...QUEUE_WORK,
+      }],
+      roles: ['admin'], asOf: Date.parse('2026-10-09T10:15:00Z'),
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onNext: null, onPrevious: null,
+    }),
+  },
+  {
+    // `UI-B-64`: the blocks under the tiles of «Обзор», with a silent server and a job that ended badly.
+    name: 'workers-overview-sections-attention',
+    make: () => createElement(WorkersOverviewSections, {
+      workers: [{
+        worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
+        started_at: '2026-10-09T10:00:00Z', heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [],
+      }],
+      workersPartial: true,
+      jobs: [{
+        job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', run_id: RUN_ID, state: 'failed', priority: 0,
+        created_at: '2026-10-09T10:00:00Z', available_at: '2026-10-09T10:00:00Z', error_code: 'analysis_failed', ...QUEUE_WORK,
+      }],
+      jobsPartial: true,
+      processesHref: '?tab=processes',
     }),
   },
   /*

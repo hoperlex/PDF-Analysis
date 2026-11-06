@@ -215,6 +215,7 @@
   font-size: var(--am-text-xs);
   line-height: 1.35;
   text-align: left;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
@@ -234,7 +235,7 @@
   background: var(--am-degraded-light);
 }
 
-.point[aria-pressed='true'] {
+.point[aria-current='true'] {
   border-color: var(--am-accent-strong);
   box-shadow: 0 0 0 1px var(--am-accent-strong);
 }

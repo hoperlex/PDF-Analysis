@@ -4,8 +4,10 @@
  * «Календарь запаса» of «График работ» (`UI-PARITY-P0P`, `R-150y`, `R-152e`…`R-152h`): each active expert's open
  * assignments of «Диспетчер» on the days they are planned for, and a «Без даты» column for the rest. No daily limit.
  *
- * An administrator moves work as in the original: drag an assignment (or the selection it belongs to) to another day or
- * another engineer's row; Ctrl/Cmd+click adds to the selection; «Раньше» and «Позже» move the selection a working day.
+ * A click on an assignment opens its document (its project when it has none), as the original's click on a dot opens the
+ * project. An administrator moves work as in the original: drag an assignment (or the selection it belongs to) to another
+ * day or another engineer's row; Ctrl/Cmd+click (or the space bar) adds it to the selection and Esc clears the selection;
+ * «Раньше» and «Позже» move the selection a working day.
  * Every move is one keyed `scheduleAssignments` command and an event of the assignment's history; a move to another
  * expert is a reassignment in «Диспетчер». An expert reads their own row and moves nothing.
  *
@@ -13,11 +15,13 @@
  * never carries work the screen has stopped showing.
  */
 
-import { useState } from 'react';
-import type { DragEvent, MouseEvent } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent } from 'react';
 
 import type { WorkScheduleDay, WorkScheduleReserve, WorkScheduleReserveItem } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
+import { routes } from '@/shared/lib';
 import { ASSIGNMENT_STATUS_LABELS } from '@/entities/assignment';
 import type { EngineerFilter } from '@/entities/work-schedule';
 import {
@@ -61,6 +65,11 @@ function itemLabel(item: WorkScheduleReserveItem): string {
   return item.document_title ?? item.project_name;
 }
 
+/** Where an assignment's dot leads: its document, or its project when the assignment names no document. */
+function itemHref(item: WorkScheduleReserveItem): string {
+  return item.document_uid === undefined ? routes.project(item.project_uid) : routes.document(item.project_uid, item.document_uid);
+}
+
 function itemTitle(item: WorkScheduleReserveItem): string {
   const where = item.document_title === undefined ? item.project_name : `${item.project_name} · ${item.document_title}`;
   const when = item.planned_on === undefined ? 'без даты' : shortDayLabel(item.planned_on);
@@ -73,6 +82,28 @@ export function nextWorkingDay(day: string, direction: 1 | -1, days: readonly Wo
   let next = addDays(day, direction);
   for (let guard = 0; guard < 14 && off.has(next); guard += 1) next = addDays(next, direction);
   return next;
+}
+
+/**
+ * The moves that put `moves` back (the original's «Отменить последнее действие», `reserve-calendar.js` 191): for each
+ * assignment, the day and the engineer it stood on in the read the moves were made from. A move that names no engineer
+ * restores no engineer; an assignment the read did not hold has nothing to restore and is left out.
+ */
+export function inverseMoves(
+  moves: readonly AssignmentPlacement[],
+  standing: ReadonlyMap<string, { readonly item: WorkScheduleReserveItem; readonly engineerUid: string }>,
+): readonly AssignmentPlacement[] {
+  const back: AssignmentPlacement[] = [];
+  for (const move of moves) {
+    const was = standing.get(move.assignmentUid);
+    if (was === undefined) continue;
+    back.push({
+      assignmentUid: move.assignmentUid,
+      plannedOn: was.item.planned_on ?? null,
+      ...(move.assigneeUserUid === undefined ? {} : { assigneeUserUid: was.engineerUid }),
+    });
+  }
+  return back;
 }
 
 export function ReserveCalendarView({
@@ -89,6 +120,8 @@ export function ReserveCalendarView({
   const [moveDate, setMoveDate] = useState('');
   const [over, setOver] = useState<string | null>(initialOver);
   const move = useMoveAssignments();
+  // What the last successful move would need to be put back (`inverseMoves`), and how many assignments it moved.
+  const [undo, setUndo] = useState<{ readonly back: readonly AssignmentPlacement[]; readonly count: number } | null>(null);
 
   const placed = new Map<string, Placed>();
   for (const engineer of reserve.engineers) {
@@ -98,7 +131,19 @@ export function ReserveCalendarView({
 
   const send = (moves: readonly AssignmentPlacement[]) => {
     if (moves.length === 0) return;
-    move.mutate(moves, { onSuccess: () => setSelected([]) });
+    const back = inverseMoves(moves, placed);
+    move.mutate(moves, {
+      onSuccess: () => {
+        setSelected([]);
+        setUndo(back.length === 0 ? null : { back, count: back.length });
+      },
+    });
+  };
+
+  const undoLast = () => {
+    if (undo === null) return;
+    const { back } = undo;
+    move.mutate(back, { onSuccess: () => { setSelected([]); setUndo(null); } });
   };
 
   const placeSelection = (engineerUid: string, day: string | null, dragged: readonly Placed[]) => {
@@ -120,17 +165,35 @@ export function ReserveCalendarView({
       })));
   };
 
-  const click = (item: WorkScheduleReserveItem, event: MouseEvent<HTMLButtonElement>) => {
-    if (!admin) return;
-    const uid = item.assignment_uid;
-    if (event.ctrlKey || event.metaKey) {
-      setSelected(selected.includes(uid) ? selected.filter((entry) => entry !== uid) : [...selected, uid]);
-    } else {
-      setSelected(selected.length === 1 && selected[0] === uid ? [] : [uid]);
-    }
+  const toggle = (uid: string) => {
+    setSelected(selected.includes(uid) ? selected.filter((entry) => entry !== uid) : [...selected, uid]);
   };
 
-  const dragStart = (item: WorkScheduleReserveItem, event: DragEvent<HTMLButtonElement>) => {
+  // A plain click follows the link, as the original's click on a dot opens the project; Ctrl/Cmd+click selects.
+  const click = (item: WorkScheduleReserveItem, event: MouseEvent<HTMLAnchorElement>) => {
+    if (!admin || !(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    toggle(item.assignment_uid);
+  };
+
+  // The space bar selects the focused dot, so the selection does not depend on a modifier key and a mouse.
+  const keyDown = (item: WorkScheduleReserveItem, event: ReactKeyboardEvent<HTMLAnchorElement>) => {
+    if (!admin || event.key !== ' ') return;
+    event.preventDefault();
+    toggle(item.assignment_uid);
+  };
+
+  // Esc clears the selection, as in the original.
+  useEffect(() => {
+    if (selected.length === 0) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected([]);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [selected.length]);
+
+  const dragStart = (item: WorkScheduleReserveItem, event: DragEvent<HTMLAnchorElement>) => {
     const uid = item.assignment_uid;
     if (!selected.includes(uid)) setSelected([uid]);
     event.dataTransfer.effectAllowed = 'move';
@@ -175,7 +238,8 @@ export function ReserveCalendarView({
       </div>
       {admin ? (
         <p className="am-note">
-          Перетащите работу на другой день или другому инженеру; Ctrl/Cmd + щелчок добавляет к выбору.
+          Щелчок открывает документ. Перетащите работу на другой день или другому инженеру; Ctrl/Cmd + щелчок или пробел
+          добавляет её к выбору, Esc снимает выбор.
         </p>
       ) : null}
       {admin && chosen.length > 0 ? (
@@ -211,6 +275,14 @@ export function ReserveCalendarView({
           </button>
           {undatedSelected ? <span className={styles.hint}>«Раньше» и «Позже» не двигают работу без даты.</span> : null}
         </div>
+      ) : null}
+      {admin && undo !== null && message === null ? (
+        <p className="am-note" role="status" data-reserve-undo={undo.count}>
+          Перенос выполнен: {undo.count}.{' '}
+          <button type="button" className="am-button am-button--quiet am-button--small" disabled={move.isPending} onClick={undoLast}>
+            Отменить последнее действие
+          </button>
+        </p>
       ) : null}
       {message !== null ? (
         <p className="am-note" role="alert" data-reserve-failure={message.kind}>
@@ -298,19 +370,20 @@ export function ReserveCalendarView({
                         onDrop={admin ? (event) => drop(engineer.user_uid, day === null ? null : day.day, event) : undefined}
                       >
                         {items.map((item) => (
-                          <button
+                          <Link
                             key={item.assignment_uid}
-                            type="button"
+                            href={itemHref(item)}
                             className={styles.point}
                             data-status={item.status}
-                            aria-pressed={admin ? selected.includes(item.assignment_uid) : undefined}
+                            aria-current={admin && selected.includes(item.assignment_uid) ? 'true' : undefined}
                             title={itemTitle(item)}
                             draggable={admin && !move.isPending}
                             onClick={(event) => click(item, event)}
+                            onKeyDown={(event) => keyDown(item, event)}
                             onDragStart={(event) => dragStart(item, event)}
                           >
                             {itemLabel(item)}
-                          </button>
+                          </Link>
                         ))}
                       </td>
                     );

@@ -64,16 +64,24 @@ describe('the row names the work', () => {
 });
 
 describe('the row says when the job started and ended', () => {
-  it('shows a dash for a time the job does not have', () => {
+  it('prints no times for a job that has neither started nor finished', () => {
     const markup = rows([item()]);
-    expect(markup).toContain('data-queue-started="true">Начат: —</p>');
-    expect(markup).toContain('Завершён: —');
+    expect(markup).not.toContain('data-queue-timing');
+    expect(markup).not.toContain('data-queue-started=');
   });
 
-  it('shows both when it has them', () => {
+  it('prints the original\'s «начало → конец · длительность» line, with the exact instants in the tooltips', () => {
     const markup = rows([item({ state: 'failed', started_at: STARTED, finished_at: FINISHED })]);
-    expect(markup).toContain(`<time dateTime="${STARTED}">${formatInstant(STARTED)}</time>`);
-    expect(markup).toContain(`<time dateTime="${FINISHED}">${formatInstant(FINISHED)}</time>`);
+    expect(markup).toContain('data-queue-timing="8 мин 30 с"');
+    expect(markup).toContain(`<time dateTime="${STARTED}" title="Начат: ${formatInstant(STARTED)}" data-queue-started="true">09.10 10:01</time>`);
+    expect(markup).toContain(`<time dateTime="${FINISHED}" title="Завершён: ${formatInstant(FINISHED)}" data-queue-finished="true">10:09</time>`);
+    expect(markup).toContain(' UTC');
+  });
+
+  it('measures a running job to the last read and leaves its end open', () => {
+    const markup = rows([item({ state: 'running', started_at: STARTED })]);
+    expect(markup).toContain('data-queue-timing="4 мин"');
+    expect(markup).toContain('data-queue-finished="">…</span>');
   });
 });
 

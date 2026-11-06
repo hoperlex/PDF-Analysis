@@ -1,8 +1,8 @@
 .panel,
 .intent {
   min-width: 0;
-  margin-top: var(--am-gap);
-  padding: var(--am-gap);
+  margin-top: var(--am-gap-sm);
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);
@@ -12,6 +12,24 @@
   overflow-x: auto;
 }
 
+/* The filters, the queue's line of counts and the pause switch share one line, as the original's queue head. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: var(--am-gap-sm) 0;
+}
+
+.toolbar > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.toolbar > button {
+  margin-left: auto;
+}
+
 .intent {
   border-color: var(--am-accent);
 }
@@ -19,6 +37,6 @@
 @media (max-width: 780px) {
   .panel,
   .intent {
-    padding: var(--am-gap);
+    padding: var(--am-gap-sm);
   }
 }

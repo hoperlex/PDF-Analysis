@@ -14,7 +14,7 @@
  */
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { WorkScheduleDay, WorkScheduleDoneDocument, WorkScheduleEngineer, WorkScheduleMonth } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
@@ -181,6 +181,7 @@ function Cell({ engineer, day, items, absent, today, calendarMode, open, onOpen,
             <button
               type="button"
               className={styles.more}
+              data-schedule-more=""
               aria-expanded={open}
               title={`Ещё ${items.length - 2} — показать все`}
               onClick={() => onOpen(!open)}
@@ -224,6 +225,24 @@ export function WorkScheduleMonthView({
     zone: schedule.settings.time_zone,
   });
   const [popover, setPopover] = useState<string | null>(initialPopover);
+  // As the original's popover: Esc or a press outside it (and outside the «+N» that opens it) closes it.
+  useEffect(() => {
+    if (popover === null) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPopover(null);
+    };
+    const onPress = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[role="dialog"], [data-schedule-more]') !== null) return;
+      setPopover(null);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onPress);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onPress);
+    };
+  }, [popover]);
   const plans = useSetPlans();
   const settings = useSetScheduleSettings();
   const calendar = useSetCalendarDays();

@@ -45,7 +45,7 @@ import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
@@ -960,6 +960,45 @@ export function screens(): Screen[] {
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
   })));
+  // `UI-PARITY-QUEUE-A`, the queue as a line per job: a finished job with its timing, its reason and its muted facts.
+  add('ExecutionQueue finished, its timing and its reason', withRouter(createElement(ExecutionQueue, {
+    items: [{
+      job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID, state: 'failed', priority: 2,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+      started_at: '2026-10-09T10:01:00Z',
+      finished_at: '2026-10-09T10:09:30Z',
+      error_code: 'analysis_failed',
+      attempt_count: 3,
+      ...QUEUE_WORK,
+    }],
+    roles: ['admin'], asOf: Date.parse('2026-10-09T10:15:00Z'),
+    busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
+    onPriority: noop, onNext: null, onPrevious: null,
+  })));
+  // `UI-B-64`: the blocks under the tiles of «Обзор» -- the servers, the nearest queued jobs, a silent server and a job that ended badly.
+  {
+    const at = '2026-10-09T10:05:00Z';
+    const job = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
+      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${id}`, run_id: RUN_ID, state, priority: 0, created_at: at, available_at: at, ...QUEUE_WORK, ...extra,
+    });
+    add('WorkersOverviewSections with attention', withRouter(createElement(WorkersOverviewSections, {
+      workers: [
+        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true, slots: 4, version: '0.5.0',
+          started_at: at, heartbeat_at: at, current_run_ids: [RUN_ID] },
+        { worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', state: 'stale', intake_enabled: true, slots: 2, version: '0.5.0',
+          started_at: at, heartbeat_at: at, current_run_ids: [] },
+      ],
+      workersPartial: true,
+      jobs: [job('1', 'queued', { queue_position: 1 }), job('2', 'failed', { error_code: 'analysis_failed' })],
+      jobsPartial: true,
+      processesHref: '?tab=processes',
+    } as unknown as Parameters<typeof WorkersOverviewSections>[0])));
+    add('WorkersOverviewSections with nothing to attend to', withRouter(createElement(WorkersOverviewSections, {
+      workers: [], workersPartial: false, jobs: [],
+    })));
+  }
   // The «Обновлено» line of the queue and the journal: current, and out of date (a note on the surface tint).
   add('UpdateTime fresh', withRouter(createElement(UpdateTime, {
     dataUpdatedAt: Date.parse('2026-10-09T10:05:00Z'), failed: false, now: Date.parse('2026-10-09T10:05:04Z'),

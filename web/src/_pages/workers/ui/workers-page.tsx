@@ -43,7 +43,7 @@ import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorGroups } from '@/widgets/executor-groups';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { ExecutorRules } from '@/widgets/executor-rules';
-import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 
 import { DEFAULT_WORKERS_TAB, WORKERS_TAB_PARAM } from '../model/tabs';
@@ -167,6 +167,17 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
           <WorkersOverviewView
             workers={workersOverview(workers.data.items, next !== null)}
             queue={queue.data?.overview}
+            processesHref={`?${WORKERS_TAB_PARAM}=processes`}
+            onOpenProcesses={() => openTab('processes')}
+          />
+        ) : null}
+        {/* The servers, the nearest queued jobs and what needs attention, from the two first pages the tiles already read. */}
+        {workers.data !== undefined ? (
+          <WorkersOverviewSections
+            workers={workers.data.items}
+            workersPartial={next !== null}
+            jobs={queue.data?.items}
+            jobsPartial={(queue.data?.page.next_cursor ?? null) !== null}
             processesHref={`?${WORKERS_TAB_PARAM}=processes`}
             onOpenProcesses={() => openTab('processes')}
           />
