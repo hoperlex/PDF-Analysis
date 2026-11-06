@@ -1942,3 +1942,20 @@ Eight direct polls on 2026-11-05 answered the P0 freeze list (`D-300`), the defi
 | R-151x | Q-DOM-1, the unit of done work: «Документ стал “Проверен”»; Q-DOM-3, who sets the plan: «Только администратор». | A fact is a document reaching the «Проверено экспертом» state of `R-150n`…`R-150u`, credited to the author of its last decision; the administrator sets each engineer's monthly plan, the expert sees their own; plan changes keep history. |
 | R-151y | D-306, where the original's dispatcher parts live: «Отдельный “График работ”». | The schedule (plan, facts, the minimal reserve calendar of `R-150y`) gets its own menu item «График работ»; worker monitoring goes to «Исполнители»; our «Диспетчер» keeps assignments. |
 | R-151z | D-310, comparing with the live auditmanager.app: «Не сверять, хватает клона». | The register rests on the clone at `d213bfdc`. Closes `D-310`. |
+
+## 3.52 — R-152a…R-152h, «График работ» direct poll of 2026-11-06 (owner)
+
+The open questions of D-304 (`dispatcher-domain-2026-11-04.md` §10), asked in the concrete case of «График работ» after the
+owner ordered it built in `dev`. `R-150y`, `R-151x` and `R-151y` already settled the unit of done work, who sets the plan,
+its history and where the schedule lives.
+
+| Ruling | Owner's answer | Consequence |
+| --- | --- | --- |
+| R-152a | Q-DOM-2, what the plan affects: «Только % выполнения». | A monthly plan per engineer drives «Факт / Осталось / План / Выполнение %» and the «Выполнение плана» figure; it sets no daily capacity. |
+| R-152b | Q-DOM-5, an engineer without a plan: «20 по умолчанию, в базе». | The default monthly plan is a stored administrator setting, initially 20; an engineer without a plan for the month is measured against it. |
+| R-152c | Q-DOM-10, the engineer's direction: «Не нужно сейчас». | One group of engineers, alphabetical; no direction attribute. |
+| R-152d | Q-DOM-9, the work calendar: «Ведёт администратор». | Saturday and Sunday are days off by default; the administrator maintains holidays, working weekends and absences on the schedule's own screen. |
+| R-152e | Q-DOM-7, Q-DOM-12, what the reserve calendar places on days: «Назначения “Диспетчера”». | An assignment of «Диспетчер» (project or document → expert) gains a planned date; only loaded documents; no reserve of not-yet-uploaded titles. |
+| R-152f | Q-DOM-8, a daily load limit: «Нет, только число задач». | A day cell counts its assignments; no limit, no over-capacity highlight. |
+| R-152g | Q-DOM-11, moving dates: «Мышью + мультивыбор». | As in the original: drag a task to another day or engineer, Ctrl/Cmd-click to select several and move them together, «Раньше / Позже» by a day. |
+| R-152h | Q-DOM-12, how a planned date is kept: «Событием в истории». | Every placement or move is a new event of the assignment's append-only history, with its author; the current date is the latest event's. |
