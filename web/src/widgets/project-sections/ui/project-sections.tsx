@@ -131,7 +131,7 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
               data-section-group={section.code}
               data-section-documents={documents.length}
             >
-              <details className={styles.card} open={total > 0}>
+              <details className={total === 0 ? `${styles.card} ${styles.cardEmpty}` : styles.card} open={total > 0}>
                 <summary className={styles.cardHeader}>
                   <span className={styles.code}>{section.code}</span>
                   <span className={styles.headText}>
@@ -179,7 +179,7 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
               data-section-group="unclassified"
               data-section-documents={structure.unclassified.length}
             >
-              <details className={styles.card} open={total > 0}>
+              <details className={total === 0 ? `${styles.card} ${styles.cardEmpty}` : styles.card} open={total > 0}>
                 <summary className={styles.cardHeader}>
                   <span className={styles.code}>—</span>
                   <span className={styles.headText}>

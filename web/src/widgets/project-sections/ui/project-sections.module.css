@@ -34,6 +34,16 @@
   border-color: var(--am-accent);
 }
 
+/* A section holding nothing is one short line: there is nothing to open, and fifteen tall cards for an empty project were the page. */
+.cardEmpty > .cardHeader {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  cursor: default;
+}
+
+.cardEmpty .chevron {
+  display: none;
+}
+
 .cardHeader {
   display: flex;
   align-items: center;
