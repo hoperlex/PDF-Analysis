@@ -8,7 +8,7 @@ import { ROLE_VALUES } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { roleLabels } from '@/entities/account';
-import { USER_PAGE_LIMIT, useUsers, userFailure } from '@/entities/user';
+import { USER_PAGE_LIMIT, lastSignInText, useUsers, userFailure } from '@/entities/user';
 
 import styles from './user-list.module.css';
 
@@ -40,12 +40,13 @@ export function UserList() {
           <div>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
-                <thead><tr><th scope="col">Пользователь</th><th scope="col">Роли</th><th scope="col">Состояние</th></tr></thead>
+                <thead><tr><th scope="col">Пользователь</th><th scope="col">Роли</th><th scope="col">Состояние</th><th scope="col">Последний вход</th></tr></thead>
                 <tbody>{items.map((account) => (
                   <tr key={account.user_uid}>
                     <td className={styles.name}><Link href={routes.user(account.user_uid)}>{account.display_label}</Link><br /><small>{account.login}</small></td>
                     <td>{roleLabels(account.roles).join(', ') || 'Не назначены'}</td>
                     <td>{account.archived_at === null ? 'Действует' : 'В архиве'}</td>
+                    <td data-user-last-sign-in={account.last_sign_in_at === null ? 'never' : 'at'}>{lastSignInText(account.last_sign_in_at)}</td>
                   </tr>
                 ))}</tbody>
               </table>

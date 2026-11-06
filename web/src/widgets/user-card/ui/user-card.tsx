@@ -3,7 +3,7 @@
 import Link from 'next/link';
 
 import { displayLabelOf, initialsOf, roleLabels, unreadableAccountDetail } from '@/entities/account';
-import { useUser, userFailure } from '@/entities/user';
+import { lastSignInText, useUser, userFailure } from '@/entities/user';
 import { ManageUserControls } from '@/features/manage-user';
 import { routes } from '@/shared/lib';
 import { Avatar, ErrorState, LoadingState } from '@/shared/ui';
@@ -38,6 +38,7 @@ export function UserCard({ userUid, signedInLogin = null }: UserCardProps) {
       <p className="am-note">Адрес входа: {account.login}</p>
       <p className="am-note">Роли: {roles.join(', ') || 'не назначены'}.</p>
       <p className="am-note">Состояние: {account.archived_at === null ? 'действует' : 'в архиве'}.</p>
+      <p className="am-note" data-user-last-sign-in={account.last_sign_in_at === null ? 'never' : 'at'}>Последний вход: {lastSignInText(account.last_sign_in_at)}.</p>
       <ManageUserControls account={account} isSelf={signedInLogin !== null && account.login === signedInLogin} />
     </div>
   );

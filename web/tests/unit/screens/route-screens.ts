@@ -89,6 +89,7 @@ import { createElement } from 'react';
 import type { ReactElement } from 'react';
 
 import { AccountPage } from '@/_pages/account';
+import { AdminAuthEventsPage } from '@/_pages/admin-auth-events';
 import { AdminRegistrationsPage } from '@/_pages/admin-registrations';
 import { AdminUserPage } from '@/_pages/admin-user';
 import { AdminUsersPage } from '@/_pages/admin-users';
@@ -310,6 +311,12 @@ export const SEEDS: readonly Seed[] = [
     address: '/admin/registrations',
     name: 'admin-registrations',
     make: () => createElement(AdminRegistrationsPage, {}),
+    discipline: {},
+  },
+  {
+    address: '/admin/auth-events',
+    name: 'admin-auth-events',
+    make: () => createElement(AdminAuthEventsPage, {}),
     discipline: {},
   },
   {

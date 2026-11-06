@@ -4,12 +4,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { Account, PersonNames, Role } from '@/shared/api';
-import { archiveUser, purgeUser, queryKeys, resetUserPassword, restoreUser, updateUser } from '@/shared/api';
+import { archiveUser, endUserSessions, purgeUser, queryKeys, resetUserPassword, restoreUser, updateUser } from '@/shared/api';
 
 export type UserCommand =
   | { readonly kind: 'names'; readonly names: PersonNames }
   | { readonly kind: 'roles'; readonly roles: Role[] }
   | { readonly kind: 'archive' }
+  | { readonly kind: 'end-sessions'; readonly idempotencyKey: string }
   | { readonly kind: 'restore' }
   | { readonly kind: 'purge' }
   | { readonly kind: 'reset-password'; readonly temporaryPassword: string };
@@ -57,6 +58,7 @@ export function useManageUser(userUid: string) {
         case 'names': return { kind: 'account', account: (await updateUser({ path, body: { names: command.names } })).data };
         case 'roles': return { kind: 'account', account: (await updateUser({ path, body: { roles: command.roles } })).data };
         case 'archive': return { kind: 'account', account: (await archiveUser({ path })).data };
+        case 'end-sessions': return { kind: 'account', account: (await endUserSessions({ path, idempotencyKey: command.idempotencyKey })).data };
         case 'restore': return { kind: 'account', account: (await restoreUser({ path })).data };
         case 'reset-password': return { kind: 'account', account: (await resetUserPassword({ path, body: { temporary_password: command.temporaryPassword } })).data };
         case 'purge': await purgeUser({ path }); return { kind: 'purged' };

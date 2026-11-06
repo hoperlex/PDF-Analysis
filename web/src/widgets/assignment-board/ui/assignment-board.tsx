@@ -4,6 +4,10 @@
  * «Диспетчер» — the list of assignments with its filters, moves and history
  * (`W61-DISPATCHER-01`).
  *
+ * The state chips (contract 1.36.0) carry the server's numbers: `overview` counts each status over the scope
+ * filters (the header's project, «Только мои», what the viewer may read) and not over the chosen status, so every
+ * chip says what choosing it would list, and «Все» is their sum. Nothing is counted from the page held.
+ *
  * What the list holds is the server's decision: an administrator reads every assignment and may
  * narrow to «Только мои»; an expert reads only the work currently given to them, so the
  * checkbox is not drawn for them. The moves offered on each row are `movesFor`'s, from the
@@ -12,9 +16,9 @@
  */
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import type { Assignment, AssignmentStatus, Role } from '@/shared/api';
+import type { Assignment, AssignmentStatus, AssignmentStatusCount, Role } from '@/shared/api';
 import { ASSIGNMENT_STATUS_VALUES } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
@@ -113,6 +117,45 @@ export function AssignmentRows({ items, roles, viewerUid, experts }: AssignmentR
   );
 }
 
+export interface AssignmentStatusChipsProps {
+  /** The server's `overview`: every status with its count, over the scope filters. */
+  readonly overview: readonly AssignmentStatusCount[];
+  /** The chosen status, or `''` for all. */
+  readonly selected: AssignmentStatus | '';
+  readonly onSelect: (status: AssignmentStatus | '') => void;
+}
+
+/** «Все (N)» and one chip per status with its server count; the chosen one is pressed. */
+export function AssignmentStatusChips({ overview, selected, onSelect }: AssignmentStatusChipsProps) {
+  const countOf = (status: AssignmentStatus): number => overview.find((entry) => entry.status === status)?.count ?? 0;
+  const all = overview.reduce((sum, entry) => sum + entry.count, 0);
+  return (
+    <nav className={styles.chips} aria-label="Состояние назначений" data-assignment-status-filter={selected === '' ? 'all' : selected}>
+      <button
+        type="button"
+        className={selected === '' ? 'am-button' : 'am-button am-button--quiet'}
+        aria-pressed={selected === ''}
+        data-assignment-status-chip="all"
+        onClick={() => onSelect('')}
+      >
+        Все ({all})
+      </button>
+      {ASSIGNMENT_STATUS_VALUES.map((value) => (
+        <button
+          key={value}
+          type="button"
+          className={selected === value ? 'am-button' : 'am-button am-button--quiet'}
+          aria-pressed={selected === value}
+          data-assignment-status-chip={value}
+          onClick={() => onSelect(value)}
+        >
+          {ASSIGNMENT_STATUS_LABELS[value]} ({countOf(value)})
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }: AssignmentBoardProps) {
   const admin = roles.includes('admin');
   const [status, setStatus] = useState<AssignmentStatus | ''>('');
@@ -125,28 +168,23 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
     ...(admin && mine ? { mine: true } : {}),
     ...(cursor === undefined ? {} : { cursor }),
   });
+  // The chips stay drawn with the last counts while another status or page is being read, instead of vanishing.
+  const [kept, setKept] = useState<readonly AssignmentStatusCount[] | null>(null);
+  const current = query.isSuccess ? query.data.overview : null;
+  useEffect(() => {
+    if (current !== null) setKept(current);
+  }, [current]);
+  const overview = current ?? kept;
+  const choose = (value: AssignmentStatus | '') => {
+    setStatus(value);
+    setCursor(undefined);
+  };
 
   return (
     <div>
-      <div className={styles.filters}>
-        <label className={styles.filter}>
-          Состояние{' '}
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value as AssignmentStatus | '');
-              setCursor(undefined);
-            }}
-          >
-            <option value="">Все</option>
-            {ASSIGNMENT_STATUS_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {ASSIGNMENT_STATUS_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </label>
-        {admin ? (
+      {overview === null ? null : <AssignmentStatusChips overview={overview} selected={status} onSelect={choose} />}
+      {admin ? (
+        <div className={styles.filters}>
           <label className={styles.filter}>
             <input
               type="checkbox"
@@ -158,8 +196,8 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
             />{' '}
             Только мои
           </label>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {query.isPending ? <LoadingState what="назначения" /> : null}
       {query.isError ? (() => {
         const failure = assignmentFailure(query.error);
@@ -184,6 +222,7 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
           <>
             <AssignmentRows items={query.data.items} roles={roles} viewerUid={viewerUid} experts={experts} />
             <div className="am-pager">
+              <span className="am-note" data-assignment-total={query.data.total}>Найдено: {query.data.total}</span>
               {cursor === undefined ? null : (
                 <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setCursor(undefined)}>
                   В начало
