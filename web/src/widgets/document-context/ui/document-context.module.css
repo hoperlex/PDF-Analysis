@@ -1,8 +1,31 @@
 /* `UI-A-22`: the context strip of the document pages. Tokens only. */
 
+/* The whole row: the breadcrumb and version choice on the left, the version's tabs and neighbours on the right. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
+}
+
 .strip {
-  margin-bottom: var(--am-gap);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
   font-size: var(--am-text-sm);
+}
+
+.aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-left: auto;
 }
 
 .steps {
@@ -39,7 +62,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
-  margin-top: var(--am-gap-xs);
   color: var(--am-ink-muted);
 }
 
@@ -53,8 +75,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-sm);
-  margin-bottom: var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
   font-size: var(--am-text-sm);
+}
+
+/* On a version page the neighbours share the context row, so they leave no gap under it. */
+.aside .neighbours {
+  margin-bottom: 0;
 }
 
 .neighbourPosition {
@@ -66,4 +93,37 @@
 .neighbourSeparator,
 .neighbourOff {
   color: var(--am-ink-muted);
+}
+
+/* The version's tabs (UI-A-22): an underlined row beside the breadcrumb, as the original's. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  font-size: var(--am-text-md);
+}
+
+.tab,
+.tabCurrent,
+.tabOff {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 2px solid transparent;
+  text-decoration: none;
+}
+
+.tabCurrent {
+  border-bottom-color: var(--am-accent);
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.tabOff {
+  color: var(--am-ink-muted);
+}
+
+.tabCount {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
 }

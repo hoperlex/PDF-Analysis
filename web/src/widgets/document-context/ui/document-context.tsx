@@ -10,6 +10,7 @@
  * («Проект», «Документ»); the strip never invents a name and never blocks the page.
  */
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +20,9 @@ import { routes } from '@/shared/lib';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { useDocumentVersion, useVersionList } from '@/entities/document-version';
 import { useProject } from '@/entities/project';
+
+import { SectionNeighbours } from './section-neighbours';
+import { VersionTabs } from './version-tabs';
 
 import styles from './document-context.module.css';
 
@@ -33,6 +37,8 @@ export interface DocumentContextProps {
   readonly runId?: string | undefined;
   /** `R-151l`: on the section page, the section's worded label. */
   readonly sectionLabel?: string | undefined;
+  /** What the page puts at the row's end (the document page's «N из M»); drawn beside the version's own tabs. */
+  readonly aside?: ReactNode | undefined;
 }
 
 export interface ContextStep {
@@ -126,7 +132,7 @@ function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly proje
   );
 }
 
-export function DocumentContext({ projectUid, current, documentUid, versionUid, runId, sectionLabel }: DocumentContextProps) {
+export function DocumentContext({ projectUid, current, documentUid, versionUid, runId, sectionLabel, aside }: DocumentContextProps) {
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
   const version = useDocumentVersion(knownVersion ?? null);
@@ -145,24 +151,41 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
     },
     current,
   );
+  const ownDocument = documentUid ?? version.data?.document_uid;
+  // `UI-A-22`, `R-151m`: on a version and on its «Блоки» tab the row also carries the version's tabs, and
+  // `UI-A-28` the document's place among the section's.
+  const tabLevel = current === 'version' || current === 'blocks' ? current : null;
   return (
-    <nav className={styles.strip} aria-label="Где вы находитесь" data-context-level={current}>
-      <ol className={styles.steps}>
-        {steps.map((step) => (
-          <li key={step.key} className={styles.step} data-context-step={step.key}>
-            {step.href === null ? (
-              <span aria-current="page" className={styles.current}>
-                {step.label}
-              </span>
-            ) : (
-              <Link href={step.href}>{step.label}</Link>
-            )}
-          </li>
-        ))}
-      </ol>
-      {current === 'version' && knownVersion !== undefined && (documentUid ?? version.data?.document_uid) !== undefined ? (
-        <VersionSwitch projectUid={projectUid} documentUid={(documentUid ?? version.data?.document_uid) as string} versionUid={knownVersion} />
+    <div className={styles.bar} data-context-level={current}>
+      <nav className={styles.strip} aria-label="Где вы находитесь">
+        <ol className={styles.steps}>
+          {steps.map((step) => (
+            <li key={step.key} className={styles.step} data-context-step={step.key}>
+              {step.href === null ? (
+                <span aria-current="page" className={styles.current}>
+                  {step.label}
+                </span>
+              ) : (
+                <Link href={step.href}>{step.label}</Link>
+              )}
+            </li>
+          ))}
+        </ol>
+        {current === 'version' && knownVersion !== undefined && ownDocument !== undefined ? (
+          <VersionSwitch projectUid={projectUid} documentUid={ownDocument} versionUid={knownVersion} />
+        ) : null}
+      </nav>
+      {(tabLevel !== null && knownVersion !== undefined) || aside !== undefined ? (
+        <div className={styles.aside}>
+          {aside}
+          {tabLevel !== null && knownVersion !== undefined ? (
+            <>
+              <SectionNeighbours projectUid={projectUid} documentUid={ownDocument ?? ''} sectionCode={ownDocument === undefined ? undefined : version.data?.classification?.section_code} />
+              <VersionTabs projectUid={projectUid} versionUid={knownVersion} documentUid={ownDocument} current={tabLevel} />
+            </>
+          ) : null}
+        </div>
       ) : null}
-    </nav>
+    </div>
   );
 }

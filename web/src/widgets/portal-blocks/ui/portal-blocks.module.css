@@ -355,3 +355,14 @@
   color: var(--am-ink-muted);
   font-style: italic;
 }
+
+/* `UI-A-81`: the reading notes fold under the summary, so the selector and the tiles open the screen. */
+.howTo {
+  margin-bottom: var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+}
+
+.howTo > summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+}

@@ -144,11 +144,6 @@ export function PortalBlockListView({
 
   return (
     <div className={styles.portal} data-portal-blocks-loaded={blocks.length} data-portal-block-count={blockCount}>
-      <p className="am-note">
-        «{RECOGNISED_MARKER}» — текст, который портал распознал по изображению страницы; это не
-        текстовый слой PDF. «{DESCRIPTION_MARKER}» — подпись портала к изображению; анализ её
-        не читает. Изображения вырезаны этим приложением из PDF.
-      </p>
       <p className={styles.summary}>
         Блоков в комплекте: {blockCount}. Показано: {blocks.length}.
         {producedByRunId === null ? null : (
@@ -162,7 +157,16 @@ export function PortalBlockListView({
         )}
       </p>
 
-      <FindingsNote reading={pageFindings} />
+      {/* How to read the tiles is one click away: the page selector and the tiles come first, as the original's. */}
+      <details className={styles.howTo} data-portal-how-to="">
+        <summary>Как читать плитки</summary>
+        <p className="am-note">
+          «{RECOGNISED_MARKER}» — текст, который портал распознал по изображению страницы; это не
+          текстовый слой PDF. «{DESCRIPTION_MARKER}» — подпись портала к изображению; анализ её
+          не читает. Изображения вырезаны этим приложением из PDF.
+        </p>
+        <FindingsNote reading={pageFindings} />
+      </details>
 
       <PageSelector
         chips={pageChips(sections)}

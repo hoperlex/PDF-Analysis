@@ -68,38 +68,41 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
   }
 
   const ownerProjectUid = version.data?.project_uid ?? projectUid;
+  // `UI-A-22`: the page is named by its document and its number, as the original's version bar names the folder.
+  const documentTitle = version.data === undefined ? undefined : (version.data.display_title ?? version.data.source_filename);
+  const title = version.data === undefined
+    ? 'Версия'
+    : `Версия ${version.data.version_ordinal}${documentTitle === undefined || documentTitle === null ? '' : ` · ${documentTitle}`}`;
 
   return (
     <PageShell
-      title="Версия"
+      title={title}
       subtitle={<code>{versionUid}</code>}
       actions={
         <>
+          {version.data === undefined ? null : (
+            <>
+              <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>Все версии документа</Link>{' '}
+            </>
+          )}
           <Link href={routes.project(ownerProjectUid)}>К проекту</Link>{' '}
           <Link href={routes.projects()}>Все проекты</Link>
         </>
       }
     >
       <DocumentContext projectUid={ownerProjectUid} versionUid={versionUid} current="version" />
-      <div className={styles.stack}>
-        <section className={styles.panel} aria-labelledby="version-detail-title">
-          <h2 id="version-detail-title">Эта версия</h2>
-          {version.isPending ? <LoadingState what="эту версию" /> : null}
-          {version.isError ? (
-            <ErrorState
-              title="Эту версию не удалось прочитать."
-              detail="Адрес может указывать на несуществующую версию, либо API не ответил."
-              onRetry={() => void version.refetch()}
-            />
-          ) : null}
-          {version.data === undefined ? null : (
-            <>
-              <VersionPanel version={version.data} />
-              <p>
-                <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>
-                  Все версии документа
-                </Link>
-              </p>
+      {version.isPending ? <LoadingState what="эту версию" /> : null}
+      {version.isError ? (
+        <ErrorState
+          title="Эту версию не удалось прочитать."
+          detail="Адрес может указывать на несуществующую версию, либо API не ответил."
+          onRetry={() => void version.refetch()}
+        />
+      ) : null}
+      {version.data === undefined ? null : (
+        <div className={styles.columns}>
+          <div className={styles.stack}>
+            <section className={styles.panel} aria-label="Стадия и раздел">
               <VersionClassification
                 address={{
                   projectUid: version.data.project_uid,
@@ -108,23 +111,21 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
                 }}
                 roles={roles}
               />
-              <p className="am-note">
-                {/* `R-151m`: «Блоки» is the version's own tab. */}
-                <Link href={routes.versionBlocks(version.data.project_uid, version.data.version_uid)}>Блоки</Link>{' · '}
-                <Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
-                <Link href={routes.stageComparison()}>Сравнение стадий</Link>
-                {' — откройте нужный модуль для сопоставления PDF.'}
-              </p>
-            </>
-          )}
-        </section>
+            </section>
+            {/* The file's identity and manifest are for proof, not for the first look: one click away. */}
+            <details className={styles.facts} data-version-facts="">
+              <summary>Сведения о версии и файле</summary>
+              <VersionPanel version={version.data} />
+            </details>
+          </div>
 
-        <section className={styles.panel} aria-labelledby="version-runs-title">
-          <h2 id="version-runs-title">Прогоны</h2>
-          {version.data === undefined ? null : <>
+          <section className={styles.panel} aria-labelledby="version-runs-title">
+            <h2 id="version-runs-title">Прогоны</h2>
             <p className="am-note">
               <Link href={routes.comparison(ownerProjectUid, versionUid)}>Сравнить два прогона</Link> —
               что изменилось в анализе одной и той же версии.
+              {' '}<Link href={routes.versionComparison()}>Сравнение версий</Link>{' · '}
+              <Link href={routes.stageComparison()}>Сравнение стадий</Link>
             </p>
             <RunList
               projectUid={ownerProjectUid}
@@ -133,9 +134,9 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
               uploadKind={version.data.upload_kind}
               onRunStarted={(run: RunStatus) => router.push(routes.run(run.project_uid, run.run_id))}
             />
-          </>}
-        </section>
-      </div>
+          </section>
+        </div>
+      )}
     </PageShell>
   );
 }

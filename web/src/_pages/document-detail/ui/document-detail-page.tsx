@@ -143,9 +143,13 @@ function DocumentScreen({
         </>
       }
     >
-      <DocumentContext projectUid={projectUid} documentUid={documentUid} current="document" />
-      {/* `UI-A-28`: between the documents of the section the current version is confirmed for. */}
-      <SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />
+      <DocumentContext
+        projectUid={projectUid}
+        documentUid={documentUid}
+        current="document"
+        // `UI-A-28`: between the documents of the section the current version is confirmed for.
+        aside={<SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />}
+      />
       {newest === undefined ? null : mayAct ? (
         <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
       ) : archived ? (
@@ -159,7 +163,7 @@ function DocumentScreen({
           <button
             key={entry.tab}
             type="button"
-            className={entry.tab === tab ? 'am-button' : 'am-button am-button--quiet'}
+            className={styles.tab}
             aria-pressed={entry.tab === tab}
             onClick={() => setTab(entry.tab)}
           >
