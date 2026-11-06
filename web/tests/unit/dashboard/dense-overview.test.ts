@@ -111,7 +111,6 @@ describe("the section table's five numbers carry the original's inks", () => {
     expect(markup).not.toMatch(/data-section="total"[^>]*data-analysed-by/);
   });
 });
-});
 
 describe('the front door is compact', () => {
   const tiles = module('widgets/home-tiles/ui/home-tiles.module.css');
