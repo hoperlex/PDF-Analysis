@@ -44,12 +44,12 @@ One supplier per item; no consumer before its supplier.
 | Item | Delivery | Consumers | Condition |
 | --- | --- | --- | --- |
 | optional `project_uid` on `getDashboardSummary` and `listDecisions`; project/document fields and `total` on decision records | **P0a, night window 2026-11-04** | waves 1–3 | none pending |
-| `getProject`; selector and section counters | P0 | waves 1, 2 | metrics dictionary approved |
+| `getProject`; selector and section counters | **1.19.0** (counters) and **1.29.0** (`getProject`, 987f8579) | waves 1, 2 | metrics dictionary approved |
 | read-only role | P0, one change | cross-cutting line | matrix approved |
 | last-run state, finding counts, severity summary on documents/versions | P0 | wave 2 | dictionary |
 | severity strip and filter on «Разбор» | **delivered without a contract change** (e5846fb4): the page loads the whole run (`R-150i`), so counts and filter share that scope, as the verdict tally does | wave 2 | decided severity plus a labelled «предложено моделью» row (`R-151j`) |
-| finding → portal block (`portal_block_id`), sheet label | P0 | wave 2 | — |
-| queue group A: item names and times, state filter and period, overview, next-job flag, attempts | P0 | waves 3, 4 | ETA by the median of similar past runs (`R-151u`) |
+| finding → portal block (`portal_block_id`), sheet label | sheet label **1.30.0** (`listVersionSheetLabels`, 1d6b93a9); a per-finding `portal_block_id` is not built: evidence carries only the text layer's `block_id` | wave 2 | — |
+| queue group A: item names and times, state filter and period, overview, next-job flag, attempts | **1.18.0**, **1.26.0** (ETA) and **1.28.0** (overview, place in the queue, attempts; 83b59f9f) | waves 3, 4 | ETA by the median of similar past runs (`R-151u`); the "next job" is the place in the dispatcher's order, not a forecast |
 | knowledge base: section, filters, decision `kind` and «Тип» filter | P0 | wave 3 | `R-151h` |
 | document archive flag and display title | P0 | wave 2 | `R-151a` |
 | multi-file upload with an explicit target per file | P0 | wave 2 | `R-151b` |
