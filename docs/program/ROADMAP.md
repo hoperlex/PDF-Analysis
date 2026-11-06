@@ -267,6 +267,8 @@ original and the active product tasks around the beta, and are built when those 
 Each becomes its own design task with a contract slice; none is started before the beta-bound
 work, unless the lanes of that work run out.
 
+Design of items 2 and 3: [DECISION-MEMORY-01](DECISION-MEMORY-01.md) (design only; the questions only the owner can answer are in its section 9).
+
 ## Normative corpus — PostgreSQL authority, pgvector retrieval, S3 custody
 
 **Owner direction, 2026-10-01.** [ADR-0020](../architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md)
