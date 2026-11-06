@@ -8,24 +8,46 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs);
 }
 
+/* A job is a line of the original's queue: state, place, work and times on one line, its facts in a muted line under it. */
 .row {
   min-width: 0;
   max-width: 100%;
-  padding: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-sm);
   overflow-wrap: anywhere;
 }
 
 .row p {
-  margin-bottom: var(--am-gap-xs);
+  margin: var(--am-gap-xs) 0 0;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--am-gap);
+  min-width: 0;
 }
 
 .work {
+  flex: 1 1 18rem;
+  min-width: 0;
   font-weight: 600;
+}
+
+.timing {
+  font-size: var(--am-text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.priority {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }
 
 .identity code {
@@ -33,38 +55,39 @@
   overflow-wrap: anywhere;
 }
 
-/* The job's times, as many to a row as the panel holds. */
+/* The job's identities and times, running on in one muted line. */
 .facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
-  gap: 2px var(--am-gap);
-  margin-bottom: var(--am-gap-xs);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--am-gap);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }
 
-.facts > p {
-  margin: 0;
-}
-
-.heading,
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   align-items: center;
+  margin-top: var(--am-gap-xs);
+}
+
+nav.actions {
   justify-content: space-between;
+  margin-top: var(--am-gap-sm);
 }
 
 .actions form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--am-gap-sm);
 }
 
 .actions input {
   width: 5rem;
   max-width: 100%;
-  margin-left: 0.35rem;
+  margin-left: var(--am-gap-xs);
 }
 
 /* The read-only block «Сравнение» under the list (`CMP-VC-UI-01`): layout only, every colour from the global classes. */
@@ -72,9 +95,9 @@
   display: grid;
   gap: var(--am-gap-xs);
   margin-top: var(--am-gap);
-  padding: 1rem;
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: 0.5rem;
+  border-radius: var(--am-radius-sm);
   min-width: 0;
   max-width: 100%;
 }

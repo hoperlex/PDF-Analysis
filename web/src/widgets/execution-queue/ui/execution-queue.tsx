@@ -9,6 +9,8 @@ import type { RunWorker } from '@/entities/execution';
 import { QueueItemWaiting } from '@/entities/audit-run';
 import { EmptyState, ErrorState } from '@/shared/ui';
 
+import { queueTiming } from '../model/timing';
+
 import styles from './execution-queue.module.css';
 
 export interface ExecutionQueueProps {
@@ -33,6 +35,28 @@ export interface ExecutionQueueProps {
   readonly onPrevious: (() => void) | null;
 }
 
+/**
+ * The original's queue line «ЧЧ:ММ → ЧЧ:ММ · длительность» (UTC, like every instant here). A job that never started and
+ * never finished prints nothing: its place and age say the rest. The exact instants are in the tooltips.
+ */
+function QueueTimingLine({ item, asOf }: { readonly item: ExecutionQueueItem; readonly asOf: number | null }) {
+  const timing = queueTiming(item, asOf);
+  if (timing === null) return null;
+  return (
+    <span className={styles.timing} data-queue-timing={timing.duration ?? ''}>
+      {item.started_at === undefined
+        ? '—'
+        : <time dateTime={item.started_at} title={`Начат: ${formatInstant(item.started_at)}`} data-queue-started>{timing.start}</time>}
+      {' → '}
+      {item.finished_at === undefined
+        ? <span data-queue-finished="">…</span>
+        : <time dateTime={item.finished_at} title={`Завершён: ${formatInstant(item.finished_at)}`} data-queue-finished>{timing.end}</time>}
+      {' UTC'}
+      {timing.duration === null ? null : ` · ${timing.duration}`}
+    </span>
+  );
+}
+
 export function ExecutionQueue({
   items, roles, asOf, busy, filtered = false, workerOf, onCancel, onReaudit, onPriority, onNext, onPrevious,
 }: ExecutionQueueProps) {
@@ -41,7 +65,7 @@ export function ExecutionQueue({
   }
   if (items.length === 0 && onPrevious === null) {
     return filtered
-      ? <EmptyState title="Задач в этом состоянии нет" detail="Выберите другое состояние или покажите все задачи." />
+      ? <EmptyState title="Задач в этом состоянии нет" detail="Выберите другое состояние или период, либо покажите все задачи." />
       : <EmptyState title="Очередь пуста" detail="Принятые прогоны появятся здесь." />;
   }
   return (
@@ -50,55 +74,49 @@ export function ExecutionQueue({
       <ol>
         {items.map((item) => {
           const error = queueItemError(item);
+          const mayCancel = canExecute(roles, 'cancel') && canCancel(item);
+          const mayReaudit = canExecute(roles, 'reaudit') && canReaudit(item);
+          const mayPrioritise = canExecute(roles, 'priority') && item.state === 'queued';
           return (
-          <li key={item.job_id} className={styles.row}>
-            <div className={styles.heading}>
+          <li key={item.job_id} className={styles.row} data-queue-row={item.state}>
+            {/* One line as the original's queue item: state, place, the work, its times; the rest of the facts under it. */}
+            <div className={styles.line}>
               <JobStateBadge state={item.state} />
               {/* `UI-PARITY-P0M`: a queued job's place in the dispatcher's order, as the original numbers its queue. */}
               {item.queue_position === undefined ? null : <span data-queue-position={item.queue_position}>№ {item.queue_position} в очереди</span>}
-              <span>Приоритет: {item.priority}</span>
+              {/* `UI-PARITY-QUEUE-A`: what the job executes, read from the server and never from a screen's memory. */}
+              <span className={styles.work} data-queue-work>
+                <Link href={routes.project(item.project_uid)}>{item.project_name}</Link>
+                {' · '}
+                <Link href={routes.document(item.project_uid, item.document_uid)}>{item.document_name}</Link>
+                {' · '}
+                <Link href={routes.version(item.project_uid, item.version_uid)}>{`Версия ${item.version_ordinal}`}</Link>
+              </span>
+              <QueueTimingLine item={item} asOf={asOf} />
+              <span className={styles.priority}>Приоритет: {item.priority}</span>
             </div>
-            {/* `UI-PARITY-QUEUE-A`: what the job executes, read from the server and never from a screen's memory. */}
-            <p className={styles.work} data-queue-work>
-              <Link href={routes.project(item.project_uid)}>{item.project_name}</Link>
-              {' · '}
-              <Link href={routes.document(item.project_uid, item.document_uid)}>{item.document_name}</Link>
-              {' · '}
-              <Link href={routes.version(item.project_uid, item.version_uid)}>{`Версия ${item.version_ordinal}`}</Link>
-            </p>
-            <p className={styles.identity}>
-              Прогон <a href={routes.logs(item.run_id)}><code>{item.run_id}</code></a>
-              {' · '}
-              <Link href={routes.run(item.project_uid, item.run_id)}>Открыть прогон</Link>
-            </p>
-            <p className={styles.identity}>Задача <code>{item.job_id}</code></p>
             <QueueItemWaiting item={item} />
             {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
-            {/* The job's times as a compact grid, one row of facts as the original's queue line. */}
-            <div className={styles.facts}>
-              <p>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></p>
+            {/* The job's identities and times as one running line of facts, as many to a line as the panel holds. */}
+            <p className={styles.facts}>
+              <span className={styles.identity}>
+                Прогон <a href={routes.logs(item.run_id)}><code>{item.run_id}</code></a>
+                {' '}(<Link href={routes.run(item.project_uid, item.run_id)}>Открыть прогон</Link>)
+              </span>
+              <span className={styles.identity}>Задача <code>{item.job_id}</code></span>
+              <span>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></span>
               {/* `R-151v`: who started the run, as the original's queue says; older runs do not know. */}
-              <p data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</p>
-              <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>
-              {item.attempt_count === undefined ? null : <p data-queue-attempts={item.attempt_count}>Попыток: {item.attempt_count}</p>}
-              <p>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></p>
-              <p data-queue-started>
-                Начат: {item.started_at === undefined
-                  ? '—'
-                  : <time dateTime={item.started_at}>{formatInstant(item.started_at)}</time>}
-              </p>
+              <span data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</span>
+              <span>Возраст: {queueAgeLabel(item.created_at, asOf)}</span>
+              {item.attempt_count === undefined ? null : <span data-queue-attempts={item.attempt_count}>Попыток: {item.attempt_count}</span>}
+              <span>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></span>
               {item.estimated_finish_at === undefined ? null : (
                 // `R-151u`: from similar past runs; never shown without enough history.
-                <p data-queue-eta>
+                <span data-queue-eta>
                   Ожидаемое завершение: ≈ <time dateTime={item.estimated_finish_at}>{formatInstant(item.estimated_finish_at)}</time>
-                </p>
+                </span>
               )}
-              <p data-queue-finished>
-                Завершён: {item.finished_at === undefined
-                  ? '—'
-                  : <time dateTime={item.finished_at}>{formatInstant(item.finished_at)}</time>}
-              </p>
-            </div>
+            </p>
             {error === null ? null : (
               <p role="status" data-queue-error={error.code}>
                 Ошибка: <code>{error.code}</code>{error.sentence === null ? null : <> — {error.sentence}</>}
@@ -109,14 +127,15 @@ export function ExecutionQueue({
                 Прогон был прерван: <code>{item.interrupted_reason}</code>
               </p>
             )}
+            {mayCancel || mayReaudit || mayPrioritise ? (
             <div className={styles.actions}>
-              {canExecute(roles, 'cancel') && canCancel(item) ? (
-                <button className="am-button am-button--quiet" type="button" disabled={busy} onClick={() => onCancel(item)}>Отменить прогон</button>
+              {mayCancel ? (
+                <button className="am-button am-button--quiet am-button--small" type="button" disabled={busy} onClick={() => onCancel(item)}>Отменить прогон</button>
               ) : null}
-              {canExecute(roles, 'reaudit') && canReaudit(item) ? (
-                <button className="am-button am-button--quiet" type="button" disabled={busy} onClick={() => onReaudit(item)}>Повторный аудит</button>
+              {mayReaudit ? (
+                <button className="am-button am-button--quiet am-button--small" type="button" disabled={busy} onClick={() => onReaudit(item)}>Повторный аудит</button>
               ) : null}
-              {canExecute(roles, 'priority') && item.state === 'queued' ? (
+              {mayPrioritise ? (
                 <form onSubmit={(event) => {
                   event.preventDefault();
                   const value = Number(new FormData(event.currentTarget).get('priority'));
@@ -125,10 +144,11 @@ export function ExecutionQueue({
                   <label>Приоритет
                     <input name="priority" type="number" min="-100" max="100" step="1" defaultValue={item.priority} required />
                   </label>
-                  <button className="am-button am-button--quiet" type="submit" disabled={busy}>Изменить</button>
+                  <button className="am-button am-button--quiet am-button--small" type="submit" disabled={busy}>Изменить</button>
                 </form>
               ) : null}
             </div>
+            ) : null}
           </li>
           );
         })}
