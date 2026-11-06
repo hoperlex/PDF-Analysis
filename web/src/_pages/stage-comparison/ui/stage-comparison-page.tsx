@@ -33,13 +33,15 @@
 
 import Link from 'next/link';
 
+import type { VersionUid } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
-import { looksLikeVersionUid } from '@/entities/document-version';
+import { looksLikeVersionUid, useDocumentVersion } from '@/entities/document-version';
 
 import { VersionComparison } from '@/widgets/version-comparison';
 
+import { ComparisonContext } from './comparison-context';
 import { ComparisonOnlyNote } from './comparison-only-note';
 import { LazyStageComparison } from './lazy-stage-comparison';
 import styles from './stage-comparison-page.module.css';
@@ -58,6 +60,9 @@ export interface StageComparisonPageProps {
 
 export function StageComparisonPage({ projectUid, versionUid }: StageComparisonPageProps) {
   const wellFormed = looksLikeProjectUid(projectUid) && looksLikeVersionUid(versionUid);
+  // The same read the widget under it makes (one key, one request): the heading names the version by its title, not by its identifier.
+  const version = useDocumentVersion(wellFormed ? (versionUid as VersionUid) : null);
+  const versionTitle = version.data?.display_title ?? version.data?.source_filename ?? undefined;
 
   if (!wellFormed) {
     return (
@@ -76,7 +81,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
   return (
     <PageShell
       title={VERSION_SCREEN_TITLE}
-      subtitle={<code>{versionUid}</code>}
+      subtitle={versionTitle === undefined ? <code>{versionUid}</code> : versionTitle}
       actions={
         <>
           <Link href={routes.version(projectUid, versionUid)}>К версии</Link>{' '}
@@ -84,6 +89,7 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
         </>
       }
     >
+      <ComparisonContext projectUid={projectUid} versionUid={versionUid as VersionUid} />
       <div className={styles.stack}>
         <section className={styles.panel} aria-label="Сравнение версий комплекта">
           <p>
