@@ -8,7 +8,7 @@ export { executionFailure } from './model/failure';
 export type { ExecutionFailure, ExecutionFailureKind } from './model/failure';
 export {
   QUEUE_STATE_OPTIONS, canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel, queueItemError,
-  visibleJournal,
+  queueOverviewLine, queueStateCount, visibleJournal,
 } from './model/presentation';
 export type { ExecutionAction, QueueItemError } from './model/presentation';
 export {

@@ -1716,6 +1716,7 @@
       "ExecutionJournalPage",
       "ExecutionQueueItem",
       "ExecutionQueuePage",
+      "ExecutionQueueStateCount",
       "ExecutionWorker",
       "ExecutionWorkerPage",
       "ExecutorAgentInstall",
@@ -2127,5 +2128,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0054_finding_execution_status",
-  "contract_version": "1.27.0"
+  "contract_version": "1.28.0"
 }

@@ -42,6 +42,11 @@ class QueueItem:
     #: `R-151u`: what the ETA compares a running job with -- its run's analysis profile and its version's page count.
     analysis_profile_id: str | None = None
     page_count: int | None = None
+    #: `UI-PARITY-P0M` (contract 1.28.0): a queued job's place in the dispatcher's order among every queued job
+    #: (priority, then the oldest first), as the original numbers its queue; ``None`` for a job not queued.
+    queue_position: int | None = None
+    #: How many attempts the job has had.
+    attempt_count: int = 0
 
     @property
     def position(self) -> QueuePosition:
@@ -106,7 +111,16 @@ _ITEM_COLUMNS = """
        r.version_uid, dv.version_ordinal,
        (SELECT min(a.created_at) FROM attempt a WHERE a.job_id = page.job_id) AS started_at,
        r.terminal_reason AS error_code, r.interrupted_reason, r.started_by_user_uid,
-       r.analysis_profile_id, dv.page_count"""
+       r.analysis_profile_id, dv.page_count,
+       CASE WHEN page.state = 'queued' THEN 1 + (
+           SELECT count(*) FROM job q
+            WHERE q.state = 'queued'
+              AND (q.priority > page.priority
+                   OR (q.priority = page.priority
+                       AND (q.created_at < page.created_at
+                            OR (q.created_at = page.created_at AND q.job_id < page.job_id))))
+       ) END AS queue_position,
+       (SELECT count(*) FROM attempt a WHERE a.job_id = page.job_id) AS attempt_count"""
 _ITEM_JOINS = """
   JOIN audit_run r ON r.run_id = page.run_id
   JOIN project p ON p.project_uid = r.project_uid
@@ -210,6 +224,15 @@ _JOURNAL_RUN = text("""
      LIMIT :fetch
 """)
 _CONTROL = text("SELECT paused, changed_at FROM execution_control WHERE singleton = true")
+#: `UI-PARITY-P0M`: how many jobs stand in each state, over the queue's period filter and not its state filter, so the
+#: counts are what each state of the filter would list.
+_OVERVIEW = text("""
+    SELECT j.state, count(*) AS count
+      FROM job j
+     WHERE (CAST(:created_from AS timestamptz) IS NULL OR j.created_at >= CAST(:created_from AS timestamptz))
+       AND (CAST(:created_to AS timestamptz) IS NULL OR j.created_at < CAST(:created_to AS timestamptz))
+     GROUP BY j.state
+""")
 
 
 class ExecutionRepository:
@@ -229,6 +252,13 @@ class ExecutionRepository:
             "fetch": limit,
         }).mappings()
         return tuple(QueueItem(**dict(row)) for row in rows)
+
+    def queue_overview(
+        self, session: Session, *, created_from: datetime | None = None, created_to: datetime | None = None,
+    ) -> dict[str, int]:
+        """``{state: count}`` of the jobs created in ``[created_from, created_to)``; a state with none is absent."""
+        rows = session.execute(_OVERVIEW, {"created_from": created_from, "created_to": created_to}).all()
+        return {str(row[0]): int(row[1]) for row in rows}
 
     def get_queue_item(self, session: Session, job_id: str) -> QueueItem | None:
         row = session.execute(_QUEUE_ITEM, {"job_id": job_id}).mappings().first()

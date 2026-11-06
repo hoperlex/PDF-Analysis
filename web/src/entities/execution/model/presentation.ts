@@ -1,4 +1,4 @@
-import type { ExecutionJournalEntry, ExecutionQueueItem, Role, RunState } from '@/shared/api';
+import type { ExecutionJournalEntry, ExecutionQueueItem, ExecutionQueueStateCount, Role, RunState } from '@/shared/api';
 import { ERROR_CODE_VALUES, RUN_STATE_VALUES } from '@/shared/api';
 import { STATE_LABELS } from '@/shared/ui';
 import { terminalReasonNote } from '@/entities/audit-run';
@@ -74,6 +74,24 @@ export function queueItemError(item: Pick<ExecutionQueueItem, 'error_code'>): Qu
   if (code === undefined || code === null || code === '') return null;
   const note = terminalReasonNote(code);
   return { code, sentence: note.kind === 'described' ? note.sentence : null };
+}
+
+/**
+ * `UI-PARITY-P0M` (contract 1.28.0): the queue's line of counts, as the original's «N / M» and «N ✓ M ✗»: every state
+ * that has a job, in the queue's order, after the total. Counted over the period, not the state filter, so it says what
+ * each choice of the filter would list.
+ */
+export function queueOverviewLine(overview: readonly ExecutionQueueStateCount[] | undefined): string | null {
+  if (overview === undefined) return null;
+  const total = overview.reduce((sum, entry) => sum + entry.count, 0);
+  if (total === 0) return 'Задач нет.';
+  const parts = overview.filter((entry) => entry.count > 0).map((entry) => `${JOB_STATE_LABELS[entry.state]} ${entry.count}`);
+  return `Всего ${total}: ${parts.join(' · ')}`;
+}
+
+/** The count of one state in the overview, for the filter's option; `null` when the page carries no overview. */
+export function queueStateCount(overview: readonly ExecutionQueueStateCount[] | undefined, state: ExecutionQueueState): number | null {
+  return overview?.find((entry) => entry.state === state)?.count ?? (overview === undefined ? null : 0);
 }
 
 export function queueAgeLabel(createdAt: string, asOf: number | null): string {

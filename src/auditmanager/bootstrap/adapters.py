@@ -20,7 +20,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, get_args
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -240,7 +240,10 @@ def _queue_item_model(
             started_by_label=(labels or {}).get(getattr(row, "started_by_user_uid", None) or ""),
             # `R-151u`: a running job's estimated finish, from similar past runs; absent without enough history.
             estimated_finish_at=_estimated_finish(row, samples),
+            # `UI-PARITY-P0M`: a queued job's place in the dispatcher's order; absent when it is not queued.
+            queue_position=getattr(row, "queue_position", None),
         ),
+        "attempt_count": getattr(row, "attempt_count", 0),
         **facts.get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
     })
 
@@ -292,10 +295,14 @@ class ExecutionAdapter(_SessionHolder):
 
             # `R-151u`: one read of the recent history serves every running item of the page.
             samples = history(session) if any(row.state in ("leased", "running") for row in items) else ()
+            counts = repo.queue_overview(session, created_from=created_from, created_to=created_to)
             return models.ExecutionQueuePage(
                 items=[_queue_item_model(row, facts, labels, samples) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
+                # `UI-PARITY-P0M`: every state, in the queue's order, 0 when no job stands in it.
+                overview=[models.ExecutionQueueStateCount(state=state, count=counts.get(state, 0))
+                          for state in get_args(models.ExecutionQueueStateCount.model_fields["state"].annotation)],
             )
         return self._read(read)
 

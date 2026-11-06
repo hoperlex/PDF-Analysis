@@ -22,7 +22,7 @@
     "dispatch_named_commit": "480458ea5d9d3aeaff6b52e7a30f4e2c87266648",
     "commit_note": "Resealed by UI-PARITY-P0L: contract 1.27.0 (contract 1.27.0 adds importRunDecisions and the «ID замечания» column (R-151d).).",
     "openapi_version": "3.1.0",
-    "info_version": "1.27.0",
+    "info_version": "1.28.0",
     "paths": 257,
     "operations": 285,
     "component_schemas": 690,

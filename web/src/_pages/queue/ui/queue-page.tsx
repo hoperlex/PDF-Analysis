@@ -8,7 +8,8 @@ import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, runWorker, useExecutionQueue,
+  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueOverviewLine, queueStateCount,
+  runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
 import type { ExecutionFailure, ExecutionQueueFilter, ExecutionQueueState } from '@/entities/execution';
@@ -156,11 +157,16 @@ export function QueuePage() {
             onChange={(event) => chooseState(event.currentTarget.value)}
           >
             <option value="">Все состояния</option>
-            {QUEUE_STATE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
+            {QUEUE_STATE_OPTIONS.map((option) => {
+              // `UI-PARITY-P0M`: each state with its count, so the filter says what it would list.
+              const count = queueStateCount(queue.data?.overview, option.value);
+              return <option key={option.value} value={option.value}>{count === null ? option.label : `${option.label} (${count})`}</option>;
+            })}
           </select>
         </label>
+        {queueOverviewLine(queue.data?.overview) === null ? null : (
+          <>{' '}<span className="am-note" data-queue-overview>{queueOverviewLine(queue.data?.overview)}</span></>
+        )}
       </p>
       {queue.data?.paused === true ? <p role="status" className="am-note" data-execution-paused>Выдача задач приостановлена.</p> : null}
       {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (

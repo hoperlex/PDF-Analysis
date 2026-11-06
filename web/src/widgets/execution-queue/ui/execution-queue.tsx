@@ -54,6 +54,8 @@ export function ExecutionQueue({
           <li key={item.job_id} className={styles.row}>
             <div className={styles.heading}>
               <JobStateBadge state={item.state} />
+              {/* `UI-PARITY-P0M`: a queued job's place in the dispatcher's order, as the original numbers its queue. */}
+              {item.queue_position === undefined ? null : <span data-queue-position={item.queue_position}>№ {item.queue_position} в очереди</span>}
               <span>Приоритет: {item.priority}</span>
             </div>
             {/* `UI-PARITY-QUEUE-A`: what the job executes, read from the server and never from a screen's memory. */}
@@ -78,6 +80,7 @@ export function ExecutionQueue({
               {/* `R-151v`: who started the run, as the original's queue says; older runs do not know. */}
               <p data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</p>
               <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>
+              {item.attempt_count === undefined ? null : <p data-queue-attempts={item.attempt_count}>Попыток: {item.attempt_count}</p>}
               <p>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></p>
               <p data-queue-started>
                 Начат: {item.started_at === undefined

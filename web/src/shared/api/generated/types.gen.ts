@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.27.0 (OpenAPI 3.1.0)
- *   sha256 b77ef0d5bda707e48edb092fa9557734f1a3843440f4a72711683d6f7bd8cf6e
+ *   AuditManager PC-01 API 1.28.0 (OpenAPI 3.1.0)
+ *   sha256 24611dded30e8082a9ea6e463eb3f273bb3dd588024d2039c7c23fe0d6fcc211
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.27.0';
+export const CONTRACT_VERSION = '1.28.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'b77ef0d5bda707e48edb092fa9557734f1a3843440f4a72711683d6f7bd8cf6e';
+export const CONTRACT_DIGEST = '24611dded30e8082a9ea6e463eb3f273bb3dd588024d2039c7c23fe0d6fcc211';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -307,6 +307,7 @@ export const SCHEMA_NAMES = [
   'ExecutionJournalPage',
   'ExecutionQueueItem',
   'ExecutionQueuePage',
+  'ExecutionQueueStateCount',
   'ExecutionWorker',
   'ExecutionWorkerPage',
   'ExecutorAgentInstall',
@@ -3909,7 +3910,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.27.0";
+  contract_version: "1.28.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3954,6 +3955,7 @@ export type ExecutionJournalPage = {
 
 /** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). `UI-PARITY-QUEUE-A` (contract 1.18.0): the queue names what it lists. Every job executes exactly one audit run of one version of one document (`job.run_id` is not null and unique), so `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and `version_ordinal` are always present; the two names and the ordinal are joined at read time and stored nowhere. `started_at` is the creation time of the job's first attempt and is absent while no attempt exists; `finished_at` is the time the job reached a terminal state and is absent while it has not; `error_code` is the run's `terminal_reason` and `interrupted_reason` the run's own, each absent when the run records none. An absent property is omitted, never sent as null. */
 export type ExecutionQueueItem = {
+  attempt_count?: number;
   available_at: string;
   binding_state?: ExecutorBindingState;
   created_at: string;
@@ -3968,6 +3970,7 @@ export type ExecutionQueueItem = {
   priority: number;
   project_name: string;
   project_uid: ProjectUid;
+  queue_position?: number;
   run_id: RunId;
   started_at?: string;
   /** `R-151v` (contract 1.21.0): the display label of the account that started the run; absent for a run created before migration 0051. */
@@ -3980,8 +3983,15 @@ export type ExecutionQueueItem = {
 
 export type ExecutionQueuePage = {
   items: Array<ExecutionQueueItem>;
+  overview?: Array<ExecutionQueueStateCount>;
   page: PageInfo;
   paused: boolean;
+};
+
+/** `UI-PARITY-P0M` (contract 1.28.0): how many jobs stand in one state. */
+export type ExecutionQueueStateCount = {
+  count: number;
+  state: "queued" | "leased" | "running" | "retry_wait" | "succeeded" | "failed" | "cancelled" | "dead_letter";
 };
 
 /** One row of the worker registry (`worker`, migration `0019_execution_workers`) and the runs it currently holds. `intake_enabled` false means it takes no new run. */

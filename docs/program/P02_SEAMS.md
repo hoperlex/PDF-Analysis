@@ -1037,6 +1037,9 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0M` (contract `1.28.0`, no migration) completes the queue group A of `UI-PARITY-01`: `listExecutionQueue`'s page
+gains the overview by state, and each item a queued job's place in the dispatcher's order and its attempt count.
+
 `UI-PARITY-P0L` (contract `1.27.0`, no migration) adds `importRunDecisions` (`R-151d`): the run's own workbook, edited,
 loaded back by `finding_uid` (the new «ID замечания» column); each changed row is an ordinary decision event by the
 importer, every row is reported. Keyed, `expert`.
