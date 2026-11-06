@@ -31,6 +31,6 @@ describe('historical map navigation', () => {
     expect(html).toContain('old-left');
     expect(html).not.toContain('new-left');
     expect(html).not.toContain('Сохранить решение эксперта');
-    expect(html).not.toContain('Принять видимые точные подсказки');
+    expect(html).not.toContain('Принять предложенные');
   });
 });
