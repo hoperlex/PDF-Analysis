@@ -14,9 +14,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--am-gap);
-  margin: 0 0 var(--am-gap);
-  padding: var(--am-gap);
+  gap: var(--am-gap-sm) var(--am-gap);
+  max-width: none;
+  margin: 0 0 var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);

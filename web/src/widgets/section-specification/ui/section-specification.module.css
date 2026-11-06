@@ -14,9 +14,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--am-gap);
-  margin: 0 0 var(--am-gap);
-  padding: var(--am-gap);
+  gap: var(--am-gap-sm) var(--am-gap);
+  max-width: none;
+  margin: 0 0 var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
@@ -27,12 +28,24 @@
   max-width: 100%;
 }
 
+.projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+}
+
 .project {
-  margin: 0 0 var(--am-gap);
-  padding: var(--am-gap);
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
+}
+
+.project p {
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .subheading {
