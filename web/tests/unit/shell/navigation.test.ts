@@ -39,7 +39,8 @@ function outline(navigation: Navigation): string[] {
  * of the top strip.
  */
 const R66 = [
-  'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
+  // `R-152a`: «График работ» after «Диспетчер», as in the original's menu (expert and admin).
+  'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, График работ /schedule, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   'Знания: База знаний /knowledge-base, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
