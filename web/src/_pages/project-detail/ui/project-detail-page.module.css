@@ -8,7 +8,7 @@
 }
 
 .tab {
-  margin: 0 0 -1px;
+  margin: 0;
   padding: var(--am-gap-xs) var(--am-gap);
   border: 0;
   border-bottom: 2px solid transparent;
