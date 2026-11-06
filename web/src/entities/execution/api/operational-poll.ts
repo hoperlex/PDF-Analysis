@@ -10,12 +10,18 @@
  * read. So the streak is kept here, per query, from the two counters that only ever grow -
  * settled successes (`dataUpdateCount`) and settled failures (`errorUpdateCount`) - and is
  * reset by the next success.
+ *
+ * A screen may switch the timed refresh off for one read (the journal's «Автообновление»): it
+ * says so in the query's `meta` (`autoRefreshMeta`), and the same function answers `false` for
+ * that query. The cadence stays the policy's; the screen only chooses whether to use it.
  */
 
 import { operationalListInterval } from '@/shared/config';
 
 /** The part of a React Query `Query` this module reads. */
 export interface PollableQuery {
+  /** The query's `meta`: `autoRefreshMeta` says whether its screen wants the timed refresh. */
+  readonly meta?: Readonly<Record<string, unknown>> | undefined;
   readonly state: {
     readonly dataUpdateCount: number;
     readonly errorUpdateCount: number;
@@ -62,12 +68,25 @@ export function consecutiveFailures(query: PollableQuery): number {
   return next.failures;
 }
 
+/**
+ * The `meta` of a list read whose screen has the timed refresh switched `on` or off. React Query
+ * hands the query, meta included, to `refetchInterval` and re-asks when the options change, so a
+ * toggle on the screen takes effect without a new cache entry: the key is the data's, not the mode's.
+ */
+export function autoRefreshMeta(on: boolean): { readonly autoRefresh: boolean } {
+  return { autoRefresh: on };
+}
+
 function tabIsVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState !== 'hidden';
 }
 
-/** The delay before the next timed read of an operational list: the policy applied to its query. */
+/**
+ * The delay before the next timed read of an operational list: the policy applied to its query,
+ * or none for a query whose screen switched the timed refresh off.
+ */
 export function operationalListRefetchInterval(query: PollableQuery): number | false {
+  if (query.meta?.autoRefresh === false) return false;
   return operationalListInterval({ failures: consecutiveFailures(query), visible: tabIsVisible() });
 }
 

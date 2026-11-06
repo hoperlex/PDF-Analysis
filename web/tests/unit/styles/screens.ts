@@ -41,7 +41,7 @@ import { EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
 import { PageViewerView } from '@/features/open-evidence';
 import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
-import { ExecutionJournal } from '@/widgets/execution-journal';
+import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
@@ -776,6 +776,37 @@ export function screens(): Screen[] {
       payload: { to_state: 'queued' },
     }],
     onNext: null, onPrevious: null,
+  })));
+  // `UI-B-40` / `UI-B-43`: the run picker at its last step with a run in view and every list cut at its first page
+  // (`populatedClient` answers each with a next cursor), a step whose list could not be read, and the controls of the
+  // page in both modes -- the `.picker`, `.steps`, `.step`, `.scope`, `.controls`, `.toggle`, `.count` and `.notes` rules.
+  add('RunPicker at the runs, a run in view', renderScreen(populatedClient(), createElement(RunPicker, {
+    selection: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+    runId: RUN_ID, onSelection: noop, onChooseRun: noop,
+  })));
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: [project()], page: { next_cursor: null } });
+    seedError(client, queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), apiError(503, 'dependency_unavailable', true));
+    add('RunPicker, the documents could not be read', renderScreen(client, createElement(RunPicker, {
+      selection: { projectUid: PROJECT_UID, documentUid: null, versionUid: null },
+      runId: null, onSelection: noop, onChooseRun: noop,
+    })));
+  }
+  add('JournalControls, auto-refresh on, rows to copy', withRouter(createElement(JournalControls, {
+    entries: [{
+      event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID,
+      aggregate_id: RUN_ID,
+      aggregate_type: 'AuditRun',
+      event_type: 'audit_run.transition',
+      occurred_at: '2026-10-09T10:00:00Z',
+      payload: { to_state: 'queued' },
+    }],
+    runId: RUN_ID, autoRefresh: true, onAutoRefresh: noop,
+  })));
+  add('JournalControls, auto-refresh off, nothing read yet', withRouter(createElement(JournalControls, {
+    entries: undefined, runId: null, autoRefresh: false, onAutoRefresh: noop,
   })));
   add('ExecutionQueue loaded', withRouter(createElement(ExecutionQueue, {
     items: [{

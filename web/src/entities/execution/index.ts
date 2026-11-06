@@ -4,6 +4,8 @@ export {
   useExecutionDispatch, useExecutionJournal, useExecutionQueue, useWorkerLookup, useWorkers,
 } from './api/use-execution';
 export type { ExecutionQueueFilter, ExecutionQueueState } from './api/use-execution';
+export { journalCopyLine, journalCopyText } from './model/journal-copy';
+export type { JournalCopyScope } from './model/journal-copy';
 export { executionFailure } from './model/failure';
 export type { ExecutionFailure, ExecutionFailureKind } from './model/failure';
 export {
