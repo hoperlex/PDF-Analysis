@@ -14,6 +14,7 @@
 }
 
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--am-gap-xs);
@@ -25,8 +26,26 @@
   box-shadow: var(--am-shadow-1);
 }
 
+.card:hover,
 .card:focus-within {
   border-color: var(--am-accent);
+}
+
+/*
+ * The whole card opens its version, as the original's does (`UI-A-45`): the title link is stretched over the card, and the
+ * card's other controls (the history link, the selection box, a chip that leads to «Разбор», a tag) sit above it.
+ */
+.title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.topEnd,
+.badges a,
+.tags {
+  position: relative;
+  z-index: 1;
 }
 
 .top {

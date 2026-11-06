@@ -8,6 +8,9 @@
  * section, and a Σ card opens the grid.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
@@ -17,6 +20,7 @@ import { DocumentCardGrid, VersionRow } from '@/entities/document-version';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { ProjectList } from '@/widgets/project-list';
 
+import { WEB_ROOT } from '../../guards/lib/repo';
 import { auditCounts } from '../dashboard/audit-counts';
 import { newClient, renderWith } from '../screens/harness';
 import { PROJECT_UID, classification, otherVersion, version } from '../sections/fixtures';
@@ -110,5 +114,18 @@ describe('a document card', () => {
     expect(markup).toContain('data-document-cards="2"');
     expect(markup.indexOf('data-grid-leading')).toBeLessThan(markup.indexOf('data-document-uid'));
     expect((markup.match(/data-document-uid=/g) ?? [])).toHaveLength(2);
+  });
+});
+
+describe('a document card as a whole target', () => {
+  const css = readFileSync(join(WEB_ROOT, 'src/entities/document-version/ui/document-cards.module.css'), 'utf8');
+
+  it('stretches the title link over the card, as the original’s card opens its version', () => {
+    expect(css).toMatch(/\.title a::after\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
+    expect(css).toMatch(/\.card\s*\{[^}]*position:\s*relative;/);
+  });
+
+  it('keeps the card’s other controls above the stretched link, so the history link and the box still work', () => {
+    expect(css).toMatch(/\.topEnd,[^{]*\{[^}]*z-index:\s*1;/);
   });
 });
