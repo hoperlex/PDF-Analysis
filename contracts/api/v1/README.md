@@ -11,7 +11,17 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.31.0` (`UI-PARITY-P0P`)
+## Current contract `1.32.0` (`UI-PARITY-KB-ALL`)
+
+Slice for ruling `R-151h` and debt `D-317`: the knowledge base's «Все». `listKnowledgeBaseEntries` (`GET /knowledge-base/entries`,
+a product read, optional `project_uid` filter, cursor and `total`) lists the decisions on findings and on optimisation
+proposals as one journal, newest first. Each row is a `KnowledgeBaseEntry`: its `kind` (`finding` or `proposal`), its
+`occurred_at`, and exactly the record its kind names (`DecisionRecord` or `ProposalDecisionRecord`), so each keeps its own
+identity; the order and the cursor are the record's time, the kind and that record's id. `listDecisions` and
+`listProposalDecisionJournal` stay the «Замечания» and «Предложения» halves. No migration, no error code.
+The API now has 267 paths, 295 operations and 711 schemas; migration head `0055`. The domain catalogs are at candidate revision 50.
+
+## Contract `1.31.0` (`UI-PARITY-P0P`, historical)
 
 «График работ» (rulings `R-151x`, `R-152a`…`R-152h`), tag `schedule`, migration `0055_work_schedule`:
 
@@ -29,7 +39,7 @@ Minimum conventions:
 Sixteen schemas (`WorkSchedule*`, `WorkCalendarDayChange`, `EngineerAbsenceChange`, `AssignmentMove` and four requests).
 No error code: a bad zone is `validation_failed` with `constraint: unknown_zone`, a plan for a non-expert
 `constraint: active_expert`.
-The API now has 266 paths, 294 operations and 709 schemas; migration head `0055`. The domain catalogs are at candidate revision 49.
+The API then had 266 paths, 294 operations and 709 schemas; migration head `0055`. The domain catalogs were at candidate revision 49.
 
 ## Contract `1.30.0` (`UI-PARITY-P0O`, historical)
 

@@ -40,7 +40,9 @@ import type { FindingCategory, ProjectUid, Verdict } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
 import { readProjectContext, switchProject } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
-import { CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useProposalDecisionJournal } from '@/entities/expert-decision';
+import {
+  CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useKnowledgeBaseJournal, useProposalDecisionJournal,
+} from '@/entities/expert-decision';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { useProjectList } from '@/entities/project';
 
@@ -159,6 +161,13 @@ function journalFailure(error: unknown, retry: () => void): ErrorStateProps {
   return { title: 'База знаний не открылась.', onRetry: retry, retryLabel: 'Повторить' };
 }
 
+/** «Тип»: both journals, the decisions on findings, the decisions on optimisation proposals. */
+const KIND_LABELS: Readonly<Record<'all' | 'findings' | 'proposals', string>> = {
+  all: 'Все',
+  findings: 'Замечания',
+  proposals: 'Предложения',
+};
+
 export function KnowledgeBasePage() {
   // `null` only where no router is mounted; the address is then no address and names no project.
   const pathname = usePathname();
@@ -167,9 +176,11 @@ export function KnowledgeBasePage() {
 
   const [category, setCategory] = useState<CategoryChoice>('all');
   const [verdict, setVerdict] = useState<VerdictChoice>('all');
-  // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base.
-  const [kind, setKind] = useState<'findings' | 'proposals'>('findings');
+  // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base, or
+  // both as one journal («Все», `D-317`). «Замечания» stays the first screen, as it was before «Все».
+  const [kind, setKind] = useState<'all' | 'findings' | 'proposals'>('findings');
   const [proposalCursors, setProposalCursors] = useState<readonly string[]>(NO_CURSORS);
+  const [allCursors, setAllCursors] = useState<readonly string[]>(NO_CURSORS);
   /*
    * The cursors of the pages walked past, oldest first; the last one is the page on screen
    * and an empty stack is the first page. The server's cursors are opaque and one-way, so
@@ -191,6 +202,13 @@ export function KnowledgeBasePage() {
       ...(proposalCursors.length === 0 ? {} : { cursor: proposalCursors.at(-1) }),
     },
     kind === 'proposals',
+  );
+  const everything = useKnowledgeBaseJournal(
+    {
+      ...(projectUid === null ? {} : { project_uid: projectUid }),
+      ...(allCursors.length === 0 ? {} : { cursor: allCursors.at(-1) }),
+    },
+    kind === 'all',
   );
   const journal = useDecisionJournal({
     ...(projectUid === null ? {} : { project_uid: projectUid }),
@@ -240,20 +258,20 @@ export function KnowledgeBasePage() {
       <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
         <div className="am-kb__filter" role="group" aria-label="Тип решений">
           <span>Тип</span>
-          {(['findings', 'proposals'] as const).map((value) => (
+          {(['all', 'findings', 'proposals'] as const).map((value) => (
             <button
               key={value}
               type="button"
               className={kind === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
               aria-pressed={kind === value}
               data-kb-kind={value}
-              onClick={() => { setKind(value); setProposalCursors(NO_CURSORS); }}
+              onClick={() => { setKind(value); setProposalCursors(NO_CURSORS); setAllCursors(NO_CURSORS); }}
             >
-              {value === 'findings' ? 'Замечания' : 'Предложения'}
+              {KIND_LABELS[value]}
             </button>
           ))}
         </div>
-        {kind === 'proposals' ? null : <>
+        {kind !== 'findings' ? null : <>
         <div className="am-kb__filter">
           <label htmlFor="kb-filter-category">Категория</label>
           <select
@@ -329,7 +347,49 @@ export function KnowledgeBasePage() {
           )}
         </div>
       ) : null}
-      {kind === 'proposals' ? null : <div className={styles.results}>
+      {kind === 'all' ? (
+        <div className={styles.results}>
+          {everything.data === undefined ? null : (
+            <p className={styles.scope} data-knowledge-base-total={everything.data.total}>
+              <span className={styles.count}>{recordCountLabel(everything.data.total)}</span>
+            </p>
+          )}
+          <LazyKnowledgeBase
+            records={[]}
+            entries={everything.data?.items ?? []}
+            isLoading={everything.isPending}
+            // «Все» has no category or verdict: only the project narrows it, and «Все проекты» is the way out.
+            narrowing={projectUid === null ? undefined : {
+              allProjectsHref: withoutProject === '' ? KNOWLEDGE_BASE_ADDRESS : `${KNOWLEDGE_BASE_ADDRESS}?${withoutProject}`,
+            }}
+            error={everything.error === null ? null : journalFailure(everything.error, () => void everything.refetch())}
+          />
+          {allCursors.length === 0 && (everything.data?.page.next_cursor ?? null) === null ? null : (
+            <nav className="am-pager" aria-label="Страницы всех решений">
+              <button
+                type="button"
+                className="am-button am-button--quiet"
+                disabled={allCursors.length === 0}
+                onClick={() => setAllCursors(allCursors.slice(0, -1))}
+              >
+                Назад
+              </button>
+              <button
+                type="button"
+                className="am-button am-button--quiet"
+                disabled={(everything.data?.page.next_cursor ?? null) === null}
+                onClick={() => {
+                  const nextCursor = everything.data?.page.next_cursor;
+                  if (nextCursor !== null && nextCursor !== undefined) setAllCursors([...allCursors, nextCursor]);
+                }}
+              >
+                Далее
+              </button>
+            </nav>
+          )}
+        </div>
+      ) : null}
+      {kind !== 'findings' ? null : <div className={styles.results}>
         <p className={styles.scope} data-journal-scope={projectUid === null ? 'all' : 'project'}>
           <span className={styles.scopeKey}>Охват</span>
           <strong className={styles.scopeValue}>

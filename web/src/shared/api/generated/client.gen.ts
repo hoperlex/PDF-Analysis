@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.31.0 (OpenAPI 3.1.0)
- *   sha256 07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c
+ *   AuditManager PC-01 API 1.32.0 (OpenAPI 3.1.0)
+ *   sha256 b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -328,6 +328,8 @@ import type {
   ListExecutorRoutesResult,
   ListExecutorRoutingRulesInput,
   ListExecutorRoutingRulesResult,
+  ListKnowledgeBaseEntriesInput,
+  ListKnowledgeBaseEntriesResult,
   ListNormDocumentsInput,
   ListNormDocumentsResult,
   ListNormParagraphsInput,
@@ -2470,6 +2472,18 @@ export function listExecutorRoutingRules(
 }
 
 /**
+ * List Knowledge Base Entries
+ *
+ * `GET /knowledge-base/entries`.
+ */
+export function listKnowledgeBaseEntries(
+  input: ListKnowledgeBaseEntriesInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListKnowledgeBaseEntriesResult>> {
+  return request<ListKnowledgeBaseEntriesResult>(OPERATIONS.listKnowledgeBaseEntries, input, options);
+}
+
+/**
  * List Norm Documents
  *
  * `GET /norm-documents`.
@@ -4297,6 +4311,7 @@ export const apiClient = {
   listExecutorGroups,
   listExecutorRoutes,
   listExecutorRoutingRules,
+  listKnowledgeBaseEntries,
   listNormDocuments,
   listNormParagraphs,
   listNormSnapshotEvents,

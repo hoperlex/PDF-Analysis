@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.31.0 (OpenAPI 3.1.0)
- *   sha256 07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c
+ *   AuditManager PC-01 API 1.32.0 (OpenAPI 3.1.0)
+ *   sha256 b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.31.0';
+export const CONTRACT_VERSION = '1.32.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c';
+export const CONTRACT_DIGEST = 'b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -404,6 +404,8 @@ export const SCHEMA_NAMES = [
   'IssuedExecutorEnrollment',
   'IssuedRunnerToken',
   'JobId',
+  'KnowledgeBaseEntry',
+  'KnowledgeBaseEntryPage',
   'MarkReleaseNotesReadRequest',
   'ModelCallId',
   'NormBuildState',
@@ -3939,7 +3941,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.31.0";
+  contract_version: "1.32.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4964,6 +4966,28 @@ export type JobId = string;
 
 /** The contract pattern for `JobId`. Anchored; use with `new RegExp()`. */
 export const JOB_ID_PATTERN = "^job_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * `R-151h`, `D-317`: one row of the knowledge base's «Все».
+ *
+ * A decision on a finding (``kind: finding``, the ``DecisionRecord`` in ``finding``) or on an optimisation proposal
+ * (``kind: proposal``, the ``ProposalDecisionRecord`` in ``proposal``); exactly the one its kind names is present. The
+ * two keep their own identities -- a row is named by its kind and that record's id, never by a number of its own.
+ * ``occurred_at`` is the record's own time (``recorded_at`` or ``decided_at``), by which the merged journal is ordered.
+ */
+export type KnowledgeBaseEntry = {
+  finding?: DecisionRecord;
+  kind: "finding" | "proposal";
+  occurred_at: string;
+  proposal?: ProposalDecisionRecord;
+};
+
+/** `R-151h`, `D-317`: one page of both journals merged, newest first, and how many entries match in both. */
+export type KnowledgeBaseEntryPage = {
+  items: Array<KnowledgeBaseEntry>;
+  page: PageInfo;
+  total: number;
+};
 
 /** The known release version through which this account has read. Unknown or future versions are refused. */
 export type MarkReleaseNotesReadRequest = {

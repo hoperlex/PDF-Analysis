@@ -19,7 +19,7 @@ export {
 export { decisionCacheKeys } from './model/cache';
 
 export type { DecisionJournalQuery } from './api/use-decision-journal';
-export { JOURNAL_PAGE_LIMIT, useDecisionJournal, useProposalDecisionJournal } from './api/use-decision-journal';
+export { JOURNAL_PAGE_LIMIT, useDecisionJournal, useKnowledgeBaseJournal, useProposalDecisionJournal } from './api/use-decision-journal';
 
 /** The Russian label for a verdict, so no consumer renders the contract value as prose. */
 export { VERDICT_LABELS } from './ui/verdict-badge';

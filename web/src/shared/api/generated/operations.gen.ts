@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.31.0 (OpenAPI 3.1.0)
- *   sha256 07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c
+ *   AuditManager PC-01 API 1.32.0 (OpenAPI 3.1.0)
+ *   sha256 b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -171,6 +171,7 @@ import type {
   IssuedExecutorEnrollment,
   IssuedRunnerToken,
   JobId,
+  KnowledgeBaseEntryPage,
   MarkReleaseNotesReadRequest,
   NormCatalogueEntryPage,
   NormCurrentSnapshot,
@@ -488,6 +489,7 @@ export const OPERATION_IDS = [
   'listExecutorGroups',
   'listExecutorRoutes',
   'listExecutorRoutingRules',
+  'listKnowledgeBaseEntries',
   'listNormDocuments',
   'listNormParagraphs',
   'listNormSnapshotEvents',
@@ -4534,6 +4536,27 @@ export type ListExecutorRoutingRulesInput = {
 
 /** Success body of `listExecutorRoutingRules` (`application/json`, HTTP 200). */
 export type ListExecutorRoutingRulesResult = ExecutorRoutingRuleList;
+
+// ------------------------------------------------------------------------------------
+// listKnowledgeBaseEntries - GET /knowledge-base/entries
+// ------------------------------------------------------------------------------------
+
+/** List Knowledge Base Entries */
+export type ListKnowledgeBaseEntriesInput = {
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+    project_uid?: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listKnowledgeBaseEntries` (`application/json`, HTTP 200). */
+export type ListKnowledgeBaseEntriesResult = KnowledgeBaseEntryPage;
 
 // ------------------------------------------------------------------------------------
 // listNormDocuments - GET /norm-documents
@@ -10401,6 +10424,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['execution'],
+  },
+  listKnowledgeBaseEntries: {
+    operationId: 'listKnowledgeBaseEntries',
+    method: 'GET',
+    path: '/knowledge-base/entries',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'project_uid'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['decisions'],
   },
   listNormDocuments: {
     operationId: 'listNormDocuments',

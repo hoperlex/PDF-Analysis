@@ -120,6 +120,8 @@ REQUIRED_OPERATIONS = {
     "setFindingExecutionStatus",
     # `UI-PARITY-P0J`, `R-151h`. The knowledge base's proposal half.
     "listProposalDecisionJournal",
+    # `UI-PARITY-KB-ALL`, `R-151h`, `D-317`. The knowledge base's «Все», both journals merged.
+    "listKnowledgeBaseEntries",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
     # `UI-PARITY-P0N`. One project as the listing gives it.

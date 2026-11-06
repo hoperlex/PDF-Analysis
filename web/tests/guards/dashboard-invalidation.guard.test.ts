@@ -176,6 +176,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/set-execution-status/model/use-set-execution-status.ts': false,
   // `R-151d`: every imported row is a decision event, so the dashboard's verdict counts move.
   'src/features/import-decisions/model/use-import-decisions.ts': true,
+  // `UI-PARITY-P0P`: «График работ»'s plans, calendar, absences, settings and planned dates; nothing the dashboard counts.
+  'src/features/edit-work-schedule/model/use-schedule-commands.ts': false,
   // Cost preflights are POST reads. They create no Run/job or dashboard spend.
   'src/features/start-run/model/use-run-cost-approval.ts': false,
   // `AR-V3-BETA-PACK-STATUS-WEB-01`: an accepted start queues six runs at once, so

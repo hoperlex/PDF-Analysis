@@ -30,7 +30,7 @@
 
 import Link from 'next/link';
 
-import type { DecisionRecord, DecisionEventType } from '@/shared/api';
+import type { DecisionRecord, DecisionEventType, KnowledgeBaseEntry, ProposalDecisionRecord } from '@/shared/api';
 import {
   DECISION_EVENT_TYPE_VALUES,
   FINDING_CATEGORY_VALUES,
@@ -38,8 +38,9 @@ import {
 } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { formatInstant } from '@/shared/lib';
+import { formatInstant, routes } from '@/shared/lib';
 import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
+import { DECISION_STATE_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
@@ -58,6 +59,12 @@ export interface KnowledgeBaseNarrowing {
 
 export interface KnowledgeBaseProps {
   readonly records: readonly DecisionRecord[];
+  /**
+   * `D-317`: «Все» -- both journals merged, newest first. When present it is the list, and `records` is not read:
+   * a decision on a finding is drawn as in «Замечания» with «Замечание» before its category, a decision on an
+   * optimisation proposal in the same row form with «Предложение».
+   */
+  readonly entries?: readonly KnowledgeBaseEntry[] | undefined;
   readonly isLoading?: boolean | undefined;
   readonly error?: ErrorStateProps | null | undefined;
   /** Present while the list is narrowed by a category, a verdict or a project; absent for the whole journal. */
@@ -106,9 +113,122 @@ function hasInvalidVocabulary(record: DecisionRecord): boolean {
   );
 }
 
-export function KnowledgeBase({ records, isLoading, error, narrowing }: KnowledgeBaseProps) {
+/** One decision on a finding, as «Замечания» lists it; in «Все» its category follows «Замечание». */
+function FindingRecordItem({ record, kindLabel = false }: { readonly record: DecisionRecord; readonly kindLabel?: boolean }) {
+  return (
+    <li
+      className="am-kb__record"
+      data-decision-id={record.decision_id}
+      data-finding-uid={record.finding_uid}
+      data-category={record.category}
+      data-event-type={record.event_type}
+      data-current-verdict={record.current_verdict}
+      data-verdict={record.verdict ?? 'none'}
+    >
+      <p className="am-kb__heading">
+        <span className="am-kb__category">
+          {kindLabel ? 'Замечание · ' : null}
+          {CATEGORY_LABELS[record.category]}
+        </span>
+        <span className="am-kb__verdict" data-verdict={record.current_verdict}>
+          {VERDICT_LABELS[record.current_verdict]}
+        </span>
+        {/*
+         * `WEB-REVIEW-FOLLOWUPS-01`: the severity the expert decided with THIS event
+         * (the row is an event), beside the verdict. A row that carries none -- a
+         * comment, a reject, a legacy accept -- renders nothing here.
+         */}
+        {record.severity === undefined ? null : (
+          <span data-decided-severity={record.severity}>
+            {'важность '}
+            <SeverityBadge severity={record.severity} title="Важность, решённая экспертом" />
+          </span>
+        )}
+        <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
+      </p>
+      <p className="am-kb__meta" data-record-place="true">
+        {placeOf(record)}
+      </p>
+      <p className="am-kb__text">{record.finding_text}</p>
+      {record.comment !== null && record.comment !== undefined ? (
+        <p className="am-kb__comment">{record.comment}</p>
+      ) : null}
+      <p className="am-kb__meta">
+        <span className="am-kb__author">{record.author_label}</span>
+        <time dateTime={record.recorded_at}>{formatInstant(record.recorded_at)}</time>
+        {/*
+         * The count, said in words rather than shown as a bare number: a record
+         * whose finding carries more than one event is the case a knowledge base
+         * exists to surface, and a lone digit beside a timestamp reads as an
+         * ordinal.
+         */}
+        <span className="am-kb__events" data-event-count={record.decision_event_count}>
+          {record.decision_event_count === 1
+            ? 'одно решение по находке'
+            : `решений по находке: ${record.decision_event_count}`}
+        </span>
+        {/*
+         * The way back to the finding. `ADR-0010`: the link is built from
+         * `project_uid` and `run_id`, both identities the record carries, and never
+         * from a display number or a path the server did not send.
+         */}
+        <Link
+          className="am-kb__link"
+          href={`/projects/${record.project_uid}/runs/${record.run_id}/review`}
+        >
+          Открыть прогон
+        </Link>
+      </p>
+    </li>
+  );
+}
+
+/**
+ * `D-317`: one decision on an optimisation proposal in «Все», in the row form of a finding's: the verdict, where it
+ * was taken, the specification row and the proposed vendor, the comment, who and when, and the way to the document's
+ * optimisation.
+ */
+function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecord }) {
+  // The section by its title, as a finding's place names it; a code this build does not know is left as sent.
+  const section = record.section === undefined ? null : findProjectSection(record.section);
+  const place = [
+    record.project_name,
+    record.document_name,
+    ...(record.section === undefined ? [] : [section === null ? record.section : projectSectionTitle(section)]),
+  ];
+  return (
+    <li className="am-kb__record" data-proposal-decision-id={record.proposal_decision_id} data-proposal-verdict={record.verdict}>
+      <p className="am-kb__heading">
+        <span className="am-kb__category">Предложение</span>
+        <span className="am-kb__verdict" data-verdict={record.verdict}>
+          {DECISION_STATE_LABELS[record.verdict]}
+        </span>
+      </p>
+      <p className="am-kb__meta" data-record-place="true">
+        {place.join(' · ')}
+      </p>
+      <p className="am-kb__text">
+        {record.row_text} · поставщик {record.proposed_vendor} · ед. {record.unit}
+      </p>
+      {record.comment === null ? null : <p className="am-kb__comment">{record.comment}</p>}
+      <p className="am-kb__meta">
+        <span className="am-kb__author">{record.actor_label}</span>
+        <time dateTime={record.decided_at}>{formatInstant(record.decided_at)}</time>
+        <Link className="am-kb__link" href={routes.documentOptimisation(record.project_uid, record.document_uid)}>
+          Открыть оптимизацию
+        </Link>
+      </p>
+    </li>
+  );
+}
+
+export function KnowledgeBase({ records: findingRecords, entries, isLoading, error, narrowing }: KnowledgeBaseProps) {
   if (isLoading === true) return <LoadingState what="базу знаний" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
+  // In «Все» the findings' vocabulary is checked on the finding entries, as in «Замечания».
+  const records = entries === undefined
+    ? findingRecords
+    : entries.flatMap((entry) => (entry.kind === 'finding' && entry.finding !== undefined ? [entry.finding] : []));
 
   if (records.some(hasInvalidVocabulary)) {
     return (
@@ -117,6 +237,23 @@ export function KnowledgeBase({ records, isLoading, error, narrowing }: Knowledg
           title="Запись решения содержит неизвестное значение."
           detail="Категорию, событие или вердикт нельзя показать достоверно — частичная запись скрыта."
         />
+      </section>
+    );
+  }
+
+  // «Все» is empty only when neither journal has an entry: a page of proposals alone is a page, not «нет решений».
+  if (entries !== undefined && entries.length > 0) {
+    return (
+      <section className="am-kb" data-record-count={entries.length} data-knowledge-base-kind="all">
+        <ol className="am-kb__records">
+          {entries.map((entry) =>
+            entry.kind === 'finding' && entry.finding !== undefined ? (
+              <FindingRecordItem key={`finding:${entry.finding.decision_id}`} record={entry.finding} kindLabel />
+            ) : entry.kind === 'proposal' && entry.proposal !== undefined ? (
+              <ProposalRecordItem key={`proposal:${entry.proposal.proposal_decision_id}`} record={entry.proposal} />
+            ) : null,
+          )}
+        </ol>
       </section>
     );
   }
@@ -174,68 +311,7 @@ export function KnowledgeBase({ records, isLoading, error, narrowing }: Knowledg
     <section className="am-kb" data-record-count={records.length}>
       <ol className="am-kb__records">
         {records.map((record) => (
-          <li
-            key={record.decision_id}
-            className="am-kb__record"
-            data-decision-id={record.decision_id}
-            data-finding-uid={record.finding_uid}
-            data-category={record.category}
-            data-event-type={record.event_type}
-            data-current-verdict={record.current_verdict}
-            data-verdict={record.verdict ?? 'none'}
-          >
-            <p className="am-kb__heading">
-              <span className="am-kb__category">{CATEGORY_LABELS[record.category]}</span>
-              <span className="am-kb__verdict" data-verdict={record.current_verdict}>
-                {VERDICT_LABELS[record.current_verdict]}
-              </span>
-              {/*
-               * `WEB-REVIEW-FOLLOWUPS-01`: the severity the expert decided with THIS event
-               * (the row is an event), beside the verdict. A row that carries none -- a
-               * comment, a reject, a legacy accept -- renders nothing here.
-               */}
-              {record.severity === undefined ? null : (
-                <span data-decided-severity={record.severity}>
-                  {'важность '}
-                  <SeverityBadge severity={record.severity} title="Важность, решённая экспертом" />
-                </span>
-              )}
-              <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
-            </p>
-            <p className="am-kb__meta" data-record-place="true">
-              {placeOf(record)}
-            </p>
-            <p className="am-kb__text">{record.finding_text}</p>
-            {record.comment !== null && record.comment !== undefined ? (
-              <p className="am-kb__comment">{record.comment}</p>
-            ) : null}
-            <p className="am-kb__meta">
-              <span className="am-kb__author">{record.author_label}</span>
-              <time dateTime={record.recorded_at}>{formatInstant(record.recorded_at)}</time>
-              {/*
-               * The count, said in words rather than shown as a bare number: a record
-               * whose finding carries more than one event is the case a knowledge base
-               * exists to surface, and a lone digit beside a timestamp reads as an
-               * ordinal.
-               */}
-              <span className="am-kb__events" data-event-count={record.decision_event_count}>
-                {record.decision_event_count === 1
-                  ? 'одно решение по находке'
-                  : `решений по находке: ${record.decision_event_count}`}
-              </span>
-              {/*
-               * The way back to the finding. `ADR-0010`: the link is built from
-               * `project_uid` and `run_id`, both identities the record carries, and never
-               * from a display number or a path the server did not send.
-               */}
-              <Link
-                className="am-kb__link"
-                href={`/projects/${record.project_uid}/runs/${record.run_id}/review`}
-              >
-                Открыть прогон
-              </Link>
-            </p>
-          </li>
+          <FindingRecordItem key={record.decision_id} record={record} />
         ))}
       </ol>
     </section>

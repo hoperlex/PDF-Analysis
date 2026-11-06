@@ -292,7 +292,7 @@ describe('an appended decision invalidates every entry the seam names', () => {
   it('invalidates the history, the detail, the run finding list, the journal and the dashboard', () => {
     const keys = decisionCacheKeys(FINDING_UID, RUN_ID).map((key) => JSON.stringify(key));
 
-    expect(keys).toHaveLength(5);
+    expect(keys).toHaveLength(6);
     expect(keys).toContain(JSON.stringify(['findings', 'decisions', FINDING_UID]));
     expect(keys).toContain(JSON.stringify(['findings', 'detail', FINDING_UID]));
     // The third is the one that gets forgotten: the verdict projection is in the list row
@@ -303,6 +303,8 @@ describe('an appended decision invalidates every entry the seam names', () => {
     // then opens the knowledge base without seeing their own decision has no way to tell
     // a stale cache from a lost write.
     expect(keys).toContain(JSON.stringify(['findings', 'journal', {}]));
+    // `D-317`: «Все» carries the same decisions merged with the proposal journal, so it moves with the journal.
+    expect(keys).toContain(JSON.stringify(['findings', 'knowledge-base', {}]));
     // The fifth, `W46-WIRE`: a decision changes `findings_by_verdict` on the dashboard's
     // one read, so the summary is invalidated alongside the journal it is summarising.
     expect(keys).toContain(JSON.stringify(['dashboard', 'summary']));

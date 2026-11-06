@@ -45,6 +45,8 @@ export function decisionCacheKeys(
      * filtered page of the journal rather than only the unfiltered one.
      */
     queryKeys.findings.journal(),
+    // `D-317`: «Все» carries the same decisions, merged with the proposal journal.
+    queryKeys.findings.knowledgeBase(),
     // The dashboard's one read. See this function's own header.
     queryKeys.dashboard.summary(),
   ];

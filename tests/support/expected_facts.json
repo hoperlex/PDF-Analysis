@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 266,
+    "path_count": 267,
     "operations": [
       [
         "DELETE",
@@ -267,6 +267,11 @@
         "GET",
         "/findings/{finding_uid}/decisions",
         "listDecisionHistory"
+      ],
+      [
+        "GET",
+        "/knowledge-base/entries",
+        "listKnowledgeBaseEntries"
       ],
       [
         "GET",
@@ -1858,6 +1863,8 @@
       "IssuedExecutorEnrollment",
       "IssuedRunnerToken",
       "JobId",
+      "KnowledgeBaseEntry",
+      "KnowledgeBaseEntryPage",
       "MarkReleaseNotesReadRequest",
       "ModelCallId",
       "NormBuildState",
@@ -2191,5 +2198,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0055_work_schedule",
-  "contract_version": "1.31.0"
+  "contract_version": "1.32.0"
 }

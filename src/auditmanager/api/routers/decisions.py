@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Path
@@ -211,6 +212,55 @@ def build_decision_routes(
         body = page_body([row.model_dump(mode="json", exclude_none=True) for row in page.items], page.next_cursor)
         body["total"] = len(rows)
         return json_response(200, encode_json(body))
+
+    @router.get(
+        "/knowledge-base/entries",
+        operation_id="listKnowledgeBaseEntries",
+        tags=["decisions"],
+        status_code=200,
+        response_model=models.KnowledgeBaseEntryPage,
+        responses={
+            **success(
+                200,
+                "One page of the decisions on findings and on optimisation proposals together, newest first, and the "
+                "number that match.",
+            ),
+            # No 404, for the reason `listDecisions` gives: `project_uid` is a filter, not a parent.
+            **envelope_responses(401, 403, 422, 500, 503),
+        },
+    )
+    def list_knowledge_base_entries(
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+        project_uid: ProjectUidFilterParam = None,  # type: ignore[assignment]
+    ) -> WireResponse:
+        # `R-151h`, `D-317`: «Все» -- the two journals the «Тип» switch shows apart, as one list. Each keeps its own
+        # identity; the merged order is the record's own time, then the kind, then that record's id, newest first, and
+        # the cursor carries that triple. `total` is both journals' matching entries under the same filter.
+        # Sorted by the instant itself: the rendered string drops a zero fraction, so two renderings do not compare as
+        # their instants do. The cursor carries the rendered triple, which `paginate` locates and never compares.
+        entries: list[tuple[tuple[datetime, str, str], tuple[str, str, str], dict[str, object]]] = []
+        for view in decisions.decision_journal(category=None, verdict=None, project_uid=project_uid):
+            at = timestamp(view.recorded_at)
+            entries.append(((_aware(view.recorded_at), "finding", view.decision_id), (at, "finding", view.decision_id), {
+                "kind": "finding", "occurred_at": at, "finding": decision_record_body(view),
+            }))
+        for row in decisions.proposal_decision_journal(project_uid=project_uid):
+            at = timestamp(row.decided_at)
+            entries.append(((_aware(row.decided_at), "proposal", row.proposal_decision_id),
+                            (at, "proposal", row.proposal_decision_id), {
+                "kind": "proposal", "occurred_at": at, "proposal": row.model_dump(mode="json", exclude_none=True),
+            }))
+        entries.sort(key=lambda entry: entry[0], reverse=True)
+        page = paginate(entries, limit=limit, cursor=cursor, sort_key=lambda entry: entry[1])
+        body = page_body([entry[2] for entry in page.items], page.next_cursor)
+        body["total"] = len(entries)
+        return json_response(200, encode_json(body))
+
+def _aware(value: datetime) -> datetime:
+    """The instant, read as UTC when a driver handed it back without its zone (``timestamp``'s rule)."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
 
 def _decision_sort_key(view: object) -> tuple[str, ...]:
     """``(recorded_at, decision_id)`` -- the declared client-visible total order.

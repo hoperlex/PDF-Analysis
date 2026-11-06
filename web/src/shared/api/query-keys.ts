@@ -491,6 +491,9 @@ export const queryKeys = {
     /** `R-151h`: one page of the proposal decision journal (`listProposalDecisionJournal`), by its filters. */
     proposalJournal: (filters: { readonly project_uid?: string; readonly cursor?: string; readonly limit?: number } = {}) =>
       ['findings', 'proposal-journal', filters] as const,
+    /** `D-317`: one page of the knowledge base's «Все» (`listKnowledgeBaseEntries`), both journals merged, by its filters. */
+    knowledgeBase: (filters: { readonly project_uid?: string; readonly cursor?: string; readonly limit?: number } = {}) =>
+      ['findings', 'knowledge-base', filters] as const,
   },
   /**
    * `getDashboardSummary`. `W46-WIRE`.

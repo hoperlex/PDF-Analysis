@@ -22,7 +22,7 @@
     "dispatch_named_commit": "e8a2c6daa70953426fe62adb11c73a25190a67c5",
     "commit_note": "Resealed by UI-PARITY-P0P: contract 1.31.0 («График работ»: seven operations of tag schedule, sixteen schemas).",
     "openapi_version": "3.1.0",
-    "info_version": "1.31.0",
+    "info_version": "1.32.0",
     "paths": 266,
     "operations": 294,
     "component_schemas": 709,

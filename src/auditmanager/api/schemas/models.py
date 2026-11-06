@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.31.0"]
+    contract_version: Literal["1.32.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2573,6 +2573,29 @@ class ProposalDecisionRecordPage(_Object):
     """`R-151h`: one page of the proposal decision journal, newest first, and how many entries match."""
 
     items: list[ProposalDecisionRecord]
+    page: PageInfo
+    total: Annotated[int, Field(ge=0)]
+
+
+class KnowledgeBaseEntry(_Object):
+    """`R-151h`, `D-317`: one row of the knowledge base's «Все».
+
+    A decision on a finding (``kind: finding``, the ``DecisionRecord`` in ``finding``) or on an optimisation proposal
+    (``kind: proposal``, the ``ProposalDecisionRecord`` in ``proposal``); exactly the one its kind names is present. The
+    two keep their own identities -- a row is named by its kind and that record's id, never by a number of its own.
+    ``occurred_at`` is the record's own time (``recorded_at`` or ``decided_at``), by which the merged journal is ordered.
+    """
+
+    kind: Literal["finding", "proposal"]
+    occurred_at: datetime
+    finding: DecisionRecord = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    proposal: ProposalDecisionRecord = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class KnowledgeBaseEntryPage(_Object):
+    """`R-151h`, `D-317`: one page of both journals merged, newest first, and how many entries match in both."""
+
+    items: list[KnowledgeBaseEntry]
     page: PageInfo
     total: Annotated[int, Field(ge=0)]
 

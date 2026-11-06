@@ -548,6 +548,7 @@ GUARDED = (
     ("listDocumentTags", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/document-tags"),
     ("setFindingExecutionStatus", "PUT", "/findings/fnd_01M2545JSD15ETSNNV904X991K/execution-status"),
     ("listProposalDecisionJournal", "GET", "/proposal-decisions"),
+    ("listKnowledgeBaseEntries", "GET", "/knowledge-base/entries"),
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),

@@ -24,8 +24,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DecisionRecordPage, FindingCategory, ProjectUid, ProposalDecisionRecordPage, Verdict } from '@/shared/api';
-import { listDecisions, listProposalDecisionJournal, queryKeys } from '@/shared/api';
+import type { DecisionRecordPage, FindingCategory, KnowledgeBaseEntryPage, ProjectUid, ProposalDecisionRecordPage, Verdict } from '@/shared/api';
+import { listDecisions, listKnowledgeBaseEntries, listProposalDecisionJournal, queryKeys } from '@/shared/api';
 
 /** Page size. Inside the contract's 1..200 bound and equal to the contract default. */
 export const JOURNAL_PAGE_LIMIT = 50;
@@ -67,6 +67,23 @@ export function useProposalDecisionJournal({ project_uid, cursor }: { readonly p
   return useQuery<ProposalDecisionRecordPage>({
     queryKey: queryKeys.findings.proposalJournal(filters),
     queryFn: async () => (await listProposalDecisionJournal({ query: filters })).data,
+    enabled,
+  });
+}
+
+/**
+ * `D-317`: the knowledge base's «Все» -- the decisions on findings and on optimisation proposals as one journal, newest
+ * first, one page, optionally of one project. Each entry names its kind and carries that journal's own record.
+ */
+export function useKnowledgeBaseJournal({ project_uid, cursor }: { readonly project_uid?: ProjectUid | undefined; readonly cursor?: string | undefined } = {}, enabled = true) {
+  const filters = {
+    ...(project_uid === undefined ? {} : { project_uid }),
+    ...(cursor === undefined ? {} : { cursor }),
+    limit: JOURNAL_PAGE_LIMIT,
+  };
+  return useQuery<KnowledgeBaseEntryPage>({
+    queryKey: queryKeys.findings.knowledgeBase(filters),
+    queryFn: async () => (await listKnowledgeBaseEntries({ query: filters })).data,
     enabled,
   });
 }

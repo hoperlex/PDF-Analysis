@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-294 operations, sealed. `A5` generates the typed client from this document; `B6`
+295 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,10 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-KB-ALL` (contract `1.32.0`, no migration) adds `listKnowledgeBaseEntries` (`R-151h`, `D-317`): the knowledge
+base's «Все», both decision journals merged at the edge, newest first, each row naming its kind and carrying that
+journal's own record, so neither identity is replaced; a product read.
+
 `UI-PARITY-P0P` (contract `1.31.0`, migration `0055_work_schedule`) adds «График работ» (`R-152a`…`R-152h`), the bounded
 context `schedule`: the month read (plan and fact per active expert, fact from the last verdict of a checked document), the
 reserve read over `work_assignment_current`, and five keyed administrator commands. Every table is an append-only journal;
@@ -1114,9 +1118,17 @@ could.
 | `listDocumentTags` | `GET /projects/{project_uid}/document-tags` |
 | `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `listProposalDecisionJournal` | `GET /proposal-decisions` |
+| `listKnowledgeBaseEntries` | `GET /knowledge-base/entries` |
 | `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
 | `getProject` | `GET /projects/{project_uid}` |
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
+| `getWorkSchedule` | `GET /work-schedule` |
+| `getWorkScheduleReserve` | `GET /work-schedule/reserve` |
+| `setWorkScheduleSettings` | `PUT /work-schedule/settings` |
+| `setWorkSchedulePlans` | `PUT /work-schedule/plans` |
+| `setWorkCalendarDays` | `PUT /work-calendar/days` |
+| `setEngineerAbsences` | `PUT /work-schedule/absences` |
+| `scheduleAssignments` | `POST /work-schedule/reserve/moves` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -1398,7 +1410,8 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-  `importRunDecisions`,
+  `importRunDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
+  `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,

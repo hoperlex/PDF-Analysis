@@ -23,11 +23,11 @@ OPS = {
 def test_c4_surface_is_additive_and_authorized() -> None:
     doc = create_documentation_app().openapi()
     frozen = json.loads(Path("contracts/api/v1/openapi.json").read_text())
-    assert doc["info"]["version"] == frozen["info"]["version"] == "1.31.0"
+    assert doc["info"]["version"] == frozen["info"]["version"] == "1.32.0"
     actual = {op["operationId"] for item in doc["paths"].values() for key,op in item.items()
               if key in {"get","post","put","delete","patch"}}
-    assert OPS <= actual and len(actual) == 294
-    assert len(doc["paths"]) == 266
+    assert OPS <= actual and len(actual) == 295
+    assert len(doc["paths"]) == 267
     assert set(doc["components"]["schemas"]) == set(frozen["components"]["schemas"])
     for item in doc["paths"].values():
         for method,op in item.items():
