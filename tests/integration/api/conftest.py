@@ -1070,6 +1070,7 @@ def shipped_router(
         FindingAdapter,
         ProjectAdapter,
         RegistrationAdapter,
+        ScheduleAdapter,
     )
 
     return Surface(build_router(
@@ -1091,6 +1092,9 @@ def shipped_router(
         registrations=RegistrationAdapter(
             session_factory, registrations=RegistrationRepository()
         ),
+        # `UI-PARITY-P0P` (`D-318`): «График работ» declares `month`, `start` and `days`; without the shipped adapter
+        # the router called a method on `None` and answered 500.
+        schedule=ScheduleAdapter(session_factory),
     ))
 
 

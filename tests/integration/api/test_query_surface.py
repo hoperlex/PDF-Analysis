@@ -1146,7 +1146,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # `UI-PARITY-P0J`. Its rows are decisions on optimisation proposals, which this sweep has none of: the journal and
         # its project filter are driven in `tests/integration/optimisation/proposals/test_decisions.py`.
         "listProposalDecisionJournal": "/proposal-decisions",
-        # `UI-PARITY-P0P`. «График работ»: a month and a run of days, not pages. Not driven yet: debt `D-318`.
+        # `UI-PARITY-P0P`. «График работ»: a month and a run of days, not pages; driven by its own test below.
         "getWorkSchedule": "/work-schedule?month=2026-11",
         "getWorkScheduleReserve": "/work-schedule/reserve?start=2026-11-02",
     }
@@ -1597,6 +1597,32 @@ def test_the_dashboard_reads_the_project_filter_it_declares(
     assert unknown.status == 404 and json.loads(unknown.body)["error_code"] == "not_found", unknown.body
     refused = get(shipped_router, "/dashboard?project_uid=not-a-project")
     assert refused.status == 422, refused.body
+
+
+def test_the_work_schedule_reads_the_month_and_the_days_it_declares(shipped_router: Surface) -> None:
+    """`UI-PARITY-P0P` (`D-318`): ``month`` reaches ``getWorkSchedule``, ``start`` and ``days`` reach the reserve.
+
+    The sweep's rule -- supply the parameter and require the answer to change -- on two reads that have no pages: another
+    month is another number of days, another start and length is another run of days; a month outside the calendar and
+    a length past the frozen bound are refused, not answered.
+    """
+    shipped_router.router.credentials.roles = frozenset({"expert", "admin"})
+    november = ok(get(shipped_router, "/work-schedule?month=2026-11"))
+    december = ok(get(shipped_router, "/work-schedule?month=2026-12"))
+    assert (november["month"], len(november["days"])) == ("2026-11", 30), november["month"]
+    assert (december["month"], len(december["days"])) == ("2026-12", 31), december["month"]
+    assert november["days"][0]["day"] == "2026-11-01" and december["days"][0]["day"] == "2026-12-01"
+
+    week = ok(get(shipped_router, "/work-schedule/reserve?start=2026-11-02&days=7"))
+    default = ok(get(shipped_router, "/work-schedule/reserve?start=2026-11-09"))
+    assert (week["start"], [day["day"] for day in week["days"]]) == (
+        "2026-11-02", [f"2026-11-{n:02d}" for n in range(2, 9)],
+    )
+    assert (default["start"], len(default["days"]), default["days"][0]["day"]) == ("2026-11-09", 28, "2026-11-09")
+
+    for refused in ("/work-schedule?month=2026-13", "/work-schedule/reserve?start=2026-11-02&days=93"):
+        answer = get(shipped_router, refused)
+        assert answer.status == 422, (refused, answer.status, answer.body)
 
 
 def _seed_accounts_and_requests(session: Session, router: Surface) -> dict[str, str]:

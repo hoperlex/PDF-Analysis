@@ -352,12 +352,18 @@ from sqlalchemy import Engine, text
 #: ``finding_execution_status``), columns +11 (``audit_run.started_by_user_uid``; ``document.archived_at`` and
 #: ``archived_by_user_uid``; four in each new table), constraints +15 (their keys, references and checks), indexes +4,
 #: triggers the same 241 with a new digest (0051 re-created ``audit_run``'s frozen-column trigger with the starter).
+#: Resealed 2026-11-06 for ``0055_work_schedule`` (`UI-PARITY-P0P`, `D-318`), measured on a throwaway PostgreSQL (the project
+#: image) upgraded to ``0055``, down to ``0054`` and up again: relations +5 (the five journals), columns +27 (5 + 6 + 5 + 6 + 5),
+#: constraints +30 (five primary keys, five event-id format checks, six account references with their six format checks,
+#: the assignment reference, and the plan's month and count, the setting's plan and time zone and the calendar's kind
+#: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
+#: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1560, "fa5dba735bf15a36ea095d44b636cb91667fee21c8d26b1dd9631b7aa12c370b"),
-    "relations": (143, "c06587b66005163398d480341ef15a002f27874e9290e0f8abc7fd234981b4b3"),
-    "constraints": (1915, "00ae84ad83f050ea4adab456288c4ab2e53b0aa32bd8ddc8260738ac2bcae677"),
-    "indexes": (454, "ec0a8481f4d1bc9b03b8e6e0515ca7914f37bf4a26bbd302ac54f807818e52df"),
-    "triggers": (241, "a740eb0f42fa677f3a47760d754119746ab7af71d15d686347bb93ee0dc7c483"),
+    "columns": (1587, "90d4879ffe720164570454cc276ad68c0445acd63be44019cd1f6e594b48235f"),
+    "relations": (148, "2bef8303c7c1cc9481b938e72e8c241fd9b3e391f55d8c3a4fdde713d60e3384"),
+    "constraints": (1945, "e243bf0b93a2d5ebf0b5d20e4c12ea7c41d429d8dd79eb2b34c2aaacd11e6bdf"),
+    "indexes": (463, "be0cefd13614ed68b79f3ffb75a69cc038deb7ca7345520fab93ee546acf600f"),
+    "triggers": (246, "d74c3af6c99e6d5fc8f5d06e6ec2f38918b5f8ea6fb5686d5533e5bb6cc1fc36"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

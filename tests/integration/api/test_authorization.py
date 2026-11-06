@@ -1234,6 +1234,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # when ``cost_consent`` is present); who may start a Run is the role register's, and the consent is bound to the digest
         # the start re-computes. Nothing else in the module reads the subject.
         "runs.py",
+        # `UI-PARITY-P0P`: «График работ» answers an administrator with every expert and an expert with their own row, and
+        # its commands record WHO set a plan, a day, an absence, the settings or a planned date; whether they may is the role
+        # register's and the schedule context's own re-read of the role set.
+        "schedule.py",
         # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
         # same reason as the priced specification below: the read re-reads the role set in its
         # own transaction; whether they may is the role register's (any one role).

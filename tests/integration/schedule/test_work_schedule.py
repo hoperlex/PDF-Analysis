@@ -54,7 +54,15 @@ def test_a_month_reads_the_default_plan_the_week_and_every_active_expert(session
     off = {day.day for day in month.days if day.day_off}
     assert date(2026, 11, 1) in off and date(2026, 11, 7) in off and date(2026, 11, 2) not in off
     uids = {engineer.user_uid for engineer in month.engineers}
-    assert uids == {cast.expert, cast.other_expert, cast.admin_expert}
+    # Every active account holding `expert` -- the cast's three and the account the migrations seed with both roles --
+    # and nobody else: not the administrator without `expert`, not the account with no role.
+    active_experts = set(session.execute(text(
+        "SELECT u.user_uid FROM app_user u JOIN app_user_role r ON r.user_uid = u.user_uid AND r.role = 'expert' "
+        "WHERE u.archived_at IS NULL"
+    )).scalars())
+    assert {cast.expert, cast.other_expert, cast.admin_expert} <= uids
+    assert uids == active_experts
+    assert cast.admin not in uids and cast.nobody not in uids
     assert all(engineer.plan == 20 and engineer.plan_is_default and engineer.fact == 0 for engineer in month.engineers)
 
     own = read_schedule_month(session, month=NOVEMBER, viewer_uid=cast.expert, viewer_roles=_roles(session, cast.expert))
