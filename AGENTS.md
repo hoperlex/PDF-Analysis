@@ -86,6 +86,28 @@ By default the working candidate is published to `origin/dev` after focused chec
 release integrator can promote it to `origin/main` under the delegated release assignment;
 an implementation lane, a wave close or a green check alone is not release authority.
 
+### 6.1 A user-visible change carries its version note
+
+Owner rule of 2026-11-06. A publication to `origin/dev` that changes what a user sees carries
+its release note in the same push; the note is never left for the move to `main`.
+
+- A new capability opens a new minor version: `release-notes/<x.y+1.0>.json`, with `VERSION`
+  moved in the same commit.
+- A minor fix or improvement a user can see either adds items to the note of the current
+  version (as a higher `revision` once that note has reached `main`) or opens a patch version
+  `x.y.z+1`.
+- The form rules choose between the two: a version holds at most seven items, and every
+  higher version needs a strictly later date, so a second change on the day of the current
+  version joins that version.
+- Moving `VERSION` moves its pins in the same commit: the revision map and the version order
+  in `tests/contract/release_notes/test_release_notes_form.py`, the version set in
+  `tests/integration/releases/test_release_loader.py` and the «Product `VERSION` is» line of
+  `docs/program/CURRENT_STATE.md`. The current note's `screen` and `where` must match
+  `web/src/shared/config/screen-registry.ts`.
+- Writing or revising a note is not a code change and needs no test run. A change nothing
+  user-visible depends on (internal code, tests, documentation) needs no note. Format and
+  review rules: `docs/program/RELEASE_PROCESS.md`.
+
 ## 7. Sessions and handoffs
 
 Continue a task in the same session while its context is reliable. A plan, review or test
