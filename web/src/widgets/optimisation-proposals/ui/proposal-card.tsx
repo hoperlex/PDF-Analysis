@@ -14,6 +14,7 @@ import type { ReactNode } from 'react';
 
 import type { OptimisationProposal, ProposalDecision, ProposalPosition } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
+import { pdfPageUrl } from '@/features/open-evidence';
 import {
   ANALOG_BASIS_LABELS,
   DECISION_STATE_LABELS,
@@ -101,9 +102,21 @@ export interface ProposalCardProps {
   readonly controls: ReactNode;
   /** The history disclosure. */
   readonly history: ReactNode;
+  /**
+   * `UI-B-09`: the object URL of the pass's version PDF once it is fetched. Absent or `null`, the card offers no
+   * link; the list above says why (loading, or the refusal).
+   */
+  readonly documentUrl?: string | null | undefined;
 }
 
-export function ProposalCard({ proposal, controls, history }: ProposalCardProps) {
+/** The page a proposal names, when it names one a PDF reader can be pointed at. */
+export function namedPage(proposal: OptimisationProposal): number | null {
+  return Number.isInteger(proposal.page_number) && proposal.page_number >= 1 ? proposal.page_number : null;
+}
+
+export function ProposalCard({ proposal, controls, history, documentUrl }: ProposalCardProps) {
+  const page = namedPage(proposal);
+  const sheetUrl = documentUrl === undefined || documentUrl === null || page === null ? null : pdfPageUrl(documentUrl, page);
   const current = formatAmount(proposal.current_unit_price, proposal.currency);
   const proposed = formatAmount(proposal.proposed_unit_price, proposal.currency);
   return (
@@ -116,7 +129,24 @@ export function ProposalCard({ proposal, controls, history }: ProposalCardProps)
         <h4 className={styles.cardTitle}>Предложение {proposal.ordinal}</h4>
         <span className={styles.state}>{DECISION_STATE_LABELS[proposal.current_verdict]}</span>
       </div>
-      <p className={styles.provenance}>Спецификация: {describeProvenance(proposal)}.</p>
+      <p className={styles.provenance}>
+        Спецификация: {describeProvenance(proposal)}.
+        {sheetUrl === null ? null : (
+          <>
+            {' '}
+            {/* `UI-B-09`: the version's PDF on the proposal's page, in the browser's own reader (the review's «Открыть PDF ↗»). */}
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-open-sheet={page}
+              aria-label={`Открыть лист: PDF версии на странице ${page}, в новой вкладке`}
+            >
+              Открыть лист ↗
+            </a>
+          </>
+        )}
+      </p>
       <blockquote className={styles.quote}>{proposal.row_text}</blockquote>
       <div className={styles.frame}>
         <table className={styles.table}>

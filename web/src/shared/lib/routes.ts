@@ -70,6 +70,12 @@ export const routes = {
   /** One project: its documents, and the upload that adds one. */
   project: (projectUid: string): string => `/projects/${projectUid}`,
 
+  /**
+   * The project's «Оптимизация» tab (`UI-B-02`): its price list, «Спецификация и цены» and vendor lists, and the
+   * summary that links each document's own optimisation tab. The tab is in the address, so a link opens it.
+   */
+  projectOptimisation: (projectUid: string): string => `/projects/${projectUid}?tab=optimisation`,
+
   /** One section of one project: the documents confirmed for it, as cards (`R-151l`, `R-151s`). */
   projectSection: (projectUid: string, sectionCode: string): string =>
     `/projects/${projectUid}/sections/${sectionCode}`,
@@ -86,9 +92,14 @@ export const routes = {
   document: (projectUid: string, documentUid: string): string =>
     `/projects/${projectUid}/documents/${documentUid}`,
 
-  /** The document's «Оптимизация» tab (`R-151r`): its passes and proposals, the document already chosen. */
-  documentOptimisation: (projectUid: string, documentUid: string): string =>
-    `/projects/${projectUid}/documents/${documentUid}?tab=optimisation`,
+  /**
+   * The document's «Оптимизация» tab (`R-151r`): its passes and proposals, the document already chosen. With a pass
+   * (`UI-B-02`, `?pass=`) the tab opens on that pass, so a decision in the knowledge base and a row of the section
+   * optimisation reach the proposal's own pass; an unknown pass is said on the tab, never silently replaced.
+   */
+  documentOptimisation: (projectUid: string, documentUid: string, passId?: string): string =>
+    `/projects/${projectUid}/documents/${documentUid}?tab=optimisation` +
+    (passId === undefined ? '' : `&pass=${encodeURIComponent(passId)}`),
 
   /** One published version: its manifest, its runs, and the control that starts one. */
   version: (projectUid: string, versionUid: string): string =>

@@ -59,10 +59,24 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
   const pathname = usePathname() ?? routes.document(projectUid, documentUid);
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const tab = documentTabOf(searchParams.get('tab'));
+  // `UI-B-02`: the chosen pass is in the address too (`?pass=`), so a link or a reload opens it. Only the
+  // optimisation tab reads it; leaving that tab drops it, because a pass belongs to that tab.
+  const pass = searchParams.get('pass');
+  const writeAddress = (params: URLSearchParams) => {
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   const setTab = (next: DocumentTab) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', next);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    if (next !== 'optimisation') params.delete('pass');
+    writeAddress(params);
+  };
+  const setPass = (next: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', 'optimisation');
+    if (next === null) params.delete('pass');
+    else params.set('pass', next);
+    writeAddress(params);
   };
 
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
@@ -82,7 +96,18 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
     router.push(routes.versionClassification(version.project_uid, version.version_uid));
   };
 
-  return <DocumentScreen projectUid={projectUid as ProjectUid} documentUid={documentUid as DocumentUid} roles={roles} tab={tab} setTab={setTab} goToNewVersion={goToNewVersion} />;
+  return (
+    <DocumentScreen
+      projectUid={projectUid as ProjectUid}
+      documentUid={documentUid as DocumentUid}
+      roles={roles}
+      tab={tab}
+      setTab={setTab}
+      pass={pass}
+      setPass={setPass}
+      goToNewVersion={goToNewVersion}
+    />
+  );
 }
 
 /**
@@ -90,13 +115,16 @@ export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: Docu
  * version's read carries it), with rename and archive for a session that may act, and a note while it is archived.
  */
 function DocumentScreen({
-  projectUid, documentUid, roles, tab, setTab, goToNewVersion,
+  projectUid, documentUid, roles, tab, setTab, pass, setPass, goToNewVersion,
 }: {
   readonly projectUid: ProjectUid;
   readonly documentUid: DocumentUid;
   readonly roles: readonly Role[];
   readonly tab: DocumentTab;
   readonly setTab: (next: DocumentTab) => void;
+  /** `UI-B-02`: the pass the address names, and the write of another one onto it. */
+  readonly pass: string | null;
+  readonly setPass: (next: string | null) => void;
   readonly goToNewVersion: (version: DocumentVersion) => void;
 }) {
   const versions = useVersionList(documentUid);
@@ -143,6 +171,8 @@ function DocumentScreen({
             projectUid={projectUid as ProjectUid}
             documentUid={documentUid as DocumentUid}
             roles={roles}
+            passId={pass}
+            onPassChange={setPass}
           />
         </section>
       ) : (

@@ -38,7 +38,8 @@ export function ProposalDecisions({ records, isLoading, error }: ProposalDecisio
           <p className={styles.text}>{record.row_text}</p>
           <p className={styles.meta}>
             Поставщик: {record.proposed_vendor} · ед. {record.unit} ·{' '}
-            <Link href={routes.documentOptimisation(record.project_uid, record.document_uid)}>
+            {/* `UI-B-02`: the link opens the document's optimisation tab on the pass the decision was made in. */}
+            <Link href={routes.documentOptimisation(record.project_uid, record.document_uid, record.optimisation_pass_id)}>
               {record.project_name} · {record.document_name}
             </Link>
             {record.section === undefined ? null : <> · {record.section}</>}

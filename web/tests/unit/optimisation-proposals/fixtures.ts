@@ -36,6 +36,7 @@ import {
   ProposalListView,
   ProposalSetChooser,
 } from '@/widgets/optimisation-proposals';
+import type { SheetDocument } from '@/widgets/optimisation-proposals';
 
 import { seedError } from '../screens/harness';
 import { OPT_PROJECT_UID, optimisationApiError } from '../optimisation/fixtures';
@@ -263,7 +264,24 @@ export function seedLoadedProposals(client: QueryClient): void {
   client.setQueryData(KEYS.proposals, proposalPage());
 }
 
+/** The older pass's own proposals, so a test can tell which pass the tab opened. */
+export function seedOlderPassProposals(client: QueryClient): void {
+  const older = pass({
+    optimisation_pass_id: OLDER_PASS_ID,
+    started_at: '2026-10-19T09:00:00Z',
+    proposal_count: 1,
+    decision_counts: { pending: 0, accept: 1, reject: 0, revise: 0 },
+  });
+  client.setQueryData(
+    queryKeys.optimisation.proposals(OLDER_PASS_ID, null, 0, PROPOSAL_PAGE_LIMIT),
+    proposalPage({ optimisation_pass: older, items: [proposal({ optimisation_pass_id: OLDER_PASS_ID })], total: 1 }),
+  );
+}
+
 const noop = (): void => undefined;
+
+/** The object URL the fetched PDF of the pass's version would have. */
+export const SHEET_URL = 'blob:http://localhost/0f0e9d8c-7b6a-4948-b726-150413021100';
 
 /** One render of a shape: a name, an element and how to seed the client it renders under. */
 export interface ProposalShape {
@@ -288,6 +306,8 @@ export function proposalShapes(): readonly ProposalShape[] {
     createElement(OptimisationProposals, { projectUid: PROPOSALS_PROJECT_UID, roles: [...roles] });
   const listView = (page: OptimisationProposalPage, canDecide: boolean) => () =>
     createElement(ProposalListView, { page, canDecide, onDecision: noop, onPage: noop });
+  const sheetView = (sheet: SheetDocument) => () =>
+    createElement(ProposalListView, { page: proposalPage(), canDecide: false, onDecision: noop, onPage: noop, sheet });
   const states: readonly ProposalDecisionState[] = ['pending', 'accept', 'reject', 'revise'];
   return [
     { name: 'proposals-loaded', make: section(['expert', 'admin']), seedClient: seedLoadedProposals },
@@ -360,6 +380,19 @@ export function proposalShapes(): readonly ProposalShape[] {
         proposalPage({ decision: 'accept', items: [], total: 0, optimisation_pass: pass() }),
         true,
       ),
+    },
+    // `UI-B-09`: the cards' «Открыть лист» once the version's PDF is fetched, while it is on its way, and refused.
+    {
+      name: 'proposals-sheet-ready',
+      make: sheetView({ url: SHEET_URL, isLoading: false, failure: null, onRetry: noop }),
+    },
+    {
+      name: 'proposals-sheet-loading',
+      make: sheetView({ url: null, isLoading: true, failure: null, onRetry: noop }),
+    },
+    {
+      name: 'proposals-sheet-refused',
+      make: sheetView({ url: null, isLoading: false, failure: failure('PDF версии недоступен.'), onRetry: noop }),
     },
     {
       name: 'proposals-second-page',
