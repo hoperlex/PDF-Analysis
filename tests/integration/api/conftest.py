@@ -494,7 +494,7 @@ class IngestDocumentAdapter:
 
     def list_documents(
         self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
-        tag: str | None = None,
+        tag: str | None = None, audit_state: str | None = None, order: str | None = None,
     ) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
 
@@ -505,10 +505,17 @@ class IngestDocumentAdapter:
         adapter's own: this delegates to it, as a copy here once kept the section filter and
         missed the other two.
         """
+        import contextlib
+
         from auditmanager.bootstrap.adapters import DocumentAdapter
 
-        return tuple(DocumentAdapter(self._ingest).list_documents(
+        # `UI-PARITY-DOC-AUDIT`: the audit filter and order read the audit of every document in one statement, so
+        # the delegate gets this double's own session, as `document_audits` below does.
+        return tuple(DocumentAdapter(
+            self._ingest, lambda: contextlib.nullcontext(self._session)  # type: ignore[arg-type]
+        ).list_documents(
             project_uid=project_uid, section_code=section_code, include_archived=include_archived, tag=tag,
+            audit_state=audit_state, order=order,
         ))
 
     def list_versions(self, *, document_uid: str) -> tuple[DocumentVersionView, ...]:
@@ -516,6 +523,17 @@ class IngestDocumentAdapter:
             self._view(record)
             for record in self._ingest.list_versions(DocumentUid(document_uid))
         )
+
+    def document_audits(self, *, version_uids: Any) -> Any:
+        """`UI-PARITY-DOC-AUDIT`. The shipped adapter's own body over this double's session, as for the uploads and
+        `stream_content`: the suite drives the shipped read and not a second implementation."""
+        import contextlib
+
+        from auditmanager.bootstrap.adapters import DocumentAdapter
+
+        return DocumentAdapter(
+            self._ingest, lambda: contextlib.nullcontext(self._session)  # type: ignore[arg-type]
+        ).document_audits(version_uids=version_uids)
 
 
 class DatabaseFindingAdapter:

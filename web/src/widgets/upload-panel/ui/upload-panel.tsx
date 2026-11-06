@@ -61,7 +61,8 @@ function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
  * read the project page already makes (its first page; the form says when there are more).
  */
 function UploadMany({ projectUid }: { readonly projectUid: ProjectUid }) {
-  const documents = useDocumentList(projectUid);
+  // `UI-PARITY-DOC-AUDIT`: the project page reads the listing in the server's audit order; the same request, so the one cache entry.
+  const documents = useDocumentList(projectUid, undefined, undefined, false, undefined, { order: 'audit' });
   const items = documents.data?.items ?? [];
   return (
     <details data-upload-many-panel="">

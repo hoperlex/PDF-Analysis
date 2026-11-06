@@ -17,7 +17,13 @@ from typing import Any, Sequence
 
 from auditmanager.api.schemas.common import timestamp
 
-__all__ = ["DocumentVersionView", "ManifestEntryView", "document_version_body"]
+__all__ = [
+    "DocumentAuditView",
+    "DocumentVersionView",
+    "ManifestEntryView",
+    "document_audit_body",
+    "document_version_body",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +34,22 @@ class ManifestEntryView:
     sha256: str
     size_bytes: int
     media_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentAuditView:
+    """Exactly the frozen ``DocumentAudit`` (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+
+    Nothing is decided here: the read model (``auditmanager.dashboard.audit_state``) classifies and the adapter
+    copies its record field for field. ``result_run_id`` is ``None`` exactly when ``state`` is ``not_run`` and is
+    then omitted on the wire.
+    """
+
+    state: str
+    partial: bool
+    result_run_id: str | None
+    finding_count: int
+    undecided_finding_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +88,21 @@ class DocumentVersionView:
     #: `R-151e` (contract 1.23.0, migration 0053): the document's free tags; ``None`` where the read does not carry
     #: them, rendered as a list (possibly empty) otherwise.
     tags: tuple[str, ...] | None = None
+    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version, attached by ``listDocuments`` only;
+    #: ``None`` on every other operation, and then omitted on the wire.
+    audit: DocumentAuditView | None = None
+
+
+def document_audit_body(view: DocumentAuditView) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "state": view.state,
+        "partial": view.partial,
+        "finding_count": view.finding_count,
+        "undecided_finding_count": view.undecided_finding_count,
+    }
+    if view.result_run_id is not None:
+        body["result_run_id"] = view.result_run_id
+    return body
 
 
 def manifest_entry_body(view: ManifestEntryView) -> dict[str, Any]:
@@ -109,4 +146,6 @@ def document_version_body(view: DocumentVersionView) -> dict[str, Any]:
         body["archived_at"] = timestamp(view.archived_at)
     if view.tags is not None:
         body["tags"] = list(view.tags)
+    if view.audit is not None:
+        body["audit"] = document_audit_body(view.audit)
     return body

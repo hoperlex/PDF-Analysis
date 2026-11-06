@@ -1,0 +1,23 @@
+/*
+ * Layout for a document's audit chip (`UI-PARITY-DOC-AUDIT`, UI-A-46). Colour is deliberately absent: the chip takes
+ * its tone from the design system's `.am-badge--*` modifiers in `globals.css`, where the contrast census measures it.
+ * The chip may wrap inside a narrow card, so a long figure never widens the grid.
+ */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.chip {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+a.chip {
+  text-decoration: none;
+}

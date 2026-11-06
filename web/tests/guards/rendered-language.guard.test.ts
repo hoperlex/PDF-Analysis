@@ -1078,7 +1078,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.34.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1090,7 +1090,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.34.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1204,8 +1204,10 @@ const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
   project: queryKeys.projects.detail(PROJECT_UID),
   documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
-  // `R-151l`: the section page's own read, `listDocuments` with `section_code` (the route seeds `AR`).
-  sectionDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR'),
+  // `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order, a cache entry of its own.
+  projectDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+  // `R-151l`: the section page's own read, `listDocuments` with `section_code` (the route seeds `AR`), in the audit order.
+  sectionDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, undefined, 'audit'),
   versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
   version: queryKeys.versions.detail(VERSION_UID),
   // `W59-SECTION-UI-01`: the version screen's stage-and-section panel.
@@ -1289,6 +1291,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.projects, { items: [project()], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.projectDocuments, { items: [version()], page });
   client.setQueryData(KEYS.sectionDocuments, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.version, version());
@@ -1451,6 +1454,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.projects, { items: [], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [], page });
+  client.setQueryData(KEYS.projectDocuments, { items: [], page });
   client.setQueryData(KEYS.sectionDocuments, { items: [], page });
   client.setQueryData(KEYS.versions, { items: [], page });
   client.setQueryData(KEYS.version, version());
@@ -1518,6 +1522,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   const page = { next_cursor: 'Y3Vyc29y' } as { next_cursor: string };
   client.setQueryData(KEYS.projects, { items: [project()], page });
   client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.projectDocuments, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page, total: 1 });
@@ -1931,7 +1936,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.34.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2139,7 +2144,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.33.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.34.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -4179,7 +4184,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.33.0',
+            contract_version: '1.34.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4201,7 +4206,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.33.0',
+            contract_version: '1.34.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

@@ -45,6 +45,7 @@ import { ErrorState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { PROJECT_SECTIONS } from '@/entities/project';
 import type { ProjectSectionCode } from '@/entities/project';
+import { withNotRunFilter } from '@/entities/document-version';
 import type { SectionDocumentCount } from '@/shared/api';
 
 import { incompleteBreakdownFailure } from '../model/dashboard-failure';
@@ -62,11 +63,38 @@ export interface SectionsPanelProps {
 }
 
 
-/** `UI-A-35`: the five numbers of a section row; without `audit_counts` only the document count is shown. */
-function SectionMetrics({ documents, audit }: { readonly documents: number; readonly audit: SectionAuditFigures | undefined }) {
+/**
+ * `UI-A-35`: the five numbers of a section row; without `audit_counts` only the document count is shown.
+ *
+ * `UI-A-38` (`UI-PARITY-DOC-AUDIT`): «Не запускались» is a link to the section page narrowed to those documents
+ * (`?filter=not_run`) when the dashboard follows one project and the section has some; across all projects there is no one
+ * section page to open, and a zero has nothing to show, so both stay plain numbers.
+ */
+function SectionMetrics({
+  documents,
+  audit,
+  notRunHref,
+}: {
+  readonly documents: number;
+  readonly audit: SectionAuditFigures | undefined;
+  readonly notRunHref: string | null;
+}) {
   return (
     <span className={styles.metrics}>
-      <span className={styles.metric} title="Не запускались">{audit?.notRun ?? '—'}</span>
+      <span className={styles.metric} title="Не запускались" data-metric="not-run">
+        {audit !== undefined && notRunHref !== null && audit.notRun > 0 ? (
+          <Link
+            className={styles.metricLink}
+            href={notRunHref}
+            aria-label={`Не запускались: ${audit.notRun}. Открыть список`}
+            data-not-run-link=""
+          >
+            {audit.notRun}
+          </Link>
+        ) : (
+          (audit?.notRun ?? '—')
+        )}
+      </span>
       <span className={styles.metric} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
         {audit?.noExpertDecision ?? '—'}
       </span>
@@ -111,7 +139,13 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
       </div>
       <ul className={styles.rows} data-section-count={PROJECT_SECTIONS.length}>
         {PROJECT_SECTIONS.map((section) => (
-          <li key={section.code} className={styles.row} data-section={section.code} data-analysed-by={section.analysedBy}>
+          <li
+            key={section.code}
+            className={`${styles.row} ${styles.sectionRow}`}
+            data-section={section.code}
+            data-analysed-by={section.analysedBy}
+            data-open={selected === section.code ? 'true' : 'false'}
+          >
             <button
               type="button"
               className={styles.rowButton}
@@ -120,9 +154,13 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
             >
               <span className={styles.badge}>{section.code}</span>
               <span className={styles.name}>{section.name}</span>
-              <SectionMetrics documents={summary.byCode[section.code]} audit={summary.auditByCode[section.code]} />
-              <span className={styles.arrow} aria-hidden="true">›</span>
             </button>
+            <SectionMetrics
+              documents={summary.byCode[section.code]}
+              audit={summary.auditByCode[section.code]}
+              notRunHref={projectUid === null ? null : withNotRunFilter(routes.projectSection(projectUid, section.code))}
+            />
+            <span className={styles.arrow} aria-hidden="true">›</span>
           </li>
         ))}
         <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified">

@@ -1160,7 +1160,8 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listRunFindings": {"category", "cursor", "limit", "verdict"},
         "listDecisionHistory": {"cursor", "limit"},
         # `UI-PARITY-P0E`, `P0G`, `P0H` (1.20.0, 1.22.0, 1.23.0): the section, archive and tag filters.
-        "listDocuments": {"cursor", "limit", "section_code", "include_archived", "tag"},
+        # `UI-PARITY-DOC-AUDIT` (1.34.0): the audit-state filter and the audit order.
+        "listDocuments": {"cursor", "limit", "section_code", "include_archived", "tag", "audit_state", "order"},
         "listVersions": {"cursor", "limit"},
         "listRuns": {"cursor", "limit"},
         "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
@@ -1562,6 +1563,77 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
     if listed(f"tag={quote('Корпус 1')}&") != {tagged}:
         inert.setdefault("listDocuments", []).append("tag")
 
+    # `UI-PARITY-DOC-AUDIT` (`UI-A-38`, `UI-A-49`): the audit-state filter and the audit order. Nothing in the catalogue has
+    # a result run yet, so every document is `not_run`; the document that comes LAST in the default order is then given a
+    # published run with no finding (`clean`, rank 1 against the others' rank 2). The filter must separate it from the
+    # others and the order must bring it first, which a passthrough does neither.
+    def items_of(query: str) -> list[dict[str, Any]]:
+        return ok(get(shipped_router, f"/projects/{paged.project_uid}/documents?{query}limit=200"))["items"]
+
+    def titles_of(items: Sequence[Mapping[str, Any]]) -> list[str]:
+        return [item["display_title"] for item in items]
+
+    base = items_of("")
+    assert [item["audit"]["state"] for item in base] == ["not_run"] * len(base) == ["not_run"] * 3, (
+        "every item of listDocuments carries the audit of its version, read for the page"
+    )
+    assert all("result_run_id" not in item["audit"] for item in base), "a never-run document names no result run"
+    last = base[-1]
+    run_id = paged._run(last["version_uid"], offset=5)
+    for step in ("queued", "running", "validating", "published"):
+        session.execute(
+            text(
+                "UPDATE audit_run SET state = :s, terminal_at = CASE WHEN :s = 'published' THEN now() ELSE NULL END, "
+                "degradation_set = CASE WHEN :s = 'published' THEN '[]'::jsonb ELSE degradation_set END "
+                "WHERE run_id = :r"
+            ),
+            {"s": step, "r": run_id},
+        )
+    session.flush()
+    others = [item for item in base if item["version_uid"] != last["version_uid"]]
+    by_title = sorted(titles_of(others))
+    assert titles_of(base) != [last["display_title"], *by_title], "the data set cannot tell the audit order from the default"
+
+    def states_of(query: str) -> dict[str, str]:
+        return {item["version_uid"]: item["audit"]["state"] for item in items_of(query)}
+
+    if states_of("audit_state=clean&") != {last["version_uid"]: "clean"}:
+        inert.setdefault("listDocuments", []).append("audit_state=clean")
+    if set(states_of("audit_state=not_run&")) != {item["version_uid"] for item in others}:
+        inert.setdefault("listDocuments", []).append("audit_state=not_run")
+    if items_of("audit_state=checked&") or items_of("audit_state=awaiting_decision&"):
+        inert.setdefault("listDocuments", []).append("audit_state=checked")
+    ordered = items_of("order=audit&")
+    if titles_of(ordered) != [last["display_title"], *by_title] or ordered[0]["audit"] != {
+        "state": "clean", "partial": False, "result_run_id": run_id, "finding_count": 0, "undecided_finding_count": 0,
+    }:
+        inert.setdefault("listDocuments", []).append("order")
+    if titles_of(items_of("order=published&")) != titles_of(base):
+        inert.setdefault("listDocuments", []).append("order=published")
+    # The server's order and filter hold across pages: walking by one row, with the server's own cursors, gives the same
+    # listing, and the end of a narrowed listing is the end of that listing and not of the project.
+    for query, expected in (("order=audit&", titles_of(ordered)), ("audit_state=not_run&", sorted_like(base, others))):
+        walked: list[str] = []
+        cursor: str | None = None
+        for _ in range(10):
+            suffix = f"cursor={quote(cursor)}&" if cursor else ""
+            page = ok(get(shipped_router, f"/projects/{paged.project_uid}/documents?{query}{suffix}limit=1"))
+            walked += titles_of(page["items"])
+            cursor = page["page"]["next_cursor"]
+            if cursor is None:
+                break
+        if walked != expected or cursor is not None:
+            inert.setdefault("listDocuments", []).append(f"paging {query}")
+    # The archived document is listed on request and says what state it is in.
+    with_archived = {item["document_uid"]: item for item in items_of("include_archived=true&audit_state=not_run&")}
+    if archived not in with_archived or with_archived[archived]["audit"]["state"] != "not_run" or last["document_uid"] in with_archived:
+        inert.setdefault("listDocuments", []).append("audit_state with include_archived")
+    # Only listDocuments carries it; a refused value is a 422.
+    assert "audit" not in ok(get(shipped_router, f"/versions/{last['version_uid']}")), "getDocumentVersion reads no runs"
+    for refused in ("audit_state=failed&", "order=newest&"):
+        refusal = get(shipped_router, f"/projects/{paged.project_uid}/documents?{refused}limit=1")
+        assert refusal.status == 422, (refused, refusal.body)
+
     assert inert == {}, (
         "the contract declares these query parameters and supplying one changes nothing, "
         f"so a caller has it silently ignored: {inert}"
@@ -1808,6 +1880,12 @@ def _bound_ports(router: Surface) -> list[tuple[Any, str]]:
         found.append((route, name))
     assert len(found) == len(wanted)
     return found
+
+
+def sorted_like(base: Sequence[Mapping[str, Any]], kept: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The titles of ``kept`` in the order ``base`` lists them (a filter removes rows and never reorders)."""
+    keep = {item["version_uid"] for item in kept}
+    return [item["display_title"] for item in base if item["version_uid"] in keep]
 
 
 @pytest.fixture

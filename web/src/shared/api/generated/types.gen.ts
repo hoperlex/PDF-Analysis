@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.33.0 (OpenAPI 3.1.0)
- *   sha256 f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f
+ *   AuditManager PC-01 API 1.34.0 (OpenAPI 3.1.0)
+ *   sha256 3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.33.0';
+export const CONTRACT_VERSION = '1.34.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f';
+export const CONTRACT_DIGEST = '3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -292,6 +292,7 @@ export const SCHEMA_NAMES = [
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
+  'DocumentAudit',
   'DocumentAuditCounts',
   'DocumentTagCount',
   'DocumentTagList',
@@ -3823,6 +3824,34 @@ export type DiffHunk = {
   target_start: number;
 };
 
+/**
+ * The audit of one version, as `listDocuments` shows it on each document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+ *
+ * The per-document form of the counters of `DocumentAuditCounts`, read by the same rules (`R-150n`, `R-150p`,
+ * `R-150r`, `R-150s`, `R-150t`): the version's **result run** is its latest run in state `published` or `partial`,
+ * ordered by `(created_at, run_id)` as `listRuns` orders them. A newer run still in flight does not displace it,
+ * and a `failed` or `cancelled` run is not a result.
+ *
+ * `state` is one of four words. `not_run`: no result run (never run, run only to `failed` or `cancelled`, or only
+ * in flight); there is then no `result_run_id`, and a failed or cancelled latest run does not change that, so the
+ * chip «отказ» (`R-150r`) is a marking of the screen's own and not a fifth state. `clean`: a result run that
+ * published no finding, a state of its own (`R-150n`). `awaiting_decision`: a result run with at least one finding
+ * whose current verdict is undecided (`pending` or `needs_manual_review`). `checked`: a result run, every finding
+ * decided. `partial` is not a fifth state: it is true when the result run is `partial` and marks the document in
+ * any of the four states (`R-150s`).
+ *
+ * `finding_count` is the number of published findings of the result run and `undecided_finding_count` the number of
+ * those still undecided; both are zero when there is no result run. Optimisation proposals are not part of any
+ * figure (`R-150u`).
+ */
+export type DocumentAudit = {
+  finding_count: number;
+  partial: boolean;
+  result_run_id?: RunId;
+  state: "not_run" | "clean" | "awaiting_decision" | "checked";
+  undecided_finding_count: number;
+};
+
 /** The audit-state counters of a set of documents (`UI-PARITY-P0B`, `R-150n` ... `R-150u`). Every figure counts documents by their **current version only** (`R-150p`) and reads that version's **result run**: its latest run in state `published` or `partial`, ordered by `(created_at, run_id)` as `listRuns` orders them; a newer run still in flight does not displace it, and a `failed` or `cancelled` run is not a result (`R-150r`). Optimisation proposals are not part of any state (`R-150u`); AR v3 six-run groups follow the same per-run rule for now (`R-150t`). A document is in exactly one of four states, so `document_count` is `not_run + clean + awaiting_decision + checked`. `partial` is not a fifth state: it counts the documents, in any of the four, whose result run is `partial` (`R-150s`). */
 export type DocumentAuditCounts = {
   /** Documents with a result run and at least one finding whose current verdict is undecided (`pending` or `needs_manual_review`). The red badge «ждут решения» (`R-150o`). */
@@ -3860,6 +3889,7 @@ export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 export type DocumentVersion = {
   /** `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use. */
   archived_at?: string;
+  audit?: DocumentAudit;
   byte_size: number;
   classification?: VersionClassification;
   display_title?: string;
@@ -3941,7 +3971,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.33.0";
+  contract_version: "1.34.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;

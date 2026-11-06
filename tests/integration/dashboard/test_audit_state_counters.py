@@ -27,9 +27,16 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.dashboard import dashboard_summary_body
+from auditmanager.api.schemas.documents import document_audit_body
 from auditmanager.api.schemas.projects import project_body
-from auditmanager.bootstrap.adapters import DashboardAdapter, ProjectAdapter
-from auditmanager.dashboard import AuditCountsRecord, DocumentAuditReadModel, counts_by_section, tally
+from auditmanager.bootstrap.adapters import DashboardAdapter, DocumentAdapter, ProjectAdapter
+from auditmanager.dashboard import (
+    AUDIT_STATES,
+    AuditCountsRecord,
+    DocumentAuditReadModel,
+    counts_by_section,
+    tally,
+)
 from auditmanager.documents.public import DocumentRepository
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
@@ -528,3 +535,125 @@ def test_a_fresh_deployment_reports_zero_everywhere(factory: sessionmaker[Sessio
         for row in body["section_breakdown"]
     )
     assert _projects_body(factory) == {}
+
+
+# --- the audit of each listed document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`, `UI-A-38`, `UI-A-49`) -------------------
+
+
+class _Documents:
+    """The part of ``IngestService`` the document adapter reads for a listing: the current version of every document."""
+
+    def __init__(self, factory: sessionmaker[Session]) -> None:
+        self._factory = factory
+
+    def list_documents(self, project_uid: Any) -> Any:
+        with self._factory() as session:
+            return DocumentRepository().list_documents(session, project_uid)
+
+
+#: The school's eleven documents as the ``world`` fixture builds them, counted by hand: the state, the partial flag, the
+#: findings of the result run and how many of them are undecided.
+SCHOOL_DOCUMENTS: dict[str, tuple[str, bool, int, int]] = {
+    "d_clean": ("clean", False, 0, 0),
+    "d_await": ("awaiting_decision", False, 3, 2),
+    "d_partial_checked": ("checked", True, 1, 0),
+    "d_v2": ("not_run", False, 0, 0),
+    "d_rerun": ("clean", False, 0, 0),
+    "d_revoked": ("awaiting_decision", False, 1, 1),
+    "d_commented": ("awaiting_decision", False, 1, 1),
+    "d_checked": ("checked", False, 2, 0),
+    "d_failed": ("not_run", False, 0, 0),
+    "d_cancelled": ("not_run", False, 0, 0),
+    "d_partial_await": ("awaiting_decision", True, 1, 1),
+}
+
+
+def _documents(factory: sessionmaker[Session]) -> DocumentAdapter:
+    return DocumentAdapter(_Documents(factory), factory)
+
+
+def test_the_audit_of_each_listed_document_is_the_one_counted_by_hand_and_agrees_with_the_counters(
+    factory: sessionmaker[Session], world: World
+) -> None:
+    adapter = _documents(factory)
+    views = [view for state in AUDIT_STATES for view in adapter.list_documents(project_uid=world.school, audit_state=state)]
+    assert len(views) == len(SCHOOL_DOCUMENTS) == 11, "the four states partition the listing"
+    seen: dict[str, tuple[str, bool, int, int]] = {}
+    for view in views:
+        assert view.audit is not None and view.display_title is not None
+        audit = view.audit
+        seen[view.display_title] = (audit.state, audit.partial, audit.finding_count, audit.undecided_finding_count)
+        # The result run is named exactly when there is one, and the wire omits it exactly when there is none.
+        assert (audit.result_run_id is None) == (audit.state == "not_run"), view.display_title
+        assert ("result_run_id" in document_audit_body(audit)) == (audit.state != "not_run")
+    assert seen == SCHOOL_DOCUMENTS
+    # The per-document states are the counters' states: the same tally of the same documents.
+    wanted = _as_wire(SCHOOL)
+    by_state = {state: sum(1 for entry in seen.values() if entry[0] == state) for state in AUDIT_STATES}
+    assert by_state == {key: wanted[key] for key in AUDIT_STATES}
+    assert sum(1 for entry in seen.values() if entry[1]) == wanted["partial"]
+
+
+def test_the_audit_filter_keeps_exactly_the_documents_in_that_state(
+    factory: sessionmaker[Session], world: World
+) -> None:
+    adapter = _documents(factory)
+    expected = {
+        state: {title for title, entry in SCHOOL_DOCUMENTS.items() if entry[0] == state} for state in AUDIT_STATES
+    }
+    assert {state: len(titles) for state, titles in expected.items()} == {
+        "not_run": 3, "clean": 2, "awaiting_decision": 4, "checked": 2,
+    }
+    for state, titles in expected.items():
+        listed = adapter.list_documents(project_uid=world.school, audit_state=state)
+        assert {view.display_title for view in listed} == titles, state
+    everything = adapter.list_documents(project_uid=world.school)
+    assert len(everything) == 11 and all(view.audit is None for view in everything), (
+        "without the filter or the order nothing is read here; the router reads the page it cut"
+    )
+    # It composes with the section filter: the school's АР section holds seven documents, one of them never run.
+    in_section = adapter.list_documents(project_uid=world.school, section_code="AR", audit_state="not_run")
+    assert {view.display_title for view in in_section} == {"d_v2"}
+    # The clinic's only document is awaiting a decision, and its project has none that was never run.
+    assert adapter.list_documents(project_uid=world.clinic, audit_state="not_run") == ()
+    assert [view.display_title for view in adapter.list_documents(project_uid=world.clinic, audit_state="awaiting_decision")] == [
+        "c_unclassified"
+    ]
+
+
+def test_the_audit_order_is_checked_then_processed_then_never_run_and_by_name_within_each(
+    factory: sessionmaker[Session], world: World
+) -> None:
+    adapter = _documents(factory)
+    ordered = adapter.list_documents(project_uid=world.school, order="audit")
+    assert [view.display_title for view in ordered] == [
+        "d_checked", "d_partial_checked",
+        "d_await", "d_clean", "d_commented", "d_partial_await", "d_rerun", "d_revoked",
+        "d_cancelled", "d_failed", "d_v2",
+    ]
+    published = adapter.list_documents(project_uid=world.school, order="published")
+    assert [view.display_title for view in published] == [
+        view.display_title for view in adapter.list_documents(project_uid=world.school)
+    ], "`published` is the order the operation always had"
+    assert [view.display_title for view in published] != [view.display_title for view in ordered], (
+        "the two orders must differ on this data set or the test proves nothing"
+    )
+    # The filter and the order compose: the narrowed listing is in the audit order.
+    narrowed = adapter.list_documents(project_uid=world.school, audit_state="awaiting_decision", order="audit")
+    assert [view.display_title for view in narrowed] == ["d_await", "d_commented", "d_partial_await", "d_revoked"]
+
+
+def test_an_unknown_audit_state_or_order_is_refused_and_an_unknown_version_is_not_found(
+    factory: sessionmaker[Session], world: World
+) -> None:
+    adapter = _documents(factory)
+    with pytest.raises(ValueError):
+        adapter.list_documents(project_uid=world.school, audit_state="failed")
+    with pytest.raises(ValueError):
+        adapter.list_documents(project_uid=world.school, order="newest")
+    with pytest.raises(DomainError) as caught:
+        adapter.document_audits(version_uids=["ver_01ARZ3NDEKTSV4RRFFQ69G5FAV"])
+    assert caught.value.code is ErrorCode.NOT_FOUND
+    assert adapter.document_audits(version_uids=[]) == {}, "no names, no statement"
+    with pytest.raises(RuntimeError):
+        DocumentAdapter(_Documents(factory)).list_documents(project_uid=world.school, audit_state="clean")

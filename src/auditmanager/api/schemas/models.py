@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.33.0"]
+    contract_version: Literal["1.34.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1260,6 +1260,35 @@ class VersionUploadKind(str, enum.Enum):
     COMPARISON_PDF = "comparison_pdf"
 
 
+class DocumentAudit(_Object):
+    """The audit of one version, as `listDocuments` shows it on each document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+
+    The per-document form of the counters of `DocumentAuditCounts`, read by the same rules (`R-150n`, `R-150p`,
+    `R-150r`, `R-150s`, `R-150t`): the version's **result run** is its latest run in state `published` or `partial`,
+    ordered by `(created_at, run_id)` as `listRuns` orders them. A newer run still in flight does not displace it,
+    and a `failed` or `cancelled` run is not a result.
+
+    `state` is one of four words. `not_run`: no result run (never run, run only to `failed` or `cancelled`, or only
+    in flight); there is then no `result_run_id`, and a failed or cancelled latest run does not change that, so the
+    chip «отказ» (`R-150r`) is a marking of the screen's own and not a fifth state. `clean`: a result run that
+    published no finding, a state of its own (`R-150n`). `awaiting_decision`: a result run with at least one finding
+    whose current verdict is undecided (`pending` or `needs_manual_review`). `checked`: a result run, every finding
+    decided. `partial` is not a fifth state: it is true when the result run is `partial` and marks the document in
+    any of the four states (`R-150s`).
+
+    `finding_count` is the number of published findings of the result run and `undecided_finding_count` the number of
+    those still undecided; both are zero when there is no result run. Optimisation proposals are not part of any
+    figure (`R-150u`).
+    """
+
+    state: Literal["not_run", "clean", "awaiting_decision", "checked"]
+    partial: bool
+    #: The result run the card links to «Разбор»; absent exactly when `state` is `not_run`.
+    result_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    finding_count: Annotated[int, Field(ge=0)]
+    undecided_finding_count: Annotated[int, Field(ge=0)]
+
+
 class DocumentVersion(_Object):
     version_uid: VersionUid
     document_uid: DocumentUid
@@ -1293,6 +1322,11 @@ class DocumentVersion(_Object):
     #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
     tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `UI-PARITY-DOC-AUDIT` (contract 1.34.0): the audit of this version. Present on the items of `listDocuments`
+    #: only, where it is the audit of the document's current version; absent from every other answer that carries a
+    #: `DocumentVersion` (`uploadDocument`, `uploadDocumentVersion`, `getDocumentVersion`, `listVersions`,
+    #: `setDocumentArchived`, `renameDocument`, `setDocumentTags`), which read no runs.
+    audit: DocumentAudit = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DocumentVersionPage(_Object):
