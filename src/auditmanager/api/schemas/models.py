@@ -45,6 +45,9 @@ from typing_extensions import TypeAliasType
 __all__ = [
     "Account",
     "AccountPage",
+    "AuthEvent",
+    "AuthEventPage",
+    "AuthEventType",
     "AnalysisProfileId",
     "AnalysisProfileList",
     "AnalysisProfileListItem",
@@ -433,6 +436,7 @@ __all__ = [
     "AssignmentEventKind",
     "AssignmentPage",
     "AssignmentStatus",
+    "AssignmentStatusCount",
     "AssignmentTransitionKind",
     "AssignmentUid",
     "CreateAssignmentRequest",
@@ -1045,7 +1049,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.35.0"]
+    contract_version: Literal["1.36.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2955,10 +2959,58 @@ class Account(_Object):
     profile_complete: bool
     is_default_credential: bool
     archived_at: datetime | None
+    #: Contract 1.36.0 (`UI-A-92`): the instant of the account's latest successful sign-in, read from the access
+    #: journal; null when none is recorded (it never signed in, or signed in before the journal began).
+    last_sign_in_at: datetime | None
 
 
 class AccountPage(_Object):
     items: list[Account]
+    page: PageInfo
+
+
+class AuthEventType(str, enum.Enum):
+    """Contract 1.36.0 (`UI-A-94`): the kinds of line the access journal holds, the ``access.*`` events of its writer.
+
+    ``sign_in_succeeded``; ``sign_in_blocked`` (a refused attempt that started a cooling-off period, at most one per
+    account per period); ``password_changed`` (the account's own); ``password_reset`` (an administrator's temporary
+    password); ``role_granted`` and ``role_revoked``; ``sessions_ended`` (an administrator ended every session of the
+    account).
+    """
+
+    SIGN_IN_SUCCEEDED = "sign_in_succeeded"
+    SIGN_IN_BLOCKED = "sign_in_blocked"
+    PASSWORD_CHANGED = "password_changed"
+    PASSWORD_RESET = "password_reset"
+    ROLE_GRANTED = "role_granted"
+    ROLE_REVOKED = "role_revoked"
+    SESSIONS_ENDED = "sessions_ended"
+
+
+class AuthEvent(_Object):
+    """Contract 1.36.0 (`UI-A-94`): one line of the access journal, as it was recorded; never changed.
+
+    Never a password, a token, an address or a login as typed: the account is named by identity and by the label it has
+    now, and an event about an account that has since been deleted keeps its identity with a null label.
+    """
+
+    event_id: Annotated[str, Field(pattern=rf"^evt_{_ULID}$")]
+    event_type: AuthEventType
+    occurred_at: datetime
+    subject_user_uid: UserUid
+    subject_label: Annotated[str, Field(min_length=1, max_length=254)] | None
+    actor_user_uid: UserUid | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)] | None
+    source: Literal["api", "host_cli"]
+    role: Role | None
+    failures: Annotated[int, Field(ge=1)] | None
+    default_credential: bool | None
+
+
+class AuthEventPage(_Object):
+    """Contract 1.36.0 (`UI-A-94`): one page of the access journal, newest first."""
+
+    items: list[AuthEvent]
     page: PageInfo
 
 
@@ -3064,9 +3116,22 @@ class AssignmentDetail(_Object):
     history: list[AssignmentEvent]
 
 
+class AssignmentStatusCount(_Object):
+    """Contract 1.36.0: how many assignments stand in one status."""
+
+    status: AssignmentStatus
+    count: Annotated[int, Field(ge=0)]
+
+
 class AssignmentPage(_Object):
     items: list[Assignment]
     page: PageInfo
+    #: Contract 1.36.0: how many assignments the caller may read under every filter of the request, the status included.
+    total: Annotated[int, Field(ge=0)]
+    #: Contract 1.36.0: every status with its count over the request's scope filters (`project_uid`, `mine` and what the
+    #: caller may read) and not its `status` filter, in the order of ``AssignmentStatus``; a status with none is 0. These
+    #: are the numbers of the dispatcher's state chips: each is what choosing that status would list.
+    overview: list[AssignmentStatusCount]
 
 
 class ProductVersion(_Object):

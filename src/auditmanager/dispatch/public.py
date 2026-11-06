@@ -28,7 +28,12 @@ from auditmanager.dispatch.policy import (
     TERMINAL_STATUSES,
     TRANSITION_KINDS,
 )
-from auditmanager.dispatch.queries import AssignmentDetail, get_assignment, list_assignments
+from auditmanager.dispatch.queries import (
+    AssignmentDetail,
+    assignment_overview,
+    get_assignment,
+    list_assignments,
+)
 from auditmanager.dispatch.repository import AssignmentEvent, AssignmentRecord
 
 __all__ = [
@@ -53,6 +58,7 @@ __all__ = [
     "AssignmentRecord",
     "AssignmentUid",
     "assign_work",
+    "assignment_overview",
     "get_assignment",
     "list_assignments",
     "transition_assignment",

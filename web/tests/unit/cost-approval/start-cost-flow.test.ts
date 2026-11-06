@@ -111,7 +111,7 @@ describe('ordinary section start preflight', () => {
 
   it('explains a comparison-only PDF refusal and stops repeat cost requests', async () => {
     vi.mocked(estimateRunCost).mockRejectedValue(new ApiError(422, {
-      contract_version: '1.35.0', error_code: 'analysis_input_invalid', message: 'comparison-only PDF',
+      contract_version: '1.36.0', error_code: 'analysis_input_invalid', message: 'comparison-only PDF',
       correlation_id: 'cid-comparison-only', retryable: false,
       details: { reason: 'comparison_only_version' },
     }, 'cid-comparison-only'));
@@ -127,7 +127,7 @@ describe('ordinary section start preflight', () => {
   });
 
   it('a server-reported stale digest clears approval and requires a new estimate', async () => {
-    vi.mocked(startRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.35.0',
+    vi.mocked(startRun).mockRejectedValueOnce(new ApiError(409, { contract_version: '1.36.0',
       error_code: 'conflict', message: 'stale estimate', correlation_id: 'cost-stale', retryable: false,
       details: { conflict_reason: 'run_cost_estimate_stale' } }, 'cost-stale'));
     live = await mountLive(createElement(QueryClientProvider, { client: client() },

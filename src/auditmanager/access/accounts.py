@@ -2,8 +2,8 @@
 
 :mod:`auditmanager.access.repository` is the sign-in half of ``app_user``: find, prove a
 password, change it, revoke, brake. This module is the management half that `W49` adds --
-the profile, the role set, archive, restore, purge and the administrator's password reset
--- and it is a separate class for the reason the sign-in half keeps its operator views off
+the profile, the role set, archive, restore, purge, the administrator's password reset and
+the administrator's ending of an account's sessions -- and it is a separate class for the reason the sign-in half keeps its operator views off
 its port: the API's credential adapter reaches the sign-in half on every request and must
 not be able to reach these.
 
@@ -11,7 +11,7 @@ Shaped like the rest of the tree: explicit statements, the caller's
 :class:`~sqlalchemy.orm.Session`, no generic CRUD. **Every invariant of §3.2 is enforced
 here, not in a router**, and is proven by tests that never build an application:
 
-* an account cannot archive, purge, demote or reset itself;
+* an account cannot archive, purge, demote, reset or end the sessions of itself;
 * the last active account holding ``admin`` cannot be archived or lose ``admin``;
 * approval grants at least one role (:mod:`auditmanager.access.registrations`).
 
@@ -44,6 +44,7 @@ from auditmanager.access.audit import (
     record_password_reset,
     record_role_granted,
     record_role_revoked,
+    record_sessions_ended,
 )
 from auditmanager.access.models import (
     ROLE_ADMIN,
@@ -71,6 +72,7 @@ __all__ = [
     "PROFILE_COMPLETED",
     "ROLES_CHANGED",
     "SELF_ACTION",
+    "SESSIONS_ENDED",
     "AccountInvariantViolation",
     "AccountRepository",
     "account_referenced",
@@ -92,6 +94,7 @@ ACCOUNT_ARCHIVED: Final[str] = "account archived"
 ACCOUNT_RESTORED: Final[str] = "account restored"
 ACCOUNT_PURGED: Final[str] = "account purged"
 PASSWORD_RESET: Final[str] = "password reset by an administrator"
+SESSIONS_ENDED: Final[str] = "sessions ended by an administrator"
 
 #: The two invariants of `W49-PLAN.md` §3.2 that are not a state machine's transition.
 SELF_ACTION: Final[str] = "self_action"
@@ -245,6 +248,18 @@ _INSERT_ROLE = text(
 _BUMP_EPOCH = text(
     "UPDATE app_user SET token_epoch = token_epoch + 1, token_epoch_updated_at = now() "
     "WHERE user_uid = :user_uid"
+)
+
+
+#: Ending every session of one account (contract 1.36.0, `UI-A-93`): the same epoch bump a change of
+#: rights carries, addressed by identity and answering the row, so an administrator's decision and the
+#: epoch it raised are one statement.
+_END_SESSIONS = text(
+    f"""
+    UPDATE app_user SET token_epoch = token_epoch + 1, token_epoch_updated_at = now()
+    WHERE user_uid = :user_uid AND archived_at IS NULL
+    RETURNING {_PUBLIC_COLUMNS}
+    """
 )
 
 
@@ -658,6 +673,38 @@ class AccountRepository:
             user_uid,
             record.login,
             actor_uid,
+        )
+        return record
+
+    def end_sessions(self, session: Session, *, actor_uid: str, user_uid: str) -> UserRecord:
+        """An administrator ends every session of ``user_uid`` (``endUserSessions``, `UI-A-93`).
+
+        A session here is a credential the account holds, and the credential epoch is what
+        every request is checked against (:mod:`auditmanager.access.repository`), so ending
+        them all is one raise of ``token_epoch``: every credential minted before this
+        statement is refused from the account's next request, and nothing else changes -- the
+        password, the roles and the brake are untouched. The mechanism is the one archive,
+        reset and a role change already use; this is the act on its own.
+
+        Refusals, in order: oneself (``permission_denied`` -- ending one's own sessions is a
+        password change, which also hands back a fresh credential); no such account, or an
+        archived one (``not_found``, as ``reset_password`` answers: an archived account holds
+        no credential that is accepted). The event is written in the transaction of the raise.
+        """
+        _refuse_self(actor_uid, user_uid, "end its own sessions")
+        current = self._lock(session, user_uid)
+        if current is None or current.archived:
+            raise _no_such_account()
+        record = _record(session.execute(_END_SESSIONS, {"user_uid": user_uid}).one())
+        record_sessions_ended(session, subject_uid=user_uid, actor_uid=actor_uid)
+        _log.warning(
+            "%s: every session of %s (%r) ended by %s; its credentials are refused from the "
+            "next request (token_epoch is now %d).",
+            SESSIONS_ENDED,
+            user_uid,
+            record.login,
+            actor_uid,
+            record.token_epoch,
         )
         return record
 

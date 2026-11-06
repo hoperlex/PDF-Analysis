@@ -229,6 +229,10 @@ class AccountRepository(Protocol):
     ) -> frozenset[str]:
         """``updateUser``'s roles: not a self-demotion, never the last administrator."""
 
+    def end_sessions(self, session: Session, *, actor_uid: str, user_uid: str) -> UserRecord:
+        """``endUserSessions``: not oneself; an archived or missing account is ``not_found``;
+        raises the epoch, so every credential the account holds is refused."""
+
 
 @runtime_checkable
 class RegistrationRepository(Protocol):

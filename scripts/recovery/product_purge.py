@@ -175,6 +175,9 @@ PRODUCT_EVENT_PREFIXES = (
 #: ``command_record.command_type``. A registration approval is account-side.
 KEEP_COMMAND_TYPES = frozenset((
     "approve_registration",
+    # Contract 1.36.0 (`UI-A-93`): an administrator ending an account's sessions is account-side, like the approval
+    # above; the ``access.sessions_ended`` event it journals is kept by the ``access.`` prefix.
+    "end_user_sessions",
     # `EXEC-SEAL-01`: the executor configuration commands, kept with the configuration.
     "archive_executor_connection", "create_executor_connection", "generate_executor_ssh_key",
     "request_executor_probe", "revise_executor_connection", "set_executor_route",

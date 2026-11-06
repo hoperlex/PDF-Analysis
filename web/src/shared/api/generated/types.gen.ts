@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.35.0 (OpenAPI 3.1.0)
- *   sha256 c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139
+ *   AuditManager PC-01 API 1.36.0 (OpenAPI 3.1.0)
+ *   sha256 f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.35.0';
+export const CONTRACT_VERSION = '1.36.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139';
+export const CONTRACT_DIGEST = 'f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -69,8 +69,12 @@ export const SCHEMA_NAMES = [
   'AssignmentMove',
   'AssignmentPage',
   'AssignmentStatus',
+  'AssignmentStatusCount',
   'AssignmentTransitionKind',
   'AssignmentUid',
+  'AuthEvent',
+  'AuthEventPage',
+  'AuthEventType',
   'BlockGeometry',
   'CarryOverDecisionRequest',
   'CarryOverDecisionResponse',
@@ -796,6 +800,8 @@ export type Account = {
   is_default_credential: boolean;
   /** Null until somebody gives the names. */
   last_name: string | null;
+  /** The instant of the account's latest successful sign-in, read from the access journal; null when none is recorded (the account never signed in, or signed in before the journal began). Present on every Account answer, including `getMe`. */
+  last_sign_in_at: string | null;
   /** The sign-in identifier: the normalised e-mail address (trimmed, lower-case, ASCII, an internationalised domain in its `xn--` form, at most 254 characters) once the profile is complete, or the legacy login an account created before the identity upgrade keeps until it completes its profile. Not an identity of this surface. */
   login: string;
   /** Optional; null when the person has none. */
@@ -1191,9 +1197,12 @@ export type AssignmentMove = {
   planned_on?: string;
 };
 
+/** Contract 1.36.0: one page of assignments, the number that match every filter of the request (`total`), and every status with its count over the scope filters only (`overview`). */
 export type AssignmentPage = {
   items: Array<Assignment>;
+  overview: Array<AssignmentStatusCount>;
   page: PageInfo;
+  total: number;
 };
 
 /**
@@ -1214,6 +1223,12 @@ export const ASSIGNMENT_STATUS_VALUES = [
 /** AssignmentStatus - the closed value set above. */
 export type AssignmentStatus = (typeof ASSIGNMENT_STATUS_VALUES)[number];
 
+/** Contract 1.36.0: how many assignments stand in one status. */
+export type AssignmentStatusCount = {
+  count: number;
+  status: AssignmentStatus;
+};
+
 /** `W61-DISPATCHER-01`. The events a transition may append: every kind but ``assigned``. */
 export const ASSIGNMENT_TRANSITION_KIND_VALUES = [
   'started',
@@ -1230,6 +1245,53 @@ export type AssignmentUid = string;
 
 /** The contract pattern for `AssignmentUid`. Anchored; use with `new RegExp()`. */
 export const ASSIGNMENT_UID_PATTERN = "^asg_[0-9A-HJKMNP-TV-Z]{26}$";
+
+/**
+ * Contract 1.36.0 (`UI-A-94`): one line of the access journal, as it was recorded; never changed.
+ *
+ * Never a password, a token, an address or a login as typed: the account is named by identity and by the label it has
+ * now, and an event about an account that has since been deleted keeps its identity with a null label.
+ */
+export type AuthEvent = {
+  actor_label: string | null;
+  actor_user_uid: UserUid | null;
+  default_credential: boolean | null;
+  event_id: string;
+  event_type: AuthEventType;
+  failures: number | null;
+  occurred_at: string;
+  role: Role | null;
+  source: "api" | "host_cli";
+  subject_label: string | null;
+  subject_user_uid: UserUid;
+};
+
+/** Contract 1.36.0 (`UI-A-94`): one page of the access journal, newest first. */
+export type AuthEventPage = {
+  items: Array<AuthEvent>;
+  page: PageInfo;
+};
+
+/**
+ * Contract 1.36.0 (`UI-A-94`): the kinds of line the access journal holds, the ``access.*`` events of its writer.
+ *
+ * ``sign_in_succeeded``; ``sign_in_blocked`` (a refused attempt that started a cooling-off period, at most one per
+ * account per period); ``password_changed`` (the account's own); ``password_reset`` (an administrator's temporary
+ * password); ``role_granted`` and ``role_revoked``; ``sessions_ended`` (an administrator ended every session of the
+ * account).
+ */
+export const AUTH_EVENT_TYPE_VALUES = [
+  'sign_in_succeeded',
+  'sign_in_blocked',
+  'password_changed',
+  'password_reset',
+  'role_granted',
+  'role_revoked',
+  'sessions_ended',
+] as const;
+
+/** AuthEventType - the closed value set above. */
+export type AuthEventType = (typeof AUTH_EVENT_TYPE_VALUES)[number];
 
 /** One derived block, one extracted text line. `block_id` is an anchor inside this artifact -- it matches `Evidence.block_id`'s pattern -- and is never a contract identifier. */
 export type BlockGeometry = {
@@ -4020,7 +4082,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.35.0";
+  contract_version: "1.36.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;

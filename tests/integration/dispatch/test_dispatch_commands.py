@@ -18,6 +18,7 @@ from auditmanager.access.public import AccountRepository
 from auditmanager.dispatch.public import (
     AssignmentRecord,
     assign_work,
+    assignment_overview,
     get_assignment,
     list_assignments,
     transition_assignment,
@@ -544,6 +545,53 @@ class TestReads:
             "assigned": [], "in_progress": [mine], "done": [], "returned": [theirs],
             "cancelled": [elsewhere],
         }
+
+    def test_the_overview_counts_every_status_over_the_scope_and_never_the_status_filter(
+        self, session, cast
+    ) -> None:
+        """Contract 1.36.0: the dispatcher's chips. All five statuses, in the vocabulary's order, ``0`` for an empty one."""
+        mine, theirs, elsewhere = self._three(session, cast)
+        _move(session, theirs, "returned", cast.other_expert, reason="не мой раздел")
+        _move(session, elsewhere, "cancelled", cast.admin)
+        everyone = {"assigned": 0, "in_progress": 1, "done": 0, "returned": 1, "cancelled": 1}
+
+        def counts(**scope: Any) -> dict[str, int]:
+            viewer = scope.pop("viewer", cast.admin)
+            roles = scope.pop("roles", ADMIN)
+            return dict(assignment_overview(session, viewer_uid=viewer, viewer_roles=roles, **scope))
+
+        overview = assignment_overview(session, viewer_uid=cast.admin, viewer_roles=ADMIN)
+        assert [status for status, _ in overview] == ["assigned", "in_progress", "done", "returned", "cancelled"]
+        assert dict(overview) == everyone
+        # each count is what choosing that status would list
+        for status, count in everyone.items():
+            assert count == len(list_assignments(
+                session, viewer_uid=cast.admin, viewer_roles=ADMIN, status=status))
+        # the scope narrows it: a project, and `mine` for an administrator who is also an expert
+        assert counts(project_uid=cast.project) == {
+            "assigned": 0, "in_progress": 1, "done": 0, "returned": 1, "cancelled": 0}
+        assert counts(viewer=cast.admin_expert, roles=BOTH, mine=True) == {
+            "assigned": 0, "in_progress": 0, "done": 0, "returned": 0, "cancelled": 1}
+        # an expert is always limited to the work given to them, whatever `mine` says
+        for flag in (False, True):
+            assert counts(viewer=cast.expert, roles=EXPERT, mine=flag) == {
+                "assigned": 0, "in_progress": 1, "done": 0, "returned": 0, "cancelled": 0}
+        # a project that holds nothing is five zeros, not an absent answer
+        assert counts(project_uid="prj_01ARZ3NDEKTSV4RRFFQ69G5FAV") == dict.fromkeys(everyone, 0)
+        # a reassignment moves the count with the status it leaves the work in
+        _move(session, theirs, "reassigned", cast.admin, new_assignee_user_uid=cast.other_expert)
+        assert counts()["assigned"] == 1 and counts()["returned"] == 0
+
+    def test_the_overview_has_the_reads_refusals(self, session, cast) -> None:
+        _refused(
+            ErrorCode.PERMISSION_DENIED, assignment_overview, session, viewer_uid=cast.nobody,
+            viewer_roles=NONE,
+        )
+        refused = _refused(
+            ErrorCode.VALIDATION_FAILED, assignment_overview, session, viewer_uid=cast.admin,
+            viewer_roles=ADMIN, project_uid="doc_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        )
+        assert refused.detail_fields == {"field": "project_uid", "constraint": "pattern"}
 
     def test_refused_reads(self, session, cast) -> None:
         uid = _assign(session, cast).assignment_uid

@@ -104,6 +104,19 @@ _LIST = text(
     """
 )
 
+#: How many assignments stand in each last event kind, over the list's scope filters and not its status filter
+#: (contract 1.36.0): the dispatcher's state chips.
+_OVERVIEW = text(
+    """
+    SELECT c.last_kind, count(*) AS count
+      FROM work_assignment_current c
+     WHERE (CAST(:assignee AS text) IS NULL
+            OR c.current_assignee_user_uid = CAST(:assignee AS text))
+       AND (CAST(:project AS text) IS NULL OR c.project_uid = CAST(:project AS text))
+     GROUP BY c.last_kind
+    """
+)
+
 _OPEN_IN_SCOPE = text(
     f"""
     SELECT {_COLUMNS}, c.first_assignee_user_uid {_FROM}
@@ -191,6 +204,15 @@ class AssignmentRepository:
             },
         ).all()
         return tuple(_record(row) for row in rows)
+
+    def counts_by_kind(
+        self, session: Session, *, assignee_user_uid: str | None, project_uid: str | None
+    ) -> dict[str, int]:
+        """``{last event kind: number of assignments}`` for the same scope as :meth:`list`; a kind with none is absent."""
+        rows = session.execute(
+            _OVERVIEW, {"assignee": assignee_user_uid, "project": project_uid}
+        ).all()
+        return {str(kind): int(count) for kind, count in rows}
 
     def history(self, session: Session, assignment_uid: AssignmentUid) -> tuple[AssignmentEvent, ...]:
         rows = session.execute(_HISTORY, {"assignment_uid": str(assignment_uid)}).all()

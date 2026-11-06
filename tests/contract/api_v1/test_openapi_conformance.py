@@ -595,7 +595,8 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-P0P` adds one: `scheduleAssignments` names assignments that may not exist.
         # `UI-PARITY-OPT-DECISIONS` adds two: `exportOptimisationProposalsXlsx` and `importOptimisationProposalDecisions`
         # address a pass by identity. (`listAcceptedOptimisationProposals` names no parent and declares no `404`.)
-        assert len(report) == 220, report
+        # `UI-PARITY-ADMIN-C2` adds one: `endUserSessions` addresses an account by identity. (`listAuthEvents` names no parent.)
+        assert len(report) == 221, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

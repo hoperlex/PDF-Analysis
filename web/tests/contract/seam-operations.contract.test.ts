@@ -173,6 +173,8 @@ describe('the seam operations', () => {
       'decideOptimisationProposal',
       'deleteComparisonReport',
       'dequeueComparisonAiSheetChanges',
+      // `UI-A-93` (contract 1.36.0): ending an account's sessions is keyed, so an exact repeat ends nothing more.
+      'endUserSessions',
       'enqueueComparisonLaunch',
       'excludeComparisonUploadSet',
       'finishComparisonAiSheetChanges',

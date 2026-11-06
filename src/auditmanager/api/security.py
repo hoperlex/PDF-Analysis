@@ -705,6 +705,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "restoreUser": _ADMIN,
         "purgeUser": _ADMIN,
         "resetUserPassword": _ADMIN,
+        # Contract 1.36.0 (`UI-A-93`, `UI-A-94`): ending an account's sessions and reading the access journal are an
+        # administrator's, like every other account operation.
+        "endUserSessions": _ADMIN,
+        "listAuthEvents": _ADMIN,
         "setJobPriority": _ADMIN,
         "setExecutionPaused": _ADMIN,
         "setWorkerIntake": _ADMIN,

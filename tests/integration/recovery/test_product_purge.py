@@ -664,16 +664,16 @@ def test_the_executor_configuration_is_kept_by_a_product_purge() -> None:
 
 
 def test_the_access_journal_is_kept_by_a_product_purge() -> None:
-    """`PROD-06`, ADR-0023 section 4: "the 1.0 purge keeps these events" -- the six ``access.*`` types.
+    """`PROD-06`, ADR-0023 section 4: "the 1.0 purge keeps these events" -- the seven ``access.*`` types (the six of the ADR and contract 1.36.0's ``sessions_ended``).
 
     No database: the family is in the tuple, every type the writer can append starts with a keep
     prefix and with no product prefix, and the prefix reaches the SQL that decides which rows stay
-    (the real-rows half is ``test_a_purge_keeps_each_of_the_six_access_event_types``). The tool's
-    ``event-types-classified`` guard stops on a type nobody classified, so an unclassified seventh
+    (the real-rows half is ``test_a_purge_keeps_each_of_the_seven_access_event_types``). The tool's
+    ``event-types-classified`` guard stops on a type nobody classified, so an unclassified eighth
     type would be a refusal on the stand; this is the early way.
     """
     assert "access." in tool.KEEP_EVENT_PREFIXES
-    assert len(access_audit.ACCESS_EVENT_TYPES) == 6
+    assert len(access_audit.ACCESS_EVENT_TYPES) == 7
     for event_type in access_audit.ACCESS_EVENT_TYPES:
         assert event_type.startswith(tool.KEEP_EVENT_PREFIXES), event_type
         assert not event_type.startswith(tool.PRODUCT_EVENT_PREFIXES), event_type
@@ -681,8 +681,8 @@ def test_the_access_journal_is_kept_by_a_product_purge() -> None:
     assert "starts_with(t.event_type, 'access.')" in keep and delete == f"NOT {keep}"
 
 
-def test_a_purge_keeps_each_of_the_six_access_event_types(stand: Stand, tmp_path: Path) -> None:
-    """One event of each of the six types, written by the real writer, survives the whole purge.
+def test_a_purge_keeps_each_of_the_seven_access_event_types(stand: Stand, tmp_path: Path) -> None:
+    """One event of each of the seven types, written by the real writer, survives the whole purge.
 
     Beside them a product event (``audit_run.created``) that must go, so the keep is shown to be
     a classification and not "nothing was deleted". The surviving rows are compared with the
@@ -700,6 +700,7 @@ def test_a_purge_keeps_each_of_the_six_access_event_types(stand: Stand, tmp_path
         access_audit.record_role_revoked(session, subject_uid=subject, role="expert", actor_uid=actor)
         access_audit.record_password_changed(session, subject_uid=subject)
         access_audit.record_password_reset(session, subject_uid=subject, actor_uid=actor)
+        access_audit.record_sessions_ended(session, subject_uid=subject, actor_uid=actor)
         session.execute(text(
             "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, aggregate_id, payload) "
             "VALUES (:e, 'audit_run.created', 'AuditRun', :a, CAST('{}' AS jsonb))"),
@@ -710,7 +711,7 @@ def test_a_purge_keeps_each_of_the_six_access_event_types(stand: Stand, tmp_path
             f"SELECT DISTINCT event_type FROM audit_event WHERE {where}")).scalars())
     assert types_before == set(access_audit.ACCESS_EVENT_TYPES)
     before = digest_of(stand.engine, "audit_event", where)
-    assert before[0] == 4 + 6  # the seed's four, and ours
+    assert before[0] == 4 + 7  # the seed's four, and ours
 
     steps = full_purge(tool, stand, tmp_path / "dump")
 

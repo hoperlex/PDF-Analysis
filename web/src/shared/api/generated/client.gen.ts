@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.35.0 (OpenAPI 3.1.0)
- *   sha256 c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139
+ *   AuditManager PC-01 API 1.36.0 (OpenAPI 3.1.0)
+ *   sha256 f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -118,6 +118,8 @@ import type {
   DequeueComparisonAiSheetChangesResult,
   DownloadAgentPackageInput,
   DownloadAgentPackageResult,
+  EndUserSessionsInput,
+  EndUserSessionsResult,
   EnqueueComparisonLaunchInput,
   EnqueueComparisonLaunchResult,
   EstimateArV3GroupCostInput,
@@ -290,6 +292,8 @@ import type {
   ListAnalysisProfilesResult,
   ListAssignmentsInput,
   ListAssignmentsResult,
+  ListAuthEventsInput,
+  ListAuthEventsResult,
   ListComparisonAiLinksInput,
   ListComparisonAiLinksResult,
   ListComparisonAiPairHintsInput,
@@ -1215,6 +1219,18 @@ export function downloadAgentPackage(
   options?: RequestOptions,
 ): Promise<ApiResponse<DownloadAgentPackageResult>> {
   return request<DownloadAgentPackageResult>(OPERATIONS.downloadAgentPackage, input, options);
+}
+
+/**
+ * End every session of an account.
+ *
+ * `POST /users/{user_uid}/sessions/end` - a write; carries a required Idempotency-Key.
+ */
+export function endUserSessions(
+  input: EndUserSessionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<EndUserSessionsResult>> {
+  return request<EndUserSessionsResult>(OPERATIONS.endUserSessions, input, options);
 }
 
 /**
@@ -2247,6 +2263,18 @@ export function listAssignments(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListAssignmentsResult>> {
   return request<ListAssignmentsResult>(OPERATIONS.listAssignments, input, options);
+}
+
+/**
+ * List the access journal.
+ *
+ * `GET /auth-events`.
+ */
+export function listAuthEvents(
+  input: ListAuthEventsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAuthEventsResult>> {
+  return request<ListAuthEventsResult>(OPERATIONS.listAuthEvents, input, options);
 }
 
 /**
@@ -4248,6 +4276,7 @@ export const apiClient = {
   deleteComparisonReport,
   dequeueComparisonAiSheetChanges,
   downloadAgentPackage,
+  endUserSessions,
   enqueueComparisonLaunch,
   estimateArV3GroupCost,
   estimateComparisonAiPairCheck,
@@ -4334,6 +4363,7 @@ export const apiClient = {
   listAnalysisPresets,
   listAnalysisProfiles,
   listAssignments,
+  listAuthEvents,
   listComparisonAiLinks,
   listComparisonAiPairHints,
   listComparisonMatrixEdits,

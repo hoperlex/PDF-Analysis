@@ -110,7 +110,11 @@ def build_dispatch_routes(router: APIRouter, dispatch: DispatchPort) -> None:
         status_code=200,
         response_model=models.AssignmentPage,
         responses={
-            **success(200, "One page of the assignments the caller may read, newest first."),
+            **success(
+                200,
+                "One page of the assignments the caller may read, newest first, the number that match "
+                "and the count in each status.",
+            ),
             **envelope_responses(401, 403, 422, 500, 503),
         },
         summary="List assignments.",
@@ -118,7 +122,11 @@ def build_dispatch_routes(router: APIRouter, dispatch: DispatchPort) -> None:
             "Any one role. An administrator reads every assignment (`mine=true` narrows to the "
             "ones currently given to them); an expert reads only the assignments currently "
             "given to them, whatever `mine` says. `status` and `project_uid` narrow the list; "
-            "newest first, ordered by `(created_at, assignment_uid)`."
+            "newest first, ordered by `(created_at, assignment_uid)`. `total` is the number of "
+            "assignments the caller may read under every filter of the request, and `overview` "
+            "gives each of the five statuses with its count over the scope filters only "
+            "(`project_uid`, `mine` and what the caller may read), so each count is what choosing "
+            "that status would list."
         ),
     )
     def list_assignments(
@@ -135,8 +143,13 @@ def build_dispatch_routes(router: APIRouter, dispatch: DispatchPort) -> None:
             status=None if status is None else status.value,
             project_uid=project_uid,
         )
+        overview = dispatch.assignment_overview(
+            user_uid=subject.user_uid, mine=mine, project_uid=project_uid
+        )
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_sort_key)
         body = page_body([view.model_dump(mode="json") for view in page.items], page.next_cursor)
+        body["total"] = len(rows)
+        body["overview"] = [count.model_dump(mode="json") for count in overview]
         return json_response(200, encode_json(body))
 
     @router.get(

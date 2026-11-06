@@ -28,6 +28,7 @@ from auditmanager.api.routers.declarations import (
     envelope_responses,
     success,
 )
+from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import AccountPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
@@ -158,6 +159,67 @@ def build_user_routes(router: APIRouter, accounts: AccountPort) -> None:
     def purge_user(subject: CurrentSubject, user_uid: UserUidPath) -> WireResponse:
         accounts.purge_account(actor_uid=subject.user_uid, user_uid=user_uid)
         return WireResponse(204, ())
+
+    @router.post(
+        "/users/{user_uid}/sessions/end",
+        operation_id="endUserSessions",
+        tags=["users"],
+        status_code=200,
+        response_model=models.Account,
+        responses={
+            **success(
+                200,
+                "Every credential the account held is refused from its next request; the account is "
+                "unchanged otherwise.",
+            ),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503, descriptions=_CONFLICT),
+        },
+        summary="End every session of an account.",
+        description=(
+            "Requires `admin` and an `Idempotency-Key`. Raises the account's credential epoch, so every "
+            "credential it holds -- in every browser and on every device -- is refused from its next "
+            "request and it signs in again; its password, roles and sign-in brake are untouched. The "
+            "event `sessions_ended` is journalled in the same transaction (`listAuthEvents`). Not "
+            "oneself (`permission_denied`): an administrator ends their own sessions by changing their "
+            "password. An archived or missing account is `not_found`. An exact repeat of the key answers "
+            "the account unchanged and ends nothing more; the key under another account or another "
+            "administrator is `idempotency_key_reuse`."
+        ),
+    )
+    def end_user_sessions(
+        subject: CurrentSubject, user_uid: UserUidPath, idempotency_key: RequiredIdempotencyKey
+    ) -> WireResponse:
+        view = accounts.end_account_sessions(
+            actor_uid=subject.user_uid, user_uid=user_uid, idempotency_key=idempotency_key
+        )
+        return json_response(200, encode_json(account_body(view)))
+
+    @router.get(
+        "/auth-events",
+        operation_id="listAuthEvents",
+        tags=["users"],
+        status_code=200,
+        response_model=models.AuthEventPage,
+        responses={
+            **success(200, "One page of the access journal, newest first."),
+            **envelope_responses(401, 403, 422, 500, 503),
+        },
+        summary="List the access journal.",
+        description=(
+            "Requires `admin`. The append-only journal of sign-ins and what changes an account's access, newest "
+            "first: `sign_in_succeeded`, `sign_in_blocked` (a refused attempt that started a cooling-off period, "
+            "at most one per account per period -- refusals that start none and attempts on an unknown login are "
+            "not journalled), `password_changed`, `password_reset`, `role_granted`, `role_revoked` and "
+            "`sessions_ended`. An account is named by identity and by its label now; the journal never holds a "
+            "password, a token, an address or a login as typed. The cursor is the last event's identity."
+        ),
+    )
+    def list_auth_events(
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+    ) -> WireResponse:
+        page = accounts.list_auth_events(cursor=cursor, limit=limit)
+        return json_response(200, encode_json(page.model_dump(mode="json")))
 
     @router.post(
         "/users/{user_uid}/password",
