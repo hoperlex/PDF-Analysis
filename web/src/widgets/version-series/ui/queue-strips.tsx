@@ -13,6 +13,7 @@
 import type { ComparisonAiQueue, ComparisonLaunchEntry, ComparisonLaunchQueue, ComparisonOverviewSet } from '@/shared/api';
 import type { ComparisonFailure } from '@/entities/version-series';
 import {
+  useAiQueue,
   AI_QUEUE_TITLE,
   LAUNCH_ENTRY_STATE_LABELS,
   LAUNCH_QUEUE_STATE_LABELS,
@@ -129,4 +130,18 @@ export function AiQueueStrip({ queue, sets }: AiQueueStripProps) {
       </ul>
     </section>
   );
+}
+
+export interface AiQueueNoticeProps {
+  readonly sets: readonly ComparisonOverviewSet[];
+}
+
+/**
+ * The same strip at the head of the page, above the tabs, as the original draws it under the title (`version-comparison.js:76-79`):
+ * the installation's AI queue is not about the open tab, so both tabs see it. It reads the queue itself (one key, one request with the
+ * table's own read) and draws nothing while no job waits.
+ */
+export function AiQueueNotice({ sets }: AiQueueNoticeProps) {
+  const queue = useAiQueue();
+  return queue.data !== undefined && queue.data.items.length > 0 ? <AiQueueStrip queue={queue.data} sets={sets} /> : null;
 }

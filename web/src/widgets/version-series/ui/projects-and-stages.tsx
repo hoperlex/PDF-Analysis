@@ -620,6 +620,8 @@ export interface ProjectsAndStagesProps {
   /** An expert; the buttons of the steps are drawn for nobody else. */
   readonly mayAct: boolean;
   readonly onOpen: (documentUid: DocumentUid) => void;
+  /** The page draws the installation's AI queue above the tabs (`AiQueueNotice`), so the table does not draw it a second time. */
+  readonly queueOnPage?: boolean;
 }
 
 type OpenDialog =
@@ -631,7 +633,7 @@ type OpenDialog =
 const QUEUE_STOPPED_NOTE = 'Очередь запуска сейчас остановлена — выбранное встанет в неё и начнётся после «Продолжить очередь».';
 const QUEUE_BUSY_NOTE = 'В очереди запуска уже идут другие шаги — выбранное начнётся после них.';
 
-export function ProjectsAndStages({ projectUid, mayAct, onOpen }: ProjectsAndStagesProps) {
+export function ProjectsAndStages({ projectUid, mayAct, onOpen, queueOnPage = false }: ProjectsAndStagesProps) {
   const overview = useComparisonOverview(projectUid);
   const launch = useLaunchQueue(projectUid);
   const aiQueue = useAiQueue();
@@ -883,7 +885,7 @@ export function ProjectsAndStages({ projectUid, mayAct, onOpen }: ProjectsAndSta
           openStep(set, entry.step, entry.series_id ?? null, entry.restart);
         }
       }}
-      aiQueue={aiQueue.data}
+      aiQueue={queueOnPage ? undefined : aiQueue.data}
       onAiAct={onAiAct}
       onSummary={(seriesId) =>
         download.mutate({ kind: 'summary-md', seriesId: seriesId as ComparisonSeriesId, fileName: 'svodka-izmeneniy.md' })

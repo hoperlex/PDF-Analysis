@@ -32,7 +32,7 @@ import { ComparisonViewer } from '@/widgets/comparison-viewer';
 import { ReportWindow } from '@/widgets/comparison-report';
 import { UploadDialog } from '@/widgets/comparison-upload';
 import type { UploadMode } from '@/widgets/comparison-upload';
-import { ModuleOffState, ProjectsAndStages, SheetsTab } from '@/widgets/version-series';
+import { AiQueueNotice, ModuleOffState, ProjectsAndStages, SheetsTab } from '@/widgets/version-series';
 
 import type { CompareTab } from '../model/tabs';
 import { useCompareAddress } from '../model/use-compare-address';
@@ -168,6 +168,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
               Комплект из адреса не найден в этом проекте. Выберите комплект в таблице.
             </p>
           ) : null}
+          <AiQueueNotice sets={overview.data?.sets ?? []} />
           <CompareTabs
             active={tab}
             onSelect={(next) => goTo({ documentUid, tab: next })}
@@ -181,6 +182,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
               <ProjectsAndStages
                 projectUid={projectUid}
                 mayAct={mayAct}
+                queueOnPage
                 onOpen={(uid) => goTo({ documentUid: uid, tab: 'sheets' })}
               />
             ) : (
