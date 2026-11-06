@@ -130,6 +130,53 @@ describe('sectionNavigationOf — the sections of the current project', () => {
   });
 });
 
+/** The same rows with `awaiting_decision` set per section; a section named in `without` has no counts at all. */
+function rowsAwaiting(
+  counts: Partial<Record<ProjectSection, number>>,
+  awaiting: Partial<Record<ProjectSection, number>>,
+  without: readonly ProjectSection[] = [],
+): SectionDocumentCount[] {
+  return rows(counts).map((row) => {
+    if (row.section === undefined) return row;
+    if (without.includes(row.section)) {
+      const bare: Partial<SectionDocumentCount> = { ...row };
+      delete bare.audit_counts;
+      return bare as SectionDocumentCount;
+    }
+    const waiting = awaiting[row.section] ?? 0;
+    return { ...row, ...sectionAudit(row.document_count, { awaiting_decision: waiting, no_expert_decision: waiting }) };
+  });
+}
+
+describe('UI-A-05: the documents of a section that no expert has checked', () => {
+  const entriesOf = (sectionRows: SectionDocumentCount[]) => {
+    const result = sectionNavigationOf(sectionRows, PROJECT, null);
+    if (result.status !== 'ready') throw new Error('not ready');
+    return result.entries;
+  };
+
+  it('is the row\'s audit_counts.awaiting_decision, and null where the row carries no counts: unknown is not zero', () => {
+    const entries = entriesOf(rowsAwaiting(COUNTS, { AR: 3, PS: 0, KJ: 9 }, ['KJ']));
+    expect(entries.map((entry) => [entry.code, entry.awaitingDecision])).toEqual([['AR', 3], ['PS', 0], ['KJ', null]]);
+  });
+
+  it('is the awaiting_decision figure and not the wider no_expert_decision, which counts the documents never run', () => {
+    // 4 documents in AR: 1 waits for a decision, 3 were never run (`no_expert_decision` = 4).
+    const row = { section: 'AR' as ProjectSection, document_count: 4, ...sectionAudit(4, { not_run: 3, awaiting_decision: 1, no_expert_decision: 4 }) };
+    const [entry] = entriesOf([...rows({}).filter((other) => other.section !== 'AR'), row]);
+    expect(entry?.awaitingDecision).toBe(1);
+  });
+
+  it('adds what the red number counts to the entry\'s name, only when there is one', () => {
+    const labels = entriesOf(rowsAwaiting(COUNTS, { AR: 3 }, ['KJ'])).map(sectionEntryLabel);
+    expect(labels).toEqual([
+      'АР Архитектурные решения, документов: 4, не проверено экспертом: 3',
+      'ПЗ Пояснительная записка, документов: 1',
+      'КЖ Конструкции железобетонные, документов: 2',
+    ]);
+  });
+});
+
 describe('offersSectionNavigation — who is offered the group', () => {
   it('a complete session holding a role, and not a guest, a default credential, an incomplete profile or no role', () => {
     expect(offersSectionNavigation(EXPERT)).toBe(true);
@@ -192,7 +239,7 @@ describe('the «Разделы» group in the menu', () => {
     expect(first).toContain(`href="${sectionPage('AR')}"`);
     expect(first).toContain('aria-label="АР Архитектурные решения, документов: 4"');
     expect(first).toContain('title="Архитектурные решения"');
-    expect(first).toMatch(/>АР<\/span><span class="[^"]*">4<\/span>/);
+    expect(first).toMatch(/>АР<\/span><span class="[^"]*"><span class="[^"]*">4<\/span><\/span>/);
   });
 
   it('shows the Cyrillic marks and numbers and never the Latin code as text', () => {
@@ -252,6 +299,54 @@ describe('the «Разделы» group in the menu', () => {
     }
   });
 
+  describe('the red badge of UI-A-05', () => {
+    const WAITING: SectionNavigation = sectionNavigationOf(rowsAwaiting(COUNTS, { AR: 3, KJ: 120 }), PROJECT, null);
+    const itemsOf = (markup: string): Map<string, string[]> => {
+      const found = new Map<string, string[]>();
+      for (const match of markup.matchAll(/<li class="am-disclosure__item" data-section-nav-item="([A-Z]+)">(.*?)<\/li>/g)) {
+        found.set(match[1] as string, [...(found.get(match[1] as string) ?? []), match[2] as string]);
+      }
+      return found;
+    };
+    const alerts = (item: string): string[] =>
+      [...item.matchAll(/<span class="[^"]*" title="([^"]*)" data-menu-badge="alert">([^<]*)<\/span>/g)].map((m) => `${m[2]}|${m[1]}`);
+
+    it('stands before the count in the bar and in the stacked menu, on the sections that wait, and nowhere else', () => {
+      const found = itemsOf(draw(WAITING));
+      // Once in the bar and once in the stacked menu.
+      expect(found.get('AR')).toHaveLength(2);
+      for (const item of found.get('AR') ?? []) {
+        expect(alerts(item)).toEqual([
+          '3|Не проверено экспертом: 3. Документы с замечаниями, по которым эксперт ещё не принял решения. Документы, которые не анализировались, не считаются.',
+        ]);
+        expect(item.indexOf('data-menu-badge="alert"')).toBeLessThan(item.lastIndexOf('>4<'));
+        expect(item).toContain('aria-label="АР Архитектурные решения, документов: 4, не проверено экспертом: 3"');
+      }
+      for (const item of found.get('PS') ?? []) expect(alerts(item)).toEqual([]);
+      expect(draw(READY)).not.toContain('data-menu-badge');
+    });
+
+    it('shows 99+ past two digits and keeps the exact figure in the tooltip and the name', () => {
+      const kj = itemsOf(draw(WAITING)).get('KJ')?.[0] ?? '';
+      expect(alerts(kj)).toHaveLength(1);
+      expect(kj).toContain('>99+<');
+      expect(kj).toContain('title="Не проверено экспертом: 120.');
+      expect(kj).toContain('не проверено экспертом: 120"');
+    });
+
+    it('rides the corner of the glyph in the compact rail, and the link\'s name says what it counts', () => {
+      const rail = /<div class="[^"]*" data-nav-state="rail">(.*?)<div class="[^"]*" data-nav-state="stacked">/s.exec(draw(WAITING))?.[1] ?? '';
+      const links = [...rail.matchAll(/<a\b([^>]*)>(.*?)<\/a>/g)].filter((m) => (m[1] as string).includes('/sections/'));
+      expect(links.map((m) => /aria-label="([^"]*)"/.exec(m[1] as string)?.[1])).toEqual([
+        'АР Архитектурные решения, документов: 4, не проверено экспертом: 3',
+        'ПЗ Пояснительная записка, документов: 1',
+        'КЖ Конструкции железобетонные, документов: 2, не проверено экспертом: 120',
+      ]);
+      expect(links.map((m) => (m[2] as string).includes('data-menu-badge="alert"'))).toEqual([true, false, true]);
+      expect(links.map((m) => /aria-hidden="true"><span[^>]*data-menu-badge="alert">([^<]*)</.exec(m[2] as string)?.[1] ?? null)).toEqual(['3', null, '99+']);
+    });
+  });
+
   it('does not touch the other groups: the same links, in the same order, with or without it', () => {
     const hrefs = (markup: string): string[] =>
       [...markup.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => m[1] as string).filter((href) => !href.includes('/sections/'));
@@ -266,6 +361,13 @@ describe('the frame reads the current project\'s sections only where it is offer
     renderWith(client, createElement(FrameNavigation, { navigation: buildNavigation(EXPERT), offersSections }));
 
   const summaryKey = (project: string) => queryKeys.dashboard.summary(project as ProjectUid);
+
+  /**
+   * The reads of the dashboard's summary that the frame filed. The frame files the menu's own counters too (the queue,
+   * the knowledge base: `menu-badges.test.ts`), which are not what these cases are about.
+   */
+  const summaryReads = (client: ReturnType<typeof newClient>): number =>
+    client.getQueryCache().getAll().filter((query) => query.queryKey[0] === 'dashboard').length;
 
   function seeded(): ReturnType<typeof newClient> {
     const client = newClient();
@@ -312,11 +414,11 @@ describe('the frame reads the current project\'s sections only where it is offer
     navigationState.pathname = '/dashboard';
     navigationState.search = '';
     const client = seeded();
-    const before = client.getQueryCache().getAll().length;
+    const before = summaryReads(client);
     const markup = frame(client, true);
     expect(markup).not.toContain('data-section-nav');
     expect(buttons(markup)).not.toContain('Разделы');
-    expect(client.getQueryCache().getAll()).toHaveLength(before);
+    expect(summaryReads(client)).toBe(before);
   });
 
   it('draws nothing, and files no read, for a session that is not offered it', () => {
@@ -325,7 +427,7 @@ describe('the frame reads the current project\'s sections only where it is offer
     const client = newClient();
     const markup = frame(client, false);
     expect(markup).not.toContain('data-section-nav');
-    expect(client.getQueryCache().getAll()).toHaveLength(0);
+    expect(summaryReads(client)).toBe(0);
   });
 
   it('draws nothing, and files no read, for a project the address does not spell as one', () => {
@@ -334,7 +436,7 @@ describe('the frame reads the current project\'s sections only where it is offer
     const client = newClient();
     const markup = frame(client, true);
     expect(markup).not.toContain('data-section-nav');
-    expect(client.getQueryCache().getAll()).toHaveLength(0);
+    expect(summaryReads(client)).toBe(0);
   });
 
   it('says it could not read the sections when the summary failed and none is held', () => {

@@ -34,6 +34,16 @@
  * the dashboard's summary of that project. {@link FrameNavigationView} takes the group's content as data
  * (`sections`), so every state of it is drawn without a query client.
  *
+ * ## Counters beside the items (`UI-A-05`, `UI-A-06`, `UI-A-91`)
+ *
+ * An item may carry a small number (`menu-badges.ts`): the unchecked documents of a section in red, the jobs of
+ * «Очередь», the entries of «База знаний», the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
+ * data (`badges`, by item address; the sections carry theirs in `sections`), so every state is drawn without a query
+ * client; `FrameNavigation` reads them (`use-menu-badges.ts`) only for the items the session's navigation holds, and only
+ * where there is a query client. A group with a badged item hands the shared `Disclosure` its list as content
+ * (`BadgedLinks`), since `links` has no place for a counter; the rail draws the number on the glyph's corner and the
+ * link's name and tooltip say what it counts.
+ *
  * ## The current page
  *
  * Read here, from `usePathname`, and matched against the registry's address shapes
@@ -43,9 +53,10 @@
  * any pathname without a router.
  */
 
+import { QueryClientContext } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Fragment, useId, useState } from 'react';
+import { Fragment, useContext, useId, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -54,13 +65,17 @@ import type { DisclosureProps } from '@/shared/ui';
 import { Disclosure } from '@/shared/ui';
 import { looksLikeProjectUid } from '@/entities/project';
 
+import type { MenuBadge, MenuBadgeSource, MenuBadges } from './menu-badges';
+import { badgeSourceAt, badgeSourcesOf, itemLabelWithBadges, uncheckedBadges, uncheckedClause } from './menu-badges';
 import type { CurrentScreen, Navigation, NavigationGroup } from './navigation';
 import { currentScreen } from './navigation';
+import { BadgedLinks, ItemBadges, RailBadges } from './navigation-badges';
 import { NavigationGlyph } from './navigation-glyph';
 import type { SectionNavigation } from './section-navigation';
 import {
   SECTIONS_EMPTY_NOTE, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, sectionEntryLabel,
 } from './section-navigation';
+import { useMenuBadges } from './use-menu-badges';
 import { useSectionNavigation } from './use-section-navigation';
 import styles from './app-frame.module.css';
 
@@ -82,12 +97,21 @@ export interface FrameNavigationViewProps {
   /** `UI-A-04`: the «Разделы» group's content for the current project. Absent: the group is not drawn. */
   readonly sections?: SectionNavigation | undefined;
   /**
+   * `UI-A-06`, `UI-A-91`: the counters beside the items, by the item's address. Absent: this render is not told of any,
+   * and a group draws its links as the shared `Disclosure` does. Present (even empty): a group with an item that can
+   * carry one draws its list itself, so the number appears in place when the read answers.
+   */
+  readonly badges?: MenuBadges | undefined;
+  /**
    * What draws «Меню» and each group. In the shell it is the `Disclosure` island, which holds its
    * own open state. An instrument that renders one static pass cannot click, so it passes a
    * view drawn open instead — the contrast census does — and measures the same tree.
    */
   readonly disclosure?: ComponentType<DisclosureProps> | undefined;
 }
+
+const NO_BADGES: readonly MenuBadge[] = [];
+const NO_SOURCES: ReadonlySet<MenuBadgeSource> = new Set();
 
 function links(group: NavigationGroup, current: CurrentScreen | null, projectUid: string | null) {
   return group.items.map((item) => ({
@@ -98,11 +122,37 @@ function links(group: NavigationGroup, current: CurrentScreen | null, projectUid
   }));
 }
 
+type GroupCommon = Omit<DisclosureProps, 'links' | 'children'>;
+
+/**
+ * One group's disclosure. With `badges` told and an item that can carry a counter, the group's list is
+ * {@link BadgedLinks}; otherwise it is the plain `links` the shared `Disclosure` draws itself.
+ */
+function groupOf(
+  Group: ComponentType<DisclosureProps>,
+  common: GroupCommon,
+  group: NavigationGroup,
+  current: CurrentScreen | null,
+  projectUid: string | null,
+  badges: MenuBadges | undefined,
+): ReactNode {
+  if (badges !== undefined && group.items.some((item) => badgeSourceAt(item.address) !== null)) {
+    return (
+      <Group {...common}>
+        <BadgedLinks group={group} current={current} projectUid={projectUid} badges={badges} />
+      </Group>
+    );
+  }
+  return <Group {...common} links={links(group, current, projectUid)} />;
+}
+
 function RailLink({
   href,
   label,
   tooltipText = label,
+  wrapTooltip = tooltipText !== label,
   glyph,
+  badges,
   current,
 }: {
   readonly href: string;
@@ -110,7 +160,11 @@ function RailLink({
   readonly label: string;
   /** What the hover tooltip says when it is not the name. */
   readonly tooltipText?: string | undefined;
+  /** The tooltip wraps instead of running on: it says more than the item's name. */
+  readonly wrapTooltip?: boolean | undefined;
   readonly glyph: ReactNode;
+  /** The counters on the glyph's corner. */
+  readonly badges?: readonly MenuBadge[] | undefined;
   readonly current: boolean;
 }) {
   const id = useId();
@@ -136,10 +190,11 @@ function RailLink({
         onClick={() => setTooltip(null)}
       >
         {glyph}
+        <RailBadges badges={badges ?? NO_BADGES} />
       </Link>
       {tooltip !== null && typeof document !== 'undefined'
         ? createPortal(
-          <span id={id} role="tooltip" className={tooltipText === label ? styles.railTooltip : `${styles.railTooltip} ${styles.railTooltipWrap}`} style={tooltip}>{tooltipText}</span>,
+          <span id={id} role="tooltip" className={wrapTooltip ? `${styles.railTooltip} ${styles.railTooltipWrap}` : styles.railTooltip} style={tooltip}>{tooltipText}</span>,
           document.body,
         )
         : null}
@@ -171,7 +226,9 @@ function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
             title={entry.name}
           >
             <span className={styles.sectionMark}>{entry.abbr}</span>
-            <span className={styles.sectionCount}>{entry.count}</span>
+            <ItemBadges badges={uncheckedBadges(entry.awaitingDecision)}>
+              <span className={styles.sectionCount}>{entry.count}</span>
+            </ItemBadges>
           </Link>
         </li>
       ))}
@@ -205,6 +262,7 @@ export function FrameNavigationView({
   pathname,
   projectUid = null,
   sections,
+  badges,
   disclosure = Disclosure,
 }: FrameNavigationViewProps) {
   const Group = disclosure;
@@ -220,7 +278,7 @@ export function FrameNavigationView({
       <div className={styles.row} data-nav-state="row">
         {groups.map((group) => (
           <Fragment key={group.group}>
-            <Group label={group.label} current={inGroup(group)} links={links(group, current, projectUid)} layout="inline" defaultOpen closeOnNavigate={false} closeOnOutside={false} />
+            {groupOf(Group, { label: group.label, current: inGroup(group), layout: 'inline', defaultOpen: true, closeOnNavigate: false, closeOnOutside: false }, group, current, projectUid, badges)}
             {sections !== undefined && afterGroup(group) ? sectionsGroup(Group, sections, true) : null}
           </Fragment>
         ))}
@@ -229,28 +287,37 @@ export function FrameNavigationView({
         {groups.map((group) => (
           <Fragment key={group.group}>
             <div className={styles.railGroup} role="group" aria-label={group.label} data-current-group={inGroup(group) ? 'true' : undefined}>
-              {group.items.map((item) => (
-                <RailLink
-                  key={item.address}
-                  href={withProjectParam(item.address, projectUid)}
-                  label={item.label}
-                  glyph={<NavigationGlyph label={item.label} />}
-                  current={current?.address === item.address}
-                />
-              ))}
+              {group.items.map((item) => {
+                const own = badges?.[item.address] ?? NO_BADGES;
+                return (
+                  <RailLink
+                    key={item.address}
+                    href={withProjectParam(item.address, projectUid)}
+                    label={itemLabelWithBadges(item.label, own)}
+                    wrapTooltip={own.length > 0}
+                    glyph={<NavigationGlyph label={item.label} />}
+                    badges={own}
+                    current={current?.address === item.address}
+                  />
+                );
+              })}
             </div>
             {railSections.length > 0 && afterGroup(group) ? (
               <div className={styles.railGroup} role="group" aria-label={SECTIONS_GROUP_LABEL} data-current-group={railSections.some((entry) => entry.current) ? 'true' : undefined}>
-                {railSections.map((entry) => (
-                  <RailLink
-                    key={entry.code}
-                    href={entry.href}
-                    label={sectionEntryLabel(entry)}
-                    tooltipText={`${entry.name}: ${entry.count}`}
-                    glyph={<span data-nav-glyph="section" aria-hidden="true">{entry.abbr}</span>}
-                    current={entry.current}
-                  />
-                ))}
+                {railSections.map((entry) => {
+                  const unchecked = uncheckedClause(entry.awaitingDecision);
+                  return (
+                    <RailLink
+                      key={entry.code}
+                      href={entry.href}
+                      label={sectionEntryLabel(entry)}
+                      tooltipText={`${entry.name}: ${entry.count}${unchecked === null ? '' : `, ${unchecked}`}`}
+                      glyph={<span data-nav-glyph="section" aria-hidden="true">{entry.abbr}</span>}
+                      badges={uncheckedBadges(entry.awaitingDecision)}
+                      current={entry.current}
+                    />
+                  );
+                })}
               </div>
             ) : null}
           </Fragment>
@@ -262,7 +329,7 @@ export function FrameNavigationView({
             {groups.map((group) => (
               <Fragment key={group.group}>
                 <li className={styles.stackedItem}>
-                  <Group label={group.label} layout="inline" current={inGroup(group)} links={links(group, current, projectUid)} closeOnNavigate={false} />
+                  {groupOf(Group, { label: group.label, layout: 'inline', current: inGroup(group), closeOnNavigate: false }, group, current, projectUid, badges)}
                 </li>
                 {sections !== undefined && afterGroup(group) ? <li className={styles.stackedItem}>{sectionsGroup(Group, sections, false)}</li> : null}
               </Fragment>
@@ -276,27 +343,47 @@ export function FrameNavigationView({
 
 const NO_PARAMS = new URLSearchParams();
 
+interface ConnectedProps {
+  readonly navigation: Navigation;
+  readonly pathname: string | null;
+  readonly projectUid: string | null;
+  /** The reads the menu's counters need (`badgeSourcesOf`); never empty here. */
+  readonly sources: ReadonlySet<MenuBadgeSource>;
+  readonly sections?: SectionNavigation | undefined;
+}
+
+/** The frame's navigation with its counters read: mounted only where there is a query client and an item that carries one. */
+function FrameNavigationWithBadges({ navigation, pathname, projectUid, sources, sections }: ConnectedProps) {
+  const badges = useMenuBadges(sources);
+  return <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} badges={badges} />;
+}
+
 /** The frame's navigation with the project's «Разделы» read: mounted only where the group is offered. */
 function FrameNavigationWithSections({
   navigation,
   pathname,
   projectUid,
-}: {
-  readonly navigation: Navigation;
-  readonly pathname: string;
-  readonly projectUid: string;
-}) {
+  sources,
+}: Omit<ConnectedProps, 'pathname' | 'projectUid' | 'sections'> & { readonly pathname: string; readonly projectUid: string }) {
   const sections = useSectionNavigation(projectUid, pathname);
-  return <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} />;
+  return sources.size === 0
+    ? <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} />
+    : <FrameNavigationWithBadges navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} sources={sources} />;
 }
 
 export function FrameNavigation({ navigation, offersSections = false }: FrameNavigationProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const projectUid = pathname === null ? null : readProjectContext(pathname, searchParams).projectUid;
+  // The counters are read only where there is a query client (the application's root layout always has one; a bare
+  // render of the frame, as the shell's tests make, does not) and only for the items this session's menu holds.
+  const client = useContext(QueryClientContext);
+  const sources = client === undefined ? NO_SOURCES : badgeSourcesOf(navigation);
   // The group needs a current project the section pages can name; a malformed uid is the page's own refusal to say.
   if (offersSections && pathname !== null && projectUid !== null && looksLikeProjectUid(projectUid)) {
-    return <FrameNavigationWithSections navigation={navigation} pathname={pathname} projectUid={projectUid} />;
+    return <FrameNavigationWithSections navigation={navigation} pathname={pathname} projectUid={projectUid} sources={sources} />;
   }
-  return <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} />;
+  return sources.size === 0
+    ? <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} />
+    : <FrameNavigationWithBadges navigation={navigation} pathname={pathname} projectUid={projectUid} sources={sources} />;
 }
