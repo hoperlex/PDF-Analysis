@@ -104,8 +104,12 @@ describe('stage run controls', () => {
     const html = renderScreen(cache, createElement(StageRunControls, { pairId: value.pair_id, linkRevisionId: value.link_revision_id, mayAct: false }));
     expect(html).toContain('Завершено');
     expect(html).toContain('07 Карточки');
-    expect(html).toContain('Результат устарел');
+    expect(html).toContain('сравнение ещё не обновлено. Обновит его эксперт');
     expect(html).not.toContain('Запустить полное сравнение');
+    // The seven steps stand as one rail of chips, each with its state (UI-B-88).
+    expect(html).toContain('Семь шагов сравнения');
+    expect(html).toContain('data-stage-step="1"');
+    expect(html).toContain('data-stage-step="7"');
   });
   it('recovers a persisted queue by its server id without inventing success', () => {
     const cache = newClient();
