@@ -20,7 +20,9 @@ import { LoadingState } from '@/shared/ui';
 
 const KnowledgeBaseChunk = dynamic(
   () => import('@/widgets/knowledge-base').then((widget) => widget.KnowledgeBase),
-  { loading: () => <LoadingState /> },
+  // `ssr: false`: the server always sends the fallback, never the widget (`D-329`, argued in
+  // `_pages/dashboard/ui/lazy-dashboard.tsx`).
+  { ssr: false, loading: () => <LoadingState /> },
 );
 
 type KnowledgeBaseProps = ComponentProps<typeof KnowledgeBaseChunk>;

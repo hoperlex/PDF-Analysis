@@ -25,7 +25,9 @@ import { LoadingState } from '@/shared/ui';
 
 const HomeSectionsChunk = dynamic(
   () => import('@/widgets/dashboard').then((widget) => widget.HomeSectionsOverview),
-  { loading: () => <LoadingState /> },
+  // `ssr: false`: the server always sends the fallback, never the widget (`D-329`, argued in
+  // `_pages/dashboard/ui/lazy-dashboard.tsx`).
+  { ssr: false, loading: () => <LoadingState /> },
 );
 
 type HomeSectionsProps = ComponentProps<typeof HomeSectionsChunk>;
