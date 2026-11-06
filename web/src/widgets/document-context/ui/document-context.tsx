@@ -5,6 +5,11 @@
  * nouns — «Проекты › Проект › Документ › Версия N › Прогон › Разбор». Every step but the current one is a
  * link built by `routes`; the current one is text with `aria-current="page"`.
  *
+ * `comparison` (second UX pass) is the version's comparison screen — «… › Версия N › Сравнение». It ends the strip as
+ * «Блоки» does, but it is not one of the version's tabs, so it draws the strip alone: no tab row, no version choice and no
+ * neighbours (and, with them, no read the comparison screen does not already make). It replaced a copy of the strip that
+ * the screen kept for itself.
+ *
  * Names come from reads the pages already make or that the query cache shares: the version (title and
  * number) and the run (its version). A name that is not known yet, or whose read failed, is the generic word
  * («Проект», «Документ»); the strip never invents a name and never blocks the page.
@@ -26,7 +31,7 @@ import { VersionTabs } from './version-tabs';
 
 import styles from './document-context.module.css';
 
-export type ContextLevel = 'section' | 'document' | 'version' | 'blocks' | 'run' | 'review';
+export type ContextLevel = 'section' | 'document' | 'version' | 'blocks' | 'comparison' | 'run' | 'review';
 
 /** Identities as the route gave them (already shape-checked by the page). */
 export interface DocumentContextProps {
@@ -101,7 +106,7 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
       href: current === 'document' ? null : routes.document(facts.projectUid, facts.documentUid),
     });
   }
-  if ((depth >= 1 || current === 'blocks') && facts.versionUid !== undefined) {
+  if ((depth >= 1 || current === 'blocks' || current === 'comparison') && facts.versionUid !== undefined) {
     steps.push({
       key: 'version',
       label: facts.versionOrdinal === undefined ? 'Версия' : `Версия ${facts.versionOrdinal}`,
@@ -111,6 +116,11 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
   if (current === 'blocks') {
     // `R-151m`: the version's «Блоки» tab ends the strip.
     steps.push({ key: 'blocks', label: 'Блоки', href: null });
+    return steps;
+  }
+  if (current === 'comparison') {
+    // The version's comparison screen ends the strip; it is a place under the version, not one of its tabs.
+    steps.push({ key: 'comparison', label: 'Сравнение', href: null });
     return steps;
   }
   if (depth >= 2 && facts.runId !== undefined) {
@@ -185,7 +195,7 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
   // `UI-A-22`, `R-151m`: as the original's strip follows its project through «Инфо», «Блоки» and «Замечания», the row
   // carries the version's tabs on the version, its «Блоки», a run and the «Разбор» of one, and `UI-A-28` the document's
   // place among the section's.
-  const tabLevel = current === 'section' || current === 'document' ? null : current;
+  const tabLevel = current === 'section' || current === 'document' || current === 'comparison' ? null : current;
   return (
     <div className={styles.bar} data-context-level={current}>
       <nav className={styles.strip} aria-label="Где вы находитесь">
