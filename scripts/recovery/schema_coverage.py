@@ -71,6 +71,9 @@ TABLES = frozenset((
     # (`UI-PARITY-P0H`, `UI-PARITY-P0I`); `0051` and `0052` add columns only. HEAD and the counts below stay at
     # `0050` until the recovery inventory is re-measured on a database at `0054`.
     "document_tag", "finding_execution_status",
+    # `0055_work_schedule` (`UI-PARITY-P0P`): five append-only journals of «График работ», each `am_immutable_row`.
+    "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
+    "work_calendar_event",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_agent_install", "executor_connection", "executor_connection_revision", "executor_enrollment", "executor_group",
     "executor_group_member", "executor_group_revision", "executor_probe",
@@ -230,6 +233,9 @@ TRIGGERS = (
     ("comparison_spec_extraction", "trg_comparison_spec_extraction_immutable", "am_immutable_row", 27),
     ("comparison_spec_extraction", "trg_comparison_spec_extraction_version", "am_check_comparison_spec_extraction", 7),
     # `0041_comparison_stage_core`: project scope, revision ordering and immutable evidence.
+    ("engineer_absence_event", "trg_engineer_absence_event_immutable", "am_immutable_row", 27),
+    ("schedule_plan_event", "trg_schedule_plan_event_immutable", "am_immutable_row", 27),
+    ("schedule_setting_event", "trg_schedule_setting_event_immutable", "am_immutable_row", 27),
     ("stage_upload_candidate", "trg_stage_upload_candidate_scope", "am_check_stage_upload_candidate_scope", 23),
     ("stage_pair", "trg_stage_pair_project", "am_check_stage_pair_project", 23),
     ("stage_assembly_member", "trg_stage_assembly_member_scope", "am_check_stage_assembly_member", 7),
@@ -380,6 +386,8 @@ TRIGGERS = (
     ("work_assignment", "trg_work_assignment_has_assigned_event", "am_require_work_assignment_event", 5),
     ("work_assignment", "trg_work_assignment_immutable", "am_immutable_row", 27),
     ("work_assignment_event", "trg_work_assignment_event_immutable", "am_immutable_row", 27),
+    ("work_assignment_schedule_event", "trg_work_assignment_schedule_event_immutable", "am_immutable_row", 27),
+    ("work_calendar_event", "trg_work_calendar_event_immutable", "am_immutable_row", 27),
     ("worker", "trg_worker_frozen_guard", "am_guard_frozen_columns", 19),
 )
 
