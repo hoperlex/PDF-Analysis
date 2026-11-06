@@ -70,27 +70,32 @@ function HitRow({ hit }: { readonly hit: NormSearchHit }) {
   const clause = clauseLabel(hit.clause_number);
   return (
     <li className={styles.hit} data-norm-hit={hit.norm_paragraph_id} data-norm-attribution={hit.source_attribution}>
-      <p>
-        <Link href={routes.normDocument(hit.norm_document_id)}><strong>{hit.designation}</strong></Link>
-        {' — '}
-        {hit.title}
-      </p>
-      <p>
-        {clause === null ? null : <span data-norm-clause={hit.clause_number}>{clause} · </span>}
-        <span data-norm-page={hit.page_label}>стр. {hit.page_label}</span>
+      {/* The document and where in it on one line; the fragment; the attribution and the way into the PDF on the last. */}
+      <p className={styles.head}>
+        <span>
+          <Link href={routes.normDocument(hit.norm_document_id)}><strong>{hit.designation}</strong></Link>
+          {' — '}
+          {hit.title}
+        </span>
+        <span className={styles.where}>
+          {clause === null ? null : <span data-norm-clause={hit.clause_number}>{clause} · </span>}
+          <span data-norm-page={hit.page_label}>стр. {hit.page_label}</span>
+        </span>
       </p>
       <blockquote className={styles.fragment} data-norm-fragment={hit.fragment.text}>
         {fragmentParts(hit.fragment).map((part, index) =>
           part.hit ? <mark key={index} className={styles.match}>{part.text}</mark> : <span key={index}>{part.text}</span>)}
       </blockquote>
-      <p className="am-form__hint">{attributionLabel(hit.source_attribution)}</p>
-      <Link
-        className="am-button am-button--quiet am-button--small"
-        href={routes.normDocument(hit.norm_document_id, hit.page_label)}
-        aria-label={`Открыть PDF документа ${hit.designation} на странице ${hit.page_label}`}
-      >
-        Открыть
-      </Link>
+      <p className={styles.foot}>
+        <span className="am-form__hint">{attributionLabel(hit.source_attribution)}</span>
+        <Link
+          className="am-button am-button--quiet am-button--small"
+          href={routes.normDocument(hit.norm_document_id, hit.page_label)}
+          aria-label={`Открыть PDF документа ${hit.designation} на странице ${hit.page_label}`}
+        >
+          Открыть
+        </Link>
+      </p>
     </li>
   );
 }

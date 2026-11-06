@@ -8,13 +8,13 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs);
 }
 
 .hit {
   min-width: 0;
   max-width: 100%;
-  padding: var(--am-gap-sm);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius);
   background: var(--am-paper);
@@ -23,6 +23,25 @@
 
 .hit p {
   margin: 0 0 var(--am-gap-xs);
+}
+
+.head,
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--am-gap);
+}
+
+.foot {
+  align-items: center;
+}
+
+.where {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  white-space: nowrap;
 }
 
 .fragment {

@@ -13,7 +13,7 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--am-gap);
+  gap: var(--am-gap-sm);
 }
 
 /*
@@ -41,7 +41,7 @@
 .card {
   min-width: 0;
   max-width: 100%;
-  padding: var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius-sm);
   overflow-wrap: anywhere;
