@@ -107,6 +107,14 @@
   border-right: 0;
 }
 
+/* The global `dl` draws a row grid with lines under each term; a tile is not a row. */
+.figure dt,
+.figure dd {
+  grid-column: auto;
+  padding: 0;
+  border-bottom: 0;
+}
+
 .figure dt {
   margin: 0;
   color: var(--am-ink-muted);
