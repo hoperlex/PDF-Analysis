@@ -1,6 +1,9 @@
 name: run-hotfix-diagnostics
 
 on:
+  workflow_run:
+    workflows: [deploy-auto]
+    types: [completed]
   workflow_dispatch:
     inputs:
       operation:
@@ -21,18 +24,22 @@ permissions:
 
 jobs:
   operator:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       contains(github.event.workflow_run.head_commit.message, '[run-complete-1106]'))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 90
     steps:
       - name: Inspect or repeat the run through the configured application
         env:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          OPERATION: ${{ inputs.operation }}
-          RUN_ID: ${{ inputs.run_id }}
-          CHECKED_SHA: ${{ github.sha }}
+          OPERATION: ${{ inputs.operation || 'reaudit-unmetered' }}
+          RUN_ID: ${{ inputs.run_id || 'run_01M6R76M73Z8QKGJCN4D623PKB' }}
+          CHECKED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
           umask 077
@@ -59,7 +66,32 @@ jobs:
           if [ "$operation" = reaudit-unmetered ]; then
             args+=(--key HOTFIX-RUN-COMPLETE-1106)
           fi
-          docker compose --env-file infra/deploy/env/alpha.env \
-            -f infra/deploy/compose.server.yml exec -T api \
-            python -m auditmanager.runs.hotfix_operator "${args[@]}" </dev/null
+          operator() {
+            docker compose --env-file infra/deploy/env/alpha.env \
+              -f infra/deploy/compose.server.yml exec -T api \
+              python -m auditmanager.runs.hotfix_operator "$@" </dev/null
+          }
+          if [ "$operation" = status ]; then
+            operator "${args[@]}"
+            exit
+          fi
+          # Diagnose the immutable parent, then admit exactly one fresh unmetered
+          # run through the ordinary command. The task key makes re-delivery safe.
+          operator status "$run_id"
+          accepted="$(operator "${args[@]}")"
+          printf '%s\n' "$accepted"
+          child="$(printf '%s' "$accepted" | python3 -c 'import json,sys; print(json.load(sys.stdin)["run_id"])')"
+          [[ "$child" =~ ^run_[0-9A-HJKMNP-TV-Z]{26}$ ]]
+          for ((attempt=0; attempt<110; attempt++)); do
+            result="$(operator status "$child")"
+            printf '%s\n' "$result"
+            state="$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])')"
+            case "$state" in
+              published) echo 'LIVE RUN COMPLETE'; exit 0 ;;
+              partial|failed|cancelled) echo 'LIVE RUN INCOMPLETE'; exit 4 ;;
+            esac
+            sleep 45
+          done
+          echo 'LIVE RUN STILL ACTIVE: observation deadline reached'
+          exit 5
           REMOTE
