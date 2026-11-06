@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import type { ExecutorBinding, ExecutorGroupPlan, RunStatus } from '@/shared/api';
 import { RUN_QUEUE_REASON_VALUES, queryKeys } from '@/shared/api';
 import {
-  QUEUE_REASON_LABELS, QueueItemWaiting, RunRow, queueItemWaiting, runExecutorLine, runExecutorSentence,
+  QUEUE_REASON_LABELS, QueueItemWaiting, RunTable, queueItemWaiting, runExecutorLine, runExecutorSentence,
   runExecutorValue, runQueueReason, runWaitingSentence,
 } from '@/entities/audit-run';
 import { formatInstant } from '@/shared/lib';
@@ -198,8 +198,9 @@ describe('the stored wait_reason', () => {
   });
 });
 
-describe('the run row and the run page', () => {
-  const row = (run: RunStatus): string => render(createElement(RunRow, { run, href: '/run' }));
+describe('the run table row and the run page', () => {
+  const row = (run: RunStatus): string =>
+    render(createElement(RunTable, { runs: [run], runHref: () => '/run', reviewHref: () => '/review' }));
 
   function page(run: RunStatus): string {
     const client = newClient();

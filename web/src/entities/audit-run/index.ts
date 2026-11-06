@@ -104,8 +104,8 @@ export { arV3PackStatusQueryOptions, useArV3PackStatus } from './api/use-ar-v3-p
 export type { RunStatusPolling } from './api/use-run-status';
 export { useRunStatus } from './api/use-run-status';
 
-export type { RunRowProps } from './ui/run-row';
-export { RunRow } from './ui/run-row';
+export type { RunTableProps } from './ui/run-table';
+export { RunTable, STARTED_BY_UNKNOWN } from './ui/run-table';
 
 export type { StageTableProps } from './ui/stage-table';
 export { StageTable } from './ui/stage-table';

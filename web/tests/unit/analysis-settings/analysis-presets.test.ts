@@ -36,7 +36,7 @@ import {
 } from '@/shared/api';
 import type { AnalysisPreset, ErrorEnvelope, RunStatus } from '@/shared/api';
 import { ANALYSIS_PRESETS_KEY, presetBlocker, presetChoices, presetFailure, presetOptionLabel } from '@/entities/analysis-preset';
-import { RunRow, classifyRunFailure, runPresetLine, runPresetSentence, runPresetValue } from '@/entities/audit-run';
+import { RunTable, classifyRunFailure, runPresetLine, runPresetSentence, runPresetValue } from '@/entities/audit-run';
 import { executorChoices } from '@/entities/executor-connection';
 import { StartRunControl, startRunBody, startRunIntent } from '@/features/start-run';
 import { RunProgress } from '@/widgets/run-progress';
@@ -506,11 +506,11 @@ describe('the preset on the run page and the run row', () => {
     }
   });
 
-  it('names the preset on the run list row, and nothing on a row without one', () => {
-    const withPreset = render(createElement(RunRow, { run: runStatus({ preset: PRESET }), href: '/run' }));
+  it('names the preset on the run table row, and nothing on a row without one', () => {
+    const withPreset = render(createElement(RunTable, { runs: [runStatus({ preset: PRESET })], runHref: () => '/run', reviewHref: () => '/review' }));
     expect(withPreset).toContain('data-run-preset');
     expect(withPreset).toContain('Пресет «Быстрый черновик», версия 2');
-    const without = render(createElement(RunRow, { run: runStatus({}), href: '/run' }));
+    const without = render(createElement(RunTable, { runs: [runStatus({})], runHref: () => '/run', reviewHref: () => '/review' }));
     expect(without).not.toContain('data-run-preset');
   });
 });
