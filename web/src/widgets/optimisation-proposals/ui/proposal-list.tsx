@@ -258,10 +258,14 @@ export interface ProposalListProps {
   readonly onPage: ((offset: number) => void) | null;
   /** `UI-B-09`: the pass's version PDF; the container reads it once for every card. */
   readonly sheet?: SheetDocument | undefined;
+  /** The pass's export and import, beside the decision filter (`UI-B-05`). */
+  readonly actions?: ReactNode;
+  /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
+  readonly summary?: ReactNode;
 }
 
 /** The live list: decision forms for an expert and a lazily read history under each card. */
-export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: ProposalListProps) {
+export function ProposalList({ page, canDecide, onDecision, onPage, sheet, actions, summary }: ProposalListProps) {
   return (
     <ProposalListView
       page={page}
