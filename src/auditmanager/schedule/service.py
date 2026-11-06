@@ -153,6 +153,7 @@ _OPEN_ASSIGNMENTS = text(
     ORDER BY c.created_at, c.assignment_uid
     """
 )
+_ASSIGNMENT_KIND = text("SELECT last_kind FROM work_assignment_current WHERE assignment_uid = :assignment_uid")
 _PLANNED = text(
     "SELECT planned_on FROM work_assignment_schedule_event WHERE assignment_uid = :assignment_uid "
     "ORDER BY occurred_at DESC, schedule_event_id DESC LIMIT 1"
@@ -427,10 +428,23 @@ def schedule_assignments(
 ) -> None:
     """`R-152g`, `R-152h`: place or move assignments on days (``None``: «без даты»), several at once; a move to another
     engineer reassigns through the dispatch boundary first. An unchanged date records nothing."""
-    from auditmanager.dispatch.public import transition_assignment
+    from auditmanager.dispatch.public import AGGREGATE_TYPE, MACHINE, STATUS_AFTER, transition_assignment
 
     roles = frozenset(actor_roles)
     _require_admin(roles)
+    for assignment_uid, _planned_on, _assignee in moves:
+        kind = session.execute(_ASSIGNMENT_KIND, {"assignment_uid": assignment_uid}).scalar_one_or_none()
+        if kind is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=AGGREGATE_TYPE)
+        if kind in _TERMINAL_KINDS:
+            # A closed assignment is not in the reserve; its date is history and is not moved.
+            raise DomainError(
+                ErrorCode.STATE_TRANSITION_NOT_ALLOWED,
+                message="a closed assignment is not placed on a day",
+                machine=MACHINE,
+                current_state=STATUS_AFTER[kind],
+                requested_state=STATUS_AFTER[kind],
+            )
     ledger, claimed = _claim(session, "schedule_assignments", idempotency_key, {"moves": sorted([
         [uid, None if day is None else day.isoformat(), assignee] for uid, day, assignee in moves
     ])}, commands)
