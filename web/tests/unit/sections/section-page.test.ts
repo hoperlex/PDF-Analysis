@@ -16,7 +16,8 @@ import { SectionDetailPage } from '@/_pages/section-detail';
 import { newClient, renderWith } from '../screens/harness';
 import { PROJECT_UID, classification, otherVersion, page, version } from './fixtures';
 
-const SECTION_KEY = queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR');
+// `UI-PARITY-DOC-AUDIT`: the page reads the listing in the server's audit order, a listing of its own in the cache.
+const SECTION_KEY = queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, undefined, 'audit');
 
 function seeded(items: ReturnType<typeof version>[], nextCursor: string | null = null) {
   const client = newClient();
@@ -29,7 +30,7 @@ const AR_TWO = otherVersion('B', { version_ordinal: 3, classification: classific
 
 describe('the section page', () => {
   it('keys its read by the section, apart from the project page’s own list', () => {
-    const options = documentListQueryOptions(PROJECT_UID, undefined, 'AR');
+    const options = documentListQueryOptions(PROJECT_UID, undefined, 'AR', false, undefined, { order: 'audit' });
     expect(options.queryKey).toEqual(SECTION_KEY);
     expect(options.queryKey).not.toEqual(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT));
   });

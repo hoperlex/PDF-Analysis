@@ -16,6 +16,7 @@ import Link from 'next/link';
 import type { DocumentVersion } from '@/shared/api';
 
 import { isComparisonOnly } from '../model/upload-kind';
+import { AuditChip } from './audit-chip';
 import { ClassificationBadges } from './classification-badges';
 import { ComparisonOnlyMark } from './comparison-only-mark';
 import styles from './document-cards.module.css';
@@ -32,13 +33,18 @@ export interface DocumentCardGridProps {
   readonly addresses: (version: DocumentVersion) => DocumentCardAddresses;
   /** A selection control for one card, or nothing; drawn in the card's corner. */
   readonly select?: ((version: DocumentVersion) => ReactNode) | undefined;
+  /**
+   * `UI-PARITY-DOC-AUDIT`: where «Разбор» of a result run opens. A card whose item carries an audit draws its chip
+   * (`audit` is on `listDocuments` items only); with this, the chip of a document that was run links to the review.
+   */
+  readonly reviewAddress?: ((runId: string) => string) | undefined;
 }
 
 export function documentCardTitle(version: DocumentVersion): string {
   return version.display_title ?? version.source_filename ?? version.version_uid;
 }
 
-export function DocumentCardGrid({ documents, addresses, select }: DocumentCardGridProps) {
+export function DocumentCardGrid({ documents, addresses, select, reviewAddress }: DocumentCardGridProps) {
   return (
     <ul className={styles.grid} data-document-cards={documents.length}>
       {documents.map((version) => {
@@ -62,6 +68,19 @@ export function DocumentCardGrid({ documents, addresses, select }: DocumentCardG
             <div className={styles.badges}>
               <ClassificationBadges classification={version.classification} />
             </div>
+            {/* `UI-A-46`: the audit state of the current version, read by the server for the page. */}
+            {version.audit === undefined ? null : (
+              <div className={styles.badges}>
+                <AuditChip
+                  audit={version.audit}
+                  reviewHref={
+                    version.audit.result_run_id === undefined || reviewAddress === undefined
+                      ? undefined
+                      : reviewAddress(version.audit.result_run_id)
+                  }
+                />
+              </div>
+            )}
             {/* `R-151e`: the document's free tags. */}
             {(version.tags ?? []).length === 0 ? null : (
               <p className={styles.tags}>{(version.tags ?? []).map((tag) => <span key={tag} className={styles.tag}>{tag}</span>)}</p>

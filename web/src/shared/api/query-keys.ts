@@ -341,9 +341,12 @@ export const queryKeys = {
      */
     documents: (
       projectUid: ProjectUid, cursor?: string, limit?: number, sectionCode?: string, archived?: boolean, tag?: string,
+      auditState?: string, order?: string,
     ) =>
       ['projects', 'documents', projectUid, {
         cursor, limit, section: sectionCode, archived: archived === true ? true : undefined, tag,
+        // `UI-PARITY-DOC-AUDIT`: the audit filter and order change the listing, so they are part of its key.
+        audit: auditState, order,
       }] as const,
     /** `R-151e`: the project's tag catalogue (`listDocumentTags`). Under `projects`, so a tag change re-reads it. */
     tags: (projectUid: ProjectUid) => ['projects', 'tags', projectUid] as const,

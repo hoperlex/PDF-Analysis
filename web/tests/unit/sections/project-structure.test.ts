@@ -134,7 +134,10 @@ describe('the structure as a reader sees it', () => {
 });
 
 describe('the project screen', () => {
-  const key = queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT);
+  // `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order.
+  const key = queryKeys.projects.documents(
+    PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit',
+  );
 
   it('groups the one listDocuments read and keeps the upload under it', () => {
     const client = newClient();

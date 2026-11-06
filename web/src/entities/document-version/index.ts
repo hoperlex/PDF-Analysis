@@ -119,6 +119,24 @@ export { ClassificationBadges } from './ui/classification-badges';
 export type { ClassificationHistoryProps } from './ui/classification-history';
 export { ClassificationHistory } from './ui/classification-history';
 
+// `UI-PARITY-DOC-AUDIT` (UI-A-46, UI-A-49, UI-A-38): the audit state of a document, its chip and the section filter.
+export type { AuditChip as AuditChipModel, AuditChipTone, AuditStateCode, SectionAuditFilter } from './model/audit-state';
+export {
+  AUDIT_PARTIAL_MARK,
+  AUDIT_STATE_CODES,
+  NOT_RUN_EMPTY_TITLE,
+  SECTION_FILTER_PARAM,
+  SHOW_ALL_LABEL,
+  auditChip,
+  auditStateOf,
+  notRunFilterSentence,
+  parseSectionAuditFilter,
+  pluralRu,
+  withNotRunFilter,
+} from './model/audit-state';
+export type { AuditChipProps } from './ui/audit-chip';
+export { AuditChip } from './ui/audit-chip';
+
 // `R-151s` (UI-A-45): documents as a grid of cards.
 export type { DocumentCardAddresses, DocumentCardGridProps } from './ui/document-cards';
 export { DocumentCardGrid, documentCardTitle } from './ui/document-cards';

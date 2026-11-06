@@ -74,6 +74,7 @@ import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
+import { SectionDetailPage } from '@/_pages/section-detail';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
 import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from '../work-schedule/fixtures';
@@ -175,7 +176,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.33.0',
+    contract_version: '1.34.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -302,6 +303,11 @@ function populatedClient() {
   client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: [project()], page });
   client.setQueryData(queryKeys.projects.detail(PROJECT_UID), project());
   client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), { items: [version()], page });
+  // `UI-PARITY-DOC-AUDIT`: the project screen reads the listing in the server's audit order, an entry of its own.
+  client.setQueryData(
+    queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+    { items: [version()], page },
+  );
   client.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), { items: [version()], page });
   client.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
   client.setQueryData(queryKeys.versions.sectionReview(VERSION_UID), sectionReview());
@@ -1279,10 +1285,46 @@ export function screens(): Screen[] {
   {
     const client = newClient();
     client.setQueryData(queryKeys.projects.tags(PROJECT_UID), { items: [{ tag: 'Корпус 1', document_count: 3 }] });
-    client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), {
-      items: [{ ...version(), tags: ['Корпус 1'] }], page: { next_cursor: null },
-    });
+    client.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+      { items: [{ ...version(), tags: ['Корпус 1'] }], page: { next_cursor: null } },
+    );
     add('ProjectSections with a tag filter', renderScreen(client, createElement(ProjectSections, { projectUid: PROJECT_UID })));
+  }
+  // `UI-PARITY-DOC-AUDIT`: the chip of each audit state on a card, a partial result's mark beside it, a never-run document
+  // and a card whose item carries no audit; and the section page narrowed to the documents never run (`?filter=not_run`),
+  // so the chips' tones, the page's note and its «Показать все» are reached by the census.
+  {
+    const runId = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const audited = (n: string, state: 'not_run' | 'clean' | 'awaiting_decision' | 'checked', partial = false) => ({
+      ...version(),
+      document_uid: `doc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      version_uid: `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      display_title: `Документ ${n}`,
+      audit: {
+        state, partial,
+        ...(state === 'not_run' ? {} : { result_run_id: runId }),
+        finding_count: state === 'not_run' || state === 'clean' ? 0 : 3,
+        undecided_finding_count: state === 'awaiting_decision' ? 2 : 0,
+      },
+    });
+    const cards = [
+      audited('A1', 'checked'), audited('A2', 'awaiting_decision', true), audited('A3', 'clean'), audited('A4', 'not_run'),
+      { ...version(), document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4QA5' as never, version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4QA5' as never },
+    ];
+    add('DocumentCardGrid with the four audit states', render(createElement(DocumentCardGrid, {
+      documents: cards,
+      addresses: () => ({ href: '/projects', documentHref: '/projects' }),
+      reviewAddress: (id) => `/projects/${PROJECT_UID}/runs/${id}/review`,
+    })));
+    const narrowed = newClient();
+    narrowed.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, 'not_run', 'audit'),
+      { items: [audited('A4', 'not_run')], page: { next_cursor: 'Y3Vyc29y' } },
+    );
+    add('SectionDetailPage narrowed to the documents never run', renderScreen(narrowed, createElement(SectionDetailPage, {
+      projectUid: PROJECT_UID, sectionCode: 'AR', filter: 'not_run',
+    })));
   }
   add('DocumentCardGrid with an archived document', render(createElement(DocumentCardGrid, {
     documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z', tags: ['Корпус 1'] }],

@@ -20,6 +20,11 @@
  * underneath moves to the next page and the structure regroups it, and the screen says when
  * there is more than one page rather than letting a reader take one page for the project.
  *
+ * **Order and state** (`UI-PARITY-DOC-AUDIT`, contract 1.34.0). The request asks for `order=audit`, so inside every group the
+ * documents the expert has checked come first, then the ones processed and still without every verdict, then the ones
+ * never audited, by name within each (`UI-A-49`) -- the server's order, kept by the grouping and not re-sorted here. Each
+ * card carries the chip of its audit state (`UI-A-46`).
+ *
  * Every row links to its version and to its document, exactly as the flat list did, so the
  * journey's walk from the project to a document is unchanged.
  */
@@ -82,6 +87,7 @@ function DocumentRows({
           : routes.version(projectUid, version.version_uid),
         documentHref: routes.document(projectUid, version.document_uid),
       })}
+      reviewAddress={(runId) => routes.review(projectUid, runId)}
       select={selection === undefined ? undefined : (version) => startable(version) ? (
         <input
           type="checkbox"
@@ -189,7 +195,7 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   // `R-151e`: the tag filter, offered from the project's whole catalogue (never from one page of documents).
   const [tag, setTag] = useState<string | null>(null);
   const tags = useDocumentTags(projectUid);
-  const query = useDocumentList(projectUid, cursor, undefined, showArchived, tag ?? undefined);
+  const query = useDocumentList(projectUid, cursor, undefined, showArchived, tag ?? undefined, { order: 'audit' });
   const mayAct = useMayActAsExpert();
   // `R-151c`: the chosen cards, by version, and the batch the panel was opened with (fixed for its life).
   const [chosen, setChosen] = useState<ReadonlyMap<string, BatchEntry>>(new Map());
