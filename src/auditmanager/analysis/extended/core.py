@@ -359,20 +359,36 @@ def build_semantic_repair_request(request: ModelRequest, *, rejected: list[dict]
     origin = {"origin_request_sha256": request.request_sha256,
               "origin_reply_sha256": reply_sha256,
               "procedure": procedure, "attempt": attempt}
-    payload = {"semantic_repair": origin, "rejected_records": feedback,
-        "accepted_records": accepted_feedback,
-        "instruction": (
-            "Предыдущий полученный ответ не прошёл проверку. Верни ПОЛНЫЙ исправленный ответ по исходной "
-            "JSON-схеме: сохрани все корректные записи и исправь перечисленные отказы. Сведения об отказах — "
-            "диагностика, а не новый источник. Пользуйся только исходными источниками и их точными source_id. "
-            "Не исправляй источник, не выдумывай цитату, число, марку или нормативную ссылку. Каждая цитата "
-            "должна дословно принадлежать указанному источнику; сохраняй знаки и десятичные разделители. "
-            "Для observations/facts откажись от неподтверждённого нового утверждения. Для reviews/corrections "
-            "сохрани обязательный полный набор input_id, при нехватке данных укажи неопределённость по схеме. "
+    instruction = (
+        "Предыдущий полученный ответ не прошёл проверку. Верни ПОЛНЫЙ исправленный ответ по исходной "
+        "JSON-схеме: сохрани все корректные записи и исправь перечисленные отказы. Сведения об отказах — "
+        "диагностика, а не новый источник. Пользуйся только исходными источниками и их точными source_id. "
+        "Не исправляй источник, не выдумывай цитату, число, марку или нормативную ссылку. Каждая цитата "
+        "должна дословно принадлежать указанному источнику; сохраняй знаки и десятичные разделители. ")
+    if procedure == "finding_review":
+        instruction += (
+            "Для reviews сохрани ровно одну запись для каждого исходного input_id и его полный исходный "
+            "набор source_ids. При review_quote_not_in_source заново проверь каждое source_evidence по тексту "
+            "именно его source_id. Не повторяй неподтверждённую цитату и не подменяй её пересказом, текстом "
+            "наблюдения, соседней страницы или нормативного кандидата. Если дословное свидетельство "
+            "подтвердить нельзя, сохрани этот input_id и source_ids, а неопределённость вырази допустимой "
+            "записью: llm_decision=needs_human, source_dependency=needs_more_context, "
+            "human_taxonomy_reason=insufficient_source_context, evidence_checked=false, source_evidence=[]. "
+            "Объясни отсутствие дословного подтверждения в explanation; это не решение об отклонении "
+            "исходного наблюдения. При отсутствии подтверждённого исправления needs_correction=false и "
+            "suggested_fix пустая строка. Не пропускай запись и не заявляй проверенное свидетельство. ")
+    elif procedure == "finding_correction":
+        instruction += (
+            "Для corrections сохрани обязательный полный набор input_id и исходные source_ids. "
             "propose_revision допустим только с дословным подтверждением всех чисел и марок. Иначе retain "
-            "или needs_context сохраняют исходные title/description/source_ids без изменений. При record_omitted "
-            "исходная запись не передана полностью: не достраивай её по хешу, проверь исходный запрос заново. "
-            "Без пояснений вне JSON.")}
+            "или needs_context сохраняют исходные title/description/source_ids без изменений. ")
+    else:
+        instruction += "Для observations/facts откажись от неподтверждённого нового утверждения. "
+    instruction += (
+        "При record_omitted исходная запись не передана полностью: не достраивай её по хешу, "
+        "проверь исходный запрос заново. Без пояснений вне JSON.")
+    payload = {"semantic_repair": origin, "rejected_records": feedback,
+        "accepted_records": accepted_feedback, "instruction": instruction}
     body = deepcopy(dict(request.body))
     messages = body.get("messages")
     if not isinstance(messages, list):

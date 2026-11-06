@@ -22,7 +22,9 @@ policies are versioned separately; existing accepted v1 plans retain their limit
 Allowed paths and ownership:
 
 - Integrator: `runs/{extended_review.py,preflight.py,cost_policy.py,norm_queries.py}`, analysis
-  public wrappers, proportional task/release records and UI execution presentation.
+  public wrappers, proportional task/release records and UI execution presentation. Release
+  metadata slot includes VERSION, release-notes and their existing contract/integration
+  revision/version pins; no new behavioral tests or test runs.
 - Passport lane: `analysis/extended/project_parameters.py`, `runs/project_parameters.py`.
 - Global lane: `analysis/extended/{coverage.py,cross_window.py,cross_window_review.py}`.
 - Semantic lane: `analysis/extended/{core.py,review.py}`, `runs/norm_queries.py` until handoff.

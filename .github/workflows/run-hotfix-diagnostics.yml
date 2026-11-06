@@ -16,7 +16,7 @@ on:
         required: true
 
 concurrency:
-  group: auditmanager-alpha-production
+  group: run-hotfix-diagnostics-1106
   cancel-in-progress: false
 
 permissions:
@@ -38,7 +38,7 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           OPERATION: ${{ inputs.operation || 'reaudit-unmetered' }}
-          RUN_ID: ${{ inputs.run_id || 'run_01M6RCQC0B0VJ8MFM0S58A61A5' }}
+          RUN_ID: ${{ inputs.run_id || 'run_01M6RJPRWTC1ER59JXJZN2C76H' }}
           CHECKED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
