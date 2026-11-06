@@ -83,7 +83,6 @@ export interface PendingPair {
 export const PENDING_PAIRS: readonly PendingPair[] = [
   { key: 'edge|--am-showcase-accent@14%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.23, dark: 1.38 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-accent@22%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.40, dark: 1.73 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-accent@26%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.49, dark: 1.94 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-accent@28%|--am-showcase-bg|-|border', themes: ['light', 'dark'], floor: { light: 1.52, dark: 2.00 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-accent@28%|--am-showcase-bg|focus-visible|border', themes: ['light', 'dark'], floor: { light: 1.52, dark: 2.00 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-accent@28%|--am-showcase-bg|hover|border', themes: ['light', 'dark'], floor: { light: 1.52, dark: 2.00 }, cause: 'translucent-border' },
@@ -103,12 +102,9 @@ export const PENDING_PAIRS: readonly PendingPair[] = [
   { key: 'edge|--am-showcase-line@30%|--am-showcase-card|hover|border', themes: ['light', 'dark'], floor: { light: 1.41, dark: 1.49 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@32%|--am-showcase-card|-|border-left', themes: ['light', 'dark'], floor: { light: 1.45, dark: 1.54 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@34%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.48, dark: 1.58 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@34%|--am-showcase-card|-|border-bottom', themes: ['light', 'dark'], floor: { light: 1.48, dark: 1.58 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@35%|--am-showcase-bg|-|border', themes: ['light', 'dark'], floor: { light: 1.46, dark: 1.61 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@36%|--am-showcase-card|-|border-top', themes: ['light', 'dark'], floor: { light: 1.52, dark: 1.63 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@38%|--am-showcase-card|-|border-left', themes: ['light', 'dark'], floor: { light: 1.56, dark: 1.68 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@40%|--am-showcase-card-alt|-|border', themes: ['light', 'dark'], floor: { light: 1.54, dark: 1.65 }, cause: 'translucent-border' },
-  { key: 'edge|--am-showcase-line@42%|--am-showcase-bg|-|border', themes: ['light', 'dark'], floor: { light: 1.59, dark: 1.82 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@45%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.71, dark: 1.87 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line@52%|--am-showcase-card|-|border', themes: ['light', 'dark'], floor: { light: 1.87, dark: 2.10 }, cause: 'translucent-border' },
   { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|-|border', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
@@ -119,7 +115,6 @@ export const PENDING_PAIRS: readonly PendingPair[] = [
   { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|focus-visible|border', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
   { key: 'edge|--am-showcase-line|--am-showcase-accent-soft|focus-visible|border-color', themes: ['dark'], floor: { dark: 2.99 }, cause: 'line-near-miss' },
   { key: 'graphic|--am-showcase-accent-soft|--am-showcase-card-alt|-|after', themes: ['light', 'dark'], floor: { light: 1.10, dark: 1.15 }, cause: 'loading-shimmer' },
-  { key: 'graphic|--am-showcase-line@38%|--am-showcase-card|-|before', themes: ['light', 'dark'], floor: { light: 1.56, dark: 1.68 }, cause: 'translucent-guide' },
   { key: 'text|--am-showcase-soft|--am-showcase-accent-soft|-|-', themes: ['light'], floor: { light: 4.33 }, cause: 'soft-ink-on-tint' },
 ];
 
