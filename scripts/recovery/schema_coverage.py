@@ -67,6 +67,10 @@ TABLES = frozenset((
     "stage_graphic_evidence", "stage_link_repair", "stage_link_repair_event", "stage_change_card",
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     "contract_state_transition", "document",
+    # `0053_document_tags` adds `document_tag` and `0054_finding_execution_status` adds `finding_execution_status`
+    # (`UI-PARITY-P0H`, `UI-PARITY-P0I`); `0051` and `0052` add columns only. HEAD and the counts below stay at
+    # `0050` until the recovery inventory is re-measured on a database at `0054`.
+    "document_tag", "finding_execution_status",
     "document_version", "document_version_classification", "document_version_classification_correction",
     "execution_control", "executor_agent_install", "executor_connection", "executor_connection_revision", "executor_enrollment", "executor_group",
     "executor_group_member", "executor_group_revision", "executor_probe",
