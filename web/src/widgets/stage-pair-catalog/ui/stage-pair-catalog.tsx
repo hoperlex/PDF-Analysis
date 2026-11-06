@@ -146,6 +146,11 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
             <button type="button" className="am-button" onClick={() => void pairs.refetch()}>Обновить</button>
           </div>
         </div>
+        {pairs.data === undefined || suggestions.data === undefined ? null : (
+          <p data-pair-counters="">
+            Сопоставлено: {selectable.length}{pairs.data.page.next_cursor === null ? '' : ' на этой странице'} · Возможных пар: {suggestions.data.items.length}{suggestions.data.page.next_cursor === null ? '' : ' на этой странице'}
+          </p>
+        )}
         {pairs.isPending ? <LoadingState what="пары стадий" /> : null}
         {pairFailure === null ? null : <ErrorState title="Пары стадий не открылись" detail={pairFailure.detail} correlationId={pairFailure.correlationId} onRetry={pairFailure.retryable ? () => void pairs.refetch() : undefined} />}
         {pairs.data?.items.length === 0 ? <EmptyState title="Подтверждённых пар пока нет" detail="Пары появятся после решения эксперта по документам П и Р." /> : null}
