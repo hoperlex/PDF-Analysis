@@ -131,7 +131,7 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
       {launcher ? null : <p>Метод: {run.engine === 'v3_native_text_experimental' ? 'V3 · эксперимент, только текст PDF' : 'Классическая цепочка'}{run.with_ai === false ? ' · без ИИ' : run.with_ai === true ? ' · с ИИ' : ''}</p>}
       {launcher ? null : <p>Изменений проектных решений: {counts.data?.project_changes ?? '—'} · Требуют проверки: {counts.data?.review ?? '—'}</p>}
       {launcher ? null : run.engine === 'v3_native_text_experimental' ? <StageExperimentalProgress progress={run.experimental_progress} state={run.state} /> : full ? <StageRail run={run} /> : <p>Шаги: {run.steps.filter((step) => step.state === 'completed').length} / {run.steps.length}</p>}
-      {run.stale ? <p role="status">Результат устарел. Запустите сравнение для текущей карты связей.</p> : null}
+      {run.stale ? <p role="status">{mayAct ? 'Результат устарел. Запустите сравнение для текущей карты связей.' : 'Есть новые документы или изменены связи — сравнение ещё не обновлено. Обновит его эксперт.'}</p> : null}
       {run.pause_reason === undefined ? null : <p>Причина остановки: {run.pause_reason}</p>}
       {run.failure_reason === undefined ? null : <p role="alert">{run.failure_reason}</p>}
       {!launcher && onRunChange !== undefined ? <button type="button" className="am-button" onClick={() => onRunChange(run)}>Открыть результат</button> : null}
