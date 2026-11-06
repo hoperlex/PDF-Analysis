@@ -168,14 +168,16 @@ def test_authored_shape_and_form() -> None:
     # while VERSION still said 0.9.0, one version per deployment day (the descending_dates rule):
     # 0.10.0 is #39 of 2026-11-03 (executor groups and rules, the agent wizard, the review's page
     # viewer, the restored intake limits), 0.11.0 is #40 to #42 of 2026-11-05 (the project
-    # selector, the viewer role, the findings table, the readable queue).
+    # selector, the viewer role, the findings table, the readable queue). 0.12.0 (RELEASE-0-12-0) is
+    # #45 of 2026-11-06, live from the grants hotfix d6e8b4af (its own deploy was refused): document
+    # cards, archive and tags, row verdicts, execution status, the queue overview, the dense layout.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
+        "0.12.0": 1, "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
         "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.11.0", "0.10.0", "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0",
+        "0.12.0", "0.11.0", "0.10.0", "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0",
         "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
