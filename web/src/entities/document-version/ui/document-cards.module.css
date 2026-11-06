@@ -140,3 +140,10 @@
   color: var(--am-ink-soft);
   font-size: var(--am-text-xs);
 }
+
+/* The findings the result run published, beside the audit chip. */
+.findings {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+}

@@ -15,6 +15,7 @@ import Link from 'next/link';
 
 import type { DocumentVersion } from '@/shared/api';
 
+import { pluralRu } from '../model/audit-state';
 import { isComparisonOnly } from '../model/upload-kind';
 import { AuditChip } from './audit-chip';
 import { ClassificationBadges } from './classification-badges';
@@ -49,6 +50,8 @@ export interface DocumentCardGridProps {
    */
   readonly classification?: 'both' | 'stage' | 'none' | undefined;
 }
+
+const FINDINGS_WORD: readonly [string, string, string] = ['замечание', 'замечания', 'замечаний'];
 
 export function documentCardTitle(version: DocumentVersion): string {
   return version.display_title ?? version.source_filename ?? version.version_uid;
@@ -92,6 +95,12 @@ export function DocumentCardGrid({ documents, addresses, select, reviewAddress, 
                       : reviewAddress(version.audit.result_run_id)
                   }
                 />
+              )}
+              {/* The original's pill «Замечания N»: how many findings the result run published. */}
+              {version.audit === undefined || version.audit.finding_count === 0 ? null : (
+                <span className={styles.findings} data-card-findings={version.audit.finding_count}>
+                  {version.audit.finding_count} {pluralRu(version.audit.finding_count, FINDINGS_WORD)}
+                </span>
               )}
             </div>
             {/* `R-151e`: the document's free tags. */}

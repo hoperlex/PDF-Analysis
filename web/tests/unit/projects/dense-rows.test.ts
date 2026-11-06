@@ -107,6 +107,19 @@ describe('a document card', () => {
     expect(none).not.toContain('data-version-classification');
   });
 
+  it('says how many findings the result run published, beside the chip, and nothing for a document with none', () => {
+    const audited = (n: number) => version({
+      classification: classification(),
+      audit: { state: 'awaiting_decision', partial: false, result_run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', finding_count: n, undecided_finding_count: 1 },
+    });
+    const three = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [audited(3)], addresses }));
+    const many = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [audited(12)], addresses }));
+    const none = renderWith(newClient(), createElement(DocumentCardGrid, { documents: [audited(0)], addresses }));
+    expect(three).toMatch(/data-card-findings="3"[^>]*>3 замечания</);
+    expect(many).toMatch(/data-card-findings="12"[^>]*>12 замечаний</);
+    expect(none).not.toContain('data-card-findings');
+  });
+
   it('opens the grid with a Σ card that is not a document', () => {
     const markup = renderWith(newClient(), createElement(DocumentCardGrid, {
       documents, addresses, leading: createElement('span', null, 'Оптимизация раздела'),
