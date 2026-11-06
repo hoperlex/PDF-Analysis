@@ -157,7 +157,13 @@ export function QueuePage() {
     <PageShell
       title="Очередь"
       subtitle="Устойчивые задачи прогонов. Данные обновляются автоматически, пока вкладка открыта, и по запросу."
-      actions={<button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>}
+      actions={(
+        <>
+          {/* The original's «+ Добавить проекты»: work enters the queue from a project's documents, so the way there is one click. */}
+          <Link href={routes.projects()} title="Выберите проект и запустите аудит его документов" data-queue-add>+ Добавить проекты</Link>
+          <button className="am-button am-button--quiet" type="button" onClick={() => { void queue.refetch(); if (holdsLease) void workers.refetch(); }}>Обновить</button>
+        </>
+      )}
     >
       <UpdateTime dataUpdatedAt={queue.dataUpdatedAt} failed={queue.isError} />
       <div className={styles.toolbar}>
