@@ -88,6 +88,8 @@ const IDENTIFIERS: Readonly<Record<string, string>> = {
   document_uid: 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
   version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
   run_id: 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8E',
+  // `R-151l`: the section page's segment is a code of the fifteen-section vocabulary, not an identity.
+  section_code: 'KJ',
 };
 
 function segmentsOf(template: string): string[] {

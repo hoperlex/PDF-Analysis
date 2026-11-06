@@ -185,7 +185,9 @@ describe('the control shows each refusal with only the actions that can help', (
     expect(markup).not.toContain('<select');
     expect(markup).not.toContain('type="radio"');
     expect(markup).toContain('type="checkbox"');
-    expect(markup).toContain('Ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
+    // 0976d3a63 (the run hotfix of 2026-11-06) removed the answer cap, so no token ceiling is promised any more.
+    expect(markup).toContain('Лимит стоимости подтверждается отдельно.');
+    expect(markup).not.toContain('16 000 токенов');
     expect(markup).not.toContain('data-ar-v3-group-failure');
     expect(markup.match(/<button\b/g)).toHaveLength(2);
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить шесть проверок АР v3<\/button>/);

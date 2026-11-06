@@ -72,7 +72,9 @@ describe('the selector is on the control', () => {
     // «Временный режим сбора статистики»; the request field it sets is still `relaxed_limits`.
     expect(markup).toMatch(/<input type="checkbox"\/>Временный режим сбора статистики/);
     expect(markup).not.toContain('Повышенные лимиты ИИ-анализа');
-    expect(markup).toContain('Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.');
+    // 0976d3a63 (the run hotfix of 2026-11-06) removed the answer cap, so no token ceiling is promised any more.
+    expect(markup).toContain('Лимит стоимости подтверждается отдельно.');
+    expect(markup).not.toContain('16 000 токенов');
     expect(markup).not.toContain('relaxed_limits');
   });
 });

@@ -274,6 +274,8 @@ describe('this slice adds no second polling loop', () => {
     join('widgets', 'stage-changes', 'ui', 'stage-journal.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-batch-controls.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-run-controls.tsx'),
+    // Lane D6 (2026-11-07) moved the pair-run summary read out of `stage-run-controls.tsx` into its own hook; same bound.
+    join('widgets', 'stage-run-controls', 'api', 'use-pair-run.ts'),
     // `CMP-SPEC` (`2510d5e3`): the whole-specification list of a series, re-read only while one of its
     // transitions is `running` or `paused` -- the source was `open ? 3000 : false`, a poll with no end
     // while the panel was open, and now names `SPECIFICATION_POLL_MS` (from config) and ends when nothing moves.
