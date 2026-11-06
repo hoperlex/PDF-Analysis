@@ -28,6 +28,14 @@ cells per data row before applying the original O1 byte comparison.
 digest-pinned in-memory projection accounts only for the current contract
 version in sixteen error envelopes and the portal upload kind in four version
 responses; it does not suppress any other byte, status or header difference.
+
+`LANE-W13-STARTED-BY-01` keeps the records unchanged a third time, for two more additive
+contract properties, each behind a digest of the historical bytes and each with a value the
+journey's own records give (never one copied from the server): `RunStatus.started_by_user_uid`
+and `started_by_label` (`R-151v`, contract 1.21.0) on the six records that carry a run, and
+`DocumentVersion.tags` (`R-151e`, contract 1.23.0) on the two listings that carry it. The
+starter is pinned, not normalised away: the uid is the journey's own account by token, the
+label a literal, so a run started by anyone else reddens the comparison.
 """
 
 from __future__ import annotations
@@ -129,6 +137,8 @@ def _csv_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
 # The W13 records are historical evidence, so these exact files stay untouched. The
 # current error-envelope version and portal version kind are additive surface changes.
 # Pin the complete bytes of all twenty affected records before projecting either field.
+# Two of the four portal records (32 and 33) are the listings, which also carry the
+# document's `tags` since contract 1.23.0; the same pin covers that third projection.
 _ERROR_VERSION_CASES = frozenset({
     "05b-createProject.idempotency_key_reuse",
     "17-uploadDocument.refusal.pdf_magic_bytes",
@@ -154,6 +164,16 @@ _PORTAL_KIND_CASES = frozenset({
     "33-listVersions.success",
 })
 _COMPAT_CASES = _ERROR_VERSION_CASES | _PORTAL_KIND_CASES
+
+# `UI-PARITY-P0H` (`R-151e`, contract 1.23.0, migration 0053): `DocumentVersion.tags`, "the document's free tags, on the
+# reads that carry them (`listDocuments`, `listVersions` and the document commands)". Records 32 and 33 are the two
+# listings; `uploadDocument` and `getDocumentVersion` (records 02 and 13) do not carry it and do not move. The journey sets
+# no tags -- `setDocumentTags` is not one of the operations this corpus covers
+# (:data:`SIXTEEN_OPERATIONS`, asserted whole by `test_every_one_of_the_sixteen_operations_is_covered`) -- so the
+# document's set is empty, and the property is the last one of the version object, after `classification`.
+_TAGS_CASES = frozenset({"32-listDocuments.success", "33-listVersions.success"})
+_TAGS_BEFORE = '"revision": 1}}], "page": {"next_cursor": null}}'
+_TAGS_AFTER = '"revision": 1}, "tags": []}], "page": {"next_cursor": null}}'
 _COMPAT_RECORDS_SHA256 = "6518c1253e1d269585b71c7f68c398bc0f33812abad0ef974653336fe3b436fd"
 
 
@@ -199,6 +219,9 @@ def _schema_compat_expected(expected: dict[str, Any]) -> dict[str, Any]:
         after = ', "upload_kind": "portal_bundle", "display_title":'
         assert original.count(before) == 1 and '"upload_kind"' not in original
     projected = original.replace(before, after, 1)
+    if case in _TAGS_CASES:
+        assert original.count(_TAGS_BEFORE) == 1 and '"tags"' not in original
+        projected = projected.replace(_TAGS_BEFORE, _TAGS_AFTER, 1)
     out = json.loads(json.dumps(expected))
     out["response"]["body"]["text"] = projected
     out["response"]["body"]["length"] += len(projected.encode("utf-8")) - len(original.encode("utf-8"))
@@ -235,6 +258,76 @@ def _audit_counts_expected(expected: dict[str, Any], *, value: str = _AUDIT_COUN
     out = json.loads(json.dumps(expected))
     out["response"]["body"]["text"] = projected
     out["response"]["body"]["length"] += len(projected.encode("utf-8")) - len(original.encode("utf-8"))
+    return out
+
+
+# `UI-PARITY-P0F` (`R-151v`, contract 1.21.0, migration 0051): a `RunStatus` also carries `started_by_user_uid`, the account
+# whose `startRun` created the run, and `started_by_label`, that account's display label (both optional in the contract,
+# absent for a run created before the migration -- which no run of this journey is). The six records that carry a run
+# (03-07 and the listing 34) stay as they were captured, and an in-memory projection appends the two properties at the end of
+# the run object, where the model emits them, after the body text of each record has been pinned by digest.
+#
+# *Why the fields are pinned and not normalised away.* A run's starter is an assertion about who acted. Treating the two names
+# like a timestamp (a declared field whose value is erased) would let a run attributed to the wrong account, or to none,
+# reproduce the record. So the expectation names the starter exactly: the uid is `{{user_uid}}`, the token the journey gives
+# the one account it provisions and presents on every request (`journey.declare_run_starter`), which the live body only matches
+# if the run names that account; the label is the literal the same account carries as the `author_label` of records 10 and 11.
+# `test_the_run_starter_of_the_run_records_follows_from_the_records_before_it` derives both from those earlier records.
+_RUN_STARTER_USER_TOKEN = "{{user_uid}}"
+_RUN_STARTER_LABEL = "Сьютова Е."
+#: The contract's `UserUid` pattern is `^usr_[0-9A-HJKMNP-TV-Z]{26}$`: the thirty bytes a token stands for in the raw body.
+_USER_UID_LENGTH = len("usr_") + 26
+#: SHA-256 of each historical record's body text (`response.body.text`, utf-8). 04-07 share a digest: two replays and two reads
+#: of one finished run, the claim records 04 and 05 make. Taken from the committed files at `ce08af3d`.
+_RUN_STARTER_BODIES_SHA256 = {
+    "03-startRun.success": "5fb0c261a28e83c313496b0a1615a282654d044f8055494e5b22eddf73ada3fa",
+    "04-startRun.replay": "f314e8f8df1b22cb09c2416bd7583b1f1e543cef329ec4c578556bb0636c0cbc",
+    "05-startRun.replay_with_normalised_property": (
+        "f314e8f8df1b22cb09c2416bd7583b1f1e543cef329ec4c578556bb0636c0cbc"
+    ),
+    "06-getRunStatus.success": "f314e8f8df1b22cb09c2416bd7583b1f1e543cef329ec4c578556bb0636c0cbc",
+    "07-getRunStatus.correlation_supplied": "f314e8f8df1b22cb09c2416bd7583b1f1e543cef329ec4c578556bb0636c0cbc",
+    "34-listRuns.success": "3a347f456138c9737a09526bf885a31d9f8673fda19e1f9ea4fa088c116c353a",
+}
+#: Where the run object ends in each body: (its last property as the record spells it, what follows it). The accepted run of
+#: record 03 has no `terminal_at`; the finished runs end with it; record 34 wraps the one run in its page envelope.
+_RUN_STARTER_ENDS = {
+    "03-startRun.success": ('"diagnostic_observation_count": 0', "}"),
+    "04-startRun.replay": ('"terminal_at": "{{ts_14}}"', "}"),
+    "05-startRun.replay_with_normalised_property": ('"terminal_at": "{{ts_14}}"', "}"),
+    "06-getRunStatus.success": ('"terminal_at": "{{ts_14}}"', "}"),
+    "07-getRunStatus.correlation_supplied": ('"terminal_at": "{{ts_14}}"', "}"),
+    "34-listRuns.success": ('"terminal_at": "{{ts_14}}"', '}], "page": {"next_cursor": null}}'),
+}
+
+
+def _run_starter_expected(
+    expected: dict[str, Any],
+    *,
+    uid: str = _RUN_STARTER_USER_TOKEN,
+    label: str = _RUN_STARTER_LABEL,
+) -> dict[str, Any]:
+    case = expected["case"]
+    if case not in _RUN_STARTER_BODIES_SHA256:
+        return expected
+    body = expected["response"]["body"]
+    original = body["text"]
+    historical = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))["response"]["body"]["text"]
+    assert body["kind"] == "text" and original == historical, (
+        f"{case}: the run-starter projection received a changed historical body"
+    )
+    assert hashlib.sha256(historical.encode("utf-8")).hexdigest() == _RUN_STARTER_BODIES_SHA256[case], (
+        f"the historical record of {case} changed; review it before projecting the run starter"
+    )
+    last_property, closing = _RUN_STARTER_ENDS[case]
+    assert original.endswith(last_property + closing) and '"started_by_' not in original
+    appended = f', "started_by_user_uid": "{uid}", "started_by_label": "{label}"'
+    projected = original[: -len(closing)] + appended + closing
+    out = json.loads(json.dumps(expected))
+    out["response"]["body"]["text"] = projected
+    # The record's length is of the raw body, before tokens: the token stands for a thirty-byte uid.
+    raw_appended = appended.replace(_RUN_STARTER_USER_TOKEN, "u" * _USER_UID_LENGTH)
+    out["response"]["body"]["length"] += len(raw_appended.encode("utf-8"))
     return out
 
 
@@ -915,6 +1008,7 @@ def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any
         expected = _csv_compat_expected(expected)
     expected = _schema_compat_expected(expected)
     expected = _audit_counts_expected(expected)
+    expected = _run_starter_expected(expected)
     exchange = exchanges[expected["case"]]
     found = journey.differences(exchange, expected)
     assert not found, (
@@ -1000,6 +1094,140 @@ def test_the_audit_counts_projection_reddens_on_a_wrong_value_and_refuses_a_chan
         _audit_counts_expected(changed)
 
 
+def _historical(case: str) -> dict[str, Any]:
+    return json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+
+def _starter_of(case: str, text: str) -> dict[str, Any]:
+    """The one run object of a projected body: record 34 wraps it in its page."""
+    parsed = json.loads(text)
+    return parsed["items"][0] if case.startswith("34") else parsed  # type: ignore[no-any-return]
+
+
+def test_the_run_starter_of_the_run_records_follows_from_the_records_before_it() -> None:
+    """The projected starter is what the journey's own earlier records say, not what the server said.
+
+    The journey provisions one account and presents it on every request (`journey.presented_account_uid`), so the account
+    that started the run is the account that confirmed the version's classification (record 13, token `{{user_uid}}`) and
+    the one that decided the first finding (records 10 and 11, whose `author_label` is its display label). A projection that
+    named no starter, another account or another label would be the frozen defect `characterization-can-freeze-a-defect`
+    warns about, and fails here. Taking the two properties back out gives the historical body, digest for digest, and they
+    are the last two of the run object (and the only bytes that moved).
+    """
+    decision = json.loads(_historical("10-appendDecision.success")["response"]["body"]["text"])["event"]
+    history = json.loads(_historical("11-listDecisionHistory.success")["response"]["body"]["text"])["items"]
+    classification = json.loads(_historical("13-getDocumentVersion.success")["response"]["body"]["text"])["classification"]
+    assert [item["author_label"] for item in history] == [decision["author_label"]] == [_RUN_STARTER_LABEL]
+    assert classification["confirmed_by_user_uid"] == _RUN_STARTER_USER_TOKEN
+    appended = f', "started_by_user_uid": "{_RUN_STARTER_USER_TOKEN}", "started_by_label": "{_RUN_STARTER_LABEL}"'
+    for case, digest in _RUN_STARTER_BODIES_SHA256.items():
+        text = _run_starter_expected(_historical(case))["response"]["body"]["text"]
+        run = _starter_of(case, text)
+        assert run["started_by_user_uid"] == classification["confirmed_by_user_uid"], case
+        assert run["started_by_label"] == decision["author_label"], case
+        assert list(run)[-2:] == ["started_by_user_uid", "started_by_label"], case
+        assert text.count(appended) == 1, case
+        assert hashlib.sha256(text.replace(appended, "").encode("utf-8")).hexdigest() == digest, (
+            f"{case} moved by more than the run starter"
+        )
+
+
+@pytest.mark.parametrize("case", tuple(_RUN_STARTER_BODIES_SHA256))
+def test_the_run_starter_is_pinned_and_the_comparison_reddens_on_a_wrong_one(
+    case: str, exchanges: dict[str, Any]
+) -> None:
+    """Right projection reproduces the live body; every way the starter can be wrong is reported.
+
+    The live side is tampered, not only the expectation: a run attributed to another account, to another label or to nobody
+    must redden, because "the starter fields are volatile" is the reading this corpus does not take.
+    """
+    import dataclasses
+
+    record = _historical(case)
+    exchange = exchanges[case]
+    right = _run_starter_expected(record)
+    assert journey.differences(exchange, right) == []
+    assert right["response"]["body"]["length"] == len(exchange.body), "the projected length is not the raw body's"
+    # Not vacuous: the committed record on its own does not match, so the two properties really are in the live body.
+    assert any("body:" in line for line in journey.differences(exchange, record))
+
+    uid = journey.presented_account_uid()
+    live = exchange.body.decode("utf-8")
+    assert live.count(f'"started_by_user_uid": "{uid}"') == 1 and live.count(f'"started_by_label": "{_RUN_STARTER_LABEL}"') == 1
+    other_uid = "usr_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+    assert other_uid != uid
+    tampered = {
+        "another account": live.replace(uid, other_uid),
+        "another label": live.replace(f'"started_by_label": "{_RUN_STARTER_LABEL}"', '"started_by_label": "Иванов И."'),
+        "no label": live.replace(f', "started_by_label": "{_RUN_STARTER_LABEL}"', ""),
+        "no starter": live.replace(f', "started_by_user_uid": "{uid}", "started_by_label": "{_RUN_STARTER_LABEL}"', ""),
+    }
+    for what, body in tampered.items():
+        assert body != live, what
+        found = journey.differences(dataclasses.replace(exchange, body=body.encode("utf-8")), right)
+        assert any("body:" in line for line in found), f"{case}: a run with {what} was not reported"
+    # And an expectation naming the wrong starter does not match the true live body.
+    for wrong in (
+        _run_starter_expected(record, uid="usr_01ARZ3NDEKTSV4RRFFQ69G5FAV"),
+        _run_starter_expected(record, label="Иванов И."),
+    ):
+        assert any("body:" in line for line in journey.differences(exchange, wrong))
+
+
+def test_the_run_starter_projection_refuses_a_changed_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both guards in front of the projection can fail: the body must be the committed one, and the committed one the pinned one."""
+    case = "06-getRunStatus.success"
+    changed = _historical(case)
+    changed["response"]["body"]["text"] += " "
+    with pytest.raises(AssertionError, match="changed historical body"):
+        _run_starter_expected(changed)
+    monkeypatch.setitem(_RUN_STARTER_BODIES_SHA256, case, "0" * 64)
+    with pytest.raises(AssertionError, match="review it before projecting the run starter"):
+        _run_starter_expected(_historical(case))
+    monkeypatch.undo()
+    already = _run_starter_expected(_historical(case))
+    with pytest.raises(AssertionError, match="changed historical body"):
+        _run_starter_expected(already)
+
+
+def test_the_document_tags_of_records_32_and_33_are_none_because_the_journey_sets_none() -> None:
+    """Both listings carry `"tags": []`, and nothing in the corpus could have given a document a tag.
+
+    `setDocumentTags` is not among the operations the records cover, and the set of covered operations is asserted whole by
+    `test_every_one_of_the_sixteen_operations_is_covered`; the listings are the two reads the contract says carry the property.
+    The value follows from that, not from the live response; the projection places it last, after `classification`.
+    """
+    assert "setDocumentTags" not in SIXTEEN_OPERATIONS
+    covered = {_historical(path.stem)["operation"] for path in RECORD_FILES}
+    assert "setDocumentTags" not in covered
+    for case in sorted(_TAGS_CASES):
+        text = _schema_compat_expected(_historical(case))["response"]["body"]["text"]
+        item = json.loads(text)["items"][0]
+        assert item["tags"] == [] and list(item)[-1] == "tags", case
+        assert text.count('"tags": []') == 1, case
+        assert text.replace(', "tags": []', "").replace(
+            ', "upload_kind": "portal_bundle"', ""
+        ) == _compat_source_bodies()[case], f"{case} moved by more than the portal kind and the tags"
+
+
+@pytest.mark.parametrize("case", sorted(_TAGS_CASES))
+def test_the_document_tags_projection_reddens_on_a_wrong_or_missing_tags(
+    case: str, exchanges: dict[str, Any]
+) -> None:
+    expected = _schema_compat_expected(_historical(case))
+    assert journey.differences(exchanges[case], expected) == []
+    for what, replacement in (("a tag", '"tags": ["extra"]'), ("no tags property", None)):
+        wrong = json.loads(json.dumps(expected))
+        text = wrong["response"]["body"]["text"]
+        assert text.count('"tags": []') == 1
+        wrong["response"]["body"]["text"] = (
+            text.replace('"tags": []', replacement) if replacement else text.replace(', "tags": []', "")
+        )
+        assert any("body:" in line for line in journey.differences(exchanges[case], wrong)), (
+            f"{case}: {what} was not reported"
+        )
+
+
 def test_schema_compat_refuses_a_changed_historical_record() -> None:
     case = "02-uploadDocument.success"
     changed = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
@@ -1014,7 +1242,7 @@ def test_the_comparison_reddens_on_a_planted_difference(exchanges: dict[str, Any
     A baseline nobody has seen reject anything is a baseline that will accept anything.
     """
     path = journey.RECORDS / "03-startRun.success.json"
-    expected = json.loads(path.read_text(encoding="utf-8"))
+    expected = _run_starter_expected(json.loads(path.read_text(encoding="utf-8")))
     exchange = exchanges[expected["case"]]
 
     assert not journey.differences(exchange, expected), (
