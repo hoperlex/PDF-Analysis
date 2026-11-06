@@ -42,15 +42,25 @@
   gap: var(--am-gap-xs) var(--am-gap-sm);
 }
 
-/* The verdict on a list row: the original's green and red rows. A waiting row keeps the page's paper. */
-.item[data-verdict-bucket='accepted'] > button[data-finding-uid]:not([aria-current='true']) {
+/*
+ * The verdict on a list row: the original's green and red rows. A waiting row keeps the page's paper. The selected row
+ * keeps the selection's own tint over a verdict's, said by a rule of its own (the census does not evaluate `:not()`).
+ */
+.item[data-verdict-bucket='accepted'] > button[data-finding-uid] {
   background: var(--am-ok-light);
   box-shadow: inset 3px 0 0 var(--am-ok);
 }
 
-.item[data-verdict-bucket='rejected'] > button[data-finding-uid]:not([aria-current='true']) {
+.item[data-verdict-bucket='rejected'] > button[data-finding-uid] {
   background: var(--am-failed-light);
   box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
+.item[data-verdict-bucket] > button[data-finding-uid][aria-current='true'] {
+  background: var(--am-accent-light);
+  box-shadow:
+    inset 3px 0 0 var(--am-accent),
+    var(--am-shadow-2);
 }
 
 .filter {
