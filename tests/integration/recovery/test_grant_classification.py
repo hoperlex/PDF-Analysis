@@ -81,8 +81,10 @@ def test_the_four_classes_partition_the_tables_schema_coverage_declares() -> Non
     # (110 -> 122); `0043` and `0044` add none. `0046_executor_capacity_enrollment` (`EXEC2-SEAL-1`): `executor_enrollment`
     # and `executor_agent_install` (122 -> 124). `0047_executor_groups_rules` (`EXEC2-SEAL-2`): `executor_group`,
     # `executor_group_revision`, `executor_group_member`, `executor_routing_rule_revision` and
-    # `executor_routing_mode_event` (124 -> 129); `0048_dispatch_time_binding` adds none.
-    assert len(coverage.TABLES) == 129
+    # `executor_routing_mode_event` (124 -> 129); `0048_dispatch_time_binding` adds none. `0053_document_tags` and
+    # `0054_finding_execution_status` add `document_tag` and `finding_execution_status`, and `0055_work_schedule` the five
+    # journals of «График работ» (129 -> 136).
+    assert len(coverage.TABLES) == 136
 
 
 def test_every_table_has_its_privileges_from_its_class() -> None:
