@@ -28,7 +28,7 @@ import { useMayActAsExpert } from '@/entities/account';
 import { DocumentLifecycle, DocumentTags } from '@/features/manage-document';
 import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
-import { DocumentContext } from '@/widgets/document-context';
+import { DocumentContext, SectionNeighbours } from '@/widgets/document-context';
 import { OptimisationProposals } from '@/widgets/optimisation-proposals';
 import styles from './document-detail-page.module.css';
 
@@ -144,6 +144,8 @@ function DocumentScreen({
       }
     >
       <DocumentContext projectUid={projectUid} documentUid={documentUid} current="document" />
+      {/* `UI-A-28`: between the documents of the section the current version is confirmed for. */}
+      <SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />
       {newest === undefined ? null : mayAct ? (
         <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
       ) : archived ? (

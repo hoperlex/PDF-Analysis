@@ -106,6 +106,11 @@ export {
   useDocumentList,
   useDocumentTags,
 } from './api/use-document-list';
+// `R-151l`, `UI-A-28`: the documents of one section in the section page's order, one page or all of them.
+export type { SectionWalk } from './api/use-section-documents';
+export { sectionListingAudit, useSectionDocumentList, useSectionDocumentWalk } from './api/use-section-documents';
+export type { SectionPosition, SectionWalkStep } from './model/section-walk';
+export { advanceSectionWalk, sectionPosition } from './model/section-walk';
 export { VERSION_PAGE_LIMIT, useVersionList } from './api/use-version-list';
 
 export type { VersionRowProps } from './ui/version-row';

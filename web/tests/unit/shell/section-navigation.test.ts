@@ -1,0 +1,348 @@
+/**
+ * `UI-A-04`: «Разделы» in the side menu — the current project's sections, each with its mark and a count badge,
+ * leading to the section page (`R-151l`).
+ *
+ * The model is pure and read as data (`sectionNavigationOf`); the markup is read off a static pass of the frame's
+ * navigation, in all three of its states; and the wiring (a project in the address, the dashboard's summary of that
+ * project, no read without one) is read off a mounted frame over a seeded cache, the way
+ * `project-switcher.test.ts` reads the selector.
+ */
+
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+
+import { FrameNavigation, FrameNavigationView } from '@/_app/frame-navigation';
+import { buildNavigation, offersSectionNavigation } from '@/_app/navigation';
+import {
+  SECTIONS_EMPTY_NOTE,
+  SECTIONS_FAILED_NOTE,
+  SECTIONS_GROUP_LABEL,
+  SECTIONS_LOADING_NOTE,
+  sectionEntryLabel,
+  sectionNavigationOf,
+} from '@/_app/section-navigation';
+import type { SectionNavigation } from '@/_app/section-navigation';
+import { RUN_STATE_VALUES, queryKeys } from '@/shared/api';
+import type { DashboardSummary, ProjectSection, ProjectUid, SectionDocumentCount } from '@/shared/api';
+import { routes } from '@/shared/lib';
+import { PROJECT_SECTIONS } from '@/entities/project';
+
+import { sectionAudit } from '../dashboard/audit-counts';
+import { newClient, renderWith, seedError } from '../screens/harness';
+import { ADMIN_ONLY, DEFAULT_CREDENTIAL, EXPERT, INCOMPLETE_PROFILE, NO_ROLES } from './subjects';
+
+const navigationState = vi.hoisted(() => ({ pathname: null as string | null, search: '' }));
+
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  usePathname: () => navigationState.pathname,
+  useSearchParams: () => new URLSearchParams(navigationState.search),
+}));
+
+const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const OTHER = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
+
+/** The fifteen rows of `section_breakdown`, with the given counts and zero elsewhere, and the «Без раздела» bucket. */
+function rows(counts: Partial<Record<ProjectSection, number>>, unclassified = 7): SectionDocumentCount[] {
+  return [
+    ...PROJECT_SECTIONS.map((section) => ({
+      section: section.code,
+      document_count: counts[section.code] ?? 0,
+      ...sectionAudit(counts[section.code] ?? 0),
+    })),
+    { document_count: unclassified, ...sectionAudit(unclassified) },
+  ];
+}
+
+function summaryOf(sectionRows: SectionDocumentCount[]): DashboardSummary {
+  return {
+    documents_by_project: [{ project_uid: PROJECT, name: 'Мост через Неву', document_count: 9 }],
+    findings_by_verdict: [
+      { verdict: 'pending', count: 0 },
+      { verdict: 'accepted', count: 0 },
+      { verdict: 'rejected', count: 0 },
+      { verdict: 'needs_manual_review', count: 0 },
+    ],
+    run_activity: { by_state: RUN_STATE_VALUES.map((state) => ({ state, count: 0 })) },
+    section_breakdown: sectionRows,
+    awaiting_decision_findings: 0,
+  };
+}
+
+// `AR` and `KJ` with documents, and `PS` with one: the structure order (`S-5`) is AR, PS, KJ.
+const COUNTS: Partial<Record<ProjectSection, number>> = { KJ: 2, AR: 4, PS: 1 };
+const sectionPage = (code: string, project = PROJECT): string => routes.projectSection(project, code);
+
+describe('sectionNavigationOf — the sections of the current project', () => {
+  it('lists only the sections that hold documents, in the order of the project structure', () => {
+    const result = sectionNavigationOf(rows(COUNTS), PROJECT, null);
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.entries.map((entry) => [entry.code, entry.abbr, entry.count])).toEqual([
+      ['AR', 'АР', 4],
+      ['PS', 'ПЗ', 1],
+      ['KJ', 'КЖ', 2],
+    ]);
+  });
+
+  it('leads each entry to the section page of that project, through the route helper', () => {
+    const result = sectionNavigationOf(rows(COUNTS), PROJECT, null);
+    if (result.status !== 'ready') throw new Error('not ready');
+    expect(result.entries.map((entry) => entry.href)).toEqual([sectionPage('AR'), sectionPage('PS'), sectionPage('KJ')]);
+  });
+
+  it('marks the entry whose page is shown current, and no other: not another project\'s page, not the project page', () => {
+    const current = (pathname: string | null): string[] => {
+      const result = sectionNavigationOf(rows(COUNTS), PROJECT, pathname);
+      if (result.status !== 'ready') throw new Error('not ready');
+      return result.entries.filter((entry) => entry.current).map((entry) => entry.code);
+    };
+    expect(current(sectionPage('KJ'))).toEqual(['KJ']);
+    expect(current(sectionPage('KJ', OTHER))).toEqual([]);
+    expect(current(routes.project(PROJECT))).toEqual([]);
+    expect(current(null)).toEqual([]);
+  });
+
+  it('is an empty list, not a failure, for a project none of whose documents is confirmed for a section', () => {
+    expect(sectionNavigationOf(rows({}), PROJECT, null)).toEqual({ status: 'ready', entries: [] });
+  });
+
+  it('never lists the «Без раздела» bucket as a section, whatever it counts', () => {
+    const result = sectionNavigationOf(rows({ AR: 1 }, 40), PROJECT, null);
+    if (result.status !== 'ready') throw new Error('not ready');
+    expect(result.entries.map((entry) => entry.code)).toEqual(['AR']);
+  });
+
+  it('is a failure, not a shorter list, when the breakdown is not whole: a section missing, repeated or unknown', () => {
+    const whole = rows(COUNTS);
+    expect(sectionNavigationOf(whole, PROJECT, null).status).toBe('ready');
+    expect(sectionNavigationOf(whole.filter((row) => row.section !== 'OV'), PROJECT, null)).toEqual({ status: 'failed' });
+    expect(sectionNavigationOf([...whole, whole[0] as SectionDocumentCount], PROJECT, null)).toEqual({ status: 'failed' });
+    const unknown = whole.map((row, index) => (index === 0 ? { ...row, section: 'ZZ' as ProjectSection } : row));
+    expect(sectionNavigationOf(unknown, PROJECT, null)).toEqual({ status: 'failed' });
+  });
+
+  it('names an entry by its mark, its name and its count, which the badge shortens to a number', () => {
+    const result = sectionNavigationOf(rows(COUNTS), PROJECT, null);
+    if (result.status !== 'ready') throw new Error('not ready');
+    expect(sectionEntryLabel(result.entries[0] as (typeof result.entries)[number])).toBe('АР Архитектурные решения, документов: 4');
+  });
+});
+
+describe('offersSectionNavigation — who is offered the group', () => {
+  it('a complete session holding a role, and not a guest, a default credential, an incomplete profile or no role', () => {
+    expect(offersSectionNavigation(EXPERT)).toBe(true);
+    expect(offersSectionNavigation(ADMIN_ONLY)).toBe(true);
+    for (const subject of [null, DEFAULT_CREDENTIAL, INCOMPLETE_PROFILE, NO_ROLES]) {
+      expect(offersSectionNavigation(subject), String(subject?.login)).toBe(false);
+    }
+  });
+
+  it('can fail: a registry without the section page offers nothing', () => {
+    expect(offersSectionNavigation(EXPERT, [])).toBe(false);
+  });
+});
+
+// ------------------------------------------------------------------------------------------- markup
+
+const READY: SectionNavigation = sectionNavigationOf(rows(COUNTS), PROJECT, null);
+const READY_ON_KJ: SectionNavigation = sectionNavigationOf(rows(COUNTS), PROJECT, sectionPage('KJ'));
+
+function draw(sections: SectionNavigation | undefined, pathname: string | null = routes.project(PROJECT)): string {
+  return renderToStaticMarkup(
+    createElement(FrameNavigationView, { navigation: buildNavigation(EXPERT), pathname, projectUid: PROJECT, sections }),
+  );
+}
+
+/** The text of every button, in document order. */
+const buttons = (markup: string): string[] => [...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1] as string);
+
+/** The attributes of the «Разделы» group buttons. */
+const sectionButtons = (markup: string): string[] =>
+  [...markup.matchAll(/<button\b([^>]*)>Разделы<\/button>/g)].map((m) => m[1] as string);
+
+/** The `href` of every section link carrying `aria-current="page"`, whatever the attribute order. */
+const currentSectionLinks = (markup: string): string[] =>
+  [...markup.matchAll(/<a\b([^>]*)>/g)]
+    .map((m) => m[1] as string)
+    .filter((attributes) => /\baria-current="page"/.test(attributes))
+    .map((attributes) => /\bhref="([^"]*)"/.exec(attributes)?.[1] ?? '')
+    .filter((href) => href.includes('/sections/'));
+
+/** The visible text of the markup: tags and their attributes removed. */
+const textOf = (markup: string): string => markup.replace(/<[^>]*>/g, ' ');
+
+describe('the «Разделы» group in the menu', () => {
+  it('follows «Работа» in the bar and in the stacked menu, and is drawn nowhere without a project\'s sections', () => {
+    expect(buttons(draw(READY))).toEqual([
+      'Работа', 'Разделы', 'Знания', 'Система',
+      'Меню', 'Работа', 'Разделы', 'Знания', 'Система',
+    ]);
+    expect(buttons(draw(undefined))).toEqual(['Работа', 'Знания', 'Система', 'Меню', 'Работа', 'Знания', 'Система']);
+    expect(draw(undefined)).not.toContain('data-section-nav');
+  });
+
+  it('draws one link per section: the mark, a badge with the count, the name as tooltip and the full name as its name', () => {
+    const markup = draw(READY);
+    const items = [...markup.matchAll(/<li class="am-disclosure__item" data-section-nav-item="([A-Z]+)">(.*?)<\/li>/g)];
+    // Once in the bar and once in the stacked menu.
+    expect(items.map((m) => m[1])).toEqual(['AR', 'PS', 'KJ', 'AR', 'PS', 'KJ']);
+    const first = items[0]?.[2] ?? '';
+    expect(first).toContain(`href="${sectionPage('AR')}"`);
+    expect(first).toContain('aria-label="АР Архитектурные решения, документов: 4"');
+    expect(first).toContain('title="Архитектурные решения"');
+    expect(first).toMatch(/>АР<\/span><span class="[^"]*">4<\/span>/);
+  });
+
+  it('shows the Cyrillic marks and numbers and never the Latin code as text', () => {
+    const text = textOf(draw(READY));
+    expect(text).toContain('АР');
+    expect(text).not.toMatch(/\b(?:AR|PS|KJ)\b/);
+    expect(draw(READY)).toContain('data-section-nav-item="AR"');
+  });
+
+  it('marks the section page shown aria-current="page", and its group; it opens the group, which is closed otherwise', () => {
+    const on = draw(READY_ON_KJ, sectionPage('KJ'));
+    // The bar, the compact rail and the stacked menu each draw the page shown as current.
+    expect(currentSectionLinks(on)).toEqual([sectionPage('KJ'), sectionPage('KJ'), sectionPage('KJ')]);
+    const [bar, stacked] = sectionButtons(on);
+    expect(bar).toContain('aria-expanded="true"');
+    expect(bar).toContain('aria-current="true"');
+    expect(stacked).toContain('aria-current="true"');
+
+    const off = draw(READY);
+    for (const attributes of sectionButtons(off)) {
+      expect(attributes).toContain('aria-expanded="false"');
+      expect(attributes).not.toContain('aria-current');
+    }
+    expect(currentSectionLinks(off)).toEqual([]);
+  });
+
+  it('is a disclosure button naming its panel, as the other groups are', () => {
+    for (const attributes of sectionButtons(draw(READY))) {
+      expect(attributes).toMatch(/aria-controls="[^"]+panel"/);
+      expect(attributes).toContain('type="button"');
+    }
+  });
+
+  it('says why there is no list, in words: still reading, could not be read whole, or no section holds a document', () => {
+    const note = (sections: SectionNavigation): string | null =>
+      /<p class="[^"]*" data-section-nav-status="([a-z]+)">([^<]*)<\/p>/.exec(draw(sections))?.slice(1).join('|') ?? null;
+    expect(note({ status: 'loading' })).toBe(`loading|${SECTIONS_LOADING_NOTE}`);
+    expect(note({ status: 'failed' })).toBe(`failed|${SECTIONS_FAILED_NOTE}`);
+    expect(note({ status: 'ready', entries: [] })).toBe(`empty|${SECTIONS_EMPTY_NOTE}`);
+    expect(draw({ status: 'failed' })).not.toContain('data-section-nav-item');
+  });
+
+  it('the compact rail holds a labelled group of mark links, only when there is a list', () => {
+    const rail = (markup: string): string => /<div class="[^"]*" data-nav-state="rail">(.*?)<div class="[^"]*" data-nav-state="stacked">/s.exec(markup)?.[1] ?? '';
+    const group = /<div class="[^"]*" role="group" aria-label="Разделы"[^>]*>(.*?)<\/div>/s.exec(rail(draw(READY_ON_KJ, sectionPage('KJ'))));
+    expect(group, 'no rail group').not.toBeNull();
+    const links = [...(group?.[1] ?? '').matchAll(/<a\b([^>]*)>(.*?)<\/a>/g)];
+    expect(links.map((m) => /aria-label="([^"]*)"/.exec(m[1] as string)?.[1])).toEqual([
+      'АР Архитектурные решения, документов: 4',
+      'ПЗ Пояснительная записка, документов: 1',
+      'КЖ Конструкции железобетонные, документов: 2',
+    ]);
+    expect(links.map((m) => /aria-current="page"/.test(m[1] as string))).toEqual([false, false, true]);
+    expect(links.map((m) => textOf(m[2] as string).trim())).toEqual(['АР', 'ПЗ', 'КЖ']);
+    for (const sections of [undefined, { status: 'loading' } as const, { status: 'failed' } as const, { status: 'ready', entries: [] } as const]) {
+      expect(rail(draw(sections)), JSON.stringify(sections)).not.toContain(`aria-label="${SECTIONS_GROUP_LABEL}"`);
+    }
+  });
+
+  it('does not touch the other groups: the same links, in the same order, with or without it', () => {
+    const hrefs = (markup: string): string[] =>
+      [...markup.matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => m[1] as string).filter((href) => !href.includes('/sections/'));
+    expect(hrefs(draw(READY))).toEqual(hrefs(draw(undefined)));
+  });
+});
+
+// ------------------------------------------------------------------------------------------- wiring
+
+describe('the frame reads the current project\'s sections only where it is offered one', () => {
+  const frame = (client: ReturnType<typeof newClient>, offersSections: boolean): string =>
+    renderWith(client, createElement(FrameNavigation, { navigation: buildNavigation(EXPERT), offersSections }));
+
+  const summaryKey = (project: string) => queryKeys.dashboard.summary(project as ProjectUid);
+
+  function seeded(): ReturnType<typeof newClient> {
+    const client = newClient();
+    client.setQueryData(summaryKey(PROJECT), summaryOf(rows(COUNTS)));
+    return client;
+  }
+
+  it('on a required screen, the project of the path: lists its sections from the dashboard\'s summary entry', () => {
+    navigationState.pathname = sectionPage('KJ');
+    navigationState.search = '';
+    const markup = frame(seeded(), true);
+    expect([...markup.matchAll(/data-section-nav-item="([A-Z]+)"/g)].map((m) => m[1])).toEqual(['AR', 'PS', 'KJ', 'AR', 'PS', 'KJ']);
+    expect(currentSectionLinks(markup)).toEqual([sectionPage('KJ'), sectionPage('KJ'), sectionPage('KJ')]);
+  });
+
+  it('on an optional screen, the project of ?project=, which the dashboard follows too', () => {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = `project=${PROJECT}`;
+    const markup = frame(seeded(), true);
+    expect(markup).toContain('data-section-nav-item="AR"');
+    expect(markup).toContain(`href="${sectionPage('AR')}"`);
+  });
+
+  it('holds only that project\'s entry: another project\'s summary is not shown for this one', () => {
+    navigationState.pathname = routes.project(OTHER);
+    navigationState.search = '';
+    const client = seeded();
+    const markup = frame(client, true);
+    expect(markup).not.toContain('data-section-nav-item');
+    expect(markup).toContain(`data-section-nav-status="loading"`);
+    expect(client.getQueryCache().find({ queryKey: summaryKey(OTHER) })).toBeDefined();
+  });
+
+  it('asks the server on a cold load: the group says it is reading, under the summary key of that project', () => {
+    navigationState.pathname = routes.project(PROJECT);
+    navigationState.search = '';
+    const client = newClient();
+    const markup = frame(client, true);
+    expect(markup).toContain('data-section-nav-status="loading"');
+    expect(client.getQueryCache().find({ queryKey: summaryKey(PROJECT) })?.state.status).toBe('pending');
+  });
+
+  it('draws nothing, and files no read, with no project in the address', () => {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = '';
+    const client = seeded();
+    const before = client.getQueryCache().getAll().length;
+    const markup = frame(client, true);
+    expect(markup).not.toContain('data-section-nav');
+    expect(buttons(markup)).not.toContain('Разделы');
+    expect(client.getQueryCache().getAll()).toHaveLength(before);
+  });
+
+  it('draws nothing, and files no read, for a session that is not offered it', () => {
+    navigationState.pathname = routes.project(PROJECT);
+    navigationState.search = '';
+    const client = newClient();
+    const markup = frame(client, false);
+    expect(markup).not.toContain('data-section-nav');
+    expect(client.getQueryCache().getAll()).toHaveLength(0);
+  });
+
+  it('draws nothing, and files no read, for a project the address does not spell as one', () => {
+    navigationState.pathname = routes.project('не-проект');
+    navigationState.search = '';
+    const client = newClient();
+    const markup = frame(client, true);
+    expect(markup).not.toContain('data-section-nav');
+    expect(client.getQueryCache().getAll()).toHaveLength(0);
+  });
+
+  it('says it could not read the sections when the summary failed and none is held', () => {
+    navigationState.pathname = routes.project(PROJECT);
+    navigationState.search = '';
+    const client = newClient();
+    seedError(client, summaryKey(PROJECT), new Error('нет связи'));
+    const markup = frame(client, true);
+    expect(markup).toContain('data-section-nav-status="failed"');
+  });
+});

@@ -277,6 +277,11 @@
   box-shadow: inset 2px 0 0 var(--am-accent), 0 0 14px color-mix(in srgb, var(--am-accent) 12%, transparent);
 }
 
+/* A tooltip that says more than the link's name (the sections' names) wraps instead of running on. */
+.railTooltipWrap {
+  white-space: normal;
+}
+
 .stacked {
   display: none;
 }
@@ -292,6 +297,34 @@
 
 .stackedItem {
   margin: 0;
+}
+
+/* `UI-A-04`: the current project's «Разделы» — each section's mark, and the number of its documents as a badge. */
+.sectionMark {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 650;
+}
+
+.sectionCount {
+  flex: 0 0 auto;
+  min-width: 2ch;
+  padding: 0 var(--am-gap-xs);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  font-size: var(--am-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--am-leading-base);
+  text-align: center;
+}
+
+.sectionNote {
+  margin: 0 0 0 var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  line-height: var(--am-leading-tight);
 }
 
 .screenContext {

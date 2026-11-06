@@ -25,7 +25,7 @@ import type { ProjectSection as ProjectSectionCode, ProjectUid } from '@/shared/
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
 import {
-  DocumentCardGrid, NOT_RUN_EMPTY_TITLE, SHOW_ALL_LABEL, notRunFilterSentence, parseSectionAuditFilter, useDocumentList,
+  DocumentCardGrid, NOT_RUN_EMPTY_TITLE, SHOW_ALL_LABEL, notRunFilterSentence, parseSectionAuditFilter, useSectionDocumentList,
 } from '@/entities/document-version';
 import type { SectionAuditFilter } from '@/entities/document-version';
 import type { ProjectSection } from '@/entities/project';
@@ -72,10 +72,8 @@ function SectionDetail({
   const sectionCode = section.code as ProjectSectionCode;
   const [cursors, setCursors] = useState<readonly string[]>([]);
   const cursor = cursors.at(-1);
-  const query = useDocumentList(projectUid, cursor, sectionCode, false, undefined, {
-    ...(auditFilter === null ? {} : { state: auditFilter }),
-    order: 'audit',
-  });
+  // The listing and its order are the entity's, so the document page's «n из m» walks the same one.
+  const query = useSectionDocumentList(projectUid, sectionCode, cursor, auditFilter);
   const wholeSection = routes.projectSection(projectUid, sectionCode);
 
   let body;

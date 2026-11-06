@@ -46,3 +46,24 @@
 .more {
   color: var(--am-ink-muted);
 }
+
+/* `UI-A-28`: «‹ Предыдущий · N из M · Следующий ›» between the documents of one section. */
+.neighbours {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
+  font-size: var(--am-text-sm);
+}
+
+.neighbourPosition {
+  color: var(--am-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.neighbourSeparator,
+.neighbourOff {
+  color: var(--am-ink-muted);
+}

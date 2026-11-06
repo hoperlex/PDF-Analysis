@@ -98,6 +98,20 @@ export function offersProjectSwitcher(
 }
 
 /**
+ * Whether the side menu offers the current project's «Разделы» (`UI-A-04`): exactly when the session may open the
+ * section page those items lead to, and so may read the counts beside them. The page is a registry row with a
+ * template address, so it is found by a concrete address of its shape. A guest, a default credential, an
+ * incomplete profile and an account with no role get no group, as they get no menu.
+ */
+export function offersSectionNavigation(
+  subject: ScreenDecisionSubject | null,
+  registry: readonly ScreenEntry[] = SCREEN_REGISTRY,
+): boolean {
+  const screen = screenMatching(routes.projectSection('project', 'section'), registry);
+  return screen !== undefined && screenDecision(screen, subject) === 'open';
+}
+
+/**
  * Whether the top strip shows the queue's pause state (`R-151f`): exactly when the «Очередь» screen is
  * open to this session, so `viewer` (`R-150w`) and a guest never read it.
  */

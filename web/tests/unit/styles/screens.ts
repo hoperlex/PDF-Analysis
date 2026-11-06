@@ -26,6 +26,7 @@ import { accountMenuProps } from '@/_app/account-menu';
 import { MarkFaultView, UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import { buildNavigation } from '@/_app/navigation';
+import { sectionNavigationOf } from '@/_app/section-navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
@@ -86,7 +87,7 @@ import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
-import { DocumentContext } from '@/widgets/document-context';
+import { DocumentContext, SectionNeighboursView } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
 import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByPage } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
@@ -110,12 +111,13 @@ import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
+import { routes } from '@/shared/lib';
 import { AVATAR_PALETTE_SIZE, Avatar, Disclosure, ErrorState, LoadingState, Menu, avatarColourIndex, Table } from '@/shared/ui';
 import type { DisclosureProps, MenuProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
-import { PROJECT_PAGE_LIMIT } from '@/entities/project';
+import { PROJECT_PAGE_LIMIT, PROJECT_SECTIONS } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
 import { UpdateTime, WORKER_PAGE_LIMIT } from '@/entities/execution';
@@ -640,6 +642,35 @@ export function screens(): Screen[] {
         ),
       );
     }
+
+    /*
+     * `UI-A-04`: the current project's «Разделы» -- the mark with its count badge, the section page being shown current
+     * (the `.sectionMark` and `.sectionCount` rules, and the hover/current rules of the links they sit in), and the
+     * notes of a group that has no list yet (`.sectionNote`).
+     */
+    const sectionRows = PROJECT_SECTIONS.map((section) => {
+      const documents = section.code === 'AR' ? 4 : section.code === 'KJ' ? 12 : 0;
+      return { section: section.code, document_count: documents, ...sectionAudit(documents) };
+    });
+    const sectionPage = routes.projectSection(PROJECT_UID, 'KJ');
+    for (const [label, sections] of [
+      ['listed, КЖ current', sectionNavigationOf(sectionRows, PROJECT_UID, sectionPage)],
+      ['loading', { status: 'loading' }],
+      ['failed', { status: 'failed' }],
+    ] as const) {
+      add(
+        `AppFrame, the navigation open, the project's sections ${label}`,
+        inBar(
+          createElement(FrameNavigationView, {
+            navigation: buildNavigation(FRAME_ADMIN),
+            pathname: sectionPage,
+            projectUid: PROJECT_UID,
+            sections,
+            disclosure: drawnOpen,
+          }),
+        ),
+      );
+    }
   }
 
   /*
@@ -773,6 +804,26 @@ export function screens(): Screen[] {
     add(
       'DocumentContext, a version of two, with more history',
       renderScreen(client, createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID, current: 'version' })),
+    );
+  }
+  // `UI-A-28`: «‹ Предыдущий · N из M · Следующий ›» between the documents of a section -- the strip's own rules.
+  {
+    const neighbour = (suffix: string) => ({ ...version(), document_uid: `${DOCUMENT_UID.slice(0, -1)}${suffix}` as DocumentVersion['document_uid'], display_title: `Документ ${suffix}` });
+    add(
+      'SectionNeighbours, the second of three',
+      render(createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID,
+        section: PROJECT_SECTIONS[0] as (typeof PROJECT_SECTIONS)[number],
+        place: { position: 2, total: 3, previous: neighbour('A'), next: neighbour('C') },
+      })),
+    );
+    add(
+      'SectionNeighbours, the first of three',
+      render(createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID,
+        section: PROJECT_SECTIONS[0] as (typeof PROJECT_SECTIONS)[number],
+        place: { position: 1, total: 3, previous: null, next: neighbour('B') },
+      })),
     );
   }
   add('ExecutionJournal loaded', withRouter(createElement(ExecutionJournal, {

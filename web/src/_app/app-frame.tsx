@@ -39,7 +39,7 @@ import { GuestNavigationPreview } from './guest-navigation-preview';
 import { ReleaseNoticesGate } from './release-notices';
 import { ScreenContext } from './screen-context';
 import { SidebarToggle } from './sidebar-toggle';
-import { buildNavigation, offersPauseStatus, offersProjectSwitcher } from './navigation';
+import { buildNavigation, offersPauseStatus, offersProjectSwitcher, offersSectionNavigation } from './navigation';
 import { ThemeToggle } from './theme-toggle';
 import styles from './app-frame.module.css';
 
@@ -104,7 +104,7 @@ export function AppFrame({ children, session }: AppFrameProps) {
          * function the guard asks — so a guest, a default credential and an incomplete
          * profile see no group, and the account menu is how the latter two move on.
          */}
-        <FrameNavigation navigation={buildNavigation(session)} />
+        <FrameNavigation navigation={buildNavigation(session)} offersSections={offersSectionNavigation(session)} />
         {session === null ? <GuestNavigationPreview /> : null}
       </header>
       <div className={styles.content}>

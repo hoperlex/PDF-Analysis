@@ -111,6 +111,8 @@ import { accountMenuProps } from '@/_app/account-menu';
 import { UpdateBannerView, WhatsNewView } from '@/_app/release-notices';
 import { FrameNavigationView } from '@/_app/frame-navigation';
 import { buildNavigation } from '@/_app/navigation';
+import { sectionNavigationOf } from '@/_app/section-navigation';
+import { SectionNeighboursView } from '@/widgets/document-context';
 import type { DisclosureProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -2446,6 +2448,47 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         pathname: '/blocks',
         disclosure: (props: DisclosureProps) =>
           createElement(DisclosureView, { ...props, open: true, panelId: `language-${props.label}` }),
+      }),
+  },
+  /*
+   * `UI-A-04`: the current project's «Разделы» in the menu -- the list (marks, names, counts) and the two sentences of a
+   * group that has none. A list built from the contract's fifteen sections, so every name the menu says is judged.
+   */
+  ...(['listed', 'loading', 'failed'] as const).map((state) => ({
+    name: `app-frame-navigation-sections-${state}`,
+    make: () =>
+      createElement(FrameNavigationView, {
+        navigation: buildNavigation(ADMIN_AND_EXPERT),
+        pathname: `/projects/${PROJECT_UID}/sections/KJ`,
+        projectUid: PROJECT_UID,
+        sections:
+          state === 'listed'
+            ? sectionNavigationOf(
+              PROJECT_SECTIONS.map((section) => ({ section: section.code, document_count: 3, ...sectionAudit(3) })),
+              PROJECT_UID,
+              `/projects/${PROJECT_UID}/sections/KJ`,
+            )
+            : { status: state },
+        disclosure: (props: DisclosureProps) =>
+          createElement(DisclosureView, { ...props, open: true, panelId: `language-sections-${state}-${props.label}` }),
+      }),
+  })),
+  /*
+   * `UI-A-28`: «‹ Предыдущий · N из M · Следующий ›» between the documents of a section. The document page draws it only
+   * once the whole section has been read, which one static pass never reaches, so the strip is rendered from a position.
+   */
+  {
+    name: 'section-neighbours-between',
+    make: () =>
+      createElement(SectionNeighboursView, {
+        projectUid: PROJECT_UID,
+        section: projectSectionOf('AR'),
+        place: {
+          position: 2,
+          total: 3,
+          previous: version({ document_uid: `doc_${ULID.slice(0, -1)}A`, display_title: 'Комплект АР, часть 1' }),
+          next: version({ document_uid: `doc_${ULID.slice(0, -1)}C`, display_title: 'Комплект АР, часть 3' }),
+        },
       }),
   },
   /*
