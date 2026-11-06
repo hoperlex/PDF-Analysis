@@ -8,6 +8,8 @@
 }
 
 .filters {
+  display: grid;
+  gap: var(--am-gap);
   margin-bottom: var(--am-gap);
 }
 

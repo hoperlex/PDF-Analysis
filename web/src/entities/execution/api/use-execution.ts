@@ -8,7 +8,7 @@ import type {
 } from '@/shared/api';
 import { getExecutionDispatch, listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
 
-import { OPERATIONAL_LIST_POLL } from './operational-poll';
+import { OPERATIONAL_LIST_POLL, autoRefreshMeta } from './operational-poll';
 
 export const EXECUTION_PAGE_LIMIT = 25;
 
@@ -81,7 +81,13 @@ export function useExecutionDispatch(enabled = true) {
   return useQuery<ExecutionDispatchStatus>(dispatchQueryOptions(enabled));
 }
 
-export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = true) {
+/**
+ * The journal read. `autoRefresh` is the screen's «Автообновление» (`UI-B-43`): on, the read follows the
+ * operational-list cadence and the focus refresh like the queue; off, the screen reads once, on opening, on a
+ * page change and on «Обновить», so the rows an operator is reading or copying do not move. It is the mode of
+ * the same data, so it is not part of the key.
+ */
+export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = true, autoRefresh = true) {
   return {
     queryKey: queryKeys.execution.journal(runId, cursor),
     queryFn: async () => (await listExecutionJournal({
@@ -92,14 +98,15 @@ export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = tr
       },
     })).data,
     ...OPERATIONAL_LIST_POLL,
-    refetchOnWindowFocus: 'always',
+    refetchOnWindowFocus: autoRefresh ? 'always' : false,
     staleTime: 0,
     enabled,
+    meta: autoRefreshMeta(autoRefresh),
   } as const;
 }
 
-export function useExecutionJournal(runId?: RunId, cursor?: string, enabled = true) {
-  return useQuery<ExecutionJournalPage>(journalQueryOptions(runId, cursor, enabled));
+export function useExecutionJournal(runId?: RunId, cursor?: string, enabled = true, autoRefresh = true) {
+  return useQuery<ExecutionJournalPage>(journalQueryOptions(runId, cursor, enabled, autoRefresh));
 }
 
 /** One page of the «Исполнители» screen. */

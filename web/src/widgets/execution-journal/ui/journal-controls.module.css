@@ -1,0 +1,29 @@
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm) var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  cursor: pointer;
+}
+
+.count {
+  margin-left: auto;
+  font-size: var(--am-text-sm);
+}
+
+.notes {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.notes p {
+  margin: 0;
+}

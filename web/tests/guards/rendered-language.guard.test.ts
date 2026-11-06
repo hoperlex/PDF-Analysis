@@ -136,7 +136,7 @@ import {
   MALFORMED_GROUP_ANSWER, StartArV3GroupView, classifyArV3GroupStartFailure,
 } from '@/features/start-ar-v3-group';
 import type { StartArV3GroupViewProps } from '@/features/start-ar-v3-group';
-import { ExecutionJournal } from '@/widgets/execution-journal';
+import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList } from '@/widgets/worker-list';
 import { WorkersPage } from '@/_pages/workers';
@@ -2517,6 +2517,23 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }],
       onNext: null, onPrevious: null,
     }),
+  },
+  {
+    // `UI-B-40`: the run picker at its last step, and the page opened on a run (the picker names it).
+    name: 'execution-journal-run-picker-chosen',
+    make: () => createElement(RunPicker, {
+      selection: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+      runId: RUN_ID, onSelection: () => {}, onChooseRun: () => {},
+    }),
+  },
+  {
+    name: 'execution-journal-run-in-view',
+    make: () => createElement(LogsPage, { initialRunId: RUN_ID }),
+  },
+  {
+    // `UI-B-43`: the controls with «Автообновление» switched off and no rows to copy.
+    name: 'execution-journal-controls-auto-refresh-off',
+    make: () => createElement(JournalControls, { entries: [], runId: null, autoRefresh: false, onAutoRefresh: () => {} }),
   },
   {
     name: 'execution-journal-empty-paged',

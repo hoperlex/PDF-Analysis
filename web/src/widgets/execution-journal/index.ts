@@ -1,2 +1,10 @@
 export { ExecutionJournal } from './ui/execution-journal';
 export type { ExecutionJournalProps } from './ui/execution-journal';
+export { JournalControls } from './ui/journal-controls';
+export type { JournalControlsProps } from './ui/journal-controls';
+export { EMPTY_PICKER_SELECTION, RunPicker } from './ui/run-picker';
+export type { RunPickerProps, RunPickerSelection } from './ui/run-picker';
+export { UNRECOGNISED_RUN_STATE, documentOptions, projectOptions, runOptions, runStateWord, versionOptions } from './model/run-options';
+export type { PickerOption } from './model/run-options';
+export { browserClipboard, copyToClipboard } from './model/copy-to-clipboard';
+export type { TextClipboard } from './model/copy-to-clipboard';
