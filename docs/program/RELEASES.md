@@ -23,7 +23,7 @@ notes), both without a user-visible change, and #45 (`68dd4d66`, 2026-11-06, 51 
 `1.20.0`…`1.30.0`, migrations `0051`…`0054`). The deploy of #45 was refused at `apply-grants.sh`
 (`grants_unclassified`, workflow run `42175149560`); the hotfix `d6e8b4af` classified `document_tag` and
 `finding_execution_status`, and its deploy succeeded (run `42177263914`), so #45 reached users on 2026-11-06.
-`release-notes/0.12.0.json` (revision 1, 2026-11-06, seven items) describes it; `VERSION` is `0.12.0`.
+`release-notes/0.12.0.json` (revision 1 of 2026-11-06, seven items; now at revision 4, see below) describes it; `VERSION` is `0.12.0`.
 
 | Item | Commits |
 | --- | --- |
@@ -35,7 +35,7 @@ notes), both without a user-visible change, and #45 (`68dd4d66`, 2026-11-06, 51 
 | 6 the queue overview, place, attempts, «Запустил», «Ожидаемое завершение», the pause in the top strip | `83b59f9f`, `4343ce52`, `84325e26`, `110b9dac` |
 | 7 the dense layout, «Блоки» as a version tab, «Диспетчер» by project, the «Процессы» tiles | `b757fc55`, `212e20a5`, `26e2bbbd`, `6f03944b`, `57d01cf9`, `ff3e9cb6`, `07a1c81b`, `31388f79` |
 
-Revision 2 (2026-11-06) adds the hotfix `65ffb867` (main deploy run `42189173407`, success): a v3 window started its normative context receipts as the parent's list, so every full section plan with a norm paragraph context policy raised `AttributeError` at its first window save (production run `run_01M6QXCZA8EKYGSMX8JA7QH6XV`). To stay within seven items the knowledge-base item is folded into item 4, and item 7 is the fix. Revision 3 (2026-11-06) adds to item 7 the run page fix: `CrossWindowReview` shared the React key `run_id` with the observation list, so each poll duplicated the cross-window block; it now has its own key, and the plan detail and the observations are folded under `<details>`.
+Revision 2 (2026-11-06) adds the hotfix `65ffb867` (main deploy run `42189173407`, success): a v3 window started its normative context receipts as the parent's list, so every full section plan with a norm paragraph context policy raised `AttributeError` at its first window save (production run `run_01M6QXCZA8EKYGSMX8JA7QH6XV`). To stay within seven items the knowledge-base item is folded into item 4, and item 7 is the fix. Revision 3 (2026-11-06) adds to item 7 the run page fix: `CrossWindowReview` shared the React key `run_id` with the observation list, so each poll duplicated the cross-window block; it now has its own key, and the plan detail and the observations are folded under `<details>`. Revision 4 (2026-11-06, AGENTS §6.1) carries the same day's dev publications, the version being full at seven items: item 3 gains «Во весь экран» and «Открыть PDF» on «Разбор» (`a941a6ae`, `c1f96051`), item 4 the knowledge base's «Все» (contract `1.32.0`, `55f3108b`), item 6 the run screen's head (`d50376c0`, `0dbf38b8`). «График работ» (`1.31.0`, `/schedule`) is not in any note yet: the version is full and a new one needs a later date.
 
 Left out: `getProject` naming the project page (`987f8579`), the role checkboxes (`aa8f139e`). The same commit
 is on `origin/dev` and, cherry-picked, on `origin/main`. Checks: none (owner: not a code task); the text was

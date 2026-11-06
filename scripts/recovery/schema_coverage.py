@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0050_viewer_role"
+HEAD = "0055_work_schedule"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -68,8 +68,7 @@ TABLES = frozenset((
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     "contract_state_transition", "document",
     # `0053_document_tags` adds `document_tag` and `0054_finding_execution_status` adds `finding_execution_status`
-    # (`UI-PARITY-P0H`, `UI-PARITY-P0I`); `0051` and `0052` add columns only. HEAD and the counts below stay at
-    # `0050` until the recovery inventory is re-measured on a database at `0054`.
+    # (`UI-PARITY-P0H`, `UI-PARITY-P0I`); `0051` and `0052` add columns only.
     "document_tag", "finding_execution_status",
     # `0055_work_schedule` (`UI-PARITY-P0P`): five append-only journals of «График работ», each `am_immutable_row`.
     "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
@@ -435,8 +434,11 @@ SEQUENCES = {
 #: constraint trigger (the deferred `trg_executor_group_revision_has_members`, contype `t`); `0048_dispatch_time_binding`
 #: adds, on `audit_run` and on `comparison_ai_job`, 15 checks (7 and 8) and four foreign keys (the group and rule
 #: revisions of each): c 1234, f 356, p 128, t 10, u 129 (measured on the stand at ``0048``); `0049_stage_identity_checks`
-#: adds 43 identity-format checks and nothing else (`EXEC2-FIX-CMP-INVENTORY`): c 1277, the other four unchanged.
-CONSTRAINT_COUNTS = {"c": 1277, "f": 356, "p": 128, "t": 10, "u": 129}
+#: adds 43 identity-format checks and nothing else (`EXEC2-FIX-CMP-INVENTORY`): c 1277, the other four unchanged;
+#: `0050_viewer_role` adds none. `0051`..`0054` (`UI-PARITY-P0F`..`P0I`) add c 7, f 6, p 2 (who started a run, the
+#: document's archive, the tag and execution-status tables) and `0055_work_schedule` adds c 17, f 8, p 5 (the five
+#: journals of «График работ»): c 1301, f 370, p 135, measured on a fresh database at ``0055`` on 2026-11-06.
+CONSTRAINT_COUNTS = {"c": 1301, "f": 370, "p": 135, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -445,8 +447,9 @@ CONSTRAINT_COUNTS = {"c": 1277, "f": 356, "p": 128, "t": 10, "u": 129}
 #: one unfinished install per connection, and one listing index on each of the two tables); 0047 adds twelve (five primary
 #: keys, four unique constraints, the partial unique index of an active group name, and one index each on the member's
 #: connection and the rule's group revision); 0048 adds four (a group-revision index and a pending-work index on each of
-#: `audit_run` and `comparison_ai_job`); 0049 adds none.
-INDEX_COUNT = 450
+#: `audit_run` and `comparison_ai_job`); 0049 and 0050 add none; 0051..0054 add four (the two new tables' keys and one
+#: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06.
+INDEX_COUNT = 463
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((
