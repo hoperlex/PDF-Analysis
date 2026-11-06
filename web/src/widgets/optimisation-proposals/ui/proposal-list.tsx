@@ -178,16 +178,22 @@ export function ProposalListView({
   controlsFor,
   historyFor,
   sheet,
+  actions,
+  summary,
 }: ProposalListViewProps) {
   const pass = page.optimisation_pass;
   return (
     <div data-proposal-list={page.total}>
-      <DecisionFilter
-        selected={page.decision}
-        counts={pass.decision_counts}
-        total={pass.proposal_count}
-        onSelect={onDecision}
-      />
+      <div className={styles.strip}>
+        <DecisionFilter
+          selected={page.decision}
+          counts={pass.decision_counts}
+          total={pass.proposal_count}
+          onSelect={onDecision}
+        />
+        {actions ?? null}
+      </div>
+      {summary ?? null}
       {sheet === undefined ? null : <SheetDocumentNote sheet={sheet} />}
       {page.items.length === 0 ? (
         <EmptyState
@@ -256,6 +262,8 @@ export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: Pro
       onDecision={onDecision}
       onPage={onPage}
       sheet={sheet}
+      actions={actions}
+      summary={summary}
       controlsFor={(proposal) => (
         <ProposalDecisionForm passId={page.optimisation_pass.optimisation_pass_id} proposal={proposal} />
       )}

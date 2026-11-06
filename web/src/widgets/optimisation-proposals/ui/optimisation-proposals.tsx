@@ -276,14 +276,7 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
       ) : null}
       {proposals.data !== undefined && failure === null ? (
         <>
-          <PassSummary pass={proposals.data.optimisation_pass} />
-          <ExportProposalsView
-            pending={exporter.isPending || workbook.isPending}
-            failure={exportFailure}
-            onDownload={exporter.download}
-            onDownloadXlsx={workbook.download}
-            importControl={canDecide ? <ImportProposalDecisions passId={passId} /> : null}
-          />
+          {/* `UI-B-05`: the original's strip -- the counts by decision and the buttons -- comes first; the pass's facts follow it. */}
           <ProposalList
             page={proposals.data}
             canDecide={canDecide}
@@ -292,6 +285,21 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
               setOffset(0);
             }}
             onPage={proposals.isPlaceholderData ? null : setOffset}
+            summary={
+              <details className={styles.details} data-pass-summary="">
+                <summary>Сведения о проходе</summary>
+                <PassSummary pass={proposals.data.optimisation_pass} />
+              </details>
+            }
+            actions={
+              <ExportProposalsView
+                pending={exporter.isPending || workbook.isPending}
+                failure={exportFailure}
+                onDownload={exporter.download}
+                onDownloadXlsx={workbook.download}
+                importControl={canDecide ? <ImportProposalDecisions passId={passId} /> : null}
+              />
+            }
             sheet={sheet}
           />
         </>

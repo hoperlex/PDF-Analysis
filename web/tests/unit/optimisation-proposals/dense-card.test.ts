@@ -81,3 +81,33 @@ describe('the action bar of a proposals tab', () => {
     expect(markup).toMatch(/<div class="[^"]*bar[^"]*"><button[^>]*>Запустить проход<\/button><p class="am-form__hint [^"]*hint[^"]*">Проход читает текущую версию/);
   });
 });
+
+describe('the strip over the proposals (UI-B-05)', () => {
+  function loaded(): string {
+    const shape = proposalShapes().find((entry) => entry.name === 'proposals-loaded');
+    if (shape === undefined) throw new Error('no shape proposals-loaded');
+    const client = newClient();
+    shape.seedClient?.(client);
+    return renderScreen(client, shape.make());
+  }
+
+  it('stands the counts by decision and the export beside each other, before the pass’s facts and the proposals', () => {
+    const markup = loaded();
+    const filter = markup.indexOf('data-decision-filter');
+    const exportAt = markup.indexOf('data-proposals-export');
+    const facts = markup.indexOf('data-pass-summary');
+    const first = markup.indexOf('data-proposal="');
+    expect(filter).toBeGreaterThan(-1);
+    expect(exportAt).toBeGreaterThan(filter);
+    expect(facts).toBeGreaterThan(exportAt);
+    expect(first).toBeGreaterThan(facts);
+    // One strip holds both.
+    expect(markup.slice(markup.lastIndexOf('<div', filter), exportAt)).toMatch(/strip/);
+  });
+
+  it('keeps the pass’s facts in the markup, in a block the reader opens', () => {
+    const markup = loaded();
+    expect(markup).toMatch(/<details[^>]*data-pass-summary=""[^>]*><summary>Сведения о проходе<\/summary>/);
+    expect(markup).toContain('не смешиваются со счётчиками замечаний');
+  });
+});

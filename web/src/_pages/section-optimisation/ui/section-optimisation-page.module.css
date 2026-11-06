@@ -52,3 +52,8 @@
   margin: 0 0 var(--am-gap-sm);
   color: var(--am-ink-muted);
 }
+
+.back {
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}

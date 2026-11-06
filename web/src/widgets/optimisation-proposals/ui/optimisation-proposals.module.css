@@ -82,6 +82,31 @@
   border-bottom: 1px solid var(--am-line-soft);
 }
 
+/*
+ * `UI-B-05`: the original's strip -- the counts by decision, and the buttons beside them. The filter keeps its place at
+ * the left and the actions stand at the right; they wrap under it on a narrow screen.
+ */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.strip > .filters {
+  margin: 0;
+}
+
+.strip > [data-proposals-export] {
+  min-width: 0;
+}
+
+.strip > [data-proposals-export] p {
+  margin: 0;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
