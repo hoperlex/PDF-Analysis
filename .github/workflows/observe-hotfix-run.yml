@@ -30,8 +30,8 @@ jobs:
           SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          RUN_ID: run_01M6RJPRWTC1ER59JXJZN2C76H
-          DEPLOYED_SHA: 0730b6179d3baa6eb9f4a78d27c63ef53893e296
+          RUN_ID: run_01M6RQ9SZPB01G22AV6VQRHJHD
+          DEPLOYED_SHA: 46b52dd068232236038d7ec4cbb0b13c63b9aa25
         run: |
           set -euo pipefail
           umask 077
