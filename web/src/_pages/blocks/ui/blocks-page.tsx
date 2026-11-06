@@ -51,14 +51,22 @@
  * version already chosen (from the address, never from memory) and the context strip says where it is. The
  * chooser at `/blocks` stays for a reader who comes without a version, out of the menu, and once a version is
  * chosen it offers the version's own tab.
+ *
+ * **The page chosen above the tiles is kept in the address** on the version's tab: `?page=N` (a PDF page) or
+ * `?page=all`, read here and written with `history.replaceState` as «Разбор» writes `?finding=`, so a reload or
+ * a link opens the same page. An address without it, or with a value that names no page, is «Все блоки». The
+ * chooser at `/blocks` has no address of its own for a version, so it keeps the choice in the page only.
  */
 
 import { useId, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import type { DocumentVersion, Project, ProjectUid, VersionUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
+import { pageSelectionOf } from '@/entities/block';
+import type { PageSelection } from '@/entities/block';
 import { looksLikeProjectUid, useProjectList } from '@/entities/project';
 import {
   COMPARISON_ONLY_START_NOTE,
@@ -71,11 +79,14 @@ import {
 import { DocumentContext } from '@/widgets/document-context';
 import { PortalBlocks } from '@/widgets/portal-blocks';
 
+import { addressWithPage } from '../model/page-address';
 import { DEFAULT_BLOCK_TAB } from '../model/tabs';
 import type { BlockTab } from '../model/tabs';
 import { BlocksTabs } from './blocks-tabs';
 import { TextLines } from './text-lines';
 import styles from './blocks-page.module.css';
+
+const NO_PARAMS = new URLSearchParams();
 
 export interface BlocksPageProps {
   /** `R-151m`: the version's tab — both given by the route; absent at the chooser `/blocks`. */
@@ -108,6 +119,15 @@ function VersionBlocksScreen({ projectUid, versionUid }: { readonly projectUid: 
 function VersionBlocksLoaded({ projectUid, versionUid }: { readonly projectUid: string; readonly versionUid: VersionUid }) {
   const version = useDocumentVersion(versionUid);
   const [tab, setTab] = useState<BlockTab>(DEFAULT_BLOCK_TAB);
+  // Outside the app router both hooks answer `null` (a static render): the list opens on «Все блоки».
+  const pathname = usePathname() ?? routes.versionBlocks(projectUid, versionUid);
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const page = pageSelectionOf(searchParams.get('page'));
+  const writePage = (selection: PageSelection) => {
+    // Next keeps `usePathname`/`useSearchParams` in step with the native history API, so the address is
+    // written without the app router, as «Разбор» writes `?finding=`.
+    window.history.replaceState(window.history.state, '', addressWithPage(pathname, searchParams.toString(), selection));
+  };
   let body;
   if (version.isPending) {
     body = <LoadingState what="версию" />;
@@ -123,7 +143,7 @@ function VersionBlocksLoaded({ projectUid, versionUid }: { readonly projectUid: 
   } else if (isComparisonOnly(version.data)) {
     body = <UnsupportedState title="Блоков нет." detail={COMPARISON_ONLY_START_NOTE} />;
   } else {
-    body = <VersionBlockViews version={version.data} tab={tab} onTab={setTab} />;
+    body = <VersionBlockViews version={version.data} tab={tab} onTab={setTab} page={page} onPage={writePage} />;
   }
   return (
     <PageShell
@@ -323,6 +343,10 @@ export interface VersionBlockViewsProps {
   readonly version: DocumentVersion;
   readonly tab: BlockTab;
   readonly onTab: (tab: BlockTab) => void;
+  /** The page chosen above the tiles when the list opens (the version's tab reads it from the address). */
+  readonly page?: PageSelection | undefined;
+  /** Told each time the reader chooses «Все блоки» or a page. */
+  readonly onPage?: ((selection: PageSelection) => void) | undefined;
 }
 
 /**
@@ -330,13 +354,13 @@ export interface VersionBlockViewsProps {
  * (the language guard, the contrast census) render the tabs and each tab's states exactly as
  * this page does: one pass cannot click a project, a document and a tab.
  */
-export function VersionBlockViews({ version, tab, onTab }: VersionBlockViewsProps) {
+export function VersionBlockViews({ version, tab, onTab, page, onPage }: VersionBlockViewsProps) {
   return (
     <BlocksTabs
       active={tab}
       onSelect={onTab}
       panels={{
-        portal: <PortalBlocks version={version} />,
+        portal: <PortalBlocks version={version} page={page} onPage={onPage} />,
         lines: <TextLines versionUid={version.version_uid} />,
       }}
     />

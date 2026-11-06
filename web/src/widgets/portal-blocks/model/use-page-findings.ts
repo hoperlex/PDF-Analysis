@@ -3,22 +3,27 @@
 /**
  * The run's findings, read for the tiles of «Блоки» (see `page-findings.ts` for what they may say).
  *
- * Two reads, in order: the run's status, to learn whether it published findings at all, and then its
- * complete finding list, the same read the review screen fills (`runFindingsQueryOptions`), so a
- * reader who came from «Разбор» finds both in the cache. The findings are not asked for a run that
- * has none to give.
+ * Three reads, in order: the version's first page of runs (newest first, `useRunList`), to learn which
+ * run's findings the reader has before them -- the latest that published a result, else the run whose
+ * geometry stage read the bundle (`scopeRunId`); then that run's status, to learn whether it published
+ * findings at all and when it started; and then its complete finding list, the same read the review
+ * screen fills (`runFindingsQueryOptions`), so a reader who came from «Разбор» finds both in the cache.
+ * The findings are not asked for a run that has none to give, and no run is asked for while the list of
+ * runs is still on its way.
  */
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { RunId } from '@/shared/api';
-import { runHasPublishedResult, runStatusQueryOptions } from '@/entities/audit-run';
+import type { RunId, VersionUid } from '@/shared/api';
+import { runHasPublishedResult, runStatusQueryOptions, useRunList } from '@/entities/audit-run';
 import { runFindingsQueryOptions } from '@/entities/finding';
 
-import { NO_PAGE_FINDINGS, completeFindingsOf, findingsByPage } from './page-findings';
+import { NO_PAGE_FINDINGS, completeFindingsOf, findingsByPage, scopeRunId } from './page-findings';
 import type { PageFindingsReading } from './page-findings';
 
-export function usePageFindings(runId: RunId | null): PageFindingsReading {
+export function usePageFindings(versionUid: VersionUid, geometryRunId: RunId | null): PageFindingsReading {
+  const runs = useRunList(versionUid);
+  const runId = scopeRunId(runs.isPending ? 'pending' : runs.data === undefined ? 'unreadable' : runs.data.items, geometryRunId);
   const status = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== null });
   const published =
     status.data !== undefined && runHasPublishedResult(status.data.state, status.data.analysis_profile_id);
@@ -31,5 +36,7 @@ export function usePageFindings(runId: RunId | null): PageFindingsReading {
   if (findings.isError) return { kind: 'unreadable', runId };
   if (findings.data === undefined) return NO_PAGE_FINDINGS;
   const items = completeFindingsOf(findings.data);
-  return items === null ? { kind: 'unreadable', runId } : { kind: 'read', runId, byPage: findingsByPage(items) };
+  return items === null
+    ? { kind: 'unreadable', runId }
+    : { kind: 'read', runId, byPage: findingsByPage(items), runAt: status.data.created_at };
 }

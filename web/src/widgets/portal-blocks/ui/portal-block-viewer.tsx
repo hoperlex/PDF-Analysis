@@ -29,6 +29,7 @@ import { SeverityBadge } from '@/entities/finding';
 import { portalBlockTypeLabel, stepIndex } from '@/entities/block';
 
 import type { PageFindings } from '../model/page-findings';
+import { runSourcePhrase } from '../model/page-findings';
 import { BlockImageStage } from './block-image-stage';
 import { PortalBlockCard } from './portal-block-card';
 import styles from './portal-block-viewer.module.css';
@@ -46,6 +47,8 @@ export interface PortalBlockViewerProps {
   readonly pageFindings: PageFindings | null;
   /** The run the findings belong to. */
   readonly runId: RunId | null;
+  /** When that run started; the panel says which run the count is from. */
+  readonly runAt?: string | undefined;
   /** The census and the unit suite: drawn open without `showModal`. */
   readonly staticOpen?: boolean | undefined;
 }
@@ -54,20 +57,23 @@ export interface PortalBlockViewerProps {
 function PageFindingsPanel({
   projectUid,
   runId,
+  runAt,
   page,
   reading,
 }: {
   readonly projectUid: ProjectUid;
   readonly runId: RunId;
+  readonly runAt: string | undefined;
   readonly page: number;
   readonly reading: PageFindings;
 }) {
+  const source = runSourcePhrase(runAt);
   return (
     <section className={styles.findings} aria-label="Замечания на странице" data-page-findings-panel={reading.count}>
       <h4 className={styles.findingsTitle}>{`Замечания на странице ${page} (${reading.count})`}</h4>
       <p className={styles.findingsNote}>
         Замечание указывает страницу PDF, а не блок: прогон не называет блок портала, поэтому здесь все замечания,
-        в которых есть цитата с этой страницы.
+        в которых есть цитата с этой страницы{source === null ? null : <> ({source})</>}.
       </p>
       {reading.count === 0 ? (
         <p className={styles.findingsNote}>Ни в одном замечании прогона нет цитаты с этой страницы.</p>
@@ -102,6 +108,7 @@ export function PortalBlockViewer({
   onClose,
   pageFindings,
   runId,
+  runAt,
   staticOpen = false,
 }: PortalBlockViewerProps) {
   const dialog = useRef<HTMLDialogElement | null>(null);
@@ -212,7 +219,7 @@ export function PortalBlockViewer({
           <aside className={styles.side} aria-label="О блоке" data-block-panel="">
             <PortalBlockCard block={block} versionUid={versionUid} showCrop={false} />
             {pageFindings === null || runId === null ? null : (
-              <PageFindingsPanel projectUid={projectUid} runId={runId} page={block.page_number} reading={pageFindings} />
+              <PageFindingsPanel projectUid={projectUid} runId={runId} runAt={runAt} page={block.page_number} reading={pageFindings} />
             )}
           </aside>
         </div>

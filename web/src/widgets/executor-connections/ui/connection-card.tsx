@@ -21,6 +21,9 @@
  * network, client installed, login valid, the administrator's mark, probe, ready — one lifecycle for
  * both install paths — and, for an administrator, «Перенести на другой сервер». The panel draws
  * nothing for a `pull` connection that is not an agent.
+ *
+ * `UI-B-68`: «Скопировать диагностику» under the probe copies the probe outcome as text, the fields
+ * the card already prints and no key or fingerprint (`model/probe-diagnostics.ts`).
  */
 
 import { useState } from 'react';
@@ -71,6 +74,8 @@ import {
 import { AgentLifecyclePanel } from '@/features/connect-remote-agent';
 import { executorSecretScreenUrl } from '@/features/set-executor-secret';
 
+import { probeDiagnosticText } from '../model/probe-diagnostics';
+import { CopyDiagnostics } from './copy-diagnostics';
 import styles from './executor-connections.module.css';
 
 export interface ConnectionCardProps {
@@ -292,6 +297,8 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
 
       <SecretsSummary connection={connection} revision={revision} />
       {revision !== undefined ? <ProbeSummary probe={probe} connection={connection} revision={revision} /> : null}
+      {/* `UI-B-68`: the probe outcome above, as text for a message to whoever looks after the connection. */}
+      {revision !== undefined ? <CopyDiagnostics text={probeDiagnosticText(connection, revision)} /> : null}
       {pulls && !archived ? <AgentLifecyclePanel connection={connection} detail={detail} canManage={canManage} nowMs={nowMs} /> : null}
       {pulls && !archived ? <RunnerTokenPanel connection={connection} detail={detail} canManage={canManage} nowMs={nowMs} /> : null}
 
