@@ -25,6 +25,12 @@
 
 .cardContent {
   min-width: 0;
+  /*
+   * A quotation is shown exactly as the server sent it, and a text layer whose words lost their
+   * spaces gives one «word» as long as a sentence. Without this it ran past the card's right edge;
+   * now it breaks at the card's width (inherited by the quotation and its anchor line).
+   */
+  overflow-wrap: anywhere;
 }
 
 /* The same numeral as the badge on the frame: quiet until its frame is the one in view. */
