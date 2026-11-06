@@ -1,0 +1,13 @@
+/* The start button and what it does on one line (`UI-PARITY-DENSE`); the hint wraps beside it, not under it. */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.hint {
+  flex: 1 1 24rem;
+  margin: 0;
+}

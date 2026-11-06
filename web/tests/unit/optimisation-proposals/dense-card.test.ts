@@ -17,7 +17,7 @@ import { ProposalCard } from '@/widgets/optimisation-proposals';
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { parseRules } from '../styles/contrast';
 import { newClient, renderScreen } from '../screens/harness';
-import { decision, proposal } from './fixtures';
+import { decision, proposal, proposalShapes } from './fixtures';
 
 const CSS = readFileSync(join(WEB_ROOT, 'src/widgets/optimisation-proposals/ui/optimisation-proposals.module.css'), 'utf8');
 const rules = parseRules(CSS, 'module');
@@ -59,5 +59,25 @@ describe('a proposal row', () => {
   it('gives the pass facts two label-and-value pairs to a line', () => {
     const facts = rules.find((rule) => rule.selector === '.facts')?.declarations.get('grid-template-columns') ?? '';
     expect(facts.match(/max-content/g)).toHaveLength(2);
+  });
+});
+
+describe('the action bar of a proposals tab', () => {
+  function loaded(): string {
+    const shape = proposalShapes().find((entry) => entry.name === 'proposals-loaded');
+    if (shape === undefined) throw new Error('no shape proposals-loaded');
+    const client = newClient();
+    shape.seedClient?.(client);
+    return renderScreen(client, shape.make());
+  }
+
+  it('keeps the explanation of how proposals are built one click away, in the markup', () => {
+    const markup = loaded();
+    expect(markup).toMatch(/<details[^>]*><summary>Как строятся предложения<\/summary><p[^>]*>Предложение — отдельная сущность/);
+  });
+
+  it('puts «Запустить проход» and what it does in one bar', () => {
+    const markup = loaded();
+    expect(markup).toMatch(/<div class="[^"]*bar[^"]*"><button[^>]*>Запустить проход<\/button><p class="am-form__hint [^"]*hint[^"]*">Проход читает текущую версию/);
   });
 });

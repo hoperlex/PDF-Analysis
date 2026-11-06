@@ -22,6 +22,15 @@
   color: var(--am-ink-muted);
 }
 
+.details {
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .chooser {
   margin: 0 0 var(--am-gap-sm);
 }

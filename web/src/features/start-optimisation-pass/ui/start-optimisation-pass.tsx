@@ -16,6 +16,7 @@ import { ErrorState, LoadingState } from '@/shared/ui';
 import { startPassFailureMessage } from '@/entities/optimisation-proposal';
 
 import { useStartOptimisationPass } from '../model/use-start-optimisation-pass';
+import styles from './start-optimisation-pass.module.css';
 
 export interface StartOptimisationPassViewProps {
   /** Whether the session holds `expert`; the API checks again. */
@@ -44,14 +45,17 @@ export function StartOptimisationPassView({
   }
   return (
     <div data-start-pass="">
-      <button type="button" className="am-button" disabled={!chosen || pending} onClick={onStart}>
-        Запустить проход
-      </button>
-      <p className="am-form__hint">
-        Проход читает текущую версию выбранного комплекта, последний опубликованный прогон,
-        действующий прайс-лист и вендор-лист раздела этого комплекта и сохраняет предложения
-        «более дешёвый аналог». Тот же набор исходных данных второй раз не создаёт нового прохода.
-      </p>
+      {/* `UI-PARITY-DENSE`: the action and what it does on one line, as the original's action bar has them. */}
+      <div className={styles.bar}>
+        <button type="button" className="am-button" disabled={!chosen || pending} onClick={onStart}>
+          Запустить проход
+        </button>
+        <p className={`am-form__hint ${styles.hint}`}>
+          Проход читает текущую версию выбранного комплекта, последний опубликованный прогон,
+          действующий прайс-лист и вендор-лист раздела этого комплекта и сохраняет предложения
+          «более дешёвый аналог». Тот же набор исходных данных второй раз не создаёт нового прохода.
+        </p>
+      </div>
       {pending ? <LoadingState what="предложений" /> : null}
       {failure !== null ? (
         <ErrorState
