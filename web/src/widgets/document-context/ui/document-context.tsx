@@ -19,7 +19,7 @@ import type { DocumentUid, RunId, VersionUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { useDocumentVersion, useVersionList } from '@/entities/document-version';
-import { useProject } from '@/entities/project';
+import { findProjectSection, useProject } from '@/entities/project';
 
 import { SectionNeighbours } from './section-neighbours';
 import { VersionTabs } from './version-tabs';
@@ -37,6 +37,11 @@ export interface DocumentContextProps {
   readonly runId?: string | undefined;
   /** `R-151l`: on the section page, the section's worded label. */
   readonly sectionLabel?: string | undefined;
+  /**
+   * `UI-A-23`: the section the document's current version is confirmed for, when the page already knows it (the
+   * document page does). A version-level page takes it from the version it reads.
+   */
+  readonly sectionCode?: string | undefined;
   /** What the page puts at the row's end (the document page's «N из M»); drawn beside the version's own tabs. */
   readonly aside?: ReactNode | undefined;
 }
@@ -45,6 +50,8 @@ export interface ContextStep {
   readonly key: string;
   readonly label: string;
   readonly href: string | null;
+  /** The step's full name when its label is short (a section's abbreviation). */
+  readonly title?: string | undefined;
 }
 
 export interface ContextFacts {
@@ -57,6 +64,12 @@ export interface ContextFacts {
   readonly runId?: string | undefined;
   /** `R-151l`: the section page's own step, its label already worded. */
   readonly sectionLabel?: string | undefined;
+  /**
+   * `UI-A-23`: the section the document is confirmed for. The original's strip opens «<код раздела> / <имя проекта>»
+   * with the section a link to its page; ours puts the section between the project and the document, a link to the
+   * section page, and draws nothing for a document with no confirmed section.
+   */
+  readonly sectionCode?: string | undefined;
 }
 
 const ORDER: readonly ContextLevel[] = ['document', 'version', 'run', 'review'];
@@ -71,6 +84,15 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
   if (current === 'section') {
     steps.push({ key: 'section', label: facts.sectionLabel ?? 'Раздел', href: null });
     return steps;
+  }
+  const section = facts.sectionCode === undefined ? null : findProjectSection(facts.sectionCode);
+  if (section !== null) {
+    steps.push({
+      key: 'section',
+      label: section.abbr,
+      title: `${section.abbr} ${section.name}`,
+      href: routes.projectSection(facts.projectUid, section.code),
+    });
   }
   if (facts.documentUid !== undefined) {
     steps.push({
@@ -106,7 +128,13 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
  * document, as the original's V# choice does. It lists the first page of the document's versions; a
  * longer history says so instead of hiding the rest.
  */
-function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly projectUid: string; readonly documentUid: string; readonly versionUid: string }) {
+function VersionSwitch({ projectUid, documentUid, versionUid, onBlocks }: {
+  readonly projectUid: string;
+  readonly documentUid: string;
+  readonly versionUid: string;
+  /** On the «Блоки» tab the choice stays on «Блоки» of the other version; elsewhere it opens that version. */
+  readonly onBlocks: boolean;
+}) {
   const router = useRouter();
   const versions = useVersionList(documentUid as DocumentUid);
   const items = versions.data?.items ?? [];
@@ -118,7 +146,7 @@ function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly proje
       <select
         value={versionUid}
         onChange={(event) => {
-          router.push(routes.version(projectUid, event.target.value));
+          router.push(onBlocks ? routes.versionBlocks(projectUid, event.target.value) : routes.version(projectUid, event.target.value));
         }}
       >
         {items.map((item) => (
@@ -132,7 +160,7 @@ function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly proje
   );
 }
 
-export function DocumentContext({ projectUid, current, documentUid, versionUid, runId, sectionLabel, aside }: DocumentContextProps) {
+export function DocumentContext({ projectUid, current, documentUid, versionUid, runId, sectionLabel, sectionCode, aside }: DocumentContextProps) {
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
   const version = useDocumentVersion(knownVersion ?? null);
@@ -148,13 +176,15 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
       versionOrdinal: version.data?.version_ordinal,
       runId,
       sectionLabel,
+      sectionCode: sectionCode ?? version.data?.classification?.section_code,
     },
     current,
   );
   const ownDocument = documentUid ?? version.data?.document_uid;
-  // `UI-A-22`, `R-151m`: on a version and on its «Блоки» tab the row also carries the version's tabs, and
-  // `UI-A-28` the document's place among the section's.
-  const tabLevel = current === 'version' || current === 'blocks' ? current : null;
+  // `UI-A-22`, `R-151m`: as the original's strip follows its project through «Инфо», «Блоки» and «Замечания», the row
+  // carries the version's tabs on the version, its «Блоки», a run and the «Разбор» of one, and `UI-A-28` the document's
+  // place among the section's.
+  const tabLevel = current === 'section' || current === 'document' ? null : current;
   return (
     <div className={styles.bar} data-context-level={current}>
       <nav className={styles.strip} aria-label="Где вы находитесь">
@@ -166,13 +196,13 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
                   {step.label}
                 </span>
               ) : (
-                <Link href={step.href}>{step.label}</Link>
+                <Link href={step.href} title={step.title}>{step.label}</Link>
               )}
             </li>
           ))}
         </ol>
-        {current === 'version' && knownVersion !== undefined && ownDocument !== undefined ? (
-          <VersionSwitch projectUid={projectUid} documentUid={ownDocument} versionUid={knownVersion} />
+        {tabLevel !== null && knownVersion !== undefined && ownDocument !== undefined ? (
+          <VersionSwitch projectUid={projectUid} documentUid={ownDocument} versionUid={knownVersion} onBlocks={current === 'blocks'} />
         ) : null}
       </nav>
       {(tabLevel !== null && knownVersion !== undefined) || aside !== undefined ? (

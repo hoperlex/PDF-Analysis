@@ -147,6 +147,8 @@ function DocumentScreen({
         projectUid={projectUid}
         documentUid={documentUid}
         current="document"
+        // `UI-A-23`: the section the current version is confirmed for opens the strip, a link to the section page.
+        sectionCode={newest?.classification?.section_code}
         // `UI-A-28`: between the documents of the section the current version is confirmed for.
         aside={<SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />}
       />

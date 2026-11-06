@@ -18,8 +18,8 @@ import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
 import { DocumentContext, VersionTabsView, latestResultRun, versionTabs } from '@/widgets/document-context';
 
 import { newClient, renderScreen, renderWith } from '../screens/harness';
-import { DOCUMENT_UID, PROJECT_UID, VERSION_UID, runStatus } from '../review/fixtures';
-import { page, version } from '../sections/fixtures';
+import { DOCUMENT_UID, PROJECT_UID, RUN_ID, VERSION_UID, runStatus } from '../review/fixtures';
+import { classification, page, version } from '../sections/fixtures';
 
 const FACTS = { projectUid: PROJECT_UID, versionUid: VERSION_UID, documentUid: DOCUMENT_UID } as const;
 const run = (id: string, state: RunState, findings = 0) =>
@@ -67,6 +67,26 @@ describe('versionTabs', () => {
   });
 });
 
+describe('the tabs under the version', () => {
+  const runs = [run('B', 'published', 7)];
+
+  it('keep their place on a run, which opens none of them', () => {
+    const tabs = versionTabs({ ...FACTS, current: 'run', runs });
+    expect(tabs.some((tab) => tab.current)).toBe(false);
+    expect(tabs.find((tab) => tab.key === 'version')?.href).toBe(routes.version(PROJECT_UID, VERSION_UID));
+    expect(tabs.find((tab) => tab.key === 'review')?.href).toBe(routes.review(PROJECT_UID, runs[0]?.run_id as string));
+  });
+
+  it('make «Разбор» the open tab on the review, as text with its count', () => {
+    const tabs = versionTabs({ ...FACTS, current: 'review', runs });
+    const review = tabs.find((tab) => tab.key === 'review');
+    expect(review?.current).toBe(true);
+    expect(review?.href).toBeNull();
+    expect(review?.count).toBe(7);
+    expect(tabs.filter((tab) => tab.current)).toHaveLength(1);
+  });
+});
+
 describe('VersionTabsView', () => {
   it('draws the open tab with aria-current, a link with its count, and a tab that is not a link', () => {
     const open = renderWith(newClient(), createElement(VersionTabsView, {
@@ -105,6 +125,26 @@ describe('the page strip', () => {
     const markup = renderScreen(cold, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'version' }));
     expect(markup).not.toContain('data-version-tabs');
     expect(cold.getQueryCache().find({ queryKey: [...queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT)] })).toBeUndefined();
+  });
+
+  it('carries them on a run and on its «Разбор» too, where the version is read through the run', () => {
+    const seeded = newClient();
+    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ classification: classification({ section_code: 'AR' }) }));
+    seeded.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), page([]));
+    seeded.setQueryData(queryKeys.runs.detail(RUN_ID), runStatus({ run_id: RUN_ID }));
+    for (const current of ['run', 'review'] as const) {
+      const markup = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, runId: RUN_ID, current }));
+      expect(markup).toContain('data-version-tabs');
+      // and the section opens the strip, a link to the section page
+      expect(markup).toContain(`href="${routes.projectSection(PROJECT_UID, 'AR')}"`);
+    }
+  });
+
+  it('puts the section step in the strip of «Блоки» as well', () => {
+    const seeded = client();
+    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ classification: classification({ section_code: 'KJ' }) }));
+    const markup = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'blocks' }));
+    expect(markup).toContain(`href="${routes.projectSection(PROJECT_UID, 'KJ')}"`);
   });
 
   it('carries none on the levels that are not a version', () => {

@@ -4,7 +4,7 @@
  *
  * Pure, so the claim is a function a test calls. «Разбор» opens the version's **latest result run** (the newest run
  * that published a result, the rule the audit chip uses, `R-150s`); with no such run it is a label that says why it
- * is not a link rather than a link to nowhere. «Оптимизация» is the document's own tab (`R-151r`).
+ * is not a link rather than a link to nowhere. On a run and on the «Разбор» of one the tabs stay, as the original's strip stays on every view of its project: the run opens none, «Разбор» is the open one. «Оптимизация» is the document's own tab (`R-151r`).
  */
 
 import type { RunStatus } from '@/shared/api';
@@ -31,7 +31,8 @@ export interface VersionTabFacts {
   readonly documentUid: string | undefined;
   /** The version's runs, newest first, or `undefined` while they are not known. */
   readonly runs: readonly RunStatus[] | undefined;
-  readonly current: 'version' | 'blocks';
+  /** The level of the page the tabs are on; a run is under the version and opens no tab. */
+  readonly current: 'version' | 'blocks' | 'run' | 'review';
 }
 
 /** The newest run that published a result, or `null`. The list is the server's, newest first. */
@@ -61,8 +62,8 @@ export function versionTabs(facts: VersionTabFacts): readonly VersionTab[] {
     {
       key: 'review',
       label: 'Разбор',
-      href: result === null ? null : routes.review(facts.projectUid, result.run_id),
-      current: false,
+      href: facts.current === 'review' || result === null ? null : routes.review(facts.projectUid, result.run_id),
+      current: facts.current === 'review',
       count: result?.published_finding_count ?? null,
       title: result !== null
         ? 'Замечания последнего прогона с результатом'
