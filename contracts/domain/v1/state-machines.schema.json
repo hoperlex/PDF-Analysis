@@ -28,7 +28,7 @@
       "const": "auditmanager.domain.state-machines"
     },
     "contract_version": {
-      "const": "1.32.0"
+      "const": "1.33.0"
     },
     "supersedes": {
       "const": "1.31.0"

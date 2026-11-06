@@ -216,7 +216,11 @@ The token lives only in that file; the config refuses a key named `token`, `secr
   (`task_id`, `model`, `system`, `user_text`, `output_schema`, `claim_expires_at`,
   `deadline_at`); the command prints ONE JSON document on stdout that validates against
   `output_schema`, and exits 0. Anything else fails the task with a typed reason
-  (`command_failed`, `command_bad_output`, `answer_not_json`, `timeout`).
+  (`command_failed`, `command_bad_output`, `answer_not_json`, `timeout`, `codex_timeout`).
+  `[command].timeout_seconds = 0` uses the remaining server task deadline; a positive value
+  can shorten it. The command receives `PDF_ANALYSIS_COMMAND_DEADLINE_MONOTONIC` so the
+  Codex wrapper uses that same budget. Timeout exit status 124 is reported as `codex_timeout`;
+  no unknown-outcome retry is added.
 - `mode = "endpoint"`: a local OpenAI-compatible `/v1/chat/completions` server (Ollama
   `http://127.0.0.1:11434/v1/chat/completions`, vLLM, llama.cpp). `response_format =
   "json_schema"` passes the task schema to servers that constrain decoding. Set
@@ -297,6 +301,14 @@ The adapter sends the task through stdin, writes schema and output only in a
 private temporary directory, runs `codex exec --json --output-schema` with
 `--ephemeral`, `--ignore-user-config`, `--sandbox read-only`, shell tool and web
 search disabled, and refuses failed, rerouted, tool-using or malformed turns.
+It has no separate 510-second timer or response/event byte ceiling. Use
+`[command].timeout_seconds = 0` to let the server task deadline bound the CLI. On timeout,
+only elapsed time, event counts/types, a thread id and byte counts reach the journal;
+the task fails as `codex_timeout`, rather than a generic command failure. Input and image
+guards still apply. Successful command and endpoint answers are read whole and answer
+submissions have no application byte ceiling; endpoint `max_tokens` is no longer sent.
+Response-token figures are estimates, not output caps. Model/context limits still belong
+to the provider.
 The CLI's output does not prove the served model independently; the local
 command declares the model selected by `--model`, and the stand records that
 as `identity_basis: declared`. Keep the account and its Codex authentication

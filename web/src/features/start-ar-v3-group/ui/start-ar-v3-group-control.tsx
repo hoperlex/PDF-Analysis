@@ -79,11 +79,7 @@ export function StartArV3GroupView({
         />
         Повышенные лимиты ИИ-анализа
       </label>
-      <p className="am-note">
-        {relaxedLimits
-          ? 'Ответ до 64 000 токенов. Провайдер может установить меньший предел. Лимит стоимости подтверждается отдельно.'
-          : 'Ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.'}
-      </p>
+      <p className="am-note">Лимит стоимости подтверждается отдельно.</p>
       <button type="button" className="am-button" disabled={locked || cost === undefined} onClick={cost?.request}>Оценить стоимость шести проверок</button>
       {cost?.pending ? <LoadingState what="оценка стоимости шести проверок" /> : null}
       {costFailure === null ? null : <ErrorState title="Стоимость не оценена" detail={costFailure.detail} correlationId={costFailure.correlationId} />}

@@ -734,10 +734,19 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
                 coverage["planned"]+=1;coverage["remaining"]+=1;coverage["total_items"]+=len(source_rows)
             receipt.update(status="running",request_sha256=request.request_sha256)
             save("running")
-        response, replayed = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
-            binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
-            source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
-            global_unknown_fence=v3)
+        try:
+            response, replayed = _call(session,run_id=run.run_id,authority=authority,jobs=jobs,journal=journal,
+                binding=binding,request=request,phase=("v3:"+window_context["window_id"]+":" if v3 else "v2:")+identity,
+                source_sha256=state["source_sha256"],meter=meter,store=store,publish=publish,checkpoint=checkpoint,
+                global_unknown_fence=v3)
+        except DomainError as error:
+            for failed_receipt in (receipt, parameter_context_receipt, parameter_review_receipt):
+                if failed_receipt is not None:
+                    failed_receipt.update(error_code=error.code.value)
+                    dependency=error.detail_fields.get("dependency")
+                    if dependency is not None:
+                        failed_receipt["dependency"]=dependency
+            raise
         if parameter_context_receipt is not None:
             parameter_context_receipt.update(response_received=True, replayed=replayed,
                 response_sha256=response.response_sha256)
@@ -1264,9 +1273,14 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
         processed=sum(record.get("coverage",{}).get("blocks_processed",0) for record in records)
         state["coverage"]["blocks_processed"]=processed
         state["coverage"]["blocks_remaining"]=max(0,state["coverage"]["blocks_total"]-processed)
-        complete=sum(record.get("status") not in {"queued","running"} for record in records)
+        complete=sum(record.get("status")=="completed" for record in records)
+        finished=sum(record.get("status") not in {"queued","running"} for record in records)
         current=next((record["window_id"] for record in records if record.get("status")=="running"),None)
-        state["window_progress"]={"completed":complete,"total":len(records),"current":current,"window_size":16}
+        state["window_progress"]={"completed":complete,"finished":finished,
+            "failed":sum(record.get("status")=="failed" for record in records),
+            "skipped":sum(record.get("status")=="skipped" for record in records),
+            "partial":sum(record.get("status")=="partial" for record in records),
+            "total":len(records),"current":current,"window_size":16}
         if state.get("text_coverage") is not None:
             covered=set()
             if policy.get("coverage_version")=="batched-v1":
@@ -1350,9 +1364,23 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                     and not (record.get("visual_phase_complete") and any(p["status"]=="queued" for p in record.get("procedures",[]))) }
             visual_windows={record["window_id"]:record for record in resume_state.get("windows",[])
                 if record.get("visual_phase_complete") and record.get("source_window_total") is not None}
-        state["windows"]=[{"window_id":f"w{index:03d}","index":index,"total":count,"status":"queued",
-            "procedures":extended_workflow_procedures_v3(),"observations":[],"sources":[]}
-            for index in range(count)]
+        state["windows"]=[]
+        for index in range(count):
+            window_id=f"w{index:03d}"
+            # Carry every completed visual result before starting posttext work. A failure
+            # in an earlier window must not erase later windows' already-journaled work.
+            record=deepcopy(visual_windows.get(window_id,{
+                "procedures":extended_workflow_procedures_v3(),"observations":[],"sources":[]}))
+            record.update(window_id=window_id,index=index,total=count,status="queued")
+            state["windows"].append(record)
+
+        def stop_later_windows(index, reason):
+            for pending in state["windows"][index+1:]:
+                retained=any(procedure.get("status")=="completed" for procedure in pending["procedures"])
+                pending.update(status="partial" if retained else "skipped",reason=reason)
+                for procedure in pending["procedures"]:
+                    if procedure.get("status") in {"queued","running"}:
+                        procedure.update(status="skipped",reason=reason)
         aggregate();save("running")
         if "project_parameter_review_context_policy" in policy:
             from auditmanager.analysis.public import validate_project_parameter_review_context_policy
@@ -1422,16 +1450,12 @@ def _run_workflow_v3(session, *, run, authority, jobs, journal, binding, outputs
                     "page_count":version.page_count,"known_visual_refusals":known_visual_refusals})
             budget_exhausted=any("cost_budget_exceeded" in str(warning) for warning in record.get("warnings",[]))
             if budget_exhausted:
-                for pending in state["windows"][index+1:]:
-                    pending.update(status="skipped",reason="cost_budget_exceeded")
-                    for procedure in pending["procedures"]:procedure.update(status="skipped",reason="cost_budget_exceeded")
+                stop_later_windows(index,"cost_budget_exceeded")
                 state["warnings"].append("cost_budget_exceeded")
                 break
             if has_ambiguous_provider_effect(session,run_id=run.run_id):
                 session.commit()
-                for pending in state["windows"][index+1:]:
-                    pending.update(status="skipped",reason="provider_outcome_unknown")
-                    for procedure in pending["procedures"]:procedure.update(status="skipped",reason="provider_outcome_unknown")
+                stop_later_windows(index,"provider_outcome_unknown")
                 state["warnings"].append("extended_provider_outcome_unknown")
                 break
             session.commit()
@@ -2048,4 +2072,5 @@ def _run_global_cross_window(session, *, run, authority, jobs, journal, binding,
         if active is not None:
             for receipt in global_state.get("batches", []):
                 if receipt.get("status") == "running": receipt.update(status="failed", reason=reason)
+                elif receipt.get("status") == "queued": receipt.update(status="skipped", reason="dependency_failed")
         persist()

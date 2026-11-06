@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import os
 import re
 import secrets
@@ -83,7 +84,6 @@ HEALTH_REPORT_SECONDS = 600.0
 HEALTH_DETECT_SECONDS = 120.0
 UNVERSIONED = "unversioned"
 DEADLINE_MARGIN_SECONDS = 5.0
-MAX_ANSWER_BYTES = 8 << 20
 SUBMIT_RETRY_BUDGET_SECONDS = 120.0
 #: After the stand hands back a task this process is still working on (a token whose limit is one is
 #: given its held task again), wait this long before claiming again: RUNNER_API.md 2.1's floor between
@@ -236,6 +236,8 @@ def validate_config(cfg: Config) -> None:
     if cfg.mode not in ("command", "endpoint"):
         raise ConfigError('[executor] mode must be "command" or "endpoint"')
     if cfg.mode == "command":
+        if not math.isfinite(cfg.command_timeout) or cfg.command_timeout < 0:
+            raise ConfigError("[command] timeout_seconds must be finite and non-negative (0 uses the task deadline)")
         argv = cfg.command_argv
         if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
             raise ConfigError("[command] argv must be a non-empty list of strings")
@@ -280,17 +282,26 @@ class Interrupted(Exception):
 def run_command(cfg: Config, task: dict, budget: float, should_stop: Any) -> Answer:
     """Task JSON to the command's stdin; its stdout is the answer document."""
     payload = json.dumps(task, ensure_ascii=False).encode("utf-8")
+    allowance = min(cfg.command_timeout, budget) if cfg.command_timeout > 0 else budget
+    if allowance <= 0:
+        raise ExecutorFailure("timeout", "no command time remains before the task deadline")
+    deadline = time.monotonic() + allowance
+    environment = os.environ.copy()
+    # Both processes use the same monotonic clock. Leave time to report the typed failure
+    # before the supervisor expires; never replace the stand's clock-adjusted budget.
+    environment["PDF_ANALYSIS_COMMAND_DEADLINE_MONOTONIC"] = str(
+        deadline - min(1.0, allowance / 10.0))
     try:
         process = subprocess.Popen(
             cfg.command_argv,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             cwd=cfg.command_cwd,
+            env=environment,
             start_new_session=True,  # so that only this command's own process group is ever signalled
         )
     except OSError as error:
         raise ExecutorFailure("command_failed", f"cannot start: {type(error).__name__}") from None
-    deadline = time.monotonic() + min(cfg.command_timeout, budget)
     stdout: bytes = b""
     first = True
     try:
@@ -320,10 +331,10 @@ def run_command(cfg: Config, task: dict, budget: float, should_stop: Any) -> Ans
             except (ProcessLookupError, PermissionError, OSError):
                 process.kill()
             process.wait()
+    if process.returncode == 124:
+        raise ExecutorFailure("codex_timeout", "the CLI exhausted its task time budget; see the runner's safe diagnostics")
     if process.returncode != 0:
         raise ExecutorFailure("command_failed", f"exit status {process.returncode}")
-    if len(stdout) > MAX_ANSWER_BYTES:
-        raise ExecutorFailure("command_bad_output", "stdout is larger than 8 MiB")
     try:
         text = stdout.decode("utf-8").strip()
     except UnicodeDecodeError:
@@ -360,8 +371,6 @@ def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_k
                 "url": "data:image/png;base64," + base64.b64encode(raw).decode("ascii")}}
               for raw in images),
         ]
-    if cfg.max_tokens > 0:
-        body["max_tokens"] = cfg.max_tokens
     if cfg.response_format == "json_object":
         body["response_format"] = {"type": "json_object"}
     elif cfg.response_format == "json_schema":
@@ -378,7 +387,7 @@ def run_endpoint(cfg: Config, task: dict, budget: float, should_stop: Any, api_k
     opener = urllib.request.build_opener(_NoRedirect())
     try:
         with opener.open(request, timeout=timeout) as response:
-            raw = response.read(MAX_ANSWER_BYTES + 1)
+            raw = response.read()
     except urllib.error.HTTPError as error:
         raise ExecutorFailure("endpoint_failed", f"HTTP {error.code}") from None
     except Exception as error:  # noqa: BLE001 - timeouts, refused connections, TLS
@@ -568,10 +577,12 @@ class Agent:
                             path.chmod(0o600)
                             local_images.append({**image, "path": str(path)})
                         command_task = {**task, "local_images": local_images}
-                        answer = run_command(self.cfg, command_task, budget, should_stop)
+                        remaining = self.client.seconds_until(task["deadline_at"]) - DEADLINE_MARGIN_SECONDS
+                        answer = run_command(self.cfg, command_task, remaining, should_stop)
                 else:
                     images = [raw for _, raw in self._fetch_images(task, budget, should_stop)]
-                    answer = run_endpoint(self.cfg, task, budget, should_stop, self.api_key, images)
+                    remaining = self.client.seconds_until(task["deadline_at"]) - DEADLINE_MARGIN_SECONDS
+                    answer = run_endpoint(self.cfg, task, remaining, should_stop, self.api_key, images)
             except Interrupted as stop:
                 self._interrupted(task_id, str(stop))
                 return

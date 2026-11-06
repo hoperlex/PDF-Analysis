@@ -65,7 +65,7 @@ export function CostApproval({ estimate, ceiling, approved, disabled, uncapped =
       : `Предварительная оценка: ${microsAsUsd(estimate.estimated_cost_micros)} USD.`}</p>
     {estimate.provider_mode === 'recorded' ? <p className="am-note">Тестовый режим (recorded): сохранённые ответы. Оценка не является фактическим расходом.</p> : null}
     <p>Модель: {estimate.model_id}. Страниц: {estimate.page_count}; символов: {estimate.text_characters}; окон: {estimate.windows}; {uncapped ? 'начальная оценка вызовов' : 'вызовов'}: {estimate.calls}.</p>
-    <p>Токены: вход — {estimate.input_tokens}, ответ — до {estimate.output_tokens}{uncapped ? ' в начальной оценке' : ''}.</p>
+    <p>Оценка входных токенов: {estimate.input_tokens}.</p>
     {uncapped ? <p className="am-note">Денежный потолок не применяется. Подтверждение разрешает фактические расходы без предела приложения.</p> : <label>Лимит стоимости, USD
       <input type="text" inputMode="decimal" maxLength={24} value={ceiling} aria-invalid={!sufficient}
         onChange={(event) => onCeilingChange(event.currentTarget.value)} />

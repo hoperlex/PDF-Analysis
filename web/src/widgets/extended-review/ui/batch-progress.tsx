@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import styles from './extended-review.module.css';
+import { extendedExecutionReason } from './execution-reason';
 
 type RecordValue = Record<string, unknown>;
 function object(value: unknown): RecordValue | null { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RecordValue : null; }
@@ -41,6 +42,7 @@ export function BatchProgress({ batches: value, coverage: reading, title = 'Па
         <strong>{PHASE[text(batch.procedure)] ?? 'Процедура обработки'}</strong> · {batch.reason === 'approved_phase_call_limit' ? 'Не обработано: лимит принятого плана' : STATUS[text(batch.status)] ?? 'Состояние не передано'}
         <p>{text(batch.window_id) ? <>Окно <code>{text(batch.window_id)}</code>. </> : null}Пакет {typeof batch.index === 'number' ? batch.index + 1 : '—'}. Входных элементов: {count(batch.input_count)}. Символов на входе: {count(batch.input_characters)}.</p>
         {batch.reason === 'approved_phase_call_limit' ? <p>Этот остаток не обработан: достигнут лимит вызовов процедуры в принятом плане. Дополнительное обращение к модели не подтверждено.</p> : null}
+        {text(batch.reason) && batch.reason !== 'approved_phase_call_limit' ? <p>{extendedExecutionReason(batch.reason, batch.dependency)}</p> : null}
         {Array.isArray(batch.page_numbers) ? <p>Физические страницы PDF: {batch.page_numbers.filter((page): page is number => typeof page === 'number' && Number.isSafeInteger(page) && page > 0).join(', ') || 'Не переданы'}.</p> : null}
         <details><summary>Происхождение пакета</summary><p>Ключ: <code>{text(batch.batch_key)}</code>.</p><p>Входные записи: {Array.isArray(batch.input_ids) ? batch.input_ids.filter((id): id is string => typeof id === 'string').join(', ') || 'Не переданы' : 'Не переданы'}.</p><p>Источники: {Array.isArray(batch.source_ids) ? batch.source_ids.filter((id): id is string => typeof id === 'string').join(', ') || 'Не переданы' : 'Не переданы'}.</p>{objects(batch.context_ranges).length > 0 ? <ul>{objects(batch.context_ranges).map((range, number) => <li key={number}>Стр. {count(range.page_number)} · {range.character_field === 'recognised_context' ? 'распознанный слой' : 'текстовый контекст'}: символы {count(range.character_start)}–{count(range.character_end)}, источник <code>{text(range.source_id)}</code>. Это границы текстового фрагмента, не координаты на PDF.</li>)}</ul> : null}{text(batch.reason) ? <p>Сервер сохранил ограничение; код доступен в полной выгрузке. Полнота обработки этого пакета не подтверждена.</p> : null}</details>
       </li>)}</ol>}
