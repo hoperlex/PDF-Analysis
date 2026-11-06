@@ -113,7 +113,9 @@ describe('a TEXT block shows the recognised text, marked, with its flags', () =>
     expect(recognised).toBeGreaterThan(1);
     expect(count(markup, 'data-quote-source="recognised"')).toBe(recognised);
     expect(count(markup, `>${RECOGNISED_MARKER}<`)).toBe(recognised);
-    expect(count(markup, /<pre[^>]*>/)).toBe(recognised);
+    // The tile shows an excerpt, not the text: the whole text sits in a `<pre>` of the block view
+    // (`block-tiles.test.ts`), so a closed list has none.
+    expect(count(markup, /<pre[^>]*>/)).toBe(0);
   });
 
   it('shows each flag the backend emits as a Russian chip with a sentence, never the token', () => {

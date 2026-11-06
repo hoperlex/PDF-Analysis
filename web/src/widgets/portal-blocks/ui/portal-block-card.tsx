@@ -134,9 +134,14 @@ export interface PortalBlockCardProps {
   readonly block: PortalBlock;
   /** The version the block belongs to, from which the seam builds the crop's address. */
   readonly versionUid: VersionUid;
+  /**
+   * Whether the crop is drawn in the card. The block view draws it beside the card, in a stage the
+   * reader can zoom, so there the card leaves it out; a block with no crop still says why.
+   */
+  readonly showCrop?: boolean | undefined;
 }
 
-export function PortalBlockCard({ block, versionUid }: PortalBlockCardProps) {
+export function PortalBlockCard({ block, versionUid, showCrop = true }: PortalBlockCardProps) {
   const status = portalStatusPresentation(block.status);
   const mismatch = geometryLabel(block.geometry);
   const vertices = block.polygon_points?.length ?? 0;
@@ -181,7 +186,7 @@ export function PortalBlockCard({ block, versionUid }: PortalBlockCardProps) {
               : 'Фрагмент не вырезан: страница портала не совпала со страницей PDF.'}
           </p>
         ) : null
-      ) : (
+      ) : showCrop ? (
         <CropFigure
           versionUid={versionUid}
           portalBlockId={block.portal_block_id}
@@ -189,7 +194,7 @@ export function PortalBlockCard({ block, versionUid }: PortalBlockCardProps) {
           heightPx={block.crop.height_px}
           alt={`${typeLabel}: фрагмент страницы ${block.page_number} PDF`}
         />
-      )}
+      ) : null}
 
       {block.portal_description === undefined ? null : <PortalDescription text={block.portal_description} />}
     </article>
