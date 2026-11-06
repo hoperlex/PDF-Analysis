@@ -196,6 +196,9 @@ APPEND_ONLY = frozenset((
     "price_list_position", "price_list_revision", "project",
     "release", "release_revision", "vendor_list_entry", "vendor_list_revision",
     "work_assignment", "work_assignment_event",
+    # `0055_work_schedule` (`UI-PARITY-P0P`): the journals of «График работ» are `am_immutable_row` and only inserted into.
+    "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
+    "work_calendar_event",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.

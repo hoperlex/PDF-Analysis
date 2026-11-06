@@ -45,7 +45,7 @@ import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
 import { sheetOfPage, useSheetLabels } from '@/entities/block';
-import { FindingList, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import { FindingList, filterBySeverity, filterGroups, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
 import type { SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
@@ -56,8 +56,8 @@ import { DocumentContext } from '@/widgets/document-context';
 import { useRecordVerdict } from '@/features/record-verdict';
 import { ExecutionStatusControl } from '@/features/set-execution-status';
 import { runStatusQueryOptions } from '@/entities/audit-run';
-import { admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
-import { firstDeclaredPage } from '@/entities/finding-observation';
+import { SEVERITY_LABELS, admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
+import { declaredPages, firstDeclaredPage } from '@/entities/finding-observation';
 
 import { presentFailureOrNull, presentFindingsFailure } from '../model/present-failure';
 import type { ReviewSelection } from '../model/selection';
@@ -65,6 +65,7 @@ import { resolveSelection, selectFinding, selectPage } from '../model/selection'
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
 import { ReviewRowActions } from './review-row-actions';
+import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
 import styles from './review-page.module.css';
 
 export interface ReviewPageProps {
@@ -138,6 +139,21 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const resolved = resolveSelection(selection, findingUids);
   const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
 
+  // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters.
+  const [expanded, setExpanded] = useState(false);
+  const shownFindings = useMemo(
+    () => filterBySeverity(filterGroups(groups, verdictFilter), severityFilter).flatMap((group) => group.findings),
+    [groups, verdictFilter, severityFilter],
+  );
+  const shownAt = selectedUid === null ? -1 : shownFindings.findIndex((finding) => finding.finding_uid === selectedUid);
+  const stepTo = (at: number) => {
+    const target = shownFindings[at];
+    return target === undefined ? undefined : () => {
+      setSelection(selectFinding(target.finding_uid));
+    };
+  };
+  const selectedSummary = shownAt < 0 ? null : (shownFindings[shownAt] ?? null);
+
   const detailQuery = useQuery({
     queryKey: queryKeys.findings.detail(selectedUid ?? ''),
     queryFn: ({ signal }) => getFinding({ path: { finding_uid: selectedUid as FindingUid } }, { signal }),
@@ -178,6 +194,40 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
   const activePage =
     resolved?.page ?? (detail === null ? null : firstDeclaredPage(detail.observation));
+
+  // One failure for the open finding, inline and in the full-screen view.
+  const detailFailure = detailQuery.error === null ? null : (
+    <ErrorState
+      {...(presentFailureOrNull(detailQuery.error, {
+        title: 'Не удалось загрузить находку',
+        onRetry: () => {
+          void detailQuery.refetch();
+        },
+      }) ?? { title: 'Не удалось загрузить находку' })}
+    />
+  );
+
+  // The same viewer inline and in the full-screen view; only the presentation differs.
+  const evidenceProps = detail === null ? null : {
+    observation: detail.observation,
+    mergedObservations: detail.merged_observations,
+    activePage: activePage ?? 1,
+    onPageChange: (page: number) => {
+      setSelection((current) => selectPage(current ?? resolved, page));
+    },
+    documentUrl: evidence.objectUrl,
+    blockIndex,
+    isLoading: evidence.isLoading,
+    error: presentFailureOrNull(evidence.error, {
+      title: 'Не удалось загрузить страницу документа',
+      onRetry: evidence.refetch,
+    }),
+  };
+  const decidedOrProposed = detail === null ? null
+    : detail.decided_severity !== undefined ? SEVERITY_LABELS[detail.decided_severity]
+    : detail.observation.proposed_severity !== undefined
+      ? `${SEVERITY_LABELS[detail.observation.proposed_severity]} — предложено моделью`
+      : null;
 
   return (
     <PageShell
@@ -260,15 +310,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         <div className={`am-review__detail ${styles.detail}`}>
           {selectedUid === null ? null : detailQuery.isPending ? (
             <LoadingState what="выбранная находка" />
-          ) : detailQuery.error !== null ? (
-            <ErrorState
-              {...(presentFailureOrNull(detailQuery.error, {
-                title: 'Не удалось загрузить находку',
-                onRetry: () => {
-                  void detailQuery.refetch();
-                },
-              }) ?? { title: 'Не удалось загрузить находку' })}
-            />
+          ) : detailFailure !== null ? (
+            detailFailure
           ) : detail === null ? null : (
             <>
               <article className="am-review__finding" data-finding-uid={detail.finding_uid}>
@@ -278,21 +321,14 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 </p>
               </article>
 
-              <LazyEvidenceViewer
-                observation={detail.observation}
-                mergedObservations={detail.merged_observations}
-                activePage={activePage ?? 1}
-                onPageChange={(page) => {
-                  setSelection((current) => selectPage(current ?? resolved, page));
-                }}
-                documentUrl={evidence.objectUrl}
-                blockIndex={blockIndex}
-                isLoading={evidence.isLoading}
-                error={presentFailureOrNull(evidence.error, {
-                  title: 'Не удалось загрузить страницу документа',
-                  onRetry: evidence.refetch,
-                })}
-              />
+              {expanded ? (
+                // One page drawn once: while the full-screen view is open it is the only viewer.
+                <p className="am-note" data-evidence-expanded="">
+                  Страница открыта во весь экран.
+                </p>
+              ) : evidenceProps === null ? null : (
+                <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
+              )}
 
               {mayAct ? <DecisionPanel
                 currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
@@ -348,6 +384,51 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           )}
         </div>
       </div>
+
+      {expanded ? (
+        <ReviewViewerDialog
+          position={shownAt < 0 ? null : shownAt + 1}
+          total={shownFindings.length}
+          onPrevious={shownAt < 0 ? stepTo(0) : stepTo(shownAt - 1)}
+          onNext={shownAt < 0 ? stepTo(0) : stepTo(shownAt + 1)}
+          onClose={() => { setExpanded(false); }}
+          title={detail?.observation.finding_text ?? 'Находка'}
+        >
+          {selectedUid === null ? (
+            <p className="am-note">Выберите находку в списке.</p>
+          ) : detailQuery.isPending ? (
+            <LoadingState what="выбранная находка" />
+          ) : evidenceProps === null || detail === null ? (
+            detailFailure
+          ) : (
+            <LazyEvidenceViewer
+              {...evidenceProps}
+              presentation="full"
+              aside={
+                <ReviewViewerAside
+                  findingUid={detail.finding_uid}
+                  meta={[decidedOrProposed, pagesLabel(declaredPages(detail.observation), (page) => sheetOfPage(sheetLabels.data, page))]
+                    .filter((part) => part !== null && part !== '')
+                    .join(' · ')}
+                  text={detail.observation.finding_text}
+                  recommendation={detail.observation.recommendation_text}
+                  actions={mayAct && selectedSummary !== null ? (
+                    <ReviewRowActions
+                      finding={selectedSummary}
+                      runId={runId}
+                      onOpen={(findingUid) => {
+                        // The severity is chosen in the panel: close the view on it.
+                        setExpanded(false);
+                        setSelection(selectFinding(findingUid));
+                      }}
+                    />
+                  ) : null}
+                />
+              }
+            />
+          )}
+        </ReviewViewerDialog>
+      ) : null}
 
       {/*
         Outside `.am-review` on purpose: the list is `position: sticky`, and a sticky box is

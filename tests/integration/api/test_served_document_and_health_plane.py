@@ -104,7 +104,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         # FastAPI's own validation schema by the assertions above. Contract 1.17.0 (`UI-PARITY-P0A`) adds one, `getDashboardSummary`,
         # whose optional `project_uid` query parameter can be refused: 186. Contracts 1.22.0 to 1.27.0 (`UI-PARITY-P0G` to
         # `P0L`) add six: `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-        # `listProposalDecisionJournal` and `importRunDecisions`: 192 of 285; 1.29.0 adds `getProject`: 193 of 286; 1.30.0 adds `listVersionSheetLabels`: 194 of 287.
+        # `listProposalDecisionJournal` and `importRunDecisions`: 192 of 285; 1.29.0 adds `getProject`: 193 of 286; 1.30.0 adds `listVersionSheetLabels`: 194 of 287; 1.31.0 adds the seven of «График работ»: 201 of 294.
         assert declared_422 == {
             "appendComparisonVersionOrder",
             "appendDecision",
@@ -170,6 +170,8 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "getStageChangeJournal",
             "getStageProfileText",
             "getStageSynthesis",
+            "getWorkSchedule",
+            "getWorkScheduleReserve",
             "importComparisonZip",
             "importRunDecisions",
             "issueExecutorEnrollment",
@@ -251,10 +253,12 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "reviseExecutorGroup",
             "reviseStageAssembly",
             "revokeRunnerToken",
+            "scheduleAssignments",
             "searchNorms",
             "setCurrentNormSnapshot",
             "setDocumentArchived",
             "setDocumentTags",
+            "setEngineerAbsences",
             "setExecutionPaused",
             "setExecutorIntegrationAuthorisation",
             "setExecutorRoute",
@@ -266,6 +270,9 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "setJobPriority",
             "setProjectVendorList",
             "setStagePairCompleteness",
+            "setWorkCalendarDays",
+            "setWorkSchedulePlans",
+            "setWorkScheduleSettings",
             "setWorkerIntake",
             "startArV3BetaGroup",
             "startComparisonAiPairCheck",

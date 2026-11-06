@@ -2,9 +2,10 @@
  * The URL the browser's own PDF reader is pointed at, addressed by the PDF Open Parameters
  * fragment `#page=N`.
  *
- * The review screen does not use this any more: `PageViewer` draws the cited page with pdf.js
- * (`OD-09`, taken by the owner on 2026-10-22). The norm document and the specification panel
- * still open their pages this way and are not this feature's to change, so the helpers stay.
+ * The review screen does not embed the reader any more: `PageViewer` draws the cited page with
+ * pdf.js (`OD-09`, taken by the owner on 2026-10-22). It still links to it: «Открыть PDF ↗» opens
+ * the whole document in a new tab on the cited page, as the original's PDF panel does. The norm
+ * document and the specification panel still open their pages this way.
  *
  * Its limits are the reader's own: no bounding box, no highlight, page-level navigation only, and
  * a toolbar the product cannot hide.

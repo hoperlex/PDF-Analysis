@@ -60,7 +60,7 @@ One supplier per item; no consumer before its supplier.
 | finding execution status (designer side) | P0 | wave 2 | `R-151g`; who sets it is decided in the task |
 | who started a run | P0 | waves 3, 4 | `R-151v` |
 | start from a stage (UI-A-60) | own task, about 2–3 days | wave 2 | `R-151i`; idempotency key fixed in the task |
-| dispatcher: schedule facts and plan, minimal reserve calendar, worker metrics, admin journal | P4 | wave 4 | `R-150y`, `R-151x`, `R-151y` |
+| dispatcher: schedule facts and plan, minimal reserve calendar, worker metrics, admin journal | «График работ» **1.31.0** (`UI-PARITY-P0P`, e8a2c6da; migration `0055`; web `/schedule`): month facts against plans, the work calendar and absences, «Календарь запаса» over «Диспетчер»'s assignments with drag, multi-select and «Раньше/Позже»; unverified on a database (`D-318`); gaps outside `R-152` in `D-319`. Worker metrics and the admin journal: P4 | wave 4 | `R-150y`, `R-151x`, `R-151y`, `R-152a`…`R-152h` |
 | dispatcher: subscription accounts, provider limits | not built (`R-150y`) | — | — |
 
 **P0b (2026-11-05, contract `1.19.0`):** the counters wave 1 waits for — a document's audit state, `audit_counts` on each `listProjects` item and on the section panel, `awaiting_decision_findings` for the home tile — are delivered under `R-150n`…`R-150u`; their dictionary is `UI-PARITY-METRICS.md`. The selector and the new columns remain waves 1 and 2.

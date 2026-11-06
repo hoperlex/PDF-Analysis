@@ -35,6 +35,8 @@ notes), both without a user-visible change, and #45 (`68dd4d66`, 2026-11-06, 51 
 | 6 the queue overview, place, attempts, «Запустил», «Ожидаемое завершение», the pause in the top strip | `83b59f9f`, `4343ce52`, `84325e26`, `110b9dac` |
 | 7 the dense layout, «Блоки» as a version tab, «Диспетчер» by project, the «Процессы» tiles | `b757fc55`, `212e20a5`, `26e2bbbd`, `6f03944b`, `57d01cf9`, `ff3e9cb6`, `07a1c81b`, `31388f79` |
 
+Revision 2 (2026-11-06) adds the hotfix `65ffb867` (main deploy run `42189173407`, success): a v3 window started its normative context receipts as the parent's list, so every full section plan with a norm paragraph context policy raised `AttributeError` at its first window save (production run `run_01M6QXCZA8EKYGSMX8JA7QH6XV`). To stay within seven items the knowledge-base item is folded into item 4, and item 7 is the fix.
+
 Left out: `getProject` naming the project page (`987f8579`), the role checkboxes (`aa8f139e`). The same commit
 is on `origin/dev` and, cherry-picked, on `origin/main`. Checks: none (owner: not a code task); the text was
 measured by a throwaway script against the form rules and the screens were read in the screen registry.

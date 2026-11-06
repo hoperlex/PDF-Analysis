@@ -551,6 +551,14 @@ GUARDED = (
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
+    # `UI-PARITY-P0P` (contract 1.31.0): «График работ».
+    ("getWorkSchedule", "GET", "/work-schedule?month=2026-11"),
+    ("getWorkScheduleReserve", "GET", "/work-schedule/reserve?start=2026-11-02"),
+    ("setWorkScheduleSettings", "PUT", "/work-schedule/settings"),
+    ("setWorkSchedulePlans", "PUT", "/work-schedule/plans"),
+    ("setWorkCalendarDays", "PUT", "/work-calendar/days"),
+    ("setEngineerAbsences", "PUT", "/work-schedule/absences"),
+    ("scheduleAssignments", "POST", "/work-schedule/reserve/moves"),
 )
 
 #: `EXEC-PULL-01`. The four operations a runner calls with a runner token, and the fifth that
@@ -1226,6 +1234,10 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # when ``cost_consent`` is present); who may start a Run is the role register's, and the consent is bound to the digest
         # the start re-computes. Nothing else in the module reads the subject.
         "runs.py",
+        # `UI-PARITY-P0P`: «График работ» answers an administrator with every expert and an expert with their own row, and
+        # its commands record WHO set a plan, a day, an absence, the settings or a planned date; whether they may is the role
+        # register's and the schedule context's own re-read of the role set.
+        "schedule.py",
         # `W63-SECTION-FORM7-01`: a section's combined specification passes WHO reads it for the
         # same reason as the priced specification below: the read re-reads the role set in its
         # own transaction; whether they may is the role register's (any one role).

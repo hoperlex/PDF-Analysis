@@ -592,7 +592,8 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-P0L` adds one: `importRunDecisions` addresses a run.
         # `UI-PARITY-P0N` adds one: `getProject` addresses a project.
         # `UI-PARITY-P0O` adds one: `listVersionSheetLabels` addresses a version.
-        assert len(report) == 217, report
+        # `UI-PARITY-P0P` adds one: `scheduleAssignments` names assignments that may not exist.
+        assert len(report) == 218, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

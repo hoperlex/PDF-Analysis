@@ -107,6 +107,7 @@ import { ProjectDetailPage } from '@/_pages/project-detail';
 import { ProjectsPage } from '@/_pages/projects';
 import { QueuePage } from '@/_pages/queue';
 import { DispatcherPage } from '@/_pages/dispatcher';
+import { WorkSchedulePage } from '@/_pages/work-schedule';
 import { RegisterPage } from '@/_pages/register';
 import { RegisterSubmittedPage } from '@/_pages/register-submitted';
 import { ReviewPage } from '@/_pages/review';
@@ -514,6 +515,25 @@ export const SEEDS: readonly Seed[] = [
     address: '/dispatcher',
     name: 'dispatcher-expert',
     make: () => createElement(DispatcherPage, { roles: ['expert'] }),
+    discipline: {},
+  },
+  {
+    // `UI-PARITY-P0P`: «График работ», «Выполнено» for an administrator and «Календарь запаса» for an expert.
+    address: '/schedule',
+    name: 'work-schedule',
+    make: () => createElement(WorkSchedulePage, {
+      roles: ['admin', 'expert'],
+      initial: { tab: 'completed', month: '2026-11', start: '2026-11-02' },
+    }),
+    discipline: {},
+  },
+  {
+    address: '/schedule',
+    name: 'work-schedule-reserve',
+    make: () => createElement(WorkSchedulePage, {
+      roles: ['expert'],
+      initial: { tab: 'reserve', month: '2026-11', start: '2026-11-02' },
+    }),
     discipline: {},
   },
   { address: '/queue', name: 'queue', make: () => createElement(QueuePage, {}), discipline: {} },

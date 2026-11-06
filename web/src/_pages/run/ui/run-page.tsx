@@ -44,8 +44,8 @@ export function RunPage({ projectUid, runId }: RunPageProps) {
     >
       <DocumentContext projectUid={projectUid} runId={runId} current="run" />
       <div className={styles.content}>
-        <CancelRunControl runId={runId} />
-        <LazyRunProgress projectUid={projectUid} runId={runId} />
+        {/* «Отменить прогон» sits in the head beside the stages, as the original's «Отменить» on its pipeline card. */}
+        <LazyRunProgress projectUid={projectUid} runId={runId} actions={<CancelRunControl runId={runId} />} />
         <RunEvents runId={runId} />
       </div>
     </PageShell>

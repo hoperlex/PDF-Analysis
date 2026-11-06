@@ -126,6 +126,14 @@ REQUIRED_OPERATIONS = {
     "getProject",
     # `UI-PARITY-P0O`. Each page's sheet label, from the portal geometry.
     "listVersionSheetLabels",
+    # `UI-PARITY-P0P`, `R-152a`…`R-152h`. «График работ»: the month, the reserve, the administrator's writes.
+    "getWorkSchedule",
+    "getWorkScheduleReserve",
+    "setWorkScheduleSettings",
+    "setWorkSchedulePlans",
+    "setWorkCalendarDays",
+    "setEngineerAbsences",
+    "scheduleAssignments",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",
@@ -426,6 +434,11 @@ WRITE_OPERATIONS = {
     "renameDocument",
     "setDocumentTags",
     "setFindingExecutionStatus",
+    "setWorkScheduleSettings",
+    "setWorkSchedulePlans",
+    "setWorkCalendarDays",
+    "setEngineerAbsences",
+    "scheduleAssignments",
     # `UI-PARITY-P0L`. Appends decision events, so it is keyed like `appendDecision`; a replay answers the stored report.
     "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.

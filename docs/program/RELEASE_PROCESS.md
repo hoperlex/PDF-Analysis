@@ -29,7 +29,12 @@ make a historical deployment fail.
 ## Version move and publication
 
 Move `VERSION` only with a new, highest non-archive release-notes entry and a
-reviewed user-visible change. Keep previous entries in the image. A file that
+reviewed user-visible change. The note travels with the change (owner rule of
+2026-11-06, `AGENTS.md` §6.1): every publication to `origin/dev` that a user can
+see adds its note in the same push. A new capability opens a minor version; a
+minor visible fix or improvement adds items to the current version's note (a
+higher revision once it reached `main`) or opens a patch version, whichever the
+seven-item and strictly-later-date rules allow. Keep previous entries in the image. A file that
 reached `main` is never deleted or rewritten at the same authored revision:
 the loader appends a higher revision, refuses a changed equal revision, and
 retains historical rows on rollback. A correction or withdrawal is expressed

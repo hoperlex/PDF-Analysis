@@ -49,13 +49,18 @@ describe('where the section appears', () => {
     expect(markup).toContain('нет сохранённого текстового слоя');
   });
 
-  it('sits between the review link and the polling note, after the run\'s own facts', () => {
+  // The run screen leads with its head since the 2026-11-06 rework (the stages, the review call and whether the
+  // reading is final, as the original's pipeline card); the norms follow the run's own facts and stage table, and
+  // the sentences that qualify the figures close the screen.
+  it('sits after the run\'s own facts and stages, before the notes on its figures', () => {
     const markup = page('published');
-    const review = markup.indexOf('Разбор');
+    const review = markup.indexOf('Разобрать находки');
+    const stages = markup.indexOf('Подробности этапов');
     const section = markup.indexOf('data-norm-references=""');
-    const polling = markup.indexOf('Показание окончательное?');
+    const notes = markup.indexOf('Пояснения к цифрам');
     expect(review).toBeGreaterThan(-1);
-    expect(section).toBeGreaterThan(review);
-    expect(polling).toBeGreaterThan(section);
+    expect(stages).toBeGreaterThan(review);
+    expect(section).toBeGreaterThan(stages);
+    expect(notes).toBeGreaterThan(section);
   });
 });

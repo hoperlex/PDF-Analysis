@@ -86,12 +86,14 @@ describe('the declared page is the page opened', () => {
       }),
     );
 
-    // The viewer draws the page itself: it is told the document and the page, and there is no
-    // `#page=` fragment for a browser reader to follow or to ignore.
+    // The viewer draws the page itself: it is told the document and the page, and no embedded
+    // reader gets a `#page=` fragment to follow or to ignore. The link «Открыть PDF ↗» carries
+    // the cited page to the reader it opens in a new tab.
     expect(markup).toContain(`data-viewer-src="${OBJECT_URL}"`);
     expect(markup).toContain('data-viewer-page="11"');
     expect(markup).toContain('data-active-page="11"');
-    expect(markup).not.toContain('#page=');
+    expect(markup).toContain(`href="${OBJECT_URL}#page=11"`);
+    expect(markup.replace(/<a [^>]*data-open-document="11"[^>]*>/, '')).not.toContain('#page=');
   });
 
   it('falls back to the first declared page when asked for one that is not declared', () => {

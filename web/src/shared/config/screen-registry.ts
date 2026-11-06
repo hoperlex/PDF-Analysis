@@ -196,6 +196,20 @@ export const SCREEN_REGISTRY = [
     projectScope: 'optional',
   },
   /*
+   * `UI-PARITY-P0P` (`R-150y`, `R-152a`…`R-152h`): «График работ», after «Диспетчер» as in the original's menu. Expert
+   * and administrator: an expert reads their own row, an administrator every expert's and edits plans, the calendar and
+   * the reserve. Not a project's screen: the schedule spans every project.
+   */
+  {
+    address: '/schedule',
+    label: 'График работ',
+    group: 'work',
+    access: 'session',
+    roles: ['expert', 'admin'],
+    inMenu: true,
+    projectScope: 'global',
+  },
+  /*
    * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
    * and the API refuses everything else. A module that is off is said so on the screen (`ProductVersion.comparison_modules`);
    * the registry has no per-deployment column, so the entry is in the menu either way. The screen shows the off state.

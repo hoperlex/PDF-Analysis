@@ -82,6 +82,12 @@ export interface PageViewerProps {
   readonly onResolved?: ((results: ReadonlyMap<string, TargetResolution>) => void) | undefined;
   /** What the page is, for assistive technology: «Страница 7 проверяемого документа». */
   readonly label: string;
+  /**
+   * `true` in a full-screen view: the viewport fills its container's height instead of a share of
+   * the screen, and a plain wheel zooms around the pointer as the original's block view does, since
+   * nothing behind the view is there to scroll. Inline, only Ctrl (⌘) + wheel zooms.
+   */
+  readonly fill?: boolean | undefined;
 }
 
 /** The zoom is drawn again at its new size after it has been still this long. */
@@ -154,6 +160,7 @@ export function PageViewer({
   onTargetSelect,
   onResolved,
   label,
+  fill = false,
 }: PageViewerProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -445,12 +452,13 @@ export function PageViewer({
     apply(next, !event.key.startsWith('Arrow'));
   };
 
-  // Ctrl (or ⌘) + wheel, and so a trackpad pinch. Attached by hand to be non-passive.
+  // Ctrl (or ⌘) + wheel, and so a trackpad pinch; in a full-screen view any wheel. Attached by hand
+  // to be non-passive.
   useEffect(() => {
     const element = viewportRef.current;
     if (element === null) return;
     const onWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!fill && !event.ctrlKey && !event.metaKey) return;
       const { stage: at, view: held } = live.current;
       if (at === null || held === null) return;
       event.preventDefault();
@@ -461,7 +469,7 @@ export function PageViewer({
     return () => {
       element.removeEventListener('wheel', onWheel);
     };
-  }, [apply, local]);
+  }, [apply, local, fill]);
 
   // ------------------------------------------------------------------- the controls
   const zoomBy = (direction: 1 | -1) => {
@@ -507,6 +515,7 @@ export function PageViewer({
   return (
     <PageViewerView
       label={label}
+      fill={fill}
       state={state}
       documentUrl={documentUrl}
       pageNumber={pageNumber}

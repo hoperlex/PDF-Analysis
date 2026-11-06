@@ -57,6 +57,7 @@
  */
 
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState } from '@/shared/api';
@@ -112,6 +113,8 @@ import {
 export interface RunProgressProps {
   readonly projectUid: string;
   readonly runId: string;
+  /** The page's own controls for this run («Отменить прогон»), beside the review call in the head. */
+  readonly actions?: ReactNode;
 }
 
 /** The worker holding a running or validating run, read from the registry's first page. */
@@ -362,7 +365,49 @@ function Recorded({ status }: { readonly status: RunStatus }) {
   );
 }
 
-export function RunProgress({ projectUid, runId }: RunProgressProps) {
+/**
+ * The line of figures under the head, as the original's spend bar («⚡ ↓вход ↑выход · Платно $ · N calls ·
+ * длительность»). Each tile is shown only when its figure is one the screen may state: the finding count only
+ * for a run that published, the cost only with the number of calls it sums. The sentences that qualify each
+ * figure are below, in «Пояснения к цифрам»; nothing here is a zero the reading did not report.
+ */
+function Figures({ status }: { readonly status: RunStatus }) {
+  const outcome = runOutcome(status);
+  const diagnostics = diagnosticObservationCount(status);
+  const cost = runCost(status);
+  return (
+    <dl className={styles.figures} aria-label="Итоги прогона">
+      {outcome.kind === 'published' ? (
+        <div className={styles.figure}>
+          <dt>Находок</dt>
+          <dd>{outcome.findingCount === null ? '—' : outcome.findingCount}</dd>
+        </div>
+      ) : null}
+      <div className={styles.figure}>
+        <dt>Диагностических наблюдений</dt>
+        <dd>{diagnostics === null ? '—' : diagnostics}</dd>
+      </div>
+      <div className={styles.figure}>
+        <dt>Длительность</dt>
+        <dd>{formatElapsed(elapsedMs(status.created_at, status.terminal_at))}</dd>
+      </div>
+      {cost.kind === 'reported' ? (
+        <>
+          <div className={styles.figure}>
+            <dt>Стоимость</dt>
+            <dd>{formatCostMicros(cost.micros)}</dd>
+          </div>
+          <div className={styles.figure}>
+            <dt>Вызовов провайдера</dt>
+            <dd>{cost.callCount}</dd>
+          </div>
+        </>
+      ) : null}
+    </dl>
+  );
+}
+
+export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
   const { status, failure, polling, retry } = useRunStatus(runId);
 
   if (status === null && failure !== null) {
@@ -401,23 +446,68 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
   const preset = runPresetLine(status);
   const waiting = executor === null ? null : runWaitingSentence(executor);
 
+  const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
+  const reviewable = !v3Beta && runHasPublishedResult(status.state, status.analysis_profile_id);
+
   return (
     <div className={styles.progress} data-run-id={status.run_id}>
-      <div className={styles.overviewGrid}>
-        <section className={styles.factsPanel} aria-label="Сведения о прогоне">
+      {/*
+        The head, as the original's pipeline card: the state and whether the reading is final on top, the stages
+        in a rail, and on the right what to do next -- review the findings, or stop the run.
+      */}
+      <section className={styles.head} aria-label="Этапы и действия">
+        <div className={styles.headTop}>
           <p className={styles.mode}>
             <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
             <span data-provider-mode={mode}>
               режим провайдера: <strong data-provider-mode={mode}>{modeText}</strong>
             </span>
           </p>
-          <p>{providerModeCaption(mode)}</p>
+          <p className={styles.activity} data-run-activity={animating && polling ? 'polling' : 'stopped'}>
+            {animating && polling
+              ? 'Идёт опрос следующего показания: интервал растёт с 2 с до 15 с и прекращается в терминальном состоянии.'
+              : animating
+                ? 'Опрос остановлен, но прогон ещё открыт: показание — последнее полученное, а не окончательное.'
+                : 'Опрос остановлен, показание окончательное.'}
+          </p>
+        </div>
+        <div className={styles.headBody}>
+          <PipelineRail rows={stageRows(status)} />
+          {reviewable || actions !== undefined ? (
+            <div className={styles.headActions}>
+              {reviewable ? (
+                <p className={styles.reviewCall}>
+                  <Link className="am-button" href={routes.review(projectUid, status.run_id)}>
+                    Разобрать находки
+                  </Link>
+                  <span>
+                    режим провайдера этого прогона: <strong data-provider-mode={mode}>{modeText}</strong>
+                  </span>
+                </p>
+              ) : null}
+              {actions}
+            </div>
+          ) : null}
+        </div>
+      </section>
 
-          <dl>
+      <Figures status={status} />
+
+      <Outcome status={status} />
+
+      <div className={styles.columns}>
+        <section className={styles.panel} aria-label="Сведения о прогоне">
+          <h2>Сведения о прогоне</h2>
+          <p className={styles.caption}>{providerModeCaption(mode)}</p>
+          <dl className={styles.facts}>
             <dt>Прогон</dt>
             <dd><code>{status.run_id}</code></dd>
             <dt>Версия</dt>
-            <dd><code>{status.version_uid}</code></dd>
+            <dd>
+              <Link href={routes.version(status.project_uid, status.version_uid)}>
+                <code>{status.version_uid}</code>
+              </Link>
+            </dd>
             {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
             {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
             {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}
@@ -443,17 +533,14 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
             />
           )}
           {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
-          <p>
-            <Link href={routes.version(status.project_uid, status.version_uid)}>Версия, которую читал прогон</Link>{' '}
-            — <code>{status.version_uid}</code>. Прогон никогда не меняет прочитанную версию,
-            и остальные её прогоны перечислены там же.
+          <p className={styles.caption}>
+            Прогон никогда не меняет прочитанную версию; остальные её прогоны перечислены на её странице.
           </p>
         </section>
 
-        <section className={styles.resultPanel} aria-label="Этапы и результат">
-          <h2>Базовые этапы анализа</h2>
-          <PipelineRail rows={stageRows(status)} />
-          <Outcome status={status} />
+        <section className={styles.panel} aria-label="Подробности этапов">
+          <h2>Подробности этапов</h2>
+          <StageTable rows={stageRows(status)} />
         </section>
       </div>
 
@@ -465,41 +552,34 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
         </p>
       ) : null}
 
-      <Recorded status={status} />
-
       <PdfPrecheckProgress status={status} />
 
-      <h2>Подробности этапов</h2>
-      <StageTable rows={stageRows(status)} />
-
-      <h2>Разбор</h2>
-      {status.analysis_profile_id === AR_V3_BETA_PROFILE_ID ? (
-        <NotApplicableState
-          title={SHOW_REVIEW_INDICATION ? 'Предварительный разбор АР v3' : 'Разбор АР v3'}
-          detail={
-            <p>
-              Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
-            </p>
-          }
-        />
-      ) : runHasPublishedResult(status.state, status.analysis_profile_id) ? (
-        <p>
-          <Link href={routes.review(projectUid, status.run_id)}>Разобрать находки</Link>{' '}
-          — режим провайдера этого прогона:{' '}
-          <strong data-provider-mode={mode}>{modeText}</strong>.
-        </p>
-      ) : (
-        <NotApplicableState
-          title="Разбирать нечего."
-          detail={
-            <p>
-              Находки появляются только когда терминальное состояние публикует результат —{' '}
-              <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
-              <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
-              <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
-            </p>
-          }
-        />
+      {reviewable ? null : (
+        <>
+          <h2>Разбор</h2>
+          {v3Beta ? (
+            <NotApplicableState
+              title={SHOW_REVIEW_INDICATION ? 'Предварительный разбор АР v3' : 'Разбор АР v3'}
+              detail={
+                <p>
+                  Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
+                </p>
+              }
+            />
+          ) : (
+            <NotApplicableState
+              title="Разбирать нечего."
+              detail={
+                <p>
+                  Находки появляются только когда терминальное состояние публикует результат —{' '}
+                  <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
+                  <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
+                  <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
+                </p>
+              }
+            />
+          )}
+        </>
       )}
 
       {/* `NORM-REFS-RUN-01`: the norms the stored run's text cites. Only once the run has stopped;
@@ -507,14 +587,9 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
           would be a claim about a run that has not got that far. */}
       {isTerminalRunState(status.state) ? <NormReferencesSection runId={status.run_id} /> : null}
 
-      <h2>Показание окончательное?</h2>
-      <p className={styles.activity} data-run-activity={animating && polling ? 'polling' : 'stopped'}>
-        {animating && polling
-          ? 'Идёт опрос следующего показания. Интервал растёт с 2 с до 15 с, срока нет; опрос прекращается, когда прогон достигает терминального состояния.'
-          : animating
-            ? 'Опрос остановлен, но прогон ещё открыт. Показание выше — последнее полученное, а не окончательное.'
-            : 'Опрос остановлен, показание окончательное.'}
-      </p>
+      <section className={styles.notes} aria-label="Пояснения к цифрам">
+        <Recorded status={status} />
+      </section>
 
       {failure !== null ? (
         <ErrorState

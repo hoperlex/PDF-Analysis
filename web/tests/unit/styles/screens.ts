@@ -18,7 +18,7 @@ import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
 import { ProjectsPage } from '@/_pages/projects';
-import { ReviewPage } from '@/_pages/review';
+import { ReviewPage, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
@@ -74,6 +74,9 @@ import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
+import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
+import { ReserveCalendarView } from '@/widgets/reserve-calendar';
+import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from '../work-schedule/fixtures';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
@@ -172,7 +175,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.30.0',
+    contract_version: '1.31.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -1433,6 +1436,37 @@ export function screens(): Screen[] {
       ),
     ),
   );
+  // «Во весь экран» on «Разбор», open: the bar with ‹ (› at the last finding is disabled), the page filling the
+  // height, and the side column with the finding, the quotations and the basis.
+  add(
+    'ReviewViewerDialog open on the last finding',
+    render(
+      createElement(ReviewViewerDialog, {
+        position: 12,
+        total: 12,
+        onPrevious: noop,
+        onNext: undefined,
+        onClose: noop,
+        title: 'Не указан класс огнестойкости перекрытия',
+        staticOpen: true,
+        children: createElement(EvidenceViewer, {
+          observation: observation({
+            evidence: [evidence({ evidence_ordinal: 1, page_number: 7, quote: 'перекрытие по металлическим балкам' })],
+          }),
+          activePage: 7,
+          onPageChange: noop,
+          documentUrl: 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100',
+          presentation: 'full',
+          aside: createElement(ReviewViewerAside, {
+            findingUid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z',
+            meta: 'Критическое · Лист 3 · стр. 7',
+            text: 'Не указан класс огнестойкости перекрытия',
+            recommendation: 'Указать предел огнестойкости REI 45 по СП 2.13130.',
+          }),
+        }),
+      }),
+    ),
+  );
   add(
     'EvidenceViewer failed',
     render(
@@ -2184,6 +2218,46 @@ export function screens(): Screen[] {
     const client = newClient();
     shape.seedClient?.(client);
     add(`Comparison: ${shape.name}`, renderScreen(client, shape.make()));
+  }
+
+  /*
+   * `UI-PARITY-P0P`: «График работ». The month in each mode an administrator opens (the plan's inputs and settings, the
+   * calendar's day and absence toggles) with a cell's «+N» list open, and «Календарь запаса» with a selection and a drop
+   * target, so every rule of `work-schedule-month.module.css` and `reserve-calendar.module.css` is reached.
+   */
+  for (const initialMode of ['view', 'plan', 'calendar'] as const) {
+    add(`WorkSchedule month ${initialMode}`, renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+      schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode,
+      initialPopover: initialMode === 'view' ? `${EXPERT_A}|2026-11-03` : null,
+    })));
+  }
+  add('WorkSchedule reserve', renderScreen(newClient(), createElement(ReserveCalendarView, {
+    reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    initialSelection: [assignmentUid(1), assignmentUid(3)], initialOver: `${EXPERT_B}|2026-11-05`,
+  })));
+  // The plan met (≥ 100 %, `ok`) and half met (≥ 50 %, `warn`), and the month and the reserve with nobody in them.
+  {
+    const month = monthFixture();
+    const [first, second] = month.engineers;
+    add('WorkSchedule month, one plan met and one half met', renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+      schedule: {
+        ...month,
+        engineers: [
+          ...(first === undefined ? [] : [{ ...first, plan: 5, fact: 5 }]),
+          ...(second === undefined ? [] : [{ ...second, plan: 20, fact: 12 }]),
+        ],
+      },
+      admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+    })));
+    add('WorkSchedule month and reserve with no engineers', renderScreen(newClient(), createElement('div', null,
+      createElement(WorkScheduleMonthView, {
+        schedule: { ...month, engineers: [] }, admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+      }),
+      createElement(ReserveCalendarView, {
+        reserve: { ...reserveFixture(), engineers: [] }, admin: false, onStart: noop, today: '2026-11-03',
+        initialSelection: [], initialOver: null,
+      }),
+    )));
   }
 
   /*

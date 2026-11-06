@@ -77,3 +77,65 @@
 .card[data-quote-located='false'] {
   border-left-color: var(--am-degraded);
 }
+
+/* ---- the bar's tools: «Открыть PDF», «Во весь экран» ------------------------------------- */
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin: 0;
+  padding: 0 var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-sm);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tool:hover {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+/* ---- the full-screen presentation: the page takes the height, the side column scrolls ----- */
+
+.full {
+  height: 100%;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.full .fullPanes {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: stretch;
+}
+
+.fullPage {
+  min-height: 0;
+}
+
+.fullSide {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--am-gap-xs);
+}
+
+@media (max-width: 900px) {
+  .full .fullPanes {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .fullSide {
+    max-height: 38vh;
+  }
+}

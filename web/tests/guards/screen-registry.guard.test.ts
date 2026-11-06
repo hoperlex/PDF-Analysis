@@ -141,7 +141,7 @@ function cycleFindings(registry: readonly ScreenEntry[]): string[] {
  */
 const R66: Partial<Record<ScreenGroup, string[]>> = {
   home: [],
-  work: ['/dashboard', '/section-optimisation', '/dispatcher', '/version-comparison', '/stage-comparison'],
+  work: ['/dashboard', '/section-optimisation', '/dispatcher', '/schedule', '/version-comparison', '/stage-comparison'],
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   knowledge: ['/knowledge-base', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
@@ -152,7 +152,7 @@ const R66: Partial<Record<ScreenGroup, string[]>> = {
 
 const R66_STUBS = ['/section-optimisation', '/norms', '/analysis-settings', '/queue'];
 /** `R-150w`: the operator's screens, closed to «Наблюдатель». */
-const OPERATOR_SCREENS: readonly string[] = ['/queue', '/logs', '/workers', '/dispatcher'];
+const OPERATOR_SCREENS: readonly string[] = ['/queue', '/logs', '/workers', '/dispatcher', '/schedule'];
 
 // --------------------------------------------------------------------------------- tree
 
@@ -171,9 +171,9 @@ describe('the registry is the route tree: every page has a row and every row a p
     // `W55A-WEB-NORMS` added the norms document view: 27 -> 28. `W61-DISPATCHER-01` added
     // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
     // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
-    // the version's «Блоки» tab: 32 -> 33.
-    expect(routeAddresses().length).toBe(33);
-    expect(REGISTRY.length).toBe(33);
+    // the version's «Блоки» tab: 32 -> 33. `UI-PARITY-P0P` added «График работ»: 33 -> 34.
+    expect(routeAddresses().length).toBe(34);
+    expect(REGISTRY.length).toBe(34);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -241,6 +241,7 @@ describe('every row has the shape §3.1 gives it', () => {
   it('R-60: exactly the three administrator screens require admin; R-150w: four operator screens require expert or admin', () => {
     expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
       ['/dispatcher', ['expert', 'admin']],
+      ['/schedule', ['expert', 'admin']],
       ['/logs', ['expert', 'admin']],
       ['/workers', ['expert', 'admin']],
       ['/queue', ['expert', 'admin']],

@@ -244,6 +244,16 @@ export const queryKeys = {
    * detail's history and the home screen's «Мои задачи». Each command invalidates
    * `assignments.all()`.
    */
+  /**
+   * «График работ» (`UI-PARITY-P0P`). One root: a plan, a calendar day or an absence changes the month, a move changes
+   * the reserve, and a move to another expert is also a reassignment under `assignments`, which that command
+   * invalidates as well.
+   */
+  workSchedule: {
+    all: () => ['work-schedule'] as const,
+    month: (month: string) => ['work-schedule', 'month', month] as const,
+    reserve: (start: string, days: number) => ['work-schedule', 'reserve', { start, days }] as const,
+  },
   assignments: {
     all: () => ['assignments'] as const,
     list: (filters: AssignmentListFilters = {}) => ['assignments', 'list', filters] as const,

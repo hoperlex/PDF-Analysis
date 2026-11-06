@@ -407,6 +407,15 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listProposalDecisionJournal": _PRODUCT_READ,
         # `R-151d`: importing decisions appends decision events, so it is `appendDecision`'s role.
         "importRunDecisions": _EXPERT,
+        # `UI-PARITY-P0P` (`R-151x`): «График работ» is read by an administrator (everyone) and an expert (their own row);
+        # the plans, the calendar, the absences and the reserve's moves are the administrator's.
+        "getWorkSchedule": _ANY_ROLE,
+        "getWorkScheduleReserve": _ANY_ROLE,
+        "setWorkScheduleSettings": _ADMIN,
+        "setWorkSchedulePlans": _ADMIN,
+        "setWorkCalendarDays": _ADMIN,
+        "setEngineerAbsences": _ADMIN,
+        "scheduleAssignments": _ADMIN,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
         # `EXEC-SEAL-01` (R-143). Any role reads connections, probes and routes; a secret is

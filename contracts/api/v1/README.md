@@ -11,14 +11,34 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.30.0` (`UI-PARITY-P0O`)
+## Current contract `1.31.0` (`UI-PARITY-P0P`)
+
+«График работ» (rulings `R-151x`, `R-152a`…`R-152h`), tag `schedule`, migration `0055_work_schedule`:
+
+- `getWorkSchedule` (`GET /work-schedule?month=YYYY-MM`, `admin` or `expert`): the month's days (Saturday and Sunday off
+  unless an administrator decided otherwise) and, per active expert, the plan (`plan_is_default` when the stored default
+  applies), the documents that became «Проверено экспертом» in the month credited to the author of their last verdict, and
+  the absent days. An expert reads their own row.
+- `getWorkScheduleReserve` (`GET /work-schedule/reserve?start=&days=28`, `admin` or `expert`): «Календарь запаса», each
+  expert's open assignments of «Диспетчер» with their planned date, or none for «без даты». No daily limit.
+- `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences` (`PUT`, keyed, `admin`):
+  the default plan (initially 20) and the time zone, each engineer's monthly plan, days off and working days, absences.
+- `scheduleAssignments` (`POST /work-schedule/reserve/moves`, keyed, `admin`): moves open assignments to a day and, with
+  `assignee_user_uid`, to another expert (a reassignment). Every move is an event with its author.
+
+Sixteen schemas (`WorkSchedule*`, `WorkCalendarDayChange`, `EngineerAbsenceChange`, `AssignmentMove` and four requests).
+No error code: a bad zone is `validation_failed` with `constraint: unknown_zone`, a plan for a non-expert
+`constraint: active_expert`.
+The API now has 266 paths, 294 operations and 709 schemas; migration head `0055`. The domain catalogs are at candidate revision 49.
+
+## Contract `1.30.0` (`UI-PARITY-P0O`, historical)
 
 `listVersionSheetLabels` (`GET /versions/{version_uid}/sheet-labels`, any one role): the version's pages with the drawing
 sheet their portal blocks name and their block count, as the original's «Лист» beside a finding's page. Read from the
 portal geometry `listVersionPortalBlocks` reads; a page whose blocks name different sheets has no label, a page without a
 block is not listed, and a version without geometry answers `not_produced`. Schemas `VersionSheetLabel`,
 `VersionSheetLabelList`. No migration, no error code.
-The API now has 259 paths, 287 operations and 693 schemas; migration head `0054`. The domain catalogs are at candidate revision 48.
+The API then had 259 paths, 287 operations and 693 schemas; migration head `0054`. The domain catalogs were at candidate revision 48.
 
 ## Contract `1.29.0` (`UI-PARITY-P0N`, historical)
 

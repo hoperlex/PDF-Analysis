@@ -66,6 +66,8 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
       ['/section-optimisation', 'Оптимизация разделов'],
       // `W61-DISPATCHER-01` (roadmap Q-2) adds «Диспетчер» at the end of «Работа».
       ['/dispatcher', 'Диспетчер'],
+      // `UI-PARITY-P0P` adds «График работ» after «Диспетчер», as the original's menu has it.
+      ['/schedule', 'График работ'],
       // `CMP-VC-UI-01` (plan §1.1) adds «Сравнение версий» after it.
       ['/version-comparison', 'Сравнение версий'],
       // `CMP-ACTIVATE-1030`: the owner activated the stage screen, and the menu offers it beside the version one.
@@ -76,7 +78,7 @@ const RULING: readonly { readonly group: string; readonly items: readonly (reado
     group: 'Знания',
     items: [
       ['/knowledge-base', 'База знаний'],
-      ['/blocks', 'Блоки'],
+      // `R-151m`: «Блоки» left the menu; it is a tab of the version, its address a chooser out of the menu.
       ['/norms', 'Нормы'],
     ],
   },
