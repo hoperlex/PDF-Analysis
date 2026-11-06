@@ -8,10 +8,10 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { OPTIMISATION_MOVED_TO, OptimisationPage } from '@/_pages/optimisation';
-import { classifiedDocumentSets } from '@/widgets/optimisation-proposals';
+import { ProposalCard, classifiedDocumentSets } from '@/widgets/optimisation-proposals';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { arVersion, otherSectionVersion, proposalShapes, unclassifiedVersion } from './fixtures';
+import { arVersion, otherSectionVersion, proposal, proposalShapes, SHEET_URL, unclassifiedVersion } from './fixtures';
 
 function rendered(name: string): string {
   const shape = proposalShapes().find((entry) => entry.name === name);
@@ -166,5 +166,50 @@ describe('the retired /optimisation address', () => {
     expect(markup).toContain('href="/projects"');
     expect(markup).toContain('вкладке проекта');
     expect(markup).not.toMatch(/пока недоступен|ещё не готов/);
+  });
+});
+
+describe('«Открыть лист» (`UI-B-09`)', () => {
+  it('opens the version’s PDF on the proposal’s page in a new tab, once the PDF is fetched', () => {
+    const markup = rendered('proposals-sheet-ready');
+    expect(markup).toContain(`href="${SHEET_URL}#page=2"`);
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
+    expect(markup).toContain('data-open-sheet="2"');
+    expect(markup.match(/Открыть лист ↗/g)?.length).toBe(2);
+    expect(markup).not.toContain('data-proposal-sheet');
+  });
+
+  it('offers nothing where no PDF is given, as before', () => {
+    expect(rendered('proposals-loaded-admin')).not.toContain('data-open-sheet');
+    expect(rendered('proposals-second-page')).not.toContain('Открыть лист');
+  });
+
+  it('says the PDF is on its way, and draws no link meanwhile', () => {
+    const markup = rendered('proposals-sheet-loading');
+    expect(markup).toContain('data-proposal-sheet="loading"');
+    expect(markup).toContain('Загружается PDF версии');
+    expect(markup).not.toContain('data-open-sheet');
+  });
+
+  it('says a refused PDF in Russian with its correlation id, and draws no link', () => {
+    const markup = rendered('proposals-sheet-refused');
+    expect(markup).toContain('PDF версии не получен: ссылок «Открыть лист» нет');
+    expect(markup).toContain('PDF версии недоступен.');
+    expect(markup).toContain('0f0e9d8c-7b6a-4948-b726-150413021100');
+    expect(markup).not.toContain('data-open-sheet');
+  });
+
+  it('draws no link for a proposal that names no page a reader can open', () => {
+    const named = renderScreen(newClient(), createElement(ProposalCard, {
+      proposal: proposal(), controls: null, history: null, documentUrl: SHEET_URL,
+    }));
+    expect(named).toContain('data-open-sheet="2"');
+    for (const page of [0, -1, 1.5]) {
+      const markup = renderScreen(newClient(), createElement(ProposalCard, {
+        proposal: proposal({ page_number: page }), controls: null, history: null, documentUrl: SHEET_URL,
+      }));
+      expect(markup, `page ${page}`).not.toContain('data-open-sheet');
+    }
   });
 });

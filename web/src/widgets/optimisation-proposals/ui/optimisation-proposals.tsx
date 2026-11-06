@@ -53,12 +53,14 @@ import {
   useOptimisationPasses,
   useOptimisationProposals,
 } from '@/entities/optimisation-proposal';
+import { useEvidenceDocument } from '@/features/open-evidence';
 import { StartOptimisationPass } from '@/features/start-optimisation-pass';
 
 import { useExportProposalsCsv } from '../model/use-export-proposals-csv';
 import styles from './optimisation-proposals.module.css';
 import { PassSummary } from './pass-summary';
 import { ProposalList } from './proposal-list';
+import type { SheetDocument } from './proposal-list';
 
 export interface OptimisationProposalsProps {
   readonly projectUid: ProjectUid;
@@ -69,6 +71,13 @@ export interface OptimisationProposalsProps {
    * «Комплект» choice; absent, the reader chooses among the project's classified sets as before.
    */
   readonly documentUid?: DocumentUid | undefined;
+  /**
+   * `UI-B-02`: the pass the address names (`?pass=`), read by the page layer. With `onPassChange` the chosen pass
+   * is this value, so a link or a reload opens it; a pass the set does not have is said, not silently replaced.
+   */
+  readonly passId?: string | null | undefined;
+  /** The reader chose another pass (or none): the page layer writes it onto the address. */
+  readonly onPassChange?: ((passId: OptimisationPassId | null) => void) | undefined;
 }
 
 /** The sets whose current version an expert confirmed in some section, in the order listed. */
@@ -226,6 +235,16 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
   const exporter = useExportProposalsCsv({ passId });
   const failure = proposals.error === null ? null : failureMessage(proposals.error);
   const exportFailure = exporter.error === null ? null : failureMessage(exporter.error);
+  // `UI-B-09`: the pass's version PDF is read once for every card's «Открыть лист», as the review screen reads its own;
+  // the bytes are asked for only for a pass that has proposals, so an empty pass costs no download.
+  const pass = proposals.data?.optimisation_pass;
+  const pdf = useEvidenceDocument(pass !== undefined && pass.proposal_count > 0 ? pass.version_uid : null);
+  const sheet: SheetDocument = {
+    url: pdf.objectUrl,
+    isLoading: pdf.isLoading,
+    failure: pdf.error === null || pdf.error === undefined ? null : failureMessage(pdf.error),
+    onRetry: pdf.refetch,
+  };
   return (
     <div>
       {proposals.isPending ? <LoadingState what="предложений" /> : null}
@@ -253,6 +272,7 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
               setOffset(0);
             }}
             onPage={proposals.isPlaceholderData ? null : setOffset}
+            sheet={sheet}
           />
         </>
       ) : null}
@@ -260,14 +280,28 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
   );
 }
 
-export function OptimisationProposals({ projectUid, roles, documentUid }: OptimisationProposalsProps) {
+export function OptimisationProposals({
+  projectUid,
+  roles,
+  documentUid,
+  passId = null,
+  onPassChange,
+}: OptimisationProposalsProps) {
   const documents = useDocumentList(projectUid);
   const sets = classifiedDocumentSets(documents.data?.items ?? []);
   // A comparison-only set is offered disabled, so it is never the default, never started for and
   // never asked for.
   const startable = sets.filter((version) => !isComparisonOnly(version));
   const [chosenSet, setChosenSet] = useState<DocumentUid | null>(null);
-  const [chosenPass, setChosenPass] = useState<OptimisationPassId | null>(null);
+  const [localPass, setLocalPass] = useState<OptimisationPassId | null>(null);
+  // With a page layer behind it (`onPassChange`) the address is the one place the chosen pass lives; without one
+  // it is local state, opened on the pass the caller names.
+  const chosenPass =
+    onPassChange === undefined ? (localPass ?? (passId as OptimisationPassId | null)) : (passId as OptimisationPassId | null);
+  const setChosenPass = (next: OptimisationPassId | null) => {
+    setLocalPass(next);
+    onPassChange?.(next);
+  };
   const fixed = documentUid !== undefined;
   const selectedSet = documentUid ?? chosenSet ?? startable[0]?.document_uid ?? null;
   const passes = useOptimisationPasses(projectUid, selectedSet);
@@ -276,6 +310,15 @@ export function OptimisationProposals({ projectUid, roles, documentUid }: Optimi
     chosenPass !== null && list.some((pass) => pass.optimisation_pass_id === chosenPass)
       ? chosenPass
       : (list[0]?.optimisation_pass_id ?? null);
+  // `UI-B-02`: a pass named by the address that the set does not have (a stale link, another document's pass) opens
+  // the newest one and says so.
+  const missingPass =
+    passes.data !== undefined &&
+    !passes.isFetching &&
+    chosenPass !== null &&
+    !list.some((pass) => pass.optimisation_pass_id === chosenPass)
+      ? chosenPass
+      : null;
   const documentsFailure = documents.error === null ? null : failureMessage(documents.error);
   const passesFailure = passes.error === null ? null : failureMessage(passes.error);
 
@@ -330,7 +373,7 @@ export function OptimisationProposals({ projectUid, roles, documentUid }: Optimi
           projectUid={projectUid}
           documentUid={selectedSet}
           canStart={roles.includes('expert')}
-          onStarted={(passId) => setChosenPass(passId as OptimisationPassId)}
+          onStarted={(startedId) => setChosenPass(startedId as OptimisationPassId)}
         />
       ) : null}
       {selectedSet !== null && passes.isPending ? <LoadingState what="проходов" /> : null}
@@ -344,6 +387,11 @@ export function OptimisationProposals({ projectUid, roles, documentUid }: Optimi
       ) : null}
       {passes.data !== undefined && passesFailure === null ? (
         <>
+          {missingPass !== null ? (
+            <p className="am-note" role="status" data-pass-not-found={missingPass}>
+              Проход из адреса не найден среди проходов этого комплекта: открыт последний.
+            </p>
+          ) : null}
           <PassList passes={list} active={activePass} onOpen={setChosenPass} />
           {activePass !== null ? (
             <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} />

@@ -30,6 +30,7 @@ export type {
   ProposalHistoryProps,
   ProposalListProps,
   ProposalListViewProps,
+  SheetDocument,
 } from './ui/proposal-list';
 export {
   DecisionFilter,

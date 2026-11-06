@@ -93,6 +93,7 @@ function Sources({ project }: { readonly project: SectionSpecificationProject })
         return (
           <li key={source.version_uid} data-section-source-state={source.state}>
             <Link href={routes.document(project.project_uid, source.document_uid)}>{source.display_title}</Link>
+            {' '}(<Link href={routes.documentOptimisation(project.project_uid, source.document_uid)}>оптимизация комплекта</Link>)
             {' '}— версия {source.version_ordinal}, стадия {stageMark(source.project_stage)}, страниц: {source.page_count}:{' '}
             {sectionSourceStateMessage(source.state)}
             {source.state === 'ready'
@@ -167,6 +168,10 @@ function ProjectPanel({
     <article className={styles.project} data-section-project={project.project_uid} data-section-price-state={project.price_state}>
       <h3 className={styles.subheading}>
         <Link href={routes.project(project.project_uid)}>{project.name}</Link>
+        {' '}
+        <span className={styles.hint}>
+          (<Link href={routes.projectOptimisation(project.project_uid)}>вкладка «Оптимизация» проекта</Link>)
+        </span>
       </h3>
       <p data-section-price-list={list?.price_list_id ?? 'none'}>
         {list === null
@@ -264,6 +269,10 @@ function Row({ row, addresses }: { readonly row: SectionSpecificationRow; readon
       <td className={styles.cell}>
         <Link href={routes.document(row.project_uid, row.document_uid)}>{source?.display_title ?? 'Комплект'}</Link>
         <span className={styles.hint}> — версия {source?.version_ordinal ?? '—'}</span>
+        {' '}
+        <span className={styles.hint}>
+          (<Link href={routes.documentOptimisation(row.project_uid, row.document_uid)}>оптимизация</Link>)
+        </span>
       </td>
       <td className={styles.cell} title={`строки ${row.line_start}–${row.line_end}`}>{place}</td>
       <td className={styles.cell}>{row.position ?? '—'}</td>

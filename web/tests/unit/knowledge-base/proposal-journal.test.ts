@@ -30,7 +30,10 @@ describe('the proposal decisions of the knowledge base', () => {
     expect(markup).toContain('Иванова А. С.');
     expect(markup).toContain('Дверь металлическая ДМ-1');
     expect(markup).toContain('ООО «Двери»');
-    expect(markup).toContain('href="/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B?tab=optimisation"');
+    // `UI-B-02`: the link opens the document's optimisation tab on the pass the decision was made in (`&` is escaped in markup).
+    expect(markup).toContain(
+      'href="/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B?tab=optimisation&amp;pass=opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B"',
+    );
     expect(markup).toContain('Аналог не подходит.');
   });
 
