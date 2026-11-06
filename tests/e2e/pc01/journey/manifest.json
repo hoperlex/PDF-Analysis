@@ -2771,6 +2771,12 @@
             "bound_ms": 120000
           },
           {
+            "do": "wait_for",
+            "selector": "[data-upload-dialog=\"single\"] button",
+            "text_contains": "Подтвердить группировку и порядок",
+            "bound_ms": 120000
+          },
+          {
             "do": "click",
             "selector": "[data-upload-dialog=\"single\"] button",
             "text": "Подтвердить группировку и порядок"
