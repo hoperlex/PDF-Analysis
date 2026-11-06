@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 257,
+    "path_count": 258,
     "operations": [
       [
         "DELETE",
@@ -357,6 +357,11 @@
         "GET",
         "/projects",
         "listProjects"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}",
+        "getProject"
       ],
       [
         "GET",
@@ -2128,5 +2133,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0054_finding_execution_status",
-  "contract_version": "1.28.0"
+  "contract_version": "1.29.0"
 }

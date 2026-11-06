@@ -583,6 +583,9 @@ class ProjectAdapter:
             created_at=record.created_at,
         )
 
+    def get_project(self, *, project_uid: str) -> ProjectView | None:
+        return _project_of(self, project_uid)
+
     def list_projects(self) -> Sequence[ProjectView]:
         # `document_count` is carried, not recomputed: `IngestService.list_projects`
         # returns `ProjectListingRecord`s whose count came out of the same statement that
@@ -616,6 +619,13 @@ class ProjectAdapter:
             )
             for r in listing
         )
+
+
+def _project_of(adapter: "ProjectAdapter", project_uid: str) -> ProjectView | None:
+    """`UI-PARITY-P0N`: the listing's own row, so a project read alone and a project listed cannot disagree on a name,
+    a document count or a counter. The listing is read whole; at the scale of a deployment's projects that is the
+    honest price of one definition."""
+    return next((view for view in adapter.list_projects() if view.project_uid == project_uid), None)
 
 
 def _audit_counts_view(record: Any) -> DocumentAuditCountsView:

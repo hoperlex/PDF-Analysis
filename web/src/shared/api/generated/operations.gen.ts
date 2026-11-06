@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.28.0 (OpenAPI 3.1.0)
- *   sha256 24611dded30e8082a9ea6e463eb3f273bb3dd588024d2039c7c23fe0d6fcc211
+ *   AuditManager PC-01 API 1.29.0 (OpenAPI 3.1.0)
+ *   sha256 159c2a8ffd2c9b51e1b0b44a783d0d65a8b7875ad57117f41f5a3ccc1646c9e7
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -426,6 +426,7 @@ export const OPERATION_IDS = [
   'getMe',
   'getNormDocument',
   'getProductVersion',
+  'getProject',
   'getRunNormReferences',
   'getRunNormVerification',
   'getRunStatus',
@@ -3140,6 +3141,29 @@ export type GetProductVersionInput = {
 
 /** Success body of `getProductVersion` (`application/json`, HTTP 200). */
 export type GetProductVersionResult = ProductVersion;
+
+// ------------------------------------------------------------------------------------
+// getProject - GET /projects/{project_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Project
+ *
+ * `UI-PARITY-P0N` (contract 1.29.0): one project by its identity, exactly as `listProjects` lists it -- its name, creation time, document count and audit counters -- so a screen that names its project need not find it on a page of the listing. An unknown project is `404`. Any role that may list projects (`role:admin|expert|viewer`).
+ */
+export type GetProjectInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getProject` (`application/json`, HTTP 200). */
+export type GetProjectResult = Project;
 
 // ------------------------------------------------------------------------------------
 // getRunNormReferences - GET /runs/{run_id}/norm-references
@@ -9402,6 +9426,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
+  },
+  getProject: {
+    operationId: 'getProject',
+    method: 'GET',
+    path: '/projects/{project_uid}',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['projects'],
   },
   getRunNormReferences: {
     operationId: 'getRunNormReferences',

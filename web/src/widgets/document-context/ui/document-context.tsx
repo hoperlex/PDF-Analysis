@@ -18,7 +18,7 @@ import type { DocumentUid, RunId, VersionUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { useDocumentVersion, useVersionList } from '@/entities/document-version';
-import { useProjectList } from '@/entities/project';
+import { useProject } from '@/entities/project';
 
 import styles from './document-context.module.css';
 
@@ -130,8 +130,8 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
   const version = useDocumentVersion(knownVersion ?? null);
-  const projects = useProjectList();
-  const projectName = projects.data?.items.find((item) => item.project_uid === projectUid)?.name;
+  // `UI-PARITY-P0N`: the project by its identity, not looked for on the listing's first page.
+  const projectName = useProject(projectUid).data?.name;
   const steps = contextSteps(
     {
       projectUid,

@@ -122,6 +122,8 @@ REQUIRED_OPERATIONS = {
     "listProposalDecisionJournal",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
+    # `UI-PARITY-P0N`. One project as the listing gives it.
+    "getProject",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",

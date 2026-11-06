@@ -381,6 +381,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
         # Reads of product data: any one role (R-80 amends R-60 and narrows R-78).
         "listProjects": _PRODUCT_READ,
+        # `UI-PARITY-P0N`: one project, as the listing gives it.
+        "getProject": _PRODUCT_READ,
         "listDocuments": _PRODUCT_READ,
         "getDocumentVersion": _PRODUCT_READ,
         "streamDocumentVersionContent": _PRODUCT_READ,

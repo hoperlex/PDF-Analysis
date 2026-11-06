@@ -305,7 +305,10 @@ class AppendedDecision(Protocol):
 
 @runtime_checkable
 class ProjectPort(Protocol):
-    """``createProject`` and ``listProjects``."""
+    """``createProject``, ``listProjects`` and ``getProject``."""
+
+    def get_project(self, *, project_uid: str) -> ProjectView | None:
+        """`UI-PARITY-P0N`: one project as ``listProjects`` lists it, or ``None`` for an unknown one."""
 
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         """Create a project, or replay the recorded outcome of an identical request."""

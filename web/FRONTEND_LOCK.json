@@ -22,7 +22,7 @@
     "dispatch_named_commit": "83b59f9f5ea7f9bac32cb970a76445f6cd7847ba",
     "commit_note": "Resealed by UI-PARITY-P0M: contract 1.28.0 (contract 1.28.0 adds the queue overview, position and attempts.).",
     "openapi_version": "3.1.0",
-    "info_version": "1.28.0",
+    "info_version": "1.29.0",
     "paths": 257,
     "operations": 285,
     "component_schemas": 691,

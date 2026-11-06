@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-285 operations, sealed. `A5` generates the typed client from this document; `B6`
+286 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,9 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0N` (contract `1.29.0`, no migration) adds `getProject`: one project as `listProjects` lists it, `404` when
+unknown, for the screens that name their project.
+
 `UI-PARITY-P0M` (contract `1.28.0`, no migration) completes the queue group A of `UI-PARITY-01`: `listExecutionQueue`'s page
 gains the overview by state, and each item a queued job's place in the dispatcher's order and its attempt count.
 
@@ -1104,6 +1107,7 @@ could.
 | `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `listProposalDecisionJournal` | `GET /proposal-decisions` |
 | `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
+| `getProject` | `GET /projects/{project_uid}` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |

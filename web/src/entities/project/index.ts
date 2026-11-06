@@ -36,6 +36,7 @@ export { classifyProjectListFailure } from './model/list-failure';
 
 export type { ProjectListOptions } from './api/use-project-list';
 export { PROJECT_PAGE_LIMIT, useProjectList } from './api/use-project-list';
+export { useProject } from './api/use-project';
 
 export type { ProjectRowProps } from './ui/project-row';
 export { ProjectRow } from './ui/project-row';

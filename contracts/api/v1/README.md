@@ -11,14 +11,21 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.28.0` (`UI-PARITY-P0M`)
+## Current contract `1.29.0` (`UI-PARITY-P0N`)
+
+`getProject` (`GET /projects/{project_uid}`, any role that may list projects): one project exactly as `listProjects` lists
+it, so a screen that names its project (the project page's title, the «Где вы находитесь» strip) need not find it on a page
+of the listing. An unknown project is `404`. No schema, no migration, no error code.
+The API now has 258 paths, 286 operations and 691 schemas; migration head `0054`. The domain catalogs are at candidate revision 47.
+
+## Contract `1.28.0` (`UI-PARITY-P0M`, historical)
 
 The rest of `UI-PARITY-01`'s queue group A, as the original's queue line «N / M», «N ✓ M ✗» and its numbered items:
 `ExecutionQueuePage` gains `overview`, every job state with its count over the period filter (not the state filter), and
 `ExecutionQueueItem` gains `queue_position` (a queued job's place among every queued job in the dispatcher's order --
 priority, then the oldest first; the order, not a forecast) and `attempt_count`. One schema, `ExecutionQueueStateCount`.
 No operation, no migration, no error code.
-The API now has 257 paths, 285 operations and 691 schemas; migration head `0054`. The domain catalogs are at candidate revision 46.
+The API then had 257 paths, 285 operations and 691 schemas; migration head `0054`. The domain catalogs were at candidate revision 46.
 
 ## Contract `1.27.0` (`UI-PARITY-P0L`, historical)
 
