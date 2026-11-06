@@ -13,6 +13,8 @@ export {
   loadedPortalBlocks,
   nextPortalCursor,
   pageChips,
+  pageSelectionOf,
+  pageSelectionParam,
   sectionsByPage,
   sectionsOfSelection,
   stepIndex,

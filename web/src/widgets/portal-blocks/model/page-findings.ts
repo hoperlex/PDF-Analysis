@@ -9,10 +9,14 @@
  * the number of the run's findings that cite the tile's PAGE, and every sentence around it says
  * «на странице».
  *
- * **The run is the one the block list names.** `produced_by_run_id` is the run whose geometry
- * stage read this bundle. If that run published no findings, or they cannot be read, the tiles
- * carry no number at all and a sentence says why, rather than a zero that reads as «checked,
- * nothing found».
+ * **The run is the version's latest that published a result** (`scopeRunId`): the geometry run
+ * is a run that read the bundle, and a later run of the same version is the one whose findings the
+ * reader has before them in «Разбор». Only when no run in the version's first page of runs
+ * published anything does the count fall back to the run whose geometry stage read this bundle
+ * (`produced_by_run_id`), and then the sentence says what that run did. Whichever run it is, the
+ * tile and the sentence say which one and when it started («по прогону от <time>»). If the run
+ * published no findings, or they cannot be read, the tiles carry no number at all and a sentence says
+ * why, rather than a zero that reads as «checked, nothing found».
  *
  * **The tone is the expert's.** A finding's canonical severity is `decided_severity` (`R-151j`);
  * the model's proposal is not an expert decision and does not colour anything here. The worst
@@ -20,8 +24,10 @@
  * undecided gets the neutral one.
  */
 
-import type { Finding, RunId, Severity } from '@/shared/api';
+import type { Finding, RunId, RunStatus, Severity } from '@/shared/api';
 import { SEVERITY_VALUES } from '@/shared/api';
+import { formatInstant } from '@/shared/lib';
+import { runHasPublishedResult } from '@/entities/audit-run';
 import { admitFindings } from '@/entities/finding';
 import { declaredPages } from '@/entities/finding-observation';
 
@@ -80,13 +86,19 @@ export function worstDecided(findings: readonly Finding[]): Severity | null {
  *   `none`         no run is named, or its answer has not arrived: no number and no sentence;
  *   `no-result`    the run published no findings (failed, cancelled, still going): a sentence;
  *   `unreadable`   the run or its findings could not be read: a sentence;
- *   `read`         the run's findings, by page.
+ *   `read`         the run's findings, by page, and the instant the run started (`created_at`) when
+ *                  the run's status carried it.
  */
 export type PageFindingsReading =
   | { readonly kind: 'none' }
   | { readonly kind: 'no-result'; readonly runId: RunId }
   | { readonly kind: 'unreadable'; readonly runId: RunId }
-  | { readonly kind: 'read'; readonly runId: RunId; readonly byPage: ReadonlyMap<number, PageFindings> };
+  | {
+      readonly kind: 'read';
+      readonly runId: RunId;
+      readonly byPage: ReadonlyMap<number, PageFindings>;
+      readonly runAt?: string | undefined;
+    };
 
 export const NO_PAGE_FINDINGS: PageFindingsReading = { kind: 'none' };
 
@@ -94,4 +106,42 @@ export const NO_PAGE_FINDINGS: PageFindingsReading = { kind: 'none' };
 export function pageReading(reading: PageFindingsReading, page: number): PageFindings | null {
   if (reading.kind !== 'read') return null;
   return reading.byPage.get(page) ?? { count: 0, worst: null, findings: [] };
+}
+
+/**
+ * The version's latest run that published a result, or `null` when none of `runs` did.
+ *
+ * `listRuns` answers newest first and this keeps its order: the first run that
+ * `runHasPublishedResult` accepts is the latest, so nothing is sorted here (a sort would hide a
+ * server that broke its order). A run of the v3 beta profile publishes no canonical findings and is
+ * not taken for one.
+ */
+export function latestPublishedRunId(runs: readonly RunStatus[]): RunId | null {
+  const published = runs.find((run) => runHasPublishedResult(run.state, run.analysis_profile_id));
+  return published === undefined ? null : published.run_id;
+}
+
+/**
+ * The run whose findings number the tiles.
+ *
+ *   a list still on its way   `null`: no run is guessed, so the wrong run's findings are not fetched
+ *                              to be replaced a moment later;
+ *   a list that was read      its latest published run, else the run whose geometry stage read the bundle;
+ *   a list that failed        the geometry run: the tiles still say which run the numbers are from.
+ */
+export function scopeRunId(
+  runs: readonly RunStatus[] | 'pending' | 'unreadable',
+  geometryRunId: RunId | null,
+): RunId | null {
+  if (runs === 'pending') return null;
+  if (runs === 'unreadable') return geometryRunId;
+  return latestPublishedRunId(runs) ?? geometryRunId;
+}
+
+/**
+ * «по прогону от <time>»: the words a tile's title and the block view use to say which run a count is
+ * from, or `null` when the run's start is not known. The instant is the shared UTC stamp.
+ */
+export function runSourcePhrase(runAt: string | undefined): string | null {
+  return runAt === undefined ? null : `по прогону от ${formatInstant(runAt)}`;
 }

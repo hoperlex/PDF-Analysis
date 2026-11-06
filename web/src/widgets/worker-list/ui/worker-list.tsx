@@ -5,7 +5,7 @@
  * worker is doing: its state, whether it takes new runs, its slots and version, when it
  * started and last answered, and the runs it holds now. The intake switch is drawn only for
  * an administrator, and pressing it only asks the page to confirm; the server still checks
- * every write.
+ * every write. `UI-B-68`: each row carries «Скопировать диагностику», the row's facts as text for any role.
  */
 
 import type { ExecutionWorker, Role } from '@/shared/api';
@@ -15,6 +15,8 @@ import {
 } from '@/entities/execution';
 import { EmptyState, ErrorState } from '@/shared/ui';
 
+import { workerDiagnosticText } from '../model/worker-diagnostics';
+import { CopyDiagnostics } from './copy-diagnostics';
 import styles from './worker-list.module.css';
 
 export interface WorkerListProps {
@@ -55,6 +57,8 @@ function WorkerRow({
           </ul>
         </div>
       )}
+      {/* `UI-B-68`: the row's facts as text for a message to whoever looks after the worker; any role may copy what it reads. */}
+      <CopyDiagnostics text={workerDiagnosticText(worker)} />
       {canExecute(roles, 'intake') ? (
         <div className={styles.actions}>
           <button
