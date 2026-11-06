@@ -660,6 +660,11 @@ def _run_workflow_v2(session, *, run, authority, jobs, journal, binding, outputs
     if v3:
         state["window_id"]=window_context["window_id"]
         state["primary_text_status"]=window_context.get("primary_text_status","pending")
+        # The planned (parent) result carries the aggregated list; a window keeps its receipts by batch
+        # index (the batch writer and the parent's aggregate both read a mapping). The list made every
+        # v3 run with a norm paragraph context policy raise AttributeError at its first window save.
+        if isinstance(state.get("normative_context_receipts"), list):
+            state["normative_context_receipts"]={}
     current = None
     used_batches={}
     def save(status):
