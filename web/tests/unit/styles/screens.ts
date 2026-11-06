@@ -41,7 +41,7 @@ import { EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
 import { PageViewerView } from '@/features/open-evidence';
 import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
-import { ExecutionJournal } from '@/widgets/execution-journal';
+import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
 import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
@@ -87,7 +87,7 @@ import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
-import { CropFigureView } from '@/widgets/portal-blocks';
+import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByPage } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
@@ -151,7 +151,9 @@ import {
   normDocument,
 } from '../norms/fixtures';
 
-import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
+import {
+  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksOnFivePages, blocksVersion, everyKindOfBlock, portalPage, runFindings,
+} from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
 import {
@@ -783,6 +785,37 @@ export function screens(): Screen[] {
     }],
     onNext: null, onPrevious: null,
   })));
+  // `UI-B-40` / `UI-B-43`: the run picker at its last step with a run in view and every list cut at its first page
+  // (`populatedClient` answers each with a next cursor), a step whose list could not be read, and the controls of the
+  // page in both modes -- the `.picker`, `.steps`, `.step`, `.scope`, `.controls`, `.toggle`, `.count` and `.notes` rules.
+  add('RunPicker at the runs, a run in view', renderScreen(populatedClient(), createElement(RunPicker, {
+    selection: { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, versionUid: VERSION_UID },
+    runId: RUN_ID, onSelection: noop, onChooseRun: noop,
+  })));
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT), { items: [project()], page: { next_cursor: null } });
+    seedError(client, queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), apiError(503, 'dependency_unavailable', true));
+    add('RunPicker, the documents could not be read', renderScreen(client, createElement(RunPicker, {
+      selection: { projectUid: PROJECT_UID, documentUid: null, versionUid: null },
+      runId: null, onSelection: noop, onChooseRun: noop,
+    })));
+  }
+  add('JournalControls, auto-refresh on, rows to copy', withRouter(createElement(JournalControls, {
+    entries: [{
+      event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      run_id: RUN_ID,
+      aggregate_id: RUN_ID,
+      aggregate_type: 'AuditRun',
+      event_type: 'audit_run.transition',
+      occurred_at: '2026-10-09T10:00:00Z',
+      payload: { to_state: 'queued' },
+    }],
+    runId: RUN_ID, autoRefresh: true, onAutoRefresh: noop,
+  })));
+  add('JournalControls, auto-refresh off, nothing read yet', withRouter(createElement(JournalControls, {
+    entries: undefined, runId: null, autoRefresh: false, onAutoRefresh: noop,
+  })));
   add('ExecutionQueue loaded', withRouter(createElement(ExecutionQueue, {
     items: [{
       job_id: 'job_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
@@ -1139,6 +1172,45 @@ export function screens(): Screen[] {
     } finally {
       if (before === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
       else process.env.NEXT_PUBLIC_API_BASE_URL = before;
+    }
+    // `UI-PARITY` «Блоки»: the tiles with the run's findings read (every tone of the number, the
+    // amber outline, a page with none), the selector with a page chosen and the load still partial,
+    // the sentence for a run with no findings and for findings that could not be read, and the block
+    // view drawn open (`staticOpen`) on each kind of block: an image with the page's findings, a text
+    // with its flags, a stamp with no picture, an image whose crop was not cut. The picture's failure
+    // is its own view, because only a browser's `error` event selects it.
+    const blocksAddress = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+    try {
+      const tiles = (over: Partial<Parameters<typeof PortalBlockListView>[0]>) =>
+        renderScreen(newClient(), createElement(PortalBlockListView, {
+          projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: BLOCKS_RUN_ID,
+          blocks: blocksOnFivePages(), versionUid: BLOCKS_VERSION_UID, hasMore: true, loadingMore: false,
+          moreFailure: null, onMore: noop,
+          pageFindings: { kind: 'read', runId: BLOCKS_RUN_ID, byPage: findingsByPage(runFindings()) },
+          ...over,
+        }));
+      add('PortalBlockListView, tiles with the run’s findings', tiles({}));
+      add('PortalBlockListView, one page chosen, no run', tiles({ initialPage: 2, pageFindings: { kind: 'none' } }));
+      add('PortalBlockListView, the run published no findings', tiles({ pageFindings: { kind: 'no-result', runId: BLOCKS_RUN_ID } }));
+      add('PortalBlockListView, the findings could not be read', tiles({ pageFindings: { kind: 'unreadable', runId: BLOCKS_RUN_ID } }));
+      add('Block view open on an image of a page with findings', tiles({ initialOpen: 1, staticOpen: true }));
+      add('Block view open on a text with flags', tiles({ initialOpen: 0, staticOpen: true }));
+      add('Block view open on a stamp', tiles({ initialOpen: 2, staticOpen: true }));
+      add('Block view open on an image whose crop was not cut', tiles({ initialPage: 3, initialOpen: 0, staticOpen: true }));
+      add('Block view open on a page with no findings', tiles({ initialOpen: 8, staticOpen: true }));
+      add('Block view open on the last block of a page, no run', tiles({ initialPage: 2, initialOpen: 1, staticOpen: true, pageFindings: { kind: 'none' } }));
+      add('BlockImageFailure', withRouter(createElement(BlockImageFailure)));
+      // The card with its own crop figure (`showCrop`, the default): the block view draws the picture in its
+      // stage and so leaves the figure out, which would leave the figure's rules unreached.
+      for (const block of everyKindOfBlock().slice(0, 2)) {
+        add(`PortalBlockCard, ${block.block_type} with the crop figure`, withRouter(createElement(PortalBlockCard, {
+          block, versionUid: BLOCKS_VERSION_UID,
+        })));
+      }
+    } finally {
+      if (blocksAddress === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = blocksAddress;
     }
     // `W55B-FIX` (Y-2): the view takes the block's identities and the seam builds the address
     // from the configured base, set for this render only.

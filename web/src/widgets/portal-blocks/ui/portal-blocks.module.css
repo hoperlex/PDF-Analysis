@@ -39,7 +39,165 @@
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: var(--am-gap-sm);
+}
+
+.blocks > li {
+  min-width: 0;
+}
+
+/* ---- the page selector: «Все блоки (N)» and one chip per page ---------------------------- */
+
+.selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap-sm);
+}
+
+.chip {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-paper);
+  color: var(--am-ink-muted);
+  font: inherit;
+  font-size: var(--am-text-sm);
+  cursor: pointer;
+}
+
+.chip:hover {
+  color: var(--am-ink);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+/* ---- a tile: the crop at a fixed height, the type and place beneath, the page's findings --- */
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-xs);
+  border: 2px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tile:hover {
+  border-color: var(--am-accent);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+/* The page has findings in the run that was read: the original's amber outline. */
+.tile[data-has-findings='true'] {
+  border-color: var(--am-degraded);
+}
+
+.tileMedia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+}
+
+.tileImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tileText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+  align-self: stretch;
+  min-width: 0;
+  padding: var(--am-gap-sm);
+  overflow: hidden;
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+/* «распознано» on the tile too: the portal's OCR is never shown unmarked (`R-116`). */
+.tileMarker {
+  display: inline-block;
+  padding: 0 var(--am-gap-sm);
+  border: 1px solid var(--am-accent);
+  border-radius: var(--am-radius-pill);
+  background: var(--am-accent-light);
+  color: var(--am-accent);
+  font-size: var(--am-text-xs);
+  line-height: var(--am-leading-base);
+}
+
+.tileExcerpt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tileNote {
+  padding: var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-style: italic;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.tileCaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--am-gap-sm);
+  min-width: 0;
+}
+
+.tileType {
+  font-size: var(--am-text-md);
+  font-weight: 600;
+}
+
+.tileMeta {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The number sits over the corner of the picture; its colour is the badge tone's own. */
+.tileBadge {
+  position: absolute;
+  top: var(--am-gap-sm);
+  right: var(--am-gap-sm);
 }
 
 .block {

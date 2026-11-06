@@ -7,8 +7,33 @@
 export { PORTAL_BLOCK_PAGE_LIMIT, portalBlocksQueryOptions, usePortalBlocks } from './api/use-portal-blocks';
 export { sheetOfPage, useSheetLabels } from './api/use-sheet-labels';
 export { PORTAL_BLOCK_LIST_ROLE, versionHasPortalBundle } from './model/bundle';
-export { loadedPortalBlocks, nextPortalCursor, sectionsByPage } from './model/pages';
-export type { PortalPageSection } from './model/pages';
+export {
+  blocksOfSelection,
+  effectiveSelection,
+  loadedPortalBlocks,
+  nextPortalCursor,
+  pageChips,
+  sectionsByPage,
+  sectionsOfSelection,
+  stepIndex,
+} from './model/pages';
+export type { PageChip, PageSelection, PortalPageSection } from './model/pages';
+export { TILE_EXCERPT_LIMIT, textExcerpt } from './model/excerpt';
+export {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  WHEEL_IN,
+  WHEEL_OUT,
+  WHOLE_IMAGE,
+  clampView,
+  isZoomed,
+  panBy,
+  viewTransform,
+  wheelZoom,
+  zoomAround,
+  zoomLabel,
+} from './model/image-view';
+export type { Point, Size, View } from './model/image-view';
 export {
   DESCRIPTION_MARKER,
   GEOMETRY_MISMATCH_LABEL,

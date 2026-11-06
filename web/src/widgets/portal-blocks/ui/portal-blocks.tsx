@@ -19,11 +19,19 @@
  * API reports for the whole version (`block_count`) is printed beside the count loaded so
  * far, so a reader always knows whether the list is complete.
  *
+ * **Tiles, a page selector and a block view** (`UI-PARITY`, the original's «Блоки»). The loaded blocks are
+ * a grid of tiles, one grouped heading per page, narrowed by the chips above it to «Все блоки» or one
+ * page; a press on a tile opens the block view (`portal-block-viewer.tsx`), which walks the blocks of
+ * the selection. The tile's number is the run's findings that cite its PAGE, never the block's: a
+ * finding names pages, not portal blocks, and the sentence under the summary says so
+ * (`model/page-findings.ts`). With no run in scope, or none that published findings, there is no number.
+ *
  * {@link PortalBlockListView} is the loaded list without the query, exported so the
  * instruments that render one static pass (the language guard, the contrast census) render
  * the markup this widget renders rather than a copy of it.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
 
 import type { DocumentVersion, PortalBlock, ProjectUid, RunId, VersionUid } from '@/shared/api';
@@ -33,13 +41,23 @@ import { EmptyState, ErrorState, LoadingState, NotApplicableState } from '@/shar
 import {
   DESCRIPTION_MARKER,
   RECOGNISED_MARKER,
+  blocksOfSelection,
+  effectiveSelection,
   loadedPortalBlocks,
+  pageChips,
   sectionsByPage,
+  sectionsOfSelection,
   usePortalBlocks,
   versionHasPortalBundle,
 } from '@/entities/block';
+import type { PageSelection } from '@/entities/block';
 
-import { PortalBlockCard } from './portal-block-card';
+import { NO_PAGE_FINDINGS, pageReading } from '../model/page-findings';
+import type { PageFindingsReading } from '../model/page-findings';
+import { usePageFindings } from '../model/use-page-findings';
+import { PageSelector } from './page-selector';
+import { PortalBlockTile } from './portal-block-tile';
+import { PortalBlockViewer } from './portal-block-viewer';
 import styles from './portal-blocks.module.css';
 
 export interface PortalBlockListViewProps {
@@ -57,6 +75,37 @@ export interface PortalBlockListViewProps {
   /** The failure of the last «Показать ещё», or `null`. */
   readonly moreFailure: ListingFailure | null;
   readonly onMore: () => void;
+  /** What the run's findings say about each page; absent, the tiles carry no number. */
+  readonly pageFindings?: PageFindingsReading | undefined;
+  /** The page selector's starting choice (a render that cannot press a chip says it here). */
+  readonly initialPage?: PageSelection | undefined;
+  /** The block view's starting place in the selection; absent, the view is closed. */
+  readonly initialOpen?: number | undefined;
+  /** The census and the unit suite: the block view is drawn open without `showModal`. */
+  readonly staticOpen?: boolean | undefined;
+}
+
+/** The sentence under the summary that says what the numbers on the tiles are, or why there are none. */
+function FindingsNote({ reading }: { readonly reading: PageFindingsReading }) {
+  if (reading.kind === 'none') return null;
+  if (reading.kind === 'read') {
+    return (
+      <p className="am-note" data-page-findings="read">
+        Число на плитке — это число замечаний прогона <code>{reading.runId}</code>, у которых есть цитата с
+        этой страницы PDF. Замечание указывает страницу, а не блок, поэтому у всех плиток одной страницы число
+        одно; у страниц без таких замечаний числа нет.
+      </p>
+    );
+  }
+  return (
+    <p className="am-note" data-page-findings={reading.kind}>
+      {reading.kind === 'no-result' ? 'Прогон ' : 'Замечания прогона '}
+      <code>{reading.runId}</code>
+      {reading.kind === 'no-result'
+        ? ' не опубликовал замечаний, поэтому чисел замечаний на плитках нет.'
+        : ' не удалось прочитать, поэтому чисел замечаний на плитках нет.'}
+    </p>
+  );
 }
 
 export function PortalBlockListView({
@@ -69,9 +118,19 @@ export function PortalBlockListView({
   loadingMore,
   moreFailure,
   onMore,
+  pageFindings = NO_PAGE_FINDINGS,
+  initialPage = 'all',
+  initialOpen,
+  staticOpen = false,
 }: PortalBlockListViewProps) {
+  const [choice, setChoice] = useState<PageSelection>(initialPage);
+  const [openAt, setOpenAt] = useState<number | null>(initialOpen ?? null);
   const sections = sectionsByPage(blocks);
-  let position = 0;
+  const selection = effectiveSelection(sections, choice);
+  const shown = sectionsOfSelection(sections, selection);
+  const walk = blocksOfSelection(sections, selection);
+  let position = -1;
+  const runId = pageFindings.kind === 'none' ? null : pageFindings.runId;
 
   return (
     <div className={styles.portal} data-portal-blocks-loaded={blocks.length} data-portal-block-count={blockCount}>
@@ -93,7 +152,20 @@ export function PortalBlockListView({
         )}
       </p>
 
-      {sections.map((section) => (
+      <FindingsNote reading={pageFindings} />
+
+      <PageSelector
+        chips={pageChips(sections)}
+        total={blocks.length}
+        partial={hasMore}
+        selection={selection}
+        onSelect={(next) => {
+          setChoice(next);
+          setOpenAt(null);
+        }}
+      />
+
+      {shown.map((section) => (
         <section key={section.pageNumber} className={styles.page} data-portal-page={section.pageNumber}>
           <h3 className={styles.pageTitle}>
             Страница {section.pageNumber}
@@ -102,18 +174,42 @@ export function PortalBlockListView({
           <ol className={styles.blocks}>
             {section.blocks.map((block) => {
               position += 1;
+              const at = position;
               // The portal's id is an external identifier: a key here and nothing else. The
               // position keeps two copies of one id (a server that repeated a block across a
               // cursor) from colliding, so the repetition is shown rather than swallowed.
               return (
-                <li key={`${position}:${block.portal_block_id}`}>
-                  <PortalBlockCard block={block} versionUid={versionUid} />
+                <li key={`${at}:${block.portal_block_id}`}>
+                  <PortalBlockTile
+                    block={block}
+                    versionUid={versionUid}
+                    pageFindings={pageReading(pageFindings, block.page_number)}
+                    onOpen={() => {
+                      setOpenAt(at);
+                    }}
+                  />
                 </li>
               );
             })}
           </ol>
         </section>
       ))}
+
+      {openAt === null || walk[openAt] === undefined ? null : (
+        <PortalBlockViewer
+          projectUid={projectUid}
+          versionUid={versionUid}
+          blocks={walk}
+          index={openAt}
+          onIndex={setOpenAt}
+          onClose={() => {
+            setOpenAt(null);
+          }}
+          pageFindings={pageReading(pageFindings, (walk[openAt] as PortalBlock).page_number)}
+          runId={runId}
+          staticOpen={staticOpen}
+        />
+      )}
 
       {hasMore ? (
         <p className={styles.summary}>
@@ -147,6 +243,9 @@ export interface PortalBlocksProps {
 
 export function PortalBlocks({ version }: PortalBlocksProps) {
   const query = usePortalBlocks(version.version_uid);
+  // The run that read the bundle is the run in scope; its findings, if it published any, number the tiles.
+  const runInScope = query.data?.pages[0]?.produced_by_run_id ?? null;
+  const pageFindings = usePageFindings(runInScope);
 
   if (query.isPending) return <LoadingState what="блоки портала" />;
   if (query.data === undefined) {
@@ -201,6 +300,7 @@ export function PortalBlocks({ version }: PortalBlocksProps) {
           : null
       }
       onMore={() => void query.fetchNextPage()}
+      pageFindings={pageFindings}
     />
   );
 }
