@@ -92,7 +92,7 @@ describe('the moves offered mirror the server table', () => {
 
 function refusal(code: ErrorEnvelope['error_code'], details: NonNullable<ErrorEnvelope['details']>): ApiError {
   return new ApiError(409, {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'raw server message',
     correlation_id: 'cid-dispatch-1',

@@ -26,7 +26,7 @@ const LAST = { next_cursor: null };
 
 function refusal(status: number, code: ErrorCode, details: Record<string, string> = {}): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'English the client never prints.',
     correlation_id: 'cid-catalogue-1',

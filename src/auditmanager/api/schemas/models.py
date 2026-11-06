@@ -1049,7 +1049,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.36.0"]
+    contract_version: Literal["1.37.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -4310,12 +4310,16 @@ class ProposalDecisionCounts(_Object):
 class OptimisationPass(_Object):
     """One optimisation pass, pinned to everything it read: the version, its published run
     and that run's text layer, the price-list revision and the vendor-list revision (global
-    or the project's own, ``vendor_list_source``), and the three algorithm versions."""
+    or the project's own, ``vendor_list_source``), and the three algorithm versions.
+
+    ``version_ordinal`` (contract 1.37.0, `UI-B-14`) is the display order of the version the pass was started over
+    («V2»), so a screen can name an earlier version's pass; it is never an identity."""
 
     optimisation_pass_id: OptimisationPassId
     project_uid: ProjectUid
     document_uid: DocumentUid
     version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
     run_id: RunId
     text_layer_sha256: Sha256
     price_list_id: PriceListId
@@ -4352,9 +4356,27 @@ class ProposalPosition(_Object):
     vendor: Annotated[str, Field(min_length=1, max_length=500)] | None
 
 
+class ProposalDecisionCarriedFrom(_Object):
+    """`UI-B-14` (contract 1.37.0): where a carried decision came from -- the decision of an earlier version's pass
+    that an expert carried over to this proposal.
+
+    ``proposal_decision_id`` is the source decision's own identity and ``optimisation_pass_id`` and ``version_uid`` the
+    pass and version it was made in. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+    """
+
+    proposal_decision_id: ProposalDecisionId
+    optimisation_pass_id: OptimisationPassId
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+
+
 class ProposalDecision(_Object):
     """One appended expert decision. Never changed; the proposal's latest one is current -- unless
-    that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``."""
+    that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``.
+
+    ``carried_from`` (`UI-B-14`) is ``null`` for a decision an expert made directly and names the source when the
+    expert carried it over from an earlier version's pass; the decision is the confirming expert's own either way
+    (``actor_user_uid``), and a later decision on the proposal supersedes it like any other."""
 
     proposal_decision_id: ProposalDecisionId
     optimisation_proposal_id: OptimisationProposalId
@@ -4363,6 +4385,7 @@ class ProposalDecision(_Object):
     actor_user_uid: UserUid
     actor_label: Annotated[str, Field(min_length=1, max_length=254)]
     decided_at: datetime
+    carried_from: ProposalDecisionCarriedFrom | None
 
 
 class OptimisationProposal(_Object):
@@ -4429,6 +4452,29 @@ class DecideOptimisationProposalRequest(_Object):
     comment: Annotated[str, Field(min_length=1, max_length=2000)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+
+
+class CarryOverProposalDecisionsRequest(_Object):
+    """`UI-B-14` (contract 1.37.0): the pass whose decisions in force are carried into the pass of the path."""
+
+    source_optimisation_pass_id: OptimisationPassId
+
+
+class ProposalDecisionCarryoverReport(_Object):
+    """`UI-B-14`: what a carryover did. Every decision in force of the source pass (``source_decided``) is counted in
+    exactly one of four outcomes: ``carried`` (appended to the target pass), ``target_decided`` (the one proposal of the
+    target with the same content already has an event, which stands), ``ambiguous`` (more than one proposal of either
+    pass has that content, so nothing is guessed) or ``unmatched`` (no proposal of the target pass has it).
+    ``source_version_ordinal`` is the display order of the source's version («V2»), never an identity."""
+
+    optimisation_pass_id: OptimisationPassId
+    source_optimisation_pass_id: OptimisationPassId
+    source_version_ordinal: Annotated[int, Field(ge=1)]
+    source_decided: Annotated[int, Field(ge=0, le=30000)]
+    carried: Annotated[int, Field(ge=0, le=30000)]
+    target_decided: Annotated[int, Field(ge=0, le=30000)]
+    ambiguous: Annotated[int, Field(ge=0, le=30000)]
+    unmatched: Annotated[int, Field(ge=0, le=30000)]
 
 
 class ProposalDecisionResult(_Object):

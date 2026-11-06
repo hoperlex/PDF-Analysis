@@ -212,7 +212,7 @@ export function synthesizedEnvelope(
   correlationId: string,
 ): ErrorEnvelope {
   return {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     correlation_id: correlationId,
     error_code: errorCode,
     message,

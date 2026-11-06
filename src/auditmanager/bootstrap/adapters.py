@@ -5712,6 +5712,33 @@ class OptimisationProposalAdapter(_SessionHolder):
             ],
         )
 
+    def carry_over_proposal_decisions(
+        self, *, optimisation_pass_id: str, source_optimisation_pass_id: str, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionCarryoverReport:
+        """`UI-B-14`: one write transaction; the role set is read inside it."""
+        from auditmanager.optimisation.public import carry_over_proposal_decisions
+
+        report = self._write(
+            lambda s: carry_over_proposal_decisions(
+                s,
+                optimisation_pass_id=optimisation_pass_id,
+                source_optimisation_pass_id=source_optimisation_pass_id,
+                idempotency_key=idempotency_key,
+                actor_uid=user_uid,
+                actor_roles=self._roles(s, user_uid),
+            )
+        )
+        return models.ProposalDecisionCarryoverReport(
+            optimisation_pass_id=report.optimisation_pass_id,
+            source_optimisation_pass_id=report.source_optimisation_pass_id,
+            source_version_ordinal=report.source_version_ordinal,
+            source_decided=report.source_decided,
+            carried=report.carried,
+            target_decided=report.target_decided,
+            ambiguous=report.ambiguous,
+            unmatched=report.unmatched,
+        )
+
     def list_accepted_optimisation_proposals(
         self, *, project_uid: str | None, section_code: str | None, user_uid: str
     ) -> Sequence[models.AcceptedOptimisationProposal]:
@@ -5800,6 +5827,7 @@ def _optimisation_pass_view(record: Any, labels: "_Labels") -> models.Optimisati
         project_uid=record.project_uid,
         document_uid=record.document_uid,
         version_uid=record.version_uid,
+        version_ordinal=record.version_ordinal,
         run_id=record.run_id,
         text_layer_sha256=record.text_layer_sha256,
         price_list_id=record.price_list_id,
@@ -5833,6 +5861,14 @@ def _proposal_decision_view(record: Any, labels: "_Labels") -> models.ProposalDe
         actor_user_uid=record.actor_user_uid,
         actor_label=labels.of(record.actor_user_uid),
         decided_at=record.decided_at,
+        carried_from=None
+        if record.carried_from is None
+        else models.ProposalDecisionCarriedFrom(
+            proposal_decision_id=record.carried_from.proposal_decision_id,
+            optimisation_pass_id=record.carried_from.optimisation_pass_id,
+            version_uid=record.carried_from.version_uid,
+            version_ordinal=record.carried_from.version_ordinal,
+        ),
     )
 
 

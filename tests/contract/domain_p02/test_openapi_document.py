@@ -130,6 +130,8 @@ REQUIRED_OPERATIONS = {
     # `UI-PARITY-OPT-DECISIONS`, `UI-B-15`. The pass's proposals as a workbook, and the decisions loaded back from it.
     "exportOptimisationProposalsXlsx",
     "importOptimisationProposalDecisions",
+    # `UI-PARITY-OPT-CARRYOVER`, `UI-B-14`. The decisions of an earlier version's pass, carried into this one by content.
+    "carryOverProposalDecisions",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
     # `UI-PARITY-P0N`. One project as the listing gives it.
@@ -454,6 +456,8 @@ WRITE_OPERATIONS = {
     # `UI-PARITY-P0L`. Appends decision events, so it is keyed like `appendDecision`; a replay answers the stored report.
     # `UI-B-15` (1.35.0): the decisions of a proposals workbook are appended under one key, like `importRunDecisions`.
     "importOptimisationProposalDecisions",
+    # `UI-B-14` (1.37.0): the carried decisions are appended under one key, each under a key derived from it.
+    "carryOverProposalDecisions",
     "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",

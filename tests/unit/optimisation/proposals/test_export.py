@@ -47,6 +47,7 @@ PASS = OptimisationPassRecord(
     started_by_user_uid="usr_01M2545JSD15ETSNNV904XA001",
     started_at=datetime(2026, 10, 20, 9, 0, tzinfo=timezone.utc),
     decision_counts={"pending": 1, "accept": 0, "reject": 0, "revise": 0},
+    version_ordinal=1,
 )
 
 
