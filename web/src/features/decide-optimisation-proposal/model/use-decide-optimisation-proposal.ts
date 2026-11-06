@@ -2,7 +2,8 @@
 
 /**
  * `decideOptimisationProposal` (`W60-OPT-PROPOSALS-01`): an expert's accept, reject or revise
- * (with a comment) on one proposal.
+ * (with a comment) on one proposal, or the withdrawal of the decision in force (`revoke`,
+ * `UI-B-12`, «Снять решение»).
  *
  * **One key per intent, dropped when the intent completes.** The same verdict and comment on
  * the same proposal pressed again after a failure carries the same `Idempotency-Key`, so a
@@ -21,8 +22,9 @@
  * proposal, the verdict and the comment together.
  *
  * **What a success changes.** The pass's proposals (the decided one's current decision),
- * every project's passes (their counts by decision) and the proposal's history. A decision
- * touches no finding, so nothing under `findings` or the dashboard is invalidated.
+ * every project's passes (their counts by decision), the proposal's history and the accepted
+ * list of the sections (`UI-B-27`: an acceptance joins it, a withdrawal or another verdict leaves
+ * it). A decision touches no finding, so nothing under `findings` or the dashboard is invalidated.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -91,6 +93,7 @@ export function useDecideOptimisationProposal() {
       intentRef.current = null;
       void client.invalidateQueries({ queryKey: queryKeys.optimisation.proposalsOf(command.passId) });
       void client.invalidateQueries({ queryKey: queryKeys.optimisation.allPasses() });
+      void client.invalidateQueries({ queryKey: queryKeys.optimisation.allAccepted() });
       void client.invalidateQueries({
         queryKey: queryKeys.optimisation.proposalDecisions(command.proposalId),
       });

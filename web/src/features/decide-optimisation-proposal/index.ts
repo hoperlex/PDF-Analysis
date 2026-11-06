@@ -13,5 +13,6 @@ export type {
 export {
   ProposalDecisionForm,
   ProposalDecisionFormView,
+  decisionInForce,
   normalisedComment,
 } from './ui/proposal-decision-form';

@@ -47,6 +47,7 @@ import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
+import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
@@ -58,6 +59,7 @@ import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisati
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
+import { SectionAcceptedFilters, SectionAcceptedList } from '@/widgets/section-accepted-optimisations';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
@@ -163,6 +165,7 @@ import {
 } from '../workers/executor-fixtures';
 import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
+import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
 import {
   AVAILABLE_RUN_ID, GROUP_ID, accountFixture, groupReviewFixture, runFindingsPage, v3FindingFixture,
 } from '../analysis-settings/ar-v3-beta-review-fixtures';
@@ -953,6 +956,23 @@ export function screens(): Screen[] {
       })),
     }),
     onPage: null, onSelectProject: noop,
+  })));
+  // `UI-B-27`: «Принято» — the filters with the project the address names, a page with a saving and one without,
+  // the empty page, and a page that has a page before and after it.
+  // The page: its two tabs, the open one by `aria-selected`.
+  add('SectionOptimisationPage specification tab', withRouter(createElement(SectionOptimisationPage)));
+  add('SectionAcceptedFilters', render(createElement(SectionAcceptedFilters, {
+    sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
+    projects: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
+  })));
+  add('SectionAcceptedList ready', render(createElement(SectionAcceptedList, {
+    page: acceptedPage(), hasPrevious: false, onPrevious: noop, onNext: noop,
+  })));
+  add('SectionAcceptedList paged', render(createElement(SectionAcceptedList, {
+    page: acceptedPage({ page: { next_cursor: 'c2' }, total: 41 }), hasPrevious: true, onPrevious: noop, onNext: noop,
+  })));
+  add('SectionAcceptedList empty', render(createElement(SectionAcceptedList, {
+    page: acceptedPage({ items: [], total: 0 }), hasPrevious: false, onPrevious: noop, onNext: noop,
   })));
   add('AnalysisProfileTable loaded', render(createElement(AnalysisProfileTable, {
     items: [
