@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 import type { RunQueueReason, RunState, RunStatus } from '@/shared/api';
 import { RUN_QUEUE_REASON_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import {
-  QUEUE_REASON_LABELS, RUN_PAGE_LIMIT, RunRow, runExecutorLine, runExecutorSentence, runQueueReason,
+  QUEUE_REASON_LABELS, RUN_PAGE_LIMIT, RunTable, runExecutorLine, runExecutorSentence, runQueueReason,
   runQueueReasonLabel, runWaitingSentence,
 } from '@/entities/audit-run';
 import { RunList } from '@/widgets/run-list';
@@ -38,7 +38,7 @@ function queued(over: Partial<RunStatus> = {}): RunStatus {
 }
 
 function row(run: RunStatus): string {
-  return render(createElement(RunRow, { run, href: '/run' }));
+  return render(createElement(RunTable, { runs: [run], runHref: () => '/run', reviewHref: () => '/review' }));
 }
 
 function page(run: RunStatus): string {
@@ -127,7 +127,7 @@ describe('the executor line of a run', () => {
   });
 });
 
-describe('the run list row', () => {
+describe('the run table row', () => {
   it('says the executor is busy, and names it, in the place of «Ждёт исполнителя»', () => {
     const markup = row(queued({ queue_reason: 'executor_at_capacity' }));
     expect(markup).toContain(`${BUSY} — «Основной шлюз», модель «модель-основная»`);

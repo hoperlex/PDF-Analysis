@@ -123,7 +123,7 @@ import {
   VERSION_PAGE_LIMIT,
 } from '@/entities/document-version';
 import type { StageRow } from '@/entities/audit-run';
-import { RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -1604,6 +1604,33 @@ export function screens(): Screen[] {
     add('DocumentList loaded', at(createElement(DocumentList, { projectUid: PROJECT_UID })));
     add('VersionList loaded', at(createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID })));
     add('RunList loaded', at(createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    // `RunTable`: the dense run table in the states its cells branch on — the executor and preset lines
+    // under the badge (a queued run waiting for its executor, a published run started with a preset), a
+    // run with a starter's label, a failed run (no «Разобрать», no findings count), a partial run, and the
+    // AR v3 beta run (published, yet no canonical review to open) — so the muted second line, the
+    // «неизвестно» of an absent starter, the figures and the action links are measured where they are drawn.
+    {
+      const runsClient = populatedClient();
+      const otherId = (digit: string): string => `${RUN_ID.slice(0, -1)}${digit}`;
+      const executor = { connection_id: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', display_name: 'Основной шлюз', pin_id: 'модель-основная' };
+      runsClient.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), {
+        items: [
+          runStatus({
+            run_id: RUN_ID,
+            executor,
+            preset: { preset_id: 'pst_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', revision_no: 2, name: 'Быстрый черновик' },
+            started_by_label: 'Проверкина А. С.',
+          }),
+          runStatus({ run_id: otherId('9'), state: 'queued', terminal_at: null, executor, queue_reason: 'executor_at_capacity' }),
+          runStatus({ run_id: otherId('8'), state: 'running', terminal_at: null, published_finding_count: 0 }),
+          runStatus({ run_id: otherId('7'), state: 'failed', terminal_reason: 'dependency_unavailable' as ErrorCode, published_finding_count: 0 }),
+          runStatus({ run_id: otherId('6'), state: 'partial', degradation_set: ['text_analysis'], started_by_label: 'Проверкина А. С.' }),
+          runStatus({ run_id: otherId('5'), analysis_profile_id: AR_V3_BETA_PROFILE_ID }),
+        ],
+        page: { next_cursor: null },
+      });
+      add('RunList table states', renderScreen(runsClient, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
+    }
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
     add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
     // `CMP-VERSION-MARK-01`: the same four screens over a version admitted for comparison only

@@ -33,7 +33,7 @@ import type {
 } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
-import { RunRow, useRunList } from '@/entities/audit-run';
+import { RunTable, useRunList } from '@/entities/audit-run';
 import { StartRunControl } from '@/features/start-run';
 
 export interface RunListProps {
@@ -114,11 +114,11 @@ function VersionRunList({
 
   return (
     <div data-run-count={page.items.length}>
-      <ul className="am-rows">
-        {page.items.map((run) => (
-          <RunRow key={run.run_id} run={run} href={routes.run(projectUid, run.run_id)} />
-        ))}
-      </ul>
+      <RunTable
+        runs={page.items}
+        runHref={(run) => routes.run(projectUid, run.run_id)}
+        reviewHref={(run) => routes.review(projectUid, run.run_id)}
+      />
       <div className="am-pager">
         {cursor === undefined ? null : (
           <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setCursor(undefined)}>

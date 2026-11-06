@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import type { RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import {
-  RUN_PAGE_LIMIT, RunRow, runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,
+  RUN_PAGE_LIMIT, RunTable, runExecutorLine, runExecutorSentence, runExecutorValue, runWaitingSentence,
 } from '@/entities/audit-run';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
@@ -24,7 +24,7 @@ const CONNECTION = 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 const EXECUTOR = { connection_id: CONNECTION, display_name: 'Основной шлюз', pin_id: 'модель-основная' };
 
 function row(over: Partial<RunStatus>): string {
-  return render(createElement(RunRow, { run: runStatus(over), href: '/run' }));
+  return render(createElement(RunTable, { runs: [runStatus(over)], runHref: () => '/run', reviewHref: () => '/review' }));
 }
 
 function page(over: Partial<RunStatus>): string {
@@ -71,7 +71,7 @@ describe('the words', () => {
   });
 });
 
-describe('the run list row', () => {
+describe('the run table row', () => {
   it('names the executor and the pinned model', () => {
     const markup = row({ executor: EXECUTOR });
     expect(markup).toContain('data-run-executor');
