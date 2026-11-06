@@ -172,8 +172,9 @@ describe('the registry is the route tree: every page has a row and every row a p
     // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
     // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
     // the version's «Блоки» tab: 32 -> 33. `UI-PARITY-P0P` added «График работ»: 33 -> 34.
-    expect(routeAddresses().length).toBe(34);
-    expect(REGISTRY.length).toBe(34);
+    // `UI-A-94` (contract 1.36.0) added «Журнал входов»: 34 -> 35.
+    expect(routeAddresses().length).toBe(35);
+    expect(REGISTRY.length).toBe(35);
   });
 
   it('has no page without a row and no row without a page', () => {

@@ -18,8 +18,8 @@
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
 }
 
 .tableWrap {

@@ -30,6 +30,7 @@ import { sectionNavigationOf } from '@/_app/section-navigation';
 import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
+import { AuthEventList } from '@/widgets/auth-event-list';
 import { UserList } from '@/widgets/user-list';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
@@ -2318,6 +2319,18 @@ export function screens(): Screen[] {
       items: [USER_ACCOUNT], page: { next_cursor: null },
     });
     add('UserList populated', renderScreen(client, createElement(UserList)));
+  }
+  {
+    // Contract 1.36.0 (`UI-A-94`): «Журнал входов», with a line that carries a detail and one about a deleted account.
+    const client = newClient();
+    client.setQueryData(queryKeys.users.authEvents({ limit: 50 }), {
+      items: [
+        { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', event_type: 'sign_in_succeeded', occurred_at: '2026-11-05T09:30:15Z', subject_user_uid: USER_ACCOUNT.user_uid, subject_label: USER_ACCOUNT.display_label, actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: null, default_credential: true },
+        { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', event_type: 'role_revoked', occurred_at: '2026-11-05T09:20:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', subject_label: null, actor_user_uid: USER_ACCOUNT.user_uid, actor_label: USER_ACCOUNT.display_label, source: 'api', role: 'expert', failures: null, default_credential: null },
+      ],
+      page: { next_cursor: 'cursor-next-1' },
+    });
+    add('AuthEventList populated', renderScreen(client, createElement(AuthEventList)));
   }
   add('ManageUserControls active', renderScreen(newClient(), createElement(ManageUserControls, { account: USER_ACCOUNT })));
   add('ManageUserControls archived', renderScreen(newClient(), createElement(ManageUserControls, { account: { ...USER_ACCOUNT, archived_at: '2026-10-08T00:00:00Z' } })));
