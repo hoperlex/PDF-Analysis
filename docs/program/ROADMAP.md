@@ -269,6 +269,8 @@ work, unless the lanes of that work run out.
 
 Design of items 2 and 3: [DECISION-MEMORY-01](DECISION-MEMORY-01.md) (design only; the questions only the owner can answer are in its section 9).
 
+Design of item 1: [AR-V3-OPT-IN-01](AR-V3-OPT-IN-01.md) (design only; a deployment allow switch, a per-start choice and provenance on every run; the questions only the owner can answer are in its section 9).
+
 ## Normative corpus — PostgreSQL authority, pgvector retrieval, S3 custody
 
 **Owner direction, 2026-10-01.** [ADR-0020](../architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md)
