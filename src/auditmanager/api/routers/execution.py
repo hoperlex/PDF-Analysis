@@ -118,6 +118,17 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
         )
         return json_response(200, encode_json(item.model_dump(mode="json", exclude_unset=True)))
 
+    @router.get(
+        "/execution/dispatch", operation_id="getExecutionDispatch",
+        tags=["execution"], response_model=models.ExecutionDispatchStatus,
+        responses={**success(200, "The durable dispatch pause state."),
+                   **envelope_responses(401, 403, 500, 503)},
+    )
+    def get_dispatch(subject: CurrentSubject) -> WireResponse:
+        # `UI-PARITY-P0E` (ruling `R-151f`): the pause state without reading the queue.
+        status = execution.get_dispatch_status()
+        return json_response(200, encode_json(status.model_dump(mode="json")))
+
     @router.put(
         "/execution/dispatch", operation_id="setExecutionPaused",
         tags=["execution"], response_model=models.ExecutionDispatchStatus,

@@ -43,7 +43,7 @@ import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
@@ -54,7 +54,7 @@ import { ArV3BetaReview } from '@/widgets/ar-v3-beta-review';
 import { ArV3BetaPack } from '@/widgets/ar-v3-beta-pack';
 import { StartArV3GroupView, classifyArV3GroupStartFailure } from '@/features/start-ar-v3-group';
 import { SpecificationPricesAnswer, SpecificationPricesChooser } from '@/widgets/specification-prices';
-import { ProposalSetChooser } from '@/widgets/optimisation-proposals';
+import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisation-proposals';
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
@@ -67,7 +67,16 @@ import { ChangesPanelView, ComparisonViewerView, canShowOverlay, initialState, r
 import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
-import { FindingList } from '@/widgets/finding-list';
+import { FindingList, FindingRowActions } from '@/widgets/finding-list';
+import { BatchStartPanelView } from '@/features/start-run';
+import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
+import { ExecutionStatusControlView } from '@/features/set-execution-status';
+import { ImportDecisionsView } from '@/features/import-decisions';
+import { ProposalDecisions } from '@/widgets/proposal-journal';
+import { ProjectSections } from '@/widgets/project-sections';
+import { DocumentCardGrid } from '@/entities/document-version';
+import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
+import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
@@ -92,7 +101,7 @@ import type {
   RunState,
   RunStatus,
 } from '@/shared/api';
-import type { DocumentVersion, Project, SectionReview } from '@/shared/api';
+import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
 import type { Account } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
@@ -103,6 +112,7 @@ import { MenuView } from '@/shared/ui/menu';
 import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
+import { PauseStatusView } from '@/widgets/pause-status';
 import { UpdateTime } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
@@ -162,7 +172,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.19.0',
+    contract_version: '1.30.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -557,6 +567,13 @@ export function screens(): Screen[] {
         'AppFrame, the project selector open, a refresh failed over a loaded list',
         seeded('/dashboard', '', SWITCHER_PAGE, apiError(503, 'dependency_unavailable', true)),
       );
+      // `R-151f`: the queue's pause state in the strip -- paused with the switch asked and a refusal, and unread.
+      const pauseView = (over: Partial<Parameters<typeof PauseStatusView>[0]>) => inStrip(createElement(PauseStatusView, {
+        status: { paused: true, changed_at: '2026-11-05T10:00:00Z' }, failed: false, mayToggle: true, asking: true,
+        busy: false, error: 'Недостаточно прав для этого действия.', onAsk: noop, onConfirm: noop, onCancel: noop, ...over,
+      }));
+      add('AppFrame, the pause state: paused, the switch asked, a refusal', pauseView({}));
+      add('AppFrame, the pause state: unread', pauseView({ status: undefined, failed: true }));
     }
     add(
       'Release history, loading',
@@ -597,7 +614,8 @@ export function screens(): Screen[] {
         onClose: () => undefined, onRetry: () => undefined,
       })),
     );
-    for (const pathname of ['/', '/blocks']) {
+    // `R-151m` took «Блоки» out of the menu; «Нормы» is the knowledge item drawn current.
+    for (const pathname of ['/', '/norms']) {
       add(
         `AppFrame, the navigation open, ${pathname} current`,
         inBar(
@@ -1002,12 +1020,30 @@ export function screens(): Screen[] {
     const loaded = proposalShapes().find((shape) => shape.name === 'proposals-loaded');
     if (loaded !== undefined) add('OptimisationProposals loaded', renderScreen(client, loaded.make()));
   }
+  // `R-151r`: the project's summary, linking each classified document's own «Оптимизация» tab.
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), {
+      items: [{ ...version(), classification: { ...CONFIRMED } }],
+      page: { next_cursor: 'Y3Vyc29y' },
+    });
+    add('OptimisationByDocument loaded', renderScreen(client, createElement(OptimisationByDocument, { projectUid: PROJECT_UID })));
+  }
   for (const shape of proposalShapes()) {
     if (shape.name === 'proposals-loaded') continue;
     const client = newClient();
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
+  // M-17 (`R-151t`): the overview tiles over «Процессы», with servers not online and a partial registry.
+  add('WorkersOverview with the queue', render(createElement(WorkersOverviewView, {
+    workers: { online: 1, total: 3, onlineSlots: 4, freeSlots: 2, partial: true },
+    queue: [
+      { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
+      { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
+      { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
+    ],
+  })));
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {
@@ -1158,6 +1194,131 @@ export function screens(): Screen[] {
       }),
     ),
   );
+  // `R-151h`: the knowledge base's proposal half, a decision with a comment and one without.
+  add('ProposalDecisions loaded', render(createElement(ProposalDecisions, {
+    records: [
+      {
+        proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8B',
+        optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'accept', comment: 'Аналог подходит по характеристикам.',
+        actor_label: 'Иванова А. С.', decided_at: '2026-11-06T09:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+        document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID, section: 'AR',
+        row_text: 'Дверь металлическая ДМ-1', proposed_vendor: 'ООО «Двери»', unit: 'шт',
+      },
+      {
+        proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C',
+        optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'revise', comment: null,
+        actor_label: 'Иванова А. С.', decided_at: '2026-11-06T08:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+        document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID,
+        row_text: 'Лента монтажная', proposed_vendor: 'ООО «Крепёж»', unit: 'м',
+      },
+    ],
+  })));
+  // `R-151g`: an accepted finding's execution status in its row, and the control with a refusal.
+  add('FindingList with an execution status', render(createElement(FindingList, {
+    groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
+      ? { ...finding, current_verdict: 'accepted' as const, execution_status: 'amended' as const }
+      : finding)),
+    selectedFindingUid: null,
+    onSelect: noop,
+  })));
+  add('ExecutionStatusControl with a refusal', render(createElement(ExecutionStatusControlView, {
+    status: 'taken_into_account', busy: false, error: 'Статус ставится только принятой находке.', onChange: noop,
+  })));
+  // `R-151d`: the decision import while sending, and its report with refused rows and a file refusal.
+  add('ImportDecisions while sending', render(createElement(ImportDecisionsView, {
+    pending: true, report: null, failure: null, onChoose: noop,
+  })));
+  add('ImportDecisions with a report and a refusal', render(createElement(ImportDecisionsView, {
+    pending: false,
+    report: {
+      run_id: RUN_ID, recorded: 2, unchanged: 40, refused: 1,
+      rows: [{ row: 7, outcome: 'refused', reason: 'unknown_finding' }],
+    },
+    failure: 'Это не наша выгрузка: нужен лист «Замечания» с колонкой «ID замечания». Скачайте Excel заново.',
+    onChoose: noop,
+  })));
+  // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
+  add(
+    'FindingList with row actions, recorded and refused',
+    render(
+      createElement(FindingList, {
+        groups: groupByCategory(FINDINGS),
+        selectedFindingUid: FINDING_UID,
+        onSelect: noop,
+        renderRowActions: (finding: { readonly finding_uid: string; readonly current_verdict: Verdict }) =>
+          createElement(FindingRowActions, {
+            verdict: finding.current_verdict,
+            sending: finding.finding_uid === FINDING_UID ? 'accept' : null,
+            note: finding.finding_uid === FINDING_UID
+              ? { tone: 'ok', text: 'Записано' }
+              : { tone: 'fail', text: 'Перед принятием выберите важность. Ничего не отправлено.' },
+            onAccept: noop,
+            onReject: noop,
+          }),
+      }),
+    ),
+  );
+  // `R-151a`: the document's lifecycle controls, archived, renaming with a refusal; and an archived document's card.
+  add('DocumentLifecycle archived, renaming, refused', render(createElement(DocumentLifecycleView, {
+    title: 'Архитектурные решения', archived: true, draft: '', asking: false, busy: false,
+    error: 'Недостаточно прав для этого действия.',
+    onEdit: noop, onDraft: noop, onSave: noop, onCancelEdit: noop, onAsk: noop, onConfirm: noop, onCancelAsk: noop,
+  })));
+  // `R-151e`: tags on the document page (chips with remove, the add field, a refusal) and with none.
+  add('DocumentTags editable, with a refusal', render(createElement(DocumentTagsView, {
+    tags: ['Корпус 1', 'Секция А'], mayEdit: true, draft: 'корпус 1', busy: false, error: 'Метка не сохранена.',
+    onDraft: noop, onAdd: noop, onRemove: noop,
+  })));
+  add('DocumentTags read-only, none', render(createElement(DocumentTagsView, {
+    tags: [], mayEdit: false, draft: '', busy: false, error: null, onDraft: noop, onAdd: noop, onRemove: noop,
+  })));
+  // `R-151e`: the project's tag filter, from its catalogue.
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.tags(PROJECT_UID), { items: [{ tag: 'Корпус 1', document_count: 3 }] });
+    client.setQueryData(queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT), {
+      items: [{ ...version(), tags: ['Корпус 1'] }], page: { next_cursor: null },
+    });
+    add('ProjectSections with a tag filter', renderScreen(client, createElement(ProjectSections, { projectUid: PROJECT_UID })));
+  }
+  add('DocumentCardGrid with an archived document', render(createElement(DocumentCardGrid, {
+    documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z', tags: ['Корпус 1'] }],
+    addresses: () => ({ href: '/projects', documentHref: '/projects' }),
+  })));
+  // `R-151c`: the batch start panel -- one estimate ready and started, one ready and refused, one being sent, one
+  // without an estimate; the agreement and the total.
+  {
+    const uid = (n: string) => `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never;
+    const entries = [
+      { versionUid: uid('A1'), title: 'Пояснительная записка' },
+      { versionUid: uid('A2'), title: 'Архитектурные решения' },
+      { versionUid: uid('A3'), title: 'Конструкции железобетонные' },
+      { versionUid: uid('A4'), title: 'Генеральный план' },
+    ];
+    const ready = (n: string) => ({ kind: 'ready' as const, estimate: costEstimate({ version_uid: uid(n) }) });
+    add(
+      'BatchStartPanel, estimates read, outcomes of each kind',
+      render(createElement(BatchStartPanelView, {
+        projectUid: PROJECT_UID,
+        entries,
+        estimates: new Map<never, BatchEstimate>([
+          [uid('A1'), ready('A1')], [uid('A2'), ready('A2')], [uid('A3'), ready('A3')],
+          [uid('A4'), { kind: 'failed' as const, text: 'Сервис оценки недоступен.' }],
+        ]),
+        outcomes: new Map<never, BatchOutcome>([
+          [uid('A1'), { kind: 'started' as const, run: runStatus() }],
+          [uid('A2'), { kind: 'refused' as const, text: 'Версия не классифицирована.' }],
+          [uid('A3'), { kind: 'sending' as const }],
+        ]),
+        estimating: false,
+        starting: false,
+        agreed: true,
+        onAgree: noop,
+        onStart: noop,
+        onClose: noop,
+      })),
+    );
+  }
   add(
     'FindingList failed',
     render(

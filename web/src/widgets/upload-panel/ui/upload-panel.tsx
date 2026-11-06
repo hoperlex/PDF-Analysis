@@ -24,8 +24,8 @@
 import type { ReactNode } from 'react';
 
 import type { DocumentUid, DocumentVersion, ProjectUid } from '@/shared/api';
-import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES } from '@/entities/document-version';
-import { UploadDocumentForm, UploadDocumentVersionForm } from '@/features/upload-document';
+import { PC01_UPLOAD_ENVELOPE, UPLOAD_ENVELOPE_RULES, documentCardTitle, useDocumentList } from '@/entities/document-version';
+import { UploadDocumentForm, UploadDocumentVersionForm, UploadManyForm } from '@/features/upload-document';
 import { useMayActAsExpert } from '@/entities/account';
 
 export interface UploadPanelProps {
@@ -50,7 +50,28 @@ function UploadPanelInner({ projectUid, onUploaded }: UploadPanelProps) {
         projectUid={projectUid}
         {...(onUploaded === undefined ? {} : { onUploaded })}
       />
+
+      <UploadMany projectUid={projectUid} />
     </section>
+  );
+}
+
+/**
+ * `R-151b`: several files at once, each to its explicit target. The targets are the project's documents from the
+ * read the project page already makes (its first page; the form says when there are more).
+ */
+function UploadMany({ projectUid }: { readonly projectUid: ProjectUid }) {
+  const documents = useDocumentList(projectUid);
+  const items = documents.data?.items ?? [];
+  return (
+    <details data-upload-many-panel="">
+      <summary>Несколько файлов</summary>
+      <UploadManyForm
+        projectUid={projectUid}
+        documents={items.map((item) => ({ documentUid: item.document_uid, title: documentCardTitle(item) }))}
+        documentsPartial={(documents.data?.page.next_cursor ?? null) !== null}
+      />
+    </details>
   );
 }
 

@@ -24,3 +24,11 @@ export { DEFAULT_EXECUTOR_LABEL, ExecutorSelectView } from './ui/executor-select
 
 export type { StartRunFailureViewProps } from './ui/start-run-failure';
 export { StartRunFailureView } from './ui/start-run-failure';
+
+// `R-151c`: starting several documents with one agreement.
+export type { BatchEntry, BatchEstimate, BatchOutcome, BatchTotals } from './model/batch-start';
+export { batchConsent, batchTotals, estimateFits, minimumCeiling } from './model/batch-start';
+export type { BatchStartApi } from './model/use-batch-start';
+export { useBatchStart } from './model/use-batch-start';
+export type { BatchStartPanelProps, BatchStartPanelViewProps } from './ui/batch-start-panel';
+export { BatchStartPanel, BatchStartPanelView } from './ui/batch-start-panel';

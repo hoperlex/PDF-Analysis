@@ -16,6 +16,28 @@
   gap: var(--am-gap);
 }
 
+/*
+ * A revision's settings two pairs to a row on a wide screen, as a dense settings table: nine rows of a
+ * full-width list made every connection card about 600px tall.
+ */
+.revision {
+  grid-template-columns:
+    minmax(8rem, max-content) minmax(0, 1fr)
+    minmax(8rem, max-content) minmax(0, 1fr);
+  column-gap: var(--am-gap);
+}
+
+.revision > dt,
+.revision > dd {
+  grid-column: auto;
+}
+
+@media (max-width: 900px) {
+  .revision {
+    grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  }
+}
+
 .card {
   min-width: 0;
   max-width: 100%;

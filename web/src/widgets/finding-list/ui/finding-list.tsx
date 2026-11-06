@@ -21,13 +21,14 @@
  */
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import type { Finding, FindingCategory, Verdict } from '@/shared/api';
+import type { Finding, FindingCategory, Severity, Verdict } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
 import type { TableColumn } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
-import { SeverityBadge, countGrouped } from '@/entities/finding';
+import { EXECUTION_STATUS_LABELS, SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
 import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
@@ -50,6 +51,66 @@ export interface FindingListProps {
   /** The verdict filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly verdictFilter?: VerdictFilter | undefined;
   readonly onVerdictFilterChange?: ((filter: VerdictFilter) => void) | undefined;
+  /**
+   * `R-151n`: the quick ✓/✕ of a finding, drawn beside its row and in the table's «Решение» column. The page
+   * passes it only to a session that may decide; without it the list draws no action at all.
+   */
+  readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
+  /** `UI-PARITY-P0O`: the drawing sheet of a PDF page, when the version's portal geometry names one. */
+  readonly sheetOf?: ((page: number) => number | undefined) | undefined;
+  /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
+  readonly severityFilter?: SeverityFilter | undefined;
+  readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
+}
+
+/**
+ * `R-151j`: the severity strip. The canonical severity is the expert's decision (`decided_severity`); a finding
+ * without one is «Не определена». The model's proposal (`observation.proposed_severity`) is counted on its own,
+ * labelled row and never filters or decides (AGENTS §4). Counts and filter share one scope: the whole run, which
+ * the page loads entirely (`R-150i`).
+ */
+export type SeverityFilter = 'all' | Severity | 'undetermined';
+
+const SEVERITY_ORDER: readonly Severity[] = ['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'];
+
+export interface SeverityTally {
+  readonly decided: Readonly<Record<Severity | 'undetermined', number>>;
+  readonly proposed: Readonly<Record<Severity, number>>;
+}
+
+export function tallySeverity(groups: readonly FindingGroup<Finding>[]): SeverityTally {
+  const decided: Record<Severity | 'undetermined', number> = {
+    critical: 0, economic: 0, operational: 0, recommendation: 0, check_adjacent: 0, undetermined: 0,
+  };
+  const proposed: Record<Severity, number> = { critical: 0, economic: 0, operational: 0, recommendation: 0, check_adjacent: 0 };
+  for (const group of groups) {
+    for (const finding of group.findings) {
+      decided[finding.decided_severity ?? 'undetermined'] += 1;
+      const proposal = finding.observation.proposed_severity;
+      if (proposal !== undefined) proposed[proposal] += 1;
+    }
+  }
+  return { decided, proposed };
+}
+
+/** A severity filter read from the address: an absent or unknown value is «Все». */
+export function severityFilterOf(value: string | null): SeverityFilter {
+  return value === 'undetermined' || SEVERITY_ORDER.includes(value as Severity) ? (value as SeverityFilter) : 'all';
+}
+
+export function filterBySeverity(
+  groups: readonly FindingGroup<Finding>[],
+  filter: SeverityFilter,
+): readonly FindingGroup<Finding>[] {
+  if (filter === 'all') return groups;
+  return groups
+    .map((group) => ({ ...group, findings: group.findings.filter((f) => (f.decided_severity ?? 'undetermined') === filter) }))
+    .filter((group) => group.findings.length > 0);
+}
+
+/** Whether a run carries any severity at all; a legacy run has none and draws no strip. */
+function hasSeverity(tally: SeverityTally): boolean {
+  return SEVERITY_ORDER.some((severity) => tally.decided[severity] > 0 || tally.proposed[severity] > 0);
 }
 
 /**
@@ -107,14 +168,30 @@ const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string 
  * norms it cites and the pages — over the same filtered findings as the list. A row's number opens the
  * finding beside the table, as a row of the list does.
  */
+/**
+ * `UI-PARITY-P0O`: a finding's pages as the original states them, with the sheet first («Лист 3 · стр. 5») when the
+ * portal geometry names a sheet for every page; otherwise the PDF pages alone, never a page number passed off as a sheet.
+ */
+export function pagesLabel(pages: readonly number[], sheetOf?: (page: number) => number | undefined): string {
+  const sheets = sheetOf === undefined ? [] : pages.map((page) => sheetOf(page));
+  const known = pages.length > 0 && sheets.length === pages.length && sheets.every((sheet) => sheet !== undefined);
+  const pageText = `стр. ${pages.join(', ')}`;
+  if (!known) return pageText;
+  return `${pages.length === 1 ? 'Лист' : 'Листы'} ${sheets.join(', ')} · ${pageText}`;
+}
+
 function FindingTable({
   groups,
   selectedFindingUid,
   onSelect,
+  renderRowActions,
+  sheetOf,
 }: {
   readonly groups: readonly FindingGroup<Finding>[];
   readonly selectedFindingUid: string | null;
   readonly onSelect: (findingUid: string) => void;
+  readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
+  readonly sheetOf?: ((page: number) => number | undefined) | undefined;
 }) {
   const rows = groups.flatMap((group) => group.findings);
   const numberOf = new Map(rows.map((finding, index) => [finding.finding_uid, index + 1]));
@@ -123,7 +200,7 @@ function FindingTable({
       key: 'number',
       header: '№',
       cell: (finding) => (
-        <button type="button" className="am-button am-button--quiet" data-finding-uid={finding.finding_uid} onClick={() => onSelect(finding.finding_uid)}>
+        <button type="button" className="am-button am-button--quiet am-button--small" data-finding-uid={finding.finding_uid} onClick={() => onSelect(finding.finding_uid)}>
           {numberOf.get(finding.finding_uid)}
         </button>
       ),
@@ -137,7 +214,8 @@ function FindingTable({
       header: 'Нормы',
       cell: (finding) => (finding.observation.norm_citations ?? []).length === 0 ? '—' : String((finding.observation.norm_citations ?? []).length),
     },
-    { key: 'pages', header: 'Стр.', cell: (finding) => declaredPages(finding.observation).join(', ') },
+    { key: 'pages', header: 'Лист / стр.', cell: (finding) => pagesLabel(declaredPages(finding.observation), sheetOf) },
+    ...(renderRowActions === undefined ? [] : [{ key: 'decision', header: 'Решение', cell: renderRowActions }]),
   ];
   return (
     <Table
@@ -164,8 +242,18 @@ export function FindingList({
   integrityFaults,
   verdictFilter,
   onVerdictFilterChange,
+  renderRowActions,
+  sheetOf,
+  severityFilter,
+  onSeverityFilterChange,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
+  const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
+  const severity = severityFilter ?? ownSeverity;
+  const setSeverity = (next: SeverityFilter) => {
+    if (onSeverityFilterChange !== undefined) onSeverityFilterChange(next);
+    else setOwnSeverity(next);
+  };
   const [view, setView] = useState<'list' | 'table'>('list');
   const filter = verdictFilter ?? ownFilter;
   const setFilter = (next: VerdictFilter) => {
@@ -194,7 +282,8 @@ export function FindingList({
   }
 
   const tally = tallyVerdicts(groups);
-  const shown = filterGroups(groups, filter);
+  const severities = tallySeverity(groups);
+  const shown = filterBySeverity(filterGroups(groups, filter), severity);
 
   return (
     <div className="am-finding-list" data-finding-count={total}>
@@ -231,6 +320,38 @@ export function FindingList({
           ))}
         </div>
       </div>
+      {hasSeverity(severities) ? (
+        <div className={styles.severities} data-severity-strip="">
+          <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
+            <span className={styles.stripLabel}>Важность (решение эксперта):</span>
+            <button
+              type="button"
+              className="am-button am-button--quiet am-button--small"
+              aria-pressed={severity === 'all'}
+              data-severity-filter="all"
+              onClick={() => setSeverity('all')}
+            >
+              Все
+            </button>
+            {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
+              <button
+                key={value}
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={severity === value}
+                data-severity-filter={value}
+                onClick={() => setSeverity(value)}
+              >
+                {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
+              </button>
+            ))}
+          </div>
+          <p className={styles.proposed} data-proposed-severity="">
+            Предложено моделью (не решение эксперта):{' '}
+            {SEVERITY_ORDER.map((value) => `${SEVERITY_LABELS[value]} ${severities.proposed[value]}`).join(' · ')}
+          </p>
+        </div>
+      ) : null}
       {faults.length > 0 ? (
         <ErrorState
           title="Нарушение целостности данных"
@@ -246,12 +367,18 @@ export function FindingList({
 
       {shown.length === 0 ? (
         <p className="am-note" data-verdict-filter-empty={filter}>
-          Находок с таким вердиктом нет.
+          {severity === 'all' ? 'Находок с таким вердиктом нет.' : 'Находок с таким отбором нет.'}
         </p>
       ) : null}
 
       {view === 'table' && shown.length > 0 ? (
-        <FindingTable groups={shown} selectedFindingUid={selectedFindingUid} onSelect={onSelect} />
+        <FindingTable
+          groups={shown}
+          selectedFindingUid={selectedFindingUid}
+          onSelect={onSelect}
+          renderRowActions={renderRowActions}
+          sheetOf={sheetOf}
+        />
       ) : null}
 
       {view === 'table' ? null : shown.map((group) => (
@@ -269,7 +396,7 @@ export function FindingList({
               const pages = declaredPages(finding.observation);
               const selected = finding.finding_uid === selectedFindingUid;
               return (
-                <li key={finding.finding_uid}>
+                <li key={finding.finding_uid} className={renderRowActions === undefined ? undefined : styles.withActions}>
                   <button
                     type="button"
                     className="am-finding-row am-button"
@@ -294,10 +421,17 @@ export function FindingList({
                         />
                       </span>
                     )}
+                    {finding.execution_status === undefined ? null : (
+                      // `R-151g`: the original's «Принято · Учтено» -- the designer's execution of an accepted finding.
+                      <span className={styles.execution} data-execution-status={finding.execution_status}>
+                        {EXECUTION_STATUS_LABELS[finding.execution_status]}
+                      </span>
+                    )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
-                      {pages.length === 1 ? `стр. ${pages[0]}` : `стр. ${pages.join(', ')}`}
+                      {pagesLabel(pages, sheetOf)}
                     </span>
                   </button>
+                  {renderRowActions === undefined ? null : renderRowActions(finding)}
                 </li>
               );
             })}

@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
+ *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
+ *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -114,7 +114,9 @@ import type {
   DashboardSummary,
   DecideOptimisationProposalRequest,
   DecisionEventPage,
+  DecisionImportReport,
   DecisionRecordPage,
+  DocumentTagList,
   DocumentUid,
   DocumentVersion,
   DocumentVersionPage,
@@ -156,11 +158,13 @@ import type {
   FailExecutorTaskRequest,
   FindingCategory,
   FindingDetail,
+  FindingExecutionState,
   FindingPage,
   FindingUid,
   GenerateComparisonSummaryRequest,
   GenerateComparisonSummaryResponse,
   IdempotencyKey,
+  ImportRunDecisionsRequest,
   IssueRunnerTokenRequest,
   IssueTokenRequest,
   IssueTokenResponse,
@@ -197,6 +201,7 @@ import type {
   ProjectSection,
   ProjectUid,
   ProposalDecisionList,
+  ProposalDecisionRecordPage,
   ProposalDecisionResult,
   ProposalDecisionState,
   ReauditRunRequest,
@@ -208,6 +213,7 @@ import type {
   RegistrationStatusResponse,
   RejectRegistrationRequest,
   ReleaseList,
+  RenameDocumentRequest,
   ReportRunnerHealthRequest,
   ResetUserPasswordRequest,
   ResumeComparisonAiJobRequest,
@@ -229,12 +235,15 @@ import type {
   SectionSpecification,
   SectionVendorList,
   SetCurrentNormSnapshotRequest,
+  SetDocumentArchivedRequest,
+  SetDocumentTagsRequest,
   SetExecutionPausedRequest,
   SetExecutorIntegrationAuthorisationRequest,
   SetExecutorRouteRequest,
   SetExecutorRoutingModeRequest,
   SetExecutorRoutingRuleRequest,
   SetExecutorSecretRequest,
+  SetFindingExecutionStatusRequest,
   SetGlobalVendorListRequest,
   SetJobPriorityRequest,
   SetProjectVendorListRequest,
@@ -309,6 +318,7 @@ import type {
   VersionComparison,
   VersionPageProfile,
   VersionPageProfilePage,
+  VersionSheetLabelList,
   VersionUid,
   WithdrawSheetPairingRequest,
   WorkerId,
@@ -406,6 +416,7 @@ export const OPERATION_IDS = [
   'getDashboardSummary',
   'getDocumentVersion',
   'getEffectiveVendorLists',
+  'getExecutionDispatch',
   'getExecutorAgentInstall',
   'getExecutorConnection',
   'getExecutorGroup',
@@ -416,6 +427,7 @@ export const OPERATION_IDS = [
   'getMe',
   'getNormDocument',
   'getProductVersion',
+  'getProject',
   'getRunNormReferences',
   'getRunNormVerification',
   'getRunStatus',
@@ -438,6 +450,7 @@ export const OPERATION_IDS = [
   'getVersionPageSpecPositions',
   'getVersionSectionReview',
   'importComparisonZip',
+  'importRunDecisions',
   'issueExecutorEnrollment',
   'issueRunnerToken',
   'issueToken',
@@ -458,6 +471,7 @@ export const OPERATION_IDS = [
   'listComparisonVersionOrders',
   'listDecisionHistory',
   'listDecisions',
+  'listDocumentTags',
   'listDocuments',
   'listExecutionJournal',
   'listExecutionQueue',
@@ -474,6 +488,7 @@ export const OPERATION_IDS = [
   'listPriceListPositions',
   'listPriceListRevisions',
   'listProjects',
+  'listProposalDecisionJournal',
   'listProposalDecisions',
   'listRegistrations',
   'listReleases',
@@ -499,6 +514,7 @@ export const OPERATION_IDS = [
   'listUsers',
   'listVersionPageProfiles',
   'listVersionPortalBlocks',
+  'listVersionSheetLabels',
   'listVersions',
   'listWorkers',
   'markReleaseNotesRead',
@@ -521,6 +537,7 @@ export const OPERATION_IDS = [
   'rejectRegistration',
   'rejectStageUploadCandidate',
   'removeComparisonLaunchEntry',
+  'renameDocument',
   'reportRunnerHealth',
   'requestExecutorProbe',
   'resetUserPassword',
@@ -542,12 +559,15 @@ export const OPERATION_IDS = [
   'revokeRunnerToken',
   'searchNorms',
   'setCurrentNormSnapshot',
+  'setDocumentArchived',
+  'setDocumentTags',
   'setExecutionPaused',
   'setExecutorIntegrationAuthorisation',
   'setExecutorRoute',
   'setExecutorRoutingMode',
   'setExecutorRoutingRule',
   'setExecutorSecret',
+  'setFindingExecutionStatus',
   'setGlobalVendorList',
   'setJobPriority',
   'setProjectVendorList',
@@ -2246,7 +2266,7 @@ export type ExportRunCsvResult = Blob;
  *
  * Synchronous, like `exportRunCsv`, and with its states and role: nothing is created, there is no export resource or identity, and repeating the request returns byte-identical bytes. An unknown run is `404`; a run whose terminal does not declare `publishes_result: true` is `409 state_transition_not_allowed`, decided on the run before anything else is read. A `partial` run is exported.
  *
- * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий -- and a «также найдено» row per merged member. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
+ * The workbook is the W57b layout (`docs/program/dispatch/W57-PLAN.md` section B3.5): «Сводка» with the run's identity and the counts by severity (decided, else proposed) and by category, and «Замечания» with one row per finding -- № | Лист/стр. | Категория | Замечание | Рекомендация | Серьёзность (решение эксперта) | Серьёзность (предложение модели) | Норма (документ, пункт) | Цитата нормы | Решение эксперта | Комментарий | ID замечания -- and a «также найдено» row per merged member. «ID замечания» is the finding's `finding_uid` (contract 1.27.0, `R-151d`), the key `importRunDecisions` reads an edited workbook back by; a «также найдено» row leaves it empty. Standard-library writer, stored ZIP parts in a fixed order with fixed timestamps, inline strings, no formula; XML-forbidden characters become U+FFFD.
  *
  * «Лист/стр.» comes only from the version's verified portal companion: a version without one, or whose companion does not verify, is `422 storage_integrity_error` with `role: source.structured_companion`; a page number is never shown as a sheet label. The norm columns carry a finding's verified citations when the run has certified citation partitions, read through its pinned retrieval set; when they do not verify the answer is `422 required_norm_unavailable` with `reference_kind: norm_retrieval_set`, never a workbook without them. A run without citation partitions exports with the norm columns empty. Roles: `expert` (`role:expert`), as `exportRunCsv`. Added by W57B-NORMS-CATALOGUE-XLSX-01.
  */
@@ -2898,6 +2918,25 @@ export type GetEffectiveVendorListsInput = {
 export type GetEffectiveVendorListsResult = EffectiveVendorLists;
 
 // ------------------------------------------------------------------------------------
+// getExecutionDispatch - GET /execution/dispatch
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Dispatch
+ *
+ * Whether the installation's execution dispatch is paused, and since when: the state `setExecutionPaused` writes. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151f`): the top strip shows the pause state without reading the queue. Readable by `expert` and `admin`; the `viewer` role is refused (`R-150w`), as for the queue.
+ */
+export type GetExecutionDispatchInput = {
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getExecutionDispatch` (`application/json`, HTTP 200). */
+export type GetExecutionDispatchResult = ExecutionDispatchStatus;
+
+// ------------------------------------------------------------------------------------
 // getExecutorAgentInstall - GET /executor-connections/{connection_id}/agent-installs/{install_id}
 // ------------------------------------------------------------------------------------
 
@@ -3104,6 +3143,29 @@ export type GetProductVersionInput = {
 
 /** Success body of `getProductVersion` (`application/json`, HTTP 200). */
 export type GetProductVersionResult = ProductVersion;
+
+// ------------------------------------------------------------------------------------
+// getProject - GET /projects/{project_uid}
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Project
+ *
+ * `UI-PARITY-P0N` (contract 1.29.0): one project by its identity, exactly as `listProjects` lists it -- its name, creation time, document count and audit counters -- so a screen that names its project need not find it on a page of the listing. An unknown project is `404`. Any role that may list projects (`role:admin|expert|viewer`).
+ */
+export type GetProjectInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getProject` (`application/json`, HTTP 200). */
+export type GetProjectResult = Project;
 
 // ------------------------------------------------------------------------------------
 // getRunNormReferences - GET /runs/{run_id}/norm-references
@@ -3610,6 +3672,36 @@ export type ImportComparisonZipInput = {
 
 /** Success body of `importComparisonZip` (`application/json`, HTTP 201). */
 export type ImportComparisonZipResult = ComparisonUpload;
+
+// ------------------------------------------------------------------------------------
+// importRunDecisions - POST /runs/{run_id}/decision-imports
+// ------------------------------------------------------------------------------------
+
+/**
+ * Import Run Decisions
+ *
+ * `UI-PARITY-P0L` (contract 1.27.0, ruling `R-151d`): load back the run's workbook as `exportRunXlsx` produced it, with «Решение эксперта» and «Комментарий» edited, at most 10 MiB. Only our export is read: a workbook without a «Замечания» sheet naming the columns «ID замечания», «Решение эксперта» and «Комментарий» is `422 validation_failed` (`field: file`, `constraint: not_our_export`), as is a file that is not a readable XLSX (`unreadable`), is larger (`too_large`) or has more than 20 000 rows (`too_many_rows`); nothing is recorded then. Rows are matched by `finding_uid`, never by «№». A row whose decision changes appends an `accept` or `reject` event carrying the row's comment, a row whose comment alone changes appends a `comment` event, both authored by the caller exactly as `appendDecision` would; the severity columns are not read and nothing is revoked. Every row naming an ID or a decision is reported, in sheet order, as `recorded`, `unchanged` or `refused` with a `reason`: `no_finding_uid`, `duplicate_finding`, `unknown_finding`, `finding_not_in_run`, `unknown_decision` (not one of the four labels the export writes) or `not_importable` («не решено» or «нужен ручной разбор» over another verdict). `finding_uid` is reported only for a published finding. An unknown run is `404`. An exact repeat of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another file, run or caller is `409 idempotency_key_reuse`. `expert` only.
+ */
+export type ImportRunDecisionsInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/decision-imports`. */
+  path: {
+    run_id: RunId;
+  };
+  /** Request body, sent as `multipart/form-data`. */
+  body: ImportRunDecisionsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `importRunDecisions` (`application/json`, HTTP 200). */
+export type ImportRunDecisionsResult = DecisionImportReport;
 
 // ------------------------------------------------------------------------------------
 // issueExecutorEnrollment - POST /executor-connections/{connection_id}/enrollments
@@ -4194,6 +4286,29 @@ export type ListDecisionsInput = {
 export type ListDecisionsResult = DecisionRecordPage;
 
 // ------------------------------------------------------------------------------------
+// listDocumentTags - GET /projects/{project_uid}/document-tags
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Document Tags
+ *
+ * `UI-PARITY-P0H` (contract 1.23.0, ruling `R-151e`): every tag the project's documents in use carry, in case-insensitive order, with how many documents carry it; archived documents are not counted. The tag filter of the project page reads it, so it offers every tag and not those of one page. A product read: `expert`, `admin` and `viewer`.
+ */
+export type ListDocumentTagsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/document-tags`. */
+  path: {
+    project_uid: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listDocumentTags` (`application/json`, HTTP 200). */
+export type ListDocumentTagsResult = DocumentTagList;
+
+// ------------------------------------------------------------------------------------
 // listDocuments - GET /projects/{project_uid}/documents
 // ------------------------------------------------------------------------------------
 
@@ -4215,8 +4330,14 @@ export type ListDocumentsInput = {
   query?: {
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
+    /** Include archived accounts. Absent is `false`. */
+    include_archived?: boolean;
     /** Page size. */
     limit?: number;
+    /** Only the documents whose current version is confirmed for this section (its `classification.section_code`); every document when absent. A document whose current version has no confirmed classification never matches. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151l`): the section page lists one section's documents without walking the whole project. A cursor resumes after its row in the filtered listing; presented under another filter it yields that listing's continuation or an empty page, never a page from another listing. */
+    section_code?: ProjectSection;
+    /** `R-151e`: only the documents carrying this tag, regardless of case. */
+    tag?: string;
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -4596,6 +4717,34 @@ export type ListProjectsInput = {
 
 /** Success body of `listProjects` (`application/json`, HTTP 200). */
 export type ListProjectsResult = ProjectPage;
+
+// ------------------------------------------------------------------------------------
+// listProposalDecisionJournal - GET /proposal-decisions
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Proposal Decision Journal
+ *
+ * `UI-PARITY-P0J` (contract 1.25.0, ruling `R-151h`): every expert decision on an optimisation proposal, newest first by `(decided_at, proposal_decision_id)`, with its project, document, version, section, specification row and proposed vendor, and `total`. The original's knowledge base lists both kinds with a «Тип» filter; ours reads this beside `listDecisions`. `project_uid` is a filter, not a parent. A product read.
+ */
+export type ListProposalDecisionJournalInput = {
+  /** Query string parameters. */
+  query?: {
+    /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
+    cursor?: Cursor;
+    /** Page size. */
+    limit?: number;
+    /** Restrict the page to decisions on proposals of this project. Absent means no project filter. */
+    project_uid?: ProjectUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listProposalDecisionJournal` (`application/json`, HTTP 200). */
+export type ListProposalDecisionJournalResult = ProposalDecisionRecordPage;
 
 // ------------------------------------------------------------------------------------
 // listProposalDecisions - GET /optimisation-proposals/{optimisation_proposal_id}/decisions
@@ -5236,6 +5385,29 @@ export type ListVersionPortalBlocksInput = {
 export type ListVersionPortalBlocksResult = PortalBlockPage;
 
 // ------------------------------------------------------------------------------------
+// listVersionSheetLabels - GET /versions/{version_uid}/sheet-labels
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Version Sheet Labels
+ *
+ * `UI-PARITY-P0O` (contract 1.30.0): the version's pages with the drawing sheet their portal blocks name (`page_label`) and how many blocks each holds, as the original's «Лист» beside a finding's page. Read from the same portal geometry as `listVersionPortalBlocks` (the most recent run whose `page_geometry_extraction` succeeded), one entry per page that has a block; a page whose blocks name different sheets carries no `page_label`, and a page number is never passed off as a sheet. A version no run of which has produced the geometry answers `status: "not_produced"` and no items. An unknown version is `404`. Any one role (`R-80`).
+ */
+export type ListVersionSheetLabelsInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/sheet-labels`. */
+  path: {
+    version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listVersionSheetLabels` (`application/json`, HTTP 200). */
+export type ListVersionSheetLabelsResult = VersionSheetLabelList;
+
+// ------------------------------------------------------------------------------------
 // listVersions - GET /documents/{document_uid}/versions
 // ------------------------------------------------------------------------------------
 
@@ -5801,6 +5973,37 @@ export type RemoveComparisonLaunchEntryInput = {
 export type RemoveComparisonLaunchEntryResult = ComparisonLaunchQueue;
 
 // ------------------------------------------------------------------------------------
+// renameDocument - PUT /projects/{project_uid}/documents/{document_uid}/title
+// ------------------------------------------------------------------------------------
+
+/**
+ * Rename Document
+ *
+ * `UI-PARITY-P0G` (contract 1.22.0, ruling `R-151a`): change the document's display title; `document_uid` stays its identity. The title is trimmed and is 1 to 400 characters. The same title again changes nothing; a change appends `document.renamed` (from, to, actor) to the audit trail. `expert` and `admin`; `viewer` is refused.
+ */
+export type RenameDocumentInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/title`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: RenameDocumentRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `renameDocument` (`application/json`, HTTP 200). */
+export type RenameDocumentResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
 // reportRunnerHealth - POST /runner/health
 // ------------------------------------------------------------------------------------
 
@@ -6358,6 +6561,68 @@ export type SetCurrentNormSnapshotInput = {
 export type SetCurrentNormSnapshotResult = NormCurrentSnapshot;
 
 // ------------------------------------------------------------------------------------
+// setDocumentArchived - PUT /projects/{project_uid}/documents/{document_uid}/archive
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Document Archived
+ *
+ * `UI-PARITY-P0G` (contract 1.22.0, ruling `R-151a`): archive (`archived: true`) or restore (`false`) one document of this project. An archived document is left out of `listDocuments` unless `include_archived` is asked; its versions, runs, findings and decisions are unchanged and stay addressable. Nothing is ever deleted. A document already in the asked state is answered as it is. Every change appends `document.archived` or `document.restored` to the audit trail. `expert` and `admin`; `viewer` is refused.
+ */
+export type SetDocumentArchivedInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/archive`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetDocumentArchivedRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setDocumentArchived` (`application/json`, HTTP 200). */
+export type SetDocumentArchivedResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
+// setDocumentTags - PUT /projects/{project_uid}/documents/{document_uid}/tags
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Document Tags
+ *
+ * `UI-PARITY-P0H` (contract 1.23.0, ruling `R-151e`): replace the document's free tags with the given set (at most ten, each 1 to 40 characters after trimming; inner spaces collapse; a case-insensitive duplicate keeps its first spelling). An empty list removes them all. No order and no group: the original's folders are not built. The same set again changes nothing; a change appends `document.tags_set` to the audit trail. `expert` and `admin`; `viewer` is refused.
+ */
+export type SetDocumentTagsInput = {
+  /** Path parameters, substituted into `/projects/{project_uid}/documents/{document_uid}/tags`. */
+  path: {
+    document_uid: DocumentUid;
+    project_uid: ProjectUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetDocumentTagsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setDocumentTags` (`application/json`, HTTP 200). */
+export type SetDocumentTagsResult = DocumentVersion;
+
+// ------------------------------------------------------------------------------------
 // setExecutionPaused - PUT /execution/dispatch
 // ------------------------------------------------------------------------------------
 
@@ -6516,6 +6781,36 @@ export type SetExecutorSecretInput = {
 
 /** Success body of `setExecutorSecret` (`application/json`, HTTP 201). */
 export type SetExecutorSecretResult = ExecutorSecretMetadata;
+
+// ------------------------------------------------------------------------------------
+// setFindingExecutionStatus - PUT /findings/{finding_uid}/execution-status
+// ------------------------------------------------------------------------------------
+
+/**
+ * Set Finding Execution Status
+ *
+ * `UI-PARITY-P0I` (contract 1.24.0, ruling `R-151g`): set, or clear with `null`, what the designer did with an accepted finding (the original's SU-10 labels, entered by hand; no registry import). Setting a status on a finding whose current verdict is not `accepted` is `422 validation_failed` (`constraint: finding_not_accepted`); clearing never is. It is not an expert decision: the verdict, the decision journal and every counter are unchanged. The same status again changes nothing; a change appends `finding.execution_status_set` to the audit trail. `expert` only.
+ */
+export type SetFindingExecutionStatusInput = {
+  /** Path parameters, substituted into `/findings/{finding_uid}/execution-status`. */
+  path: {
+    finding_uid: FindingUid;
+  };
+  /** Request body, sent as `application/json`. */
+  body: SetFindingExecutionStatusRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `setFindingExecutionStatus` (`application/json`, HTTP 200). */
+export type SetFindingExecutionStatusResult = FindingExecutionState;
 
 // ------------------------------------------------------------------------------------
 // setGlobalVendorList - PUT /vendor-lists/{section_code}
@@ -9003,6 +9298,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['optimisation'],
   },
+  getExecutionDispatch: {
+    operationId: 'getExecutionDispatch',
+    method: 'GET',
+    path: '/execution/dispatch',
+    pathParams: [],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 500, 503],
+    tags: ['execution'],
+  },
   getExecutorAgentInstall: {
     operationId: 'getExecutorAgentInstall',
     method: 'GET',
@@ -9142,6 +9451,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
+  },
+  getProject: {
+    operationId: 'getProject',
+    method: 'GET',
+    path: '/projects/{project_uid}',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['projects'],
   },
   getRunNormReferences: {
     operationId: 'getRunNormReferences',
@@ -9451,6 +9774,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['comparison'],
   },
+  importRunDecisions: {
+    operationId: 'importRunDecisions',
+    method: 'POST',
+    path: '/runs/{run_id}/decision-imports',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'multipart/form-data',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['export'],
+  },
   issueExecutorEnrollment: {
     operationId: 'issueExecutorEnrollment',
     method: 'POST',
@@ -9731,12 +10068,26 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['decisions'],
   },
+  listDocumentTags: {
+    operationId: 'listDocumentTags',
+    method: 'GET',
+    path: '/projects/{project_uid}/document-tags',
+    pathParams: ['project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['documents'],
+  },
   listDocuments: {
     operationId: 'listDocuments',
     method: 'GET',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
-    queryParams: ['cursor', 'limit'],
+    queryParams: ['cursor', 'include_archived', 'limit', 'section_code', 'tag'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,
@@ -9954,6 +10305,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['projects'],
+  },
+  listProposalDecisionJournal: {
+    operationId: 'listProposalDecisionJournal',
+    method: 'GET',
+    path: '/proposal-decisions',
+    pathParams: [],
+    queryParams: ['cursor', 'limit', 'project_uid'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['decisions'],
   },
   listProposalDecisions: {
     operationId: 'listProposalDecisions',
@@ -10305,6 +10670,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['documents'],
   },
+  listVersionSheetLabels: {
+    operationId: 'listVersionSheetLabels',
+    method: 'GET',
+    path: '/versions/{version_uid}/sheet-labels',
+    pathParams: ['version_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
+  },
   listVersions: {
     operationId: 'listVersions',
     method: 'GET',
@@ -10613,6 +10992,20 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 500, 503],
     tags: ['comparison'],
   },
+  renameDocument: {
+    operationId: 'renameDocument',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/title',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
   reportRunnerHealth: {
     operationId: 'reportRunnerHealth',
     method: 'POST',
@@ -10907,6 +11300,34 @@ export const OPERATIONS = {
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['norms'],
   },
+  setDocumentArchived: {
+    operationId: 'setDocumentArchived',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/archive',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
+  setDocumentTags: {
+    operationId: 'setDocumentTags',
+    method: 'PUT',
+    path: '/projects/{project_uid}/documents/{document_uid}/tags',
+    pathParams: ['document_uid', 'project_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['documents'],
+  },
   setExecutionPaused: {
     operationId: 'setExecutionPaused',
     method: 'PUT',
@@ -10990,6 +11411,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['execution'],
+  },
+  setFindingExecutionStatus: {
+    operationId: 'setFindingExecutionStatus',
+    method: 'PUT',
+    path: '/findings/{finding_uid}/execution-status',
+    pathParams: ['finding_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['findings'],
   },
   setGlobalVendorList: {
     operationId: 'setGlobalVendorList',

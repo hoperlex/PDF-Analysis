@@ -17,25 +17,53 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import type { DocumentVersion } from '@/shared/api';
+import type { DocumentUid, DocumentVersion, ProjectUid, Role } from '@/shared/api';
 import { PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
-import { looksLikeDocumentUid } from '@/entities/document-version';
+import { looksLikeDocumentUid, useVersionList } from '@/entities/document-version';
+import { useMayActAsExpert } from '@/entities/account';
+import { DocumentLifecycle, DocumentTags } from '@/features/manage-document';
 import { UploadVersionPanel } from '@/widgets/upload-panel';
 import { VersionList } from '@/widgets/version-list';
 import { DocumentContext } from '@/widgets/document-context';
+import { OptimisationProposals } from '@/widgets/optimisation-proposals';
 import styles from './document-detail-page.module.css';
 
 export interface DocumentDetailPageProps {
   readonly projectUid: string;
   readonly documentUid: string;
+  /** The session's roles, as the route's guard read them (`R-151r`: the optimisation tab acts by role). */
+  readonly roles?: readonly Role[] | undefined;
 }
 
-export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPageProps) {
+/** `R-151r`: the document's tabs, in the address as `?tab=`; an absent or unknown value is «Версии». */
+type DocumentTab = 'versions' | 'optimisation';
+
+const DOCUMENT_TABS: readonly { readonly tab: DocumentTab; readonly label: string }[] = [
+  { tab: 'versions', label: 'Версии' },
+  { tab: 'optimisation', label: 'Оптимизация' },
+];
+
+export function documentTabOf(value: string | null): DocumentTab {
+  return value === 'optimisation' ? 'optimisation' : 'versions';
+}
+
+const NO_PARAMS = new URLSearchParams();
+
+export function DocumentDetailPage({ projectUid, documentUid, roles = [] }: DocumentDetailPageProps) {
   const router = useRouter();
+  // Outside the app router both hooks answer `null`: the first tab, written onto the document's own address.
+  const pathname = usePathname() ?? routes.document(projectUid, documentUid);
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const tab = documentTabOf(searchParams.get('tab'));
+  const setTab = (next: DocumentTab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', next);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   if (!looksLikeProjectUid(projectUid) || !looksLikeDocumentUid(documentUid)) {
     return (
@@ -54,9 +82,31 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
     router.push(routes.versionClassification(version.project_uid, version.version_uid));
   };
 
+  return <DocumentScreen projectUid={projectUid as ProjectUid} documentUid={documentUid as DocumentUid} roles={roles} tab={tab} setTab={setTab} goToNewVersion={goToNewVersion} />;
+}
+
+/**
+ * The document's screen once its address is well formed. `R-151a`: the title is the document's own (the newest
+ * version's read carries it), with rename and archive for a session that may act, and a note while it is archived.
+ */
+function DocumentScreen({
+  projectUid, documentUid, roles, tab, setTab, goToNewVersion,
+}: {
+  readonly projectUid: ProjectUid;
+  readonly documentUid: DocumentUid;
+  readonly roles: readonly Role[];
+  readonly tab: DocumentTab;
+  readonly setTab: (next: DocumentTab) => void;
+  readonly goToNewVersion: (version: DocumentVersion) => void;
+}) {
+  const versions = useVersionList(documentUid);
+  const mayAct = useMayActAsExpert();
+  const newest = versions.data?.items[0];
+  const title = newest?.display_title ?? newest?.source_filename ?? 'Документ';
+  const archived = newest?.archived_at !== undefined;
   return (
     <PageShell
-      title="Документ"
+      title={title}
       subtitle={<code>{documentUid}</code>}
       actions={
         <>
@@ -66,6 +116,36 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
       }
     >
       <DocumentContext projectUid={projectUid} documentUid={documentUid} current="document" />
+      {newest === undefined ? null : mayAct ? (
+        <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
+      ) : archived ? (
+        <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
+      ) : null}
+      {newest === undefined ? null : (
+        <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
+      )}
+      <nav className={styles.tabs} aria-label="Разделы документа" data-document-tabs={tab}>
+        {DOCUMENT_TABS.map((entry) => (
+          <button
+            key={entry.tab}
+            type="button"
+            className={entry.tab === tab ? 'am-button' : 'am-button am-button--quiet'}
+            aria-pressed={entry.tab === tab}
+            onClick={() => setTab(entry.tab)}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </nav>
+      {tab === 'optimisation' ? (
+        <section className={styles.panel} aria-label="Оптимизация документа">
+          <OptimisationProposals
+            projectUid={projectUid as ProjectUid}
+            documentUid={documentUid as DocumentUid}
+            roles={roles}
+          />
+        </section>
+      ) : (
       <div className={styles.stack}>
         <section className={styles.panel} aria-labelledby="document-versions-title">
           <h2 id="document-versions-title">Опубликованные версии</h2>
@@ -79,6 +159,7 @@ export function DocumentDetailPage({ projectUid, documentUid }: DocumentDetailPa
           />
         </section>
       </div>
+      )}
     </PageShell>
   );
 }

@@ -127,6 +127,10 @@ class ExecutionPort(Protocol):
     def set_paused(
         self, *, paused: bool, user_uid: str, idempotency_key: str
     ) -> models.ExecutionDispatchStatus: ...
+    def get_dispatch_status(self) -> models.ExecutionDispatchStatus:
+        """`UI-PARITY-P0E` (ruling `R-151f`): the durable pause state ``set_paused`` writes,
+        read without the queue, for the top strip's indicator."""
+        ...
     # `W54-SEAL-01`. The worker registry (plan section 3.7). Sealed as stubs that answer
     # `503 dependency_unavailable`; `W54-WORKER-01` supplies the behaviour.
     def list_workers(
@@ -301,7 +305,10 @@ class AppendedDecision(Protocol):
 
 @runtime_checkable
 class ProjectPort(Protocol):
-    """``createProject`` and ``listProjects``."""
+    """``createProject``, ``listProjects`` and ``getProject``."""
+
+    def get_project(self, *, project_uid: str) -> ProjectView | None:
+        """`UI-PARITY-P0N`: one project as ``listProjects`` lists it, or ``None`` for an unknown one."""
 
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         """Create a project, or replay the recorded outcome of an identical request."""
@@ -374,8 +381,19 @@ class DocumentPort(Protocol):
     def get_version(self, *, version_uid: str) -> DocumentVersionView:
         """One published version and its input manifest."""
 
-    def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
+    def list_documents(
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
+        tag: str | None = None,
+    ) -> Sequence[DocumentVersionView]:
         """The current version of every document in one project, **newest first**.
+
+        ``section_code`` (`UI-PARITY-P0E`, ruling `R-151l`) keeps the documents whose current
+        version is confirmed for that section (its ``classification.section_code``); ``None``
+        keeps every document. An unclassified current version never matches, and the order is
+        the unfiltered order with rows removed, so the router's cursor stays meaningful.
+
+        ``include_archived`` (`R-151a`): an archived document is left out unless asked for; when listed it carries
+        its ``archived_at``.
 
         The order is part of this declaration for the reason ``list_projects`` gives: the
         router pages what this returns and never re-sorts it.
@@ -390,6 +408,28 @@ class DocumentPort(Protocol):
         into this same collection. There is no ``Document`` shape in the frozen contract
         and this declaration does not invent one.
         """
+
+    def set_document_archived(
+        self, *, project_uid: str, document_uid: str, archived: bool, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`R-151a`: archive or restore one document; its current version with its archive state. Keyed."""
+        ...
+
+    def rename_document(
+        self, *, project_uid: str, document_uid: str, display_title: str, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`R-151a`: change a document's display title; its identity stays. Keyed."""
+        ...
+
+    def set_document_tags(
+        self, *, project_uid: str, document_uid: str, tags: list[str], user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        """`R-151e`: replace one document's free tags (at most ten, 1 to 40 characters each). Keyed."""
+        ...
+
+    def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
+        """`R-151e`: each tag of the project's documents in use, with how many carry it."""
+        ...
 
     def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
         """Every published version of one document, **newest first**.
@@ -463,6 +503,9 @@ class BlockPort(Protocol):
         tuple for both without varying ``status`` would have destroyed exactly the
         distinction this method exists to carry.
         """
+
+    def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
+        """`UI-PARITY-P0O`: each page's sheet label from the version's portal geometry."""
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         """Every portal block of one version's bundle, or its not-yet-produced status.
@@ -636,6 +679,7 @@ class RunPort(Protocol):
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
         executor_group_id: str | None = None,  # EXEC2-GROUP-RUN-01
+        started_by_user_uid: str | None = None,  # `R-151v`: the account whose request this is
     ) -> RunStatusView:
         """Start a run, or return the existing one for this key and payload.
 
@@ -742,6 +786,12 @@ class FindingPort(Protocol):
     def get_finding(self, *, finding_uid: str) -> FindingDetailView:
         """One finding with its observation, evidence, provenance and projection."""
 
+    def set_execution_status(
+        self, *, finding_uid: str, status: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.FindingExecutionState:
+        """`R-151g`: set or clear the designer's execution status of an accepted finding. Keyed."""
+        ...
+
     def finding_exists(self, *, finding_uid: str) -> bool:
         """Is this a published finding? `D-74`.
 
@@ -806,6 +856,10 @@ class DecisionPort(Protocol):
         Ordered by ``(recorded_at, decision_id)`` -- a total order, stable across
         pages. The server's ``sequence_no`` is never exposed, in a field or in a cursor.
         """
+
+    def proposal_decision_journal(self, *, project_uid: str | None) -> Sequence[models.ProposalDecisionRecord]:
+        """`R-151h`: every decision on an optimisation proposal, newest first, optionally of one project."""
+        ...
 
     def decision_journal(
         self,
@@ -881,6 +935,11 @@ class XlsxExportPort(Protocol):
 
     def export_run_xlsx(self, *, run_id: str, principal_id: str) -> bytes:
         """The workbook bytes for one run, for the principal the seam admitted."""
+
+    def import_run_decisions(
+        self, *, run_id: str, content: BinaryIO, idempotency_key: str, author_label: str, author_user_uid: str,
+    ) -> models.DecisionImportReport:
+        """`R-151d`: the edited workbook's decisions appended, and what happened to each row."""
 
 
 @runtime_checkable

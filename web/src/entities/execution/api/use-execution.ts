@@ -3,9 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import type {
-  ExecutionJournalPage, ExecutionQueuePage, ExecutionWorkerPage, ListExecutionQueueInput, RunId,
+  ExecutionDispatchStatus, ExecutionJournalPage, ExecutionQueuePage, ExecutionWorkerPage, ListExecutionQueueInput,
+  RunId,
 } from '@/shared/api';
-import { listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
+import { getExecutionDispatch, listExecutionJournal, listExecutionQueue, listWorkers, queryKeys } from '@/shared/api';
 
 import { OPERATIONAL_LIST_POLL } from './operational-poll';
 
@@ -57,6 +58,27 @@ export function queueQueryOptions(cursor?: string, filter: ExecutionQueueFilter 
 
 export function useExecutionQueue(cursor?: string, filter: ExecutionQueueFilter = {}) {
   return useQuery<ExecutionQueuePage>(queueQueryOptions(cursor, filter));
+}
+
+/**
+ * The installation's pause state (`getExecutionDispatch`, `UI-PARITY-P0E`, ruling `R-151f`). The top strip
+ * reads it on every screen, so it follows the operational-list cadence: re-read while the tab is visible,
+ * backing off after a failure, never in the background. `enabled` is false for a session the queue is closed
+ * to (the server refuses the read to `viewer`, `R-150w`).
+ */
+export function dispatchQueryOptions(enabled = true) {
+  return {
+    queryKey: queryKeys.execution.dispatch(),
+    queryFn: async () => (await getExecutionDispatch({})).data,
+    ...OPERATIONAL_LIST_POLL,
+    refetchOnWindowFocus: 'always',
+    staleTime: 0,
+    enabled,
+  } as const;
+}
+
+export function useExecutionDispatch(enabled = true) {
+  return useQuery<ExecutionDispatchStatus>(dispatchQueryOptions(enabled));
 }
 
 export function journalQueryOptions(runId?: RunId, cursor?: string, enabled = true) {

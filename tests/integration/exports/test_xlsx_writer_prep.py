@@ -130,7 +130,7 @@ def test_findings_columns_multicitation_member_rows_color_and_frozen_header():
     )
     sheet = _parts(source)["xl/worksheets/sheet2.xml"]
     cells = _cells(sheet)
-    assert tuple(cells[f"{chr(65 + i)}1"][0] for i in range(11)) == FINDING_COLUMNS
+    assert tuple(cells[f"{chr(65 + i)}1"][0] for i in range(12)) == FINDING_COLUMNS
     assert cells["A2"] == ("1", "3")  # economic row fill
     assert cells["H2"][0] == "СП 1, п. 2\nСП 2, табл. 3"
     assert cells["I2"][0] == "Первая цитата\nВторая цитата"
@@ -142,7 +142,7 @@ def test_findings_columns_multicitation_member_rows_color_and_frozen_header():
     root = ET.fromstring(sheet)
     pane = root.find(f".//{MAIN}pane")
     assert pane is not None and pane.attrib["state"] == "frozen"
-    assert len(root.findall(f".//{MAIN}col")) == 11
+    assert len(root.findall(f".//{MAIN}col")) == 12
 
 
 def test_formulas_are_literal_strings_xml_forbidden_replaced_and_counted():
@@ -167,7 +167,7 @@ def test_formulas_are_literal_strings_xml_forbidden_replaced_and_counted():
 
 def test_cell_limit_empty_workbook_and_invalid_inputs_fail_closed():
     empty = _cells(_parts(_source())["xl/worksheets/sheet2.xml"])
-    assert len(empty) == 11
+    assert len(empty) == 12
     render_xlsx(_source(_finding(finding_text="x" * 32_767)))
     with pytest.raises(ValueError, match="xlsx_cell_too_long"):
         render_xlsx(_source(_finding(finding_text="x" * 32_768)))

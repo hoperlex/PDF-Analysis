@@ -184,12 +184,12 @@ def test_absent_run_and_explicit_empty_run() -> None:
     assert empty is not None
     assert _cells(empty.content) == {
         f"{column}1": value for column, value in zip(
-            "ABCDEFGHIJK",
+            "ABCDEFGHIJKL",
             (
                 "№", "Лист/стр.", "Категория", "Замечание", "Рекомендация",
                 "Серьёзность (решение эксперта)", "Серьёзность (предложение модели)",
                 "Норма (документ, пункт)", "Цитата нормы", "Решение эксперта",
-                "Комментарий",
+                "Комментарий", "ID замечания",
             ),
         )
     }

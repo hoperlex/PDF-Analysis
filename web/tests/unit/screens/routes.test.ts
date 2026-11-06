@@ -142,7 +142,8 @@ describe('each route delegates to its screen and to no other', () => {
       ...NO_QUERY,
     });
     expect(element.type).toBe(DocumentDetailPage);
-    expect(element.props).toEqual({ projectUid: A_PROJECT, documentUid: A_DOCUMENT });
+    // `R-151r`: the document's optimisation tab acts by role, so the guard's roles go with it, as the project's do.
+    expect(element.props).toEqual({ projectUid: A_PROJECT, documentUid: A_DOCUMENT, roles: [...SIGNED_IN.roles] });
   });
 
   it('/projects/{project_uid}/versions/{version_uid} passes both, and does not cross them', async () => {
@@ -657,8 +658,14 @@ describe('every screen address is built once and matches a route file on disk', 
       workers: routes.workers(),
       projects: routes.projects(),
       project: routes.project(PROJECT_UID),
+      // `R-151l`: a confirmed section of the project structure links its own page (the census confirms `GP`).
+      projectSection: routes.projectSection(PROJECT_UID, 'GP'),
       document: routes.document(PROJECT_UID, DOCUMENT_UID),
+      // `R-151r`: the project's optimisation summary links each document's own tab.
+      documentOptimisation: routes.documentOptimisation(PROJECT_UID, DOCUMENT_UID),
       version: routes.version(PROJECT_UID, VERSION_UID),
+      // `R-151m`: the version page links its «Блоки» tab.
+      versionBlocks: routes.versionBlocks(PROJECT_UID, VERSION_UID),
       // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
       // version at the stage-and-section panel, and so does the run control's refusal.
       versionClassification: routes.versionClassification(PROJECT_UID, VERSION_UID),

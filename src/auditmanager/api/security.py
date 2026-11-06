@@ -381,15 +381,32 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
         # Reads of product data: any one role (R-80 amends R-60 and narrows R-78).
         "listProjects": _PRODUCT_READ,
+        # `UI-PARITY-P0N`: one project, as the listing gives it.
+        "getProject": _PRODUCT_READ,
         "listDocuments": _PRODUCT_READ,
         "getDocumentVersion": _PRODUCT_READ,
         "streamDocumentVersionContent": _PRODUCT_READ,
         "getVersionBlocks": _PRODUCT_READ,
         "listVersionPortalBlocks": _PRODUCT_READ,
+        # `UI-PARITY-P0O`: the sheet of each page, from the same geometry.
+        "listVersionSheetLabels": _PRODUCT_READ,
         "streamVersionPortalBlockCrop": _PRODUCT_READ,
         "listVersions": _PRODUCT_READ,
         "listRuns": _PRODUCT_READ,
         "listExecutionQueue": _ANY_ROLE,
+        "getExecutionDispatch": _ANY_ROLE,
+        # `R-151a`: archiving and renaming a document are expert or administrator work; a viewer only reads.
+        "setDocumentArchived": _ANY_ROLE,
+        "renameDocument": _ANY_ROLE,
+        # `R-151e`: tagging is expert or administrator work; the catalogue is a product read.
+        "setDocumentTags": _ANY_ROLE,
+        "listDocumentTags": _PRODUCT_READ,
+        # `R-151g`: the execution status is set by an expert, as the expert's registry of the original is kept.
+        "setFindingExecutionStatus": _EXPERT,
+        # `R-151h`: the knowledge base's proposal half is a product read, like `listDecisions`.
+        "listProposalDecisionJournal": _PRODUCT_READ,
+        # `R-151d`: importing decisions appends decision events, so it is `appendDecision`'s role.
+        "importRunDecisions": _EXPERT,
         "listExecutionJournal": _ANY_ROLE,
         "listWorkers": _ANY_ROLE,
         # `EXEC-SEAL-01` (R-143). Any role reads connections, probes and routes; a secret is

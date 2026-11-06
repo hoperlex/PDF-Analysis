@@ -4,13 +4,25 @@
  * where the contrast census measures them. Every length is a global token.
  */
 
+/*
+ * The choices flow into as many columns as the panel holds, as the original lays its section list out,
+ * instead of fifteen stacked rows; a hint line and the suggested section (which carries its evidence)
+ * take the whole width.
+ */
 .group {
   display: grid;
-  gap: var(--am-gap-sm);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  column-gap: var(--am-gap);
+  row-gap: var(--am-gap-xs);
   min-width: 0;
-  margin: 0;
+  margin: 0 0 var(--am-gap-sm);
   padding: 0;
   border: 0;
+}
+
+.group > p,
+.choice[data-suggested='true'] {
+  grid-column: 1 / -1;
 }
 
 .legend {

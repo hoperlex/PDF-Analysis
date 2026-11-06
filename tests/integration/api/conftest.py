@@ -492,17 +492,24 @@ class IngestDocumentAdapter:
             version_uid=version_uid, byte_range=byte_range
         )
 
-    def list_documents(self, *, project_uid: str) -> tuple[DocumentVersionView, ...]:
+    def list_documents(
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
+        tag: str | None = None,
+    ) -> tuple[DocumentVersionView, ...]:
         """`R-5`. Delegated, which is exactly what the shipped `DocumentAdapter` does.
 
         There is no test query here: the rows, the order and the `404` for an unknown
         project all come from `DocumentRepository`, so a suite driving this adapter is
-        driving the shipped listing and not a second implementation of it.
+        driving the shipped listing and not a second implementation of it. The filters -- the
+        section (`UI-PARITY-P0E`), the archive (`P0G`) and the tag (`P0H`) -- are the shipped
+        adapter's own: this delegates to it, as a copy here once kept the section filter and
+        missed the other two.
         """
-        return tuple(
-            self._view(record)
-            for record in self._ingest.list_documents(ProjectUid(project_uid))
-        )
+        from auditmanager.bootstrap.adapters import DocumentAdapter
+
+        return tuple(DocumentAdapter(self._ingest).list_documents(
+            project_uid=project_uid, section_code=section_code, include_archived=include_archived, tag=tag,
+        ))
 
     def list_versions(self, *, document_uid: str) -> tuple[DocumentVersionView, ...]:
         return tuple(
@@ -840,7 +847,7 @@ class SeamRunAdapter:
 
     def start_run(
         self, *, version_uid: str, provider_mode: str | None, idempotency_key: str,
-        executor_connection_id: str | None = None, preset_id: str | None = None,
+        executor_connection_id: str | None = None, preset_id: str | None = None, **_: Any,
     ) -> RunStatusView:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="DocumentVersion")
 

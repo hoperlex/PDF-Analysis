@@ -97,6 +97,18 @@ export function offersProjectSwitcher(
   return screen !== undefined && screenDecision(screen, subject) === 'open';
 }
 
+/**
+ * Whether the top strip shows the queue's pause state (`R-151f`): exactly when the «Очередь» screen is
+ * open to this session, so `viewer` (`R-150w`) and a guest never read it.
+ */
+export function offersPauseStatus(
+  subject: ScreenDecisionSubject | null,
+  registry: readonly ScreenEntry[] = SCREEN_REGISTRY,
+): boolean {
+  const screen = screenAt(routes.queue(), registry);
+  return screen !== undefined && screenDecision(screen, subject) === 'open';
+}
+
 /** The screen being shown, as the menu marks it: its registry address and its group. */
 export interface CurrentScreen {
   readonly address: string;

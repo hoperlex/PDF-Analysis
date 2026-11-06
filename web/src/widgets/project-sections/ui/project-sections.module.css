@@ -12,7 +12,7 @@
 .sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--am-gap);
+  gap: var(--am-gap-sm);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -25,7 +25,7 @@
 .card {
   height: 100%;
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
@@ -38,8 +38,7 @@
   display: flex;
   align-items: center;
   gap: var(--am-gap-sm);
-  min-height: 68px;
-  padding: var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
   cursor: pointer;
   list-style: none;
 }
@@ -95,7 +94,6 @@
 
 .count {
   display: block;
-  margin-top: var(--am-gap-xs);
   color: var(--am-ink-muted);
   font-weight: 400;
   font-size: var(--am-text-sm);
@@ -121,4 +119,33 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--am-gap-sm);
+}
+
+/* `R-151a`: the archive toggle beside «Обновить». */
+.archivedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* `R-151e`: the tag filter above the sections. */
+.tagFilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap-sm);
+}
+
+/* A tag's document count beside its name, quieter, so «Корпус 1» and «3» do not read as one label. */
+.tagCount {
+  color: var(--am-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tagFilterLabel {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }

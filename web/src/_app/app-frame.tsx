@@ -30,6 +30,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { HOME_SCREEN, SIGN_IN_SCREEN, getInstanceLabel } from '@/shared/config';
+import { PauseStatus } from '@/widgets/pause-status';
 import { ProjectSwitcher } from '@/widgets/project-switcher';
 
 import { AccountMenu } from './account-menu';
@@ -38,7 +39,7 @@ import { GuestNavigationPreview } from './guest-navigation-preview';
 import { ReleaseNoticesGate } from './release-notices';
 import { ScreenContext } from './screen-context';
 import { SidebarToggle } from './sidebar-toggle';
-import { buildNavigation, offersProjectSwitcher } from './navigation';
+import { buildNavigation, offersPauseStatus, offersProjectSwitcher } from './navigation';
 import { ThemeToggle } from './theme-toggle';
 import styles from './app-frame.module.css';
 
@@ -115,6 +116,8 @@ export function AppFrame({ children, session }: AppFrameProps) {
            */}
           {offersProjectSwitcher(session) ? <ProjectSwitcher /> : null}
           <div className={styles.end}>
+            {/* `R-151f`: the queue's pause state, for a session the queue is open to. */}
+            {offersPauseStatus(session) ? <PauseStatus /> : null}
             {/* The stand label distinguishes otherwise identical deployments. */}
             {instance !== null ? <span className="am-app__instance" title={instance}>{instance}</span> : null}
             <ThemeToggle />

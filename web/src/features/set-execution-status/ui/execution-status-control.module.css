@@ -1,0 +1,20 @@
+/* `R-151g`: «Исполнение» under the decision panel of an accepted finding. Tokens only. */
+.control {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-top: var(--am-gap-sm);
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+.error {
+  margin: 0;
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+}

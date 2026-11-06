@@ -622,7 +622,7 @@ h4 {
 /* Inside a page body, `h2` is a section rule, not a title: the title is `am-page__title`. */
 .am-page__body > h2,
 .am-page__body h2 {
-  margin: var(--am-gap-xl) 0 var(--am-gap-sm);
+  margin: var(--am-gap-lg) 0 var(--am-gap-sm);
   padding-bottom: var(--am-gap-sm);
   border-bottom: 1px solid var(--am-line-soft);
   font-size: var(--am-text-lg);
@@ -635,7 +635,7 @@ h4 {
 }
 
 h3 {
-  margin: var(--am-gap-lg) 0 var(--am-gap-sm);
+  margin: var(--am-gap) 0 var(--am-gap-xs);
   font-size: var(--am-text-md);
   letter-spacing: 0.01em;
 }
@@ -704,7 +704,7 @@ dl {
 
 dt {
   grid-column: 1;
-  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  padding: 5px var(--am-gap) 5px 0;
   border-bottom: 1px solid var(--am-grid-line);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
@@ -714,7 +714,7 @@ dt {
 dd {
   grid-column: 2;
   margin: 0;
-  padding: var(--am-gap-sm) 0;
+  padding: 5px 0;
   border-bottom: 1px solid var(--am-grid-line);
   min-width: 0;
 }
@@ -726,11 +726,11 @@ dd > p:last-child {
 table {
   border-collapse: collapse;
   width: 100%;
-  font-size: var(--am-text-md);
+  font-size: var(--am-text-sm);
 }
 
 thead th {
-  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  padding: 6px 12px 6px 0;
   border-bottom: 1px solid var(--am-line-strong);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
@@ -742,7 +742,7 @@ thead th {
 }
 
 tbody td {
-  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap-sm) 0;
+  padding: 5px 12px 5px 0;
   border-bottom: 1px solid var(--am-grid-line);
   vertical-align: top;
 }
@@ -797,8 +797,9 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
-  min-height: 42px;
-  padding: 8px 11px;
+  /* As tall as a button (34px), so a field and its button line up in one row, as in the original. */
+  min-height: 34px;
+  padding: 5px 10px;
   color: var(--am-ink);
   background: var(--am-paper);
   border: 1px solid var(--am-line-strong);
@@ -1511,7 +1512,7 @@ input[type='file']::file-selector-button:hover {
   background: var(--am-paper);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
-  padding: 20px;
+  padding: var(--am-gap);
   box-shadow: var(--am-shadow-2);
 }
 
@@ -1529,7 +1530,7 @@ input[type='file']::file-selector-button:hover {
   overflow-wrap: anywhere;
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
-  padding: var(--am-gap);
+  padding: 12px 14px;
   background: var(--am-paper);
 }
 
@@ -1744,9 +1745,9 @@ li.am-state .am-state__detail {
   font: inherit;
   font-size: var(--am-text-md);
   font-weight: 550;
-  min-height: 40px;
-  padding: 9px 16px;
-  border-radius: var(--am-radius);
+  min-height: 34px;
+  padding: 6px 14px;
+  border-radius: var(--am-radius-sm);
   border: 1px solid var(--am-accent);
   background: var(--am-accent);
   color: var(--am-ink-inverse);
@@ -1798,8 +1799,23 @@ li.am-state .am-state__detail {
   color: var(--am-ink);
 }
 
+/*
+ * A quiet button that is a filter or a view switch says which one is on, as the original's active
+ * filter does in its accent tint. Before this rule «Список» and «Таблица», «Все» and «Приняты» looked
+ * the same pressed or not: the state was in `aria-pressed` and nowhere on screen.
+ */
+.am-button--quiet[aria-pressed='true'],
+.am-button--quiet[aria-pressed='true']:hover {
+  background: var(--am-accent-light);
+  border-color: var(--am-accent);
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+/* `min-height` too: without it a small button kept the 34px of every button and was small in name only. */
 .am-button--small {
-  padding: 5px 11px;
+  min-height: 28px;
+  padding: 3px 10px;
   font-size: var(--am-text-sm);
 }
 
@@ -1982,7 +1998,7 @@ li.am-state .am-state__detail {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--am-gap-xs);
 }
 
 .am-finding-group__items > li {
@@ -1997,14 +2013,14 @@ li.am-state .am-state__detail {
   align-items: start;
   width: 100%;
   text-align: left;
-  padding: 11px 13px;
+  padding: 6px 10px;
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
+  border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   color: var(--am-ink);
-  font-size: var(--am-text-md);
+  font-size: var(--am-text-sm);
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.4;
   box-shadow: var(--am-shadow-0);
   cursor: pointer;
 }
@@ -2024,21 +2040,27 @@ li.am-state .am-state__detail {
   background: var(--am-accent-light);
 }
 
+/*
+ * The finding's text takes the whole first line; the pages and the badges share the second. With the
+ * badges beside the text, the list column (at most 360px, less the ✓/✕ of R-151n) left the text a
+ * word per line.
+ */
 .am-finding-row__text {
-  grid-column: 1;
+  grid-column: 1 / -1;
   display: block;
 }
 
 .am-button.am-finding-row .am-badge {
   grid-column: 2;
-  grid-row: 1;
-  align-self: start;
+  grid-row: 2;
+  justify-self: end;
 }
 
 .am-finding-row__pages {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
+  align-self: center;
   display: block;
-  margin-top: 2px;
   font-family: var(--am-font-mono);
   font-size: var(--am-text-xs);
   color: var(--am-ink-soft);
@@ -2421,6 +2443,13 @@ li.am-state .am-state__detail {
   margin-bottom: 12px;
 }
 
+.am-export__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--am-gap-sm);
+}
+
 .am-export__header h3 {
   margin: 0;
   font-size: var(--am-text-lg);
@@ -2530,6 +2559,11 @@ li.am-state .am-state__detail {
   max-width: 44rem;
 }
 
+/* A button in a form is as wide as its label, as the original's: a grid item would stretch it to 44rem. */
+.am-form > button {
+  justify-self: start;
+}
+
 .am-form__row {
   display: flex;
   flex-wrap: wrap;
@@ -2603,6 +2637,19 @@ li.am-state .am-state__detail {
 
 .am-note em {
   font-style: normal;
+}
+
+/*
+ * A note inside a line (a table cell, a status strip) is muted small text, not a block: on a span the
+ * block's padding, left rule and tint drew a bar through the text around it (the vendor lists' «редакция
+ * … от …», the comparison strips).
+ */
+span.am-note {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 
 /* ---- odds and ends --------------------------------------------------------------- */
@@ -2713,7 +2760,7 @@ li.am-state .am-state__detail {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--am-gap);
+  gap: var(--am-gap-sm);
 }
 
 .am-kb__record {
@@ -2721,7 +2768,7 @@ li.am-state .am-state__detail {
   overflow-wrap: anywhere;
   margin: 0;
   border-left: 2px solid var(--am-line);
-  padding: 0 0 var(--am-gap-sm) var(--am-gap);
+  padding: 2px 0 2px var(--am-gap-sm);
 }
 
 .am-kb__record[data-current-verdict='accepted'] {
@@ -2757,11 +2804,11 @@ li.am-state .am-state__detail {
 }
 
 .am-kb__text {
-  margin: var(--am-gap-sm) 0 0;
+  margin: 2px 0 0;
 }
 
 .am-kb__comment {
-  margin: var(--am-gap-sm) 0 0;
+  margin: 2px 0 0;
   padding-left: var(--am-gap-sm);
   border-left: 2px solid var(--am-line-soft);
   color: var(--am-ink-muted);
@@ -2772,7 +2819,7 @@ li.am-state .am-state__detail {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--am-gap-sm);
-  margin: var(--am-gap-sm) 0 0;
+  margin: 2px 0 0;
   font-size: var(--am-text-xs);
   color: var(--am-ink-muted);
 }

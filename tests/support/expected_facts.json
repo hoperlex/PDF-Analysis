@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 250,
+    "path_count": 259,
     "operations": [
       [
         "DELETE",
@@ -195,6 +195,11 @@
       ],
       [
         "GET",
+        "/execution/dispatch",
+        "getExecutionDispatch"
+      ],
+      [
+        "GET",
         "/execution/journal",
         "listExecutionJournal"
       ],
@@ -355,6 +360,11 @@
       ],
       [
         "GET",
+        "/projects/{project_uid}",
+        "getProject"
+      ],
+      [
+        "GET",
         "/projects/{project_uid}/comparison-launch-queue",
         "getComparisonLaunchQueue"
       ],
@@ -367,6 +377,11 @@
         "GET",
         "/projects/{project_uid}/comparison-uploads",
         "listComparisonUploads"
+      ],
+      [
+        "GET",
+        "/projects/{project_uid}/document-tags",
+        "listDocumentTags"
       ],
       [
         "GET",
@@ -457,6 +472,11 @@
         "GET",
         "/projects/{project_uid}/vendor-lists",
         "getEffectiveVendorLists"
+      ],
+      [
+        "GET",
+        "/proposal-decisions",
+        "listProposalDecisionJournal"
       ],
       [
         "GET",
@@ -707,6 +727,11 @@
         "GET",
         "/versions/{version_uid}/runs",
         "listRuns"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/sheet-labels",
+        "listVersionSheetLabels"
       ],
       [
         "PATCH",
@@ -1215,6 +1240,11 @@
       ],
       [
         "POST",
+        "/runs/{run_id}/decision-imports",
+        "importRunDecisions"
+      ],
+      [
+        "POST",
         "/runs/{run_id}/reaudit",
         "reauditRun"
       ],
@@ -1360,6 +1390,11 @@
       ],
       [
         "PUT",
+        "/findings/{finding_uid}/execution-status",
+        "setFindingExecutionStatus"
+      ],
+      [
+        "PUT",
         "/me/release-notes",
         "markReleaseNotesRead"
       ],
@@ -1367,6 +1402,21 @@
         "PUT",
         "/norms/snapshots/current",
         "setCurrentNormSnapshot"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/archive",
+        "setDocumentArchived"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/tags",
+        "setDocumentTags"
+      ],
+      [
+        "PUT",
+        "/projects/{project_uid}/documents/{document_uid}/title",
+        "renameDocument"
       ],
       [
         "PUT",
@@ -1653,10 +1703,16 @@
       "DecisionEventPage",
       "DecisionEventType",
       "DecisionId",
+      "DecisionImportOutcome",
+      "DecisionImportRefusal",
+      "DecisionImportReport",
+      "DecisionImportRow",
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
       "DocumentAuditCounts",
+      "DocumentTagCount",
+      "DocumentTagList",
       "DocumentUid",
       "DocumentVersion",
       "DocumentVersionPage",
@@ -1670,6 +1726,7 @@
       "ExecutionJournalPage",
       "ExecutionQueueItem",
       "ExecutionQueuePage",
+      "ExecutionQueueStateCount",
       "ExecutionWorker",
       "ExecutionWorkerPage",
       "ExecutorAgentInstall",
@@ -1745,6 +1802,8 @@
       "FindingCategory",
       "FindingComparison",
       "FindingDetail",
+      "FindingExecutionState",
+      "FindingExecutionStatus",
       "FindingMatchProposal",
       "FindingObservation",
       "FindingObservationId",
@@ -1754,6 +1813,7 @@
       "GenerateComparisonSummaryRequest",
       "GenerateComparisonSummaryResponse",
       "IdempotencyKey",
+      "ImportRunDecisionsRequest",
       "InputManifestEntry",
       "IssueRunnerTokenRequest",
       "IssueTokenRequest",
@@ -1846,6 +1906,8 @@
       "ProposalDecisionCounts",
       "ProposalDecisionId",
       "ProposalDecisionList",
+      "ProposalDecisionRecord",
+      "ProposalDecisionRecordPage",
       "ProposalDecisionResult",
       "ProposalDecisionState",
       "ProposalMatchBasis",
@@ -1864,6 +1926,7 @@
       "ReleaseList",
       "ReleaseNoteItem",
       "ReleaseNoteKind",
+      "RenameDocumentRequest",
       "ReportRunnerHealthRequest",
       "ResetUserPasswordRequest",
       "ResumeComparisonAiJobRequest",
@@ -1908,12 +1971,15 @@
       "SectionSuggestion",
       "SectionVendorList",
       "SetCurrentNormSnapshotRequest",
+      "SetDocumentArchivedRequest",
+      "SetDocumentTagsRequest",
       "SetExecutionPausedRequest",
       "SetExecutorIntegrationAuthorisationRequest",
       "SetExecutorRouteRequest",
       "SetExecutorRoutingModeRequest",
       "SetExecutorRoutingRuleRequest",
       "SetExecutorSecretRequest",
+      "SetFindingExecutionStatusRequest",
       "SetGlobalVendorListRequest",
       "SetJobPriorityRequest",
       "SetProjectVendorListRequest",
@@ -2060,6 +2126,8 @@
       "VersionComparison",
       "VersionPageProfile",
       "VersionPageProfilePage",
+      "VersionSheetLabel",
+      "VersionSheetLabelList",
       "VersionUid",
       "VersionUploadKind",
       "WithdrawSheetPairingRequest",
@@ -2071,6 +2139,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0050_viewer_role",
-  "contract_version": "1.19.0"
+  "migration_head": "0054_finding_execution_status",
+  "contract_version": "1.30.0"
 }

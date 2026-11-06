@@ -2,7 +2,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--am-gap-sm);
-  margin-bottom: var(--am-gap-lg);
+  margin-bottom: var(--am-gap);
   padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
@@ -11,7 +11,7 @@
 
 .stack {
   display: grid;
-  gap: var(--am-gap-lg);
+  gap: var(--am-gap);
   min-width: 0;
 }
 

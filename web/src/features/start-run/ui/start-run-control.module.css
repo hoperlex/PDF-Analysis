@@ -23,3 +23,55 @@
   gap: var(--am-gap-sm);
   cursor: pointer;
 }
+
+/* `R-151c`: one panel for starting several documents. Tokens only. */
+.batch {
+  display: grid;
+  gap: var(--am-gap-sm);
+  padding: var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.batchTitle {
+  margin: 0;
+  font-size: var(--am-text-md);
+}
+
+.batchList {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding-left: var(--am-gap-lg);
+}
+
+.batchName {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.batchEstimate {
+  color: var(--am-ink-muted);
+}
+
+.batchRefused {
+  color: var(--am-failed);
+}
+
+.batchTotal {
+  margin: 0;
+  font-weight: 600;
+}
+
+.batchAgree {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.batchActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+}

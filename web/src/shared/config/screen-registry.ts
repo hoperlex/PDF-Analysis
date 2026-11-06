@@ -192,7 +192,8 @@ export const SCREEN_REGISTRY = [
     access: 'session',
     roles: ['expert', 'admin'], // R-150w: not a viewer's screen
     inMenu: true,
-    projectScope: 'global',
+    // `R-151m`: follows the header's project (`?project=`), «Все проекты» without it.
+    projectScope: 'optional',
   },
   /*
    * `CMP-VC-UI-01` (plan §1.1, wave C1): «Сравнение версий». `any-role`: both roles open it, an expert sends the commands
@@ -227,6 +228,16 @@ export const SCREEN_REGISTRY = [
     projectScope: 'required',
   },
   {
+    // `R-151l`: the original's section page, in our nouns — one project's documents of one section.
+    address: '/projects/[project_uid]/sections/[section_code]',
+    label: 'Раздел',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: false,
+    projectScope: 'required',
+  },
+  {
     address: '/projects/[project_uid]/documents/[document_uid]',
     label: 'Документ',
     group: 'work',
@@ -238,6 +249,16 @@ export const SCREEN_REGISTRY = [
   {
     address: '/projects/[project_uid]/versions/[version_uid]',
     label: 'Версия документа',
+    group: 'work',
+    access: 'session',
+    roles: 'any-role',
+    inMenu: false,
+    projectScope: 'required',
+  },
+  {
+    // `R-151m`: the original's «Блоки» tab of a project, in our nouns a tab of the version.
+    address: '/projects/[project_uid]/versions/[version_uid]/blocks',
+    label: 'Блоки',
     group: 'work',
     access: 'session',
     roles: 'any-role',
@@ -288,7 +309,8 @@ export const SCREEN_REGISTRY = [
     group: 'knowledge',
     access: 'session',
     roles: 'any-role',
-    inMenu: true,
+    // `R-151m`: «Блоки» is a tab of the version now; the address stays, out of the menu, as a chooser.
+    inMenu: false,
     projectScope: 'global',
   },
   {

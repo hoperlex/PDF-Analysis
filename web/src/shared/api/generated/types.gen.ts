@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
+ *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
+ *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.19.0';
+export const CONTRACT_VERSION = '1.30.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac';
+export const CONTRACT_DIGEST = '49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -284,10 +284,16 @@ export const SCHEMA_NAMES = [
   'DecisionEventPage',
   'DecisionEventType',
   'DecisionId',
+  'DecisionImportOutcome',
+  'DecisionImportRefusal',
+  'DecisionImportReport',
+  'DecisionImportRow',
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
   'DocumentAuditCounts',
+  'DocumentTagCount',
+  'DocumentTagList',
   'DocumentUid',
   'DocumentVersion',
   'DocumentVersionPage',
@@ -301,6 +307,7 @@ export const SCHEMA_NAMES = [
   'ExecutionJournalPage',
   'ExecutionQueueItem',
   'ExecutionQueuePage',
+  'ExecutionQueueStateCount',
   'ExecutionWorker',
   'ExecutionWorkerPage',
   'ExecutorAgentInstall',
@@ -376,6 +383,8 @@ export const SCHEMA_NAMES = [
   'FindingCategory',
   'FindingComparison',
   'FindingDetail',
+  'FindingExecutionState',
+  'FindingExecutionStatus',
   'FindingMatchProposal',
   'FindingObservation',
   'FindingObservationId',
@@ -385,6 +394,7 @@ export const SCHEMA_NAMES = [
   'GenerateComparisonSummaryRequest',
   'GenerateComparisonSummaryResponse',
   'IdempotencyKey',
+  'ImportRunDecisionsRequest',
   'InputManifestEntry',
   'IssueRunnerTokenRequest',
   'IssueTokenRequest',
@@ -477,6 +487,8 @@ export const SCHEMA_NAMES = [
   'ProposalDecisionCounts',
   'ProposalDecisionId',
   'ProposalDecisionList',
+  'ProposalDecisionRecord',
+  'ProposalDecisionRecordPage',
   'ProposalDecisionResult',
   'ProposalDecisionState',
   'ProposalMatchBasis',
@@ -495,6 +507,7 @@ export const SCHEMA_NAMES = [
   'ReleaseList',
   'ReleaseNoteItem',
   'ReleaseNoteKind',
+  'RenameDocumentRequest',
   'ReportRunnerHealthRequest',
   'ResetUserPasswordRequest',
   'ResumeComparisonAiJobRequest',
@@ -539,12 +552,15 @@ export const SCHEMA_NAMES = [
   'SectionSuggestion',
   'SectionVendorList',
   'SetCurrentNormSnapshotRequest',
+  'SetDocumentArchivedRequest',
+  'SetDocumentTagsRequest',
   'SetExecutionPausedRequest',
   'SetExecutorIntegrationAuthorisationRequest',
   'SetExecutorRouteRequest',
   'SetExecutorRoutingModeRequest',
   'SetExecutorRoutingRuleRequest',
   'SetExecutorSecretRequest',
+  'SetFindingExecutionStatusRequest',
   'SetGlobalVendorListRequest',
   'SetJobPriorityRequest',
   'SetProjectVendorListRequest',
@@ -691,6 +707,8 @@ export const SCHEMA_NAMES = [
   'VersionComparison',
   'VersionPageProfile',
   'VersionPageProfilePage',
+  'VersionSheetLabel',
+  'VersionSheetLabelList',
   'VersionUid',
   'VersionUploadKind',
   'WithdrawSheetPairingRequest',
@@ -3692,6 +3710,46 @@ export type DecisionId = string;
 /** The contract pattern for `DecisionId`. Anchored; use with `new RegExp()`. */
 export const DECISION_ID_PATTERN = "^dec_[0-9A-HJKMNP-TV-Z]{26}$";
 
+/** ``recorded``: a decision event was appended; ``unchanged``: the ledger already says it; ``refused``. */
+export const DECISION_IMPORT_OUTCOME_VALUES = [
+  'recorded',
+  'unchanged',
+  'refused',
+] as const;
+
+/** DecisionImportOutcome - the closed value set above. */
+export type DecisionImportOutcome = (typeof DECISION_IMPORT_OUTCOME_VALUES)[number];
+
+/** Why a row of the workbook was refused. */
+export const DECISION_IMPORT_REFUSAL_VALUES = [
+  'no_finding_uid',
+  'duplicate_finding',
+  'unknown_finding',
+  'finding_not_in_run',
+  'unknown_decision',
+  'not_importable',
+] as const;
+
+/** DecisionImportRefusal - the closed value set above. */
+export type DecisionImportRefusal = (typeof DECISION_IMPORT_REFUSAL_VALUES)[number];
+
+/** `R-151d`: what an import of edited decisions did, row by row, in sheet order. */
+export type DecisionImportReport = {
+  recorded: number;
+  refused: number;
+  rows: Array<DecisionImportRow>;
+  run_id: RunId;
+  unchanged: number;
+};
+
+/** `R-151d`: one row of «Замечания» that names an ID or a decision; ``finding_uid`` only for a known finding. */
+export type DecisionImportRow = {
+  finding_uid?: FindingUid;
+  outcome: DecisionImportOutcome;
+  reason?: DecisionImportRefusal;
+  row: number;
+};
+
 /** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
@@ -3759,12 +3817,25 @@ export type DocumentAuditCounts = {
   partial: number;
 };
 
+/** `R-151e`: one tag of a project's documents in use, and how many documents carry it. */
+export type DocumentTagCount = {
+  document_count: number;
+  tag: string;
+};
+
+/** `R-151e`: the project's tag catalogue, in case-insensitive order; archived documents are not counted. */
+export type DocumentTagList = {
+  items: Array<DocumentTagCount>;
+};
+
 export type DocumentUid = string;
 
 /** The contract pattern for `DocumentUid`. Anchored; use with `new RegExp()`. */
 export const DOCUMENT_UID_PATTERN = "^doc_[0-9A-HJKMNP-TV-Z]{26}$";
 
 export type DocumentVersion = {
+  /** `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use. */
+  archived_at?: string;
   byte_size: number;
   classification?: VersionClassification;
   display_title?: string;
@@ -3777,6 +3848,8 @@ export type DocumentVersion = {
   section?: ProjectSection;
   sha256: Sha256;
   source_filename?: string | null;
+  /** `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them (`listDocuments`, `listVersions` and the document commands). */
+  tags?: Array<string>;
   upload_kind?: VersionUploadKind;
   version_ordinal: number;
   version_uid: VersionUid;
@@ -3839,7 +3912,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.19.0";
+  contract_version: "1.30.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -3884,20 +3957,26 @@ export type ExecutionJournalPage = {
 
 /** `EXEC2-SEAL-2`: `binding_state` and `wait_reason` are present for a job whose Run was admitted by a rule or a group (`pending` while it waits for an executor). `UI-PARITY-QUEUE-A` (contract 1.18.0): the queue names what it lists. Every job executes exactly one audit run of one version of one document (`job.run_id` is not null and unique), so `project_uid`, `project_name`, `document_uid`, `document_name`, `version_uid` and `version_ordinal` are always present; the two names and the ordinal are joined at read time and stored nowhere. `started_at` is the creation time of the job's first attempt and is absent while no attempt exists; `finished_at` is the time the job reached a terminal state and is absent while it has not; `error_code` is the run's `terminal_reason` and `interrupted_reason` the run's own, each absent when the run records none. An absent property is omitted, never sent as null. */
 export type ExecutionQueueItem = {
+  attempt_count?: number;
   available_at: string;
   binding_state?: ExecutorBindingState;
   created_at: string;
   document_name: string;
   document_uid: DocumentUid;
   error_code?: ErrorCode;
+  /** `R-151u` (contract 1.26.0): a running job's estimated finish -- its first attempt's start plus the median duration of at least three recent completed runs of the same analysis profile and a page count within a quarter of its own; absent without enough history or while the job is not running. Never invented. */
+  estimated_finish_at?: string;
   finished_at?: string;
   interrupted_reason?: string;
   job_id: JobId;
   priority: number;
   project_name: string;
   project_uid: ProjectUid;
+  queue_position?: number;
   run_id: RunId;
   started_at?: string;
+  /** `R-151v` (contract 1.21.0): the display label of the account that started the run; absent for a run created before migration 0051. */
+  started_by_label?: string;
   state: string;
   version_ordinal: number;
   version_uid: VersionUid;
@@ -3906,8 +3985,15 @@ export type ExecutionQueueItem = {
 
 export type ExecutionQueuePage = {
   items: Array<ExecutionQueueItem>;
+  overview?: Array<ExecutionQueueStateCount>;
   page: PageInfo;
   paused: boolean;
+};
+
+/** `UI-PARITY-P0M` (contract 1.28.0): how many jobs stand in one state. */
+export type ExecutionQueueStateCount = {
+  count: number;
+  state: "queued" | "leased" | "running" | "retry_wait" | "succeeded" | "failed" | "cancelled" | "dead_letter";
 };
 
 /** One row of the worker registry (`worker`, migration `0019_execution_workers`) and the runs it currently holds. `intake_enabled` false means it takes no new run. */
@@ -4623,6 +4709,9 @@ export type Finding = {
   current_verdict: Verdict;
   decided_severity?: Severity;
   decision_recorded_at?: string | null;
+  execution_status?: FindingExecutionStatus;
+  /** `R-151g`: when the execution status was set. */
+  execution_status_at?: string;
   finding_uid: FindingUid;
   latest_decision_id?: DecisionId | null;
   merged_observations?: Array<FindingObservation>;
@@ -4673,6 +4762,9 @@ export type FindingDetail = {
   decided_severity?: Severity;
   decision_event_count?: number;
   decision_recorded_at?: string | null;
+  execution_status?: FindingExecutionStatus;
+  /** `R-151g`: when the execution status was set. */
+  execution_status_at?: string;
   finding_uid: FindingUid;
   /** The comment of the most recent event carrying one, whatever its type. */
   latest_comment?: string | null;
@@ -4689,6 +4781,24 @@ export type FindingDetail = {
   stated_value?: string;
   version_uid: VersionUid;
 };
+
+/** `R-151g`: a finding's execution status after the command; `status` and `set_at` are absent when it has none. */
+export type FindingExecutionState = {
+  finding_uid: FindingUid;
+  set_at?: string;
+  status?: FindingExecutionStatus;
+};
+
+/** `R-151g` (contract 1.24.0): what the designer did with an accepted finding, the original's SU-10 labels: `taken_into_account` «Учтено», `amended` «Внесено», `declined` «Отклонено», `agreed` «По согласованию». Not an expert decision. */
+export const FINDING_EXECUTION_STATUS_VALUES = [
+  'taken_into_account',
+  'amended',
+  'declined',
+  'agreed',
+] as const;
+
+/** FindingExecutionStatus - the closed value set above. */
+export type FindingExecutionStatus = (typeof FINDING_EXECUTION_STATUS_VALUES)[number];
 
 /** A proposed label for a finding of either run; never a decision or a carryover. */
 export type FindingMatchProposal = {
@@ -4766,6 +4876,15 @@ export type IdempotencyKey = string;
 
 /** The contract pattern for `IdempotencyKey`. Anchored; use with `new RegExp()`. */
 export const IDEMPOTENCY_KEY_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$";
+
+/**
+ * `R-151d` (contract 1.27.0): the multipart body of ``importRunDecisions``.
+ *
+ * ``file`` is the run's workbook as ``exportRunXlsx`` produced it, edited, at most 10 MiB.
+ */
+export type ImportRunDecisionsRequest = {
+  file: Blob;
+};
 
 /** One role of the immutable input manifest. It carries a blob_id and a checksum and never an object key, bucket or URL. */
 export type InputManifestEntry = {
@@ -5672,6 +5791,33 @@ export type ProposalDecisionList = {
   items: Array<ProposalDecision>;
 };
 
+/** `R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it decided about -- the knowledge base's «Предложения» half, as `DecisionRecord` is its «Замечания» half. */
+export type ProposalDecisionRecord = {
+  actor_label: string;
+  comment: string | null;
+  decided_at: string;
+  document_name: string;
+  document_uid: DocumentUid;
+  optimisation_pass_id: OptimisationPassId;
+  optimisation_proposal_id: OptimisationProposalId;
+  project_name: string;
+  project_uid: ProjectUid;
+  proposal_decision_id: ProposalDecisionId;
+  proposed_vendor: string;
+  row_text: string;
+  section?: ProjectSection;
+  unit: string;
+  verdict: ProposalVerdict;
+  version_uid: VersionUid;
+};
+
+/** `R-151h`: one page of the proposal decision journal, newest first, and how many entries match. */
+export type ProposalDecisionRecordPage = {
+  items: Array<ProposalDecisionRecord>;
+  page: PageInfo;
+  total: number;
+};
+
 /** The decision appended (or replayed) and the proposal as it now stands. */
 export type ProposalDecisionResult = {
   decision: ProposalDecision;
@@ -5837,6 +5983,11 @@ export const RELEASE_NOTE_KIND_VALUES = [
 
 /** ReleaseNoteKind - the closed value set above. */
 export type ReleaseNoteKind = (typeof RELEASE_NOTE_KIND_VALUES)[number];
+
+/** `R-151a` (contract 1.22.0): the document's new display title; `document_uid` stays its identity. */
+export type RenameDocumentRequest = {
+  display_title: string;
+};
 
 /** An agent's health report (`EXEC2-SEAL-1`, ADR-0026 decision 5): sanitised enumerations and bounded strings only. */
 export type ReportRunnerHealthRequest = {
@@ -6073,6 +6224,9 @@ export type RunStatus = {
   reaudit_of_run_id?: RunId;
   run_id: RunId;
   stages: Array<StageState>;
+  /** `R-151v` (contract 1.21.0): the display label of the account that started the run; absent for a run created before migration 0051. */
+  started_by_label?: string;
+  started_by_user_uid?: UserUid;
   state: RunState;
   terminal_at?: string | null;
   /** D-46: safe scalar classifiers saying WHICH dependency a `failed` run terminated on, restricted to the `safe_detail_keys` the domain catalog declares for the code in `terminal_reason`. Present only beside a `terminal_reason`, because the allowlist that bounds these keys is a property of the reported code; absent when there is nothing to say, and never an empty object. The same shape and the same rule as `ErrorEnvelope.details`, applied to a 200 run reading rather than to a failure -- which is why it had to be added at all: a run reading is not an error envelope and carried no detail object. It classifies; it never identifies. No path, object key, URL, credential, token, prompt, payload or host appears here, and no error code was added to the catalog for it. */
@@ -6371,6 +6525,16 @@ export type SetCurrentNormSnapshotRequest = {
   norms_snapshot_id: NormsSnapshotId;
 };
 
+/** `R-151a` (contract 1.22.0): archive (`true`) or restore (`false`) one document. Nothing is deleted. */
+export type SetDocumentArchivedRequest = {
+  archived: boolean;
+};
+
+/** `R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all. */
+export type SetDocumentTagsRequest = {
+  tags: Array<string>;
+};
+
 export type SetExecutionPausedRequest = {
   paused: boolean;
 };
@@ -6402,6 +6566,11 @@ export type SetExecutorRoutingRuleRequest = {
 export type SetExecutorSecretRequest = {
   purpose: ExecutorSecretPurpose;
   value: string;
+};
+
+/** `R-151g`: the new execution status, or `null` to clear it. */
+export type SetFindingExecutionStatusRequest = {
+  status: FindingExecutionStatus | null;
 };
 
 /**
@@ -7762,6 +7931,24 @@ export type VersionPageProfile = {
 export type VersionPageProfilePage = {
   items: Array<VersionPageProfile>;
   page: PageInfo;
+};
+
+/** `UI-PARITY-P0O` (contract 1.30.0): one page of a version and the drawing sheet its portal blocks name. */
+export type VersionSheetLabel = {
+  block_count: number;
+  page_label?: number;
+  page_number: number;
+};
+
+/**
+ * `UI-PARITY-P0O`: a version's pages with their sheet labels, as the original's «Лист» column, from the same portal
+ * geometry `listVersionPortalBlocks` reads; ``not_produced`` and no items while no run has produced it. A page without a
+ * portal block is not listed: a page number is never shown as a sheet.
+ */
+export type VersionSheetLabelList = {
+  items: Array<VersionSheetLabel>;
+  status: "produced" | "not_produced";
+  version_uid: VersionUid;
 };
 
 export type VersionUid = string;

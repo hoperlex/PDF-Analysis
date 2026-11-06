@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.19.0"]
+    contract_version: Literal["1.30.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1288,6 +1288,11 @@ class DocumentVersion(_Object):
     upload_kind: VersionUploadKind = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property
     )
+    #: `R-151a` (contract 1.22.0): when the document was archived; absent while it is in use.
+    archived_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151e` (contract 1.23.0): the document's free tags, on the reads that carry them.
+    tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class DocumentVersionPage(_Object):
@@ -1385,6 +1390,25 @@ class PortalBlock(_Object):
     portal_description: Annotated[str, Field(min_length=1)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+
+
+class VersionSheetLabel(_Object):
+    """`UI-PARITY-P0O` (contract 1.30.0): one page of a version and the drawing sheet its portal blocks name."""
+
+    page_number: Annotated[int, Field(ge=1)]
+    #: The portal's ``page_label`` of the page's blocks; absent when they name different sheets (never guessed).
+    page_label: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    block_count: Annotated[int, Field(ge=1)]
+
+
+class VersionSheetLabelList(_Object):
+    """`UI-PARITY-P0O`: a version's pages with their sheet labels, as the original's «Лист» column, from the same portal
+    geometry `listVersionPortalBlocks` reads; ``not_produced`` and no items while no run has produced it. A page without a
+    portal block is not listed: a page number is never shown as a sheet."""
+
+    version_uid: VersionUid
+    status: Literal["produced", "not_produced"]
+    items: list[VersionSheetLabel]
 
 
 class PortalBlockPage(_Object):
@@ -1708,6 +1732,11 @@ class RunStatus(_Object):
     binding: ExecutorBinding = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     waiting_since: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151v` (contract 1.21.0): the account that started the run and its display label; absent for a run
+    #: created before migration 0051.
+    started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class RunStatusPage(_Object):
@@ -1745,14 +1774,39 @@ class ExecutionQueueItem(_Object):
     finished_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     error_code: ErrorCode = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     interrupted_reason: str = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151v` (contract 1.21.0): who started the job's run, by display label; absent before migration 0051.
+    started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: `R-151u` (contract 1.26.0): a running job's estimated finish -- its start plus the median duration of similar
+    #: recent runs; absent without enough history or while the job is not running.
+    estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `UI-PARITY-P0M` (contract 1.28.0): a queued job's place among every queued job in the dispatcher's order
+    #: (priority, then the oldest first), as the original numbers its queue; absent for a job that is not queued.
+    #: It is the order, not a forecast: a job whose executor is busy can be passed by the next one.
+    queue_position: Annotated[int, Field(ge=1)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: `UI-PARITY-P0M`: how many attempts the job has had (0 before its first).
+    attempt_count: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
     binding_state: ExecutorBindingState = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     wait_reason: RunQueueReason = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ExecutionQueueStateCount(_Object):
+    """`UI-PARITY-P0M` (contract 1.28.0): how many jobs stand in one state."""
+
+    state: Literal["queued", "leased", "running", "retry_wait", "succeeded", "failed", "cancelled", "dead_letter"]
+    count: Annotated[int, Field(ge=0)]
 
 
 class ExecutionQueuePage(_Object):
     items: list[ExecutionQueueItem]
     page: PageInfo
     paused: bool
+    #: `UI-PARITY-P0M` (contract 1.28.0): every job state with its count over the period filter (not the state
+    #: filter), in the queue's state order, as the original's «N / M» and «N ✓ M ✗» line; a state with no job is 0.
+    overview: list[ExecutionQueueStateCount] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class ExecutionJournalEntry(_Object):
@@ -1776,6 +1830,108 @@ class SetJobPriorityRequest(_Object):
 
 class SetExecutionPausedRequest(_Object):
     paused: bool
+
+
+class SetDocumentArchivedRequest(_Object):
+    """`R-151a` (contract 1.22.0): archive (``true``) or restore (``false``) one document. Nothing is deleted."""
+
+    archived: bool
+
+
+class FindingExecutionStatus(str, enum.Enum):
+    """`R-151g` (contract 1.24.0): what the designer did with an accepted finding, the original's SU-10 labels:
+    ``taken_into_account`` «Учтено», ``amended`` «Внесено», ``declined`` «Отклонено», ``agreed`` «По согласованию»."""
+
+    TAKEN_INTO_ACCOUNT = "taken_into_account"
+    AMENDED = "amended"
+    DECLINED = "declined"
+    AGREED = "agreed"
+
+
+class SetFindingExecutionStatusRequest(_Object):
+    """`R-151g`: the new execution status, or ``null`` to clear it."""
+
+    status: FindingExecutionStatus | None
+
+
+class FindingExecutionState(_Object):
+    """`R-151g`: a finding's execution status after the command; ``status`` and ``set_at`` absent when it has none."""
+
+    finding_uid: FindingUid
+    status: FindingExecutionStatus = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    set_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class ImportRunDecisionsRequest(_Object):
+    """`R-151d` (contract 1.27.0): the multipart body of ``importRunDecisions``.
+
+    ``file`` is the run's workbook as ``exportRunXlsx`` produced it, edited, at most 10 MiB.
+    """
+
+    file: Annotated[UploadFile, WithJsonSchema(_BINARY_STRING)]
+
+
+class DecisionImportOutcome(str, enum.Enum):
+    """``recorded``: a decision event was appended; ``unchanged``: the ledger already says it; ``refused``."""
+
+    RECORDED = "recorded"
+    UNCHANGED = "unchanged"
+    REFUSED = "refused"
+
+
+class DecisionImportRefusal(str, enum.Enum):
+    """Why a row of the workbook was refused."""
+
+    NO_FINDING_UID = "no_finding_uid"
+    DUPLICATE_FINDING = "duplicate_finding"
+    UNKNOWN_FINDING = "unknown_finding"
+    FINDING_NOT_IN_RUN = "finding_not_in_run"
+    UNKNOWN_DECISION = "unknown_decision"
+    NOT_IMPORTABLE = "not_importable"
+
+
+class DecisionImportRow(_Object):
+    """`R-151d`: one row of «Замечания» that names an ID or a decision; ``finding_uid`` only for a known finding."""
+
+    row: Annotated[int, Field(ge=2)]
+    outcome: DecisionImportOutcome
+    finding_uid: FindingUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reason: DecisionImportRefusal = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class DecisionImportReport(_Object):
+    """`R-151d`: what an import of edited decisions did, row by row, in sheet order."""
+
+    run_id: RunId
+    recorded: Annotated[int, Field(ge=0)]
+    unchanged: Annotated[int, Field(ge=0)]
+    refused: Annotated[int, Field(ge=0)]
+    rows: list[DecisionImportRow]
+
+
+class SetDocumentTagsRequest(_Object):
+    """`R-151e` (contract 1.23.0): the document's whole new set of free tags; an empty list removes them all."""
+
+    tags: Annotated[list[Annotated[str, Field(min_length=1, max_length=40)]], Field(max_length=10)]
+
+
+class DocumentTagCount(_Object):
+    """`R-151e`: one tag of a project's documents in use, and how many documents carry it."""
+
+    tag: Annotated[str, Field(min_length=1, max_length=40)]
+    document_count: Annotated[int, Field(ge=1)]
+
+
+class DocumentTagList(_Object):
+    """`R-151e`: the project's tag catalogue, in case-insensitive order; archived documents are not counted."""
+
+    items: list[DocumentTagCount]
+
+
+class RenameDocumentRequest(_Object):
+    """`R-151a` (contract 1.22.0): the document's new display title; ``document_uid`` stays its identity."""
+
+    display_title: Annotated[str, Field(min_length=1, max_length=400)]
 
 
 class ExecutionDispatchStatus(_Object):
@@ -2097,6 +2253,10 @@ class Finding(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     decided_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151g` (contract 1.24.0): the designer's execution status of an accepted finding, and when it was set.
+    execution_status: FindingExecutionStatus = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    execution_status_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
@@ -2130,6 +2290,10 @@ class FindingDetail(_Object):
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
     decided_severity: Severity = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151g` (contract 1.24.0): as on ``Finding``.
+    execution_status: FindingExecutionStatus = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    execution_status_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
@@ -2380,6 +2544,36 @@ class DecisionRecordPage(_Object):
     items: list[DecisionRecord]
     page: PageInfo
     #: `UI-PARITY-P0A`. The number of entries that match the filters, not the number on this page.
+    total: Annotated[int, Field(ge=0)]
+
+
+class ProposalDecisionRecord(_Object):
+    """`R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it
+    decided about -- the knowledge base's «Предложения» half, as ``DecisionRecord`` is its «Замечания» half."""
+
+    proposal_decision_id: ProposalDecisionId
+    optimisation_proposal_id: OptimisationProposalId
+    optimisation_pass_id: OptimisationPassId
+    verdict: ProposalVerdict
+    comment: Annotated[str, Field(min_length=1, max_length=2000)] | None
+    actor_label: Annotated[str, Field(min_length=1, max_length=254)]
+    decided_at: datetime
+    project_uid: ProjectUid
+    project_name: Annotated[str, Field(min_length=1, max_length=200)]
+    document_uid: DocumentUid
+    document_name: Annotated[str, Field(min_length=1, max_length=400)]
+    version_uid: VersionUid
+    section: ProjectSection = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    row_text: Annotated[str, Field(min_length=1)]
+    proposed_vendor: Annotated[str, Field(min_length=1)]
+    unit: Annotated[str, Field(min_length=1)]
+
+
+class ProposalDecisionRecordPage(_Object):
+    """`R-151h`: one page of the proposal decision journal, newest first, and how many entries match."""
+
+    items: list[ProposalDecisionRecord]
+    page: PageInfo
     total: Annotated[int, Field(ge=0)]
 
 

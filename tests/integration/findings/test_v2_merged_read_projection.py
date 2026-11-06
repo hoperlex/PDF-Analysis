@@ -66,6 +66,11 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> FindingAdapter:
         "auditmanager.decisions.current_verdict",
         lambda _session, _finding_uid: SimpleNamespace(current_verdict="pending"),
     )
+    # `R-151g` (contract 1.24.0): the execution status is read with `= ANY(...)`, which this SQLite stand cannot
+    # parse; none is set here, as none is on a fresh finding.
+    monkeypatch.setattr(
+        "auditmanager.decisions.execution_status.execution_statuses", lambda _session, _finding_uids: {},
+    )
     monkeypatch.setattr(
         "auditmanager.decisions.decision_history", lambda _session, _finding_uid: (),
     )

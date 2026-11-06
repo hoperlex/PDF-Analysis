@@ -171,9 +171,11 @@ def test_event_record_and_finding_wire_omit_absent_severity() -> None:
     event.severity = None
     assert "severity" not in decision_event_body(_event_view(event))
 
+    # `UI-PARITY-P0A` (d369d9be): a journal record also names its document, version and place.
     record = SimpleNamespace(
         **vars(event), project_uid="p1", run_id="r1", category="layout",
         finding_text="Текст", current_verdict="accepted", decision_event_count=1,
+        document_uid="d1", version_uid="v1", project_name="Проект", document_name="Документ", section=None,
     )
     assert "severity" not in decision_record_body(_record_view(record))
     record.severity = "operational"

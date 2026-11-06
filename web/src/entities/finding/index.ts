@@ -34,3 +34,6 @@ export {
   readAllRunFindings,
   runFindingsQueryOptions,
 } from './api/run-findings-query';
+
+// `R-151g`: the designer's execution status of an accepted finding.
+export { EXECUTION_STATUS_LABELS, EXECUTION_STATUS_ORDER } from './model/execution-status';

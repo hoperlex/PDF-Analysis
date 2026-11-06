@@ -54,6 +54,8 @@ export function ExecutionQueue({
           <li key={item.job_id} className={styles.row}>
             <div className={styles.heading}>
               <JobStateBadge state={item.state} />
+              {/* `UI-PARITY-P0M`: a queued job's place in the dispatcher's order, as the original numbers its queue. */}
+              {item.queue_position === undefined ? null : <span data-queue-position={item.queue_position}>№ {item.queue_position} в очереди</span>}
               <span>Приоритет: {item.priority}</span>
             </div>
             {/* `UI-PARITY-QUEUE-A`: what the job executes, read from the server and never from a screen's memory. */}
@@ -72,19 +74,31 @@ export function ExecutionQueue({
             <p className={styles.identity}>Задача <code>{item.job_id}</code></p>
             <QueueItemWaiting item={item} />
             {jobHoldsLease(item.state) ? <div className={styles.identity}><RunWorkerLine worker={workerOf(item.run_id)} /></div> : null}
-            <p>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></p>
-            <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>
-            <p>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></p>
-            <p data-queue-started>
-              Начат: {item.started_at === undefined
-                ? '—'
-                : <time dateTime={item.started_at}>{formatInstant(item.started_at)}</time>}
-            </p>
-            <p data-queue-finished>
-              Завершён: {item.finished_at === undefined
-                ? '—'
-                : <time dateTime={item.finished_at}>{formatInstant(item.finished_at)}</time>}
-            </p>
+            {/* The job's times as a compact grid, one row of facts as the original's queue line. */}
+            <div className={styles.facts}>
+              <p>Принята: <time dateTime={item.created_at}>{formatInstant(item.created_at)}</time></p>
+              {/* `R-151v`: who started the run, as the original's queue says; older runs do not know. */}
+              <p data-queue-started-by>Запустил: {item.started_by_label ?? 'неизвестно'}</p>
+              <p>Возраст: {queueAgeLabel(item.created_at, asOf)}</p>
+              {item.attempt_count === undefined ? null : <p data-queue-attempts={item.attempt_count}>Попыток: {item.attempt_count}</p>}
+              <p>Доступна: <time dateTime={item.available_at}>{formatInstant(item.available_at)}</time></p>
+              <p data-queue-started>
+                Начат: {item.started_at === undefined
+                  ? '—'
+                  : <time dateTime={item.started_at}>{formatInstant(item.started_at)}</time>}
+              </p>
+              {item.estimated_finish_at === undefined ? null : (
+                // `R-151u`: from similar past runs; never shown without enough history.
+                <p data-queue-eta>
+                  Ожидаемое завершение: ≈ <time dateTime={item.estimated_finish_at}>{formatInstant(item.estimated_finish_at)}</time>
+                </p>
+              )}
+              <p data-queue-finished>
+                Завершён: {item.finished_at === undefined
+                  ? '—'
+                  : <time dateTime={item.finished_at}>{formatInstant(item.finished_at)}</time>}
+              </p>
+            </div>
             {error === null ? null : (
               <p role="status" data-queue-error={error.code}>
                 Ошибка: <code>{error.code}</code>{error.sentence === null ? null : <> — {error.sentence}</>}

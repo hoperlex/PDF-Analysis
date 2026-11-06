@@ -420,6 +420,9 @@ export function RunProgress({ projectUid, runId }: RunProgressProps) {
             <dd><code>{status.version_uid}</code></dd>
             {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
             {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
+            {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}
+            <dt>Запустил</dt>
+            <dd data-run-started-by={status.started_by_user_uid ?? 'unknown'}>{status.started_by_label ?? 'неизвестно'}</dd>
             <dt>Создан</dt>
             <dd>{formatInstant(status.created_at)}</dd>
             <dt>Завершён</dt>

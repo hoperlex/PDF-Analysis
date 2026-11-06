@@ -2,7 +2,7 @@
 
 .badges {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -30,4 +30,68 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--am-gap-xs);
+}
+
+/* `R-151n`: ✓/✕ beside a finding's row, and in the table's «Решение» column. Tokens only. */
+.withActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--am-gap-xs);
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.rowAccept:hover {
+  border-color: var(--am-ok);
+  color: var(--am-ok);
+}
+
+.rowReject:hover {
+  border-color: var(--am-failed);
+  color: var(--am-failed);
+}
+
+.rowNote {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.rowNoteFail {
+  color: var(--am-failed);
+  font-size: var(--am-text-xs);
+}
+
+/* `R-151j`: the severity strip -- the expert's decided severity as a filter, the model's proposal labelled apart. */
+.severities {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap);
+}
+
+.stripLabel {
+  align-self: center;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.proposed {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+/* `R-151g`: the designer's execution status of an accepted finding, beside its verdict. */
+.execution {
+  justify-self: start;
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-ok);
+  border-radius: var(--am-radius-pill);
+  color: var(--am-ok);
+  font-size: var(--am-text-xs);
 }

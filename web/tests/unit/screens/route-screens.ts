@@ -111,6 +111,7 @@ import { RegisterPage } from '@/_pages/register';
 import { RegisterSubmittedPage } from '@/_pages/register-submitted';
 import { ReviewPage } from '@/_pages/review';
 import { RunPage } from '@/_pages/run';
+import { SectionDetailPage } from '@/_pages/section-detail';
 import { SectionOptimisationPage } from '@/_pages/section-optimisation';
 import { SignInPage } from '@/_pages/sign-in';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
@@ -394,6 +395,28 @@ export const SEEDS: readonly Seed[] = [
     discipline: { project_uid: 'refuses' },
   },
   {
+    // `R-151l`: one section of one project; the screen refuses either malformed segment itself.
+    address: '/projects/[project_uid]/sections/[section_code]',
+    name: 'section-detail',
+    make: (s) =>
+      createElement(SectionDetailPage, {
+        projectUid: s['project_uid'] as string,
+        sectionCode: s['section_code'] as string,
+      }),
+    discipline: { project_uid: 'refuses', section_code: 'refuses' },
+  },
+  {
+    // `R-151m`: the version's «Блоки» tab; the screen refuses either malformed identifier itself.
+    address: '/projects/[project_uid]/versions/[version_uid]/blocks',
+    name: 'version-blocks',
+    make: (s) =>
+      createElement(BlocksPage, {
+        projectUid: s['project_uid'] as string,
+        versionUid: s['version_uid'] as string,
+      }),
+    discipline: { project_uid: 'refuses', version_uid: 'refuses' },
+  },
+  {
     address: '/projects/[project_uid]/documents/[document_uid]',
     name: 'document-detail',
     make: (s) =>
@@ -540,6 +563,8 @@ export function wellFormed(identities: {
     version_uid: identities.versionUid,
     run_id: identities.runId,
     user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+    // `R-151l`: a section code is one of the fifteen, a contract enum (Latin, like an identifier).
+    section_code: 'AR',
   };
 }
 

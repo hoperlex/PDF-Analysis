@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.19.0 (OpenAPI 3.1.0)
- *   sha256 536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac
+ *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
+ *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -198,6 +198,8 @@ import type {
   GetDocumentVersionResult,
   GetEffectiveVendorListsInput,
   GetEffectiveVendorListsResult,
+  GetExecutionDispatchInput,
+  GetExecutionDispatchResult,
   GetExecutorAgentInstallInput,
   GetExecutorAgentInstallResult,
   GetExecutorConnectionInput,
@@ -218,6 +220,8 @@ import type {
   GetNormDocumentResult,
   GetProductVersionInput,
   GetProductVersionResult,
+  GetProjectInput,
+  GetProjectResult,
   GetRunNormReferencesInput,
   GetRunNormReferencesResult,
   GetRunNormVerificationInput,
@@ -262,6 +266,8 @@ import type {
   GetVersionSectionReviewResult,
   ImportComparisonZipInput,
   ImportComparisonZipResult,
+  ImportRunDecisionsInput,
+  ImportRunDecisionsResult,
   IssueExecutorEnrollmentInput,
   IssueExecutorEnrollmentResult,
   IssueRunnerTokenInput,
@@ -302,6 +308,8 @@ import type {
   ListDecisionHistoryResult,
   ListDecisionsInput,
   ListDecisionsResult,
+  ListDocumentTagsInput,
+  ListDocumentTagsResult,
   ListDocumentsInput,
   ListDocumentsResult,
   ListExecutionJournalInput,
@@ -334,6 +342,8 @@ import type {
   ListPriceListRevisionsResult,
   ListProjectsInput,
   ListProjectsResult,
+  ListProposalDecisionJournalInput,
+  ListProposalDecisionJournalResult,
   ListProposalDecisionsInput,
   ListProposalDecisionsResult,
   ListRegistrationsInput,
@@ -384,6 +394,8 @@ import type {
   ListVersionPageProfilesResult,
   ListVersionPortalBlocksInput,
   ListVersionPortalBlocksResult,
+  ListVersionSheetLabelsInput,
+  ListVersionSheetLabelsResult,
   ListVersionsInput,
   ListVersionsResult,
   ListWorkersInput,
@@ -428,6 +440,8 @@ import type {
   RejectStageUploadCandidateResult,
   RemoveComparisonLaunchEntryInput,
   RemoveComparisonLaunchEntryResult,
+  RenameDocumentInput,
+  RenameDocumentResult,
   ReportRunnerHealthInput,
   ReportRunnerHealthResult,
   RequestExecutorProbeInput,
@@ -470,6 +484,10 @@ import type {
   SearchNormsResult,
   SetCurrentNormSnapshotInput,
   SetCurrentNormSnapshotResult,
+  SetDocumentArchivedInput,
+  SetDocumentArchivedResult,
+  SetDocumentTagsInput,
+  SetDocumentTagsResult,
   SetExecutionPausedInput,
   SetExecutionPausedResult,
   SetExecutorIntegrationAuthorisationInput,
@@ -482,6 +500,8 @@ import type {
   SetExecutorRoutingRuleResult,
   SetExecutorSecretInput,
   SetExecutorSecretResult,
+  SetFindingExecutionStatusInput,
+  SetFindingExecutionStatusResult,
   SetGlobalVendorListInput,
   SetGlobalVendorListResult,
   SetJobPriorityInput,
@@ -1656,6 +1676,18 @@ export function getEffectiveVendorLists(
 }
 
 /**
+ * Get Dispatch
+ *
+ * `GET /execution/dispatch`.
+ */
+export function getExecutionDispatch(
+  input: GetExecutionDispatchInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetExecutionDispatchResult>> {
+  return request<GetExecutionDispatchResult>(OPERATIONS.getExecutionDispatch, input, options);
+}
+
+/**
  * Get Executor Agent Install
  *
  * `GET /executor-connections/{connection_id}/agent-installs/{install_id}`.
@@ -1773,6 +1805,18 @@ export function getProductVersion(
   options?: RequestOptions,
 ): Promise<ApiResponse<GetProductVersionResult>> {
   return request<GetProductVersionResult>(OPERATIONS.getProductVersion, input, options);
+}
+
+/**
+ * Get Project
+ *
+ * `GET /projects/{project_uid}`.
+ */
+export function getProject(
+  input: GetProjectInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<GetProjectResult>> {
+  return request<GetProjectResult>(OPERATIONS.getProject, input, options);
 }
 
 /**
@@ -2040,6 +2084,18 @@ export function importComparisonZip(
 }
 
 /**
+ * Import Run Decisions
+ *
+ * `POST /runs/{run_id}/decision-imports` - a write; carries a required Idempotency-Key.
+ */
+export function importRunDecisions(
+  input: ImportRunDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ImportRunDecisionsResult>> {
+  return request<ImportRunDecisionsResult>(OPERATIONS.importRunDecisions, input, options);
+}
+
+/**
  * Issue Executor Enrollment
  *
  * `POST /executor-connections/{connection_id}/enrollments` - a write; carries a required Idempotency-Key.
@@ -2280,6 +2336,18 @@ export function listDecisions(
 }
 
 /**
+ * List Document Tags
+ *
+ * `GET /projects/{project_uid}/document-tags`.
+ */
+export function listDocumentTags(
+  input: ListDocumentTagsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListDocumentTagsResult>> {
+  return request<ListDocumentTagsResult>(OPERATIONS.listDocumentTags, input, options);
+}
+
+/**
  * List the documents of one project, newest first.
  *
  * `GET /projects/{project_uid}/documents`.
@@ -2469,6 +2537,18 @@ export function listProjects(
   options?: RequestOptions,
 ): Promise<ApiResponse<ListProjectsResult>> {
   return request<ListProjectsResult>(OPERATIONS.listProjects, input, options);
+}
+
+/**
+ * List Proposal Decision Journal
+ *
+ * `GET /proposal-decisions`.
+ */
+export function listProposalDecisionJournal(
+  input: ListProposalDecisionJournalInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListProposalDecisionJournalResult>> {
+  return request<ListProposalDecisionJournalResult>(OPERATIONS.listProposalDecisionJournal, input, options);
 }
 
 /**
@@ -2772,6 +2852,18 @@ export function listVersionPortalBlocks(
 }
 
 /**
+ * List Version Sheet Labels
+ *
+ * `GET /versions/{version_uid}/sheet-labels`.
+ */
+export function listVersionSheetLabels(
+  input: ListVersionSheetLabelsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListVersionSheetLabelsResult>> {
+  return request<ListVersionSheetLabelsResult>(OPERATIONS.listVersionSheetLabels, input, options);
+}
+
+/**
  * List the published versions of one document, newest first.
  *
  * `GET /documents/{document_uid}/versions`.
@@ -3036,6 +3128,18 @@ export function removeComparisonLaunchEntry(
 }
 
 /**
+ * Rename Document
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/title` - a write; carries a required Idempotency-Key.
+ */
+export function renameDocument(
+  input: RenameDocumentInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<RenameDocumentResult>> {
+  return request<RenameDocumentResult>(OPERATIONS.renameDocument, input, options);
+}
+
+/**
  * Report Runner Health
  *
  * `POST /runner/health`.
@@ -3288,6 +3392,30 @@ export function setCurrentNormSnapshot(
 }
 
 /**
+ * Set Document Archived
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/archive` - a write; carries a required Idempotency-Key.
+ */
+export function setDocumentArchived(
+  input: SetDocumentArchivedInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetDocumentArchivedResult>> {
+  return request<SetDocumentArchivedResult>(OPERATIONS.setDocumentArchived, input, options);
+}
+
+/**
+ * Set Document Tags
+ *
+ * `PUT /projects/{project_uid}/documents/{document_uid}/tags` - a write; carries a required Idempotency-Key.
+ */
+export function setDocumentTags(
+  input: SetDocumentTagsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetDocumentTagsResult>> {
+  return request<SetDocumentTagsResult>(OPERATIONS.setDocumentTags, input, options);
+}
+
+/**
  * Set Paused
  *
  * `PUT /execution/dispatch` - a write; carries a required Idempotency-Key.
@@ -3357,6 +3485,18 @@ export function setExecutorSecret(
   options?: RequestOptions,
 ): Promise<ApiResponse<SetExecutorSecretResult>> {
   return request<SetExecutorSecretResult>(OPERATIONS.setExecutorSecret, input, options);
+}
+
+/**
+ * Set Finding Execution Status
+ *
+ * `PUT /findings/{finding_uid}/execution-status` - a write; carries a required Idempotency-Key.
+ */
+export function setFindingExecutionStatus(
+  input: SetFindingExecutionStatusInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<SetFindingExecutionStatusResult>> {
+  return request<SetFindingExecutionStatusResult>(OPERATIONS.setFindingExecutionStatus, input, options);
 }
 
 /**
@@ -3994,6 +4134,7 @@ export const apiClient = {
   getDashboardSummary,
   getDocumentVersion,
   getEffectiveVendorLists,
+  getExecutionDispatch,
   getExecutorAgentInstall,
   getExecutorConnection,
   getExecutorGroup,
@@ -4004,6 +4145,7 @@ export const apiClient = {
   getMe,
   getNormDocument,
   getProductVersion,
+  getProject,
   getRunNormReferences,
   getRunNormVerification,
   getRunStatus,
@@ -4026,6 +4168,7 @@ export const apiClient = {
   getVersionPageSpecPositions,
   getVersionSectionReview,
   importComparisonZip,
+  importRunDecisions,
   issueExecutorEnrollment,
   issueRunnerToken,
   issueToken,
@@ -4046,6 +4189,7 @@ export const apiClient = {
   listComparisonVersionOrders,
   listDecisionHistory,
   listDecisions,
+  listDocumentTags,
   listDocuments,
   listExecutionJournal,
   listExecutionQueue,
@@ -4062,6 +4206,7 @@ export const apiClient = {
   listPriceListPositions,
   listPriceListRevisions,
   listProjects,
+  listProposalDecisionJournal,
   listProposalDecisions,
   listRegistrations,
   listReleases,
@@ -4087,6 +4232,7 @@ export const apiClient = {
   listUsers,
   listVersionPageProfiles,
   listVersionPortalBlocks,
+  listVersionSheetLabels,
   listVersions,
   listWorkers,
   markReleaseNotesRead,
@@ -4109,6 +4255,7 @@ export const apiClient = {
   rejectRegistration,
   rejectStageUploadCandidate,
   removeComparisonLaunchEntry,
+  renameDocument,
   reportRunnerHealth,
   requestExecutorProbe,
   resetUserPassword,
@@ -4130,12 +4277,15 @@ export const apiClient = {
   revokeRunnerToken,
   searchNorms,
   setCurrentNormSnapshot,
+  setDocumentArchived,
+  setDocumentTags,
   setExecutionPaused,
   setExecutorIntegrationAuthorisation,
   setExecutorRoute,
   setExecutorRoutingMode,
   setExecutorRoutingRule,
   setExecutorSecret,
+  setFindingExecutionStatus,
   setGlobalVendorList,
   setJobPriority,
   setProjectVendorList,

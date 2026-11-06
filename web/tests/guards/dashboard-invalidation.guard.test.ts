@@ -170,6 +170,12 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/export-run/model/use-export-run.ts': false,
   'src/features/record-verdict/model/use-record-verdict.ts': true,
   'src/features/start-run/model/use-start-run.ts': true,
+  // `R-151a`: archiving or renaming a document moves the dashboard's documents and sections.
+  'src/features/manage-document/model/use-manage-document.ts': true,
+  // `R-151g`: the execution status is not a decision and moves no dashboard figure.
+  'src/features/set-execution-status/model/use-set-execution-status.ts': false,
+  // `R-151d`: every imported row is a decision event, so the dashboard's verdict counts move.
+  'src/features/import-decisions/model/use-import-decisions.ts': true,
   // Cost preflights are POST reads. They create no Run/job or dashboard spend.
   'src/features/start-run/model/use-run-cost-approval.ts': false,
   // `AR-V3-BETA-PACK-STATUS-WEB-01`: an accepted start queues six runs at once, so

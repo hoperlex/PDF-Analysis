@@ -630,6 +630,7 @@ def start_audit_run(
     cost_actor_uid: str | None = None,
     executor_group_id: str | None = None,
     group_admitter: GroupAdmitter | None = None,
+    started_by_user_uid: str | None = None,
 ) -> StartedRun:
     """Create one durable ``AuditRun``, or answer what already happened under this key.
 
@@ -876,6 +877,7 @@ def start_audit_run(
         norms_snapshot_id=snapshot,
         connection_revision_id=None if frozen is None else frozen.revision_id,
         preset_revision_id=None if chosen_preset is None else chosen_preset.revision_id,
+        started_by_user_uid=started_by_user_uid,  # `R-151v`
         **_admission_columns(admitted),
     )
     _journal_standby(session, run_id, frozen)
@@ -1061,6 +1063,7 @@ def reaudit_run(
     cost_consent: Mapping[str, Any] | None = None,
     cost_actor_uid: str | None = None,
     group_admitter: GroupAdmitter | None = None,
+    started_by_user_uid: str | None = None,
 ) -> StartedRun:
     """Create one new run of a terminal source's document version, on today's configuration.
 
@@ -1218,6 +1221,7 @@ def reaudit_run(
         command_id=str(claimed.command_id), reaudit_of_run_id=source_run_id,
         norms_snapshot_id=snapshot,
         connection_revision_id=None if frozen is None else frozen.revision_id,
+        started_by_user_uid=started_by_user_uid,  # `R-151v`
         **_admission_columns(admitted),
     )
     _journal_standby(session, new_id, frozen)

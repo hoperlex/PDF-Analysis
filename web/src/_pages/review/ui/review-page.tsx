@@ -44,8 +44,9 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
-import { FindingList, verdictFilterOf } from '@/widgets/finding-list';
-import type { VerdictFilter } from '@/widgets/finding-list';
+import { sheetOfPage, useSheetLabels } from '@/entities/block';
+import { FindingList, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import type { SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
 import { useEvidenceDocument, useVersionBlockIndex } from '@/features/open-evidence';
@@ -53,6 +54,7 @@ import { useExportRun } from '@/features/export-run';
 import type { DecisionIntent } from '@/widgets/decision-panel';
 import { DocumentContext } from '@/widgets/document-context';
 import { useRecordVerdict } from '@/features/record-verdict';
+import { ExecutionStatusControl } from '@/features/set-execution-status';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { admitFindings, groupByCategory, runFindingsQueryOptions } from '@/entities/finding';
 import { firstDeclaredPage } from '@/entities/finding-observation';
@@ -62,6 +64,7 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { ReviewRowActions } from './review-row-actions';
 import styles from './review-page.module.css';
 
 export interface ReviewPageProps {
@@ -81,10 +84,12 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const linkedFinding = searchParams.get('finding');
   const verdictFilter = verdictFilterOf(searchParams.get('verdict'));
+  // `R-151j`: the severity filter lives in the address too (`?severity=`).
+  const severityFilter = severityFilterOf(searchParams.get('severity'));
   const [selection, setSelectionState] = useState<ReviewSelection | null>(
     linkedFinding === null ? null : selectFinding(linkedFinding),
   );
-  const writeAddress = (key: 'finding' | 'verdict', value: string | null) => {
+  const writeAddress = (key: 'finding' | 'verdict' | 'severity', value: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === null) params.delete(key);
     else params.set(key, value);
@@ -102,6 +107,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   };
   const setVerdictFilter = (filter: VerdictFilter) => {
     writeAddress('verdict', filter === 'all' ? null : filter);
+  };
+  const setSeverityFilter = (filter: SeverityFilter) => {
+    writeAddress('severity', filter === 'all' ? null : filter);
   };
 
   // `D-57`: this query used to build its own options, and its `queryFn` filed the
@@ -145,6 +153,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
   const detail = detailQuery.data?.data ?? null;
   const versionUid = detail?.version_uid ?? null;
+  // `UI-PARITY-P0O`: the sheet of each page, so a row says «Лист 3 · стр. 5» as the original's does.
+  const sheetLabels = useSheetLabels(runQuery.data?.version_uid ?? versionUid);
   const evidence = useEvidenceDocument(versionUid);
   // The line geometry the viewer frames quotations with. Read here because this page owns the
   // queries; without it (not produced, failed, in flight) the viewer searches the page text.
@@ -216,10 +226,23 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             groups={groups}
             verdictFilter={verdictFilter}
             onVerdictFilterChange={setVerdictFilter}
+            severityFilter={severityFilter}
+            onSeverityFilterChange={setSeverityFilter}
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
               setSelection(selectFinding(findingUid));
             }}
+            sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
+            // `R-151n`: ✓/✕ in each row, for a session that may decide.
+            renderRowActions={mayAct ? (finding) => (
+              <ReviewRowActions
+                finding={finding}
+                runId={runId}
+                onOpen={(findingUid) => {
+                  setSelection(selectFinding(findingUid));
+                }}
+              />
+            ) : undefined}
             isLoading={findingsQuery.isPending}
             error={presentFindingsFailure(findingsQuery.error, {
               title: 'Не удалось загрузить находки',
@@ -301,6 +324,15 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                   })
                 }
               /> : <p className="am-note" data-expert-only="DecisionPanel">Решения по находкам записывает эксперт.</p>}
+              {/* `R-151g`: what the designer did with an accepted finding, as the original's SU-10 badge. */}
+              {mayAct && (verdict.result?.current_verdict ?? detail.current_verdict) === 'accepted' ? (
+                <ExecutionStatusControl
+                  key={detail.finding_uid}
+                  findingUid={detail.finding_uid as FindingUid}
+                  runId={runId}
+                  status={detail.execution_status ?? null}
+                />
+              ) : null}
 
               <DecisionHistory
                 events={historyQuery.data?.data.items ?? []}
@@ -333,6 +365,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             onExport={exporter.download}
             isPending={exporter.isPending}
             lastFileName={exporter.lastFileName}
+            mayImportDecisions={mayAct}
             error={presentFailureOrNull(exporter.error, {
               title: 'В выгрузке отказано',
             })}

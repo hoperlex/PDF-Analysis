@@ -163,7 +163,7 @@ def test_a_published_v3_run_exports_its_certified_citation_in_the_norm_columns(
     set_id = world.set_of[scope]
     assert export.citation_source_ref == f"{run_id}:{world.snapshot_id}:{set_id}"
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
-    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJK") == FINDING_COLUMNS
+    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJKL") == FINDING_COLUMNS
     rows = sorted({int(address[1:]) for address in findings if address[0] == "A"} - {1})
     assert rows == [2]
     # the norm columns carry the certified citation: designation and clause, then the exact quote
@@ -196,7 +196,8 @@ def test_the_workbook_carries_neither_claimed_number_in_any_cell(
     assert required not in every_cell and stated not in every_cell
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
     assert not {"required_value", "stated_value"} & set(findings.values())
-    assert len(FINDING_COLUMNS) == 11 and not any("required" in c or "stated" in c for c in FINDING_COLUMNS)
+    # Twelve since contract 1.27.0: the last, «ID замечания», is the finding's identity (`R-151d`), not a number.
+    assert len(FINDING_COLUMNS) == 12 and not any("required" in c or "stated" in c for c in FINDING_COLUMNS)
 
 
 @pytest.mark.parametrize("scope", decisions.WITHHELD_SCOPES)
@@ -207,7 +208,7 @@ def test_a_published_v3_run_with_no_finding_exports_an_empty_findings_sheet(
     _add_companion(session, blob_store, world.version_uid)
     export = _export(session, blob_store, run_id, _read_citations_for_export)
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
-    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJK") == FINDING_COLUMNS
+    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJKL") == FINDING_COLUMNS
     assert {int(address[1:]) for address in findings if address[0] == "A"} == {1}
     assert export.citation_source_ref == f"{run_id}:{world.snapshot_id}:{world.set_of[scope]}"
 

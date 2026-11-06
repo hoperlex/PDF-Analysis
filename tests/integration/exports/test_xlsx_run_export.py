@@ -151,7 +151,7 @@ def test_a_real_v1_run_exports_with_portal_labels_and_empty_norm_columns(
     assert export.content == _export(session, blob_store, run_id).content
 
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
-    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJK") == FINDING_COLUMNS
+    assert tuple(findings[f"{column}1"] for column in "ABCDEFGHIJKL") == FINDING_COLUMNS
     rows = sorted({int(address[1:]) for address in findings if address[0] == "A"} - {1})
     expected = published_finding_count(session, run_id)
     assert expected > 0 and rows == list(range(2, expected + 2))
@@ -305,3 +305,63 @@ def test_a_merged_finding_exports_its_canonical_row_and_a_member_row(
     # The CSV exports the canonical observation only, as before.
     rows = export_run_csv(session, run_id).content.decode("utf-8-sig")
     assert canonical in rows and member not in rows and original not in rows
+
+
+def test_decisions_edited_in_the_run_workbook_load_back_by_finding_uid(
+    session, seeded, blob_store, recorded_adapter, provider_config, new_key
+) -> None:
+    """`R-151d` (contract 1.27.0): the workbook the export wrote, edited in «Решение эксперта» and «Комментарий», loads
+    back into the ledger by «ID замечания»; a repeat of the key appends nothing; the same file again changes nothing."""
+    import re
+
+    from auditmanager.exports import import_run_decisions
+
+    run_id = _run(session, seeded, blob_store, recorded_adapter, provider_config, new_key("r151d-import-run"))
+    _add_companion(session, blob_store, seeded.version_uid)
+    content = _export(session, blob_store, run_id).content
+    finding_uid = _cells(content, "xl/worksheets/sheet2.xml")["L2"]
+    assert finding_uid.startswith("fnd_")
+
+    def edited(raw: bytes) -> bytes:
+        out = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(out, "w") as target:
+            for info in source.infolist():
+                data = source.read(info.filename)
+                if info.filename == "xl/worksheets/sheet2.xml":
+                    sheet = data.decode("utf-8")
+                    for address, value in (("J2", "Отклонено"), ("K2", "не по норме")):
+                        sheet = re.sub(
+                            rf'(<c r="{address}"[^>]*><is><t xml:space="preserve">)[^<]*(</t></is></c>)',
+                            rf"\g<1>{value}\g<2>", sheet,
+                        )
+                    data = sheet.encode("utf-8")
+                target.writestr(info, data)
+        return out.getvalue()
+
+    workbook = edited(content)
+    key = new_key("r151d-import").value
+    report = import_run_decisions(
+        session, run_id=run_id, content=workbook, idempotency_key=key, author_label="Эксперт", author_user_uid=None,
+    )
+    by_row = {row.row: row for row in report.rows}
+    assert by_row[2].outcome == "recorded" and by_row[2].finding_uid == finding_uid
+    assert all(row.outcome == "unchanged" for number, row in by_row.items() if number != 2)
+    verdict = session.execute(text(
+        "SELECT current_verdict, latest_comment FROM finding_current_verdict WHERE finding_uid = :f"
+    ), {"f": finding_uid}).one()
+    assert tuple(verdict) == ("rejected", "не по норме")
+
+    def events() -> int:
+        return session.execute(text(
+            "SELECT count(*) FROM expert_decision_event WHERE finding_uid = :f"), {"f": finding_uid}).scalar_one()
+
+    before = events()
+    assert import_run_decisions(
+        session, run_id=run_id, content=workbook, idempotency_key=key, author_label="Эксперт", author_user_uid=None,
+    ) == report
+    again = import_run_decisions(
+        session, run_id=run_id, content=workbook, idempotency_key=new_key("r151d-import-again").value,
+        author_label="Эксперт", author_user_uid=None,
+    )
+    assert {row.outcome for row in again.rows} == {"unchanged"}
+    assert events() == before

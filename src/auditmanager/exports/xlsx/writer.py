@@ -7,6 +7,10 @@ Enum cells (severity, category, verdict) are written as the Russian labels the s
 show (:mod:`.labels`, held equal to the web tables by a lockstep test); a value outside
 the closed set is refused, never printed raw. Identifiers stay opaque and free text is
 written verbatim (`XLSX-RU-LABELS-01`).
+
+The last column, «ID замечания», is the finding's ``finding_uid`` (`R-151d`): the key by which
+:mod:`.decision_import` reads an edited «Решение эксперта» back. A «также найдено» row leaves it
+empty; the display number «№» is never a key.
 """
 
 from __future__ import annotations
@@ -44,6 +48,7 @@ FINDING_COLUMNS: Final[tuple[str, ...]] = (
     "Цитата нормы",
     "Решение эксперта",
     "Комментарий",
+    "ID замечания",
 )
 
 _PARTS: Final[tuple[str, ...]] = (
@@ -285,6 +290,7 @@ def _findings(source: WorkbookInput, cells: _Cells) -> bytes:
                     norm_quotes,
                     _verdict_label(finding.expert_decision),
                     finding.comment,
+                    finding.finding_uid,
                 ),
                 style,
                 cells,
@@ -294,12 +300,12 @@ def _findings(source: WorkbookInput, cells: _Cells) -> bytes:
             rows.append(
                 _row(
                     len(rows) + 1,
-                    ("", member.sheet_page, "", "также найдено", "", "", "", "", "", "", member.note),
+                    ("", member.sheet_page, "", "также найдено", "", "", "", "", "", "", member.note, ""),
                     style,
                     cells,
                 )
             )
-    return _sheet(rows, (7, 21, 23, 54, 54, 28, 28, 45, 68, 27, 48))
+    return _sheet(rows, (7, 21, 23, 54, 54, 28, 28, 45, 68, 27, 48, 32))
 
 
 def _static_parts() -> dict[str, bytes]:

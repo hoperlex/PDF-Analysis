@@ -1,0 +1,46 @@
+/* `R-151h`: the decisions on optimisation proposals, dense rows as the original's knowledge base. Tokens only. */
+.list {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  gap: var(--am-gap-xs);
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.verdict {
+  color: var(--am-accent-strong);
+  font-weight: 600;
+}
+
+.text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.comment {
+  margin: 0;
+  font-size: var(--am-text-sm);
+}

@@ -151,6 +151,10 @@ class RunStatusView:
     binding: RunBindingView | None = None
     wait_reason: str | None = None
     waiting_since: datetime | None = None
+    #: `R-151v` (contract 1.21.0, migration 0051): the account that started the run and its display label; both
+    #: ``None`` for a run created before 0051, rendered only when present.
+    started_by_user_uid: str | None = None
+    started_by_label: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -245,6 +249,10 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         }
     if view.queue_reason is not None:
         body["queue_reason"] = view.queue_reason
+    if view.started_by_user_uid is not None:
+        body["started_by_user_uid"] = view.started_by_user_uid
+        if view.started_by_label is not None:
+            body["started_by_label"] = view.started_by_label
     if view.binding_state is not None:
         body["binding_state"] = view.binding_state
     if view.planned is not None:

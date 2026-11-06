@@ -202,8 +202,12 @@ def test_the_reaudit_port_stamps_the_deployment_and_reports_lineage(
     )
     port = ExecutionAdapter(lambda: nullcontext(session), runs=runs)
 
+    # Since migration 0051 the run records who started it (`R-151v`): the caller is a real account.
+    from auditmanager.access.public import UserRepository
+
+    starter = UserRepository().create_user(session, f"w53c-{_key()}@example.com", f"w53c-passphrase-{_key()}")
     view = port.reaudit_run(
-        run_id=source_id, user_uid="usr_" + str(RunId.new()).split("_", 1)[1],
+        run_id=source_id, user_uid=str(starter.user_uid),
         idempotency_key=_key(),
     )
 

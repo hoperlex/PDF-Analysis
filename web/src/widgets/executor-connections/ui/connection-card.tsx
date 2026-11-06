@@ -113,7 +113,7 @@ function RevisionSummary({ revision }: { readonly revision: ExecutorRevision }) 
   // A revision without the member is a revision from before capacity existed: one at a time.
   const activeRuns = revision.max_active_runs ?? 1;
   return (
-    <dl data-executor-revision={revision.revision_no}>
+    <dl className={styles.revision} data-executor-revision={revision.revision_no}>
       <dt>Настройки</dt>
       <dd>
         версия {revision.revision_no}, сохранена <Moment at={revision.created_at} />, автор{' '}

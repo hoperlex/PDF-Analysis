@@ -252,6 +252,76 @@ class IngestService:
         with session_scope(self._factory) as session:
             return self._documents.list_versions(session, document_uid)
 
+    # -- lifecycle (`R-151a`, migration 0052) ---------------------------------
+
+    def tags_in_project(self, project_uid: ProjectUid) -> dict[str, list[str]]:
+        with session_scope(self._factory) as session:
+            return self._documents.tags_in(session, project_uid)
+
+    def tag_catalogue(self, project_uid: ProjectUid) -> list[tuple[str, int]]:
+        with session_scope(self._factory) as session:
+            return self._documents.tag_catalogue(session, project_uid)
+
+    def tags_of_document(self, document_uid: DocumentUid) -> list[str]:
+        with session_scope(self._factory) as session:
+            return self._documents.tags_of(session, document_uid)
+
+    def set_document_tags(
+        self, *, project_uid: str, document_uid: str, tags: list[str], actor_uid: str, idempotency_key: str,
+    ) -> tuple[DocumentVersionRecord, Any, list[str]]:
+        """`R-151e`: replace a document's tags; answer its current version, archive time and tags."""
+        from auditmanager.ingest.lifecycle import set_document_tags
+
+        with session_scope(self._factory) as session:
+            set_document_tags(
+                session, project_uid=project_uid, document_uid=document_uid, tags=tags,
+                actor_uid=actor_uid, idempotency_key=idempotency_key,
+            )
+            record, archived_at = self._current(session, DocumentUid.parse(document_uid))
+            return record, archived_at, self._documents.tags_of(session, DocumentUid.parse(document_uid))
+
+    def document_archived_at(self, document_uid: DocumentUid) -> Any:
+        """When one document was archived, ``None`` while in use. Unknown is ``not_found``."""
+        with session_scope(self._factory) as session:
+            return self._documents.document_state(session, document_uid)[1]
+
+    def archived_documents(self, project_uid: ProjectUid) -> dict[str, Any]:
+        """``{document_uid: archived_at}`` of one project's archived documents."""
+        with session_scope(self._factory) as session:
+            return self._documents.archived_in(session, project_uid)
+
+    def set_document_archived(
+        self, *, project_uid: str, document_uid: str, archived: bool, actor_uid: str, idempotency_key: str,
+    ) -> tuple[DocumentVersionRecord, Any]:
+        """Archive or restore a document; answer its current version and its archive time (``None`` in use)."""
+        from auditmanager.ingest.lifecycle import set_document_archived
+
+        with session_scope(self._factory) as session:
+            set_document_archived(
+                session, project_uid=project_uid, document_uid=document_uid, archived=archived,
+                actor_uid=actor_uid, idempotency_key=idempotency_key,
+            )
+            return self._current(session, DocumentUid.parse(document_uid))
+
+    def rename_document(
+        self, *, project_uid: str, document_uid: str, display_title: str, actor_uid: str, idempotency_key: str,
+    ) -> tuple[DocumentVersionRecord, Any]:
+        """Change a document's display title; answer its current version and its archive time."""
+        from auditmanager.ingest.lifecycle import rename_document
+
+        with session_scope(self._factory) as session:
+            rename_document(
+                session, project_uid=project_uid, document_uid=document_uid, display_title=display_title,
+                actor_uid=actor_uid, idempotency_key=idempotency_key,
+            )
+            return self._current(session, DocumentUid.parse(document_uid))
+
+    def _current(self, session: Any, document_uid: DocumentUid) -> tuple[DocumentVersionRecord, Any]:
+        current, archived_at = self._documents.document_state(session, document_uid)
+        if current is None:  # pragma: no cover - a listed document always has a version
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="DocumentVersion")
+        return self._documents.get_version(session, current), archived_at
+
     # -- reads ---------------------------------------------------------------
 
     def get_version(self, version_uid: VersionUid) -> DocumentVersionRecord:

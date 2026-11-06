@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-277 operations, sealed. `A5` generates the typed client from this document; `B6`
+287 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1037,6 +1037,43 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-P0O` (contract `1.30.0`, no migration) adds `listVersionSheetLabels`: each page's sheet label from the
+version's portal geometry, so a finding's page is shown with its sheet as in the original.
+
+`UI-PARITY-P0N` (contract `1.29.0`, no migration) adds `getProject`: one project as `listProjects` lists it, `404` when
+unknown, for the screens that name their project.
+
+`UI-PARITY-P0M` (contract `1.28.0`, no migration) completes the queue group A of `UI-PARITY-01`: `listExecutionQueue`'s page
+gains the overview by state, and each item a queued job's place in the dispatcher's order and its attempt count.
+
+`UI-PARITY-P0L` (contract `1.27.0`, no migration) adds `importRunDecisions` (`R-151d`): the run's own workbook, edited,
+loaded back by `finding_uid` (the new «ID замечания» column); each changed row is an ordinary decision event by the
+importer, every row is reported. Keyed, `expert`.
+
+`UI-PARITY-P0J` (contract `1.25.0`, no migration) adds `listProposalDecisionJournal` (`R-151h`): the decisions on
+optimisation proposals as the knowledge base's «Предложения» half, a product read.
+
+`UI-PARITY-P0I` (contract `1.24.0`, migration `0054_finding_execution_status`) adds the designer's execution status of an
+accepted finding (`R-151g`): `setFindingExecutionStatus` (keyed, `expert`), `Finding.execution_status`. Not a decision.
+
+`UI-PARITY-P0H` (contract `1.23.0`, migration `0053_document_tags`) adds free tags on a document (`R-151e`):
+`setDocumentTags` (keyed, `expert` or `admin`) and the catalogue `listDocumentTags` (a product read); `listDocuments` filters by
+`tag`; `DocumentVersion.tags`.
+
+`UI-PARITY-P0G` (contract `1.22.0`, migration `0052_document_archive`) lets a document be archived or renamed, never deleted
+(`R-151a`): `setDocumentArchived` and `renameDocument`, keyed, `expert` or `admin`; `listDocuments` hides an archived document
+unless `include_archived`; `DocumentVersion.archived_at`. The history is the audit trail of `Document`.
+
+`UI-PARITY-P0F` (contract `1.21.0`, migration `0051_run_started_by`) records who started a run (`R-151v`): `startRun` and
+`reauditRun` write the subject into `audit_run.started_by_user_uid`, a frozen RESTRICT reference; `RunStatus` carries
+`started_by_user_uid` and `started_by_label`, `ExecutionQueueItem` `started_by_label`, each absent for an older run.
+
+`UI-PARITY-P0E` (contract `1.20.0`, no migration) added two reads. `listDocuments` takes the optional `section_code`
+filter (a `ProjectSection`): only documents whose current version is confirmed for that section, unclassified ones never; the
+section page of ruling `R-151l` reads it. `getExecutionDispatch` (`GET /execution/dispatch`) returns the durable pause state
+`setExecutionPaused` writes, for the pause indicator of ruling `R-151f`; any one of `expert` and `admin`, `viewer` refused
+(`R-150w`). No error code, no migration.
+
 `UI-PARITY-P0B` (contract `1.19.0`, no migration) added the audit state of a document and its counters and no operation. A new
 schema `DocumentAuditCounts` (`document_count`, `not_run`, `clean`, `awaiting_decision`, `checked`, `partial`,
 `no_expert_decision`) is carried by `listProjects` (the optional `audit_counts` of each `Project`; `createProject` omits it) and
@@ -1066,6 +1103,15 @@ could.
 | `listProjects` | `GET /projects` |
 | `uploadDocument` | `POST /projects/{project_uid}/documents` |
 | `uploadDocumentVersion` | `POST /projects/{project_uid}/documents/{document_uid}/versions` |
+| `setDocumentArchived` | `PUT /projects/{project_uid}/documents/{document_uid}/archive` |
+| `renameDocument` | `PUT /projects/{project_uid}/documents/{document_uid}/title` |
+| `setDocumentTags` | `PUT /projects/{project_uid}/documents/{document_uid}/tags` |
+| `listDocumentTags` | `GET /projects/{project_uid}/document-tags` |
+| `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
+| `listProposalDecisionJournal` | `GET /proposal-decisions` |
+| `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
+| `getProject` | `GET /projects/{project_uid}` |
+| `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
 | `getDocumentVersion` | `GET /versions/{version_uid}` |
 | `streamDocumentVersionContent` | `GET /versions/{version_uid}/content` |
 | `startRun` | `POST /runs` |
@@ -1111,6 +1157,7 @@ could.
 | `reauditRun` | `POST /runs/{run_id}/reaudit` |
 | `setJobPriority` | `PUT /execution/queue/{job_id}/priority` |
 | `setExecutionPaused` | `PUT /execution/dispatch` |
+| `getExecutionDispatch` | `GET /execution/dispatch` |
 | `listWorkers` | `GET /execution/workers` |
 | `setWorkerIntake` | `PUT /execution/workers/{worker_id}/intake` |
 | `searchNorms` | `GET /norms/search` |
@@ -1345,7 +1392,8 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`,
+  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
+  `importRunDecisions`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,
   `setExecutorSecret`, `generateExecutorSshKey`, `requestExecutorProbe`,

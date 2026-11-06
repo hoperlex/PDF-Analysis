@@ -108,6 +108,24 @@ REQUIRED_OPERATIONS = {
     "reauditRun",
     "setJobPriority",
     "setExecutionPaused",
+    # `UI-PARITY-P0E`, `R-151f`. The durable pause state, read without the queue.
+    "getExecutionDispatch",
+    # `UI-PARITY-P0G`, `R-151a`. A document is archived or renamed, never deleted.
+    "setDocumentArchived",
+    "renameDocument",
+    # `UI-PARITY-P0H`, `R-151e`. Free tags on a document and the project's catalogue.
+    "setDocumentTags",
+    "listDocumentTags",
+    # `UI-PARITY-P0I`, `R-151g`. The designer's execution status of an accepted finding.
+    "setFindingExecutionStatus",
+    # `UI-PARITY-P0J`, `R-151h`. The knowledge base's proposal half.
+    "listProposalDecisionJournal",
+    # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
+    "importRunDecisions",
+    # `UI-PARITY-P0N`. One project as the listing gives it.
+    "getProject",
+    # `UI-PARITY-P0O`. Each page's sheet label, from the portal geometry.
+    "listVersionSheetLabels",
     # `W54-SEAL-01`, `R-105`. The worker registry: a read for any role, an administrator's
     # intake switch. Sealed as stubs until `W54-WORKER-01`.
     "listWorkers",
@@ -403,6 +421,13 @@ WRITE_OPERATIONS = {
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",
+    # `UI-PARITY-P0G`. Keyed like `setExecutionPaused`: a replay answers the same state and writes no second event.
+    "setDocumentArchived",
+    "renameDocument",
+    "setDocumentTags",
+    "setFindingExecutionStatus",
+    # `UI-PARITY-P0L`. Appends decision events, so it is keyed like `appendDecision`; a replay answers the stored report.
+    "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
     # `COMPARE-PERSISTED-SUMMARY-01`. Each appends a row of the sheet-link history, so both are keyed.
@@ -918,10 +943,12 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
     # work kind, with the mode) and the cut-over preview each take no identity, no filter and no body.
     # `UI-PARITY-P0A` removes ``getDashboardSummary``: it takes the optional ``project_uid`` filter, so it now
     # declares the ``404`` and ``422`` an input-taking operation must (``listDecisions`` already had its own).
+    # `UI-PARITY-P0E` adds ``getExecutionDispatch``: the installation's pause state addresses no identity.
     {"getMe", "getProductVersion", "listReleases", "listAnalysisProfiles",
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
-     "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting"}
+     "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
+     "getExecutionDispatch"}
 )
 
 

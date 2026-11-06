@@ -586,7 +586,13 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-P0A` adds one: `getDashboardSummary` names a project in its optional `project_uid`
         # filter, and a project that does not exist is `not_found` and never a summary of zeros (as the
         # unknown `project_uid` filter of `getSectionSpecification` is `404` too).
-        assert len(report) == 209, report
+        # `UI-PARITY-P0G` adds two: `setDocumentArchived` and `renameDocument` address a document by identity.
+        # `UI-PARITY-P0H` adds two: `setDocumentTags` and `listDocumentTags` address a document or a project.
+        # `UI-PARITY-P0I` adds one: `setFindingExecutionStatus` addresses a finding.
+        # `UI-PARITY-P0L` adds one: `importRunDecisions` addresses a run.
+        # `UI-PARITY-P0N` adds one: `getProject` addresses a project.
+        # `UI-PARITY-P0O` adds one: `listVersionSheetLabels` addresses a version.
+        assert len(report) == 217, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

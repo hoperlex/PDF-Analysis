@@ -288,6 +288,12 @@ export const queryKeys = {
     journal: (runId?: RunId, cursor?: string) =>
       ['execution', 'journal', { runId, cursor }] as const,
     /**
+     * `getExecutionDispatch` (`UI-PARITY-P0E`, `R-151f`): the installation's pause state, read by the top
+     * strip on every screen. Under `execution`, so pausing or resuming (which invalidates `execution.all`)
+     * refreshes it at once.
+     */
+    dispatch: () => ['execution', 'dispatch'] as const,
+    /**
      * One page of `listWorkers` (`W54-WORKERS-WEB`). The page size is part of the key: the
      * «Исполнители» screen pages through the registry, and the queue and run screens read
      * one larger first page only to name the worker holding a run.
@@ -323,8 +329,14 @@ export const queryKeys = {
      * invalidates `projects.detail(project_uid)`; a key under `versions` would not be
      * reached by that invalidation and the screen would show a stale project.
      */
-    documents: (projectUid: ProjectUid, cursor?: string, limit?: number) =>
-      ['projects', 'documents', projectUid, { cursor, limit }] as const,
+    documents: (
+      projectUid: ProjectUid, cursor?: string, limit?: number, sectionCode?: string, archived?: boolean, tag?: string,
+    ) =>
+      ['projects', 'documents', projectUid, {
+        cursor, limit, section: sectionCode, archived: archived === true ? true : undefined, tag,
+      }] as const,
+    /** `R-151e`: the project's tag catalogue (`listDocumentTags`). Under `projects`, so a tag change re-reads it. */
+    tags: (projectUid: ProjectUid) => ['projects', 'tags', projectUid] as const,
   },
   versions: {
     all: () => ['versions'] as const,
@@ -360,6 +372,8 @@ export const queryKeys = {
      */
     portalBlocks: (versionUid: VersionUid, limit: number) =>
       ['versions', 'portal-blocks', versionUid, { limit }] as const,
+    /** `UI-PARITY-P0O`: each page's sheet label (`listVersionSheetLabels`), from the same portal geometry. */
+    sheetLabels: (versionUid: VersionUid) => ['versions', 'sheet-labels', versionUid] as const,
     /**
      * `getVersionSectionReview` for one version (`W59-SECTION-UI-01`): the fifteen section
      * choices, their suggestion evidence, whether each has an analysis profile, and the
@@ -464,6 +478,9 @@ export const queryKeys = {
      */
     journal: (filters: DecisionJournalFilters = {}) =>
       ['findings', 'journal', filters] as const,
+    /** `R-151h`: one page of the proposal decision journal (`listProposalDecisionJournal`), by its filters. */
+    proposalJournal: (filters: { readonly project_uid?: string; readonly cursor?: string; readonly limit?: number } = {}) =>
+      ['findings', 'proposal-journal', filters] as const,
   },
   /**
    * `getDashboardSummary`. `W46-WIRE`.

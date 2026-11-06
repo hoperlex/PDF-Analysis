@@ -114,6 +114,26 @@ _INSERT_DOCUMENT = text(
 _SELECT_DOCUMENT = text(
     "SELECT document_uid, project_uid FROM document WHERE document_uid = :document_uid"
 )
+#: `R-151a` (migration 0052): the archived documents of one project, with when they were archived.
+_SELECT_ARCHIVED = text(
+    "SELECT document_uid, archived_at FROM document WHERE project_uid = :project_uid AND archived_at IS NOT NULL"
+)
+#: `R-151e` (migration 0053): the tags of one project's documents, and its tag catalogue (archived documents excluded).
+_SELECT_TAGS_IN = text(
+    "SELECT t.document_uid, t.tag FROM document_tag t JOIN document d ON d.document_uid = t.document_uid "
+    "WHERE d.project_uid = :project_uid ORDER BY lower(t.tag), t.tag"
+)
+_SELECT_TAG_CATALOGUE = text(
+    "SELECT min(t.tag) AS tag, count(*) AS document_count FROM document_tag t "
+    "JOIN document d ON d.document_uid = t.document_uid "
+    "WHERE d.project_uid = :project_uid AND d.archived_at IS NULL "
+    "GROUP BY lower(t.tag) ORDER BY lower(min(t.tag))"
+)
+_SELECT_TAGS_OF = text("SELECT tag FROM document_tag WHERE document_uid = :document_uid ORDER BY lower(tag), tag")
+#: `R-151a`: one document's current version and archive state.
+_SELECT_DOCUMENT_STATE = text(
+    "SELECT current_version_uid, archived_at FROM document WHERE document_uid = :document_uid"
+)
 #: `W59-VERSION-UPLOAD-01`. The document row is locked before its next ordinal is read, so
 #: two publications into one document serialise here and the second reads the first's
 #: committed ordinal (each statement under ``READ COMMITTED`` takes a fresh snapshot).
@@ -620,6 +640,34 @@ class DocumentRepository:
         if row is None:
             raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
         return ProjectUid(tuple(row)[1])
+
+    def archived_in(self, session: Session, project_uid: ProjectUid) -> dict[str, Any]:
+        """`R-151a`: ``{document_uid: archived_at}`` of the project's archived documents."""
+        rows = session.execute(_SELECT_ARCHIVED, {"project_uid": str(project_uid)}).all()
+        return {str(row[0]): row[1] for row in rows}
+
+    def tags_in(self, session: Session, project_uid: ProjectUid) -> dict[str, list[str]]:
+        """`R-151e`: ``{document_uid: [tag, ...]}`` of one project, each list in case-insensitive order."""
+        out: dict[str, list[str]] = {}
+        for row in session.execute(_SELECT_TAGS_IN, {"project_uid": str(project_uid)}).all():
+            out.setdefault(str(row[0]), []).append(str(row[1]))
+        return out
+
+    def tag_catalogue(self, session: Session, project_uid: ProjectUid) -> list[tuple[str, int]]:
+        """`R-151e`: each tag of the project's documents in use, with how many documents carry it."""
+        self.get_project(session, project_uid)
+        rows = session.execute(_SELECT_TAG_CATALOGUE, {"project_uid": str(project_uid)}).all()
+        return [(str(row[0]), int(row[1])) for row in rows]
+
+    def tags_of(self, session: Session, document_uid: DocumentUid) -> list[str]:
+        return [str(row[0]) for row in session.execute(_SELECT_TAGS_OF, {"document_uid": str(document_uid)}).all()]
+
+    def document_state(self, session: Session, document_uid: DocumentUid) -> tuple[VersionUid | None, Any]:
+        """`R-151a`: a document's current version and when it was archived (``None`` in use). Unknown is refused."""
+        row = session.execute(_SELECT_DOCUMENT_STATE, {"document_uid": str(document_uid)}).first()
+        if row is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Document")
+        return (None if row[0] is None else VersionUid(str(row[0]))), row[1]
 
     # -- versions ------------------------------------------------------------
 

@@ -9,6 +9,7 @@ export type {
   ProposalSetChooserProps,
 } from './ui/optimisation-proposals';
 export {
+  OptimisationByDocument,
   ExportProposalsView,
   OptimisationProposals,
   PassList,

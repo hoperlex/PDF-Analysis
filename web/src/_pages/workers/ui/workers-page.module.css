@@ -61,7 +61,7 @@
 
 .panel {
   margin-top: var(--am-gap);
-  padding: var(--am-gap-lg);
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);

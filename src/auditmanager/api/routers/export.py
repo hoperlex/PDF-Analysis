@@ -14,17 +14,23 @@ poll, because a synchronous read creates nothing.
 workbook: :class:`~auditmanager.api.routers.ports.XlsxExportPort` returns the bytes and
 every refusal, and this file adds the media type and the download name -- built by
 :func:`_disposition`, the one place a download name is spelled.
+
+``importRunDecisions`` (`R-151d`, contract 1.27.0) is the way back: the same workbook, edited,
+uploaded for the same run. The file handle goes to the port unread; the reading, every refusal
+and the per-row report are ``auditmanager.exports.import_run_decisions``'s.
 """
 
 from __future__ import annotations
 
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Path, Response
+from fastapi import APIRouter, Depends, Form, Path, Response
 
 from auditmanager.api.routers.declarations import envelope_responses, success
+from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
+from auditmanager.api.routers.multipart import CheckedUpload, UploadRoute, require_a_strict_multipart_body
 from auditmanager.api.routers.ports import CsvExportPort, XlsxExportPort
-from auditmanager.api.routers.wire import WireResponse
+from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
 from auditmanager.api.security import CurrentSubject
 
@@ -128,6 +134,55 @@ def build_export_routes(
             ),
             content,
         )
+
+    # Declared through ``add_api_route`` for ``route_class_override``: ``UploadRoute`` parses the
+    # form under the upload's small part bounds, as it does for ``uploadPriceList``.
+    def import_run_decisions(
+        subject: CurrentSubject,
+        run_id: Annotated[models.RunId, Path()],
+        body: Annotated[models.ImportRunDecisionsRequest, Form(media_type="multipart/form-data")],
+        idempotency_key: RequiredIdempotencyKey,
+        checked: Annotated[CheckedUpload, Depends(require_a_strict_multipart_body)],
+    ) -> WireResponse:
+        del checked  # a repeated, unnamed or filename-less part was refused before this runs
+        report = xlsx.import_run_decisions(  # type: ignore[union-attr]
+            run_id=run_id, content=body.file.file, idempotency_key=idempotency_key,
+            author_label=subject.display_label, author_user_uid=subject.user_uid,
+        )
+        return json_response(200, encode_json(report.model_dump(mode="json", exclude_none=True)))
+
+    router.add_api_route(
+        "/runs/{run_id}/decision-imports",
+        import_run_decisions,
+        methods=["POST"],
+        operation_id="importRunDecisions",
+        tags=["export"],
+        status_code=200,
+        response_model=models.DecisionImportReport,
+        responses={
+            **success(200, "What the import did with each row that names an ID or a decision."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+        route_class_override=UploadRoute,
+        description=(
+            "`UI-PARITY-P0L` (contract 1.27.0, ruling `R-151d`): load back the run's workbook as "
+            "`exportRunXlsx` produced it, with «Решение эксперта» and «Комментарий» edited, at most 10 MiB. "
+            "Only our export is read: a workbook without a «Замечания» sheet naming the columns «ID замечания», "
+            "«Решение эксперта» and «Комментарий» is `422 validation_failed` (`field: file`, `constraint: "
+            "not_our_export`), as is a file that is not a readable XLSX (`unreadable`), is larger (`too_large`) "
+            "or has more than 20 000 rows (`too_many_rows`); nothing is recorded then. Rows are matched by "
+            "`finding_uid`, never by «№». A row whose decision changes appends an `accept` or `reject` event "
+            "carrying the row's comment, a row whose comment alone changes appends a `comment` event, both "
+            "authored by the caller exactly as `appendDecision` would; the severity columns are not read and "
+            "nothing is revoked. Every row naming an ID or a decision is reported, in sheet order, as "
+            "`recorded`, `unchanged` or `refused` with a `reason`: `no_finding_uid`, `duplicate_finding`, "
+            "`unknown_finding`, `finding_not_in_run`, `unknown_decision` (not one of the four labels the "
+            "export writes) or `not_importable` («не решено» or «нужен ручной разбор» over another verdict). "
+            "`finding_uid` is reported only for a published finding. An unknown run is `404`. An exact repeat "
+            "of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another "
+            "file, run or caller is `409 idempotency_key_reuse`. `expert` only."
+        ),
+    )
 
 
 def _disposition(run_id: str, *, suffix: str = "csv") -> str:

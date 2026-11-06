@@ -15,8 +15,8 @@
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--am-gap);
-  margin: 0 0 var(--am-gap-lg);
-  padding: var(--am-gap-lg);
+  margin: 0 0 var(--am-gap);
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);
@@ -29,7 +29,7 @@
 
 .project {
   margin: 0 0 var(--am-gap);
-  padding: var(--am-gap-lg);
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);

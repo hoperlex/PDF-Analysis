@@ -40,7 +40,8 @@ function outline(navigation: Navigation): string[] {
  */
 const R66 = [
   'Работа: Дашборд /dashboard, Оптимизация разделов /section-optimisation, Диспетчер /dispatcher, Сравнение версий /version-comparison, Сравнение стадий /stage-comparison',
-  'Знания: База знаний /knowledge-base, Блоки /blocks, Нормы /norms',
+  // `R-151m`: «Блоки» is a tab of the version, out of the menu.
+  'Знания: База знаний /knowledge-base, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];
 const ADMIN_MENU = 'Администрирование: Пользователи /admin/users, Заявки на регистрацию /admin/registrations';
@@ -119,9 +120,10 @@ describe('navigation disclosure behavior', () => {
 describe('navigation glyph coverage', () => {
   it('has a distinct drawn glyph for every currently offered menu label', () => {
     const labels = buildNavigation(ADMIN_AND_EXPERT).groups.flatMap((group) => group.items.map((item) => item.label));
-    // `R-150b`: «Проекты» left the menu, and its glyph is the one drawing no menu row any more. It is named
-    // here so that it is the only one: every other glyph is a menu row, and every menu row has its glyph.
-    const RETIRED_FROM_THE_MENU = ['Проекты'];
+    // `R-150b`: «Проекты» left the menu, and `R-151m` took «Блоки» out too; their glyphs draw no menu row any
+    // more. They are named here so that they are the only ones: every other glyph is a menu row, and every menu
+    // row has its glyph.
+    const RETIRED_FROM_THE_MENU = ['Проекты', 'Блоки'];
     expect([...NAVIGATION_GLYPH_LABELS].sort()).toEqual([...labels, ...RETIRED_FROM_THE_MENU].sort());
     for (const label of labels) {
       const markup = renderToStaticMarkup(createElement(NavigationGlyph, { label }));
@@ -287,11 +289,11 @@ describe('the current group and item', () => {
 
   it('marks the group button aria-current="true" and the item aria-current="page" in all states', () => {
     // The same destination is present in the full sidebar, compact rail and stacked menu.
-    const markup = draw('/blocks');
+    const markup = draw('/norms');
     expect(currentButtons(markup)).toEqual(['Знания', 'Меню', 'Знания']);
-    expect(currentLinks(markup)).toEqual(['/blocks', '/blocks', '/blocks']);
-    expect(markup).toContain('aria-label="Блоки" aria-current="page"');
-    expect(markup).toContain('data-nav-glyph="blocks"');
+    expect(currentLinks(markup)).toEqual(['/norms', '/norms', '/norms']);
+    expect(markup).toContain('aria-label="Нормы" aria-current="page"');
+    expect(markup).toContain('data-nav-glyph="norms"');
   });
 
   it('marks the group but no item on a page the menu does not list', () => {

@@ -14,8 +14,13 @@
  * the active experts a creation or a reassignment may name.
  */
 
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+
 import type { Account, Role } from '@/shared/api';
+import { readProjectContext, switchProject } from '@/shared/lib';
 import { useMe } from '@/entities/account';
+import { useProjectList } from '@/entities/project';
 import { USER_PAGE_LIMIT, useUsers } from '@/entities/user';
 import { canAssignWork } from '@/entities/assignment';
 import { CreateAssignmentForm } from '@/features/create-assignment';
@@ -35,7 +40,23 @@ export function expertOptions(accounts: readonly Account[]): readonly ExpertOpti
     .map((account) => ({ userUid: account.user_uid, label: account.display_label }));
 }
 
-function AdministratorTools({ roles, viewerUid }: { readonly roles: readonly Role[]; readonly viewerUid: string | null }) {
+/** This screen's registry address, the one `readProjectContext` classifies (`R-151m`: it follows the header). */
+const DISPATCHER_ADDRESS = '/dispatcher';
+const NO_PARAMS = new URLSearchParams();
+
+/** «Все проекты» or the project's name, and the way back to all of them, as the dashboard says its scope. */
+function ProjectScope({ projectUid, allProjectsHref }: { readonly projectUid: string | null; readonly allProjectsHref: string }) {
+  const projects = useProjectList(undefined, { enabled: projectUid !== null });
+  if (projectUid === null) return <p className="am-note" data-dispatcher-scope="all">Все проекты</p>;
+  const name = projects.data?.items.find((item) => item.project_uid === projectUid)?.name ?? 'Проект';
+  return (
+    <p className="am-note" data-dispatcher-scope="project">
+      Проект: {name} · <Link href={allProjectsHref}>Все проекты</Link>
+    </p>
+  );
+}
+
+function AdministratorTools({ roles, viewerUid, projectUid }: { readonly roles: readonly Role[]; readonly viewerUid: string | null; readonly projectUid: string | null }) {
   const users = useUsers({ includeArchived: false, limit: USER_PAGE_LIMIT });
   const experts = users.isSuccess ? expertOptions(users.data.items) : [];
   return (
@@ -51,13 +72,19 @@ function AdministratorTools({ roles, viewerUid }: { readonly roles: readonly Rol
       </section>
       <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
         <h2>Назначения</h2>
-        <AssignmentBoard roles={roles} viewerUid={viewerUid} experts={experts} />
+        <AssignmentBoard key={projectUid ?? 'all'} roles={roles} viewerUid={viewerUid} experts={experts} projectUid={projectUid} />
       </section>
     </div>
   );
 }
 
 export function DispatcherPage({ roles }: DispatcherPageProps) {
+  // `R-151m`: the project comes from the address only; a reload or a pasted link restores it.
+  const pathname = usePathname();
+  const searchParams = useSearchParams() ?? NO_PARAMS;
+  const { projectUid } = readProjectContext(pathname ?? '', searchParams);
+  const withoutProject = switchProject(searchParams, null).toString();
+  const allProjectsHref = withoutProject === '' ? DISPATCHER_ADDRESS : `${DISPATCHER_ADDRESS}?${withoutProject}`;
   const me = useMe();
   const viewerUid = me.isSuccess ? me.data.user_uid : null;
   const admin = canAssignWork(roles);
@@ -72,12 +99,13 @@ export function DispatcherPage({ roles }: DispatcherPageProps) {
         </p>
       </header>
       <div className="am-page__body am-page__body--canvas">
+        <ProjectScope projectUid={projectUid} allProjectsHref={allProjectsHref} />
         {admin ? (
-          <AdministratorTools roles={roles} viewerUid={viewerUid} />
+          <AdministratorTools roles={roles} viewerUid={viewerUid} projectUid={projectUid} />
         ) : (
           <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
             <h2>Мои назначения</h2>
-            <AssignmentBoard roles={roles} viewerUid={viewerUid} experts={[]} />
+            <AssignmentBoard key={projectUid ?? 'all'} roles={roles} viewerUid={viewerUid} experts={[]} projectUid={projectUid} />
           </section>
         )}
       </div>

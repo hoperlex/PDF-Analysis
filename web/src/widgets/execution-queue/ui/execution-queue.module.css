@@ -8,20 +8,20 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: var(--am-gap-sm);
 }
 
 .row {
   min-width: 0;
   max-width: 100%;
-  padding: 1rem;
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: 0.5rem;
+  border-radius: var(--am-radius-sm);
   overflow-wrap: anywhere;
 }
 
 .row p {
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--am-gap-xs);
 }
 
 .work {
@@ -31,6 +31,18 @@
 .identity code {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* The job's times, as many to a row as the panel holds. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 2px var(--am-gap);
+  margin-bottom: var(--am-gap-xs);
+}
+
+.facts > p {
+  margin: 0;
 }
 
 .heading,

@@ -1078,7 +1078,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.19.0',
+    contract_version: '1.30.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1090,7 +1090,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.19.0',
+    contract_version: '1.30.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1204,6 +1204,8 @@ const KEYS = {
   projects: queryKeys.projects.list(undefined, PROJECT_PAGE_LIMIT),
   project: queryKeys.projects.detail(PROJECT_UID),
   documents: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT),
+  // `R-151l`: the section page's own read, `listDocuments` with `section_code` (the route seeds `AR`).
+  sectionDocuments: queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR'),
   versions: queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT),
   version: queryKeys.versions.detail(VERSION_UID),
   // `W59-SECTION-UI-01`: the version screen's stage-and-section panel.
@@ -1283,6 +1285,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.projects, { items: [project()], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [version()], page });
+  client.setQueryData(KEYS.sectionDocuments, { items: [version()], page });
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.version, version());
   // Unconfirmed, so the expert's seed draws the form and the reader's seed its sentence.
@@ -1442,6 +1445,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.projects, { items: [], page });
   client.setQueryData(KEYS.project, project());
   client.setQueryData(KEYS.documents, { items: [], page });
+  client.setQueryData(KEYS.sectionDocuments, { items: [], page });
   client.setQueryData(KEYS.versions, { items: [], page });
   client.setQueryData(KEYS.version, version());
   client.setQueryData(KEYS.runs, { items: [], page });
@@ -1921,7 +1925,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.19.0',
+    contract_version: '1.30.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2129,7 +2133,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.19.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.30.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -4152,7 +4156,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.19.0',
+            contract_version: '1.30.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4174,7 +4178,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.19.0',
+            contract_version: '1.30.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -5146,6 +5150,22 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  * red rather than leaving a stale excuse in place.
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
+  {
+    label: 'Загрузка: решения по предложениям…',
+    why: 'R-151h: the knowledge base reads the proposal journal only after «Тип: Предложения» is pressed; one static pass renders «Замечания». tests/unit/knowledge-base/proposal-journal.test.ts renders the loading branch of ProposalDecisions.',
+  },
+  {
+    label: 'Решений по предложениям оптимизации нет.',
+    why: 'R-151h: the empty proposal journal is drawn only after «Тип: Предложения» is pressed; tests/unit/knowledge-base/proposal-journal.test.ts renders it.',
+  },
+  {
+    label: 'Блоков нет.',
+    why: 'R-151m: the version\'s «Блоки» tab says this only for a version admitted for comparison only (upload_kind comparison_pdf); the matrix seeds one portal-bundle version for every screen. tests/unit/blocks/version-blocks.test.ts seeds that version and reads the sentence.',
+  },
+  {
+    label: 'Эта версия из другого проекта.',
+    why: 'R-151m: the version\'s «Блоки» tab says this only when the version read answers a project other than the one in the address; the matrix seeds one project for every screen. tests/unit/blocks/version-blocks.test.ts seeds the mismatch and reads the sentence.',
+  },
   {
     label: 'Роли не сохранены',
     why: 'R-150e: the user form shows this only after its submit finds «Наблюдатель» ticked beside another role; one static render cannot tick boxes or submit. The rule itself is rolesCombinationAllowed, tested in tests/unit/entities/account.test.ts.',

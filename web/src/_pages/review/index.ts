@@ -20,3 +20,5 @@ export { resolveSelection, selectFinding, selectPage } from './model/selection';
  * (`web/tests/guards/lazy-boundary.guard.test.ts`).
  */
 export { EvidenceViewerEagerSeam } from './ui/lazy-evidence-viewer';
+export { ReviewRowActions, acceptNeedsSeverity } from './ui/review-row-actions';
+export type { ReviewRowActionsProps } from './ui/review-row-actions';

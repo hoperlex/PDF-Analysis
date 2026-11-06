@@ -102,7 +102,9 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
         # enrollment, install, group and routing operations, the cost estimates, the ZIP import and the technical report).
         # An operation is added here only when its contract declares the `422`; an operation that does not is still refused
         # FastAPI's own validation schema by the assertions above. Contract 1.17.0 (`UI-PARITY-P0A`) adds one, `getDashboardSummary`,
-        # whose optional `project_uid` query parameter can be refused: 186.
+        # whose optional `project_uid` query parameter can be refused: 186. Contracts 1.22.0 to 1.27.0 (`UI-PARITY-P0G` to
+        # `P0L`) add six: `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
+        # `listProposalDecisionJournal` and `importRunDecisions`: 192 of 285; 1.29.0 adds `getProject`: 193 of 286; 1.30.0 adds `listVersionSheetLabels`: 194 of 287.
         assert declared_422 == {
             "appendComparisonVersionOrder",
             "appendDecision",
@@ -159,6 +161,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "getExecutorGroup",
             "getExecutorGroupCapacity",
             "getExecutorTaskImage",
+            "getProject",
             "getSectionSpecification",
             "getSpecificationPrices",
             "getStageAssembly",
@@ -168,6 +171,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "getStageProfileText",
             "getStageSynthesis",
             "importComparisonZip",
+            "importRunDecisions",
             "issueExecutorEnrollment",
             "issueRunnerToken",
             "issueToken",
@@ -198,6 +202,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "listPriceListPositions",
             "listPriceListRevisions",
             "listProjects",
+            "listProposalDecisionJournal",
             "listRegistrations",
             "listRunFindings",
             "listRuns",
@@ -221,6 +226,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "listUsers",
             "listVersionPageProfiles",
             "listVersionPortalBlocks",
+            "listVersionSheetLabels",
             "listVersions",
             "listWorkers",
             "markReleaseNotesRead",
@@ -231,6 +237,7 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "recomputeStageTextEvidence",
             "redeemExecutorEnrollment",
             "rejectRegistration",
+            "renameDocument",
             "reportRunnerHealth",
             "requestExecutorProbe",
             "resetUserPassword",
@@ -246,12 +253,15 @@ class TestTheDocumentedAndTheWiredApplicationAgree:
             "revokeRunnerToken",
             "searchNorms",
             "setCurrentNormSnapshot",
+            "setDocumentArchived",
+            "setDocumentTags",
             "setExecutionPaused",
             "setExecutorIntegrationAuthorisation",
             "setExecutorRoute",
             "setExecutorRoutingMode",
             "setExecutorRoutingRule",
             "setExecutorSecret",
+            "setFindingExecutionStatus",
             "setGlobalVendorList",
             "setJobPriority",
             "setProjectVendorList",

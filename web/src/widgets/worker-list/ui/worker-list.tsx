@@ -35,11 +35,14 @@ function WorkerRow({
         <strong>{workerStateLabel(worker.state)}</strong>
         <span>{workerIntakeLabel(worker.intake_enabled)}</span>
       </div>
-      <p className={styles.identity}>Исполнитель <code>{worker.worker_id}</code></p>
-      <p>Слотов: {worker.slots}</p>
-      <p className={styles.identity}>Версия: <code>{worker.version}</code></p>
-      <p>Запущен: <time dateTime={worker.started_at}>{formatInstant(worker.started_at)}</time></p>
-      <p>Последний сигнал: <time dateTime={worker.heartbeat_at}>{formatInstant(worker.heartbeat_at)}</time></p>
+      {/* The worker's facts as a compact grid, as many to a row as the panel holds. */}
+      <div className={styles.facts}>
+        <p className={styles.identity}>Исполнитель <code>{worker.worker_id}</code></p>
+        <p>Слотов: {worker.slots}</p>
+        <p className={styles.identity}>Версия: <code>{worker.version}</code></p>
+        <p>Запущен: <time dateTime={worker.started_at}>{formatInstant(worker.started_at)}</time></p>
+        <p>Последний сигнал: <time dateTime={worker.heartbeat_at}>{formatInstant(worker.heartbeat_at)}</time></p>
+      </div>
       {worker.current_run_ids.length === 0 ? (
         <p data-worker-runs="0">Текущих прогонов нет.</p>
       ) : (

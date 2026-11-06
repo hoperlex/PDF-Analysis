@@ -107,6 +107,9 @@ class FindingView:
     decision_recorded_at: datetime | None = None
     merged_observations: tuple[ObservationView, ...] | None = None
     decided_severity: str | None = None
+    #: `R-151g` (contract 1.24.0, migration 0054): what the designer did with the accepted finding, and when it was set.
+    execution_status: str | None = None
+    execution_status_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +205,10 @@ def finding_body(view: FindingView) -> dict[str, Any]:
         body["merged_observations"] = [observation_body(item) for item in view.merged_observations]
     if view.decided_severity is not None:
         body["decided_severity"] = view.decided_severity
+    if view.execution_status is not None:
+        body["execution_status"] = view.execution_status
+        if view.execution_status_at is not None:
+            body["execution_status_at"] = timestamp(view.execution_status_at)
     for name in ("norm_citations", "required_value", "stated_value"):
         if name in body["observation"]:
             body[name] = body["observation"][name]

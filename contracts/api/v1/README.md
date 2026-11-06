@@ -11,7 +11,112 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.19.0` (`UI-PARITY-P0B`)
+## Current contract `1.30.0` (`UI-PARITY-P0O`)
+
+`listVersionSheetLabels` (`GET /versions/{version_uid}/sheet-labels`, any one role): the version's pages with the drawing
+sheet their portal blocks name and their block count, as the original's «Лист» beside a finding's page. Read from the
+portal geometry `listVersionPortalBlocks` reads; a page whose blocks name different sheets has no label, a page without a
+block is not listed, and a version without geometry answers `not_produced`. Schemas `VersionSheetLabel`,
+`VersionSheetLabelList`. No migration, no error code.
+The API now has 259 paths, 287 operations and 693 schemas; migration head `0054`. The domain catalogs are at candidate revision 48.
+
+## Contract `1.29.0` (`UI-PARITY-P0N`, historical)
+
+`getProject` (`GET /projects/{project_uid}`, any role that may list projects): one project exactly as `listProjects` lists
+it, so a screen that names its project (the project page's title, the «Где вы находитесь» strip) need not find it on a page
+of the listing. An unknown project is `404`. No schema, no migration, no error code.
+The API then had 258 paths, 286 operations and 691 schemas; migration head `0054`. The domain catalogs were at candidate revision 47.
+
+## Contract `1.28.0` (`UI-PARITY-P0M`, historical)
+
+The rest of `UI-PARITY-01`'s queue group A, as the original's queue line «N / M», «N ✓ M ✗» and its numbered items:
+`ExecutionQueuePage` gains `overview`, every job state with its count over the period filter (not the state filter), and
+`ExecutionQueueItem` gains `queue_position` (a queued job's place among every queued job in the dispatcher's order --
+priority, then the oldest first; the order, not a forecast) and `attempt_count`. One schema, `ExecutionQueueStateCount`.
+No operation, no migration, no error code.
+The API then had 257 paths, 285 operations and 691 schemas; migration head `0054`. The domain catalogs were at candidate revision 46.
+
+## Contract `1.27.0` (`UI-PARITY-P0L`, historical)
+
+Slice for ruling `R-151d`: decisions edited in our own Excel export are loaded back. `exportRunXlsx`'s «Замечания» sheet
+gains a last column, «ID замечания», holding the finding's `finding_uid` (empty on a «также найдено» row).
+`importRunDecisions` (`POST /runs/{run_id}/decision-imports`, multipart `file`, keyed, `expert`) reads only that sheet of
+our workbook (`422 validation_failed`, `field: file`, `constraint: not_our_export | unreadable | too_large |
+too_many_rows`, refuses a foreign file whole) and matches rows by `finding_uid`, never by «№». A changed «Решение
+эксперта» appends `accept` or `reject` with the row's comment, a changed «Комментарий» alone a `comment` event, both
+authored by the caller; nothing is revoked and the severity columns are not read. `DecisionImportReport` lists every row
+naming an ID or a decision as `recorded`, `unchanged` or `refused` with a `DecisionImportRefusal` reason. No migration,
+no error code.
+The API then had 257 paths, 285 operations and 690 schemas; migration head `0054`. The domain catalogs were at candidate revision 45.
+
+## Contract `1.26.0` (`UI-PARITY-P0K`, historical)
+
+Additive slice for ruling `R-151u`: `ExecutionQueueItem` gains the optional `estimated_finish_at` of a running job -- its
+first attempt's start plus the median duration of at least three recent completed runs of the same analysis profile and
+a page count within a quarter of its own (`execution/eta.py`); absent without enough history, never invented. No
+operation, no schema, no migration, no error code.
+The API then had 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs were at candidate revision 44.
+
+## Contract `1.25.0` (`UI-PARITY-P0J`, historical)
+
+Slice for ruling `R-151h`: the knowledge base's «Предложения» half. `listProposalDecisionJournal` (`GET /proposal-decisions`,
+a product read, optional `project_uid` filter, cursor and `total`) lists every expert decision on an optimisation proposal,
+newest first, as `ProposalDecisionRecord` (verdict, comment, actor label, project, document, version, section, the
+specification row and the proposed vendor). `listDecisions` stays the «Замечания» half; the screen switches between them
+with «Тип». No migration, no error code.
+The API then had 256 paths, 284 operations and 685 schemas; migration head `0054`. The domain catalogs were at candidate revision 43.
+
+## Contract `1.24.0` (`UI-PARITY-P0I`, historical)
+
+Slice for ruling `R-151g`: the designer's execution status of an accepted finding, our own instead of the original's
+SU-10 registry labels. `setFindingExecutionStatus` (`PUT /findings/{finding_uid}/execution-status`, keyed, `expert` only,
+body `SetFindingExecutionStatusRequest {status}` with `FindingExecutionStatus` `taken_into_account` | `amended` | `declined` |
+`agreed` or `null` to clear) answers `FindingExecutionState`; setting it on a finding not accepted is `422`
+(`finding_not_accepted`). `Finding` and `FindingDetail` gain the optional `execution_status` and `execution_status_at`. It is
+not an expert decision. Migration `0054_finding_execution_status`. No error code.
+The API then had 255 paths, 283 operations and 683 schemas; migration head `0054`. The domain catalogs were at candidate revision 42.
+
+## Contract `1.23.0` (`UI-PARITY-P0H`, historical)
+
+Slice for ruling `R-151e`: free tags on a document, and a filter by tag (the original's folders are not built: no order,
+no drag, no group entity). `setDocumentTags` (`PUT /projects/{project_uid}/documents/{document_uid}/tags`, keyed, body
+`SetDocumentTagsRequest {tags}`, at most ten tags of 1 to 40 characters) replaces the set; `listDocumentTags`
+(`GET /projects/{project_uid}/document-tags`, `DocumentTagList` of `DocumentTagCount {tag, document_count}`) is the project's
+catalogue without archived documents; `listDocuments` takes the optional `tag` filter (case-insensitive) and `DocumentVersion`
+gains the optional `tags`. Migration `0053_document_tags` adds `document_tag`. No error code.
+The API then had 254 paths, 282 operations and 680 schemas; migration head `0053`. The domain catalogs were at candidate revision 41.
+
+## Contract `1.22.0` (`UI-PARITY-P0G`, historical)
+
+Slice for ruling `R-151a`: a document is archived or renamed, never deleted. Two keyed operations, `setDocumentArchived`
+(`PUT /projects/{project_uid}/documents/{document_uid}/archive`, body `SetDocumentArchivedRequest {archived}`) and
+`renameDocument` (`PUT /projects/{project_uid}/documents/{document_uid}/title`, body `RenameDocumentRequest
+{display_title}`), each answering the document's current `DocumentVersion`. `listDocuments` leaves an archived document out
+unless `include_archived` is asked, and `DocumentVersion` gains the optional `archived_at`. Every change appends
+`document.archived`, `document.restored` or `document.renamed` to the audit trail. `expert` and `admin`; `viewer` refused.
+Migration `0052_document_archive` adds `document.archived_at` and `archived_by_user_uid` (a RESTRICT reference). No error code.
+The API then had 252 paths, 280 operations and 677 schemas; migration head `0052`. The domain catalogs were at candidate revision 40.
+
+## Contract `1.21.0` (`UI-PARITY-P0F`, historical)
+
+Additive slice for ruling `R-151v`: who started a run. `RunStatus` gains the optional `started_by_user_uid` and
+`started_by_label`, `ExecutionQueueItem` the optional `started_by_label` (the account's display label). Both are absent
+for a run created before migration `0051_run_started_by`, which adds `audit_run.started_by_user_uid` (a frozen RESTRICT
+reference to `app_user`; an account that started a run is archived, never purged). No operation, no error code.
+The API then had 250 paths, 278 operations and 675 schemas; migration head `0051`. The domain catalogs were at candidate revision 39.
+
+## Contract `1.20.0` (`UI-PARITY-P0E`, historical)
+
+Additive read slice for the UI parity programme (rulings `R-151f`, `R-151l`). One optional query parameter and one operation;
+no migration, no new schema, no new error code.
+`listDocuments` takes the optional `section_code` (a `ProjectSection`): only the documents whose current version is confirmed for
+that section (its `classification.section_code`); a document whose current version is unclassified never matches. The order is
+the unfiltered order with rows removed, and a cursor resumes after its row in the filtered listing.
+`getExecutionDispatch` (`GET /execution/dispatch`) returns the `ExecutionDispatchStatus` `setExecutionPaused` writes, so the top
+strip can show the pause state without reading the queue; readable by `expert` and `admin`, refused to `viewer` (`R-150w`).
+The API then had 250 paths, 278 operations and 675 schemas; migration head `0050`. The domain catalogs were at candidate revision 38.
+
+## Contract `1.19.0` (`UI-PARITY-P0B`, historical)
 
 Additive read slice that gives a document an audit state and its counters (the counters the project selector and the section panel of the
 UI parity programme wait for; rulings `R-150n` ... `R-150u`, dictionary `docs/program/UI-PARITY-METRICS.md`). Response fields and one new
@@ -26,7 +131,7 @@ A document counts by its current version only; its result run is the latest run 
 `(created_at, run_id)`; a failed, cancelled or still running run is not a result. A document is `not_run`, `clean` (a result with no
 finding), `awaiting_decision` or `checked`, and `partial` flags a partial result. `no_expert_decision` is `not_run +
 awaiting_decision`.
-The API now has 250 paths, 277 operations and 675 schemas; migration head `0050`. The domain catalogs are at candidate revision 37.
+The API then had 250 paths, 277 operations and 675 schemas; migration head `0050`. The domain catalogs were at candidate revision 37.
 
 ## Contract `1.18.0` (`UI-PARITY-QUEUE-A`, historical)
 

@@ -213,6 +213,12 @@ def test_the_item_schema_requires_the_work_it_names_and_leaves_the_rest_optional
         "project_uid", "project_name", "document_uid", "document_name", "version_uid", "version_ordinal",
     }
     optional = set(schema["properties"]) - set(schema["required"])
-    assert optional == {"started_at", "finished_at", "error_code", "interrupted_reason", "binding_state", "wait_reason"}
+    # Contract 1.21.0 adds who started the run (`started_by_label`, `R-151v`), 1.26.0 a running job's
+    # `estimated_finish_at` (`R-151u`); both absent when unknown, never invented. 1.28.0 adds a queued job's
+    # `queue_position` and the `attempt_count` (`UI-PARITY-P0M`), the latter always sent.
+    assert optional == {
+        "started_at", "finished_at", "error_code", "interrupted_reason", "binding_state", "wait_reason",
+        "started_by_label", "estimated_finish_at", "queue_position", "attempt_count",
+    }
     assert schema["properties"]["error_code"] == {"$ref": "#/components/schemas/ErrorCode"}, "no nullable form"
     assert models.ExecutionQueueItem.model_fields["version_ordinal"].is_required()

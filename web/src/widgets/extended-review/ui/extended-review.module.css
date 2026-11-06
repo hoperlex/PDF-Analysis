@@ -44,3 +44,16 @@
 .digest dt { overflow-wrap: anywhere; }
 .digest dd { margin: var(--am-gap-sm) 0 0; font-size: 1.8em; font-weight: 650; }
 .packagePanel { margin-block: var(--am-gap-lg); padding: var(--am-gap); border: 1px solid var(--am-line); border-radius: var(--am-radius-lg); background: var(--am-paper); }
+
+/* `R-151q`: the critic's queues as chips above the filters. Tokens only. */
+.queues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.queueCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

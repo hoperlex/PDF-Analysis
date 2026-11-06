@@ -20,7 +20,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, get_args
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -181,7 +181,48 @@ def _queue_cursor(raw: str | None, scope: tuple[str, str, str] | None = None) ->
     return QueuePosition(rank, priority, created_at, job_id)
 
 
-def _queue_item_model(row: Any, facts: Mapping[str, Mapping[str, Any]]) -> models.ExecutionQueueItem:
+def _with_execution_status(session: Session, views: Sequence[Any]) -> list[Any]:
+    """`R-151g`: each finding with its designer execution status, read once for the whole list."""
+    from dataclasses import replace
+
+    from auditmanager.decisions.execution_status import execution_statuses
+
+    known = execution_statuses(session, [view.finding_uid for view in views])
+    return [
+        replace(view, execution_status=known[view.finding_uid][0], execution_status_at=known[view.finding_uid][1])
+        if view.finding_uid in known else view
+        for view in views
+    ]
+
+
+def _estimated_finish(row: Any, samples: Sequence[Any]) -> Any:
+    from auditmanager.execution.eta import estimated_finish
+
+    if getattr(row, "state", None) not in ("leased", "running") or not samples:
+        return None
+    return estimated_finish(
+        samples, started_at=getattr(row, "started_at", None),
+        analysis_profile_id=getattr(row, "analysis_profile_id", None), page_count=getattr(row, "page_count", None),
+    )
+
+
+def _starter_labels(session: Session, rows: Sequence[Any]) -> dict[str, str]:
+    """`R-151v`: the display label of each account that started a listed run, each read once."""
+    from auditmanager.access.public import AccountRepository
+
+    accounts = AccountRepository()
+    labels: dict[str, str] = {}
+    for uid in {row.started_by_user_uid for row in rows if getattr(row, "started_by_user_uid", None) is not None}:
+        account = accounts.get_account(session, uid)
+        if account is not None:
+            labels[uid] = account.record.display_label
+    return labels
+
+
+def _queue_item_model(
+    row: Any, facts: Mapping[str, Mapping[str, Any]], labels: Mapping[str, str] | None = None,
+    samples: Sequence[Any] = (),
+) -> models.ExecutionQueueItem:
     """One queue item of the wire from a read row and the binding facts of its run.
 
     A member the row does not have is **left unset** (never ``None``), so the answer omits it: the contract
@@ -195,7 +236,14 @@ def _queue_item_model(row: Any, facts: Mapping[str, Mapping[str, Any]]) -> model
         **_unset_none(
             started_at=row.started_at, finished_at=row.finished_at,
             error_code=row.error_code, interrupted_reason=row.interrupted_reason,
+            # `R-151v`: who started the run, by label; absent for a run created before 0051.
+            started_by_label=(labels or {}).get(getattr(row, "started_by_user_uid", None) or ""),
+            # `R-151u`: a running job's estimated finish, from similar past runs; absent without enough history.
+            estimated_finish_at=_estimated_finish(row, samples),
+            # `UI-PARITY-P0M`: a queued job's place in the dispatcher's order; absent when it is not queued.
+            queue_position=getattr(row, "queue_position", None),
         ),
+        "attempt_count": getattr(row, "attempt_count", 0),
         **facts.get(row.run_id, {}),  # EXEC2-GROUP-RUN-01
     })
 
@@ -242,10 +290,19 @@ class ExecutionAdapter(_SessionHolder):
             else:
                 next_cursor = None
             facts = _queue_binding_facts(session, [row.run_id for row in items])  # EXEC2-GROUP-RUN-01
+            labels = _starter_labels(session, items)  # `R-151v`
+            from auditmanager.execution.eta import history
+
+            # `R-151u`: one read of the recent history serves every running item of the page.
+            samples = history(session) if any(row.state in ("leased", "running") for row in items) else ()
+            counts = repo.queue_overview(session, created_from=created_from, created_to=created_to)
             return models.ExecutionQueuePage(
-                items=[_queue_item_model(row, facts) for row in items],
+                items=[_queue_item_model(row, facts, labels, samples) for row in items],
                 page=models.PageInfo(next_cursor=next_cursor),
                 paused=repo.dispatch_status(session).paused,
+                # `UI-PARITY-P0M`: every state, in the queue's order, 0 when no job stands in it.
+                overview=[models.ExecutionQueueStateCount(state=state, count=counts.get(state, 0))
+                          for state in get_args(models.ExecutionQueueStateCount.model_fields["state"].annotation)],
             )
         return self._read(read)
 
@@ -316,6 +373,7 @@ class ExecutionAdapter(_SessionHolder):
                                  # A run adapter always has the attribute (``None`` is the `environment` source); the
                                  # default is for the stand-ins older suites hand this port, which have no group seam.
                                  group_admitter=getattr(self._runs, "group_admitter", None),
+                                 started_by_user_uid=user_uid,  # `R-151v`
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
         new_id, replayed, view = self._write(write)
@@ -336,8 +394,16 @@ class ExecutionAdapter(_SessionHolder):
             row = ExecutionRepository().get_queue_item(session, job_id)
             if row is None:
                 raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Job")
-            return _queue_item_model(row, _queue_binding_facts(session, [row.run_id]))
+            return _queue_item_model(row, _queue_binding_facts(session, [row.run_id]), _starter_labels(session, [row]))
         return self._write(write)
+
+    def get_dispatch_status(self) -> models.ExecutionDispatchStatus:
+        from auditmanager.execution.public import ExecutionRepository
+
+        def read(session: Session) -> models.ExecutionDispatchStatus:
+            state = ExecutionRepository().dispatch_status(session)
+            return models.ExecutionDispatchStatus(paused=state.paused, changed_at=state.changed_at)
+        return self._read(read)
 
     def set_paused(self, *, paused: bool, user_uid: str, idempotency_key: str) -> models.ExecutionDispatchStatus:
         from auditmanager.jobs.public import set_execution_paused
@@ -517,6 +583,9 @@ class ProjectAdapter:
             created_at=record.created_at,
         )
 
+    def get_project(self, *, project_uid: str) -> ProjectView | None:
+        return _project_of(self, project_uid)
+
     def list_projects(self) -> Sequence[ProjectView]:
         # `document_count` is carried, not recomputed: `IngestService.list_projects`
         # returns `ProjectListingRecord`s whose count came out of the same statement that
@@ -550,6 +619,13 @@ class ProjectAdapter:
             )
             for r in listing
         )
+
+
+def _project_of(adapter: "ProjectAdapter", project_uid: str) -> ProjectView | None:
+    """`UI-PARITY-P0N`: the listing's own row, so a project read alone and a project listed cannot disagree on a name,
+    a document count or a counter. The listing is read whole; at the scale of a deployment's projects that is the
+    honest price of one definition."""
+    return next((view for view in adapter.list_projects() if view.project_uid == project_uid), None)
 
 
 def _audit_counts_view(record: Any) -> DocumentAuditCountsView:
@@ -890,22 +966,94 @@ class DocumentAdapter:
             chunks=opened.chunks,
         )
 
-    def list_documents(self, *, project_uid: str) -> Sequence[DocumentVersionView]:
+    def list_documents(
+        self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
+        tag: str | None = None,
+    ) -> Sequence[DocumentVersionView]:
+        from dataclasses import replace
+
         from auditmanager.shared.identity import ProjectUid
 
-        return tuple(
-            _version_view(record)
-            for record in self._service.list_documents(ProjectUid.parse(project_uid))
+        parsed = ProjectUid.parse(project_uid)
+        archived = self._service.archived_documents(parsed) if hasattr(self._service, "archived_documents") else {}
+        tags = self._service.tags_in_project(parsed) if hasattr(self._service, "tags_in_project") else {}
+        wanted = None if tag is None else " ".join(tag.split()).casefold()
+        views = tuple(
+            replace(view, archived_at=archived.get(view.document_uid), tags=tuple(tags.get(view.document_uid, ())))
+            for view in (_version_view(record) for record in self._service.list_documents(parsed))
+            # `R-151a`: an archived document is listed only on request.
+            if (include_archived or view.document_uid not in archived)
+            # `R-151e`: a tag filter keeps the documents carrying that tag, regardless of case.
+            and (wanted is None or wanted in {t.casefold() for t in tags.get(view.document_uid, ())})
         )
+        if section_code is None:
+            return views
+        # `UI-PARITY-P0E` (`R-151l`): the confirmed classification of the current version decides;
+        # the legacy `section` column and any suggestion never do.
+        return tuple(view for view in views if _classified_section(view) == section_code)
+
+    def set_document_archived(
+        self, *, project_uid: str, document_uid: str, archived: bool, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at = self._service.set_document_archived(
+            project_uid=project_uid, document_uid=document_uid, archived=archived,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at)
+
+    def set_document_tags(
+        self, *, project_uid: str, document_uid: str, tags: list[str], user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at, current = self._service.set_document_tags(
+            project_uid=project_uid, document_uid=document_uid, tags=tags,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at, tags=tuple(current))
+
+    def list_document_tags(self, *, project_uid: str) -> models.DocumentTagList:
+        from auditmanager.shared.identity import ProjectUid
+
+        rows = self._service.tag_catalogue(ProjectUid.parse(project_uid))
+        return models.DocumentTagList(items=[models.DocumentTagCount(tag=tag, document_count=count) for tag, count in rows])
+
+    def rename_document(
+        self, *, project_uid: str, document_uid: str, display_title: str, user_uid: str, idempotency_key: str,
+    ) -> DocumentVersionView:
+        from dataclasses import replace
+
+        record, archived_at = self._service.rename_document(
+            project_uid=project_uid, document_uid=document_uid, display_title=display_title,
+            actor_uid=user_uid, idempotency_key=idempotency_key,
+        )
+        return replace(_version_view(record), archived_at=archived_at)
 
     def list_versions(self, *, document_uid: str) -> Sequence[DocumentVersionView]:
+        from dataclasses import replace
+
         from auditmanager.shared.identity import DocumentUid
 
-        return tuple(
-            _version_view(record)
-            for record in self._service.list_versions(DocumentUid.parse(document_uid))
+        parsed = DocumentUid.parse(document_uid)
+        records = self._service.list_versions(parsed)
+        # `R-151a`: every version of an archived document says so, so the document's own page knows its state.
+        archived_at = (
+            self._service.document_archived_at(parsed) if hasattr(self._service, "document_archived_at") else None
         )
+        tags = tuple(self._service.tags_of_document(parsed)) if hasattr(self._service, "tags_of_document") else None
+        return tuple(replace(_version_view(record), archived_at=archived_at, tags=tags) for record in records)
 
+
+
+def _classified_section(view: DocumentVersionView) -> str | None:
+    """The section code of a version's confirmed classification, or ``None`` when it has none."""
+    classification = view.classification
+    if classification is None:
+        return None
+    code = getattr(classification, "section_code", None)
+    return getattr(code, "value", code)
 
 class _Uploaded:
     __slots__ = ("_version", "_replayed")
@@ -1158,6 +1306,7 @@ class RunAdapter(_SessionHolder):
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
         executor_group_id: str | None = None,
+        started_by_user_uid: str | None = None,
     ) -> Any:
         """A caller-supplied provider mode is refused, never silently overridden.
 
@@ -1226,6 +1375,7 @@ class RunAdapter(_SessionHolder):
                 cost_actor_uid=cost_actor_uid,
                 executor_group_id=executor_group_id,
                 group_admitter=self._group_admitter,
+                started_by_user_uid=started_by_user_uid,  # `R-151v`
             )
             if not started.replayed:
                 # `D-20`. `created -> queued` happens here, in the transaction that
@@ -1538,6 +1688,14 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     repository = RunRepository()
     run = repository.get(session, run_id)
     stages = repository.stage_results(session, run_id)
+    # `R-151v`: who started the run, by the account's own display label; none before 0051.
+    started_by = getattr(run, "started_by_user_uid", None)
+    started_by_label = None
+    if started_by is not None:
+        from auditmanager.access.public import AccountRepository
+
+        starter = AccountRepository().get_account(session, started_by)
+        started_by_label = None if starter is None else starter.record.display_label
     # `EXEC-PAR-START-01`. Which executor the run froze, from its frozen revision; none for a
     # run that froze none. The name and the pinned model only -- nothing of the connection's
     # address, key or probe is read here.
@@ -1555,6 +1713,8 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
     return RunStatusView(
+        started_by_user_uid=started_by,
+        started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
         # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
         # `run_status_body` renders it only when one was pinned.
@@ -1967,6 +2127,29 @@ class BlockAdapter(_SessionHolder):
 
         return self._read(work)
 
+    def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
+        """`UI-PARITY-P0O`: one read of the portal blocks document (not the crops, not the recognised text) folded into
+        each page's sheet label and block count. A page whose blocks name two sheets carries no label."""
+        from auditmanager.analysis.public import ROLE_PORTAL_BLOCKS
+
+        source = self._portal_source(version_uid)
+        if source is None:
+            return models.VersionSheetLabelList(version_uid=version_uid, status="not_produced", items=[])
+        blocks = self._portal_document(source.portal_blocks, ROLE_PORTAL_BLOCKS, version_uid)
+        labels: dict[int, set[int]] = {}
+        counts: dict[int, int] = {}
+        for block in blocks["blocks"]:
+            page = int(block["page_number"])
+            labels.setdefault(page, set()).add(int(block["page_label"]))
+            counts[page] = counts.get(page, 0) + 1
+        return models.VersionSheetLabelList(
+            version_uid=version_uid, status="produced",
+            items=[models.VersionSheetLabel(**{
+                "page_number": page, "block_count": counts[page],
+                **({"page_label": next(iter(labels[page]))} if len(labels[page]) == 1 else {}),
+            }) for page in sorted(counts)],
+        )
+
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (
             KIND_PORTAL_DESCRIPTION,
@@ -2184,7 +2367,7 @@ class FindingAdapter(_SessionHolder):
                 views = [v for v in views if v.category == category]
             if verdict is not None:
                 views = [v for v in views if v.current_verdict == verdict]
-            return tuple(views)
+            return tuple(_with_execution_status(session, views))
 
         return self._read(work)
 
@@ -2214,15 +2397,30 @@ class FindingAdapter(_SessionHolder):
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_finding_view(
+                finding=_with_execution_status(session, [_finding_view(
                     row, evidence, verdict, matches[0].merged,
                     _v3_beta_citations(session, members),
-                ),
+                )])[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )
 
         return self._read(work)
+
+    def set_execution_status(
+        self, *, finding_uid: str, status: str | None, user_uid: str, idempotency_key: str,
+    ) -> models.FindingExecutionState:
+        from auditmanager.decisions.execution_status import execution_statuses, set_execution_status
+
+        def write(session: Session) -> models.FindingExecutionState:
+            set_execution_status(
+                session, finding_uid=finding_uid, status=status, actor_uid=user_uid, idempotency_key=idempotency_key,
+            )
+            known = execution_statuses(session, [finding_uid]).get(finding_uid)
+            if known is None:
+                return models.FindingExecutionState(finding_uid=finding_uid)
+            return models.FindingExecutionState(finding_uid=finding_uid, status=known[0], set_at=known[1])
+        return self._write(write)
 
     def finding_exists(self, *, finding_uid: str) -> bool:
         """`D-74`. The question the decision ledger has always asked, offered to the router.
@@ -2283,6 +2481,37 @@ class DecisionAdapter(_SessionHolder):
         from auditmanager.decisions import decision_history as history
 
         return self._read(lambda s: tuple(_event_view(e) for e in history(s, finding_uid)))
+
+    def proposal_decision_journal(self, *, project_uid: str | None = None) -> Sequence[models.ProposalDecisionRecord]:
+        """`R-151h`: the proposal decision journal, each actor named by the account's display label."""
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.optimisation.proposals.journal import proposal_decision_journal
+
+        def work(session: Session) -> Sequence[models.ProposalDecisionRecord]:
+            entries = proposal_decision_journal(session, project_uid=project_uid)
+            labels = _Labels(session, AccountRepository())
+            return tuple(
+                models.ProposalDecisionRecord(
+                    proposal_decision_id=entry.proposal_decision_id,
+                    optimisation_proposal_id=entry.optimisation_proposal_id,
+                    optimisation_pass_id=entry.optimisation_pass_id,
+                    verdict=entry.verdict,
+                    comment=entry.comment,
+                    actor_label=labels.of(entry.actor_user_uid),
+                    decided_at=entry.decided_at,
+                    project_uid=entry.project_uid,
+                    project_name=entry.project_name,
+                    document_uid=entry.document_uid,
+                    document_name=entry.document_name,
+                    version_uid=entry.version_uid,
+                    **({} if entry.section is None else {"section": entry.section}),
+                    row_text=entry.row_text,
+                    proposed_vendor=entry.proposed_vendor,
+                    unit=entry.unit,
+                )
+                for entry in entries
+            )
+        return self._read(work)
 
     def decision_journal(
         self,
@@ -2455,6 +2684,25 @@ class XlsxExportAdapter(_SessionHolder):
                 read_blob=self._read_blob,
                 read_citations=_read_citations_for_export,
             ).content
+        )
+
+    def import_run_decisions(
+        self, *, run_id: str, content: BinaryIO, idempotency_key: str, author_label: str, author_user_uid: str,
+    ) -> models.DecisionImportReport:
+        """`R-151d`: one write transaction; the file is read once, one byte past its bound."""
+        from auditmanager.exports import DECISION_IMPORT_MAX_BYTES, import_run_decisions
+
+        data = content.read(DECISION_IMPORT_MAX_BYTES + 1)
+        report = self._write(lambda s: import_run_decisions(
+            s, run_id=run_id, content=data, idempotency_key=idempotency_key,
+            author_label=author_label, author_user_uid=author_user_uid,
+        ))
+        return models.DecisionImportReport(
+            run_id=report.run_id, recorded=report.count("recorded"), unchanged=report.count("unchanged"),
+            refused=report.count("refused"),
+            rows=[models.DecisionImportRow(**{key: value for key, value in (
+                ("row", row.row), ("outcome", row.outcome), ("finding_uid", row.finding_uid), ("reason", row.reason),
+            ) if value is not None}) for row in report.rows],
         )
 
 

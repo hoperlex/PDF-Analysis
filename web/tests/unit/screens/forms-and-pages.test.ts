@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest';
 // the context Next's own `<AppRouterProvider>` publishes; supplying it is what lets the
 // screen be rendered at all. It is a deep import into `next/dist`, which is why it is
 // here in one place and not spread across the suite, and it adds no dependency.
+import type { ProjectUid } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { AppFrame } from '@/_app';
 import { CreateProjectForm } from '@/features/create-project';
@@ -154,6 +155,17 @@ describe('/projects/{project_uid}', () => {
       expect(detail(bad)).toContain('Это не адрес проекта.');
     },
   );
+
+  // `UI-PARITY-P0N`: the page is titled with the project's name, read by its identity (`getProject`), and says
+  // «Проект» only until that read answers.
+  it('is titled with the project read by its identity', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.projects.detail(PROJECT_UID as ProjectUid), {
+      project_uid: PROJECT_UID, name: 'Мост через Неву', created_at: '2026-09-10T08:00:00Z',
+    });
+    expect(renderScreen(client, createElement(ProjectDetailPage, { projectUid: PROJECT_UID }))).toContain('>Мост через Неву</h1>');
+    expect(detail(PROJECT_UID)).toContain('>Проект</h1>');
+  });
 
   it('shows the upload screen for a well-shaped address', () => {
     const markup = detail(PROJECT_UID);

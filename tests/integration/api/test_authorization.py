@@ -535,6 +535,22 @@ GUARDED = (
     ("estimateRunCost", "POST", "/runs/cost-estimate"),
     ("estimateArV3GroupCost", "POST", "/ar-v3-beta/groups/cost-estimate"),
     ("importComparisonZip", "POST", "/projects/prj_01M2545JSD15ETSNNV904X991F/comparison-zip-uploads"),
+    # `UI-PARITY-P0E`..`P0O` (contracts 1.20.0..1.30.0): the pause read, a document's archive, title and tags, the
+    # project's tag catalogue, a finding's execution status, the proposal decision journal, the decision import, one
+    # project and a version's sheet labels.
+    ("getExecutionDispatch", "GET", "/execution/dispatch"),
+    ("setDocumentArchived", "PUT",
+     "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/archive"),
+    ("renameDocument", "PUT",
+     "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/title"),
+    ("setDocumentTags", "PUT",
+     "/projects/prj_01M2545JSD15ETSNNV904X991F/documents/doc_01M2545JSD15ETSNNV904X991H/tags"),
+    ("listDocumentTags", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F/document-tags"),
+    ("setFindingExecutionStatus", "PUT", "/findings/fnd_01M2545JSD15ETSNNV904X991K/execution-status"),
+    ("listProposalDecisionJournal", "GET", "/proposal-decisions"),
+    ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
+    ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
+    ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),
 )
 
 #: `EXEC-PULL-01`. The four operations a runner calls with a runner token, and the fifth that
@@ -1166,6 +1182,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
         # do is the role register's and the dispatch context's own re-read of the role set.
         "dispatch.py",
+        # `UI-PARITY-P0G`, `P0H`: archiving, renaming and tagging a document record WHO did it (the actor of the
+        # document's trail and of its archive and tag rows); whether they may is the role register's.
+        "documents.py",
         "execution.py",
         # `EXEC2-ENROLL-01`: issuing a grant, the integration-authorisation mark and an install session record WHO did
         # it (the actor of the journal event and of the row); that only an administrator may is the role register's and
@@ -1183,6 +1202,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # `W57B-NORMS-CATALOGUE-XLSX-01`: the workbook's export authorization records WHO
         # downloaded it; whether they may is the role register's (expert, as the CSV).
         "export.py",
+        # `UI-PARITY-P0I`: a finding's execution status records WHO set it; whether they may is the role register's
+        # (expert).
+        "findings.py",
         "me.py",
         "norms.py",
         # `W60-PRICE-LIST-01`: a price list and a vendor-list revision record WHO uploaded or

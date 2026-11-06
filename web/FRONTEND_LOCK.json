@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac",
-    "content_commit": "1a480de4",
-    "content_commit_subject": "docs(ui-parity): UI-PARITY-METRICS, the dictionary of the P0b counters",
-    "dispatch_named_commit": "1bdab5b650d9ddec711c294e7f01719bb5331dfa",
-    "commit_note": "Resealed 2026-11-05 by UI-PARITY-P0B: contract 1.19.0 (the audit state of a document and its counters: the new schema DocumentAuditCounts, the optional audit_counts of each listProjects item, audit_counts and finding_count of SectionDocumentCount, awaiting_decision_findings of DashboardSummary, and the all-time description of VerdictCount; one schema, no operation or migration added). content_commit names the base commit 6937d818 the seal was made on top of, not a commit that contains the change; the integrator's commit of this seal is the first to carry these bytes. Surface 250/277/675. Resealed again 2026-11-05 by UI-PARITY-VIEWER on top of 1a480de4: the Role enum gains `viewer` («Наблюдатель», R-150e/R-150x) and 60 operation descriptions name `role:admin|expert|viewer`; no operation, schema or path added. Surface 250/277/675.",
+    "sha256": "49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470",
+    "content_commit": "1d6b93a9",
+    "content_commit_subject": "feat(contract): 1.30.0 — each page's drawing sheet; «Разбор» says «Лист N · стр. M» (UI-PARITY-P0O)",
+    "dispatch_named_commit": "1d6b93a92af75c5b2898d6207f0460e0dc259945",
+    "commit_note": "Resealed by UI-PARITY-P0O: contract 1.30.0 (contract 1.30.0 adds listVersionSheetLabels.).",
     "openapi_version": "3.1.0",
-    "info_version": "1.19.0",
-    "paths": 250,
-    "operations": 277,
-    "component_schemas": 675,
+    "info_version": "1.30.0",
+    "paths": 259,
+    "operations": 287,
+    "component_schemas": 693,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "536ebbcba6b916de8006ab7076f7715315cf0fd039861c202d712dabd81938ac",
+    "snapshot_sha256": "49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "c7fab96dc515def4a982b04208548c8673482b8c8b4a47332a38a9439a8e4dd5",
-      "index.ts": "0101b03549010b4e0e08c1ac4976243fa05b165f2f41d9591466a4a675bd332d",
-      "operations.gen.ts": "400e77115bdabcc54fe3c281375c26cae8b7c31591079942905c26fb71619dc2",
-      "types.gen.ts": "89c764167bbb46ddfbd3d3c2426069fe050e0cdde293b8e6b5bebb905c55ce10"
+      "client.gen.ts": "e20eb32b6d8ef2f7abfb402b77dbf47bee68946e532dbb40443aeba457df3835",
+      "index.ts": "d8a1727944404a56f3524949297acf528c1fbbf903171b5fe9f55bb98b0f5e38",
+      "operations.gen.ts": "535d2888e1bc852eb5322c1cf4bfd4e14d2e8880aa97675e7df66a8464b3ef44",
+      "types.gen.ts": "3c1e9bbd32e11a48ebf664ac17d62d377dd133a43158733f3e96cfc56a8b1637"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

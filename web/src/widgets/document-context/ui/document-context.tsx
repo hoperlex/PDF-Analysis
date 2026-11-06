@@ -18,11 +18,11 @@ import type { DocumentUid, RunId, VersionUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { runStatusQueryOptions } from '@/entities/audit-run';
 import { useDocumentVersion, useVersionList } from '@/entities/document-version';
-import { useProjectList } from '@/entities/project';
+import { useProject } from '@/entities/project';
 
 import styles from './document-context.module.css';
 
-export type ContextLevel = 'document' | 'version' | 'run' | 'review';
+export type ContextLevel = 'section' | 'document' | 'version' | 'blocks' | 'run' | 'review';
 
 /** Identities as the route gave them (already shape-checked by the page). */
 export interface DocumentContextProps {
@@ -31,6 +31,8 @@ export interface DocumentContextProps {
   readonly documentUid?: string | undefined;
   readonly versionUid?: string | undefined;
   readonly runId?: string | undefined;
+  /** `R-151l`: on the section page, the section's worded label. */
+  readonly sectionLabel?: string | undefined;
 }
 
 export interface ContextStep {
@@ -47,6 +49,8 @@ export interface ContextFacts {
   readonly versionUid?: string | undefined;
   readonly versionOrdinal?: number | undefined;
   readonly runId?: string | undefined;
+  /** `R-151l`: the section page's own step, its label already worded. */
+  readonly sectionLabel?: string | undefined;
 }
 
 const ORDER: readonly ContextLevel[] = ['document', 'version', 'run', 'review'];
@@ -58,6 +62,10 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
     { key: 'projects', label: 'Проекты', href: routes.projects() },
     { key: 'project', label: facts.projectName ?? 'Проект', href: routes.project(facts.projectUid) },
   ];
+  if (current === 'section') {
+    steps.push({ key: 'section', label: facts.sectionLabel ?? 'Раздел', href: null });
+    return steps;
+  }
   if (facts.documentUid !== undefined) {
     steps.push({
       key: 'document',
@@ -65,12 +73,17 @@ export function contextSteps(facts: ContextFacts, current: ContextLevel): readon
       href: current === 'document' ? null : routes.document(facts.projectUid, facts.documentUid),
     });
   }
-  if (depth >= 1 && facts.versionUid !== undefined) {
+  if ((depth >= 1 || current === 'blocks') && facts.versionUid !== undefined) {
     steps.push({
       key: 'version',
       label: facts.versionOrdinal === undefined ? 'Версия' : `Версия ${facts.versionOrdinal}`,
       href: current === 'version' ? null : routes.version(facts.projectUid, facts.versionUid),
     });
+  }
+  if (current === 'blocks') {
+    // `R-151m`: the version's «Блоки» tab ends the strip.
+    steps.push({ key: 'blocks', label: 'Блоки', href: null });
+    return steps;
   }
   if (depth >= 2 && facts.runId !== undefined) {
     steps.push({ key: 'run', label: 'Прогон', href: current === 'run' ? null : routes.run(facts.projectUid, facts.runId) });
@@ -113,12 +126,12 @@ function VersionSwitch({ projectUid, documentUid, versionUid }: { readonly proje
   );
 }
 
-export function DocumentContext({ projectUid, current, documentUid, versionUid, runId }: DocumentContextProps) {
+export function DocumentContext({ projectUid, current, documentUid, versionUid, runId, sectionLabel }: DocumentContextProps) {
   const run = useQuery({ ...runStatusQueryOptions((runId ?? '') as RunId), enabled: runId !== undefined && versionUid === undefined });
   const knownVersion = (versionUid as VersionUid | undefined) ?? run.data?.version_uid;
   const version = useDocumentVersion(knownVersion ?? null);
-  const projects = useProjectList();
-  const projectName = projects.data?.items.find((item) => item.project_uid === projectUid)?.name;
+  // `UI-PARITY-P0N`: the project by its identity, not looked for on the listing's first page.
+  const projectName = useProject(projectUid).data?.name;
   const steps = contextSteps(
     {
       projectUid,
@@ -128,6 +141,7 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
       versionUid: knownVersion,
       versionOrdinal: version.data?.version_ordinal,
       runId,
+      sectionLabel,
     },
     current,
   );

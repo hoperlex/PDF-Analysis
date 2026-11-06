@@ -14,11 +14,11 @@
 
 .list,
 .detail {
-  padding: var(--am-gap-lg);
+  padding: var(--am-gap);
 }
 
 .export {
-  padding: var(--am-gap-lg);
+  padding: var(--am-gap);
 }
 
 @media (max-width: 900px) {

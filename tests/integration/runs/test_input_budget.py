@@ -505,12 +505,17 @@ def test_the_shipped_execution_adapter_refuses_a_reaudit_above_its_budget(
         ExecutionAdapter, "_roles", staticmethod(lambda _session, _user: frozenset({"expert"}))
     )
     adapters = _adapters(session, seeded, BUDGET)
+    # Since migration 0051 the run records who started it (`R-151v`): the caller is a real account.
+    from auditmanager.access.public import UserRepository
+
+    starter = str(UserRepository().create_user(
+        session, f"budget-{_key('starter')}@example.com", f"budget-passphrase-{_key('starter')}").user_uid)
     over = _counted_version(session, seeded, LIMIT + 1)
     source = _terminal(session, seeded, over)
     before = _table_counts(session)
     refused = _refusal(
         lambda: adapters.execution.reaudit_run(
-            run_id=source, user_uid="usr_00000000000000000000000000", idempotency_key=_key("reaudit")
+            run_id=source, user_uid=starter, idempotency_key=_key("reaudit")
         )
     )
     assert dict(refused.detail_fields) == {"character_count": LIMIT + 1, "budget_characters": LIMIT}
@@ -520,6 +525,6 @@ def test_the_shipped_execution_adapter_refuses_a_reaudit_above_its_budget(
     at = _counted_version(session, seeded, LIMIT)
     admitted = _terminal(session, seeded, at)
     view = adapters.execution.reaudit_run(
-        run_id=admitted, user_uid="usr_00000000000000000000000000", idempotency_key=_key("reaudit")
+        run_id=admitted, user_uid=starter, idempotency_key=_key("reaudit")
     )
     assert view.state == "queued" and len(adapters.carrier.submitted) == 1

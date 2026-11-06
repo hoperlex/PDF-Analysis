@@ -1,8 +1,10 @@
-"""``createProject`` and ``listProjects``."""
+"""``createProject``, ``listProjects`` and ``getProject``."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Path
 
 from auditmanager.api.routers.declarations import (
     CursorParam,
@@ -16,6 +18,7 @@ from auditmanager.api.routers.wire import WireResponse, encode_json, json_respon
 from auditmanager.api.schemas import models
 from auditmanager.api.schemas.common import page_body, paginate
 from auditmanager.api.schemas.projects import project_body
+from auditmanager.shared.errors import DomainError, ErrorCode
 
 __all__ = ["build_project_routes"]
 
@@ -65,6 +68,29 @@ def build_project_routes(router: APIRouter, projects: ProjectPort) -> None:
         page = paginate(rows, limit=limit, cursor=cursor, sort_key=_project_sort_key)
         body = page_body([project_body(view) for view in page.items], page.next_cursor)
         return json_response(200, encode_json(body))
+
+    @router.get(
+        "/projects/{project_uid}",
+        operation_id="getProject",
+        tags=["projects"],
+        status_code=200,
+        response_model=models.Project,
+        responses={
+            **success(200, "The project as `listProjects` lists it."),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+        description=(
+            "`UI-PARITY-P0N` (contract 1.29.0): one project by its identity, exactly as `listProjects` lists it -- its "
+            "name, creation time, document count and audit counters -- so a screen that names its project need not "
+            "find it on a page of the listing. An unknown project is `404`. Any role that may list projects "
+            "(`role:admin|expert|viewer`)."
+        ),
+    )
+    def get_project(project_uid: Annotated[models.ProjectUid, Path()]) -> WireResponse:
+        view = projects.get_project(project_uid=project_uid)
+        if view is None:
+            raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="Project")
+        return json_response(200, encode_json(project_body(view)))
 
 
 

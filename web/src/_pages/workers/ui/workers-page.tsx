@@ -28,21 +28,21 @@
  * never becomes a JavaScript value (`features/set-executor-secret`).
  */
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { ExecutionWorker } from '@/shared/api';
 import { newIdempotencyKey, queryKeys } from '@/shared/api';
 import { useMe } from '@/entities/account';
-import { UpdateTime, executionFailure, useWorkers } from '@/entities/execution';
+import { UpdateTime, executionFailure, queueQueryOptions, useWorkers, workersOverview } from '@/entities/execution';
 import type { ExecutionFailure } from '@/entities/execution';
 import { useSetWorkerIntake } from '@/features/set-worker-intake';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorGroups } from '@/widgets/executor-groups';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { ExecutorRules } from '@/widgets/executor-rules';
-import { WorkerList } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 
 import { DEFAULT_WORKERS_TAB, WORKERS_TAB_PARAM } from '../model/tabs';
@@ -98,6 +98,8 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
   const readFailure = workers.error === null ? null : executionFailure(workers.error, false);
   const accountFailure = account.error === null ? null : executionFailure(account.error, false);
   const next = workers.data?.page.next_cursor ?? null;
+  // M-17 (`R-151t`): the queue's counts for the overview tiles, read only while «Процессы» is open.
+  const queueOverview = useQuery({ ...queueQueryOptions(undefined, {}), enabled: tab === 'processes' }).data?.overview;
 
   function select(worker: ExecutionWorker, enabled: boolean) {
     sequence.current += 1;
@@ -170,6 +172,9 @@ export function WorkersPage({ initialTab, secretConnectionId = null, secretForm 
           * As on the queue (`C-27`): the rows do not wait for `getMe`. Until the roles are
           * read, or when that read fails, `roles` is empty and no switch is drawn.
           */}
+        {workers.data !== undefined ? (
+          <WorkersOverviewView workers={workersOverview(workers.data.items, next !== null)} queue={queueOverview} />
+        ) : null}
         {workers.data !== undefined ? (
           <WorkerList
             items={workers.data.items}

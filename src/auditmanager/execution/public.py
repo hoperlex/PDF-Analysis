@@ -37,6 +37,16 @@ class QueueItem:
     finished_at: datetime | None = None
     error_code: str | None = None
     interrupted_reason: str | None = None
+    #: `R-151v` (migration 0051): the account that started the job's run; ``None`` before 0051.
+    started_by_user_uid: str | None = None
+    #: `R-151u`: what the ETA compares a running job with -- its run's analysis profile and its version's page count.
+    analysis_profile_id: str | None = None
+    page_count: int | None = None
+    #: `UI-PARITY-P0M` (contract 1.28.0): a queued job's place in the dispatcher's order among every queued job
+    #: (priority, then the oldest first), as the original numbers its queue; ``None`` for a job not queued.
+    queue_position: int | None = None
+    #: How many attempts the job has had.
+    attempt_count: int = 0
 
     @property
     def position(self) -> QueuePosition:
@@ -100,12 +110,21 @@ _ITEM_COLUMNS = """
        dv.document_uid, d.display_title AS document_name,
        r.version_uid, dv.version_ordinal,
        (SELECT min(a.created_at) FROM attempt a WHERE a.job_id = page.job_id) AS started_at,
-       r.terminal_reason AS error_code, r.interrupted_reason"""
+       r.terminal_reason AS error_code, r.interrupted_reason, r.started_by_user_uid,
+       r.analysis_profile_id, dv.page_count, qp.queue_position,
+       (SELECT count(*) FROM attempt a WHERE a.job_id = page.job_id) AS attempt_count"""
+#: `UI-PARITY-P0M`: a queued job's place in the dispatcher's order (priority, then the oldest first), numbered once per
+#: statement over the queued jobs (``ix_job_dispatch`` leads with ``state``) rather than counted again for every row.
 _ITEM_JOINS = """
   JOIN audit_run r ON r.run_id = page.run_id
   JOIN project p ON p.project_uid = r.project_uid
   JOIN document_version dv ON dv.version_uid = r.version_uid
-  JOIN document d ON d.document_uid = dv.document_uid"""
+  JOIN document d ON d.document_uid = dv.document_uid
+  LEFT JOIN (
+      SELECT q.job_id, row_number() OVER (ORDER BY q.priority DESC, q.created_at, q.job_id) AS queue_position
+        FROM job q
+       WHERE q.state = 'queued'
+  ) qp ON qp.job_id = page.job_id"""
 #: The page of jobs is cut from ``job`` alone, sorted and limited first; only those rows are then joined to the run,
 #: the project and the document, so the cost of a read is the sort it always was plus one lookup per listed row.
 #: The three optional filters bind as ``CAST(:name AS type) IS NULL OR ...``: a state, and the half-open period
@@ -204,6 +223,15 @@ _JOURNAL_RUN = text("""
      LIMIT :fetch
 """)
 _CONTROL = text("SELECT paused, changed_at FROM execution_control WHERE singleton = true")
+#: `UI-PARITY-P0M`: how many jobs stand in each state, over the queue's period filter and not its state filter, so the
+#: counts are what each state of the filter would list.
+_OVERVIEW = text("""
+    SELECT j.state, count(*) AS count
+      FROM job j
+     WHERE (CAST(:created_from AS timestamptz) IS NULL OR j.created_at >= CAST(:created_from AS timestamptz))
+       AND (CAST(:created_to AS timestamptz) IS NULL OR j.created_at < CAST(:created_to AS timestamptz))
+     GROUP BY j.state
+""")
 
 
 class ExecutionRepository:
@@ -223,6 +251,13 @@ class ExecutionRepository:
             "fetch": limit,
         }).mappings()
         return tuple(QueueItem(**dict(row)) for row in rows)
+
+    def queue_overview(
+        self, session: Session, *, created_from: datetime | None = None, created_to: datetime | None = None,
+    ) -> dict[str, int]:
+        """``{state: count}`` of the jobs created in ``[created_from, created_to)``; a state with none is absent."""
+        rows = session.execute(_OVERVIEW, {"created_from": created_from, "created_to": created_to}).all()
+        return {str(row[0]): int(row[1]) for row in rows}
 
     def get_queue_item(self, session: Session, job_id: str) -> QueueItem | None:
         row = session.execute(_QUEUE_ITEM, {"job_id": job_id}).mappings().first()
