@@ -9,12 +9,13 @@ credential, over the committed synthetic fixtures and nothing else:
 2. classify the version (stage ``П``, section ``AR``);
 3. a published run of the version: the recorded answer
    ``fixtures/recorded/sections/ar_specification/<key>.json`` is found by the key of the request
-   over the PDF's text layer, and the run publishes. Since `PROD-11-AR-V1-V2-REMOVAL-01` the served
-   ``startRun`` refuses an АР version (``section_profile_unavailable``), so this step is driven
-   in-process through the executor with the v1 machinery's reference profile
-   (``tests/support/published_run.py``): the run, its saved text layer and everything the
+   over the PDF's text layer, and the run publishes. The served ``startRun`` routes an АР version to the
+   draft original-source АР profile (`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`) and, without a priced cost
+   consent, refuses it as ``validation_failed`` on ``cost_consent`` (asserted below). That profile has no
+   synthetic recording, so this step is driven in-process through the executor with the v1 machinery's
+   reference profile (``tests/support/published_run.py``): the run, its saved text layer and everything the
    specification and optimisation reads do with them are what they were. Where an АР version gets its
-   published run in production (the v3 group, `PROD-11a`) is not exercised here;
+   published run in production (the served ordinary start, or the v3 group, `PROD-11a`) is not exercised here;
 4. upload ``ar_specification_prices.csv`` as the project's price list;
 5. set the project's AR vendor list;
 6. start an optimisation pass.

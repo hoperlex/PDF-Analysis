@@ -1,14 +1,20 @@
 """A published run of a version, made in-process under the v1 reference profile (`PROD-11-AR-V1-V2-REMOVAL-01`).
 
-The served ``startRun`` refuses a version classified АР (``section_profile_unavailable``): АР is not a
-text profile any more (`ADR-0024` section 2, `AD-12`). The АР specification, price and optimisation
-reads (`PROD-10` finding 2, `D-222`) take the saved text of the newest **published** run of the
-version whatever made it, and their suites need such a run on an АР version. This helper makes one
-the way the executor has always made it, outside the served routes: it starts the run with the
-explicit pair the v1 machinery's reference profile carries and executes it with that profile and the
-recorded adapter. The run, its saved text layer and everything the reads do with them are what they
-were; only the route to it is not the product's. Where an АР version gets its published run in
-production (the v3 group) is not exercised by the suites that use this.
+The served ``startRun`` routes a version classified АР to the draft original-source АР text profile
+(1.0.0; `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`, 3821261a) and accepts it once the request carries
+a priced cost consent. Between `PROD-11-AR-V1-V2-REMOVAL-01` and that hotfix it refused the version
+with ``section_profile_unavailable``; it does not any more. The АР specification, price and
+optimisation reads (`PROD-10` finding 2, `D-222`) take the saved text of the newest **published**
+run of the version whatever made it, and their suites need such a run on an АР version in recorded
+mode. The served route cannot give them one: the recorded adapter finds an answer only by the exact
+request key, and the draft АР profile has no synthetic recording (see ``test_section_recordings.py``
+in ``tests/integration/sections``), while the committed recordings and oracles are the v1 machinery's
+reference profile's. So this helper makes the run the way the executor has always made it, outside
+the served routes: it starts the run with the explicit pair the reference profile carries and
+executes it with that profile and the recorded adapter. The run, its saved text layer and everything
+the reads do with them are what they were; only the route to it is not the product's. Where an АР
+version gets its published run in production (the served ordinary start on the draft АР profile,
+or the v3 group where it is activated) is not exercised by the suites that use this.
 
 It reads ``DATABASE_URL`` and the ``S3_*`` names from the process environment, like the composed
 application the suite already built, and spends nothing (recorded mode).

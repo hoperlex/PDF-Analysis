@@ -662,9 +662,11 @@ _PRE_SECTION_MOVE_BODIES = {
 def test_the_four_classification_records_moved_by_the_section_and_nothing_else() -> None:
     """Put `AR` back where the one section code is and each body is the base capture's again.
 
-    The served `startRun` refuses a version classified `AR` (`PROD-11-AR-V1-V2-REMOVAL-01`), so the
+    `PROD-11-AR-V1-V2-REMOVAL-01` made the served `startRun` refuse a version classified `AR`, so the
     journey's version is classified `KJ` and the v1 reference profile is registered under `KJ`
-    for this journey (``journey.build_apps``). What is pinned is the *difference*: one
+    for this journey (``journey.build_apps``). It stays `KJ` after `HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`
+    gave `AR` a text profile again: that profile has no synthetic recording to replay.
+    What is pinned is the *difference*: one
     ``"section_code": "KJ"`` per body, where ``"AR"`` was, and no other byte. Every run record is
     unchanged, so none of them is marked.
     """
