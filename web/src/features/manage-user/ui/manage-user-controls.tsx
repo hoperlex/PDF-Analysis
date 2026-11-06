@@ -102,7 +102,7 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
 
       <form className="am-form" key={`roles-${account.roles.join('-')}`} onSubmit={saveRoles}>
         <h2>Роли</h2>
-        {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" name="role" value={role} defaultChecked={account.roles.includes(role)} /> {roleLabels([role])[0]}</label>)}
+        {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><span><input type="checkbox" name="role" value={role} defaultChecked={account.roles.includes(role)} /> {roleLabels([role])[0]}</span></label>)}
         <p className="am-form__hint">При изменении ролей все прежние пропуска этой учётной записи отзываются. Пользователю потребуется войти снова.</p>
         {rolesRefused ? <div data-user-failure="viewer_exclusive"><ErrorState title="Роли не сохранены" detail="Роль «Наблюдатель» не сочетается с другими ролями. Запрос не отправлен." /></div> : null}
         <button className="am-button" type="submit" disabled={manage.isPending}>Сохранить роли</button>

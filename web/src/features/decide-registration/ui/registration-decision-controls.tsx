@@ -70,7 +70,7 @@ export function RegistrationDecisionControls({ request }: { readonly request: Re
       <form className="am-form" onSubmit={approve}>
         <fieldset>
           <legend>Роли новой учётной записи</legend>
-          {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => toggleRole(role, event.target.checked)} /> {roleLabels([role])[0]}</label>)}
+          {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><span><input type="checkbox" checked={selectedRoles.includes(role)} onChange={(event) => toggleRole(role, event.target.checked)} /> {roleLabels([role])[0]}</span></label>)}
         </fieldset>
         <button className="am-button" type="submit" disabled={decision.isPending}>Одобрить заявку</button>
       </form>
