@@ -2,7 +2,7 @@
 
 import type { ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
-import { routes } from '@/shared/lib';
+import { routes, withProjectParam } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { useMe } from '@/entities/account';
 import { useAddressProject, useProjectList } from '@/entities/project';
@@ -27,7 +27,11 @@ export function StageComparePage() {
   const productFailure = product.error === null ? null : failureMessage(product.error);
 
   return (
-    <PageShell title="Сравнение стадий" subtitle="Документы П и Р, подтверждённые пары и полнота комплекта.">
+    <PageShell
+      title="Сравнение стадий"
+      subtitle="Документы П и Р, подтверждённые пары и полнота комплекта."
+      actions={moduleOn ? <a className="am-button" href={withProjectParam(routes.versionComparison(), projectUid)}>Сравнение версий</a> : undefined}
+    >
       {projectFailure === null ? null : <ErrorState title="Проекты не открылись" detail={projectFailure.detail} correlationId={projectFailure.correlationId} onRetry={projectFailure.retryable ? () => void projects.refetch() : undefined} />}
       {productFailure === null ? null : <ErrorState title="Состояние модуля не прочитано" detail={productFailure.detail} correlationId={productFailure.correlationId} onRetry={productFailure.retryable ? () => void product.refetch() : undefined} />}
       {projects.isPending || product.isPending ? <LoadingState what="сравнение стадий" /> : null}

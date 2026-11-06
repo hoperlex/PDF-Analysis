@@ -23,7 +23,7 @@ import { useState } from 'react';
 
 import type { DocumentUid, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
-import { classifyListingFailure, routes } from '@/shared/lib';
+import { classifyListingFailure, routes, withProjectParam } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { useAddressProject, useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
@@ -114,7 +114,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
       subtitle="Версии комплектов проекта: загрузка, разбор, сопоставление листов и сравнение соседних версий."
       actions={
         <>
-        {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={routes.stageComparison()}>Сравнение стадий</a> : null}
+        {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={withProjectParam(routes.stageComparison(), projectUid)}>Сравнение стадий</a> : null}
         <button
           type="button"
           className="am-button"
