@@ -1751,6 +1751,13 @@ def _seed_accounts_and_requests(session: Session, router: Surface) -> dict[str, 
     AccountRepository().archive_account(
         session, actor_uid=TEST_SUBJECT.user_uid, user_uid=str(gone.user_uid)
     )
+    # `listAuthEvents` (1.36.0): the access journal needs two lines for a page boundary to be visible.
+    from auditmanager.access import audit as access_audit
+
+    for _ in range(2):
+        access_audit.record_sign_in_succeeded(
+            session, subject_uid=str(kept.user_uid), default_credential=False
+        )
     return {
         "pending": pending.request_id,
         "rejected": rejected.request_id,

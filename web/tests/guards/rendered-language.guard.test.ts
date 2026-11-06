@@ -1405,8 +1405,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
   client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
-  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
-  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
+  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
   client.setQueryData(KEYS.assignment, ASSIGNMENT_DETAIL);
   return client;
 }
@@ -1484,8 +1484,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.normSearch, { items: [], page });
   client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
   client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
-  client.setQueryData(KEYS.assignments, { items: [], page });
-  client.setQueryData(KEYS.myTasks, { items: [], page });
+  client.setQueryData(KEYS.assignments, { items: [], page, total: 0, overview: ASSIGNMENT_OVERVIEW_EMPTY });
+  client.setQueryData(KEYS.myTasks, { items: [], page, total: 0, overview: ASSIGNMENT_OVERVIEW_EMPTY });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1528,7 +1528,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page, total: 1 });
-  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
   return client;
 }
 
@@ -1900,6 +1900,14 @@ const ASSIGNMENTS: readonly Assignment[] = [
   assignment('D', 'done', { assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', assignee_label: 'Экспертова Д. Д.' }),
   assignment('E', 'cancelled', { status_reason: 'Проект закрыт' }),
 ];
+
+/** The dispatcher's server counts for `ASSIGNMENTS` (contract 1.36.0), one assignment in each status. */
+const ASSIGNMENT_OVERVIEW: readonly { readonly status: Assignment['status']; readonly count: number }[] = [
+  { status: 'assigned', count: 1 }, { status: 'in_progress', count: 1 }, { status: 'done', count: 1 },
+  { status: 'returned', count: 1 }, { status: 'cancelled', count: 1 },
+];
+const ASSIGNMENT_OVERVIEW_EMPTY: readonly { readonly status: Assignment['status']; readonly count: number }[] =
+  ASSIGNMENT_OVERVIEW.map(({ status }) => ({ status, count: 0 }));
 
 const ASSIGNMENT_DETAIL: AssignmentDetail = {
   assignment: ASSIGNMENTS[2] as Assignment,

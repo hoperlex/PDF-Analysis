@@ -167,6 +167,11 @@ const MY_WORK: AssignmentPage = {
     assignment('E', 'cancelled'),
   ],
   page: NO_NEXT,
+  total: 5,
+  overview: [
+    { status: 'assigned', count: 1 }, { status: 'in_progress', count: 1 }, { status: 'done', count: 1 },
+    { status: 'returned', count: 1 }, { status: 'cancelled', count: 1 },
+  ],
 };
 
 const RAW_MESSAGE = 'Сырое сообщение сервера, которого на экране быть не должно';
@@ -669,7 +674,7 @@ describe('«Мои задачи» (`W61-DISPATCHER-01`)', () => {
 
   it('says so when nothing is open', () => {
     const client = loaded();
-    client.setQueryData(KEYS.assignments, { items: [assignment('D', 'done')], page: NO_NEXT });
+    client.setQueryData(KEYS.assignments, { items: [assignment('D', 'done')], page: NO_NEXT, total: 1, overview: [{ status: 'done', count: 1 }] });
     expect(draw(home(EXPERT), client)).toContain('data-my-tasks="none"');
   });
 });
