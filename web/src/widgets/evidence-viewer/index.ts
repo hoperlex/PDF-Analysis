@@ -10,3 +10,11 @@ export { EvidenceViewer } from './ui/evidence-viewer';
  */
 export type { QuotationCardProps, QuotationPlacement } from './ui/quotation-card';
 export { QuotationCard } from './ui/quotation-card';
+
+/*
+ * `UI-A-27` «Просмотр PDF» on the version page: the version's document in a drawer, page by page. `DocumentViewer` reads the bytes
+ * and is mounted only through the version page's `next/dynamic` boundary; `DocumentViewerView` is the same markup from plain data,
+ * exported so the styling census can render the drawer open.
+ */
+export type { DocumentViewerProps, DocumentViewerViewProps } from './ui/document-viewer';
+export { DocumentViewer, DocumentViewerView } from './ui/document-viewer';

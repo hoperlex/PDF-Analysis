@@ -56,8 +56,10 @@ import { KnowledgeBaseEagerSeam, KnowledgeBasePage } from '@/_pages/knowledge-ba
 import '@/_pages/review';
 import { RunPage, RunProgressEagerSeam } from '@/_pages/run';
 import { StageComparisonEagerSeam, StageComparisonPage } from '@/_pages/stage-comparison';
+import { DocumentViewerEagerSeam } from '@/_pages/version-detail';
+import { LazyDocumentViewer } from '@/_pages/version-detail/ui/version-pdf-chunk';
 import { Dashboard, HomeSectionsOverview } from '@/widgets/dashboard';
-import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { DocumentViewer, EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RunProgress } from '@/widgets/run-progress';
 import { StageComparison } from '@/widgets/stage-comparison';
@@ -169,7 +171,24 @@ const HOME_SECTIONS = {
   seam: 'HomeSectionsEagerSeam',
   marker: 'data-home-sections=""',
 } as const;
-const WRAPPED_SEAMS: readonly string[] = [...WIDGETS.map((entry) => entry.seam), HOME_SECTIONS.seam];
+
+/**
+ * A seventh wrapper, the second over `evidence-viewer`: the version page's «Просмотр PDF» drawer (`UI-A-27`).
+ *
+ * `DocumentViewer` is exported by the slice that also carries the heavy `EvidenceViewer`, so `_pages/version-detail` cannot import it
+ * statically either; its wrapper is `_pages/version-detail/ui/version-pdf-chunk.tsx` (not named `lazy-*.tsx`: those files belong to the
+ * hydration lane, `D-329`). The counts below are the five widgets plus the home overview plus this drawer, and the cases that read them
+ * name it, so an eighth is a failure and not a drift. The drawer is mounted only after a press, so the census draws it through
+ * `DocumentViewerView` open (`VersionDetailPage PDF drawer open`).
+ */
+const VERSION_PDF = {
+  slice: 'evidence-viewer',
+  widget: DocumentViewer as ComponentType<never>,
+  seam: 'DocumentViewerEagerSeam',
+  marker: 'data-version-pdf=""',
+  screen: 'VersionDetailPage PDF drawer open',
+} as const;
+const WRAPPED_SEAMS: readonly string[] = [...WIDGETS.map((entry) => entry.seam), HOME_SECTIONS.seam, VERSION_PDF.seam];
 
 /** The wrapper's own fallback, as `<LoadingState />` renders it with no `what`. */
 const BARE_FALLBACK = '>Загрузка…<';
@@ -265,11 +284,18 @@ describe('(a) no _pages module imports one of the five widgets statically', () =
     ).toEqual([]);
   });
 
-  it('reaches each of the five through exactly one import() — plus the home overview into dashboard', () => {
+  it('reaches each of the five through exactly one import() — plus the home overview into dashboard and the version page’s drawer into evidence-viewer', () => {
     const dynamics = edgesUnderPages().filter((edge) => edge.kind === 'dynamic');
     expect(dynamics.map((edge) => edge.widget).sort()).toEqual(
-      [...LAZY_SLICES, HOME_SECTIONS.slice].sort(),
+      [...LAZY_SLICES, HOME_SECTIONS.slice, VERSION_PDF.slice].sort(),
     );
+    // And the two over `evidence-viewer` are in two different pages: the review's viewer and the version page's drawer.
+    expect(
+      dynamics.filter((edge) => edge.widget === 'evidence-viewer').map((edge) => edge.file).sort(),
+    ).toEqual([
+      'web/src/_pages/review/ui/lazy-evidence-viewer.tsx',
+      'web/src/_pages/version-detail/ui/version-pdf-chunk.tsx',
+    ]);
   });
 
   it('can fail: every spelling of a static edge is caught, and import() is not', () => {
@@ -304,17 +330,18 @@ function visibleText(markup: string): string[] {
 }
 
 describe('each wrapper loads its widget through next/dynamic, behind a typed Russian loading state', () => {
-  it('records exactly six dynamic() calls, and their loaders resolve to the five widgets and the home overview', async () => {
+  it('records exactly seven dynamic() calls, and their loaders resolve to the five widgets, the home overview and the version drawer', async () => {
     // The pages were imported above, so every wrapper has called `dynamic()` by now.
-    expect(recorded.length, 'not every wrapper called next/dynamic, or something else did').toBe(6);
+    expect(recorded.length, 'not every wrapper called next/dynamic, or something else did').toBe(7);
     const resolved = await Promise.all(recorded.map((call) => call.loader()));
-    const names = resolved.map(
-      (component) =>
-        component === HOME_SECTIONS.widget
-          ? 'home-sections'
+    const names = resolved.map((component) =>
+      component === HOME_SECTIONS.widget
+        ? 'home-sections'
+        : component === VERSION_PDF.widget
+          ? 'version-pdf'
           : (WIDGETS.find((entry) => entry.widget === component)?.slice ?? `?${String(component)}`),
     );
-    expect(names.sort()).toEqual([...LAZY_SLICES, 'home-sections'].sort());
+    expect(names.sort()).toEqual([...LAZY_SLICES, 'home-sections', 'version-pdf'].sort());
   });
 
   // The name is read off the loader only to title the case; which widget a loader really
@@ -364,6 +391,28 @@ describe('each wrapper loads its widget through next/dynamic, behind a typed Rus
       HomeSectionsEagerSeam,
       createElement(HomePage, { displayLabel: 'Иванов И. И.', roles: ['expert'] }),
     ]);
+    // The version page's drawer has no frame of its own to draw empty: it is mounted by a press. Its wrapper with the seam empty is the
+    // fallback and none of the drawer; that the page mounts nothing before the press is `tests/unit/version-detail/pdf-drawer.test.ts`.
+    {
+      const Provider = (DocumentViewerEagerSeam as typeof DashboardEagerSeam).Provider as ComponentType<{
+        value: null;
+        children: ReactNode;
+      }>;
+      const markup = renderScreen(
+        newClient(),
+        createElement(Provider, {
+          value: null,
+          children: createElement(LazyDocumentViewer, {
+            versionUid: VERSION_UID,
+            title: 'Проверка',
+            pageCount: 3,
+            onClose: () => undefined,
+          }),
+        }),
+      );
+      expect(markup, 'version-pdf: no fallback where the drawer goes').toContain(BARE_FALLBACK);
+      expect(markup, 'version-pdf: the eager drawer rendered with no seam').not.toContain(VERSION_PDF.marker);
+    }
     for (const [slice, seam, page] of pages) {
       // `null` under the harness' own provider is exactly what the product has: no provider.
       const Provider = (seam as typeof DashboardEagerSeam).Provider as ComponentType<{
@@ -391,7 +440,7 @@ describe('the eager seam is provided by the harness and by nothing under web/src
     .map(repoRelative)
     .sort();
 
-  it('is named by exactly the six wrappers and their six slice indexes', () => {
+  it('is named by exactly the seven wrappers and their seven slice indexes', () => {
     expect(mentioning).toEqual(
       [
         'web/src/_pages/dashboard/index.ts',
@@ -406,6 +455,8 @@ describe('the eager seam is provided by the harness and by nothing under web/src
         'web/src/_pages/run/ui/lazy-run-progress.tsx',
         'web/src/_pages/stage-comparison/index.ts',
         'web/src/_pages/stage-comparison/ui/lazy-stage-comparison.tsx',
+        'web/src/_pages/version-detail/index.ts',
+        'web/src/_pages/version-detail/ui/version-pdf-chunk.tsx',
       ].sort(),
     );
   });
@@ -426,7 +477,7 @@ describe('the eager seam is provided by the harness and by nothing under web/src
 
   it('is provided by the harness, once per widget, with the widget itself', () => {
     const harness = readText(join(WEB_ROOT, 'tests/unit/screens/harness.ts'));
-    for (const { seam, slice } of [...WIDGETS, HOME_SECTIONS]) {
+    for (const { seam, slice } of [...WIDGETS, HOME_SECTIONS, VERSION_PDF]) {
       expect(harness, `${seam} is not provided by the harness`).toMatch(
         new RegExp(`${seam}\\.Provider,\\s*\\{\\s*value:\\s*\\w+\\s*\\}`),
       );
@@ -502,6 +553,13 @@ describe('the contrast census still sees the five widgets', () => {
       censusPairCount(rendered, theme),
       `the census measures fewer pairs in the ${theme} palette`,
     ).toBeGreaterThanOrEqual(baseline);
+  });
+
+  it('(c) the version page’s PDF drawer is in the census markup, open, in its viewer’s shell', () => {
+    const screen = rendered.find((candidate) => candidate.name === VERSION_PDF.screen);
+    expect(screen, `the census has no screen named ${VERSION_PDF.screen}`).toBeDefined();
+    expect(screen?.markup ?? '').toContain(VERSION_PDF.marker);
+    expect(screen?.markup ?? '', 'the census draws the drawer’s fallback, not the drawer').not.toContain(BARE_FALLBACK);
   });
 
   it.each(WIDGETS.map((entry) => [entry.slice, entry] as const))(

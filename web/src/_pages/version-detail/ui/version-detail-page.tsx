@@ -22,6 +22,10 @@
  * expert's confirmation form, or a read-only sentence. The session's roles arrive from the
  * route, which has just checked them; they decide only which of those is drawn.
  *
+ * `UI-A-27` «Просмотр PDF»: the original's button in the version bar opens the version's PDF in a drawer from the bottom of the
+ * page. The button is in the page's actions; the drawer is the PDF page viewer (`widgets/evidence-viewer`, pdf.js), mounted through a
+ * lazy boundary only once the button is pressed, so neither the viewer's code nor the document's bytes are asked for before.
+ *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind`
  * `comparison_pdf`) carries the mark «PDF без пакета портала» in its panel; its run list
  * offers the ordinary cost-approved section start.
@@ -29,9 +33,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import type { Role, RunStatus } from '@/shared/api';
-import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { ErrorState, Icon, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import {
@@ -42,6 +47,7 @@ import {
 import { RunList } from '@/widgets/run-list';
 import { VersionClassification } from '@/widgets/version-classification';
 import { DocumentContext } from '@/widgets/document-context';
+import { LazyDocumentViewer } from './version-pdf-chunk';
 import styles from './version-detail-page.module.css';
 
 export interface VersionDetailPageProps {
@@ -55,6 +61,8 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
   const router = useRouter();
   const wellFormed = looksLikeProjectUid(projectUid) && looksLikeVersionUid(versionUid);
   const version = useDocumentVersion(wellFormed ? versionUid : null);
+  // `UI-A-27`: nothing of the drawer exists until this is true.
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   if (!wellFormed) {
     return (
@@ -82,6 +90,16 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
         <>
           {version.data === undefined ? null : (
             <>
+              <button
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={pdfOpen}
+                title="Открыть PDF этой версии снизу"
+                data-version-pdf-toggle=""
+                onClick={() => setPdfOpen((open) => !open)}
+              >
+                <Icon name="document" /> Просмотр PDF
+              </button>{' '}
               <Link href={routes.document(version.data.project_uid, version.data.document_uid)}>Все версии документа</Link>{' '}
             </>
           )}
@@ -137,6 +155,14 @@ export function VersionDetailPage({ projectUid, versionUid, roles }: VersionDeta
           </section>
         </div>
       )}
+      {pdfOpen && version.data !== undefined ? (
+        <LazyDocumentViewer
+          versionUid={version.data.version_uid}
+          title={documentTitle === undefined || documentTitle === null ? `Версия ${version.data.version_ordinal}` : `${documentTitle} · Версия ${version.data.version_ordinal}`}
+          pageCount={version.data.page_count}
+          onClose={() => setPdfOpen(false)}
+        />
+      ) : null}
     </PageShell>
   );
 }
