@@ -268,6 +268,14 @@ function expectedNumberTokens(summary: DashboardSummary): ReadonlySet<string> {
     add(row.audit_counts.checked);
   }
 
+  // `UI-A-36`: the «Σ Итого» row, the column sums of the fifteen section rows, by the arithmetic the panel does.
+  const sections = summary.section_breakdown.filter((row) => row.section !== undefined);
+  add(sections.reduce((sum, row) => sum + row.document_count, 0));
+  add(sections.reduce((sum, row) => sum + row.finding_count, 0));
+  add(sections.reduce((sum, row) => sum + row.audit_counts.not_run, 0));
+  add(sections.reduce((sum, row) => sum + row.audit_counts.no_expert_decision, 0));
+  add(sections.reduce((sum, row) => sum + row.audit_counts.checked, 0));
+
   return tokens;
 }
 

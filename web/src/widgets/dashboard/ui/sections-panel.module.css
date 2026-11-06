@@ -132,6 +132,21 @@ a.arrow:hover {
   color: var(--am-accent-strong);
 }
 
+.totalLabel {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+/* The original's total row: set off from the rows above by a heavier line, the figures in bold, no hover. */
+.totalRow {
+  margin-top: var(--am-gap-xs);
+  border-top: 2px solid var(--am-line-strong);
+  font-weight: 700;
+}
+
 .unclassified {
   margin-top: var(--am-gap-sm);
   font-weight: 600;

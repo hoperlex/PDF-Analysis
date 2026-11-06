@@ -175,6 +175,15 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
             )}
           </li>
         ))}
+        {/* `UI-A-36`: the original's «Σ Итого», the column sums of the rows above; the unclassified row below is not in it. */}
+        <li className={`${styles.row} ${styles.totalRow}`} data-section="total">
+          <span className={styles.totalLabel}>
+            <span className={styles.badge}>Σ</span>
+            <span className={styles.name}>Итого по разделам</span>
+          </span>
+          <SectionMetrics documents={summary.totals.documents} audit={summary.totals.audit} notRunHref={null} />
+          <span className={styles.arrow} aria-hidden="true" />
+        </li>
         <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified">
           <span className={styles.badge}>—</span>
           <span className={styles.name}>Без раздела:</span>

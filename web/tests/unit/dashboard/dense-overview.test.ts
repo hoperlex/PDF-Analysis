@@ -89,18 +89,28 @@ describe("the section table's five numbers carry the original's inks", () => {
     ]);
   });
 
-  it('adds no total row: a sum the server did not send would be a number nobody counted', () => {
-    const markup = renderWith(
-      (() => {
-        const client = newClient();
-        client.setQueryData(queryKeys.dashboard.summary(), SUMMARY);
-        return client;
-      })(),
-      createElement(Dashboard),
-    );
-    expect(markup).not.toContain('data-section="total"');
-    expect(markup).not.toMatch(/Итого/);
+  it('adds the original’s total row: the sums of the fifteen rows above it, the unclassified row outside them', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.dashboard.summary(), SUMMARY);
+    const markup = renderWith(client, createElement(Dashboard));
+    const total = /<li[^>]*data-section="total"[^>]*>([\s\S]*?)<\/li>/.exec(markup)?.[1] ?? '';
+    expect(total).toContain('Итого по разделам');
+    const sections = SUMMARY.section_breakdown.filter((row) => row.section !== undefined);
+    const sum = (read: (row: (typeof sections)[number]) => number): number => sections.reduce((acc, row) => acc + read(row), 0);
+    // The five figures, in the table's column order: not run, awaiting a decision, checked, documents, remarks.
+    const shown = (total.replace(/<[^>]*>/g, ' ').match(/\d+/g) ?? []).map(Number);
+    expect(shown).toEqual([
+      sum((row) => row.audit_counts?.not_run ?? 0),
+      sum((row) => row.audit_counts?.no_expert_decision ?? 0),
+      sum((row) => row.audit_counts?.checked ?? 0),
+      sum((row) => row.document_count),
+      sum((row) => row.finding_count),
+    ]);
+    // «Без раздела» is a row of its own with its own number, and the total row comes before it.
+    expect(markup.indexOf('data-section="total"')).toBeLessThan(markup.indexOf('data-section="unclassified"'));
+    expect(markup).not.toMatch(/data-section="total"[^>]*data-analysed-by/);
   });
+});
 });
 
 describe('the front door is compact', () => {
