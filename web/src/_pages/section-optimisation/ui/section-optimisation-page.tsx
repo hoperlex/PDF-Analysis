@@ -15,7 +15,10 @@
  * **The address.** `?section=<code>&project=<project_uid>&tab=accepted` opens the page on that section, narrowed to that
  * project, on that tab (`UI-B-20`); the page keeps the address in step with the choices, and carries the section and the
  * project from one tab to the other. A parameter the address carries that is not a section code or a project identity is
- * set aside and said so. Only the open tab is mounted, so a closed tab reads nothing.
+ * set aside and said so. Only the open tab is mounted, so a closed tab shows nothing of its own; each tab does carry the
+ * server's number for the section and project chosen («Форма 7 · Спецификация N», «Принято N»), read here without
+ * opening it. The two reads are the tabs' own first reads -- the same query keys, so an open tab and its number are one
+ * request -- and the number of a tab whose read has not answered, was refused or was stopped at a bound is left off.
  *
  * Not `/optimisation`, which is the optimisation of one project and stays registered, outside
  * the menu, until it becomes a tab of the project screen.
@@ -28,13 +31,15 @@ import type { KeyboardEvent } from 'react';
 import type { ProjectSection, ProjectUid } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
+import { useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
+import { useSectionSpecification } from '@/entities/section-specification';
 import { SectionAcceptedOptimisations } from '@/widgets/section-accepted-optimisations';
 import { SectionSpecificationSection } from '@/widgets/section-specification';
 
 import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, sectionOptimisationSearch } from '../model/address';
 import type { SectionOptimisationAddress } from '../model/address';
-import { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS } from '../model/tabs';
-import type { SectionOptimisationTab } from '../model/tabs';
+import { SECTION_OPTIMISATION_TABS, sectionOptimisationTabText } from '../model/tabs';
+import type { SectionOptimisationTab, SectionOptimisationTabCounts } from '../model/tabs';
 import styles from './section-optimisation-page.module.css';
 
 export interface SectionOptimisationPageProps {
@@ -56,6 +61,23 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
     sectionCode: initial.sectionCode,
     projectUid: initial.projectUid,
   });
+
+  // The tabs' numbers. `row_count` counts every row in scope apart from the text search, and only a `ready` answer has
+  // one worth showing: a section the server stopped at a bound (`section_too_large`) lists no rows.
+  const specification = useSectionSpecification({
+    sectionCode: filter.sectionCode,
+    projectUid: filter.projectUid,
+    query: '',
+    offset: 0,
+  });
+  const accepted = useAcceptedOptimisationProposals({ sectionCode: filter.sectionCode, projectUid: filter.projectUid });
+  const counts: SectionOptimisationTabCounts = {
+    specification:
+      specification.data !== undefined && specification.data.section_code === filter.sectionCode && specification.data.state === 'ready'
+        ? specification.data.row_count
+        : null,
+    accepted: accepted.data?.total ?? null,
+  };
 
   function keep(next: { readonly tab: SectionOptimisationTab; readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
     // A reload or a pasted link opens the same view: the address follows every choice, without a new history entry.
@@ -131,7 +153,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
               onClick={() => chooseTab(name)}
               onKeyDown={onKeyDown}
             >
-              {SECTION_OPTIMISATION_TAB_LABELS[name]}
+              {sectionOptimisationTabText(name, counts)}
             </button>
           ))}
         </div>
