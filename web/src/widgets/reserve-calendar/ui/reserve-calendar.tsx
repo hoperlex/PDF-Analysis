@@ -75,6 +75,28 @@ export function nextWorkingDay(day: string, direction: 1 | -1, days: readonly Wo
   return next;
 }
 
+/**
+ * The moves that put `moves` back (the original's «Отменить последнее действие», `reserve-calendar.js` 191): for each
+ * assignment, the day and the engineer it stood on in the read the moves were made from. A move that names no engineer
+ * restores no engineer; an assignment the read did not hold has nothing to restore and is left out.
+ */
+export function inverseMoves(
+  moves: readonly AssignmentPlacement[],
+  standing: ReadonlyMap<string, { readonly item: WorkScheduleReserveItem; readonly engineerUid: string }>,
+): readonly AssignmentPlacement[] {
+  const back: AssignmentPlacement[] = [];
+  for (const move of moves) {
+    const was = standing.get(move.assignmentUid);
+    if (was === undefined) continue;
+    back.push({
+      assignmentUid: move.assignmentUid,
+      plannedOn: was.item.planned_on ?? null,
+      ...(move.assigneeUserUid === undefined ? {} : { assigneeUserUid: was.engineerUid }),
+    });
+  }
+  return back;
+}
+
 export function ReserveCalendarView({
   reserve,
   admin,
@@ -89,6 +111,8 @@ export function ReserveCalendarView({
   const [moveDate, setMoveDate] = useState('');
   const [over, setOver] = useState<string | null>(initialOver);
   const move = useMoveAssignments();
+  // What the last successful move would need to be put back (`inverseMoves`), and how many assignments it moved.
+  const [undo, setUndo] = useState<{ readonly back: readonly AssignmentPlacement[]; readonly count: number } | null>(null);
 
   const placed = new Map<string, Placed>();
   for (const engineer of reserve.engineers) {
@@ -98,7 +122,19 @@ export function ReserveCalendarView({
 
   const send = (moves: readonly AssignmentPlacement[]) => {
     if (moves.length === 0) return;
-    move.mutate(moves, { onSuccess: () => setSelected([]) });
+    const back = inverseMoves(moves, placed);
+    move.mutate(moves, {
+      onSuccess: () => {
+        setSelected([]);
+        setUndo(back.length === 0 ? null : { back, count: back.length });
+      },
+    });
+  };
+
+  const undoLast = () => {
+    if (undo === null) return;
+    const { back } = undo;
+    move.mutate(back, { onSuccess: () => { setSelected([]); setUndo(null); } });
   };
 
   const placeSelection = (engineerUid: string, day: string | null, dragged: readonly Placed[]) => {
@@ -211,6 +247,14 @@ export function ReserveCalendarView({
           </button>
           {undatedSelected ? <span className={styles.hint}>«Раньше» и «Позже» не двигают работу без даты.</span> : null}
         </div>
+      ) : null}
+      {admin && undo !== null && message === null ? (
+        <p className="am-note" role="status" data-reserve-undo={undo.count}>
+          Перенос выполнен: {undo.count}.{' '}
+          <button type="button" className="am-button am-button--quiet am-button--small" disabled={move.isPending} onClick={undoLast}>
+            Отменить последнее действие
+          </button>
+        </p>
       ) : null}
       {message !== null ? (
         <p className="am-note" role="alert" data-reserve-failure={message.kind}>
