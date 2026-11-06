@@ -8,9 +8,7 @@
  * the hooks answer `null` and the static render starts from the empty address.
  */
 
-import { usePathname, useSearchParams } from 'next/navigation';
-
-import { routes } from '@/shared/lib';
+import { useSearchParams } from 'next/navigation';
 
 import { readStageAddress, writeStageAddress } from './address';
 import type { StageAddress } from './address';
@@ -18,13 +16,15 @@ import type { StageAddress } from './address';
 const NO_PARAMS = new URLSearchParams();
 
 export function useStageAddress(): readonly [StageAddress, (next: StageAddress, how?: 'push' | 'replace') => void] {
-  const pathname = usePathname() ?? routes.stageComparison();
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const address = readStageAddress(searchParams);
   const go = (next: StageAddress, how: 'push' | 'replace' = 'push') => {
-    const query = writeStageAddress(searchParams, next).toString();
-    if (query === searchParams.toString() || typeof window === 'undefined') return;
-    const href = query === '' ? pathname : `${pathname}?${query}`;
+    if (typeof window === 'undefined') return;
+    // The base is the address as it is now, not as it was when the handler was made: a poll may have written the run since.
+    const base = new URLSearchParams(window.location.search);
+    const query = writeStageAddress(base, next).toString();
+    if (query === base.toString()) return;
+    const href = query === '' ? window.location.pathname : `${window.location.pathname}?${query}`;
     if (how === 'push') window.history.pushState(window.history.state, '', href);
     else window.history.replaceState(window.history.state, '', href);
   };

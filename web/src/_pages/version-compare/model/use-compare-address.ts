@@ -7,9 +7,7 @@
  * trip. Outside the app router both hooks answer `null` and the static render starts from `initial`.
  */
 
-import { usePathname, useSearchParams } from 'next/navigation';
-
-import { routes } from '@/shared/lib';
+import { useSearchParams } from 'next/navigation';
 
 import { readCompareAddress, writeCompareAddress } from './address';
 import type { CompareAddress } from './address';
@@ -17,7 +15,6 @@ import type { CompareAddress } from './address';
 const NO_PARAMS = new URLSearchParams();
 
 export function useCompareAddress(initial?: Partial<CompareAddress>): readonly [CompareAddress, (next: CompareAddress) => void] {
-  const pathname = usePathname() ?? routes.versionComparison();
   const searchParams = useSearchParams() ?? NO_PARAMS;
   const read = readCompareAddress(searchParams);
   const address: CompareAddress =
@@ -25,9 +22,11 @@ export function useCompareAddress(initial?: Partial<CompareAddress>): readonly [
       ? { documentUid: initial.documentUid, tab: initial.tab ?? 'projects' }
       : read;
   const go = (next: CompareAddress) => {
-    const query = writeCompareAddress(searchParams, next).toString();
-    if (query === searchParams.toString() || typeof window === 'undefined') return;
-    window.history.pushState(window.history.state, '', query === '' ? pathname : `${pathname}?${query}`);
+    if (typeof window === 'undefined') return;
+    const base = new URLSearchParams(window.location.search);
+    const query = writeCompareAddress(base, next).toString();
+    if (query === base.toString()) return;
+    window.history.pushState(window.history.state, '', query === '' ? window.location.pathname : `${window.location.pathname}?${query}`);
   };
   return [address, go] as const;
 }
