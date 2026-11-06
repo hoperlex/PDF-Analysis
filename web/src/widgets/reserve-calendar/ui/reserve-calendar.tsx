@@ -8,6 +8,9 @@
  * another engineer's row; Ctrl/Cmd+click adds to the selection; «Раньше» and «Позже» move the selection a working day.
  * Every move is one keyed `scheduleAssignments` command and an event of the assignment's history; a move to another
  * expert is a reassignment in «Диспетчер». An expert reads their own row and moves nothing.
+ *
+ * `D-319`: an administrator narrows the rows to one engineer; the selection is cleared when the filter changes, so a move
+ * never carries work the screen has stopped showing.
  */
 
 import { useState } from 'react';
@@ -16,7 +19,17 @@ import type { DragEvent, MouseEvent } from 'react';
 import type { WorkScheduleDay, WorkScheduleReserve, WorkScheduleReserveItem } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { ASSIGNMENT_STATUS_LABELS } from '@/entities/assignment';
-import { addDays, dayOfMonth, initialsOf, shortDayLabel, todayIso, weekdayLabel } from '@/entities/work-schedule';
+import type { EngineerFilter } from '@/entities/work-schedule';
+import {
+  EngineerFilterSelect,
+  addDays,
+  dayOfMonth,
+  initialsOf,
+  narrowEngineers,
+  shortDayLabel,
+  todayIso,
+  weekdayLabel,
+} from '@/entities/work-schedule';
 import type { AssignmentPlacement } from '@/features/edit-work-schedule';
 import { useMoveAssignments } from '@/features/edit-work-schedule';
 
@@ -27,6 +40,9 @@ export interface ReserveCalendarViewProps {
   /** The session holds `admin`: work can be selected and moved. */
   readonly admin: boolean;
   readonly onStart: (start: string) => void;
+  /** The engineer the rows are narrowed to, resolved against the engineers of this read. */
+  readonly filter: EngineerFilter;
+  readonly onEngineer: (engineer: string | null) => void;
   /** Today, `YYYY-MM-DD`; a test passes a fixed one. */
   readonly today?: string;
   /** The selection and the drop target to start with; a static render (the style census) seeds them. */
@@ -63,6 +79,8 @@ export function ReserveCalendarView({
   reserve,
   admin,
   onStart,
+  filter,
+  onEngineer,
   today = todayIso(),
   initialSelection = [],
   initialOver = null,
@@ -127,6 +145,12 @@ export function ReserveCalendarView({
     placeSelection(engineerUid, day, dragged);
   };
 
+  const visible = narrowEngineers(reserve.engineers, filter);
+  const chooseEngineer = (engineer: string | null) => {
+    setSelected([]);
+    onEngineer(engineer);
+  };
+
   const columns: readonly (WorkScheduleDay | null)[] = [null, ...reserve.days];
   const message = move.isError ? failureMessage(move.error) : null;
   const undatedSelected = chosen.some(({ item }) => item.planned_on === undefined);
@@ -135,6 +159,7 @@ export function ReserveCalendarView({
     <div className={styles.reserve} data-schedule-reserve={reserve.start}>
       <div className={styles.toolbar}>
         <strong>Очередь по инженерам</strong>
+        {admin ? <EngineerFilterSelect engineers={reserve.engineers} filter={filter} onChange={chooseEngineer} /> : null}
         <div className={styles.actions}>
           <button type="button" className="am-button am-button--quiet am-button--small" title="Неделей раньше" onClick={() => onStart(addDays(reserve.start, -7))}>
             ‹
@@ -221,7 +246,7 @@ export function ReserveCalendarView({
             </tr>
           </thead>
           <tbody>
-            {reserve.engineers.map((engineer) => {
+            {visible.map((engineer) => {
               const byDay = new Map<string, WorkScheduleReserveItem[]>();
               for (const item of engineer.items) {
                 const key = item.planned_on ?? UNDATED;
@@ -293,7 +318,7 @@ export function ReserveCalendarView({
                 </tr>
               );
             })}
-            {reserve.engineers.length === 0 ? (
+            {visible.length === 0 ? (
               <tr>
                 <td className={styles.empty} colSpan={columns.length + 1}>
                   Нет действующих экспертов.

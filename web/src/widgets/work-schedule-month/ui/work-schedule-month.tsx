@@ -8,6 +8,9 @@
  * this only draws it. An administrator edits the plans (and the default plan and time zone) in one mode, and the days off
  * and the absences in another: a click on a day's heading makes it a day off or a working day, a click on a cell marks
  * the engineer absent or present. An expert reads their own row and edits nothing.
+ *
+ * `D-319`: an administrator narrows the grid, the table and the tiles to one engineer, and a fourth tile, «Просрочки»,
+ * counts the open assignments of «Диспетчер» planned before today; the page reads them and passes the number.
  */
 
 import Link from 'next/link';
@@ -15,11 +18,14 @@ import { useState } from 'react';
 
 import type { WorkScheduleDay, WorkScheduleDoneDocument, WorkScheduleEngineer, WorkScheduleMonth } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
+import type { EngineerFilter, OverdueRead } from '@/entities/work-schedule';
 import {
+  EngineerFilterSelect,
   dayOfMonth,
   doneByDay,
   initialsOf,
   monthLabel,
+  narrowEngineers,
   percentTone,
   planPercent,
   scheduleTotals,
@@ -36,6 +42,11 @@ export interface WorkScheduleMonthViewProps {
   /** The session holds `admin`: the edit modes are drawn. */
   readonly admin: boolean;
   readonly onMonth: (month: string) => void;
+  /** The engineer the rows are narrowed to, resolved against the engineers of this read. */
+  readonly filter: EngineerFilter;
+  readonly onEngineer: (engineer: string | null) => void;
+  /** «Просрочки»: the late open assignments the page counted, or why there is no number. */
+  readonly overdue: OverdueRead;
   /** Today, `YYYY-MM-DD`; a test passes a fixed one. */
   readonly today?: string;
   /** The mode and the open cell to start in; a static render (the style census) seeds them, a reader clicks. */
@@ -73,8 +84,29 @@ function Percent({ value }: { readonly value: number | null }) {
   );
 }
 
-function Tiles({ schedule }: { readonly schedule: WorkScheduleMonth }) {
-  const totals = scheduleTotals(schedule.engineers);
+const OVERDUE_TITLE =
+  'Открытые назначения «Диспетчера», у которых плановая дата раньше сегодняшнего дня. Работа без даты не считается.';
+
+function overdueValue(overdue: OverdueRead): string {
+  if (overdue.kind === 'ready') return String(overdue.count);
+  return overdue.kind === 'pending' ? '…' : '—';
+}
+
+function OverdueTile({ overdue }: { readonly overdue: OverdueRead }) {
+  const late = overdue.kind === 'ready' && overdue.count > 0;
+  return (
+    <div className={late ? `${styles.tile} ${styles.tileLate}` : styles.tile} title={OVERDUE_TITLE} data-schedule-overdue={overdue.kind}>
+      <span className={styles.tileLabel}>Просрочки</span>
+      <span className={styles.tileValue}>{overdueValue(overdue)}</span>
+      <span className={styles.tileSub}>
+        {overdue.kind === 'failed' ? 'Назначения не загружены' : 'Назначения с прошедшей датой'}
+      </span>
+    </div>
+  );
+}
+
+function Tiles({ engineers, overdue }: { readonly engineers: readonly WorkScheduleEngineer[]; readonly overdue: OverdueRead }) {
+  const totals = scheduleTotals(engineers);
   const tone = percentTone(totals.percent);
   const ring = Math.min(100, totals.percent ?? 0);
   return (
@@ -100,6 +132,7 @@ function Tiles({ schedule }: { readonly schedule: WorkScheduleMonth }) {
           {totals.fact} из {totals.plan} отчётов
         </span>
       </div>
+      <OverdueTile overdue={overdue} />
     </div>
   );
 }
@@ -176,6 +209,9 @@ export function WorkScheduleMonthView({
   schedule,
   admin,
   onMonth,
+  filter,
+  onEngineer,
+  overdue,
   today = todayIso(),
   initialMode = 'view',
   initialPopover = null,
@@ -226,7 +262,9 @@ export function WorkScheduleMonthView({
     }
   };
 
-  const totals = scheduleTotals(schedule.engineers);
+  // The drafts and the save above work on every engineer of the read; only the rows, the tiles and the total are narrowed.
+  const visible = narrowEngineers(schedule.engineers, filter);
+  const totals = scheduleTotals(visible);
   const message = failure === undefined ? null : failureMessage(failure, {
     validation_failed: 'Сервер не принял значения: план — целое от 0 до 999, часовой пояс — имя IANA (например, Europe/Moscow).',
   });
@@ -243,6 +281,7 @@ export function WorkScheduleMonthView({
             ›
           </button>
         </div>
+        {admin ? <EngineerFilterSelect engineers={schedule.engineers} filter={filter} onChange={onEngineer} /> : null}
         {admin ? (
           <div className={styles.actions}>
             {mode === 'plan' ? (
@@ -272,7 +311,7 @@ export function WorkScheduleMonthView({
         ) : null}
       </div>
 
-      <Tiles schedule={schedule} />
+      <Tiles engineers={visible} overdue={overdue} />
 
       {mode === 'calendar' ? (
         <p className="am-note" data-schedule-hint="calendar">
@@ -346,7 +385,7 @@ export function WorkScheduleMonthView({
             </tr>
           </thead>
           <tbody>
-            {schedule.engineers.map((engineer) => {
+            {visible.map((engineer) => {
               const done = doneByDay(engineer);
               const absent = new Set(engineer.absences);
               return (
@@ -380,7 +419,7 @@ export function WorkScheduleMonthView({
                 </tr>
               );
             })}
-            {schedule.engineers.length === 0 ? (
+            {visible.length === 0 ? (
               <tr>
                 <td className={styles.empty} colSpan={schedule.days.length + 1}>
                   Нет действующих экспертов.
@@ -407,7 +446,7 @@ export function WorkScheduleMonthView({
             </tr>
           </thead>
           <tbody>
-            {schedule.engineers.map((engineer) => {
+            {visible.map((engineer) => {
               const remaining = Math.max(0, engineer.plan - engineer.fact);
               return (
                 <tr key={engineer.user_uid}>

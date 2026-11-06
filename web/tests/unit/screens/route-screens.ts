@@ -523,7 +523,7 @@ export const SEEDS: readonly Seed[] = [
     name: 'work-schedule',
     make: () => createElement(WorkSchedulePage, {
       roles: ['admin', 'expert'],
-      initial: { tab: 'completed', month: '2026-11', start: '2026-11-02' },
+      initial: { tab: 'completed', month: '2026-11', start: '2026-11-02', engineer: null },
     }),
     discipline: {},
   },
@@ -532,7 +532,7 @@ export const SEEDS: readonly Seed[] = [
     name: 'work-schedule-reserve',
     make: () => createElement(WorkSchedulePage, {
       roles: ['expert'],
-      initial: { tab: 'reserve', month: '2026-11', start: '2026-11-02' },
+      initial: { tab: 'reserve', month: '2026-11', start: '2026-11-02', engineer: null },
     }),
     discipline: {},
   },

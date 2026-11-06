@@ -7,6 +7,9 @@
  * plan, and «Календарь запаса», the open assignments of «Диспетчер» placed on days. The API decides what each role reads
  * and may change; the roles the route's guard read only decide which controls are drawn. Only the open tab is mounted,
  * so a closed tab reads nothing.
+ *
+ * `D-319`: an administrator can narrow both tabs to one engineer (`?engineer=`), and «Выполнено» also reads the reserve
+ * — the open assignments of «Диспетчер» — for its «Просрочки» tile.
  */
 
 import { useId, useRef, useState } from 'react';
@@ -15,7 +18,8 @@ import type { KeyboardEvent } from 'react';
 import type { Role } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { ErrorState, LoadingState } from '@/shared/ui';
-import { useWorkSchedule, useWorkScheduleReserve } from '@/entities/work-schedule';
+import type { OverdueRead } from '@/entities/work-schedule';
+import { overdueCount, resolveEngineerFilter, todayIso, useWorkSchedule, useWorkScheduleReserve } from '@/entities/work-schedule';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 
@@ -26,12 +30,28 @@ import styles from './work-schedule-page.module.css';
 export interface WorkSchedulePageProps {
   /** The session's roles, as the route's guard read them. */
   readonly roles: readonly Role[];
-  /** The tab, month and reserve start the address named. */
+  /** The tab, month, reserve start and engineer the address named. */
   readonly initial: ScheduleAddress;
+  /** Today, `YYYY-MM-DD`: the day «Просрочки» counts back from; a test passes a fixed one. */
+  readonly today?: string;
 }
 
-function MonthTab({ month, admin, onMonth }: { readonly month: string; readonly admin: boolean; readonly onMonth: (month: string) => void }) {
+interface TabProps {
+  readonly admin: boolean;
+  /** The engineer the address named; only an administrator's screen applies it. */
+  readonly engineer: string | null;
+  readonly onEngineer: (engineer: string | null) => void;
+}
+
+function MonthTab({ month, today, admin, engineer, onMonth, onEngineer }: TabProps & {
+  readonly month: string;
+  readonly today: string;
+  readonly onMonth: (month: string) => void;
+}) {
   const schedule = useWorkSchedule(month);
+  // The reserve carries every open assignment of «Диспетчер» whatever its window, so one day from today is enough to count
+  // the late ones; a failed read leaves the tile saying so and the month undisturbed.
+  const assignments = useWorkScheduleReserve(today, 1);
   if (schedule.isPending) return <LoadingState what="график за месяц" />;
   if (schedule.isError) {
     const message = failureMessage(schedule.error);
@@ -44,10 +64,29 @@ function MonthTab({ month, admin, onMonth }: { readonly month: string; readonly 
       />
     );
   }
-  return <WorkScheduleMonthView key={schedule.data.month} schedule={schedule.data} admin={admin} onMonth={onMonth} />;
+  const filter = resolveEngineerFilter(schedule.data.engineers, admin ? engineer : null);
+  let overdue: OverdueRead = { kind: 'pending' };
+  if (assignments.isError) overdue = { kind: 'failed' };
+  else if (assignments.isSuccess) overdue = { kind: 'ready', count: overdueCount(assignments.data.engineers, today, filter) };
+  return (
+    <WorkScheduleMonthView
+      key={schedule.data.month}
+      schedule={schedule.data}
+      admin={admin}
+      today={today}
+      filter={filter}
+      overdue={overdue}
+      onMonth={onMonth}
+      onEngineer={onEngineer}
+    />
+  );
 }
 
-function ReserveTab({ start, admin, onStart }: { readonly start: string; readonly admin: boolean; readonly onStart: (start: string) => void }) {
+function ReserveTab({ start, today, admin, engineer, onStart, onEngineer }: TabProps & {
+  readonly start: string;
+  readonly today: string;
+  readonly onStart: (start: string) => void;
+}) {
   const reserve = useWorkScheduleReserve(start, RESERVE_DAYS);
   if (reserve.isPending) return <LoadingState what="календарь запаса" />;
   if (reserve.isError) {
@@ -61,10 +100,11 @@ function ReserveTab({ start, admin, onStart }: { readonly start: string; readonl
       />
     );
   }
-  return <ReserveCalendarView reserve={reserve.data} admin={admin} onStart={onStart} />;
+  const filter = resolveEngineerFilter(reserve.data.engineers, admin ? engineer : null);
+  return <ReserveCalendarView reserve={reserve.data} admin={admin} today={today} filter={filter} onStart={onStart} onEngineer={onEngineer} />;
 }
 
-export function WorkSchedulePage({ roles, initial }: WorkSchedulePageProps) {
+export function WorkSchedulePage({ roles, initial, today = todayIso() }: WorkSchedulePageProps) {
   const [address, setAddress] = useState<ScheduleAddress>(initial);
   const base = useId();
   const buttons = useRef<Partial<Record<ScheduleTab, HTMLButtonElement | null>>>({});
@@ -118,9 +158,23 @@ export function WorkSchedulePage({ roles, initial }: WorkSchedulePageProps) {
         </div>
         <div role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-tab-${address.tab}`} className={styles.panel}>
           {address.tab === 'completed' ? (
-            <MonthTab month={address.month} admin={admin} onMonth={(month) => go({ ...address, month })} />
+            <MonthTab
+              month={address.month}
+              today={today}
+              admin={admin}
+              engineer={address.engineer}
+              onMonth={(month) => go({ ...address, month })}
+              onEngineer={(engineer) => go({ ...address, engineer })}
+            />
           ) : (
-            <ReserveTab start={address.start} admin={admin} onStart={(start) => go({ ...address, start })} />
+            <ReserveTab
+              start={address.start}
+              today={today}
+              admin={admin}
+              engineer={address.engineer}
+              onStart={(start) => go({ ...address, start })}
+              onEngineer={(engineer) => go({ ...address, engineer })}
+            />
           )}
         </div>
       </div>
