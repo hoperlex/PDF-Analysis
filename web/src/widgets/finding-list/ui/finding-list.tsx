@@ -188,6 +188,8 @@ export interface FindingToolbarProps {
   readonly onSeverityFilterChange: (filter: SeverityFilter) => void;
   readonly view: FindingView;
   readonly onViewChange: (view: FindingView) => void;
+  /** What stands at the right end of the first row: the file actions, in the original. */
+  readonly actions?: ReactNode | undefined;
 }
 
 /** What the model proposed, by severity, naming only the severities it proposed anything for. */
@@ -210,6 +212,7 @@ export function FindingToolbar({
   onSeverityFilterChange: setSeverity,
   view,
   onViewChange: setView,
+  actions,
 }: FindingToolbarProps) {
   const total = countGrouped(groups);
   if (total === 0) return null;
@@ -218,10 +221,48 @@ export function FindingToolbar({
   const proposedText = proposedSummary(severities);
   return (
     <div className={styles.toolbar}>
+      {/* The original's top row: the total and the severity chips on the left, the file actions on the right. */}
+      <div className={styles.top}>
+        <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
+        {hasSeverity(severities) ? (
+          <div className={styles.severities} data-severity-strip="">
+            <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
+              <span className={styles.stripLabel}>Важность (решение эксперта):</span>
+              <button
+                type="button"
+                className="am-button am-button--quiet am-button--small"
+                aria-pressed={severity === 'all'}
+                data-severity-filter="all"
+                onClick={() => setSeverity('all')}
+              >
+                Все
+              </button>
+              {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="am-button am-button--quiet am-button--small"
+                  aria-pressed={severity === value}
+                  data-severity-filter={value}
+                  onClick={() => setSeverity(value)}
+                >
+                  {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
+                </button>
+              ))}
+            </div>
+            {proposedText === null ? null : (
+              <p className={styles.proposed} data-proposed-severity="">
+                Предложено моделью (не решение эксперта):{' '}
+                {proposedText}
+              </p>
+            )}
+          </div>
+        ) : null}
+        {actions === undefined ? null : <div className={styles.actions}>{actions}</div>}
+      </div>
       <div className={styles.verdicts} data-finding-toolbar="">
         <p className={styles.tally} data-verdict-tally={`${tally.waiting}/${tally.accepted}/${tally.rejected}`}>
-          <strong className={styles.total} data-finding-total={total}>Всего: {total}</strong>
-          {' · '}Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
+          Ожидают решения: {tally.waiting} · Приняты: {tally.accepted} · Отклонены: {tally.rejected}
         </p>
         <div className={styles.controls}>
           <div className={styles.filter} role="group" aria-label="Отбор по вердикту">
@@ -254,40 +295,6 @@ export function FindingToolbar({
           </div>
         </div>
       </div>
-      {hasSeverity(severities) ? (
-        <div className={styles.severities} data-severity-strip="">
-          <div className={styles.filter} role="group" aria-label="Отбор по важности, решённой экспертом">
-            <span className={styles.stripLabel}>Важность (решение эксперта):</span>
-            <button
-              type="button"
-              className="am-button am-button--quiet am-button--small"
-              aria-pressed={severity === 'all'}
-              data-severity-filter="all"
-              onClick={() => setSeverity('all')}
-            >
-              Все
-            </button>
-            {[...SEVERITY_ORDER, 'undetermined' as const].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className="am-button am-button--quiet am-button--small"
-                aria-pressed={severity === value}
-                data-severity-filter={value}
-                onClick={() => setSeverity(value)}
-              >
-                {value === 'undetermined' ? 'Не определена' : SEVERITY_LABELS[value]} {severities.decided[value]}
-              </button>
-            ))}
-          </div>
-          {proposedText === null ? null : (
-            <p className={styles.proposed} data-proposed-severity="">
-              Предложено моделью (не решение эксперта):{' '}
-              {proposedText}
-            </p>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -401,9 +401,12 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     >
       <DocumentContext projectUid={projectUid} runId={runId} current="review" />
       <ExtendedReviewSummary projectUid={projectUid} runId={runId} />
-      {/* The file actions stand over the findings, as the original's toolbar does, not under the last of a long list. */}
-      {exportPanel}
-      {/* The filters and the tally across the whole width over the list and the open finding, as the original's top row. */}
+      {/*
+        The filters, the tally and the file actions across the whole width over the list and the open finding, as the
+        original's top row: the total and the severity chips at the left, the file actions at the right. A run with no
+        findings has no toolbar, and its file actions stand on their own.
+      */}
+      {admitted.findings.length === 0 ? <div className={styles.exportAlone}>{exportPanel}</div> : null}
       <FindingToolbar
         groups={groups}
         verdictFilter={verdictFilter}
@@ -412,6 +415,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         onSeverityFilterChange={setSeverityFilter}
         view={view}
         onViewChange={setView}
+        actions={admitted.findings.length === 0 ? undefined : exportPanel}
       />
       <div className={view === 'table' ? `am-review ${styles.layout} ${styles.layoutTable}` : `am-review ${styles.layout}`}>
         <div className={view === 'table' ? `am-review__list ${styles.list} ${styles.listTable}` : `am-review__list ${styles.list}`}>

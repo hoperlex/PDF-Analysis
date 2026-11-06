@@ -17,6 +17,18 @@
   gap: var(--am-gap-sm);
 }
 
+/* The first row: the total, the severity chips and, at the right, the file actions; it wraps as a whole. */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.actions {
+  margin-left: auto;
+}
+
 /* The list's own rhythm: the rows of the toolbar and the groups stand 8px apart (the global gap is 16px). */
 .root.root {
   gap: var(--am-gap-sm);

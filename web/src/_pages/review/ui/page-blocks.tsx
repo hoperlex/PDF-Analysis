@@ -17,10 +17,12 @@
  * one static pass draw the markup the screen draws.
  */
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import type { PortalBlock, ProjectUid, VersionUid } from '@/shared/api';
 import { portalBlockCropUrl } from '@/shared/api';
+import { routes } from '@/shared/lib';
 import { portalBlockTypeLabel, usePortalBlocks } from '@/entities/block';
 import { PortalBlockViewer } from '@/widgets/portal-blocks';
 
@@ -40,6 +42,11 @@ export interface PageBlocksStripProps {
   readonly onMore: () => void;
   readonly loadingMore: boolean;
   readonly moreFailed: boolean;
+  /**
+   * The version's whole «Блоки» tab, where the original's thumbnails lead (`/project/<id>/blocks`). Absent, the strip
+   * offers no way out, as the census and the unit suite draw it.
+   */
+  readonly blocksHref?: string | undefined;
 }
 
 function Thumb({
@@ -87,7 +94,7 @@ function Thumb({
   );
 }
 
-export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMore, moreFailed }: PageBlocksStripProps) {
+export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMore, moreFailed, blocksHref }: PageBlocksStripProps) {
   if (reading.kind === 'unreadable') {
     return (
       <p className={`${styles.note} ${styles.alone}`} data-page-blocks="unreadable">
@@ -108,6 +115,14 @@ export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMo
     >
       <h3 className={styles.title}>
         {reading.kind === 'blocks' ? `Блоки страницы ${reading.page} (${blocks.length})` : `Блоки страницы ${reading.page}`}
+        {blocksHref === undefined ? null : (
+          <>
+            {' '}
+            <Link className={styles.all} href={blocksHref} data-page-blocks-all="">
+              Все блоки версии →
+            </Link>
+          </>
+        )}
       </h3>
       {blocks.length === 0 ? null : (
         <>
@@ -182,6 +197,7 @@ export function ReviewPageBlocks({ projectUid, versionUid, page, initialOpen, st
         onMore={() => void query.fetchNextPage()}
         loadingMore={query.isFetchingNextPage}
         moreFailed={query.isFetchNextPageError}
+        blocksHref={routes.versionBlocks(projectUid, versionUid)}
       />
       {openAt === null || walk[openAt] === undefined ? null : (
         <PortalBlockViewer

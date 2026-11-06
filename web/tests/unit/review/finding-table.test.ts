@@ -180,6 +180,19 @@ describe('the toolbar over the findings', () => {
     expect((inside.match(/data-finding-toolbar/g) ?? []).length).toBe(1);
   });
 
+  it('stands the total and the severity chips at the left of the first row and the file actions at its right, over the verdict row', () => {
+    const markup = renderToStaticMarkup(createElement(FindingToolbar, {
+      groups: GROUPS, verdictFilter: 'all', onVerdictFilterChange: () => {}, severityFilter: 'all', onSeverityFilterChange: () => {},
+      view: 'list', onViewChange: () => {}, actions: createElement('span', { 'data-file-actions': '' }, 'файлы'),
+    }));
+    const at = (needle: string) => markup.indexOf(needle);
+    expect(at('data-finding-total')).toBeGreaterThan(-1);
+    expect(at('data-finding-total')).toBeLessThan(at('data-severity-strip'));
+    expect(at('data-severity-strip')).toBeLessThan(at('data-file-actions'));
+    expect(at('data-file-actions')).toBeLessThan(at('data-verdict-tally'));
+    expect(toolbar()).not.toContain('data-file-actions');
+  });
+
   it('is nothing for a run without findings', () => {
     expect(toolbar([])).toBe('');
   });

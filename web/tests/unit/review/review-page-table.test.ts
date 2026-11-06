@@ -67,6 +67,12 @@ describe('the review page by its address', () => {
     expect(markup.indexOf(`data-row-key="${SECOND}"`)).toBeLessThan(markup.indexOf('data-finding-expansion'));
   });
 
+  it('stands the file actions in the toolbar’s first row, before the verdict tally', () => {
+    const markup = page('');
+    expect(markup.indexOf('data-exportable')).toBeGreaterThan(markup.indexOf('data-finding-total'));
+    expect(markup.indexOf('data-exportable')).toBeLessThan(markup.indexOf('data-verdict-tally'));
+  });
+
   it('puts the file actions over the findings in either view', () => {
     for (const search of ['', 'view=table']) {
       const markup = page(search);

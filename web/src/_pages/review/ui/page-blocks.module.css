@@ -20,6 +20,13 @@
   font-weight: 600;
 }
 
+/* The way into the version's whole «Блоки» tab, in the weight of a link, not of the title. */
+.all {
+  margin-left: var(--am-gap-sm);
+  font-size: var(--am-text-sm);
+  font-weight: 400;
+}
+
 /* One row that scrolls sideways: the side column is narrow, and a page can hold many blocks. */
 .thumbs {
   display: flex;
