@@ -104,3 +104,22 @@ notes. Later unpublished dev API 1.34 changes are not part of this hotfix. The m
 candidate is merged into dev, then its exact checked production SHA is published to main
 after the live run is terminal. Version 0.12.5 identifies the updated runner package.
 Only deployment buildability checks run under the owner's explicit exception.
+
+
+## Critic-specific repair after run RJPR
+
+RJPR completed all47blocks and covered all30textpages. Its firstwindow critic retained
+one actual quote refusal after the one authorizedrepair (the same input failed twice;
+8/9records accepted). Central read-only diagnostic42237751294 distinguishes this from
+an invalid replacement of an originally valid row. Otherwindow repairs succeeded.
+The generic repair instruction included corrector action enums for critic replies.
+The fix supplies critic-schema uncertainty fields when exact quote evidence cannot be
+confirmed, retaining each input/source binding and strict source validation. Corrector
+action instructions are limited to the corrector. This is a valid machine request for
+expert review, never an accepted invented quote or automatic expert decision.
+
+core.py participates in rules_sha256, so a fresh estimate/consent is required; RJPR and
+its saved refusals remain immutable. After its terminal state the deployment follow-up
+uses the ordinary unmetered re-audit of RJPR. The diagnostics workflow has an independent
+concurrency group: observation does not own the deployment lock. Release0.12.5revision3
+contains these repairs only; unpublished dev features remain outside this candidate.
