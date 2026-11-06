@@ -559,15 +559,10 @@ def test_a_dry_run_is_the_default_prints_exact_counts_and_changes_nothing(stand:
     exclusive = exclusive_blobs(stand, target)
     assert int(_line(out, "blobs-exclusive")) == len(exclusive) == 17
     assert int(_line(out, "blobs-shared")) == len(blob_ids_of(stand, target)) - len(exclusive) == 1
-    # The seed drives the real pipeline, whose source-preparation stage journals `stage.pdf_precheck` for the run (`runs/executor.py`,
-    # at most once a second): the 24 are the events that exist whatever the host's speed, and the precheck rows are counted from the
-    # database with this test's own predicate, so the figure is exact and not a timing guess.
-    prechecks = scalars(
-        stand,
-        "SELECT count(*) FROM audit_event WHERE event_type = 'stage.pdf_precheck' "
-        "AND aggregate_id IN (SELECT run_id FROM audit_run WHERE project_uid = :p)", p=target)[0]
-    assert prechecks >= 1, "the seed no longer reaches the PDF precheck: this decomposition would be vacuous"
-    assert f"run-journal events of the project (identities only): {24 + prechecks}" in out
+    # The seed drives the real pipeline, whose source-preparation stage journals `stage.pdf_precheck` for the run (`runs/executor.py`).
+    # `D-327`: the seed holds the throttle's clock still (`precheck_clock`), so those are exactly three (`PRECHECK_EVENTS`): the run's
+    # journal is the 24 + 3 = 27 events, whatever the host's speed.
+    assert "run-journal events of the project (identities only): 27" in out
     assert events(stand) == []
 
 

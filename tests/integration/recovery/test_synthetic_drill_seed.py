@@ -29,6 +29,7 @@ from scripts.recovery import synthetic_drill_seed as seed
 from scripts.recovery.blob_reference_audit import audit_blob_references
 from scripts.recovery.schema_coverage import audit_restored_schema
 from scripts.recovery.synthetic_drill_compare import probe_guards
+from tests.integration.recovery.purge_seed import PRECHECK_EVENTS, precheck_clock
 
 _LANE_NAMES = (
     "FOUNDATION_INSTANCE", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_PORT",
@@ -70,9 +71,9 @@ def test_the_seed_never_carries_a_provider_credential() -> None:
 
 
 @pytest.fixture
-def seeded_lane(
+def empty_lane(
     migrated_database_factory: Callable[[], DatabaseSettings],
-) -> Iterator[tuple[dict[str, Any], DatabaseSettings, dict[str, str]]]:
+) -> Iterator[tuple[DatabaseSettings, dict[str, str]]]:
     try:
         base = S3StorageSettings.from_env()
     except StorageError as exc:
@@ -92,12 +93,20 @@ def seeded_lane(
         "S3_BUCKET": bucket,
     }
     try:
-        yield seed.seed_source_lane(values), database, values
+        yield database, values
     finally:
         for page in raw.get_paginator("list_objects_v2").paginate(Bucket=bucket):
             for item in page.get("Contents", []):
                 raw.delete_object(Bucket=bucket, Key=item["Key"])
         raw.delete_bucket(Bucket=bucket)
+
+
+@pytest.fixture
+def seeded_lane(
+    empty_lane: tuple[DatabaseSettings, dict[str, str]],
+) -> tuple[dict[str, Any], DatabaseSettings, dict[str, str]]:
+    database, values = empty_lane
+    return seed.seed_source_lane(values), database, values
 
 
 def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
@@ -126,7 +135,8 @@ def test_the_seeded_lane_holds_the_realistic_dataset_and_both_audits_accept_it(
     # `0042_comparison_stage_review`: twelve more, nine of them immutable.
     # `0046_executor_capacity_enroll` (`EXEC2-SEAL-1`): `executor_enrollment`, `executor_agent_install`.
     # `0047_executor_groups_rules` (`EXEC2-SEAL-2`): the group store (five tables, none seeded); `0048` adds none.
-    assert schema.tables == 129 and schema.guarded_tables >= 29
+    # `0053_document_tags`, `0054_finding_execution_status`, `0055_work_schedule`: seven more (129 -> 136).
+    assert schema.tables == 136 and schema.guarded_tables >= 29
     assert len(references.available_blobs) >= 5
     assert dict(references.source_counts)["price_list_revision"] == 2
     assert {"geometry_crop_image", "prepared_text_layer"} <= roles
@@ -142,6 +152,39 @@ def test_a_lane_that_already_holds_a_project_is_refused(
     _, _, values = seeded_lane
     with pytest.raises(seed.SeedRefused, match="already holds a project"):
         seed.seed_source_lane(values)
+
+
+def test_the_precheck_journal_is_the_throttles_and_the_held_clock_is_what_pins_it(
+    empty_lane: tuple[DatabaseSettings, dict[str, str]],
+) -> None:
+    """`D-327`: with the throttle's clock moving 2 s per reading the journal holds EVERY receipt.
+
+    The purge and erase tests seed with the clock held still and count `PRECHECK_EVENTS` (3) events. This
+    is the other end: the same pipeline on a clock that is always late for the once-a-second throttle writes
+    `started`, a `checking` receipt for 0..N pages and `completed`, N + 3 events. That the two differ is what
+    shows the held clock (and not a pipeline that stopped journalling) pins the count, and it fails if the
+    executor ever reads another clock for the throttle.
+    """
+    database, values = empty_lane
+    with precheck_clock(step=2.0):
+        summary = seed.seed_source_lane(values)
+    engine = create_database_engine(database)
+    try:
+        with engine.connect() as connection:
+            events = sorted(connection.execute(text(
+                "SELECT payload->>'phase', (payload->>'completed_pages')::int, (payload->>'total_pages')::int "
+                "FROM audit_event WHERE event_type = 'stage.pdf_precheck' AND aggregate_id = :r"),
+                {"r": summary["run_id"]}).all())
+            pages = connection.execute(text(
+                "SELECT v.page_count FROM audit_run r JOIN document_version v ON v.version_uid = r.version_uid "
+                "WHERE r.run_id = :r"), {"r": summary["run_id"]}).scalar_one()
+    finally:
+        engine.dispose()
+    assert pages >= 2, "one page would never be throttled: the contrast would prove nothing"
+    assert events == sorted(
+        [("started", 0, pages), ("completed", pages, pages)]
+        + [("checking", done, pages) for done in range(pages + 1)])
+    assert len(events) == pages + 3 > PRECHECK_EVENTS
 
 
 _ADDED_AFTER_0023 = frozenset((

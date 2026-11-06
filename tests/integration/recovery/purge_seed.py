@@ -20,17 +20,21 @@ comparison with it does not share a bug with what it checks.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
-from collections.abc import Mapping
+import time
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 import boto3
+import pytest
 from botocore.client import Config
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from auditmanager.access.public import UserRepository
 from auditmanager.access.registrations import RegistrationRepository
+from auditmanager.runs import executor
 from auditmanager.shared.db.config import DatabaseSettings, parse_database_url
 from auditmanager.shared.db.engine import create_database_engine
 from auditmanager.shared.identity import AuditEventId, NormsSnapshotId
@@ -41,6 +45,47 @@ from tests.integration.db.test_norm_citations_migration import QUOTE, _seed_find
 NEW_ADMIN_PASSWORD = "A-changed-administrator-password-2026"  # noqa: S105 - a lane's literal
 STRAY_KEY = "blobs/ZZ/ZZ/ZZZZZZZZZZZZZZZZZZZZZZZZZZ"
 STRAY_BYTES = b"nothing names me, so nothing deletes me"
+
+#: `D-327`. The seed executes one real run, and the executor journals the PDF precheck's progress as
+#: `stage.pdf_precheck` events. It writes a `checking` receipt at most once a second (a clock read per
+#: receipt), so on a free-running clock the number of events follows the host's speed. With the clock held
+#: still (`precheck_clock()`, which `seed_stand` applies) the throttle is decided by the code alone:
+#: `started` (the first write is never throttled), the `checking` receipt of the LAST page (the throttle never
+#: holds back the page that completes the count), and `completed`. Whatever the page count, that is three.
+PRECHECK_EVENTS = 3
+#: What a held clock reads. Far from zero, so the checkpoint's own once-a-second gate (it starts at 0.0)
+#: lets the first check through and then holds the rest, as a fast host would.
+STEADY_MONOTONIC = 1_000_000.0
+
+
+class _ExecutorTime:
+    """The `time` module as `auditmanager.runs.executor` sees it, with only `monotonic` replaced.
+
+    `step` seconds pass between two readings: 0 holds the clock still, a step of a second or more
+    makes every reading late enough for the throttle to let a receipt through.
+    """
+
+    def __init__(self, step: float) -> None:
+        self._step, self._readings = step, 0
+
+    def monotonic(self) -> float:
+        self._readings += 1
+        return STEADY_MONOTONIC + self._step * self._readings
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(time, name)
+
+
+@contextlib.contextmanager
+def precheck_clock(step: float = 0.0) -> Iterator[None]:
+    """Hold (step 0) or push forward (step >= 1) the clock that throttles the precheck journal.
+
+    The seam is the executor module's own `time` name, put back on exit even when the body raises. The
+    precheck's child process and its timeouts (`analysis.stages.pdf_precheck`) keep the real clock.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(executor, "time", _ExecutorTime(step))
+        yield
 
 
 def s3(values: Mapping[str, str]) -> Any:
@@ -71,7 +116,8 @@ def digest_of(engine: Engine, table: str, where: str = "true") -> tuple[int, str
 
 def seed_stand(values: Mapping[str, str], settings: DatabaseSettings) -> dict[str, Any]:
     """Fill a migrated, empty lane. Returns identities and the keys the tests assert on."""
-    summary = seed.seed_source_lane(values)
+    with precheck_clock():  # `D-327`: the precheck journal is three events, not a function of the host's speed
+        summary = seed.seed_source_lane(values)
     engine = create_database_engine(settings)
     client = s3(values)
     bucket = values["S3_BUCKET"]
