@@ -151,6 +151,11 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
                   {/* `R-151l`: the section's own page lists every document of the section, not one page of the project. */}
                   <p data-section-page-link={section.code}>
                     <Link href={routes.projectSection(projectUid, section.code)}>Открыть раздел</Link>
+                    {/* `UI-A-53`: the section's optimisation, with the project and the section in the address. */}
+                    {' · '}
+                    <Link href={routes.sectionOptimisation(section.code, projectUid)} data-section-optimisation-link={section.code}>
+                      Оптимизация раздела
+                    </Link>
                   </p>
                   <DocumentRows projectUid={projectUid} documents={documents} selection={selection} />
                 </div>

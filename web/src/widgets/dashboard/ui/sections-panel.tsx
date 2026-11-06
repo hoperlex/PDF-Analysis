@@ -176,7 +176,13 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
           {projectUid === null ? (
             <Link href={routes.projects()}>Открыть проекты</Link>
           ) : (
-            <Link href={routes.projectSection(projectUid, selected)}>Открыть раздел</Link>
+            <>
+              <Link href={routes.projectSection(projectUid, selected)}>Открыть раздел</Link>
+              {/* `UI-A-53`: the section's optimisation, with the project the dashboard follows and the section. */}
+              <Link href={routes.sectionOptimisation(selected, projectUid)} data-section-optimisation-link={selected}>
+                Оптимизация раздела
+              </Link>
+            </>
           )}
         </div>
       )}

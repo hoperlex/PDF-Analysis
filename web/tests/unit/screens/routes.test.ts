@@ -668,6 +668,8 @@ describe('every screen address is built once and matches a route file on disk', 
       version: routes.version(PROJECT_UID, VERSION_UID),
       // `R-151m`: the version page links its «Блоки» tab.
       versionBlocks: routes.versionBlocks(PROJECT_UID, VERSION_UID),
+      // `UI-A-53`: a confirmed section of the project structure links its optimisation. Markup writes `&` as `&amp;`.
+      sectionOptimisation: routes.sectionOptimisation('GP', PROJECT_UID).replace(/&/g, '&amp;'),
       // `W59-SECTION-UI-01`: an unclassified document in the project structure opens its
       // version at the stage-and-section panel, and so does the run control's refusal.
       versionClassification: routes.versionClassification(PROJECT_UID, VERSION_UID),
