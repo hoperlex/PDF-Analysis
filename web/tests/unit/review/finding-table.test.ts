@@ -13,6 +13,7 @@ import { groupByCategory } from '@/entities/finding';
 import { ExportPanel } from '@/widgets/export-panel';
 import { FindingList, findingNumbers, findingViewOf, pagesParts } from '@/widgets/finding-list';
 
+import { newClient, renderWith } from '../screens/harness';
 import { findingDetail, observation, RUN_ID } from './fixtures';
 
 const A = 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4QA1';
@@ -145,7 +146,7 @@ describe('the sheet over the page', () => {
 });
 
 describe('the export bar', () => {
-  const panel = (layout: 'card' | 'bar') => renderToStaticMarkup(createElement(ExportPanel, {
+  const panel = (layout: 'card' | 'bar') => renderWith(newClient(), createElement(ExportPanel, {
     runId: RUN_ID, runState: 'published', providerMode: 'recorded', onExport: () => {}, mayImportDecisions: true, layout,
   }));
 

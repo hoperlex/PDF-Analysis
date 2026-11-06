@@ -6,7 +6,7 @@
  * `UI-A-65`: the original's live banner, reduced to what the reading can state — which stage the run has not
  * reached yet, and how long the run has been going. Shown only while the run is open; a terminal reading has
  * its own duration among the figures. The clock is the browser's, read after mount so a server render and the
- * first client render say the same thing; against a skewed clock the elapsed time reads «—» rather than a
+ * first client render say the same thing, and again with each poll; against a skewed clock the elapsed time reads «—» rather than a
  * negative span (`elapsedMs`).
  */
 
@@ -42,17 +42,16 @@ export function RunLiveLineView({ stage, elapsed }: RunLiveLineViewProps) {
   );
 }
 
+/**
+ * The elapsed time is stamped with the browser's clock each time the poll brings a new reading (`status` is a new
+ * object then), not on a timer of its own: this slice schedules no interval (`tests/unit/run/polling.test.ts`), the
+ * reading is only as fresh as the last poll, and the line says «идёт» for the time up to that reading.
+ */
 export function RunLiveLine({ status, rows }: { readonly status: Pick<RunStatus, 'created_at'>; readonly rows: readonly StageRow[] }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
-    const timer = setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
+  }, [status]);
   const elapsed = now === null ? '—' : formatElapsed(elapsedMs(status.created_at, new Date(now).toISOString()));
   return <RunLiveLineView stage={liveStageOf(rows)} elapsed={elapsed} />;
 }

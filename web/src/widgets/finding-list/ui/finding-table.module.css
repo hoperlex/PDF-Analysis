@@ -157,6 +157,10 @@
   font-size: var(--am-text-sm);
 }
 
+.normCell {
+  font-size: var(--am-text-xs);
+}
+
 .norms {
   display: flex;
   flex-direction: column;
