@@ -128,7 +128,9 @@ def form_failures(
         failures.add("unique_versions")
     if any(left <= right for left, right in zip(keys, keys[1:])):
         failures.add("descending_versions")
-    if len(dates) == len(entries) and any(left <= right for left, right in zip(dates, dates[1:])):
+    # Owner 2026-11-06: versions of one day may share its date (a full version is followed by a patch version the
+    # same day); an older version is still never dated after a newer one.
+    if len(dates) == len(entries) and any(left < right for left, right in zip(dates, dates[1:])):
         failures.add("descending_dates")
     if not versions or versions[0] != version or versions.count(version) != 1:
         failures.add("product_version")
@@ -175,14 +177,14 @@ def test_authored_shape_and_form() -> None:
     # receipts): the knowledge-base item joins item 4 to leave room for one fixed item. Revision 3
     # adds to that item the run page fix of the same day (a duplicated React key, folded details). Revision 4 (AGENTS
     # §6.1) is the same day's other dev publications: «Во весь экран» and «Открыть PDF» join item 3, «Все» item 4, the
-    # run screen's head item 6; the version is full at seven items and a new one would need a later date.
+    # run screen's head item 6; the version is full at seven items, so «График работ» opens 0.12.1 the same day.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.12.0": 4, "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
+        "0.12.1": 1, "0.12.0": 4, "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
         "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
     assert [entry["version"] for _, entry in entries] == [
-        "0.12.0", "0.11.0", "0.10.0", "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0",
+        "0.12.1", "0.12.0", "0.11.0", "0.10.0", "0.9.0", "0.8.2", "0.8.1", "0.8.0", "0.7.0", "0.6.0", "0.5.1", "0.5.0", "0.4.0",
         "0.3.0", "0.2.0",
     ]
     archive = entries[-1][1]
@@ -216,7 +218,7 @@ def test_bad_fixture_fails_named_rule(rule: str) -> None:
     elif rule == "canonical_date":
         current["date"] = "2026-2-8"
     elif rule == "descending_dates":
-        archive["date"] = current["date"]
+        archive["date"] = "2099-12-31"
     elif rule == "product_version":
         entries.pop(0)
     elif rule == "title_word_count":

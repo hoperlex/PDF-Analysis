@@ -96,9 +96,9 @@ its release note in the same push; the note is never left for the move to `main`
 - A minor fix or improvement a user can see either adds items to the note of the current
   version (as a higher `revision` once that note has reached `main`) or opens a patch version
   `x.y.z+1`.
-- The form rules choose between the two: a version holds at most seven items, and every
-  higher version needs a strictly later date, so a second change on the day of the current
-  version joins that version.
+- The form rules choose between the two: a version holds at most seven items; when the current
+  one is full, the change opens a patch version, which may carry the same date (owner
+  2026-11-06).
 - Moving `VERSION` moves its pins in the same commit: the revision map and the version order
   in `tests/contract/release_notes/test_release_notes_form.py`, the version set in
   `tests/integration/releases/test_release_loader.py` and the «Product `VERSION` is» line of
