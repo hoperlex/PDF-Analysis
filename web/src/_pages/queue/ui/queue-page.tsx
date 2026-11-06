@@ -12,7 +12,7 @@ import {
   runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
-import type { ExecutionFailure, ExecutionQueueFilter, ExecutionQueueState } from '@/entities/execution';
+import type { ExecutionFailure, ExecutionQueueFilter } from '@/entities/execution';
 import { useCancelRun } from '@/features/cancel-run';
 import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';

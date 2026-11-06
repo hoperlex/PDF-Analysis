@@ -394,7 +394,7 @@ describe('each wrapper loads its widget through next/dynamic, behind a typed Rus
     // The version page's drawer has no frame of its own to draw empty: it is mounted by a press. Its wrapper with the seam empty is the
     // fallback and none of the drawer; that the page mounts nothing before the press is `tests/unit/version-detail/pdf-drawer.test.ts`.
     {
-      const Provider = (DocumentViewerEagerSeam as typeof DashboardEagerSeam).Provider as ComponentType<{
+      const Provider = (DocumentViewerEagerSeam as unknown as typeof DashboardEagerSeam).Provider as ComponentType<{
         value: null;
         children: ReactNode;
       }>;
