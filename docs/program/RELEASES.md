@@ -22,7 +22,7 @@ after host verification.
 `67a62928`); the second density pass over norms, settings, administration, account, logs and optimisation (lane B,
 `22c63209`). A patch version on the day of `0.12.0`, because
 `0.12.0` is full at seven items; the owner removed the strictly-later-date rule on 2026-11-06 (versions of one day may
-share its date). On `origin/dev` only; `VERSION` is `0.12.1`.
+share its date). `VERSION` is `0.12.1`. Revision 2 carries `HOTFIX-RUN-PARTIAL-1106`: partial parameter replies retain valid facts, completed visual work survives later failures, successful/stopped windows are distinguished, and Codex answer delivery ceilings and its hidden deadline are removed. Contract 1.33.0 relaxes the runner answer-text constraint. The owner authorized dev-to-main publication with deployment build checks only; the deployment workflow and exact-tree verification are recorded in that task's release receipt.
 
 ## `v0.12.0` — pull request #45, live from the grants hotfix
 

@@ -17,9 +17,9 @@
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
     "sha256": "f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f",
-    "content_commit": "ce08af3d",
-    "content_commit_subject": "HOTFIX-RUN-PARTIAL-1106 authored reseal based on dev ce08af3d",
-    "dispatch_named_commit": "ce08af3d20e2efdc6ee21d35317b097f7fdfb35d",
+    "content_commit": "0976d3a637fa434485d5d83d8f64536a69061524",
+    "content_commit_subject": "fix(run): retain partial work and remove Codex answer delivery caps",
+    "dispatch_named_commit": "0976d3a637fa434485d5d83d8f64536a69061524",
     "commit_note": "Contract 1.33.0 removes the runner answer-text character ceiling; same paths, operations and schemas.",
     "openapi_version": "3.1.0",
     "info_version": "1.33.0",
