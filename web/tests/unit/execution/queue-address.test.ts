@@ -13,6 +13,7 @@
  */
 
 import { createElement } from 'react';
+import type { ComponentType } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { queryKeys } from '@/shared/api';
@@ -20,6 +21,7 @@ import { QUEUE_STATE_OPTIONS } from '@/entities/execution';
 import {
   EMPTY_QUEUE_ADDRESS, QUEUE_PERIOD_PARAM, QUEUE_STATE_PARAM, QueuePage, isQueueState, readQueueAddress, writeQueueAddress,
 } from '@/_pages/queue';
+import type { QueuePageProps } from '@/_pages/queue';
 import { queueStateHref } from '@/widgets/worker-list';
 
 import { newClient, renderScreen } from '../screens/harness';
@@ -76,7 +78,7 @@ describe('the page opened on an address', () => {
   it('reads the filtered queue first, and never the unfiltered one', () => {
     const client = newClient();
     client.setQueryData(queryKeys.execution.queue(undefined, { state: 'failed' }), EMPTY_PAGE);
-    const markup = renderScreen(client, createElement(QueuePage, { initialAddress: { state: 'failed', period: 'all' } }));
+    const markup = renderScreen(client, createElement(QueuePage as ComponentType<QueuePageProps>, { initialAddress: { state: 'failed', period: 'all' } }));
     const keys = client.getQueryCache().getAll().map((query) => JSON.stringify(query.queryKey));
     expect(keys).toContain(JSON.stringify(queryKeys.execution.queue(undefined, { state: 'failed' })));
     expect(keys).not.toContain(JSON.stringify(queryKeys.execution.queue(undefined, {})));
@@ -97,7 +99,7 @@ describe('the page opened on an address', () => {
 
   it('shows the period chosen by the address', () => {
     const client = newClient();
-    const markup = renderScreen(client, createElement(QueuePage, { initialAddress: { state: '', period: 'week' } }));
+    const markup = renderScreen(client, createElement(QueuePage as ComponentType<QueuePageProps>, { initialAddress: { state: '', period: 'week' } }));
     expect(markup).toMatch(/<option value="week" selected="">/);
   });
 });

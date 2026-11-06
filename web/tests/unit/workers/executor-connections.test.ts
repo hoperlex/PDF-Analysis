@@ -428,9 +428,11 @@ describe('the page', () => {
     return renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, props));
   }
 
-  it('opens on «Процессы» unless the address names a tab, with «Обзор» first and the tabs in their order', () => {
+  it('opens on «Обзор» unless the address names a tab, with the tabs in their order', () => {
     const markup = page({});
-    expect(markup).toContain('data-workers-panel="processes"');
+    expect(markup).toContain('data-workers-panel="overview"');
+    expect(markup).not.toContain('data-workers-panel="processes"');
+    expect(page({ initialTab: 'processes' })).toContain('data-workers-panel="processes"');
     const order = ['overview', 'connections', 'processes', 'routes'].map((tab) => markup.indexOf(`data-workers-tab="${tab}"`));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);

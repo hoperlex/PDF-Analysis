@@ -33,7 +33,7 @@ import type { HomePageProps } from '@/_pages/home';
 import pageStyles from '@/_pages/home/ui/home-page.module.css';
 import { ROLE_LABELS } from '@/entities/account';
 import { PROJECT_SECTIONS } from '@/entities/project';
-import type { DashboardSummary, ErrorCode, ErrorEnvelope, ProjectPage, Role } from '@/shared/api';
+import type { DashboardSummary, ErrorCode, ErrorEnvelope, Role } from '@/shared/api';
 import { ApiError, queryKeys } from '@/shared/api';
 import { SCREEN_REGISTRY } from '@/shared/config';
 import { screenRolesAdmit } from '@/shared/config/screen-registry';
