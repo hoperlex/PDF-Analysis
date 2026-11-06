@@ -179,20 +179,29 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}
-    {v3 ? <WindowProgress windows={result?.windows} progress={result?.window_progress} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} /> : null}
-    {result?.coverage_version === 'batched-v1' ? <BatchProgress batches={result?.batches} coverage={result?.phase_coverage} /> : null}
-    {result?.coverage_version === 'batched-v1' ? <CoverageBudget mode={result?.coverage_budget_mode} limits={result?.phase_call_limits} estimatedText={result?.estimated_text_characters} pieceCharacters={result?.comprehensive_piece_characters} /> : null}
-    <CrossWindowReview key={reading.run_id} value={result?.global_cross_window} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
-    <ProjectParameters key={`parameters:${reading.run_id}`} value={result?.project_parameters} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
-    <NormativeContext key={`norm-context:${reading.run_id}`} policy={result?.norm_paragraph_context_policy} receipts={result?.normative_context_receipts} />
-    <NormativeSearches key={`norm-searches:${reading.run_id}`} value={result?.norm_lookup_receipts} />
+    {/* The detail of the plan is folded, as the original's run screen keeps to its stage chain; every key below
+        is distinct, because a key shared with the observation list made React duplicate the cross-window block
+        on each poll. */}
+    <details data-extended-plan-details="">
+      <summary>Подробности плана: окна, межоконная сверка, параметры и нормативный контекст</summary>
+      {v3 ? <WindowProgress windows={result?.windows} progress={result?.window_progress} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} /> : null}
+      {result?.coverage_version === 'batched-v1' ? <BatchProgress batches={result?.batches} coverage={result?.phase_coverage} /> : null}
+      {result?.coverage_version === 'batched-v1' ? <CoverageBudget mode={result?.coverage_budget_mode} limits={result?.phase_call_limits} estimatedText={result?.estimated_text_characters} pieceCharacters={result?.comprehensive_piece_characters} /> : null}
+      <CrossWindowReview key={`cross-window:${reading.run_id}`} value={result?.global_cross_window} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+      <ProjectParameters key={`parameters:${reading.run_id}`} value={result?.project_parameters} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+      <NormativeContext key={`norm-context:${reading.run_id}`} policy={result?.norm_paragraph_context_policy} receipts={result?.normative_context_receipts} />
+      <NormativeSearches key={`norm-searches:${reading.run_id}`} value={result?.norm_lookup_receipts} />
+    </details>
     {v3 && result?.primary_text_status === 'pending' ? <p>Базовый текстовый анализ ещё выполняется. {result.visual_phase_complete === true ? 'Визуальный проход сохранён; свод и последующие проверки ожидают текстовый результат.' : 'Сохранённые визуальные результаты ещё не означают завершения анализа раздела.'}</p> : null}
     {coverage && <p>Исследовано блоков: <strong>{count(coverage.blocks_processed)}</strong> из {count(coverage.blocks_total)}. {fullWindow ? 'В плане' : 'В одобренном окне'}: {count(coverage.blocks_selected)}. Ещё не исследовано или недоступно: <strong>{count(coverage.blocks_remaining)}</strong>.</p>}
     {textCoverage === null ? null : <section data-extended-text-coverage=""><p>Комплексная сверка текста: успешно обработано страниц <strong>{count(textCoverage.pages_processed)}</strong> из {count(textCoverage.pages_total)}. В плане: {count(textCoverage.pages_selected)}. Ещё не обработано или недоступно: <strong>{count(textCoverage.pages_remaining)}</strong>.</p>{typeof textCoverage.characters_total === 'number' ? <p>Известный текстовый объём: {count(textCoverage.characters_processed)} из {count(textCoverage.characters_total)} символов обработано; осталось {count(textCoverage.characters_remaining)}. План может уточняться после подготовки следующих окон.</p> : null}<p>Эти счётчики не подтверждают отсутствие ошибок или экспертную проверку.</p></section>}
     {Array.isArray(result?.warnings) && result.warnings.length > 0 && <ul>{result.warnings.map((warning, i) => <li key={i}>{warningLabels[text(warning)] ?? 'Обзор имеет ограничение или ошибку; проверьте источники и состояние прогона.'}</li>)}</ul>}
     {consolidation !== null && !showGroups ? <p role="status">Группировка повторов в этой записи не подтверждена или не завершена. Ниже показаны исходные наблюдения; все данные сохранены в полных выгрузках.</p> : null}
-    {showGroups ? <ConsolidatedObservations key={reading.run_id} groups={result?.consolidated_observations} consolidation={consolidation} observations={observations} rawRecords={result?.observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
-      : <ObservationList key={reading.run_id} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />}
+    <details data-extended-observations-details="">
+      <summary>Наблюдения и источники · {observations.length}</summary>
+      {showGroups ? <ConsolidatedObservations key={`observations:${reading.run_id}`} groups={result?.consolidated_observations} consolidation={consolidation} observations={observations} rawRecords={result?.observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />
+        : <ObservationList key={`observations:${reading.run_id}`} observations={observations} sources={sources} fallbackVersion={text(result?.version_uid)} {...(projectUid === undefined ? {} : { projectUid })} />}
+    </details>
     {coverage && objects(coverage.skipped).length > 0 && <details><summary>Непроверенные блоки ({objects(coverage.skipped).length})</summary><ul>{objects(coverage.skipped).map((item, i) => <li key={text(item.block_id) || i}>Стр. {count(item.page_number)}, <code>{text(item.block_id)}</code> — {item.reason === 'outside_approved_window' ? 'за пределами одобренного окна' : 'изображение или геометрия недоступны'}</li>)}</ul></details>}
     {report === null ? null : <section id="extended-saved-report" aria-label="Состояние отчёта раздела"><h3>Сохранённый отчёт раздела</h3><p>{procedureLabels[reportStatus] ?? 'Состояние не передано'} · записей: {count(report.observation_count)}.</p>
       {text(report.markdown) ? <ReadableReport markdown={text(report.markdown)} /> : null}
