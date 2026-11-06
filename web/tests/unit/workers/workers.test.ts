@@ -320,7 +320,7 @@ describe('the «Исполнители» page', () => {
 
   it('says the list refreshes itself, without claiming that of the other tabs', () => {
     const markup = seeded(['expert']);
-    expect(markup).toContain('Список процессов обновляется автоматически, пока вкладка открыта');
+    expect(markup).toContain('Обзор и список процессов обновляются автоматически, пока вкладка открыта');
     expect(markup).toContain('остальные данные');
   });
 });

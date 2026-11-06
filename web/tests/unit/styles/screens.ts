@@ -118,7 +118,7 @@ import { groupByCategory } from '@/entities/finding';
 import { PROJECT_PAGE_LIMIT } from '@/entities/project';
 import { ProjectSwitcherView, buildSwitcherModel, switcherListOf } from '@/widgets/project-switcher';
 import { PauseStatusView } from '@/widgets/pause-status';
-import { UpdateTime } from '@/entities/execution';
+import { UpdateTime, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import {
   CLASSIFY_NOT_PERMITTED_DETAIL,
   DOCUMENT_PAGE_LIMIT,
@@ -1079,15 +1079,41 @@ export function screens(): Screen[] {
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
-  // M-17 (`R-151t`): the overview tiles over «Процессы», with servers not online and a partial registry.
+  // M-17 (`R-151t`), UI-B-63: the overview tiles of «Обзор», with servers not online and a partial registry, the
+  // queue's line, and the links from the tiles to «Процессы» and «Очередь» (the rules `.link` and `.queueLine`).
+  const OVERVIEW_QUEUE = [
+    { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
+    { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
+    { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
+  ] as const;
   add('WorkersOverview with the queue', render(createElement(WorkersOverviewView, {
     workers: { online: 1, total: 3, onlineSlots: 4, freeSlots: 2, partial: true },
-    queue: [
-      { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
-      { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
-      { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
-    ],
+    queue: OVERVIEW_QUEUE,
+    processesHref: '?tab=processes',
   })));
+  {
+    const client = newClient();
+    client.setQueryData(queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT), {
+      items: [
+        {
+          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', state: 'online', intake_enabled: true,
+          slots: 4, version: '0.5.0', started_at: '2026-10-09T10:00:00Z',
+          heartbeat_at: '2026-10-09T10:05:00Z', current_run_ids: [RUN_ID, RUN_ID],
+        },
+        {
+          worker_id: 'wrk_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', state: 'offline', intake_enabled: true,
+          slots: 1, version: '0.4.0', started_at: '2026-10-08T09:00:00Z',
+          heartbeat_at: '2026-10-08T12:00:00Z', current_run_ids: [],
+        },
+      ],
+      page: { next_cursor: null },
+    });
+    client.setQueryData(queryKeys.execution.queue(undefined, {}), {
+      items: [], page: { next_cursor: null }, paused: false, overview: OVERVIEW_QUEUE,
+    });
+    client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+    add('WorkersPage overview tab', renderScreen(client, createElement(WorkersPage as ComponentType<{ initialTab: 'overview' }>, { initialTab: 'overview' })));
+  }
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {

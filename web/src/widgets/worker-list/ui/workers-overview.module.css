@@ -1,4 +1,4 @@
-/* M-17: the overview tiles over «Процессы», a dense row as the original's. Tokens only. */
+/* M-17, UI-B-63: the overview tiles of «Обзор», a dense row as the original's, each with its link. Tokens only. */
 .tiles {
   display: flex;
   flex-wrap: wrap;
@@ -39,4 +39,17 @@
   align-self: center;
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
+}
+
+.link {
+  justify-self: start;
+  margin-top: var(--am-gap-xs);
+  font-size: var(--am-text-xs);
+}
+
+.queueLine {
+  margin: 0 0 var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-variant-numeric: tabular-nums;
 }

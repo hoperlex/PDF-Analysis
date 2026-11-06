@@ -1,5 +1,5 @@
 /**
- * The tabs of «Исполнители» (`EXEC-HTTP-01`, widened by `EXEC2-WEB-GROUPS-01`), and how the keyboard
+ * The tabs of «Исполнители» (`EXEC-HTTP-01`, widened by `EXEC2-WEB-GROUPS-01` and `UI-PARITY` UI-B-63), and how the keyboard
  * moves between them.
  *
  * Pure, as `_pages/blocks/model/tabs.ts` is: the static render this suite has cannot fire a key
@@ -15,18 +15,23 @@
  * `EXEC2-WEB-GROUPS-01` adds «Группы» and «Правила» between «Процессы» and «Назначения». «Назначения» stays
  * last: it is the legacy Primary/Standby routing, the live editor while the routing mode is `legacy`
  * and the history of the routes once rules are in force (ADR-0026 decision 17).
+ *
+ * `UI-PARITY` UI-B-63: «Обзор» is the first tab, as the first tab of the original's dispatcher. It holds the
+ * tiles and the queue line that sat over «Процессы», and links to the tab or the screen each one summarises.
  */
-export const WORKERS_TABS = ['connections', 'processes', 'groups', 'rules', 'routes'] as const;
+export const WORKERS_TABS = ['overview', 'connections', 'processes', 'groups', 'rules', 'routes'] as const;
 
 export type WorkersTab = (typeof WORKERS_TABS)[number];
 
 /**
  * The tab the screen opens on when the address names none: the worker list the screen has
- * always shown. A redirect from the key form names «Подключения» itself.
+ * always shown, not the first tab, so an address that names no tab keeps its meaning. A redirect from the key
+ * form names «Подключения» itself, and a link to the overview names `?tab=overview`.
  */
 export const DEFAULT_WORKERS_TAB: WorkersTab = 'processes';
 
 export const WORKERS_TAB_LABELS: Readonly<Record<WorkersTab, string>> = {
+  overview: 'Обзор',
   connections: 'Подключения',
   processes: 'Процессы',
   groups: 'Группы',
