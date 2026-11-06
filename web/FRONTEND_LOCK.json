@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c",
-    "content_commit": "e8a2c6da",
-    "content_commit_subject": "feat(contract): 1.31.0 — «График работ»: month, reserve, plans, calendar, absences, moves (UI-PARITY-P0P)",
-    "dispatch_named_commit": "e8a2c6daa70953426fe62adb11c73a25190a67c5",
-    "commit_note": "Resealed by UI-PARITY-P0P: contract 1.31.0 («График работ»: seven operations of tag schedule, sixteen schemas).",
+    "sha256": "b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c",
+    "content_commit": "55f3108b",
+    "content_commit_subject": "feat(contract): 1.32.0 — the knowledge base's «Все» (D-317, R-151h, UI-PARITY-KB-ALL)",
+    "dispatch_named_commit": "55f3108b7cd16409c922a52d95768b9bc19865cf",
+    "commit_note": "Resealed by UI-PARITY-KB-ALL: contract 1.32.0 (contract 1.32.0 adds listKnowledgeBaseEntries (D-317).).",
     "openapi_version": "3.1.0",
     "info_version": "1.32.0",
-    "paths": 266,
-    "operations": 294,
-    "component_schemas": 709,
+    "paths": 267,
+    "operations": 295,
+    "component_schemas": 711,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "07c8b3fc592a089a02ac42b82f3389cf3399a6804ae1e60fdaad0c60ac55324c",
+    "snapshot_sha256": "b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "247f4a23845fb3483319f70400af6bee32d7a14f0ee31e4ee7743688284364f7",
-      "index.ts": "d3a1319833f5437674c2f0ba0700685983b4cb7a61dffab0f1c7d6aa7689f5c4",
-      "operations.gen.ts": "15b9ff84885d9c18610cf6e160d9b19cc3b35cbb733f5d78a682a067f881b934",
-      "types.gen.ts": "c06bb6da298e1360ae1c5a51d85fdd2af1be4904f274895b09b91ba5bf708976"
+      "client.gen.ts": "e6b55a01ae5f8232674d59c6cf09b7fddc6e35d8a5c5ba93b3de128a3d8baa11",
+      "index.ts": "89d1f8ab81388c3dff3eaf29f1969a6fd8c4e8853888e61706929df77451a567",
+      "operations.gen.ts": "b300c43c74660d1a636ca694ab0375bce318924cc45b2f6a57976eec7d264b99",
+      "types.gen.ts": "147985802bc185e8958afe5c0cdc66c6acc2e41de44d1b1986f96aaf79628e42"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
