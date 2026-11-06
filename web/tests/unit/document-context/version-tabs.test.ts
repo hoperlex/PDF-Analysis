@@ -100,6 +100,13 @@ describe('the page strip', () => {
     }
   });
 
+  it('asks for no runs and draws no tabs until the version itself is known', () => {
+    const cold = newClient();
+    const markup = renderScreen(cold, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'version' }));
+    expect(markup).not.toContain('data-version-tabs');
+    expect(cold.getQueryCache().find({ queryKey: [...queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT)] })).toBeUndefined();
+  });
+
   it('carries none on the levels that are not a version', () => {
     const markup = renderScreen(client(), createElement(DocumentContext, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, current: 'document' }));
     expect(markup).not.toContain('data-version-tabs');

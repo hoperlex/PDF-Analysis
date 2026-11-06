@@ -181,7 +181,10 @@ export function DocumentContext({ projectUid, current, documentUid, versionUid, 
           {tabLevel !== null && knownVersion !== undefined ? (
             <>
               <SectionNeighbours projectUid={projectUid} documentUid={ownDocument ?? ''} sectionCode={ownDocument === undefined ? undefined : version.data?.classification?.section_code} />
-              <VersionTabs projectUid={projectUid} versionUid={knownVersion} documentUid={ownDocument} current={tabLevel} />
+              {/* The tabs read the version's runs, so they wait for the version itself (`D-16`: runs are asked for only once the version is known). */}
+              {version.data === undefined ? null : (
+                <VersionTabs projectUid={projectUid} versionUid={knownVersion} documentUid={ownDocument} current={tabLevel} />
+              )}
             </>
           ) : null}
         </div>
