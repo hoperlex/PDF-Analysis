@@ -616,7 +616,7 @@ def build_application(
 
     router = build_router(
         projects=ProjectAdapter(ingest, sessions),
-        documents=DocumentAdapter(ingest),
+        documents=DocumentAdapter(ingest, sessions),
         runs=run_adapter,
         ar_v3_groups=run_adapter,
         findings=FindingAdapter(sessions),

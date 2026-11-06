@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.33.0 (OpenAPI 3.1.0)
- *   sha256 f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f
+ *   AuditManager PC-01 API 1.34.0 (OpenAPI 3.1.0)
+ *   sha256 3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -4386,6 +4386,8 @@ export type ListDocumentTagsResult = DocumentTagList;
  * The item is a `DocumentVersion` because that is what `uploadDocument` publishes into this same collection: the `GET` of a collection returns a page of exactly what its `POST` returns, which is the rule `listProjects` follows against `createProject`. This surface has no separate `Document` resource and does not acquire one here.
  *
  * An unknown project is `404`, never an empty page: "this project has nothing in it yet" is a different answer from "there is no such project".
+ *
+ * `UI-PARITY-DOC-AUDIT` (contract 1.34.0): each item carries `audit`, the audit state of the version it shows (`DocumentAudit`), read for the page in one statement and never one request per document. No other operation that returns a `DocumentVersion` carries it. The optional `audit_state` filter and the `order` parameter are applied by the server to the whole listing before it is paged.
  */
 export type ListDocumentsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents`. */
@@ -4394,12 +4396,16 @@ export type ListDocumentsInput = {
   };
   /** Query string parameters. */
   query?: {
+    /** `UI-PARITY-DOC-AUDIT` (contract 1.34.0, `UI-A-38`): only the documents whose current version is in this audit state (`DocumentAudit.state`: `not_run`, `clean`, `awaiting_decision` or `checked`); every document when absent. «Не запускались» is `not_run`. It is applied to the whole listing before the listing is paged, so the cursor and the end of the listing are those of the narrowed listing, and a screen that follows the cursors counts exactly the documents in that state. It composes with `section_code`, `include_archived` and `tag`. */
+    audit_state?: "not_run" | "clean" | "awaiting_decision" | "checked";
     /** Opaque continuation token from the previous page's `next_cursor`. Never parsed by a client and never constructed by one. */
     cursor?: Cursor;
     /** Include archived accounts. Absent is `false`. */
     include_archived?: boolean;
     /** Page size. */
     limit?: number;
+    /** `UI-PARITY-DOC-AUDIT` (contract 1.34.0, `UI-A-49`): the order of the whole listing. `published` (the default) is the order the operation always had, newest first. `audit` is the original's order of a section, decided by the server so that it holds across pages: documents the expert has checked (`checked`) first, then documents processed and not yet decided on (`clean`, `awaiting_decision`), then documents never audited (`not_run`); within each group by `display_title` in natural Russian order (runs of digits compare as numbers, so «АР1-2» precedes «АР1-10»; letter case and the marks on a letter such as «ё» are ignored), and by `version_uid` among equal names. The cursor is built on the identity and resumes after its row in the ordered listing; presented under another `order` it yields that listing's continuation or an empty page, never a page from another listing. The order follows each document's audit state at the time of the request, so a document that changes state between two pages can appear on both or on neither; a screen that needs the whole listing reads it again from the first page. */
+    order?: "published" | "audit";
     /** Only the documents whose current version is confirmed for this section (its `classification.section_code`); every document when absent. A document whose current version has no confirmed classification never matches. `UI-PARITY-P0E` (contract 1.20.0, ruling `R-151l`): the section page lists one section's documents without walking the whole project. A cursor resumes after its row in the filtered listing; presented under another filter it yields that listing's continuation or an empty page, never a page from another listing. */
     section_code?: ProjectSection;
     /** `R-151e`: only the documents carrying this tag, regardless of case. */
@@ -10332,7 +10338,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/projects/{project_uid}/documents',
     pathParams: ['project_uid'],
-    queryParams: ['cursor', 'include_archived', 'limit', 'section_code', 'tag'],
+    queryParams: ['audit_state', 'cursor', 'include_archived', 'limit', 'order', 'section_code', 'tag'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

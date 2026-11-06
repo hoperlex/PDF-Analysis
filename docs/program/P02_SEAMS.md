@@ -1037,6 +1037,13 @@ period `created_from` / `created_to` over `created_at`; the order is unchanged a
 was issued under (`validation_failed`, `constraint: scope`). The operation stays any one role, is not keyed, and the catalogue
 gains no error code.
 
+`UI-PARITY-DOC-AUDIT` (contract `1.34.0`, no migration, no new operation) gives `listDocuments` the audit state of each
+document (`UI-A-46`): the optional `DocumentVersion.audit` (`DocumentAudit`), read for the page in one statement through
+`DocumentAuditReadModel.audits` by the rules the counters use, and on this operation only. The optional `audit_state`
+filter (`UI-A-38`, «не запускались» is `not_run`) and the `order` parameter (`published` or `audit`, `UI-A-49`) are applied
+by the adapter to the whole narrowed listing before the router cuts a page, so the ordering is the server's and holds
+across pages and the cursor is the one of the narrowed, ordered listing.
+
 `UI-PARITY-KB-ALL` (contract `1.32.0`, no migration) adds `listKnowledgeBaseEntries` (`R-151h`, `D-317`): the knowledge
 base's «Все», both decision journals merged at the edge, newest first, each row naming its kind and carrying that
 journal's own record, so neither identity is replaced; a product read.

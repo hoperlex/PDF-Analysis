@@ -42,7 +42,7 @@ from auditmanager.api.schemas.content import ByteRange, StreamedContent
 from auditmanager.api.security import RunnerIdentity
 from auditmanager.api.schemas.dashboard import DashboardSummaryView
 from auditmanager.api.schemas.decisions import DecisionEventView, DecisionRecordView
-from auditmanager.api.schemas.documents import DocumentVersionView
+from auditmanager.api.schemas.documents import DocumentAuditView, DocumentVersionView
 from auditmanager.api.schemas.findings import FindingDetailView, FindingView
 from auditmanager.api.schemas.projects import ProjectView
 from auditmanager.api.schemas.registrations import RegistrationListingView, RegistrationView
@@ -383,9 +383,9 @@ class DocumentPort(Protocol):
 
     def list_documents(
         self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
-        tag: str | None = None,
+        tag: str | None = None, audit_state: str | None = None, order: str | None = None,
     ) -> Sequence[DocumentVersionView]:
-        """The current version of every document in one project, **newest first**.
+        """The current version of every document in one project, **newest first** unless ``order`` says otherwise.
 
         ``section_code`` (`UI-PARITY-P0E`, ruling `R-151l`) keeps the documents whose current
         version is confirmed for that section (its ``classification.section_code``); ``None``
@@ -394,6 +394,16 @@ class DocumentPort(Protocol):
 
         ``include_archived`` (`R-151a`): an archived document is left out unless asked for; when listed it carries
         its ``archived_at``.
+
+        ``audit_state`` (`UI-PARITY-DOC-AUDIT`, `UI-A-38`) keeps the documents whose current version is in that audit
+        state (``not_run``, ``clean``, ``awaiting_decision`` or ``checked``); ``None`` keeps every document. It is
+        applied here, on the whole filtered listing, so that the router's pages and their cursor are the pages of
+        the narrowed listing and not of the project with rows hidden afterwards. ``order`` is ``None`` (or
+        ``published``) for the order above, or ``audit`` (`UI-A-49`): checked first, then processed
+        (``clean`` or ``awaiting_decision``), then never audited, and within each the name in natural Russian
+        order (``auditmanager.dashboard.audit_order_key``). Either of the two reads the audit of every document
+        it considers, in one statement, and returns the views with ``audit`` attached; with neither, the views
+        carry none and the router asks :meth:`document_audits` for the page it cut.
 
         The order is part of this declaration for the reason ``list_projects`` gives: the
         router pages what this returns and never re-sorts it.
@@ -407,6 +417,21 @@ class DocumentPort(Protocol):
         Items are ``DocumentVersion`` because that is what ``upload_document`` publishes
         into this same collection. There is no ``Document`` shape in the frozen contract
         and this declaration does not invent one.
+        """
+
+    def document_audits(
+        self, *, version_uids: Sequence[str]
+    ) -> Mapping[str, DocumentAuditView]:
+        """The audit of each named version, **in one read** (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
+
+        ``listDocuments`` names the versions of the page it is about to return, so a page costs one statement and
+        not one per document. The audit is the one the counters of ``listProjects`` and the section panel are
+        tallies of (``dashboard.audit_state``): the same result-run rule, the same undecided rule, the same
+        classifying function.
+
+        **Every named version has an entry.** A name that is no version is ``not_found`` naming ``Version``,
+        never an absent key the caller would have to explain: the caller indexes the answer, and a missing
+        entry would be a silent ``not_run``. No names is an empty answer and no read.
         """
 
     def set_document_archived(

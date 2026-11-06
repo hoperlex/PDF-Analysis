@@ -50,7 +50,7 @@ from auditmanager.api.schemas.decisions import (
     DecisionRecordView,
     decision_event_body,
 )
-from auditmanager.api.schemas.documents import DocumentVersionView, ManifestEntryView
+from auditmanager.api.schemas.documents import DocumentAuditView, DocumentVersionView, ManifestEntryView
 from auditmanager.api.schemas.findings import (
     EvidenceView,
     FindingDetailView,
@@ -860,10 +860,17 @@ class SectionAdapter(_SessionHolder):
 
 
 class DocumentAdapter:
-    """Documents. Like :class:`ProjectAdapter`, the service owns its sessions."""
+    """Documents. Like :class:`ProjectAdapter`, the service owns its sessions.
 
-    def __init__(self, service: Any) -> None:
+    ``sessions`` is for the audit reads only (`UI-PARITY-DOC-AUDIT`): the audit of a version is a read of its own
+    over the same database, as ``ProjectAdapter``'s counters are. It is optional so that a double built to upload
+    or stream a document does not have to invent one; asking such an adapter for audits is a refusal that says so,
+    not an empty answer.
+    """
+
+    def __init__(self, service: Any, sessions: sessionmaker[Session] | None = None) -> None:
         self._service = service
+        self._sessions = sessions
 
     def upload_document(
         self,
@@ -968,7 +975,7 @@ class DocumentAdapter:
 
     def list_documents(
         self, *, project_uid: str, section_code: str | None = None, include_archived: bool = False,
-        tag: str | None = None,
+        tag: str | None = None, audit_state: str | None = None, order: str | None = None,
     ) -> Sequence[DocumentVersionView]:
         from dataclasses import replace
 
@@ -986,11 +993,70 @@ class DocumentAdapter:
             # `R-151e`: a tag filter keeps the documents carrying that tag, regardless of case.
             and (wanted is None or wanted in {t.casefold() for t in tags.get(view.document_uid, ())})
         )
-        if section_code is None:
+        if section_code is not None:
+            # `UI-PARITY-P0E` (`R-151l`): the confirmed classification of the current version decides;
+            # the legacy `section` column and any suggestion never do.
+            views = tuple(view for view in views if _classified_section(view) == section_code)
+        return self._with_audit_filter_and_order(views, audit_state=audit_state, order=order)
+
+    def _with_audit_filter_and_order(
+        self, views: tuple[DocumentVersionView, ...], *, audit_state: str | None, order: str | None,
+    ) -> tuple[DocumentVersionView, ...]:
+        """`UI-PARITY-DOC-AUDIT` (`UI-A-38`, `UI-A-49`): the audit filter and order, over the whole narrowed listing.
+
+        Applied here, before the router cuts a page, so that the cursor, the end of the listing and every figure
+        a screen derives from it are those of the narrowed and ordered listing. With neither asked for, nothing is
+        read and the views are returned untouched (the router reads the audits of the page it cut).
+        """
+        from dataclasses import replace
+
+        from auditmanager.dashboard import AUDIT_STATES, audit_order_key
+
+        if audit_state is not None and audit_state not in AUDIT_STATES:
+            raise ValueError(f"{audit_state!r} is not an audit state")
+        if order not in (None, "published", "audit"):
+            raise ValueError(f"{order!r} is not a document order")
+        if audit_state is None and order != "audit":
             return views
-        # `UI-PARITY-P0E` (`R-151l`): the confirmed classification of the current version decides;
-        # the legacy `section` column and any suggestion never do.
-        return tuple(view for view in views if _classified_section(view) == section_code)
+        audits = self.document_audits(version_uids=[view.version_uid for view in views])
+        audited = [(view, audits[view.version_uid]) for view in views]
+        if audit_state is not None:
+            audited = [(view, audit) for view, audit in audited if audit.state == audit_state]
+        if order == "audit":
+            audited.sort(key=lambda pair: audit_order_key(pair[1].state, pair[0].display_title, pair[0].version_uid))
+        return tuple(replace(view, audit=audit) for view, audit in audited)
+
+    def document_audits(
+        self, *, version_uids: Sequence[str]
+    ) -> Mapping[str, DocumentAuditView]:
+        """`UI-A-46`: one statement for all the named versions (``DocumentAuditReadModel.audits``).
+
+        The record is copied field for field; the state and the flag are the read model's
+        ``audit_state`` and nothing is classified here. A name that is no version is ``not_found``.
+        """
+        from auditmanager.dashboard import DocumentAuditReadModel
+
+        names = tuple(dict.fromkeys(version_uids))
+        if not names:
+            return {}
+        if self._sessions is None:
+            raise RuntimeError(
+                "DocumentAdapter was built without a session factory, so it cannot read audits"
+            )
+        with self._sessions() as session:
+            records = DocumentAuditReadModel().audits(session, version_uids=names)
+        if any(name not in records for name in names):
+            raise _not_found("Version")
+        return {
+            name: DocumentAuditView(
+                state=record.state,
+                partial=record.partial,
+                result_run_id=record.result_run_id,
+                finding_count=record.finding_count,
+                undecided_finding_count=record.undecided_finding_count,
+            )
+            for name, record in records.items()
+        }
 
     def set_document_archived(
         self, *, project_uid: str, document_uid: str, archived: bool, user_uid: str, idempotency_key: str,

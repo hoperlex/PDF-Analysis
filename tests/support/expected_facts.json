@@ -1751,6 +1751,7 @@
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
+      "DocumentAudit",
       "DocumentAuditCounts",
       "DocumentTagCount",
       "DocumentTagList",
@@ -2198,5 +2199,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0055_work_schedule",
-  "contract_version": "1.32.0"
+  "contract_version": "1.34.0"
 }

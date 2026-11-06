@@ -11,12 +11,38 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.33.0` (`HOTFIX-RUN-PARTIAL-1106`)
+## Current contract `1.34.0` (`UI-PARITY-DOC-AUDIT`)
 
-Removes the application character ceiling on runner answer text. Request/response fields,
-paths and operations are unchanged. Analysis and event families share the new seal.
+Slice for register rows `UI-A-46`, `UI-A-49` and `UI-A-38`: each document's audit state on `listDocuments`, so a section
+orders its documents as the original does and filters «не запускались». No new operation, no migration, no error code.
 
-## Previous contract `1.32.0` (`UI-PARITY-KB-ALL`)
+- `DocumentVersion.audit` (new optional `DocumentAudit`: `state` `not_run`, `clean`, `awaiting_decision` or `checked`;
+  `partial`; `result_run_id`, absent exactly when the state is `not_run`; `finding_count`; `undecided_finding_count`) is
+  the audit of the version the item shows, by the rules of the counters of `DocumentAuditCounts` (`R-150n`…`R-150u`).
+  It is on the items of `listDocuments` only, read for the page in one statement and never one request per document;
+  every other answer carrying a `DocumentVersion` omits it.
+- `listDocuments` gains the optional `audit_state` filter (the four states; every document when absent) and the `order`
+  parameter (`published`, the default and the order the operation always had, newest first; or `audit`). Both are applied
+  by the server to the whole listing before it is paged, so the cursor, the end of the listing and the number of
+  documents a screen counts by following the cursors are those of the narrowed, ordered listing.
+- **Ordering is decided by the server, not by each page.** `order=audit` is the original's `projectOrderRank`: documents
+  the expert has checked (`checked`) first, then documents processed and not yet decided on (`clean`,
+  `awaiting_decision`), then documents never audited (`not_run`); within each group by `display_title` in natural Russian
+  order (runs of digits compare as numbers, case and the marks on a letter such as «ё» are ignored), and by `version_uid`
+  among equal names. A client that sorted a page would order a section differently on each page; the cursor is built on
+  the identity and resumes after its row in the ordered listing; because the order follows the audit state at the time of each
+  request, a document that changes state between two pages can appear on both or on neither, and a screen that needs the whole
+  listing reads it again from the first page.
+
+The API now has 267 paths, 295 operations and 712 schemas (the one new schema is `DocumentAudit`); migration head `0055`.
+The domain catalogs are at candidate revision 51.
+
+## Contract `1.33.0` (`HOTFIX-RUN-PARTIAL-1106`, historical)
+
+Removed the application character ceiling on runner answer text. Request/response fields,
+paths and operations were unchanged. Analysis and event families share the seal.
+
+## Contract `1.32.0` (`UI-PARITY-KB-ALL`, historical)
 
 Slice for ruling `R-151h` and debt `D-317`: the knowledge base's «Все». `listKnowledgeBaseEntries` (`GET /knowledge-base/entries`,
 a product read, optional `project_uid` filter, cursor and `total`) lists the decisions on findings and on optimisation
@@ -24,7 +50,7 @@ proposals as one journal, newest first. Each row is a `KnowledgeBaseEntry`: its 
 `occurred_at`, and exactly the record its kind names (`DecisionRecord` or `ProposalDecisionRecord`), so each keeps its own
 identity; the order and the cursor are the record's time, the kind and that record's id. `listDecisions` and
 `listProposalDecisionJournal` stay the «Замечания» and «Предложения» halves. No migration, no error code.
-The API now has 267 paths, 295 operations and 711 schemas; migration head `0055`. The domain catalogs are at candidate revision 50.
+The API then had 267 paths, 295 operations and 711 schemas; migration head `0055`. The domain catalogs were at candidate revision 50.
 
 ## Contract `1.31.0` (`UI-PARITY-P0P`, historical)
 
