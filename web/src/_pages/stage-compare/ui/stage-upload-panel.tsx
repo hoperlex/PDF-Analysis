@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { ProjectUid, StageUpload, StageUploadCandidate, StageUploadFile } from '@/shared/api';
 import {
@@ -123,9 +123,16 @@ function FileRow({ file }: { readonly file: StageUploadFile }) {
   return <div className={styles.file}><span>{file.declaration.display_name}</span><span>{file.state} · {file.received_bytes} / {file.declaration.size_bytes} байт</span></div>;
 }
 
-export function StageUploadPanel({ projectUid, mayAct }: {
+/**
+ * The sets of PDF and ZIP files of the project and the form that adds one. The original opens its upload in a dialog from the button
+ * «Загрузить проекты» at the right of the steps bar; here the same button opens this panel, which stays closed until it is asked for
+ * — except that a set with documents waiting for the expert's word opens it once, since those decisions would otherwise hide.
+ */
+export function StageUploadPanel({ projectUid, mayAct, open, onOpenChange }: {
   readonly projectUid: ProjectUid;
   readonly mayAct: boolean;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
 }) {
   const cache = useQueryClient();
   const [cursor, setCursor] = useState('');
@@ -145,6 +152,15 @@ export function StageUploadPanel({ projectUid, mayAct }: {
     })).data,
     retry: false,
   });
+
+  const waiting = mayAct && (uploads.data?.items.some((upload) => upload.candidates.some((candidate) => candidate.state === 'proposed')) ?? false);
+  const announced = useRef(false);
+  useEffect(() => {
+    if (waiting && !announced.current) {
+      announced.current = true;
+      onOpenChange(true);
+    }
+  }, [waiting, onOpenChange]);
 
   const keyFor = (action: string) => {
     const existing = keys.current.get(action);
@@ -271,8 +287,11 @@ export function StageUploadPanel({ projectUid, mayAct }: {
   const failure = error === null ? null : failureMessage(error);
   const readFailure = uploads.error === null ? null : failureMessage(uploads.error);
   return (
-    <section aria-labelledby="stage-upload-heading" className={styles.panel}>
-      <h2 id="stage-upload-heading">Наборы PDF и ZIP</h2>
+    <section aria-labelledby="stage-upload-heading" className={styles.panel} id="stage-upload-panel" hidden={!open}>
+      <div className={styles.heading}>
+        <h2 id="stage-upload-heading">Наборы PDF и ZIP</h2>
+        <button type="button" className="am-button am-button--quiet" onClick={() => onOpenChange(false)}>Свернуть</button>
+      </div>
       <p>Файлы ZIP проверяются целиком. Каждый PDF становится кандидатом; эксперт отдельно подтверждает стадию, раздел и документ.</p>
       {mayAct ? (
         <div className={styles.form}>

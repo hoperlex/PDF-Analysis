@@ -44,3 +44,7 @@
 .heading code {
   overflow-wrap: anywhere;
 }
+
+.panel[hidden] {
+  display: none;
+}
