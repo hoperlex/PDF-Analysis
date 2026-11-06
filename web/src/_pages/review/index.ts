@@ -21,4 +21,7 @@ export { resolveSelection, selectFinding, selectPage } from './model/selection';
  */
 export { EvidenceViewerEagerSeam } from './ui/lazy-evidence-viewer';
 export { ReviewRowActions, acceptNeedsSeverity } from './ui/review-row-actions';
+/** «Во весь экран», exported so the styling census renders it open. */
+export { ReviewViewerAside, ReviewViewerDialog } from './ui/review-viewer-dialog';
+export type { ReviewViewerAsideProps, ReviewViewerDialogProps } from './ui/review-viewer-dialog';
 export type { ReviewRowActionsProps } from './ui/review-row-actions';

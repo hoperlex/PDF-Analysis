@@ -38,6 +38,28 @@ export interface ReviewViewerDialogProps {
   readonly staticOpen?: boolean | undefined;
 }
 
+export interface ReviewViewerAsideProps {
+  readonly findingUid: string;
+  /** «Критическое · Лист 3 · стр. 7»: the severity and where the finding is. */
+  readonly meta: string;
+  readonly text: string;
+  readonly recommendation: string;
+  /** ✓/✕ for a session that may decide. */
+  readonly actions?: ReactNode;
+}
+
+/** The finding at the head of the side column: where it is, what it says, what it recommends, and ✓/✕. */
+export function ReviewViewerAside({ findingUid, meta, text, recommendation, actions }: ReviewViewerAsideProps) {
+  return (
+    <div className={styles.aside} data-finding-uid={findingUid}>
+      {meta === '' ? null : <p className={styles.meta}>{meta}</p>}
+      <p className={styles.text}>{text}</p>
+      {recommendation === '' ? null : <p className={styles.recommendation}>{recommendation}</p>}
+      {actions}
+    </div>
+  );
+}
+
 export function ReviewViewerDialog({
   position,
   total,

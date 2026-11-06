@@ -22,11 +22,6 @@
   overflow: hidden;
 }
 
-.dialog::backdrop {
-  background: var(--am-ink);
-  opacity: 0.45;
-}
-
 .box {
   display: flex;
   flex-direction: column;
@@ -69,14 +64,17 @@
   cursor: pointer;
 }
 
-.step:hover:not(:disabled),
+.step:hover,
 .close:hover {
   border-color: var(--am-accent);
   background: var(--am-accent-light);
   color: var(--am-accent-strong);
 }
 
-.step:disabled {
+.step:disabled,
+.step:disabled:hover {
+  border-color: var(--am-line);
+  background: var(--am-paper);
   color: var(--am-ink-soft);
   cursor: default;
 }

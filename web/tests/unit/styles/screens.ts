@@ -18,7 +18,7 @@ import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
 import { ProjectsPage } from '@/_pages/projects';
-import { ReviewPage } from '@/_pages/review';
+import { ReviewPage, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
@@ -1434,6 +1434,37 @@ export function screens(): Screen[] {
           badge: '5', active: false, onSelect: noop, placement: null,
         }),
       ),
+    ),
+  );
+  // «Во весь экран» on «Разбор», open: the bar with ‹ (› at the last finding is disabled), the page filling the
+  // height, and the side column with the finding, the quotations and the basis.
+  add(
+    'ReviewViewerDialog open on the last finding',
+    render(
+      createElement(ReviewViewerDialog, {
+        position: 12,
+        total: 12,
+        onPrevious: noop,
+        onNext: undefined,
+        onClose: noop,
+        title: 'Не указан класс огнестойкости перекрытия',
+        staticOpen: true,
+        children: createElement(EvidenceViewer, {
+          observation: observation({
+            evidence: [evidence({ evidence_ordinal: 1, page_number: 7, quote: 'перекрытие по металлическим балкам' })],
+          }),
+          activePage: 7,
+          onPageChange: noop,
+          documentUrl: 'blob:https://app.test/0f0e9d8c-7b6a-5948-3726-150413021100',
+          presentation: 'full',
+          aside: createElement(ReviewViewerAside, {
+            findingUid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z',
+            meta: 'Критическое · Лист 3 · стр. 7',
+            text: 'Не указан класс огнестойкости перекрытия',
+            recommendation: 'Указать предел огнестойкости REI 45 по СП 2.13130.',
+          }),
+        }),
+      }),
     ),
   );
   add(

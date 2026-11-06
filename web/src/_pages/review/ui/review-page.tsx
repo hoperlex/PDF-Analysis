@@ -65,8 +65,7 @@ import { resolveSelection, selectFinding, selectPage } from '../model/selection'
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
 import { ReviewRowActions } from './review-row-actions';
-import { ReviewViewerDialog } from './review-viewer-dialog';
-import dialogStyles from './review-viewer-dialog.module.css';
+import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
 import styles from './review-page.module.css';
 
 export interface ReviewPageProps {
@@ -196,6 +195,18 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   const activePage =
     resolved?.page ?? (detail === null ? null : firstDeclaredPage(detail.observation));
 
+  // One failure for the open finding, inline and in the full-screen view.
+  const detailFailure = detailQuery.error === null ? null : (
+    <ErrorState
+      {...(presentFailureOrNull(detailQuery.error, {
+        title: 'Не удалось загрузить находку',
+        onRetry: () => {
+          void detailQuery.refetch();
+        },
+      }) ?? { title: 'Не удалось загрузить находку' })}
+    />
+  );
+
   // The same viewer inline and in the full-screen view; only the presentation differs.
   const evidenceProps = detail === null ? null : {
     observation: detail.observation,
@@ -299,15 +310,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
         <div className={`am-review__detail ${styles.detail}`}>
           {selectedUid === null ? null : detailQuery.isPending ? (
             <LoadingState what="выбранная находка" />
-          ) : detailQuery.error !== null ? (
-            <ErrorState
-              {...(presentFailureOrNull(detailQuery.error, {
-                title: 'Не удалось загрузить находку',
-                onRetry: () => {
-                  void detailQuery.refetch();
-                },
-              }) ?? { title: 'Не удалось загрузить находку' })}
-            />
+          ) : detailFailure !== null ? (
+            detailFailure
           ) : detail === null ? null : (
             <>
               <article className="am-review__finding" data-finding-uid={detail.finding_uid}>
@@ -322,7 +326,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 <p className="am-note" data-evidence-expanded="">
                   Страница открыта во весь экран.
                 </p>
-              ) : (
+              ) : evidenceProps === null ? null : (
                 <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
               )}
 
@@ -395,23 +399,20 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
           ) : detailQuery.isPending ? (
             <LoadingState what="выбранная находка" />
           ) : evidenceProps === null || detail === null ? (
-            <ErrorState title="Не удалось загрузить находку" />
+            detailFailure
           ) : (
             <LazyEvidenceViewer
               {...evidenceProps}
               presentation="full"
               aside={
-                <div className={dialogStyles.aside} data-finding-uid={detail.finding_uid}>
-                  <p className={dialogStyles.meta}>
-                    {[decidedOrProposed, pagesLabel(declaredPages(detail.observation), (page) => sheetOfPage(sheetLabels.data, page))]
-                      .filter((part) => part !== null && part !== '')
-                      .join(' · ')}
-                  </p>
-                  <p className={dialogStyles.text}>{detail.observation.finding_text}</p>
-                  {detail.observation.recommendation_text !== '' ? (
-                    <p className={dialogStyles.recommendation}>{detail.observation.recommendation_text}</p>
-                  ) : null}
-                  {mayAct && selectedSummary !== null ? (
+                <ReviewViewerAside
+                  findingUid={detail.finding_uid}
+                  meta={[decidedOrProposed, pagesLabel(declaredPages(detail.observation), (page) => sheetOfPage(sheetLabels.data, page))]
+                    .filter((part) => part !== null && part !== '')
+                    .join(' · ')}
+                  text={detail.observation.finding_text}
+                  recommendation={detail.observation.recommendation_text}
+                  actions={mayAct && selectedSummary !== null ? (
                     <ReviewRowActions
                       finding={selectedSummary}
                       runId={runId}
@@ -422,7 +423,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                       }}
                     />
                   ) : null}
-                </div>
+                />
               }
             />
           )}
