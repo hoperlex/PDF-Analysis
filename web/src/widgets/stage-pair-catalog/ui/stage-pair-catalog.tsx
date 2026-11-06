@@ -58,6 +58,14 @@ function OpenButton({ pairId, onRunChange }: { readonly pairId: string; readonly
   return <button type="button" className="am-button" data-pair-open={pairId} onClick={() => onRunChange(run)}>Открыть</button>;
 }
 
+/** The row's way into the expert's tools: «Запустить сравнение» for a pair that has no run yet (the original's button), «Управление» after it. */
+function ManageButton({ pairId, open, onToggle }: { readonly pairId: string; readonly open: boolean; readonly onToggle: () => void }) {
+  const { run } = useLatestPairRun(pairId);
+  return <button type="button" className="am-button am-button--quiet" aria-expanded={open} data-pair-manage={pairId} onClick={onToggle}>
+    {run === undefined ? 'Запустить сравнение' : 'Управление'}
+  </button>;
+}
+
 /**
  * The catalog of the project's stage pairs (`UI-B-85`, plan §1.2 tab 1): one table as the original's «Проект / раздел, Метод и
  * модель, Дата, Изменения, Требуют проверки, Статус, Открыть», with the documents by their titles. What an expert does with a
@@ -127,8 +135,8 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
       key: 'actions', header: 'Действия',
       cell: (pair) => <div className={styles.actions}>
         <OpenButton pairId={pair.pair_id} onRunChange={onRunChange} />
-        {mayAct && pair.state === 'confirmed' ? <button type="button" className="am-button am-button--quiet" aria-expanded={managedId === pair.pair_id}
-          data-pair-manage={pair.pair_id} onClick={() => setManaged(managedId === pair.pair_id ? null : pair.pair_id)}>Управление</button> : null}
+        {mayAct && pair.state === 'confirmed'
+          ? <ManageButton pairId={pair.pair_id} open={managedId === pair.pair_id} onToggle={() => setManaged(managedId === pair.pair_id ? null : pair.pair_id)} /> : null}
       </div>,
     },
   ];
