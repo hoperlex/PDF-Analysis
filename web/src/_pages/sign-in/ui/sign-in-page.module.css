@@ -4,7 +4,7 @@
   align-items: center;
   gap: var(--am-gap-xl);
   width: min(100%, 1200px);
-  min-height: calc(100dvh - 120px);
+  min-height: calc(100dvh - 160px);
   margin: 0 auto;
   padding: var(--am-gap) 0;
   color: var(--am-showcase-ink);
