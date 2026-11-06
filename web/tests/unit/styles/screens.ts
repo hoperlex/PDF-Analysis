@@ -86,7 +86,7 @@ import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
-import { CropFigureView } from '@/widgets/portal-blocks';
+import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByPage } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
@@ -150,7 +150,9 @@ import {
   normDocument,
 } from '../norms/fixtures';
 
-import { BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
+import {
+  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksOnFivePages, blocksVersion, everyKindOfBlock, portalPage, runFindings,
+} from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
 import {
@@ -1133,6 +1135,45 @@ export function screens(): Screen[] {
     } finally {
       if (before === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
       else process.env.NEXT_PUBLIC_API_BASE_URL = before;
+    }
+    // `UI-PARITY` «Блоки»: the tiles with the run's findings read (every tone of the number, the
+    // amber outline, a page with none), the selector with a page chosen and the load still partial,
+    // the sentence for a run with no findings and for findings that could not be read, and the block
+    // view drawn open (`staticOpen`) on each kind of block: an image with the page's findings, a text
+    // with its flags, a stamp with no picture, an image whose crop was not cut. The picture's failure
+    // is its own view, because only a browser's `error` event selects it.
+    const blocksAddress = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+    try {
+      const tiles = (over: Partial<Parameters<typeof PortalBlockListView>[0]>) =>
+        renderScreen(newClient(), createElement(PortalBlockListView, {
+          projectUid: BLOCKS_PROJECT_UID, blockCount: 129, producedByRunId: BLOCKS_RUN_ID,
+          blocks: blocksOnFivePages(), versionUid: BLOCKS_VERSION_UID, hasMore: true, loadingMore: false,
+          moreFailure: null, onMore: noop,
+          pageFindings: { kind: 'read', runId: BLOCKS_RUN_ID, byPage: findingsByPage(runFindings()) },
+          ...over,
+        }));
+      add('PortalBlockListView, tiles with the run’s findings', tiles({}));
+      add('PortalBlockListView, one page chosen, no run', tiles({ initialPage: 2, pageFindings: { kind: 'none' } }));
+      add('PortalBlockListView, the run published no findings', tiles({ pageFindings: { kind: 'no-result', runId: BLOCKS_RUN_ID } }));
+      add('PortalBlockListView, the findings could not be read', tiles({ pageFindings: { kind: 'unreadable', runId: BLOCKS_RUN_ID } }));
+      add('Block view open on an image of a page with findings', tiles({ initialOpen: 1, staticOpen: true }));
+      add('Block view open on a text with flags', tiles({ initialOpen: 0, staticOpen: true }));
+      add('Block view open on a stamp', tiles({ initialOpen: 2, staticOpen: true }));
+      add('Block view open on an image whose crop was not cut', tiles({ initialPage: 3, initialOpen: 0, staticOpen: true }));
+      add('Block view open on a page with no findings', tiles({ initialOpen: 8, staticOpen: true }));
+      add('Block view open on the last block of a page, no run', tiles({ initialPage: 2, initialOpen: 1, staticOpen: true, pageFindings: { kind: 'none' } }));
+      add('BlockImageFailure', withRouter(createElement(BlockImageFailure)));
+      // The card with its own crop figure (`showCrop`, the default): the block view draws the picture in its
+      // stage and so leaves the figure out, which would leave the figure's rules unreached.
+      for (const block of everyKindOfBlock().slice(0, 2)) {
+        add(`PortalBlockCard, ${block.block_type} with the crop figure`, withRouter(createElement(PortalBlockCard, {
+          block, versionUid: BLOCKS_VERSION_UID,
+        })));
+      }
+    } finally {
+      if (blocksAddress === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = blocksAddress;
     }
     // `W55B-FIX` (Y-2): the view takes the block's identities and the seam builds the address
     // from the configured base, set for this render only.

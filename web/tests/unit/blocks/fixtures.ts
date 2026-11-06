@@ -10,7 +10,13 @@
  * with no ordinal.
  */
 
-import type { DocumentVersion, PortalBlock, PortalBlockPage } from '@/shared/api';
+import type { DocumentVersion, Finding, PortalBlock, PortalBlockPage, Severity } from '@/shared/api';
+
+import {
+  evidence as reviewEvidence,
+  finding as reviewFinding,
+  observation as reviewObservation,
+} from '../review/fixtures';
 
 const ULID = '01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 export const BLOCKS_PROJECT_UID = `prj_${ULID}`;
@@ -181,3 +187,47 @@ export function blocksVersion(bundle: boolean, over: Partial<DocumentVersion> = 
 /** The crop address the instruments use instead of the configured one. */
 export const TEST_CROP_SRC = (block: PortalBlock): string =>
   `/bff/v1/versions/${BLOCKS_VERSION_UID}/portal-blocks/${block.portal_block_id}/crop`;
+
+/**
+ * `UI-PARITY` «Блоки»: a run's findings for the tiles' numbers, in Russian so the language guard can
+ * render them. A finding cites PAGES (its evidence), never a portal block:
+ *
+ *   A  critical (decided), two quotations on page 1                -> page 1 once, not twice
+ *   B  economic (decided), quotations on pages 1 and 2             -> on both pages
+ *   C  undecided, the model proposed «critical», page 2           -> counted, and colours nothing
+ *   D  operational (decided), page 3
+ *   E  undecided, no proposal, page 4
+ *
+ * So page 1 has 2 findings (worst: critical), page 2 has 2 (worst: economic, not the proposal),
+ * page 3 has 1 (operational), page 4 has 1 (no decided severity), page 5 none.
+ */
+export function runFindings(): Finding[] {
+  const make = (uid: string, over: Partial<Finding>, pages: readonly number[], text: string, proposed?: Severity): Finding =>
+    reviewFinding({
+      finding_uid: `fnd_${uid}`,
+      observation: reviewObservation({
+        finding_observation_id: `fobs_${uid}`,
+        finding_text: text,
+        recommendation_text: 'Привести значения в соответствие.',
+        evidence: pages.map((page, i) => reviewEvidence({ evidence_ordinal: i + 1, page_number: page, quote: `Цитата со страницы ${page}.` })),
+        ...(proposed === undefined ? {} : { proposed_severity: proposed }),
+      }),
+      ...over,
+    });
+  return [
+    make('01J9ZQ8K7NHVXW3T2R5M6P4Q8A', { decided_severity: 'critical' }, [1, 1], 'Не указан класс огнестойкости перекрытия.'),
+    make('01J9ZQ8K7NHVXW3T2R5M6P4Q8C', { decided_severity: 'economic' }, [1, 2], 'Объём бетона в ведомости и на плане различается.'),
+    make('01J9ZQ8K7NHVXW3T2R5M6P4Q8D', {}, [2], 'Отметка пола не совпадает с планом первого этажа.', 'critical'),
+    make('01J9ZQ8K7NHVXW3T2R5M6P4Q8E', { decided_severity: 'operational' }, [3], 'Не указан материал ограждения кровли.'),
+    make('01J9ZQ8K7NHVXW3T2R5M6P4Q8F', {}, [4], 'В экспликации помещений пропущена площадь.'),
+  ];
+}
+
+/** `everyKindOfBlock()` plus a block on pages 4 and 5, so every tone of a tile's number and a page with none are shown. */
+export function blocksOnFivePages(): PortalBlock[] {
+  return [
+    ...everyKindOfBlock(),
+    textBlock({ portal_block_id: blockId(8), page_number: 4, page_label: 4, ordinal: 1 }),
+    textBlock({ portal_block_id: blockId(9), page_number: 5, page_label: 5, ordinal: 1 }),
+  ];
+}
