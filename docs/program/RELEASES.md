@@ -15,16 +15,20 @@ after host verification.
 | `v0.6.0` | `37393a979a430e490843d7f410e9eca9491a4ea1` | `bf03d913bde596a77` (computed from tagged tree) | not measured (stand environment) | `1.0.0-draft.1` | `0021_portal_bundles` | `934705c04a71…` | `30053740f569…` | `W55B-INT-MAIN-PREP-03.md` (R-125 same-SHA gate completion); deploy run `38897018419`, owner-run host verification in `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md`; five live checks waived in `W55B-INT-TAG-01.md` | — (not promoted) |
 | `v0.7.0` — on `origin/main`, **host verification owed**, not tagged | `48c8e34ccd08a58ae61cbd09ecdba49066a5ad46` (the owner's pull request #3) | `bbbab3c0dfb856a39` computed from `git archive` of that SHA (`compute_build_id()`) | not measured (stand environment) | `1.0.0-draft.1` | `0028_classification_corrections` | `934705c04a71…` (builtin AR profile, unchanged since `v0.6.0`) | `30053740f569…` (builtin AR profile, unchanged since `v0.6.0`) | **none on this tree.** The owner merged pull requests #2 and #3 into `main` without a gate (`R-141e`); `NIGHT-1020-GATE-0-7-0-01.md` is an `R-125` completion of an earlier lineage and covers neither the classification correction, the normative references nor the hardening slices; light checks only (`RELEASE-0-7-0-RECORD-01.md`). Deploy workflow run `39571427597`, success, reported by the integrator and not re-read here; `infra/deploy/verify-deployed.sh` on the host: **pending** | none — the normative corpus is not imported on the stand |
 
-## `v0.12.5` candidate — visible preparation and deadline-bound answer delivery
+## `v0.12.5` — verified deployment and full machine run
 
-`HOTFIX-RUN-COMPLETE-1106` exposes preparatory parameter progress above the seven
-procedures and keeps an already generated answer available for idempotent delivery until
-the server deadline, claim loss, definitive rejection or shutdown. The former 120-second
-local submit cap is removed. This does not add inference retries or process-restart
-recovery. Production web build and runner compilation/package build pass; the owner
-explicitly requested build-only verification. The active owner-started run is
-run_01M6RJPRWTC1ER59JXJZN2C76H; deployment waits for its terminal state. Exact SHA,
-deployment verification and live outcome belong in the external task receipt. No tag.
+`HOTFIX-RUN-COMPLETE-1106` deployed exact SHA `46b52dd068232236038d7ec4cbb0b13c63b9aa25`:
+workflow 42241699088 succeeded, the host verifier confirmed the same tree, and public
+TLS/auth smoke returned 200/401. The release exposes preparatory parameter progress,
+retains ready answers to the server deadline and uses critic-specific semantic repair
+with honest uncertainty. Run `run_01M6RQ9SZPB01G22AV6VQRHJHD` is published: all 7 procedures,
+3 windows, 47 blocks, 30 pages and 1848 pairs completed; all 74 provider effects completed,
+0 unresolved, recorded unmetered cost 0. The passport accepts 307 strictly validated
+candidates; 80 unsupported candidates remain rejected outside accepted facts. Strict
+source guards are unchanged; no expert decision is written. Build-only checks passed as
+explicitly ordered; no behavioral suites, full gate or tag.
+[Full verified task record](HOTFIX-RUN-COMPLETE-1106.md). Closure records are dev-only;
+main runtime remains the exact verified release SHA.
 
 ## `v0.12.3` candidate — local stdin delivery and validation outcomes
 
