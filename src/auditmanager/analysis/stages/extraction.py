@@ -57,14 +57,25 @@ NORMALIZATION_DESCRIPTION: Final[str] = (
 EXTRACTOR_NAME: Final[str] = "pdfplumber"
 
 #: Extraction options, recorded so ``extractor.options_sha256`` fixes reproducibility.
-#: Same bytes plus same extractor plus same options gives the same offsets; a change to
-#: any of the three is a new ``artifact_version``.
+#: Same bytes plus same extractor plus same options gives the same offsets. A change is
+#: recorded in the layer's ``extractor.options_sha256``; ``artifact_version`` names the
+#: artifact's shape, which these options do not change, so older layers stay readable.
 EXTRACTION_OPTIONS: Final[dict[str, Any]] = {
     "line_source": "extract_text_lines",
     "page_separator": "",
     "line_separator": "\n",
     "normalization": NORMALIZATION_ID,
+    "x_tolerance_ratio": 0.2,
 }
+
+#: How pdfplumber decides where a word ends (owner hotfix, 2026-11-06). Its default is a fixed
+#: ``x_tolerance`` of 3 pt, and it drops a PDF's own space glyphs and splits words by gaps alone,
+#: so a document that places words by offsets with no space glyph (drawings from CAD tools do)
+#: and a word gap under 3 pt -- any small font -- came out as «ПолпомещенийТПпокрыть…». A gap
+#: wider than 0.2 of the character's size is a space instead: a word space is about 0.25-0.33 em,
+#: letters of a word sit closer. Measured on 29 norms pages: 4 changed, each a glued pair split
+#: («предоставлен КонсультантПлюс»), plus a few spaces inside tiny formula subscripts.
+TEXT_OPTIONS: Final[dict[str, Any]] = {"x_tolerance_ratio": EXTRACTION_OPTIONS["x_tolerance_ratio"]}
 
 
 def normalize(text: str) -> str:
@@ -342,13 +353,13 @@ def _release(page: Any) -> None:
 
 def _extract_page(page: Any, page_number: int) -> ExtractedPage:
     """Extract one page, cross-checking the line traversal against the page text."""
-    raw_lines = page.extract_text_lines()
+    raw_lines = page.extract_text_lines(**TEXT_OPTIONS)
     joined = "\n".join(line["text"] for line in raw_lines)
 
     # The cross-check. If pdfplumber's line traversal ever stops agreeing with its
     # own page text, every block span would silently index the wrong characters, so
     # the document is refused instead.
-    whole = page.extract_text() or ""
+    whole = page.extract_text(**TEXT_OPTIONS) or ""
     if joined != whole:
         raise DomainError(
             ErrorCode.ANALYSIS_INPUT_INVALID,
