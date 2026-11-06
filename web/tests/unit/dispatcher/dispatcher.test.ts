@@ -128,6 +128,7 @@ function account(roles: Role[], over: Partial<Account> = {}): Account {
     profile_complete: true,
     is_default_credential: false,
     archived_at: null,
+    last_sign_in_at: null,
     ...over,
   };
 }

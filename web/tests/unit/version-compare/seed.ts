@@ -35,7 +35,7 @@ import {
 } from './fixtures';
 
 export const EXPERT: Account = {
-  archived_at: null, display_label: 'Сьютова Е.', first_name: 'Е', is_default_credential: false, last_name: 'Сьютова',
+  archived_at: null, display_label: 'Сьютова Е.', first_name: 'Е', is_default_credential: false, last_name: 'Сьютова', last_sign_in_at: null,
   login: 'e@suite.invalid', middle_name: null, profile_complete: true, roles: ['expert'], user_uid: uid('usr', 1),
 };
 export const READER: Account = { ...EXPERT, roles: ['admin'], login: 'a@suite.invalid' };

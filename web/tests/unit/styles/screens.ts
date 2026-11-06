@@ -429,6 +429,7 @@ const USER_ACCOUNT: Account = {
   first_name: 'Анна',
   is_default_credential: false,
   last_name: 'Проверкина',
+  last_sign_in_at: '2026-11-05T09:30:15Z',
   login: 'proverkina@example.org',
   middle_name: 'Сергеевна',
   profile_complete: true,
