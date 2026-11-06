@@ -168,6 +168,13 @@ export interface ProposalListViewProps {
   readonly historyFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   /** `UI-B-09`: the pass's version PDF; absent, the cards offer no «Открыть лист». */
   readonly sheet?: SheetDocument | undefined;
+  /**
+   * `UI-B-05`/`UI-B-16`: the pass's actions (the export, the import of decisions). The original puts its counts by
+   * decision and its buttons in one strip above the table; they stand beside the decision filter here.
+   */
+  readonly actions?: ReactNode;
+  /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
+  readonly summary?: ReactNode;
 }
 
 export function ProposalListView({
