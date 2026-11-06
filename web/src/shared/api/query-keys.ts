@@ -207,6 +207,21 @@ export const queryKeys = {
     ) => ['optimisation', 'proposals', passId, { decision, offset, limit }] as const,
     proposalDecisions: (proposalId: OptimisationProposalId) =>
       ['optimisation', 'proposal-decisions', proposalId] as const,
+    /** Every proposal's history: what a workbook loaded back (`UI-B-15`) may have appended to many proposals at once. */
+    allProposalDecisions: () => ['optimisation', 'proposal-decisions'] as const,
+    /**
+     * `UI-B-27` (contract 1.35.0): one page of `listAcceptedOptimisationProposals`, by its filters. A decision on any
+     * proposal can add a row or take one away, so a decision invalidates the whole `allAccepted` prefix.
+     */
+    accepted: (
+      filters: {
+        readonly project_uid?: ProjectUid;
+        readonly section_code?: ProjectSection;
+        readonly cursor?: string;
+        readonly limit?: number;
+      } = {},
+    ) => ['optimisation', 'accepted', filters] as const,
+    allAccepted: () => ['optimisation', 'accepted'] as const,
     /**
      * One page of `getSectionSpecification` (`W63-SECTION-FORM7-01`): a section's combined
      * Form-7 specification across projects. The section is a filter, the project filter and

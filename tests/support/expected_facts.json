@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 267,
+    "path_count": 270,
     "operations": [
       [
         "DELETE",
@@ -320,8 +320,18 @@
       ],
       [
         "GET",
+        "/optimisation-passes/{optimisation_pass_id}/export.xlsx",
+        "exportOptimisationProposalsXlsx"
+      ],
+      [
+        "GET",
         "/optimisation-passes/{optimisation_pass_id}/proposals",
         "listOptimisationProposals"
+      ],
+      [
+        "GET",
+        "/optimisation-proposals/accepted",
+        "listAcceptedOptimisationProposals"
       ],
       [
         "GET",
@@ -1055,6 +1065,11 @@
       ],
       [
         "POST",
+        "/optimisation-passes/{optimisation_pass_id}/decision-imports",
+        "importOptimisationProposalDecisions"
+      ],
+      [
+        "POST",
         "/optimisation-proposals/{optimisation_proposal_id}/decisions",
         "decideOptimisationProposal"
       ],
@@ -1480,6 +1495,8 @@
       ]
     ],
     "schema_names": [
+      "AcceptedOptimisationProposal",
+      "AcceptedOptimisationProposalPage",
       "Account",
       "AccountPage",
       "AgentPackageVersion",
@@ -1856,6 +1873,7 @@
       "GenerateComparisonSummaryRequest",
       "GenerateComparisonSummaryResponse",
       "IdempotencyKey",
+      "ImportProposalDecisionsRequest",
       "ImportRunDecisionsRequest",
       "InputManifestEntry",
       "IssueRunnerTokenRequest",
@@ -1950,6 +1968,9 @@
       "ProposalDecision",
       "ProposalDecisionCounts",
       "ProposalDecisionId",
+      "ProposalDecisionImportRefusal",
+      "ProposalDecisionImportReport",
+      "ProposalDecisionImportRow",
       "ProposalDecisionList",
       "ProposalDecisionRecord",
       "ProposalDecisionRecordPage",
@@ -2198,6 +2219,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0055_work_schedule",
-  "contract_version": "1.34.0"
+  "migration_head": "0056_optimisation_decisions",
+  "contract_version": "1.35.0"
 }

@@ -1147,6 +1147,9 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # its project filter are driven in `tests/integration/optimisation/proposals/test_decisions.py`.
         "listProposalDecisionJournal": "/proposal-decisions",
         "listKnowledgeBaseEntries": "/knowledge-base/entries",
+        # `UI-B-27` (1.35.0): the accepted proposals; its rows need decided proposals, so its filters are driven in
+        # `tests/integration/optimisation/proposals/test_accepted.py`.
+        "listAcceptedOptimisationProposals": "/optimisation-proposals/accepted",
         # `UI-PARITY-P0P`. «График работ»: a month and a run of days, not pages; driven by its own test below.
         "getWorkSchedule": "/work-schedule?month=2026-11",
         "getWorkScheduleReserve": "/work-schedule/reserve?start=2026-11-02",
@@ -1190,6 +1193,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # `UI-PARITY-P0J` (1.25.0): the proposal decision journal, optionally of one project.
         "listProposalDecisionJournal": {"project_uid", "cursor", "limit"},
         "listKnowledgeBaseEntries": {"project_uid", "cursor", "limit"},
+        "listAcceptedOptimisationProposals": {"project_uid", "section_code", "cursor", "limit"},
         # `UI-PARITY-P0P` (1.31.0): the month of «Выполнено»; the reserve's first day and length.
         "getWorkSchedule": {"month"},
         "getWorkScheduleReserve": {"start", "days"},
@@ -1336,6 +1340,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
             "listPriceListPositions",
             "getDashboardSummary",
             "listProposalDecisionJournal",
+            "listAcceptedOptimisationProposals",
             "getWorkSchedule",
             "getWorkScheduleReserve",
         ):

@@ -11,7 +11,48 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.34.0` (`UI-PARITY-DOC-AUDIT`)
+## Current contract `1.35.0` (`UI-PARITY-OPT-DECISIONS`)
+
+Slice for register rows `UI-B-12`, `UI-B-27` and `UI-B-15` (the optimisation decisions of the original that ours lacked),
+migration `0056_optimisation_decisions`:
+
+- **«Снять решение»** (`UI-B-12`). `ProposalVerdict` gains `revoke`: `decideOptimisationProposal` accepts it as a fourth
+  verdict. A withdrawal is one more appended event on the append-only decision history, never an update or a deletion, and
+  it takes the proposal back to `pending`: `OptimisationProposal.current_verdict` and the pass's `decision_counts` count a
+  proposal whose latest event is a `revoke` as `pending`, and `current_decision` still names that latest event, so a screen can
+  say who withdrew the decision and when. `listProposalDecisions`, `listProposalDecisionJournal` and `listKnowledgeBaseEntries`
+  show the `revoke` event as it was recorded. A `revoke` over a proposal with no decision in force (none yet, or the latest
+  event is already a `revoke`) is `409 conflict` with `conflict_reason` `no_decision_to_revoke`; the comment of a `revoke` is
+  optional. The operation stays keyed and `expert`-only. Migration `0056` widens `ck_optimisation_proposal_decision_verdict`;
+  its downgrade refuses while any `revoke` event exists.
+- **«Принято»** (`UI-B-27`). `listAcceptedOptimisationProposals` (`GET /optimisation-proposals/accepted`, a product read,
+  optional `project_uid` and `section_code` filters, cursor and `total`) lists the proposals whose decision in force is an
+  acceptance, across every pass, newest acceptance first. Each row is an `AcceptedOptimisationProposal`: its proposal and
+  pass identities, where it belongs (project, document set, version and the version's section), the row's place and text,
+  both position names, the proposed vendor, the exact prices and the saving (`null`, never `0`, when the quantity is not a
+  number), and the acceptance (decision id, comment, author, time). Neither filter is a parent: a project or a section with no
+  acceptance is an empty page. A rejection, a revision request, a withdrawal or no decision is not listed.
+
+- **«Загрузить решения»** (`UI-B-15`). `exportOptimisationProposalsXlsx` (`GET /optimisation-passes/{optimisation_pass_id}/export.xlsx`,
+  any one role) is the pass's proposals as a workbook with one sheet, «Предложения»: the first column, «ID предложения», is
+  the proposal's own identity, then the specification row, both positions, the exact prices and the saving (empty, never `0`,
+  when absent), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено`, `на доработку`)
+  and «Комментарий», filled with the decision in force. `importOptimisationProposalDecisions`
+  (`POST /optimisation-passes/{optimisation_pass_id}/decision-imports`, multipart `file`, at most 10 MiB, keyed, `expert`)
+  reads it back by proposal identity, never by «№», and only into proposals of that pass: a row that differs from the decision
+  in force appends one ordinary event authored by the caller (`accept`, `reject`, `revise` with its comment, or `revoke` for
+  «не решено» over a decision in force); a blank decision cell keeps the decision in force; the report
+  (`ProposalDecisionImportReport`) names every row that carries an ID or a decision as `recorded`, `unchanged` or `refused`
+  with one of six reasons. A workbook without the «Предложения» sheet and its three columns is `422 validation_failed`
+  (`field: file`, `constraint: not_our_export`; also `unreadable`, `too_large`, `too_many_rows`). An exact repeat of the key
+  answers the stored report; another file under it is `409 idempotency_key_reuse`.
+
+The API now has 270 paths, 298 operations and 718 schemas (the six new schemas are `AcceptedOptimisationProposal`,
+`AcceptedOptimisationProposalPage`, `ImportProposalDecisionsRequest`, `ProposalDecisionImportRefusal`,
+`ProposalDecisionImportReport` and `ProposalDecisionImportRow`); migration head `0056`. The domain catalogs are at candidate
+revision 52.
+
+## Contract `1.34.0` (`UI-PARITY-DOC-AUDIT`, historical)
 
 Slice for register rows `UI-A-46`, `UI-A-49` and `UI-A-38`: each document's audit state on `listDocuments`, so a section
 orders its documents as the original does and filters «не запускались». No new operation, no migration, no error code.
@@ -34,8 +75,8 @@ orders its documents as the original does and filters «не запускали�
   request, a document that changes state between two pages can appear on both or on neither, and a screen that needs the whole
   listing reads it again from the first page.
 
-The API now has 267 paths, 295 operations and 712 schemas (the one new schema is `DocumentAudit`); migration head `0055`.
-The domain catalogs are at candidate revision 51.
+The API then had 267 paths, 295 operations and 712 schemas (the one new schema is `DocumentAudit`); migration head `0055`.
+The domain catalogs were at candidate revision 51.
 
 ## Contract `1.33.0` (`HOTFIX-RUN-PARTIAL-1106`, historical)
 

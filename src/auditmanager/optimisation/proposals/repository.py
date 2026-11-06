@@ -10,7 +10,10 @@ Proposals are written with one statement per chunk: the rows travel as one JSON 
 ``jsonb_to_recordset`` expands them; every price, quantity and saving reaches ``numeric`` from
 its exact decimal text, never through a float.
 
-The current decision of a proposal is its highest ``seq``; it is read, never stored.
+The current decision of a proposal is its highest ``seq``; it is read, never stored. A ``revoke``
+as the highest event withdraws the decision (`UI-B-12`): the proposal stands ``pending`` in every
+count and filter below, and :attr:`OptimisationProposalRecord.current_decision` still names that
+latest event, so a reader can say who withdrew it and when.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from sqlalchemy.orm import Session
 from ..matching import canonical_amount
 from .generator import ProposalDraft
 from .identity import OptimisationPassId, OptimisationProposalId, ProposalDecisionId
-from .policy import DECISION_PENDING, VERDICTS
+from .policy import DECISION_PENDING, VERDICT_REVOKE, VERDICTS
 
 __all__ = [
     "OptimisationPassRecord",
@@ -42,7 +45,7 @@ _PROPOSAL_CHUNK: Final[int] = 2000
 
 _COUNTS = (
     "(SELECT jsonb_object_agg(k.verdict, k.n) FROM ("
-    "  SELECT COALESCE(cur.verdict, 'pending') AS verdict, count(*) AS n "
+    "  SELECT COALESCE(NULLIF(cur.verdict, 'revoke'), 'pending') AS verdict, count(*) AS n "
     "  FROM optimisation_proposal q "
     "  LEFT JOIN LATERAL (SELECT d.verdict FROM optimisation_proposal_decision d "
     "    WHERE d.optimisation_proposal_id = q.optimisation_proposal_id "
@@ -131,7 +134,7 @@ _PROPOSAL_FROM = (
 _PROPOSAL_FILTER = (
     "WHERE q.optimisation_pass_id = :pass_id "
     "AND (CAST(:decision AS text) IS NULL "
-    "  OR COALESCE(cur.verdict, 'pending') = CAST(:decision AS text)) "
+    "  OR COALESCE(NULLIF(cur.verdict, 'revoke'), 'pending') = CAST(:decision AS text)) "
 )
 _PROPOSAL_PAGE = text(
     f"SELECT {_PROPOSAL_COLUMNS} {_PROPOSAL_FROM} {_PROPOSAL_FILTER} "
@@ -164,6 +167,10 @@ _DECISION_BY_ID = text(
 )
 _DECISION_BY_COMMAND = text(
     f"SELECT {_DECISION_COLUMNS} FROM optimisation_proposal_decision WHERE command_id = :command"
+)
+_DECISION_LATEST = text(
+    f"SELECT {_DECISION_COLUMNS} FROM optimisation_proposal_decision "
+    "WHERE optimisation_proposal_id = :proposal ORDER BY seq DESC LIMIT 1"
 )
 _DECISION_HISTORY = text(
     f"SELECT {_DECISION_COLUMNS} FROM optimisation_proposal_decision "
@@ -255,7 +262,10 @@ class OptimisationProposalRecord:
 
     @property
     def current_verdict(self) -> str:
-        return DECISION_PENDING if self.current_decision is None else self.current_decision.verdict
+        """The decision in force: the latest event's verdict, ``pending`` for none or a ``revoke``."""
+        if self.current_decision is None or self.current_decision.verdict == VERDICT_REVOKE:
+            return DECISION_PENDING
+        return self.current_decision.verdict
 
 
 def _counts(raw: Any) -> dict[str, int]:
@@ -538,6 +548,10 @@ class ProposalRepository:
 
     def get_decision(self, session: Session, decision_id: str) -> ProposalDecisionRecord | None:
         row = session.execute(_DECISION_BY_ID, {"id": decision_id}).first()
+        return None if row is None else _decision(tuple(row))
+
+    def latest_decision(self, session: Session, proposal_id: str) -> ProposalDecisionRecord | None:
+        row = session.execute(_DECISION_LATEST, {"proposal": proposal_id}).first()
         return None if row is None else _decision(tuple(row))
 
     def decision_by_command(self, session: Session, command_id: str) -> ProposalDecisionRecord | None:

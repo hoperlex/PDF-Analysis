@@ -40,7 +40,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant, routes } from '@/shared/lib';
 import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
-import { DECISION_STATE_LABELS } from '@/entities/optimisation-proposal';
+import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
@@ -202,7 +202,7 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
       <p className="am-kb__heading">
         <span className="am-kb__category">Предложение</span>
         <span className="am-kb__verdict" data-verdict={record.verdict}>
-          {DECISION_STATE_LABELS[record.verdict]}
+          {DECISION_EVENT_LABELS[record.verdict]}
         </span>
       </p>
       <p className="am-kb__meta" data-record-place="true">

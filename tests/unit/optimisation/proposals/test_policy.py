@@ -38,9 +38,21 @@ MIGRATION = (
 )
 
 
+WIDENING = MIGRATION.with_name("20261106_0056_optimisation_decisions.py")
+
+
 @pytest.fixture(scope="module")
 def migration() -> ModuleType:
     spec = importlib.util.spec_from_file_location("migration_0027", MIGRATION)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def widening() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("migration_0056", WIDENING)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -58,6 +70,29 @@ def test_the_migration_restates_the_vocabularies(migration: ModuleType) -> None:
     assert migration.MATCH_BASES == matching.BASES
     assert migration.VERDICTS == policy.VERDICTS == ("accept", "reject", "revise")
     assert migration.VENDOR_LIST_SOURCES == SCOPES
+
+
+def test_the_widening_migration_restates_the_stored_verdicts(widening: ModuleType) -> None:
+    """`UI-B-12`: ``0056`` adds the withdrawal to the stored verdicts; the three that count as a decision stay."""
+    assert widening.revision == "0056_optimisation_decisions" and len(widening.revision) <= 32
+    assert widening.down_revision == "0055_work_schedule"
+    assert widening.STORED_VERDICTS == policy.STORED_VERDICTS == ("accept", "reject", "revise", "revoke")
+    assert widening.PREVIOUS_VERDICTS == policy.VERDICTS == ("accept", "reject", "revise")
+    assert policy.VERDICT_REVOKE not in policy.DECISION_FILTERS  # a withdrawn proposal is ``pending``, not a state
+
+
+def test_the_verdict_parser_accepts_the_withdrawal_and_nothing_outside_the_four() -> None:
+    assert policy.parse_verdict("revoke") == "revoke"
+    for value in ("pending", "accepted", "", None, 1):
+        with pytest.raises(DomainError) as caught:
+            policy.parse_verdict(value)
+        assert caught.value.code is ErrorCode.VALIDATION_FAILED
+        assert caught.value.detail_fields["field"] == "verdict"
+    # The comment of a withdrawal is optional, as it is for an acceptance; ``revise`` still requires one.
+    assert policy.normalize_comment(None, verdict="revoke") is None
+    assert policy.normalize_comment("  ошибся ", verdict="revoke") == "ошибся"
+    with pytest.raises(DomainError):
+        policy.normalize_comment(None, verdict="revise")
 
 
 def test_the_migration_restates_the_bounds(migration: ModuleType) -> None:
@@ -136,7 +171,12 @@ def test_only_an_expert_starts_and_decides(roles: frozenset[str], allowed: bool)
 
 @pytest.mark.parametrize(
     ("roles", "allowed"),
-    [(frozenset({"expert"}), True), (frozenset({"admin"}), True), (frozenset(), False)],
+    [
+        (frozenset({"expert"}), True),
+        (frozenset({"admin"}), True),
+        (frozenset({"viewer"}), True),  # `R-150e`: the viewer reads product data
+        (frozenset(), False),
+    ],
 )
 def test_any_one_role_reads(roles: frozenset[str], allowed: bool) -> None:
     if allowed:
@@ -144,7 +184,7 @@ def test_any_one_role_reads(roles: frozenset[str], allowed: bool) -> None:
         return
     with pytest.raises(DomainError) as caught:
         policy.require_reader(roles, aggregate_type="OptimisationPass")
-    assert caught.value.detail_fields["required_capability"] == "role:admin|expert"
+    assert caught.value.detail_fields["required_capability"] == "role:admin|expert|viewer"
 
 
 def test_verdicts_and_filters() -> None:

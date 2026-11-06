@@ -1,4 +1,4 @@
-"""The six «Предложения» operations (`W60-OPT-PROPOSALS-01`): optimisation passes, their
+"""The «Предложения» operations (`W60-OPT-PROPOSALS-01`): optimisation passes, their
 deterministic proposals and the experts' decisions on them.
 
 * ``startOptimisationPass`` -- ``POST /projects/{project_uid}/documents/{document_uid}/
@@ -8,11 +8,18 @@ deterministic proposals and the experts' decisions on them.
 * ``listOptimisationProposals`` -- ``GET /optimisation-passes/{optimisation_pass_id}/
   proposals``: one page, the pass with its counts by decision, optionally filtered.
 * ``decideOptimisationProposal`` -- ``POST /optimisation-proposals/{optimisation_proposal_id}/
-  decisions`` (``expert``, ``Idempotency-Key`` required): accept, reject or revise.
+  decisions`` (``expert``, ``Idempotency-Key`` required): accept, reject or revise, or revoke
+  the standing decision (`UI-B-12`, contract 1.35.0).
+* ``listAcceptedOptimisationProposals`` -- ``GET /optimisation-proposals/accepted`` (`UI-B-27`,
+  contract 1.35.0): the proposals whose decision in force is an acceptance, by project and section.
 * ``listProposalDecisions`` -- ``GET /optimisation-proposals/{optimisation_proposal_id}/
   decisions``: the append-only history.
 * ``exportOptimisationProposalsCsv`` -- ``GET /optimisation-passes/{optimisation_pass_id}/
   export.csv``: the formula-escaped file, separate from the findings' CSV.
+* ``exportOptimisationProposalsXlsx`` and ``importOptimisationProposalDecisions`` (`UI-B-15`,
+  contract 1.35.0) -- ``GET /optimisation-passes/{optimisation_pass_id}/export.xlsx`` and ``POST
+  /optimisation-passes/{optimisation_pass_id}/decision-imports``: the pass's workbook, and the
+  decisions loaded back from it by proposal identity.
 
 The routes parse, call one port method and render; the rules -- roles read in the writing
 transaction, the preconditions of a pass, the generator, the exact repeats, the append-only
@@ -25,15 +32,23 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Final
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Depends, Form, Path, Query, Response
 from pydantic import BeforeValidator, Field, WithJsonSchema
 
-from auditmanager.api.routers.declarations import envelope_responses, success
+from auditmanager.api.routers.declarations import (
+    CursorParam,
+    LimitParam,
+    ProjectUidFilterParam,
+    envelope_responses,
+    success,
+)
 from auditmanager.api.routers.export import attachment_disposition
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
+from auditmanager.api.routers.multipart import CheckedUpload, UploadRoute, require_a_strict_multipart_body
 from auditmanager.api.routers.ports import OptimisationProposalPort
 from auditmanager.api.routers.wire import WireResponse, encode_json, json_response
 from auditmanager.api.schemas import models
+from auditmanager.api.schemas.common import page_body, paginate, timestamp
 from auditmanager.api.schemas.models import optional_property
 from auditmanager.api.security import CurrentSubject
 
@@ -41,6 +56,7 @@ __all__ = ["build_optimisation_proposal_routes"]
 
 _CSV: Final[str] = "text/csv; charset=utf-8"
 _CSV_MEDIA_TYPE: Final[str] = "text/csv"
+_XLSX_MEDIA_TYPE: Final[str] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _absent(value: Any) -> Any:
@@ -70,6 +86,13 @@ DocumentFilterParam = Annotated[
     models.DocumentUid | None,
     BeforeValidator(_absent),
     WithJsonSchema({"$ref": "#/components/schemas/DocumentUid"}),
+    Query(json_schema_extra=optional_property),
+]
+
+# `UI-B-27`: the accepted list reads one section's proposals; absent, every section.
+SectionCodeFilterParam = Annotated[
+    models.ProjectSection | None,
+    WithJsonSchema({"$ref": "#/components/schemas/ProjectSection"}),
     Query(json_schema_extra=optional_property),
 ]
 
@@ -216,8 +239,13 @@ def build_optimisation_proposal_routes(
         },
         description=(
             "Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the "
-            "comment is required for `revise`, at most 2000 characters). Decisions are only "
-            "appended, never changed; the latest one is current, and any number may follow. "
+            "comment is required for `revise`, at most 2000 characters), or `revoke` -- the "
+            "withdrawal of the decision in force («Снять решение»), an event like any other that "
+            "takes the proposal back to `pending`, with an optional comment, refused with "
+            "`409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has "
+            "no decision in force. Decisions are only "
+            "appended, never changed; the latest one is current (unless it is a `revoke`), and "
+            "any number may follow. "
             "`expert` is required (`admin` alone is `permission_denied`); an unknown "
             "proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored "
             "decision; the same key with another verdict, comment, proposal or caller is "
@@ -239,6 +267,58 @@ def build_optimisation_proposal_routes(
             user_uid=subject.user_uid,
         )
         return json_response(201, encode_json(result.model_dump(mode="json")))
+
+    @router.get(
+        "/optimisation-proposals/accepted",
+        operation_id="listAcceptedOptimisationProposals",
+        tags=["optimisation"],
+        status_code=200,
+        response_model=models.AcceptedOptimisationProposalPage,
+        responses={
+            **success(
+                200, "One page of the accepted proposals, newest acceptance first, and the number that match."
+            ),
+            # No 404: `project_uid` and `section_code` are filters, not parents -- a project or a section nothing was
+            # accepted in matches no row, and that is an empty page.
+            **envelope_responses(401, 403, 422, 500, 503),
+        },
+        description=(
+            "The optimisation proposals whose decision in force is an acceptance, across every pass, newest "
+            "acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and "
+            "the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest "
+            "decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. "
+            "`project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that "
+            "section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of "
+            "proposals the filters match, on every page. Any one role, `role:admin|expert|viewer`."
+        ),
+    )
+    def list_accepted_optimisation_proposals(
+        subject: CurrentSubject,
+        cursor: CursorParam = None,  # type: ignore[assignment]
+        limit: LimitParam = 50,
+        project_uid: ProjectUidFilterParam = None,  # type: ignore[assignment]
+        section_code: SectionCodeFilterParam = None,  # type: ignore[assignment]
+    ) -> WireResponse:
+        rows = proposals.list_accepted_optimisation_proposals(
+            project_uid=project_uid,
+            section_code=None if section_code is None else section_code.value,
+            user_uid=subject.user_uid,
+        )
+        page = paginate(
+            rows,
+            limit=limit,
+            cursor=cursor,
+            sort_key=lambda row: (timestamp(row.decided_at), row.proposal_decision_id),
+        )
+        items = []
+        for row in page.items:
+            item = row.model_dump(mode="json")
+            if item.get("section") is None:
+                item.pop("section", None)
+            items.append(item)
+        body = page_body(items, page.next_cursor)
+        body["total"] = len(rows)
+        return json_response(200, encode_json(body))
 
     @router.get(
         "/optimisation-proposals/{optimisation_proposal_id}/decisions",
@@ -311,3 +391,103 @@ def build_optimisation_proposal_routes(
             ),
             content,
         )
+
+    @router.get(
+        "/optimisation-passes/{optimisation_pass_id}/export.xlsx",
+        operation_id="exportOptimisationProposalsXlsx",
+        tags=["optimisation"],
+        status_code=200,
+        response_class=Response,
+        responses={
+            **success(
+                200,
+                "The workbook of this pass's proposals.",
+                content={_XLSX_MEDIA_TYPE: {"schema": {"type": "string", "format": "binary"}}},
+                headers={
+                    "Content-Disposition": {
+                        "schema": {"type": "string"},
+                        "description": "Attachment with a display file name built from the "
+                        "opaque pass identity. The file name is presentation only and is "
+                        "never an identity.",
+                    }
+                },
+            ),
+            **envelope_responses(401, 403, 404, 500, 503),
+        },
+        description=(
+            "`UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one "
+            "row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by "
+            "which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the "
+            "specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never "
+            "`0`), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на "
+            "доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins "
+            "with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. "
+            "Any one role, `role:admin|expert|viewer`."
+        ),
+    )
+    def export_optimisation_proposals_xlsx(
+        subject: CurrentSubject, optimisation_pass_id: PassIdPath
+    ) -> WireResponse:
+        content = proposals.export_optimisation_proposals_xlsx(
+            optimisation_pass_id=optimisation_pass_id, user_uid=subject.user_uid
+        )
+        return WireResponse(
+            200,
+            (
+                ("Content-Type", _XLSX_MEDIA_TYPE),
+                ("Content-Length", str(len(content))),
+                ("Content-Disposition", attachment_disposition(optimisation_pass_id, suffix="xlsx")),
+            ),
+            content,
+        )
+
+    # Declared through ``add_api_route`` for ``route_class_override``: ``UploadRoute`` parses the
+    # form under the upload's small part bounds, as it does for ``importRunDecisions``.
+    def import_optimisation_proposal_decisions(
+        subject: CurrentSubject,
+        optimisation_pass_id: PassIdPath,
+        body: Annotated[models.ImportProposalDecisionsRequest, Form(media_type="multipart/form-data")],
+        idempotency_key: RequiredIdempotencyKey,
+        checked: Annotated[CheckedUpload, Depends(require_a_strict_multipart_body)],
+    ) -> WireResponse:
+        del checked  # a repeated, unnamed or filename-less part was refused before this runs
+        report = proposals.import_optimisation_proposal_decisions(
+            optimisation_pass_id=optimisation_pass_id,
+            content=body.file.file,
+            idempotency_key=idempotency_key,
+            user_uid=subject.user_uid,
+        )
+        return json_response(200, encode_json(report.model_dump(mode="json", exclude_none=True)))
+
+    router.add_api_route(
+        "/optimisation-passes/{optimisation_pass_id}/decision-imports",
+        import_optimisation_proposal_decisions,
+        methods=["POST"],
+        operation_id="importOptimisationProposalDecisions",
+        tags=["optimisation"],
+        status_code=200,
+        response_model=models.ProposalDecisionImportReport,
+        responses={
+            **success(200, "What the import did with each row that names an ID or a decision."),
+            **envelope_responses(401, 403, 404, 409, 422, 500, 503),
+        },
+        route_class_override=UploadRoute,
+        description=(
+            "`UI-B-15` (contract 1.35.0): load back the pass's workbook as `exportOptimisationProposalsXlsx` produced it, "
+            "with «Решение эксперта» and «Комментарий» edited, at most 10 MiB. Only our export is read: a workbook "
+            "without a «Предложения» sheet naming the columns «ID предложения», «Решение эксперта» and «Комментарий» is "
+            "`422 validation_failed` (`field: file`, `constraint: not_our_export`), as is a file that is not a readable "
+            "XLSX (`unreadable`), is larger (`too_large`) or has more than 20 000 rows (`too_many_rows`); nothing is "
+            "recorded then. Rows are matched by the proposal's identity, never by «№», and only proposals of this pass. "
+            "A row whose decision differs from the one in force appends an `accept`, `reject` or `revise` event carrying "
+            "the row's comment (`revise` requires one), authored by the caller exactly as `decideOptimisationProposal` "
+            "would; «не решено» over a decision in force appends its withdrawal (`revoke`); the same decision with a "
+            "new comment appends a new event; a blank decision cell keeps the decision in force. Every row naming an ID "
+            "or a decision is reported, in sheet order, as `recorded`, `unchanged` or `refused` with a `reason`: "
+            "`no_proposal_id`, `duplicate_proposal`, `unknown_proposal`, `unknown_decision` (not one of the four "
+            "labels the export writes), `comment_required` or `comment_too_long`. The proposal's identity is reported "
+            "only for a proposal of the pass. An unknown pass is `404`. An exact repeat of the `Idempotency-Key` answers "
+            "the stored report and appends nothing; the same key with another file, pass or caller is `409 "
+            "idempotency_key_reuse`. `expert` only (`admin` alone is `permission_denied`)."
+        ),
+    )

@@ -3,16 +3,19 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import type {
+  AcceptedOptimisationProposalPage,
   DocumentUid,
   OptimisationPassId,
   OptimisationPassList,
   OptimisationProposalId,
   OptimisationProposalPage,
+  ProjectSection,
   ProjectUid,
   ProposalDecisionList,
   ProposalDecisionState,
 } from '@/shared/api';
 import {
+  listAcceptedOptimisationProposals,
   listOptimisationPasses,
   listOptimisationProposals,
   listProposalDecisions,
@@ -89,4 +92,39 @@ export function proposalDecisionsQueryOptions(proposalId: OptimisationProposalId
 
 export function useProposalDecisions(proposalId: OptimisationProposalId, enabled: boolean) {
   return useQuery<ProposalDecisionList>({ ...proposalDecisionsQueryOptions(proposalId), enabled });
+}
+
+/** Accepted proposals per page on the section's «Принято» tab; the contract allows up to 200. */
+export const ACCEPTED_PAGE_LIMIT = 20;
+
+export interface AcceptedProposalsFilter {
+  readonly projectUid?: ProjectUid | null | undefined;
+  readonly sectionCode?: ProjectSection | null | undefined;
+  readonly cursor?: string | undefined;
+}
+
+/**
+ * `listAcceptedOptimisationProposals` (`UI-B-27`, contract 1.35.0): the proposals whose decision in force is an
+ * acceptance, newest acceptance first, one page, optionally of one project and one section. The filters are
+ * filters and not parents: a project or a section nothing was accepted in answers an empty page.
+ */
+export function acceptedProposalsQueryOptions(filter: AcceptedProposalsFilter = {}) {
+  const query = {
+    ...(filter.projectUid === undefined || filter.projectUid === null ? {} : { project_uid: filter.projectUid }),
+    ...(filter.sectionCode === undefined || filter.sectionCode === null ? {} : { section_code: filter.sectionCode }),
+    ...(filter.cursor === undefined ? {} : { cursor: filter.cursor }),
+    limit: ACCEPTED_PAGE_LIMIT,
+  };
+  return {
+    queryKey: queryKeys.optimisation.accepted(query),
+    queryFn: async () => (await listAcceptedOptimisationProposals({ query })).data,
+  } as const;
+}
+
+export function useAcceptedOptimisationProposals(filter: AcceptedProposalsFilter = {}) {
+  return useQuery<AcceptedOptimisationProposalPage>({
+    ...acceptedProposalsQueryOptions(filter),
+    // Paging keeps the page on screen until the next one arrives.
+    placeholderData: keepPreviousData,
+  });
 }

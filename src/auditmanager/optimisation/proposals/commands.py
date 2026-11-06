@@ -22,7 +22,10 @@ generator runs and the pass and every proposal are inserted in this transaction.
 comment); the key is claimed (same payload answers the stored decision); the proposal must
 exist (``not_found`` ``OptimisationProposal``); under the proposal's advisory lock the next
 ``seq`` is appended. Every call under a new key appends a new event -- the history is the
-record, the latest event is the current decision.
+record, the latest event is the current decision. ``revoke`` (`UI-B-12`) withdraws the standing
+decision as one more event: under the same lock it is refused (``conflict`` /
+``no_decision_to_revoke``) when the latest event is absent or is itself a ``revoke``, so the
+journal never holds a withdrawal of nothing.
 """
 
 from __future__ import annotations
@@ -64,7 +67,9 @@ from .policy import (
     AGGREGATE_OPTIMISATION_PROPOSAL,
     COMMAND_TYPE_DECIDE_PROPOSAL,
     COMMAND_TYPE_START_PASS,
+    REFUSAL_NOTHING_TO_REVOKE,
     REFUSAL_VENDOR_LIST_MISSING,
+    VERDICT_REVOKE,
     normalize_comment,
     parse_verdict,
     require_expert,
@@ -352,6 +357,15 @@ def decide_optimisation_proposal(
     if repository.get_proposal(session, proposal) is None:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=AGGREGATE_OPTIMISATION_PROPOSAL)
     repository.lock_proposal(session, proposal)
+    if chosen == VERDICT_REVOKE:
+        latest = repository.latest_decision(session, proposal)
+        if latest is None or latest.verdict == VERDICT_REVOKE:
+            raise DomainError(
+                ErrorCode.CONFLICT,
+                message="the proposal has no decision to withdraw",
+                aggregate_type=AGGREGATE_OPTIMISATION_PROPOSAL,
+                conflict_reason=REFUSAL_NOTHING_TO_REVOKE,
+            )
     decision = repository.insert_decision(
         session,
         decision_id=ProposalDecisionId.new(),

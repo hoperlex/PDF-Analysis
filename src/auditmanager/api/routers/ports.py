@@ -1554,7 +1554,7 @@ class OptimisationPort(Protocol):
 
 @runtime_checkable
 class OptimisationProposalPort(Protocol):
-    """The six «Предложения» operations. `W60-OPT-PROPOSALS-01`.
+    """The «Предложения» operations. `W60-OPT-PROPOSALS-01`, and `UI-B-27`'s accepted list.
 
     A separate protocol, optional in ``build_router``, for the reason ``BlockPort`` gives.
     Behind it: ``auditmanager.optimisation.proposals``. Every method reads the actor's role
@@ -1611,6 +1611,22 @@ class OptimisationProposalPort(Protocol):
         self, *, optimisation_pass_id: str, user_uid: str
     ) -> bytes:
         """The pass's proposals as the formula-escaped CSV bytes."""
+
+    def export_optimisation_proposals_xlsx(
+        self, *, optimisation_pass_id: str, user_uid: str
+    ) -> bytes:
+        """`UI-B-15`: the pass's proposals as the workbook the expert edits and loads back."""
+
+    def import_optimisation_proposal_decisions(
+        self, *, optimisation_pass_id: str, content: BinaryIO, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionImportReport:
+        """`UI-B-15`: read the edited workbook and append the decisions it changes, one keyed command, one report."""
+
+    def list_accepted_optimisation_proposals(
+        self, *, project_uid: str | None, section_code: str | None, user_uid: str
+    ) -> Sequence[models.AcceptedOptimisationProposal]:
+        """`UI-B-27`: the proposals whose decision in force is an acceptance, newest acceptance first, optionally of
+        one project and one section; the edge pages them."""
 
 
 # --- comparison modules (`CMP-SEAL-C0`, ADR-0025) ----------------------------------------

@@ -32,6 +32,9 @@ export const PASS_REFUSAL_TEXT: Readonly<Record<string, string>> = {
 
 export const COMMENT_REQUIRED_TEXT = 'Для решения «На доработку» нужен комментарий: напишите, что изменить.';
 export const COMMENT_TOO_LONG_TEXT = 'Комментарий длиннее 2000 знаков.';
+/** `UI-B-12`: «Снять решение» over a proposal nobody has decided, or whose decision is already withdrawn. */
+export const NOTHING_TO_REVOKE_TEXT =
+  'Снимать нечего: по этому предложению нет действующего решения. Обновите страницу, возможно, его уже сняли.';
 
 function detailOf(error: unknown, key: string): string | null {
   if (!(error instanceof ApiError)) return null;
@@ -61,5 +64,6 @@ export function decideFailureMessage(error: unknown): FailureMessage {
     if (constraint === 'required') return { ...base, detail: COMMENT_REQUIRED_TEXT };
     if (constraint === 'max_length') return { ...base, detail: COMMENT_TOO_LONG_TEXT };
   }
+  if (detailOf(error, 'conflict_reason') === 'no_decision_to_revoke') return { ...base, detail: NOTHING_TO_REVOKE_TEXT };
   return base;
 }

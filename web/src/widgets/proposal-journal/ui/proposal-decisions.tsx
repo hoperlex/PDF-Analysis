@@ -10,7 +10,7 @@ import type { ProposalDecisionRecord } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant, routes } from '@/shared/lib';
-import { DECISION_STATE_LABELS } from '@/entities/optimisation-proposal';
+import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 
 import styles from './proposal-decisions.module.css';
 
@@ -31,7 +31,7 @@ export function ProposalDecisions({ records, isLoading, error }: ProposalDecisio
       {records.map((record) => (
         <li key={record.proposal_decision_id} className={styles.row} data-proposal-verdict={record.verdict}>
           <div className={styles.head}>
-            <span className={styles.verdict}>{DECISION_STATE_LABELS[record.verdict]}</span>
+            <span className={styles.verdict}>{DECISION_EVENT_LABELS[record.verdict]}</span>
             <time dateTime={record.decided_at}>{formatInstant(record.decided_at)}</time>
             <span>{record.actor_label}</span>
           </div>

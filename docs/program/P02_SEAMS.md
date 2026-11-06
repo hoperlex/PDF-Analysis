@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-295 operations, sealed. `A5` generates the typed client from this document; `B6`
+298 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1044,6 +1044,18 @@ filter (`UI-A-38`, «не запускались» is `not_run`) and the `order`
 by the adapter to the whole narrowed listing before the router cuts a page, so the ordering is the server's and holds
 across pages and the cursor is the one of the narrowed, ordered listing.
 
+`UI-PARITY-OPT-DECISIONS` (contract `1.35.0`, migration `0056_optimisation_decisions`) brings two decisions of the original's
+optimisation screen. `ProposalVerdict` gains `revoke` (`UI-B-12`, «Снять решение»): `decideOptimisationProposal` appends it
+as an ordinary keyed event that takes the proposal back to `pending` (the counts and `current_verdict` read a latest
+`revoke` as `pending`; `current_decision` still names it); it is refused as `conflict` / `no_decision_to_revoke` when no decision
+stands, and the migration widens the verdict CHECK, its downgrade refusing while a `revoke` exists. `listAcceptedOptimisationProposals`
+(`UI-B-27`, «Принято») lists the proposals whose decision in force is an acceptance, across every pass, by optional
+`project_uid` and `section_code`; a product read, cursor and `total`. `exportOptimisationProposalsXlsx` and the keyed
+`importOptimisationProposalDecisions` (`UI-B-15`, «Загрузить решения») are the pass's proposals as a workbook whose first
+column is the proposal's identity and the decisions loaded back from it by that identity: every changed row is an ordinary
+keyed decision event authored by the caller (`revoke` for «не решено» over a decision in force), and the report names every
+row that carries an ID or a decision.
+
 `UI-PARITY-KB-ALL` (contract `1.32.0`, no migration) adds `listKnowledgeBaseEntries` (`R-151h`, `D-317`): the knowledge
 base's «Все», both decision journals merged at the edge, newest first, each row naming its kind and carrying that
 journal's own record, so neither identity is replaced; a product read.
@@ -1126,6 +1138,9 @@ could.
 | `setFindingExecutionStatus` | `PUT /findings/{finding_uid}/execution-status` |
 | `listProposalDecisionJournal` | `GET /proposal-decisions` |
 | `listKnowledgeBaseEntries` | `GET /knowledge-base/entries` |
+| `listAcceptedOptimisationProposals` | `GET /optimisation-proposals/accepted` |
+| `exportOptimisationProposalsXlsx` | `GET /optimisation-passes/{optimisation_pass_id}/export.xlsx` |
+| `importOptimisationProposalDecisions` | `POST /optimisation-passes/{optimisation_pass_id}/decision-imports` |
 | `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
 | `getProject` | `GET /projects/{project_uid}` |
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
@@ -1417,7 +1432,7 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-  `importRunDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
+  `importRunDecisions`, `importOptimisationProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,

@@ -8,8 +8,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.34.0 (OpenAPI 3.1.0)
- *   sha256 3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad
+ *   AuditManager PC-01 API 1.35.0 (OpenAPI 3.1.0)
+ *   sha256 c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -138,6 +138,8 @@ import type {
   ExcludeComparisonUploadSetResult,
   ExportOptimisationProposalsCsvInput,
   ExportOptimisationProposalsCsvResult,
+  ExportOptimisationProposalsXlsxInput,
+  ExportOptimisationProposalsXlsxResult,
   ExportRunCsvInput,
   ExportRunCsvResult,
   ExportRunXlsxInput,
@@ -270,6 +272,8 @@ import type {
   GetWorkScheduleReserveResult,
   ImportComparisonZipInput,
   ImportComparisonZipResult,
+  ImportOptimisationProposalDecisionsInput,
+  ImportOptimisationProposalDecisionsResult,
   ImportRunDecisionsInput,
   ImportRunDecisionsResult,
   IssueExecutorEnrollmentInput,
@@ -278,6 +282,8 @@ import type {
   IssueRunnerTokenResult,
   IssueTokenInput,
   IssueTokenResult,
+  ListAcceptedOptimisationProposalsInput,
+  ListAcceptedOptimisationProposalsResult,
   ListAnalysisPresetsInput,
   ListAnalysisPresetsResult,
   ListAnalysisProfilesInput,
@@ -1332,6 +1338,18 @@ export function exportOptimisationProposalsCsv(
 }
 
 /**
+ * Export Optimisation Proposals Xlsx
+ *
+ * `GET /optimisation-passes/{optimisation_pass_id}/export.xlsx`.
+ */
+export function exportOptimisationProposalsXlsx(
+  input: ExportOptimisationProposalsXlsxInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ExportOptimisationProposalsXlsxResult>> {
+  return request<ExportOptimisationProposalsXlsxResult>(OPERATIONS.exportOptimisationProposalsXlsx, input, options);
+}
+
+/**
  * Download the CSV for one run.
  *
  * `GET /runs/{run_id}/export.csv`.
@@ -2124,6 +2142,18 @@ export function importComparisonZip(
 }
 
 /**
+ * Import Optimisation Proposal Decisions
+ *
+ * `POST /optimisation-passes/{optimisation_pass_id}/decision-imports` - a write; carries a required Idempotency-Key.
+ */
+export function importOptimisationProposalDecisions(
+  input: ImportOptimisationProposalDecisionsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ImportOptimisationProposalDecisionsResult>> {
+  return request<ImportOptimisationProposalDecisionsResult>(OPERATIONS.importOptimisationProposalDecisions, input, options);
+}
+
+/**
  * Import Run Decisions
  *
  * `POST /runs/{run_id}/decision-imports` - a write; carries a required Idempotency-Key.
@@ -2169,6 +2199,18 @@ export function issueToken(
   options?: RequestOptions,
 ): Promise<ApiResponse<IssueTokenResult>> {
   return request<IssueTokenResult>(OPERATIONS.issueToken, input, options);
+}
+
+/**
+ * List Accepted Optimisation Proposals
+ *
+ * `GET /optimisation-proposals/accepted`.
+ */
+export function listAcceptedOptimisationProposals(
+  input: ListAcceptedOptimisationProposalsInput,
+  options?: RequestOptions,
+): Promise<ApiResponse<ListAcceptedOptimisationProposalsResult>> {
+  return request<ListAcceptedOptimisationProposalsResult>(OPERATIONS.listAcceptedOptimisationProposals, input, options);
 }
 
 /**
@@ -4216,6 +4258,7 @@ export const apiClient = {
   estimateStageChainRun,
   excludeComparisonUploadSet,
   exportOptimisationProposalsCsv,
+  exportOptimisationProposalsXlsx,
   exportRunCsv,
   exportRunXlsx,
   extendExecutorTaskClaim,
@@ -4282,10 +4325,12 @@ export const apiClient = {
   getWorkSchedule,
   getWorkScheduleReserve,
   importComparisonZip,
+  importOptimisationProposalDecisions,
   importRunDecisions,
   issueExecutorEnrollment,
   issueRunnerToken,
   issueToken,
+  listAcceptedOptimisationProposals,
   listAnalysisPresets,
   listAnalysisProfiles,
   listAssignments,
