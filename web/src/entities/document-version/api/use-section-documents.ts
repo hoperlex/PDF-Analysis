@@ -28,17 +28,31 @@ export function sectionListingAudit(auditFilter: SectionAuditFilter | null): Doc
   return { ...(auditFilter === null ? {} : { state: auditFilter }), order: 'audit' };
 }
 
+/**
+ * What else narrows the section page's listing: archived documents on request (`R-151a`) and one tag (`R-151e`).
+ * The walk of the document page never carries either: a position among the section's documents is counted over
+ * the documents the section holds.
+ */
+export interface SectionListingScope {
+  readonly includeArchived?: boolean | undefined;
+  readonly tag?: string | undefined;
+}
+
 function sectionListQueryOptions(
   projectUid: ProjectUid, sectionCode: ProjectSection, cursor: string | undefined, auditFilter: SectionAuditFilter | null,
+  scope: SectionListingScope = {},
 ) {
-  return documentListQueryOptions(projectUid, cursor, sectionCode, false, undefined, sectionListingAudit(auditFilter));
+  return documentListQueryOptions(
+    projectUid, cursor, sectionCode, scope.includeArchived ?? false, scope.tag, sectionListingAudit(auditFilter),
+  );
 }
 
 /** One page of a section's documents, in the section page's order. */
 export function useSectionDocumentList(
   projectUid: ProjectUid, sectionCode: ProjectSection, cursor: string | undefined, auditFilter: SectionAuditFilter | null,
+  scope: SectionListingScope = {},
 ) {
-  return useQuery<DocumentVersionPage>(sectionListQueryOptions(projectUid, sectionCode, cursor, auditFilter));
+  return useQuery<DocumentVersionPage>(sectionListQueryOptions(projectUid, sectionCode, cursor, auditFilter, scope));
 }
 
 /** What a reader of the whole section is told. */

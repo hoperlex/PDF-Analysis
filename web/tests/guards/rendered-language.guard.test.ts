@@ -113,7 +113,8 @@ import { FrameNavigationView } from '@/_app/frame-navigation';
 import { menuBadgesOf } from '@/_app/menu-badges';
 import { buildNavigation } from '@/_app/navigation';
 import { sectionNavigationOf } from '@/_app/section-navigation';
-import { SectionNeighboursView } from '@/widgets/document-context';
+import { SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
+import { AuditTallyLine } from '@/entities/document-version';
 import type { DisclosureProps } from '@/shared/ui';
 import { DisclosureView } from '@/shared/ui/disclosure';
 import { MenuView } from '@/shared/ui/menu';
@@ -2515,6 +2516,27 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
           previous: version({ document_uid: `doc_${ULID.slice(0, -1)}A`, display_title: 'Комплект АР, часть 1' }),
           next: version({ document_uid: `doc_${ULID.slice(0, -1)}C`, display_title: 'Комплект АР, часть 3' }),
         },
+      }),
+  },
+  /**
+   * `UI-A-35`: the original's row of numbers for a set of documents -- every state a badge names, the findings, and the
+   * note that a page of a longer list was counted.
+   */
+  {
+    name: 'audit-tally-line',
+    make: () =>
+      createElement(AuditTallyLine, {
+        tally: { documents: 12, notRun: 3, awaitingDecision: 2, checked: 5, clean: 2, findings: 27 },
+        partial: true,
+        label: 'АР Архитектурные решения',
+      }),
+  },
+  /** `UI-A-22`: the version's tabs, the open one, a link with its finding count, one that is not a link, and the document's. */
+  {
+    name: 'version-tabs',
+    make: () =>
+      createElement(VersionTabsView, {
+        tabs: versionTabs({ projectUid: PROJECT_UID, versionUid: VERSION_UID, documentUid: DOCUMENT_UID, current: 'version', runs: [] }),
       }),
   },
   /*

@@ -21,3 +21,36 @@
     padding: var(--am-gap);
   }
 }
+
+/* Classification and runs side by side on a wide screen, as the original's info page keeps its actions beside its pipeline. */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--am-gap);
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+}
+
+/* The file's facts, collapsed under the classification. */
+.facts {
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+}
+
+.facts > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.facts[open] > summary {
+  margin-bottom: var(--am-gap-sm);
+}

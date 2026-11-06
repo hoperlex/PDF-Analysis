@@ -517,6 +517,20 @@ describe('the number on a tile is the run’s findings on its page, and only whe
     expect(markup).toContain(`data-page-findings-run-at="${RUN_AT}"`);
   });
 
+  it('folds the reading notes under «Как читать плитки» and opens with the summary, the selector and the tiles', () => {
+    const markup = list(blocks, { pageFindings: READ });
+    const howTo = markup.indexOf('data-portal-how-to');
+    expect(howTo).toBeGreaterThan(-1);
+    // `UI-A-81` (density): the notes sit in a closed `<details>`, after the summary and before the selector, and the
+    // selector and the tiles are not inside it.
+    expect(markup.indexOf('data-portal-block-count')).toBeLessThan(howTo);
+    const closing = markup.indexOf('</details>', howTo);
+    expect(markup.slice(howTo, closing)).toContain('Замечание указывает страницу, а не блок');
+    expect(markup.slice(howTo, closing)).not.toContain('data-page-selector');
+    expect(markup.indexOf('data-page-selector')).toBeGreaterThan(closing);
+    expect(markup.slice(howTo - 40, howTo)).not.toContain('open');
+  });
+
   it('draws the title without the run’s time when the reading does not carry it', () => {
     const markup = list(blocks, { pageFindings: { ...READ, runAt: undefined } as PageFindingsReading });
     expect(markup).toContain('title="Замечаний на странице 1: 2"');

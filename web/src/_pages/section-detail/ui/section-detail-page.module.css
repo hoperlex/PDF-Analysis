@@ -1,0 +1,19 @@
+/* The section page: the filters above the cards and the Σ card that opens the grid (UI-A-53). Tokens only. */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap-sm);
+}
+
+
+.sigmaBadge {
+  align-self: flex-start;
+}
+
+.sigmaNote {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}

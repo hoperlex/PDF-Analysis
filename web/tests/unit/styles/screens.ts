@@ -79,6 +79,8 @@ import { ImportDecisionsView } from '@/features/import-decisions';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
 import { SectionDetailPage } from '@/_pages/section-detail';
+import { ProjectDetailPage } from '@/_pages/project-detail';
+import { DocumentDetailPage } from '@/_pages/document-detail';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
 import { NO_ENGINEER_FILTER } from '@/entities/work-schedule';
@@ -90,7 +92,7 @@ import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
 import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
-import { DocumentContext, SectionNeighboursView } from '@/widgets/document-context';
+import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
 import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByPage } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
@@ -229,6 +231,8 @@ const project = (): Project => ({
   name: 'Договор поставки',
   created_at: '2026-09-10T08:00:00.000Z',
   document_count: 2,
+  // `UI-A-10`, `UI-A-35`: the counters `listProjects` and `getProject` carry, so the list row and the project's figures are drawn.
+  audit_counts: auditCounts(6, { not_run: 2, awaiting_decision: 2, checked: 1, clean: 1, no_expert_decision: 4 }),
 });
 
 const version = (): DocumentVersion => ({
@@ -876,6 +880,17 @@ export function screens(): Screen[] {
         place: { position: 1, total: 3, previous: null, next: neighbour('B') },
       })),
     );
+  }
+  // `UI-A-22`: the version's tabs -- the open one, a link with the finding count, a tab that is not a link yet, and the
+  // document's optimisation -- so the row's current, off and count rules are measured where they are drawn.
+  {
+    const base = { projectUid: PROJECT_UID, versionUid: VERSION_UID, documentUid: DOCUMENT_UID, current: 'version' as const };
+    add('VersionTabs, a result run to open', render(createElement(VersionTabsView, {
+      tabs: versionTabs({ ...base, runs: [runStatus({ run_id: RUN_ID, published_finding_count: 7 })] }),
+    })));
+    add('VersionTabs, no result run yet, on «Блоки»', render(createElement(VersionTabsView, {
+      tabs: versionTabs({ ...base, current: 'blocks', runs: [] }),
+    })));
   }
   add('ExecutionJournal loaded', withRouter(createElement(ExecutionJournal, {
     entries: [{
@@ -1898,6 +1913,10 @@ export function screens(): Screen[] {
       add('RunList table states', renderScreen(runsClient, createElement(RunList, { projectUid: PROJECT_UID, versionUid: VERSION_UID })));
     }
     add('ProjectsPage loaded', at(createElement(ProjectsPage, {})));
+    // `UI-A-35`, `UI-A-22`: the project's page with its figures and tabs, and the document's page with its tabs and
+    // neighbours strip over the same populated client.
+    add('ProjectDetailPage loaded', at(createElement(ProjectDetailPage, { projectUid: PROJECT_UID, roles: ['expert'] })));
+    add('DocumentDetailPage loaded', at(createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, roles: ['expert'] })));
     add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
     // `CMP-VERSION-MARK-01`: the same four screens over a version admitted for comparison only
     // (`upload_kind` `comparison_pdf`): the mark on a row and in the panel, and the run list with

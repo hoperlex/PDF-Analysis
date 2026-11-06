@@ -1,0 +1,30 @@
+/* The audit figures of a set of documents in one row (UI-A-35). Colour comes from `.am-badge--*`; tokens only. */
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  min-width: 0;
+  font-size: var(--am-text-sm);
+}
+
+.total {
+  color: var(--am-ink);
+  font-weight: 600;
+}
+
+.part {
+  white-space: normal;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.scope {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}

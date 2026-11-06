@@ -14,7 +14,7 @@ import { queryKeys } from '@/shared/api';
 import { portalBlocksQueryOptions } from '@/entities/block';
 import { BlocksPage, addressWithPage } from '@/_pages/blocks';
 
-import { newClient, renderWith } from '../screens/harness';
+import { newClient, renderScreen, renderWith } from '../screens/harness';
 import { BLOCKS_PROJECT_UID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from './fixtures';
 
 // The address the page layer reads `?page=` from; outside the app router the hooks answer `null`.
@@ -43,7 +43,8 @@ function withVersion(version: DocumentVersion) {
 }
 
 const tab = (client: ReturnType<typeof newClient>, projectUid = BLOCKS_PROJECT_UID, versionUid = BLOCKS_VERSION_UID) =>
-  renderWith(client, createElement(BlocksPage, { projectUid, versionUid }));
+  // A routed page: its strip offers the document's versions through the router, so the app router is mounted.
+  renderScreen(client, createElement(BlocksPage, { projectUid, versionUid }));
 
 describe('the version’s «Блоки» tab', () => {
   it('shows the tabs at once for the version in the address, with no chooser', () => {

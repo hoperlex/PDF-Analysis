@@ -8,6 +8,10 @@
  * genuinely empty list is `EmptyState` — which is a different claim from "the request
  * failed" and must not look like it.
  *
+ * **Each row states the project's audit** (`UI-A-10`, `UI-A-44`): documents, not started, awaiting a decision,
+ * checked, from the `audit_counts` of the item, so the list answers «where is work waiting» without opening a
+ * project. No request beyond the list's own.
+ *
  * Paging follows the opaque cursor exactly as received. Nothing here parses one, builds
  * one, or assumes a page number behind it.
  */
@@ -15,6 +19,7 @@
 import { useState } from 'react';
 
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { AuditTallyLine, tallyOfCounts } from '@/entities/document-version';
 import { ProjectRow, classifyProjectListFailure, useProjectList } from '@/entities/project';
 
 export function ProjectList() {
@@ -54,7 +59,14 @@ export function ProjectList() {
     <div>
       <ul className="am-rows">
         {page.items.map((project) => (
-          <ProjectRow key={project.project_uid} project={project} />
+          <ProjectRow
+            key={project.project_uid}
+            project={project}
+            // `UI-A-10`: the original's two badges and more, from the counters `listProjects` already carries.
+            figures={project.audit_counts === undefined ? undefined : (
+              <AuditTallyLine tally={tallyOfCounts(project.audit_counts)} label={project.name} />
+            )}
+          />
         ))}
       </ul>
       <div className="am-pager">
