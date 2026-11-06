@@ -166,7 +166,8 @@ describe('sectionFigures — the section panel as exact figures', () => {
       page([DOCS[0] as (typeof DOCS)[number]], 'next'),
     );
     const markup = renderWith(seeded, createElement(ProjectSections, { projectUid: PROJECT_UID }));
-    const kj = markup.slice(markup.indexOf('data-section-group="KJ"'), markup.indexOf('data-section-group="OV"'));
+    const from = markup.indexOf('data-section-group="KJ"');
+    const kj = markup.slice(from, markup.indexOf('data-section-group=', from + 1));
     expect(kj).toContain('data-audit-tally="5"');
     expect(kj).not.toContain('документов нет');
     expect(kj).toContain('Открыть раздел');

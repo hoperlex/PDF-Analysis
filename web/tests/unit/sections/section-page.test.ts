@@ -103,7 +103,7 @@ describe('the section page keeps the original’s controls', () => {
   });
 
   it('draws no box for a document whose section is not confirmed, and no «Выбрать все» when none can start', () => {
-    const markup = render([version({ classification: undefined })]);
+    const markup = render([version()]);
     expect((markup.match(/type="checkbox"/g) ?? []).length).toBe(1);
     expect(markup).not.toContain('Выбрать все');
   });

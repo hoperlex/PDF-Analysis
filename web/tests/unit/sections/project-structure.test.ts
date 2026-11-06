@@ -87,7 +87,9 @@ describe('the structure as a reader sees it', () => {
 
   it('counts the documents of each group and says when one is empty', () => {
     expect(group(markup, 'KJ')).toContain('data-section-documents="2"');
-    expect(group(markup, 'KJ')).toContain('документов: 2');
+    // `UI-A-35`: the count is the first part of the section's row of figures.
+    expect(group(markup, 'KJ')).toContain('data-audit-tally="2"');
+    expect(group(markup, 'KJ')).toMatch(/data-tally="documents"[^>]*>(<!-- -->)?<span[^>]*>2<\/span>/);
     expect(group(markup, 'GP')).toContain('data-section-documents="0"');
     expect(group(markup, 'GP')).toContain('документов нет');
     expect(group(markup, 'unclassified')).toContain('data-section-documents="1"');

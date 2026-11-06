@@ -87,7 +87,7 @@ describe('VersionTabsView', () => {
 describe('the page strip', () => {
   const client = () => {
     const seeded = newClient();
-    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ classification: undefined }));
+    seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version());
     seeded.setQueryData(queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT), page([]));
     return seeded;
   };
