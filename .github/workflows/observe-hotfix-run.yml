@@ -1,0 +1,53 @@
+name: observe-hotfix-run
+
+on:
+  push:
+    branches: [dev]
+    paths: [.github/workflows/observe-hotfix-run.yml]
+
+# Read-only observation must neither hold the deployment lock nor cancel inference.
+concurrency:
+  group: observe-hotfix-run-1106
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Observe the existing run without changing application state
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          RUN_ID: run_01M6RJPRWTC1ER59JXJZN2C76H
+          DEPLOYED_SHA: 0730b6179d3baa6eb9f4a78d27c63ef53893e296
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$RUN_ID" =~ ^run_[0-9A-HJKMNP-TV-Z]{26}$ ]]
+          [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          case "$VPS_HOST" in 135.106.164.147|audit.135.106.164.147.sslip.io) ;; *) exit 2 ;; esac
+          test -n "$SSH_KEY"
+          mkdir -p "$HOME/.ssh"
+          trap 'rm -f "$HOME/.ssh/observe_key" "$HOME/.ssh/observe_hosts"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/observe_key"
+          printf '%s\n' '135.106.164.147 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' 'audit.135.106.164.147.sslip.io ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZcfVwHVIUEU7W0auTb70VKY/aLppXM/54vzpmy0+XV' > "$HOME/.ssh/observe_hosts"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/observe_hosts" -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i "$HOME/.ssh/observe_key" \
+            "${VPS_USER}@${VPS_HOST}" bash -s -- "$DEPLOYED_SHA" "$RUN_ID" <<'REMOTE'
+          set -euo pipefail
+          cd /srv/auditmanager
+          test "$(git rev-parse HEAD)" = "$1"
+          run_id="$2"
+          # A short snapshot can be re-run read-only while inference continues.
+          docker compose --env-file infra/deploy/env/alpha.env \
+            -f infra/deploy/compose.server.yml exec -T api \
+            python -m auditmanager.runs.hotfix_operator status "$run_id" </dev/null
+          REMOTE
