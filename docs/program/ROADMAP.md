@@ -244,6 +244,29 @@ Use P04 evidence to choose, reject or simplify the old backlog. Candidate work i
 
 The output is a new beta/v1 roadmap with estimates based on actual P01–P04 throughput.
 
+### Owner goals of 2026-11-07 (after the beta-bound product work)
+
+Set by the owner on 2026-11-07. They come after the functional and navigational likeness to the
+original and the active product tasks around the beta, and are built when those leave room:
+
+1. **AR v3 as an opt-in mode.** The imported (current) analysis stays the default; v3 is
+   switched on per deployment or per run, never replacing the default silently.
+2. **Expert decision memory.** Every expert decision is kept together with the crop or crops it
+   concerns in a vectorised segment of PostgreSQL (pgvector, as the normative corpus already
+   uses), so that it can feed fine-tuning data, dynamic prompts and hints to an expert facing a
+   similar case. The memory outlives its sources: deleting a project or a document must not lose
+   the context of decisions already taken, so the crops and the decision's own record are copied
+   into the memory when the decision is taken and the product purge keeps them. The stored
+   decision is the expert's recorded fact (AGENTS.md §4: model output is never the canonical
+   decision); a hint drawn from it is labelled as a hint.
+3. **Normative crops for an external executor.** When a task needs normative text, the crops of
+   the normative base it needs are delivered to the external executor with the job, dynamically
+   and within the executor's consent and custody rules, instead of the executor holding the
+   whole corpus.
+
+Each becomes its own design task with a contract slice; none is started before the beta-bound
+work, unless the lanes of that work run out.
+
 ## Normative corpus — PostgreSQL authority, pgvector retrieval, S3 custody
 
 **Owner direction, 2026-10-01.** [ADR-0020](../architecture/adr/ADR-0020-normative-corpus-alpha-runtime.md)
