@@ -56,6 +56,8 @@ export interface FindingListProps {
    * passes it only to a session that may decide; without it the list draws no action at all.
    */
   readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
+  /** `UI-PARITY-P0O`: the drawing sheet of a PDF page, when the version's portal geometry names one. */
+  readonly sheetOf?: ((page: number) => number | undefined) | undefined;
   /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly severityFilter?: SeverityFilter | undefined;
   readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
@@ -166,16 +168,30 @@ const FILTERS: readonly { readonly value: VerdictFilter; readonly label: string 
  * norms it cites and the pages — over the same filtered findings as the list. A row's number opens the
  * finding beside the table, as a row of the list does.
  */
+/**
+ * `UI-PARITY-P0O`: a finding's pages as the original states them, with the sheet first («Лист 3 · стр. 5») when the
+ * portal geometry names a sheet for every page; otherwise the PDF pages alone, never a page number passed off as a sheet.
+ */
+export function pagesLabel(pages: readonly number[], sheetOf?: (page: number) => number | undefined): string {
+  const sheets = sheetOf === undefined ? [] : pages.map((page) => sheetOf(page));
+  const known = pages.length > 0 && sheets.length === pages.length && sheets.every((sheet) => sheet !== undefined);
+  const pageText = `стр. ${pages.join(', ')}`;
+  if (!known) return pageText;
+  return `${pages.length === 1 ? 'Лист' : 'Листы'} ${sheets.join(', ')} · ${pageText}`;
+}
+
 function FindingTable({
   groups,
   selectedFindingUid,
   onSelect,
   renderRowActions,
+  sheetOf,
 }: {
   readonly groups: readonly FindingGroup<Finding>[];
   readonly selectedFindingUid: string | null;
   readonly onSelect: (findingUid: string) => void;
   readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
+  readonly sheetOf?: ((page: number) => number | undefined) | undefined;
 }) {
   const rows = groups.flatMap((group) => group.findings);
   const numberOf = new Map(rows.map((finding, index) => [finding.finding_uid, index + 1]));
@@ -198,7 +214,7 @@ function FindingTable({
       header: 'Нормы',
       cell: (finding) => (finding.observation.norm_citations ?? []).length === 0 ? '—' : String((finding.observation.norm_citations ?? []).length),
     },
-    { key: 'pages', header: 'Стр.', cell: (finding) => declaredPages(finding.observation).join(', ') },
+    { key: 'pages', header: 'Лист / стр.', cell: (finding) => pagesLabel(declaredPages(finding.observation), sheetOf) },
     ...(renderRowActions === undefined ? [] : [{ key: 'decision', header: 'Решение', cell: renderRowActions }]),
   ];
   return (
@@ -227,6 +243,7 @@ export function FindingList({
   verdictFilter,
   onVerdictFilterChange,
   renderRowActions,
+  sheetOf,
   severityFilter,
   onSeverityFilterChange,
 }: FindingListProps) {
@@ -360,6 +377,7 @@ export function FindingList({
           selectedFindingUid={selectedFindingUid}
           onSelect={onSelect}
           renderRowActions={renderRowActions}
+          sheetOf={sheetOf}
         />
       ) : null}
 
@@ -410,7 +428,7 @@ export function FindingList({
                       </span>
                     )}
                     <span className="am-finding-row__pages" data-pages={pages.join(',')}>
-                      {pages.length === 1 ? `стр. ${pages[0]}` : `стр. ${pages.join(', ')}`}
+                      {pagesLabel(pages, sheetOf)}
                     </span>
                   </button>
                   {renderRowActions === undefined ? null : renderRowActions(finding)}

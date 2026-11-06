@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.29.0 (OpenAPI 3.1.0)
- *   sha256 159c2a8ffd2c9b51e1b0b44a783d0d65a8b7875ad57117f41f5a3ccc1646c9e7
+ *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
+ *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.29.0';
+export const CONTRACT_VERSION = '1.30.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '159c2a8ffd2c9b51e1b0b44a783d0d65a8b7875ad57117f41f5a3ccc1646c9e7';
+export const CONTRACT_DIGEST = '49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -707,6 +707,8 @@ export const SCHEMA_NAMES = [
   'VersionComparison',
   'VersionPageProfile',
   'VersionPageProfilePage',
+  'VersionSheetLabel',
+  'VersionSheetLabelList',
   'VersionUid',
   'VersionUploadKind',
   'WithdrawSheetPairingRequest',
@@ -3910,7 +3912,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.29.0";
+  contract_version: "1.30.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -7929,6 +7931,24 @@ export type VersionPageProfile = {
 export type VersionPageProfilePage = {
   items: Array<VersionPageProfile>;
   page: PageInfo;
+};
+
+/** `UI-PARITY-P0O` (contract 1.30.0): one page of a version and the drawing sheet its portal blocks name. */
+export type VersionSheetLabel = {
+  block_count: number;
+  page_label?: number;
+  page_number: number;
+};
+
+/**
+ * `UI-PARITY-P0O`: a version's pages with their sheet labels, as the original's «Лист» column, from the same portal
+ * geometry `listVersionPortalBlocks` reads; ``not_produced`` and no items while no run has produced it. A page without a
+ * portal block is not listed: a page number is never shown as a sheet.
+ */
+export type VersionSheetLabelList = {
+  items: Array<VersionSheetLabel>;
+  status: "produced" | "not_produced";
+  version_uid: VersionUid;
 };
 
 export type VersionUid = string;

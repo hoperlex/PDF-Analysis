@@ -372,6 +372,8 @@ export const queryKeys = {
      */
     portalBlocks: (versionUid: VersionUid, limit: number) =>
       ['versions', 'portal-blocks', versionUid, { limit }] as const,
+    /** `UI-PARITY-P0O`: each page's sheet label (`listVersionSheetLabels`), from the same portal geometry. */
+    sheetLabels: (versionUid: VersionUid) => ['versions', 'sheet-labels', versionUid] as const,
     /**
      * `getVersionSectionReview` for one version (`W59-SECTION-UI-01`): the fifteen section
      * choices, their suggestion evidence, whether each has an analysis profile, and the

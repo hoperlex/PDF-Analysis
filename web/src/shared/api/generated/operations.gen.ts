@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.29.0 (OpenAPI 3.1.0)
- *   sha256 159c2a8ffd2c9b51e1b0b44a783d0d65a8b7875ad57117f41f5a3ccc1646c9e7
+ *   AuditManager PC-01 API 1.30.0 (OpenAPI 3.1.0)
+ *   sha256 49cdac66006eaed17df06bc9645e8b8f106c1c3f31a060357897023c879c1470
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -318,6 +318,7 @@ import type {
   VersionComparison,
   VersionPageProfile,
   VersionPageProfilePage,
+  VersionSheetLabelList,
   VersionUid,
   WithdrawSheetPairingRequest,
   WorkerId,
@@ -513,6 +514,7 @@ export const OPERATION_IDS = [
   'listUsers',
   'listVersionPageProfiles',
   'listVersionPortalBlocks',
+  'listVersionSheetLabels',
   'listVersions',
   'listWorkers',
   'markReleaseNotesRead',
@@ -5381,6 +5383,29 @@ export type ListVersionPortalBlocksInput = {
 
 /** Success body of `listVersionPortalBlocks` (`application/json`, HTTP 200). */
 export type ListVersionPortalBlocksResult = PortalBlockPage;
+
+// ------------------------------------------------------------------------------------
+// listVersionSheetLabels - GET /versions/{version_uid}/sheet-labels
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Version Sheet Labels
+ *
+ * `UI-PARITY-P0O` (contract 1.30.0): the version's pages with the drawing sheet their portal blocks name (`page_label`) and how many blocks each holds, as the original's «Лист» beside a finding's page. Read from the same portal geometry as `listVersionPortalBlocks` (the most recent run whose `page_geometry_extraction` succeeded), one entry per page that has a block; a page whose blocks name different sheets carries no `page_label`, and a page number is never passed off as a sheet. A version no run of which has produced the geometry answers `status: "not_produced"` and no items. An unknown version is `404`. Any one role (`R-80`).
+ */
+export type ListVersionSheetLabelsInput = {
+  /** Path parameters, substituted into `/versions/{version_uid}/sheet-labels`. */
+  path: {
+    version_uid: VersionUid;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listVersionSheetLabels` (`application/json`, HTTP 200). */
+export type ListVersionSheetLabelsResult = VersionSheetLabelList;
 
 // ------------------------------------------------------------------------------------
 // listVersions - GET /documents/{document_uid}/versions
@@ -10637,6 +10662,20 @@ export const OPERATIONS = {
     path: '/versions/{version_uid}/portal-blocks',
     pathParams: ['version_uid'],
     queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['documents'],
+  },
+  listVersionSheetLabels: {
+    operationId: 'listVersionSheetLabels',
+    method: 'GET',
+    path: '/versions/{version_uid}/sheet-labels',
+    pathParams: ['version_uid'],
+    queryParams: [],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

@@ -101,6 +101,29 @@ def build_block_routes(router: APIRouter, blocks: BlockPort) -> None:
         )
 
     @router.get(
+        "/versions/{version_uid}/sheet-labels",
+        operation_id="listVersionSheetLabels",
+        tags=["documents"],
+        status_code=200,
+        response_model=models.VersionSheetLabelList,
+        responses={
+            **success(200, "Each page of the version with its sheet label, or the not-yet-produced status."),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+        description=(
+            "`UI-PARITY-P0O` (contract 1.30.0): the version's pages with the drawing sheet their portal blocks name "
+            "(`page_label`) and how many blocks each holds, as the original's «Лист» beside a finding's page. Read from the "
+            "same portal geometry as `listVersionPortalBlocks` (the most recent run whose `page_geometry_extraction` "
+            "succeeded), one entry per page that has a block; a page whose blocks name different sheets carries no "
+            "`page_label`, and a page number is never passed off as a sheet. A version no run of which has produced the "
+            "geometry answers `status: \"not_produced\"` and no items. An unknown version is `404`. Any one role (`R-80`)."
+        ),
+    )
+    def list_version_sheet_labels(version_uid: Annotated[models.VersionUid, Path()]) -> WireResponse:
+        labels = blocks.list_sheet_labels(version_uid=version_uid)
+        return json_response(200, encode_json(labels.model_dump(mode="json", exclude_none=True)))
+
+    @router.get(
         "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",
         operation_id="streamVersionPortalBlockCrop",
         tags=["documents"],

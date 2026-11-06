@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.29.0"]
+    contract_version: Literal["1.30.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1390,6 +1390,25 @@ class PortalBlock(_Object):
     portal_description: Annotated[str, Field(min_length=1)] = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+
+
+class VersionSheetLabel(_Object):
+    """`UI-PARITY-P0O` (contract 1.30.0): one page of a version and the drawing sheet its portal blocks name."""
+
+    page_number: Annotated[int, Field(ge=1)]
+    #: The portal's ``page_label`` of the page's blocks; absent when they name different sheets (never guessed).
+    page_label: Annotated[int, Field(ge=1)] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    block_count: Annotated[int, Field(ge=1)]
+
+
+class VersionSheetLabelList(_Object):
+    """`UI-PARITY-P0O`: a version's pages with their sheet labels, as the original's «Лист» column, from the same portal
+    geometry `listVersionPortalBlocks` reads; ``not_produced`` and no items while no run has produced it. A page without a
+    portal block is not listed: a page number is never shown as a sheet."""
+
+    version_uid: VersionUid
+    status: Literal["produced", "not_produced"]
+    items: list[VersionSheetLabel]
 
 
 class PortalBlockPage(_Object):

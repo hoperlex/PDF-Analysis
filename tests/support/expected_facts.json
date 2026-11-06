@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 258,
+    "path_count": 259,
     "operations": [
       [
         "DELETE",
@@ -727,6 +727,11 @@
         "GET",
         "/versions/{version_uid}/runs",
         "listRuns"
+      ],
+      [
+        "GET",
+        "/versions/{version_uid}/sheet-labels",
+        "listVersionSheetLabels"
       ],
       [
         "PATCH",
@@ -2121,6 +2126,8 @@
       "VersionComparison",
       "VersionPageProfile",
       "VersionPageProfilePage",
+      "VersionSheetLabel",
+      "VersionSheetLabelList",
       "VersionUid",
       "VersionUploadKind",
       "WithdrawSheetPairingRequest",
@@ -2133,5 +2140,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0054_finding_execution_status",
-  "contract_version": "1.29.0"
+  "contract_version": "1.30.0"
 }

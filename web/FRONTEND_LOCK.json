@@ -22,7 +22,7 @@
     "dispatch_named_commit": "987f85793920d5830a09342c4cf789aa99a99f64",
     "commit_note": "Resealed by UI-PARITY-P0N: contract 1.29.0 (contract 1.29.0 adds getProject.).",
     "openapi_version": "3.1.0",
-    "info_version": "1.29.0",
+    "info_version": "1.30.0",
     "paths": 258,
     "operations": 286,
     "component_schemas": 691,

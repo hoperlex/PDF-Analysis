@@ -44,6 +44,7 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
+import { sheetOfPage, useSheetLabels } from '@/entities/block';
 import { FindingList, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
 import type { SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
@@ -152,6 +153,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
   const detail = detailQuery.data?.data ?? null;
   const versionUid = detail?.version_uid ?? null;
+  // `UI-PARITY-P0O`: the sheet of each page, so a row says «Лист 3 · стр. 5» as the original's does.
+  const sheetLabels = useSheetLabels(runQuery.data?.version_uid ?? versionUid);
   const evidence = useEvidenceDocument(versionUid);
   // The line geometry the viewer frames quotations with. Read here because this page owns the
   // queries; without it (not produced, failed, in flight) the viewer searches the page text.
@@ -229,6 +232,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             onSelect={(findingUid) => {
               setSelection(selectFinding(findingUid));
             }}
+            sheetOf={(page) => sheetOfPage(sheetLabels.data, page)}
             // `R-151n`: ✓/✕ in each row, for a session that may decide.
             renderRowActions={mayAct ? (finding) => (
               <ReviewRowActions

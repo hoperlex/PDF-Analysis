@@ -2127,6 +2127,29 @@ class BlockAdapter(_SessionHolder):
 
         return self._read(work)
 
+    def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
+        """`UI-PARITY-P0O`: one read of the portal blocks document (not the crops, not the recognised text) folded into
+        each page's sheet label and block count. A page whose blocks name two sheets carries no label."""
+        from auditmanager.analysis.public import ROLE_PORTAL_BLOCKS
+
+        source = self._portal_source(version_uid)
+        if source is None:
+            return models.VersionSheetLabelList(version_uid=version_uid, status="not_produced", items=[])
+        blocks = self._portal_document(source.portal_blocks, ROLE_PORTAL_BLOCKS, version_uid)
+        labels: dict[int, set[int]] = {}
+        counts: dict[int, int] = {}
+        for block in blocks["blocks"]:
+            page = int(block["page_number"])
+            labels.setdefault(page, set()).add(int(block["page_label"]))
+            counts[page] = counts.get(page, 0) + 1
+        return models.VersionSheetLabelList(
+            version_uid=version_uid, status="produced",
+            items=[models.VersionSheetLabel(**{
+                "page_number": page, "block_count": counts[page],
+                **({"page_label": next(iter(labels[page]))} if len(labels[page]) == 1 else {}),
+            }) for page in sorted(counts)],
+        )
+
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (
             KIND_PORTAL_DESCRIPTION,

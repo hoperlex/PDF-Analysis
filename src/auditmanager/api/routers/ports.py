@@ -504,6 +504,9 @@ class BlockPort(Protocol):
         distinction this method exists to carry.
         """
 
+    def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
+        """`UI-PARITY-P0O`: each page's sheet label from the version's portal geometry."""
+
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         """Every portal block of one version's bundle, or its not-yet-produced status.
         `W55B-SEAL-01`; the behaviour is `W55B-GEOMETRY-01`'s.

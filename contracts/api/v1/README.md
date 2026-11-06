@@ -11,12 +11,21 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.29.0` (`UI-PARITY-P0N`)
+## Current contract `1.30.0` (`UI-PARITY-P0O`)
+
+`listVersionSheetLabels` (`GET /versions/{version_uid}/sheet-labels`, any one role): the version's pages with the drawing
+sheet their portal blocks name and their block count, as the original's «Лист» beside a finding's page. Read from the
+portal geometry `listVersionPortalBlocks` reads; a page whose blocks name different sheets has no label, a page without a
+block is not listed, and a version without geometry answers `not_produced`. Schemas `VersionSheetLabel`,
+`VersionSheetLabelList`. No migration, no error code.
+The API now has 259 paths, 287 operations and 693 schemas; migration head `0054`. The domain catalogs are at candidate revision 48.
+
+## Contract `1.29.0` (`UI-PARITY-P0N`, historical)
 
 `getProject` (`GET /projects/{project_uid}`, any role that may list projects): one project exactly as `listProjects` lists
 it, so a screen that names its project (the project page's title, the «Где вы находитесь» strip) need not find it on a page
 of the listing. An unknown project is `404`. No schema, no migration, no error code.
-The API now has 258 paths, 286 operations and 691 schemas; migration head `0054`. The domain catalogs are at candidate revision 47.
+The API then had 258 paths, 286 operations and 691 schemas; migration head `0054`. The domain catalogs were at candidate revision 47.
 
 ## Contract `1.28.0` (`UI-PARITY-P0M`, historical)
 
