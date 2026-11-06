@@ -15,6 +15,30 @@ after host verification.
 | `v0.6.0` | `37393a979a430e490843d7f410e9eca9491a4ea1` | `bf03d913bde596a77` (computed from tagged tree) | not measured (stand environment) | `1.0.0-draft.1` | `0021_portal_bundles` | `934705c04a71…` | `30053740f569…` | `W55B-INT-MAIN-PREP-03.md` (R-125 same-SHA gate completion); deploy run `38897018419`, owner-run host verification in `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md`; five live checks waived in `W55B-INT-TAG-01.md` | — (not promoted) |
 | `v0.7.0` — on `origin/main`, **host verification owed**, not tagged | `48c8e34ccd08a58ae61cbd09ecdba49066a5ad46` (the owner's pull request #3) | `bbbab3c0dfb856a39` computed from `git archive` of that SHA (`compute_build_id()`) | not measured (stand environment) | `1.0.0-draft.1` | `0028_classification_corrections` | `934705c04a71…` (builtin AR profile, unchanged since `v0.6.0`) | `30053740f569…` (builtin AR profile, unchanged since `v0.6.0`) | **none on this tree.** The owner merged pull requests #2 and #3 into `main` without a gate (`R-141e`); `NIGHT-1020-GATE-0-7-0-01.md` is an `R-125` completion of an earlier lineage and covers neither the classification correction, the normative references nor the hardening slices; light checks only (`RELEASE-0-7-0-RECORD-01.md`). Deploy workflow run `39571427597`, success, reported by the integrator and not re-read here; `infra/deploy/verify-deployed.sh` on the host: **pending** | none — the normative corpus is not imported on the stand |
 
+## `v0.12.0` — pull request #45, live from the grants hotfix
+
+Written by `RELEASE-0-12-0` at the owner's request of 2026-11-06 (again no version for what `main` runs).
+After `0.11.0` the owner merged #43 (`5958528b`) and #44 (`e8b12094`, which carried the `0.10.0`/`0.11.0`
+notes), both without a user-visible change, and #45 (`68dd4d66`, 2026-11-06, 51 commits, contracts
+`1.20.0`…`1.30.0`, migrations `0051`…`0054`). The deploy of #45 was refused at `apply-grants.sh`
+(`grants_unclassified`, workflow run `42175149560`); the hotfix `d6e8b4af` classified `document_tag` and
+`finding_execution_status`, and its deploy succeeded (run `42177263914`), so #45 reached users on 2026-11-06.
+`release-notes/0.12.0.json` (revision 1, 2026-11-06, seven items) describes it; `VERSION` is `0.12.0`.
+
+| Item | Commits |
+| --- | --- |
+| 1 section cards and page, «Несколько файлов», «Запустить аудит (N)» | `b6eccfe3`, `90f89103`, `22abc9e0`, `b468070f` |
+| 2 rename and archive, «Показать архивные», tags and the tag filter, the document's «Оптимизация» | `46de9524`, `d8e2fb89`, `5a064771` |
+| 3 ✓/✕ per row, the severity strip and the model row, the drawing sheet, the critic chips | `4e922722`, `e5846fb4`, `1d6b93a9`, `cce599cc` |
+| 4 the execution status, «Загрузить решения из Excel» and «ID замечания» | `275cd57d`, `480458ea` |
+| 5 «Замечания» / «Предложения» in the knowledge base | `284c10ad` |
+| 6 the queue overview, place, attempts, «Запустил», «Ожидаемое завершение», the pause in the top strip | `83b59f9f`, `4343ce52`, `84325e26`, `110b9dac` |
+| 7 the dense layout, «Блоки» as a version tab, «Диспетчер» by project, the «Процессы» tiles | `b757fc55`, `212e20a5`, `26e2bbbd`, `6f03944b`, `57d01cf9`, `ff3e9cb6`, `07a1c81b`, `31388f79` |
+
+Left out: `getProject` naming the project page (`987f8579`), the role checkboxes (`aa8f139e`). The same commit
+is on `origin/dev` and, cherry-picked, on `origin/main`. Checks: none (owner: not a code task); the text was
+measured by a throwaway script against the form rules and the screens were read in the screen registry.
+
 ## `v0.10.0` and `v0.11.0` — notes for what `main` already ran without a version
 
 Written by `RELEASE-0-10-0-0-11-0` on `origin/dev` at the owner's request of 2026-11-05 (versions existed on
