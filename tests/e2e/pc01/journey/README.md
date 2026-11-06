@@ -107,6 +107,28 @@ finding and names the envelope file. `--phase read|write|all` selects; the defau
 **The origin must be one you may write to.** There is no default origin, and the write half
 creates real state.
 
+## A throwaway local stand (`local-stand.sh`, D-314, D-318)
+
+```sh
+npm --prefix web ci && NEXT_PUBLIC_API_BASE_URL=/bff/v1 NEXT_PUBLIC_WEB_BUILD_ID=local npm --prefix web run build   # once per tree
+LANE_STAND_DIR=<a directory of yours> flock <the host's run lock> bash tests/e2e/pc01/journey/local-stand.sh --hold-seconds 1500
+# while it prints STAND_READY (it writes $LANE_STAND_DIR/stand.env and tears everything down on exit or when $LANE_STAND_DIR/stop appears):
+. $LANE_STAND_DIR/stand.env && node tests/e2e/pc01/journey/journey.mjs --origin $ORIGIN --phase all --allow-spend --out <dir>
+```
+
+It starts a tmpfs PostgreSQL and MinIO (containers named after `LANE_PG_NAME` / `LANE_S3_NAME`, on `LANE_*_PORT`),
+migrates to head, seeds the norms, loads the release notes, starts the API (`EXECUTION_ROLE=api`), a worker
+(`EXECUTION_ROLE=worker`, `recorded`) and `next start` of the built `web/`, and takes the seeded administrator off the
+shipped password. `LANE_C4=1` also starts the test-owned synthetic worker for the `cmp-stage-*` steps (and turns the comparison
+modules off on the ordinary worker, as "CMP-JOURNEY-C4-01" above asks). Two settings are not obvious and each cost a red:
+
+* **`AUDITMANAGER_EXTENDED_ANALYSIS=0`.** The shipped plan is the extended review; the committed recordings answer the plain
+  analysis only, so under the default a recorded run fails `text_analysis` with `recording_missing`
+  (`tests/support/run_consent.py`, `plain_analysis_pricing`). `--allow-spend` is accepted here because the stand is `recorded`.
+* **The «Что нового» card.** An account that has not read the newest release notes sees a fixed, non-modal card at the lower
+  left that covers about 450 px of a 780 px screen, so a press under it lands on the card. `session.mjs` closes it once, through
+  its own button, in every sign-in (and records `releaseNotice` in the envelope).
+
 ## W51 identity continuation
 
 `identity.mjs` consumes the completed PC-01 write envelope so the newly approved expert can
