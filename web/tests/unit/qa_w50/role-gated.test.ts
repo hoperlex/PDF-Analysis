@@ -104,7 +104,7 @@ describe('6 (fixture): admin screens are absent from the menu for an expert', ()
     const navigation = buildNavigation(ADMIN, FIXTURE);
     const admin = navigation.groups.find((group) => group.group === 'admin');
     expect(admin?.label).toBe('Администрирование');
-    expect(admin?.items.map((item) => item.address)).toEqual(['/admin/users', '/admin/registrations']);
+    expect(admin?.items.map((item) => item.address)).toEqual(['/admin/users', '/admin/registrations', '/admin/auth-events']);
     // The dynamic row is never a menu link.
     expect(addressesIn(navigation)).not.toContain('/admin/users/[user_uid]');
     expect(addressesIn(navigation)).not.toContain('/expert-desk');

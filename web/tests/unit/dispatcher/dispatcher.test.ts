@@ -206,8 +206,8 @@ describe('the dispatcher screen', () => {
     }
     expect(markup).toContain('data-assignment-total="2"');
     expect(markup).toContain('Найдено: 2');
-    // the chips replaced the state select
-    expect(markup).not.toContain('<select');
+    // the chips replaced the state select (the creation form's own selects are another matter)
+    expect(markup).not.toMatch(/Состояние\s*<select/);
     // an expert reads the same chips over what the server lets them read
     expect(renderScreen(seeded(['expert']), createElement(DispatcherPage, { roles: ['expert'] }))).toContain('Назначено (7)');
   });
