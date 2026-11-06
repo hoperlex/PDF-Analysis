@@ -15,10 +15,12 @@ after host verification.
 | `v0.6.0` | `37393a979a430e490843d7f410e9eca9491a4ea1` | `bf03d913bde596a77` (computed from tagged tree) | not measured (stand environment) | `1.0.0-draft.1` | `0021_portal_bundles` | `934705c04a71…` | `30053740f569…` | `W55B-INT-MAIN-PREP-03.md` (R-125 same-SHA gate completion); deploy run `38897018419`, owner-run host verification in `W55B-INT-MAIN-VERIFY-ADDENDUM-01.md`; five live checks waived in `W55B-INT-TAG-01.md` | — (not promoted) |
 | `v0.7.0` — on `origin/main`, **host verification owed**, not tagged | `48c8e34ccd08a58ae61cbd09ecdba49066a5ad46` (the owner's pull request #3) | `bbbab3c0dfb856a39` computed from `git archive` of that SHA (`compute_build_id()`) | not measured (stand environment) | `1.0.0-draft.1` | `0028_classification_corrections` | `934705c04a71…` (builtin AR profile, unchanged since `v0.6.0`) | `30053740f569…` (builtin AR profile, unchanged since `v0.6.0`) | **none on this tree.** The owner merged pull requests #2 and #3 into `main` without a gate (`R-141e`); `NIGHT-1020-GATE-0-7-0-01.md` is an `R-125` completion of an earlier lineage and covers neither the classification correction, the normative references nor the hardening slices; light checks only (`RELEASE-0-7-0-RECORD-01.md`). Deploy workflow run `39571427597`, success, reported by the integrator and not re-read here; `infra/deploy/verify-deployed.sh` on the host: **pending** | none — the normative corpus is not imported on the stand |
 
-## `v0.12.1` development candidate — «График работ»
+## `v0.12.1` development candidate — «График работ», the runs table, dense screens
 
-`release-notes/0.12.1.json` (revision 1, 2026-11-06, one item): «График работ» (contract `1.31.0`, migration
-`0055_work_schedule`, `/schedule`), «Выполнено» and «Календарь запаса». A patch version on the day of `0.12.0`, because
+`release-notes/0.12.1.json` (revision 1, 2026-11-06, three items): «График работ» (contract `1.31.0`, migration
+`0055_work_schedule`, `/schedule`), «Выполнено» and «Календарь запаса»; the version's runs as a dense table (lane A,
+`67a62928`); the second density pass over norms, settings, administration, account, logs and optimisation (lane B,
+`22c63209`). A patch version on the day of `0.12.0`, because
 `0.12.0` is full at seven items; the owner removed the strictly-later-date rule on 2026-11-06 (versions of one day may
 share its date). On `origin/dev` only; `VERSION` is `0.12.1`.
 

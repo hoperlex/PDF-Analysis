@@ -63,7 +63,8 @@ function countOf(path: string): number {
  * case of this file prints the same sum when it fails. Lower it when you remove literals;
  * raising it needs a reason a reader can check.
  */
-const CEILING = 560;
+// 2026-11-06: the schedule modules and the second density pass replaced their literals with tokens (628 -> 442).
+const CEILING = 442;
 
 describe('the CSS modules spell no more lengths than they did on 2026-11-02', () => {
   it('reads the modules of the whole tree', () => {
