@@ -24,15 +24,22 @@
  * Under the two panes, a finding that carries v2 fields shows what it rests on
  * (`FindingBasis`, `REVIEW-V2-UI-01`): the required and stated values, the norm citations and
  * the merged observations. A finding without them shows nothing more than it ever did.
+ *
+ * Two presentations. `inline` sits in the review column; its bar offers «Во весь экран» when the
+ * screen can open one (`onExpand`). `full` fills the box it is given, as the original's block view
+ * does: the page takes the height and a plain wheel zooms it, and the side column scrolls on its
+ * own, carrying what the screen puts there (`aside`: the finding and its ✓/✕), the quotations and
+ * the basis. Both offer «Открыть PDF», the whole document in the browser's reader on this page.
  */
 
 import { useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import type { FindingObservation, VersionBlockIndex } from '@/shared/api';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState } from '@/shared/ui';
 import type { TargetResolution } from '@/features/open-evidence';
-import { PageViewer } from '@/features/open-evidence';
+import { PageViewer, pdfPageUrl } from '@/features/open-evidence';
 import {
   declaredPages,
   evidenceOnPage,
@@ -41,6 +48,7 @@ import {
 
 import { FindingBasis } from './finding-basis';
 import { quotationTargetId, quotationTargets } from '../model/quotation-targets';
+import styles from './evidence-viewer.module.css';
 import { QuotationCard } from './quotation-card';
 
 export interface EvidenceViewerProps {
@@ -58,6 +66,12 @@ export interface EvidenceViewerProps {
    * null while it is unavailable. Without it the quotations are searched in the page text.
    */
   readonly blockIndex?: VersionBlockIndex | null | undefined;
+  /** `inline` in the review column (the default), or `full` filling a full-screen view. */
+  readonly presentation?: 'inline' | 'full' | undefined;
+  /** Inline only: opens the full-screen view; without it the bar offers none. */
+  readonly onExpand?: (() => void) | undefined;
+  /** Full only: what the screen shows above the quotations (the finding and its decision). */
+  readonly aside?: ReactNode;
 }
 
 /** What a reader has chosen, and the page it was chosen on: a new finding or page forgets it. */
@@ -77,8 +91,14 @@ function EvidencePanes({
   isLoading,
   error,
   blockIndex,
-}: Pick<EvidenceViewerProps, 'observation' | 'documentUrl' | 'isLoading' | 'error' | 'blockIndex'> & {
+  full,
+  aside,
+  basis,
+}: Pick<EvidenceViewerProps, 'observation' | 'documentUrl' | 'isLoading' | 'error' | 'blockIndex' | 'aside'> & {
   readonly page: number;
+  readonly full: boolean;
+  /** Full only: the basis, at the foot of the side column instead of under the panes. */
+  readonly basis: ReactNode;
 }) {
   const quotations = useMemo(() => evidenceOnPage(observation, page), [observation, page]);
   const scope = `${observation.finding_observation_id}:${page}`;
@@ -101,8 +121,8 @@ function EvidencePanes({
   };
 
   return (
-    <div className="am-evidence__panes">
-      <div className="am-evidence__page">
+    <div className={full ? `am-evidence__panes ${styles.fullPanes}` : 'am-evidence__panes'}>
+      <div className={full ? `am-evidence__page ${styles.fullPage}` : 'am-evidence__page'}>
         {isLoading === true ? <LoadingState what="страницу документа" /> : null}
         {error !== undefined && error !== null ? <ErrorState {...error} /> : null}
         {isLoading !== true && (error === undefined || error === null) ? (
@@ -127,12 +147,14 @@ function EvidencePanes({
                 setReported({ scope, value: results });
               }}
               label={`Страница ${page} проверяемого документа`}
+              fill={full}
             />
           )
         ) : null}
       </div>
 
-      <div className="am-evidence__quotations">
+      <div className={full ? `am-evidence__quotations ${styles.fullSide}` : 'am-evidence__quotations'}>
+        {full ? aside : null}
         <h3>Цитаты на странице {page}</h3>
         {/*
           * NO EMPTY BRANCH HERE, and its absence is the repair `D-85` asked for.
@@ -179,6 +201,7 @@ function EvidencePanes({
           Свидетельство — цитата: она показана точно так, как её прислал сервер, и по рамке не
           пересчитывается.
         </p>
+        {full ? basis : null}
       </div>
     </div>
   );
@@ -193,8 +216,12 @@ export function EvidenceViewer({
   isLoading,
   error,
   blockIndex,
+  presentation = 'inline',
+  onExpand,
+  aside,
 }: EvidenceViewerProps) {
   const pages = declaredPages(observation);
+  const full = presentation === 'full';
 
   if (pages.length === 0) {
     return (
@@ -211,9 +238,14 @@ export function EvidenceViewer({
   }
 
   const page = pages.includes(activePage) ? activePage : (pages[0] as number);
+  const basis = <FindingBasis observation={observation} mergedObservations={mergedObservations} />;
 
   return (
-    <div className="am-evidence" data-active-page={page}>
+    <div
+      className={full ? `am-evidence ${styles.full}` : 'am-evidence'}
+      data-active-page={page}
+      data-presentation={presentation}
+    >
       <nav className="am-evidence__pages" aria-label="Заявленные страницы">
         {pages.map((candidate) => (
           <button
@@ -233,6 +265,23 @@ export function EvidenceViewer({
         <span className="am-evidence__provider" data-provider-mode={observationProviderMode(observation)}>
           {observationProviderMode(observation) === 'live' ? 'живой вызов' : 'из записи'}
         </span>
+        {/* The whole document in the browser's own reader, opened on this page (the original's «↗»). */}
+        {documentUrl !== null ? (
+          <a
+            className={styles.tool}
+            href={pdfPageUrl(documentUrl, page)}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-open-document={page}
+          >
+            Открыть PDF ↗
+          </a>
+        ) : null}
+        {!full && onExpand !== undefined ? (
+          <button type="button" className={styles.tool} onClick={onExpand} data-expand-evidence="">
+            Во весь экран
+          </button>
+        ) : null}
       </nav>
 
       <EvidencePanes
@@ -242,9 +291,12 @@ export function EvidenceViewer({
         isLoading={isLoading}
         error={error}
         blockIndex={blockIndex}
+        full={full}
+        aside={aside}
+        basis={basis}
       />
 
-      <FindingBasis observation={observation} mergedObservations={mergedObservations} />
+      {full ? null : basis}
     </div>
   );
 }

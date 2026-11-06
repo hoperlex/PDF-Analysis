@@ -35,6 +35,8 @@ export type ViewerState = 'loading' | 'ready' | 'rendering' | 'failed';
 
 export interface PageViewerViewProps {
   readonly label: string;
+  /** The viewport fills its container's height and a plain wheel zooms (`PageViewer` `fill`). */
+  readonly fill?: boolean | undefined;
   readonly state: ViewerState;
   readonly documentUrl: string;
   /** The page the reader asked for. */
@@ -62,9 +64,11 @@ export interface PageViewerViewProps {
 }
 
 const HINT = 'Перетаскивайте страницу, Ctrl + колесо — масштаб, двойной щелчок — приблизить.';
+const FILL_HINT = 'Перетаскивайте страницу, колесо — масштаб, двойной щелчок — приблизить.';
 
 export function PageViewerView({
   label,
+  fill = false,
   state,
   documentUrl,
   pageNumber,
@@ -94,6 +98,7 @@ export function PageViewerView({
       data-viewer-state={state}
       data-viewer-src={documentUrl}
       data-viewer-page={pageNumber}
+      data-fill={fill ? 'true' : 'false'}
     >
       <div className={styles.stage}>
         <div
@@ -148,7 +153,7 @@ export function PageViewerView({
       </div>
       {drawn ? (
         <p className={styles.hint}>
-          <span>{HINT}</span>
+          <span>{fill ? FILL_HINT : HINT}</span>
           <span>{pageCount === null ? `Страница ${pageNumber}` : `Страница ${pageNumber} из ${pageCount}`}</span>
         </p>
       ) : null}

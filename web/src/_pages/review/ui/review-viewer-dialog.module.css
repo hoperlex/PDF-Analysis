@@ -1,0 +1,152 @@
+/*
+ * «Во весь экран» on «Разбор». The box is the original's block view: 94vh, at most 1600px wide, the
+ * page on the left and the panel on the right (`evidence-viewer.module.css`, `full`). Every colour,
+ * radius, gap and shadow is a global `--am-*` token.
+ */
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  width: min(1600px, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  height: 94vh;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: hidden;
+}
+
+.dialog::backdrop {
+  background: var(--am-ink);
+  opacity: 0.45;
+}
+
+.box {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-paper);
+}
+
+.steps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  flex: none;
+}
+
+.step,
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step:hover:not(:disabled),
+.close:hover {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+.step:disabled {
+  color: var(--am-ink-soft);
+  cursor: default;
+}
+
+.position {
+  min-width: 64px;
+  color: var(--am-ink-muted);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+  text-align: center;
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close {
+  flex: none;
+  font-size: var(--am-text-md);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap);
+}
+
+/* ---- the finding at the head of the side column ---------------------------------------- */
+
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
+  padding-bottom: var(--am-gap);
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
+.meta {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.text {
+  margin: 0;
+  font-weight: 600;
+  line-height: var(--am-leading-tight);
+}
+
+.recommendation {
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-left: 3px solid var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-ink);
+  font-size: var(--am-text-sm);
+}
+
+@media (max-width: 900px) {
+  .dialog {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+}

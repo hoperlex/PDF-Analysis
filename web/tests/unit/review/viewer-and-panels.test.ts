@@ -231,7 +231,7 @@ describe('the page viewer is pointed at the declared page', () => {
     // Asserted on the viewer's root, not "somewhere in the markup": `data-active-page` belongs to
     // the screen and would stay right while the viewer was handed another page.
     expect(markup).toMatch(
-      new RegExp(`<div class="[^"]*" data-viewer-state="loading" data-viewer-src="${OBJECT_URL}" data-viewer-page="11">`),
+      new RegExp(`<div class="[^"]*" data-viewer-state="loading" data-viewer-src="${OBJECT_URL}" data-viewer-page="11" data-fill="false">`),
     );
   });
 
@@ -240,8 +240,13 @@ describe('the page viewer is pointed at the declared page', () => {
     // the fragment, and brought a toolbar and a thumbnail pane the product cannot hide.
     const markup = viewer(anchored({ quote: 'on page eleven', page_number: 11 }), 11);
     expect(markup).not.toContain('<object');
+    expect(markup).not.toContain('<iframe');
+    expect(markup).not.toContain('<embed');
     expect(markup).not.toContain('application/pdf');
-    expect(markup).not.toContain('#page=');
+    // The one `#page=` left is the link «Открыть PDF ↗», which opens the reader in a new tab on the
+    // cited page; nothing on this screen embeds it.
+    expect(markup).toContain(`href="${OBJECT_URL}#page=11" target="_blank" rel="noopener noreferrer" data-open-document="11"`);
+    expect(markup.replace(/<a [^>]*data-open-document="11"[^>]*>/, '')).not.toContain('#page=');
   });
 });
 
