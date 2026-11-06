@@ -15,29 +15,34 @@ import { parseRules } from '../styles/contrast';
 
 const read = (path: string): string => readFileSync(join(WEB_ROOT, 'src', path), 'utf8');
 const PAGE = read('_pages/knowledge-base/ui/knowledge-base-page.module.css');
+const WIDGET = read('widgets/knowledge-base/ui/knowledge-base.module.css');
 const area = (css: string, selector: string): string | undefined =>
   parseRules(css, 'module').find((rule) => rule.selector === selector)?.declarations.get('grid-area');
 
 describe('the findings and «Все» rows', () => {
   it('place the heading, the place line, the text, the comment and the author line on the grid', () => {
     expect({
-      heading: area(PAGE, '.results :global(.am-kb__heading)'),
-      place: area(PAGE, '.results :global(.am-kb__record > [data-record-place])'),
-      text: area(PAGE, '.results :global(.am-kb__text)'),
-      comment: area(PAGE, '.results :global(.am-kb__comment)'),
-      meta: area(PAGE, '.results :global(.am-kb__record > .am-kb__meta:last-child)'),
+      heading: area(WIDGET, '.records :global(.am-kb__heading)'),
+      place: area(WIDGET, '.records > :global(.am-kb__record) > [data-record-place]'),
+      text: area(WIDGET, '.records :global(.am-kb__text)'),
+      comment: area(WIDGET, '.records :global(.am-kb__comment)'),
+      meta: area(WIDGET, '.records > :global(.am-kb__record) > :global(.am-kb__meta):last-child'),
     }).toEqual({ heading: 'head', place: 'place', text: 'text', comment: 'comment', meta: 'meta' });
   });
 
-  it('are three columns and two lines, and stack below 900px', () => {
-    const record = parseRules(PAGE, 'module').find((rule) => rule.selector === '.results :global(.am-kb__record)');
+  it('are three columns and two lines, with the legend over the same three, and stack below 900px', () => {
+    const rules = parseRules(WIDGET, 'module');
+    const record = rules.find((rule) => rule.selector === '.records > :global(.am-kb__record)');
     expect(record?.declarations.get('display')).toBe('grid');
-    expect(record?.declarations.get('grid-template-columns')?.match(/minmax/g)).toHaveLength(3);
-    const stacked = /@media \(max-width: 900px\)\s*\{\s*\.results :global\(\.am-kb__record\)\s*\{[^}]*grid-template-areas:([^;]*);/.exec(PAGE);
+    const columns = record?.declarations.get('grid-template-columns');
+    expect(columns?.match(/minmax/g)).toHaveLength(3);
+    expect(rules.find((rule) => rule.selector === '.legend')?.declarations.get('grid-template-columns')).toBe(columns);
+    const stacked = /@media \(max-width: 900px\)\s*\{[^@]*grid-template-areas:([^;]*);/.exec(WIDGET);
     expect((stacked?.[1] ?? '').match(/'([a-z]+)'/g)).toEqual(["'head'", "'place'", "'text'", "'comment'", "'meta'"]);
   });
 
-  it('keep the three filters in a row, each label beside its control', () => {
+  it('keep the page free of the layout, which the widget owns, and the three filters in a row', () => {
+    expect(PAGE).not.toContain('grid-template-areas');
     const filter = parseRules(PAGE, 'module').find((rule) => rule.selector === '.filters :global(.am-kb__filter)');
     expect(filter?.declarations.get('flex-direction')).toBe('row');
   });

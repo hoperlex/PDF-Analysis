@@ -63,7 +63,9 @@ describe('the dashboard opens on its table', () => {
 
   it('keeps the module free of the poster and of fixed row heights', () => {
     const css = module('widgets/dashboard/ui/dashboard.module.css');
-    expect(css).not.toMatch(/orbit|heroArt|heroCopy|eyebrow|heroDescription/);
+    // The selectors, not the text: the comment above `.hero` names what it replaced.
+    const selectors = parseRules(css, 'module').map((rule) => rule.selector).join(' ');
+    expect(selectors).not.toMatch(/orbit|heroArt|heroCopy|eyebrow|heroDescription/);
     expect(declarations(css, '.hero').get('min-height')).toBeUndefined();
     const sections = module('widgets/dashboard/ui/sections-panel.module.css');
     for (const rule of parseRules(sections, 'module')) {
@@ -74,10 +76,11 @@ describe('the dashboard opens on its table', () => {
 
 describe("the section table's five numbers carry the original's inks", () => {
   const css = module('widgets/dashboard/ui/sections-panel.module.css');
-  const ink = (nth: number): string | undefined => declarations(css, `.metrics > :nth-child(${nth})`).get('color');
+  // A class per column, not `:nth-child`: the contrast census evaluates class selectors and declines positional ones.
+  const ink = (column: string): string | undefined => declarations(css, `.${column}`).get('color');
 
   it('reads the inks as tokens, in the original order: not run, awaiting, checked, all, remarks', () => {
-    expect([1, 2, 3, 4, 5].map(ink)).toEqual([
+    expect(['notRun', 'awaiting', 'checked', 'total', 'remarks'].map(ink)).toEqual([
       'var(--am-degraded)',
       'var(--am-accent-strong)',
       'var(--am-ok)',

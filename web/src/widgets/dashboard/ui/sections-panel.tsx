@@ -81,7 +81,7 @@ function SectionMetrics({
 }) {
   return (
     <span className={styles.metrics}>
-      <span className={styles.metric} title="Не запускались" data-metric="not-run">
+      <span className={`${styles.metric} ${styles.notRun}`} title="Не запускались" data-metric="not-run">
         {audit !== undefined && notRunHref !== null && audit.notRun > 0 ? (
           <Link
             className={styles.metricLink}
@@ -95,12 +95,12 @@ function SectionMetrics({
           (audit?.notRun ?? '—')
         )}
       </span>
-      <span className={styles.metric} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
+      <span className={`${styles.metric} ${styles.awaiting}`} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
         {audit?.noExpertDecision ?? '—'}
       </span>
-      <span className={styles.metric} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
-      <span className={styles.metric} title="Документы"><strong>{documents}</strong></span>
-      <span className={styles.metric} title="Находок">{audit?.findings ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.checked}`} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.total}`} title="Документы"><strong>{documents}</strong></span>
+      <span className={`${styles.metric} ${styles.remarks}`} title="Находок">{audit?.findings ?? '—'}</span>
     </span>
   );
 }

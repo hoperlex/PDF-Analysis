@@ -210,23 +210,23 @@
  * The original's colours by column (`dash-stat--todo/proc/done/total/find`): not run in the warning amber, without an
  * expert decision in the accent, checked in green, all in the muted ink, remarks in red. Tokens, so both palettes.
  */
-.metrics > :nth-child(1) {
+.notRun {
   color: var(--am-degraded);
 }
 
-.metrics > :nth-child(2) {
+.awaiting {
   color: var(--am-accent-strong);
 }
 
-.metrics > :nth-child(3) {
+.checked {
   color: var(--am-ok);
 }
 
-.metrics > :nth-child(4) {
+.total {
   color: var(--am-ink-muted);
 }
 
-.metrics > :nth-child(5) {
+.remarks {
   color: var(--am-failed);
 }
 

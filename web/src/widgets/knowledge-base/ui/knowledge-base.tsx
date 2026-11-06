@@ -44,6 +44,8 @@ import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
 
+import styles from './knowledge-base.module.css';
+
 /**
  * What narrows the list the reader is looking at, and the way back out of it (`D-313`). The page
  * passes it only while a category, a verdict or a project is chosen; it is then what makes an
@@ -223,6 +225,17 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
   );
 }
 
+/** The header line of the table of rows (`UI-B-34`); the columns are the rows' own, in `knowledge-base.module.css`. */
+function Legend() {
+  return (
+    <div className={styles.legend} aria-hidden="true">
+      <span>Находка и решение</span>
+      <span>Суть и комментарий</span>
+      <span>Кто и когда</span>
+    </div>
+  );
+}
+
 export function KnowledgeBase({ records: findingRecords, entries, isLoading, error, narrowing }: KnowledgeBaseProps) {
   if (isLoading === true) return <LoadingState what="базу знаний" />;
   if (error !== undefined && error !== null) return <ErrorState {...error} />;
@@ -246,7 +259,8 @@ export function KnowledgeBase({ records: findingRecords, entries, isLoading, err
   if (entries !== undefined && entries.length > 0) {
     return (
       <section className="am-kb" data-record-count={entries.length} data-knowledge-base-kind="all">
-        <ol className="am-kb__records">
+        <Legend />
+        <ol className={`am-kb__records ${styles.records}`}>
           {entries.map((entry) =>
             entry.kind === 'finding' && entry.finding !== undefined ? (
               <FindingRecordItem key={`finding:${entry.finding.decision_id}`} record={entry.finding} kindLabel />
@@ -310,7 +324,8 @@ export function KnowledgeBase({ records: findingRecords, entries, isLoading, err
 
   return (
     <section className="am-kb" data-record-count={records.length}>
-      <ol className="am-kb__records">
+      <Legend />
+      <ol className={`am-kb__records ${styles.records}`}>
         {records.map((record) => (
           <FindingRecordItem key={record.decision_id} record={record} />
         ))}
