@@ -91,16 +91,17 @@ describe('opening on the address', () => {
 });
 
 describe('the tabs', () => {
-  it('opens «Спецификация» by default and mounts nothing of «Принято»', () => {
+  it('opens «Спецификация» by default and mounts nothing of «Принято», whose number is the only thing read for it', () => {
     const { markup, client } = page({});
     expect(markup).toContain('data-section-optimisation-panel="specification"');
     expect(markup).toMatch(/aria-selected="true"[^>]*data-section-optimisation-tab="specification"/);
     expect(markup).toContain('data-section-specification');
     expect(markup).not.toContain('data-section-accepted');
-    expect(keys(client).filter((key) => (key as string[])[1] === 'accepted')).toEqual([]);
+    // The tab's number (`UI-B-22`) is the accepted list's own first page: the key the open tab would read.
+    expect(keys(client).filter((key) => (key as string[])[1] === 'accepted')).toEqual([acceptedKey({ sectionCode: 'AR' })]);
   });
 
-  it('opens «Принято» on the section and project of the address and reads only the accepted list', () => {
+  it('opens «Принято» on the section and project of the address; the specification is read for its number only', () => {
     const { markup, client } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B, tab: 'accepted' });
     expect(markup).toContain('data-section-optimisation-panel="accepted"');
     expect(markup).toContain('data-section-accepted');
@@ -108,7 +109,10 @@ describe('the tabs', () => {
     expect(selected(markup, 'KJ')).toBe(true);
     expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
     expect(keys(client)).toContainEqual(acceptedKey({ sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B }));
-    expect(keys(client)).not.toContainEqual(specificationKey('KJ', ACCEPTED_PROJECT_B));
+    // The specification tab is not mounted, but its number is read under the key the tab itself would use (once, whichever
+    // tab is open), for the section and project chosen and for no other.
+    expect(keys(client)).toContainEqual(specificationKey('KJ', ACCEPTED_PROJECT_B));
+    expect(keys(client).filter((key) => (key as string[])[1] === 'section-specification')).toHaveLength(1);
   });
 
   it('names both tabs', () => {

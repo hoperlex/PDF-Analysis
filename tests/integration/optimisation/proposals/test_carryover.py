@@ -398,3 +398,58 @@ def test_the_shipped_adapter_answers_the_frozen_shapes(unit, factory, cast, two_
     assert set(page["optimisation_pass"]) == set(contract["OptimisationPass"]["properties"])
     window = next(item for item in page["items"] if item["row_text"].startswith("Окно"))
     assert window["current_decision"]["carried_from"] == carried["carried_from"]
+
+
+def test_a_carried_decision_is_written_only_into_a_proposal_that_has_no_event(unit, factory, cast, two_passes) -> None:
+    """The insert itself: ``ON CONFLICT DO NOTHING`` on ``(proposal, seq)`` leaves an event that got there first alone, so
+    a concurrent ordinary decision is never overwritten and no lock per proposal is needed; and the foreign key refuses a
+    source that names no decision."""
+    from sqlalchemy.exc import IntegrityError
+
+    from auditmanager.ingest.public import CommandRepository, payload_fingerprint
+    from auditmanager.optimisation.proposals.identity import ProposalDecisionId
+    from auditmanager.optimisation.proposals.repository import ProposalRepository
+    from auditmanager.shared.identity import IdempotencyKey
+
+    old, new = _by_row(two_passes["old"]), _by_row(two_passes["new"])
+    source = _decide(unit, cast, old["Окно"].optimisation_proposal_id, "accept", "d-1").decision
+    free = new["Окно"].optimisation_proposal_id
+    touched = new["Анкер"].optimisation_proposal_id
+    _decide(unit, cast, touched, "reject", "n-1", "уже решено")
+
+    def attempt(session: Session, proposal: str, tag: str, carried_from: str) -> Any:
+        claim = CommandRepository().begin(
+            session,
+            command_type="carry_over_proposal_decision",
+            idempotency_key=IdempotencyKey(f"cry-race-{tag}-0123456789"),
+            fingerprint=payload_fingerprint({"command": "race", "tag": tag}),
+        )
+        return ProposalRepository().insert_carried_decision(
+            session,
+            decision_id=ProposalDecisionId.new(),
+            proposal_id=proposal,
+            verdict="accept",
+            comment=None,
+            actor_user_uid=cast.expert,
+            command_id=str(claim.command_id),
+            carried_from_decision_id=carried_from,
+        )
+
+    with session_scope(factory) as session:
+        written = attempt(session, free, "a", source.proposal_decision_id)
+        assert written is not None and written.seq == 1
+        assert written.carried_from is not None and written.carried_from.proposal_decision_id == source.proposal_decision_id
+        assert attempt(session, free, "b", source.proposal_decision_id) is None  # seq 1 is taken
+        assert attempt(session, touched, "c", source.proposal_decision_id) is None  # a direct decision got there first
+    histories = {
+        proposal: unit(list_proposal_decisions, optimisation_proposal_id=proposal, actor_roles=frozenset({"expert"}))
+        for proposal in (free, touched)
+    }
+    assert [(entry.verdict, entry.carried_from is not None) for entry in histories[free]] == [("accept", True)]
+    assert [(entry.verdict, entry.comment, entry.carried_from) for entry in histories[touched]] == [
+        ("reject", "уже решено", None)
+    ]
+    with pytest.raises(IntegrityError) as refused:
+        with session_scope(factory) as session:
+            attempt(session, new["Монтажная"].optimisation_proposal_id, "d", "opd_01M2545JSD15ETSNNV904XA001")
+    assert "fk_optimisation_proposal_decision_carried_from" in str(refused.value)
