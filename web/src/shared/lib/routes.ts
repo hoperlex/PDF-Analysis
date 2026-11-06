@@ -150,4 +150,7 @@ export const routes = {
 
   /** One account, addressed by its opaque identity rather than its display name. */
   user: (userUid: string): string => `/admin/users/${userUid}`,
+
+  /** The access journal: sign-ins and what changes an account's access (`UI-A-94`). */
+  authEvents: (): string => '/admin/auth-events',
 } as const;

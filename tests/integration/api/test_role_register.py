@@ -466,6 +466,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "restoreUser": ("POST", "/users/usr_01M2545JSD15ETSNNV904X991S/restore"),
     "purgeUser": ("DELETE", "/users/usr_01M2545JSD15ETSNNV904X991S"),
     "resetUserPassword": ("POST", "/users/usr_01M2545JSD15ETSNNV904X991S/password"),
+    "endUserSessions": ("POST", "/users/usr_01M2545JSD15ETSNNV904X991S/sessions/end"),
+    "listAuthEvents": ("GET", "/auth-events"),
 }
 
 _ANY: frozenset[str] = frozenset()
@@ -772,6 +774,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "restoreUser": _ADMIN,
     "purgeUser": _ADMIN,
     "resetUserPassword": _ADMIN,
+    "endUserSessions": _ADMIN,
+    "listAuthEvents": _ADMIN,
     "setJobPriority": _ADMIN,
     "setExecutionPaused": _ADMIN,
     "setWorkerIntake": _ADMIN,

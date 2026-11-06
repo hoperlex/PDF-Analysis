@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 270,
+    "path_count": 272,
     "operations": [
       [
         "DELETE",
@@ -42,6 +42,11 @@
         "GET",
         "/assignments/{assignment_uid}",
         "getAssignment"
+      ],
+      [
+        "GET",
+        "/auth-events",
+        "listAuthEvents"
       ],
       [
         "GET",
@@ -1390,6 +1395,11 @@
       ],
       [
         "POST",
+        "/users/{user_uid}/sessions/end",
+        "endUserSessions"
+      ],
+      [
+        "POST",
         "/work-schedule/reserve/moves",
         "scheduleAssignments"
       ],
@@ -1543,8 +1553,12 @@
       "AssignmentMove",
       "AssignmentPage",
       "AssignmentStatus",
+      "AssignmentStatusCount",
       "AssignmentTransitionKind",
       "AssignmentUid",
+      "AuthEvent",
+      "AuthEventPage",
+      "AuthEventType",
       "BlockGeometry",
       "CarryOverDecisionRequest",
       "CarryOverDecisionResponse",
@@ -2220,5 +2234,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0056_optimisation_decisions",
-  "contract_version": "1.35.0"
+  "contract_version": "1.36.0"
 }

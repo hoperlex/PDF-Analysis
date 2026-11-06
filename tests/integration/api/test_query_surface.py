@@ -1092,6 +1092,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         # below, in this test's transaction, and the caller is given `admin` to reach them.
         "listRegistrations": "/registrations",
         "listUsers": "/users",
+        "listAuthEvents": "/auth-events",
         # `W53-SEAL-01`: the two execution reads are served below through the
         # shipped ExecutionAdapter on this suite's rollback-joined session.
         "listExecutionQueue": "/execution/queue",
@@ -1170,6 +1171,7 @@ def test_every_declared_query_parameter_is_read_by_the_router_that_declares_it(
         "listDecisions": {"category", "cursor", "limit", "verdict", "project_uid"},
         "listRegistrations": {"status", "cursor", "limit"},
         "listUsers": {"include_archived", "cursor", "limit"},
+        "listAuthEvents": {"cursor", "limit"},
         # `UI-PARITY-QUEUE-A` (contract 1.18.0): the state and the half-open period over `created_at`.
         "listExecutionQueue": {"cursor", "limit", "state", "created_from", "created_to"},
         "listExecutionJournal": {"run_id", "cursor", "limit"},
@@ -1749,6 +1751,13 @@ def _seed_accounts_and_requests(session: Session, router: Surface) -> dict[str, 
     AccountRepository().archive_account(
         session, actor_uid=TEST_SUBJECT.user_uid, user_uid=str(gone.user_uid)
     )
+    # `listAuthEvents` (1.36.0): the access journal needs two lines for a page boundary to be visible.
+    from auditmanager.access import audit as access_audit
+
+    for _ in range(2):
+        access_audit.record_sign_in_succeeded(
+            session, subject_uid=str(kept.user_uid), default_credential=False
+        )
     return {
         "pending": pending.request_id,
         "rejected": rejected.request_id,
@@ -1997,6 +2006,25 @@ def test_list_assignments_reads_every_query_parameter_it_declares(
     scoped = listed(f"project_uid={first}&limit=200")
     if ids(scoped) != [mine]:
         inert.append("project_uid")
+
+    # Contract 1.36.0: `total` follows every filter, `overview` only the scope ones.
+    whole = ok(get(surface, "/assignments?limit=200"))
+    in_progress = ok(get(surface, "/assignments?status=in_progress&limit=1"))
+    scoped_page = ok(get(surface, f"/assignments?project_uid={first}&limit=200"))
+    counted = {entry["status"]: entry["count"] for entry in whole["overview"]}
+    if (
+        [entry["status"] for entry in whole["overview"]]
+        != ["assigned", "in_progress", "done", "returned", "cancelled"]
+        or whole["total"] != len(whole["items"])
+        or in_progress["total"] != len(progress)
+        or {entry["status"]: entry["count"] for entry in in_progress["overview"]} != counted
+        or counted["in_progress"] != len(progress)
+        or counted["assigned"] != len(assigned)
+        or scoped_page["total"] != 1
+        or {entry["status"]: entry["count"] for entry in scoped_page["overview"]}
+        != {"assigned": 0, "in_progress": 1, "done": 0, "returned": 0, "cancelled": 0}
+    ):
+        inert.append("total/overview")
 
     assert inert == [], f"listAssignments accepts and ignores: {inert}"
     refused = get(surface, "/assignments?status=open")

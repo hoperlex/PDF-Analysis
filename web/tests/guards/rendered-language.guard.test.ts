@@ -76,11 +76,13 @@ import type {
   StageStatus,
   VersionClassification as VersionClassificationRecord,
   Assignment,
+  AuthEvent,
   AssignmentDetail,
   VersionComparison,
 } from '@/shared/api';
 import { RUN_STATE_VALUES } from '@/shared/api';
 import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, classifyRunFailure } from '@/entities/audit-run';
+import { AUTH_EVENT_PAGE_LIMIT } from '@/entities/auth-event';
 import { USER_PAGE_LIMIT } from '@/entities/user';
 import { ASSIGNMENT_PAGE_LIMIT } from '@/entities/assignment';
 import { REGISTRATION_PAGE_LIMIT } from '@/entities/registration-request';
@@ -1086,7 +1088,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.35.0',
+    contract_version: '1.36.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1098,7 +1100,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.35.0',
+    contract_version: '1.36.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1254,6 +1256,8 @@ const KEYS = {
   account: queryKeys.account.me(),
   users: queryKeys.users.list({ includeArchived: false, limit: USER_PAGE_LIMIT }),
   user: queryKeys.users.detail('usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F'),
+  // Contract 1.36.0 (`UI-A-94`): «Журнал входов», seeded loaded, empty and (through `failedClient`) refused.
+  authEvents: queryKeys.users.authEvents({ limit: AUTH_EVENT_PAGE_LIMIT }),
   registrations: queryKeys.registrations.list({ limit: REGISTRATION_PAGE_LIMIT, status: 'pending' }),
   // `W55A-WEB-NORMS`: the «Нормы» screens' reads, under the keys their seeds ask for. The PDF
   // bytes (`norms.content`) are not seeded, so the document view's PDF panel reads pending.
@@ -1365,6 +1369,7 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.pendingRegistrations, { items: [], page, pending_total: 2 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [ADMIN_USER_ACCOUNT], page });
+  client.setQueryData(KEYS.authEvents, { items: AUTH_EVENTS, page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.registrations, { items: [QUEUE_REQUEST], page, pending_total: 1 });
   client.setQueryData(KEYS.executionQueue, {
@@ -1411,8 +1416,8 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.normDocument, normDocument());
   client.setQueryData(KEYS.normParagraphs, { items: NORM_PARAGRAPHS, page, source_attribution: 'consultant_plus' });
   client.setQueryData(KEYS.normCatalogue, NORM_CATALOGUE_PAGE);
-  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
-  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
+  client.setQueryData(KEYS.myTasks, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
   client.setQueryData(KEYS.assignment, ASSIGNMENT_DETAIL);
   return client;
 }
@@ -1473,6 +1478,7 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.journal, { items: [], page, total: 0 });
   client.setQueryData(KEYS.account, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.users, { items: [], page });
+  client.setQueryData(KEYS.authEvents, { items: [], page });
   client.setQueryData(KEYS.user, ADMIN_USER_ACCOUNT);
   client.setQueryData(KEYS.registrations, { items: [], page, pending_total: 0 });
   client.setQueryData(KEYS.executionQueue, { items: [], page, paused: false });
@@ -1490,8 +1496,8 @@ function emptyClient(): Client {
   client.setQueryData(KEYS.normSearch, { items: [], page });
   client.setQueryData(KEYS.normDocument, normDocument({ unreliable_paragraph_count: 0, paragraph_count: 0 }));
   client.setQueryData(KEYS.normParagraphs, { items: [], page, source_attribution: 'consultant_plus' });
-  client.setQueryData(KEYS.assignments, { items: [], page });
-  client.setQueryData(KEYS.myTasks, { items: [], page });
+  client.setQueryData(KEYS.assignments, { items: [], page, total: 0, overview: ASSIGNMENT_OVERVIEW_EMPTY });
+  client.setQueryData(KEYS.myTasks, { items: [], page, total: 0, overview: ASSIGNMENT_OVERVIEW_EMPTY });
   client.setQueryData(
     KEYS.dashboardSummary,
     dashboardSummary({
@@ -1534,7 +1540,7 @@ function pagedClient(loaded: (over?: Partial<RunStatus>) => Client): Client {
   client.setQueryData(KEYS.versions, { items: [version()], page });
   client.setQueryData(KEYS.runs, { items: [run()], page });
   client.setQueryData(KEYS.journal, { items: [record()], page, total: 1 });
-  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page });
+  client.setQueryData(KEYS.assignments, { items: [...ASSIGNMENTS], page, total: ASSIGNMENTS.length, overview: ASSIGNMENT_OVERVIEW });
   return client;
 }
 
@@ -1862,6 +1868,7 @@ const ADMIN_USER_ACCOUNT: Account = {
   first_name: 'Анна',
   is_default_credential: false,
   last_name: 'Проверкина',
+  last_sign_in_at: '2026-11-05T09:30:15Z',
   login: 'проверкина@пример.испытание',
   middle_name: 'Сергеевна',
   profile_complete: true,
@@ -1895,6 +1902,14 @@ function assignment(letter: string, status: Assignment['status'], over: Partial<
   };
 }
 
+/** One line of each kind of the access journal (contract 1.36.0), one of them about an account since deleted. */
+const AUTH_EVENTS: readonly AuthEvent[] = [
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', event_type: 'sessions_ended', occurred_at: '2026-11-05T09:40:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', subject_label: 'Экспертова Д. Д.', actor_user_uid: ADMIN_USER_ACCOUNT.user_uid, actor_label: ADMIN_USER_ACCOUNT.display_label, source: 'api', role: null, failures: null, default_credential: null },
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', event_type: 'sign_in_succeeded', occurred_at: '2026-11-05T09:30:15Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', subject_label: 'Экспертова Д. Д.', actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: null, default_credential: true },
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', event_type: 'sign_in_blocked', occurred_at: '2026-11-05T09:20:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', subject_label: 'Экспертова Д. Д.', actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: 5, default_credential: null },
+  { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', event_type: 'role_granted', occurred_at: '2026-11-05T09:10:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', subject_label: null, actor_user_uid: null, actor_label: null, source: 'host_cli', role: 'admin', failures: null, default_credential: null },
+];
+
 const ASSIGNMENTS: readonly Assignment[] = [
   assignment('A', 'assigned', { note: 'Проверить армирование до пятницы' }),
   assignment('B', 'in_progress', { document_uid: DOCUMENT_UID, document_title: 'Пояснительная записка' }),
@@ -1906,6 +1921,14 @@ const ASSIGNMENTS: readonly Assignment[] = [
   assignment('D', 'done', { assignee_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', assignee_label: 'Экспертова Д. Д.' }),
   assignment('E', 'cancelled', { status_reason: 'Проект закрыт' }),
 ];
+
+/** The dispatcher's server counts for `ASSIGNMENTS` (contract 1.36.0), one assignment in each status. */
+const ASSIGNMENT_OVERVIEW: readonly { readonly status: Assignment['status']; readonly count: number }[] = [
+  { status: 'assigned', count: 1 }, { status: 'in_progress', count: 1 }, { status: 'done', count: 1 },
+  { status: 'returned', count: 1 }, { status: 'cancelled', count: 1 },
+];
+const ASSIGNMENT_OVERVIEW_EMPTY: readonly { readonly status: Assignment['status']; readonly count: number }[] =
+  ASSIGNMENT_OVERVIEW.map(({ status }) => ({ status, count: 0 }));
 
 const ASSIGNMENT_DETAIL: AssignmentDetail = {
   assignment: ASSIGNMENTS[2] as Assignment,
@@ -1944,7 +1967,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.35.0',
+    contract_version: '1.36.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2152,7 +2175,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.35.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.36.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -4396,7 +4419,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.35.0',
+            contract_version: '1.36.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4418,7 +4441,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.35.0',
+            contract_version: '1.36.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',

@@ -420,6 +420,15 @@ export const SCREEN_REGISTRY = [
     inMenu: true,
     projectScope: 'global',
   },
+  {
+    address: '/admin/auth-events',
+    label: 'Журнал входов',
+    group: 'admin',
+    access: 'session',
+    roles: ['admin'],
+    inMenu: true,
+    projectScope: 'global',
+  },
 
   {
     address: '/login',

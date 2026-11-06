@@ -678,6 +678,8 @@ describe('every screen address is built once and matches a route file on disk', 
       review: routes.review(PROJECT_UID, RUN_ID),
       user: routes.user(A_USER),
       users: routes.users(),
+      // `UI-A-94`: the user list links the access journal beside it.
+      authEvents: routes.authEvents(),
       // `W55A-WEB-NORMS`: the search's own address, and a document as a result's title links it.
       norms: routes.norms(),
       normDocument: routes.normDocument(NORM_DOCUMENT_ID),

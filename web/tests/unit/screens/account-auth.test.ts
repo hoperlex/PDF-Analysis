@@ -13,6 +13,7 @@ const ACCOUNT: Account = {
   first_name: 'Анна',
   is_default_credential: false,
   last_name: 'Петрова',
+  last_sign_in_at: null,
   login: 'petrova@example.org',
   middle_name: 'Сергеевна',
   profile_complete: true,

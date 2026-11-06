@@ -36,6 +36,8 @@ class AccountView:
     profile_complete: bool
     is_default_credential: bool
     archived_at: datetime | None
+    #: Contract 1.36.0: the latest successful sign-in recorded in the access journal, ``None`` when there is none.
+    last_sign_in_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +50,7 @@ class PersonNamesView:
 
 
 def account_body(view: AccountView) -> dict[str, Any]:
-    """Every property is required by the contract; the four that may be unknown are ``null``."""
+    """Every property is required by the contract; the five that may be unknown are ``null``."""
     return {
         "user_uid": view.user_uid,
         "login": view.login,
@@ -60,4 +62,5 @@ def account_body(view: AccountView) -> dict[str, Any]:
         "profile_complete": view.profile_complete,
         "is_default_credential": view.is_default_credential,
         "archived_at": None if view.archived_at is None else timestamp(view.archived_at),
+        "last_sign_in_at": None if view.last_sign_in_at is None else timestamp(view.last_sign_in_at),
     }

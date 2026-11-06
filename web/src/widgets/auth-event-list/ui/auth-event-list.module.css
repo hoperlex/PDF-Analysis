@@ -1,0 +1,11 @@
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+.table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.table th, .table td { padding: var(--am-gap-xs) var(--am-gap-sm); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.when { white-space: nowrap; }
+.detail { display: block; color: var(--am-ink-muted); font-size: var(--am-text-sm); }

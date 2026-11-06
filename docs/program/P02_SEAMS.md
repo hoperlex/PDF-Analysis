@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-298 operations, sealed. `A5` generates the typed client from this document; `B6`
+300 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1056,6 +1056,16 @@ column is the proposal's identity and the decisions loaded back from it by that 
 keyed decision event authored by the caller (`revoke` for «не решено» over a decision in force), and the report names every
 row that carries an ID or a decision.
 
+`UI-PARITY-ADMIN-C2` (contract `1.36.0`, no migration) brings the administrator's side of the original's «Пользователи»
+and the «Диспетчер» counts. `Account.last_sign_in_at` (`UI-A-92`, «Последний вход») is the instant of the account's latest
+`access.sign_in_succeeded` event, read from the access journal for the accounts an answer names and never by the seam's
+per-request standing read; `endUserSessions` (`UI-A-93`, «Завершить сеансы») is the keyed administrator write that raises
+an account's credential epoch and journals `access.sessions_ended` in the same transaction, so every credential the account
+holds is refused from its next request; `listAuthEvents` (`UI-A-94`, «Журнал входов») reads the same `audit_event` journal
+newest first with a cursor that is an event's own identity, an administrator's read that never sends the sequence and never
+holds a password, a token, an address or a login as typed. `listAssignments` answers `total` and the per-status `overview`
+the dispatcher's chips show, counted by the server over the scope filters and never from the page held.
+
 `UI-PARITY-KB-ALL` (contract `1.32.0`, no migration) adds `listKnowledgeBaseEntries` (`R-151h`, `D-317`): the knowledge
 base's «Все», both decision journals merged at the edge, newest first, each row naming its kind and carrying that
 journal's own record, so neither identity is replaced; a product read.
@@ -1187,6 +1197,8 @@ could.
 | `restoreUser` | `POST /users/{user_uid}/restore` |
 | `purgeUser` | `DELETE /users/{user_uid}` |
 | `resetUserPassword` | `POST /users/{user_uid}/password` |
+| `endUserSessions` | `POST /users/{user_uid}/sessions/end` |
+| `listAuthEvents` | `GET /auth-events` |
 | `getProductVersion` | `GET /system/version` |
 | `listReleases` | `GET /releases` |
 | `markReleaseNotesRead` | `PUT /me/release-notes` |
@@ -1431,7 +1443,7 @@ Rules that hold across the whole surface:
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
-  `setExecutionPaused`, `setWorkerIntake`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
+  `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
   `importRunDecisions`, `importOptimisationProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
@@ -1537,10 +1549,11 @@ Rules that hold across the whole surface:
   So an administrator takes back another account's credentials through `archiveUser`,
   `resetUserPassword` or a change of its role set in `updateUser`, each of which raises the
   generation, as `restoreUser` does. An administrator may not archive itself, reset its own
-  password or remove a role of its own, and the last active administrator can neither be
-  archived nor lose `admin` (`W49-PLAN.md` §3.2). There is still no operation whose only
-  effect is to revoke: taking credentials back from a shell — one account's, or everyone's —
-  remains an operator's action (`python -m auditmanager.access.revoke`).
+  password, end its own sessions or remove a role of its own, and the last active administrator
+  can neither be archived nor lose `admin` (`W49-PLAN.md` §3.2). Since contract `1.36.0`
+  (`UI-A-93`) one operation has no other effect than to revoke: `endUserSessions` ends every
+  session of one account and nothing else. Bulk revocation — everyone's credentials — remains an
+  operator's action from a shell (`python -m auditmanager.access.revoke`).
 
 ## 8. Owner decisions this seam register encodes
 

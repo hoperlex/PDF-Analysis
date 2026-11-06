@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.35.0 (OpenAPI 3.1.0)
- *   sha256 c8ab328555f3596ec6a552683576ee53352438f053044c3b0a15d0b4dd7cb139
+ *   AuditManager PC-01 API 1.36.0 (OpenAPI 3.1.0)
+ *   sha256 f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -40,6 +40,7 @@ import type {
   AssignmentPage,
   AssignmentStatus,
   AssignmentUid,
+  AuthEventPage,
   CarryOverDecisionRequest,
   CarryOverDecisionResponse,
   ChangePasswordRequest,
@@ -387,6 +388,7 @@ export const OPERATION_IDS = [
   'deleteComparisonReport',
   'dequeueComparisonAiSheetChanges',
   'downloadAgentPackage',
+  'endUserSessions',
   'enqueueComparisonLaunch',
   'estimateArV3GroupCost',
   'estimateComparisonAiPairCheck',
@@ -473,6 +475,7 @@ export const OPERATION_IDS = [
   'listAnalysisPresets',
   'listAnalysisProfiles',
   'listAssignments',
+  'listAuthEvents',
   'listComparisonAiLinks',
   'listComparisonAiPairHints',
   'listComparisonMatrixEdits',
@@ -2006,6 +2009,34 @@ export type DownloadAgentPackageInput = {
 
 /** Success body of `downloadAgentPackage` (`application/gzip`, HTTP 200). */
 export type DownloadAgentPackageResult = Blob;
+
+// ------------------------------------------------------------------------------------
+// endUserSessions - POST /users/{user_uid}/sessions/end
+// ------------------------------------------------------------------------------------
+
+/**
+ * End every session of an account.
+ *
+ * Requires `admin` and an `Idempotency-Key`. Raises the account's credential epoch, so every credential it holds -- in every browser and on every device -- is refused from its next request and it signs in again; its password, roles and sign-in brake are untouched. The event `sessions_ended` is journalled in the same transaction (`listAuthEvents`). Not oneself (`permission_denied`): an administrator ends their own sessions by changing their password. An archived or missing account is `not_found`. An exact repeat of the key answers the account unchanged and ends nothing more; the key under another account or another administrator is `idempotency_key_reuse`.
+ */
+export type EndUserSessionsInput = {
+  /** Path parameters, substituted into `/users/{user_uid}/sessions/end`. */
+  path: {
+    user_uid: UserUid;
+  };
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `endUserSessions` (`application/json`, HTTP 200). */
+export type EndUserSessionsResult = Account;
 
 // ------------------------------------------------------------------------------------
 // enqueueComparisonLaunch - POST /projects/{project_uid}/comparison-launch-queue/entries
@@ -3978,7 +4009,7 @@ export type ListAnalysisProfilesResult = AnalysisProfileList;
 /**
  * List assignments.
  *
- * Any one role. An administrator reads every assignment (`mine=true` narrows to the ones currently given to them); an expert reads only the assignments currently given to them, whatever `mine` says. `status` and `project_uid` narrow the list; newest first, ordered by `(created_at, assignment_uid)`.
+ * Any one role. An administrator reads every assignment (`mine=true` narrows to the ones currently given to them); an expert reads only the assignments currently given to them, whatever `mine` says. `status` and `project_uid` narrow the list; newest first, ordered by `(created_at, assignment_uid)`. `total` is the number of assignments the caller may read under every filter of the request, and `overview` gives each of the five statuses with its count over the scope filters only (`project_uid`, `mine` and what the caller may read), so each count is what choosing that status would list.
  */
 export type ListAssignmentsInput = {
   /** Query string parameters. */
@@ -3999,6 +4030,30 @@ export type ListAssignmentsInput = {
 
 /** Success body of `listAssignments` (`application/json`, HTTP 200). */
 export type ListAssignmentsResult = AssignmentPage;
+
+// ------------------------------------------------------------------------------------
+// listAuthEvents - GET /auth-events
+// ------------------------------------------------------------------------------------
+
+/**
+ * List the access journal.
+ *
+ * Requires `admin`. The append-only journal of sign-ins and what changes an account's access, newest first: `sign_in_succeeded`, `sign_in_blocked` (a refused attempt that started a cooling-off period, at most one per account per period -- refusals that start none and attempts on an unknown login are not journalled), `password_changed`, `password_reset`, `role_granted`, `role_revoked` and `sessions_ended`. An account is named by identity and by its label now; the journal never holds a password, a token, an address or a login as typed. The cursor is the last event's identity.
+ */
+export type ListAuthEventsInput = {
+  /** Query string parameters. */
+  query?: {
+    cursor?: Cursor;
+    limit?: number;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listAuthEvents` (`application/json`, HTTP 200). */
+export type ListAuthEventsResult = AuthEventPage;
 
 // ------------------------------------------------------------------------------------
 // listComparisonAiLinks - GET /projects/{project_uid}/documents/{document_uid}/comparison-ai-links
@@ -9046,6 +9101,20 @@ export const OPERATIONS = {
     errorStatuses: [422, 500, 503],
     tags: ['execution'],
   },
+  endUserSessions: {
+    operationId: 'endUserSessions',
+    method: 'POST',
+    path: '/users/{user_uid}/sessions/end',
+    pathParams: ['user_uid'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['users'],
+  },
   enqueueComparisonLaunch: {
     operationId: 'enqueueComparisonLaunch',
     method: 'POST',
@@ -10249,6 +10318,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 422, 500, 503],
     tags: ['dispatch'],
+  },
+  listAuthEvents: {
+    operationId: 'listAuthEvents',
+    method: 'GET',
+    path: '/auth-events',
+    pathParams: [],
+    queryParams: ['cursor', 'limit'],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 422, 500, 503],
+    tags: ['users'],
   },
   listComparisonAiLinks: {
     operationId: 'listComparisonAiLinks',

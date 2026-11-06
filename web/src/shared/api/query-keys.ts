@@ -122,6 +122,12 @@ export interface UserListFilters {
   readonly limit?: number;
 }
 
+/** Filters that make a page of `listAuthEvents` (the access journal, `UI-A-94`) a distinct cache entry. */
+export interface AuthEventListFilters {
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
 /** Filters that make a page of `listRegistrations` a distinct cache entry. */
 export interface RegistrationListFilters {
   readonly status?: RegistrationStatus;
@@ -581,6 +587,12 @@ export const queryKeys = {
     all: () => ['users'] as const,
     list: (filters: UserListFilters = {}) => ['users', 'list', filters] as const,
     detail: (userUid: UserUid) => ['users', 'detail', userUid] as const,
+    /**
+     * `listAuthEvents` (contract 1.36.0): the access journal. Under `users` and not a root of its own, because what
+     * writes it is an act on an account (a sign-in, a reset, ending the sessions), so a user command that
+     * invalidates `users.all()` refreshes the journal with it.
+     */
+    authEvents: (filters: AuthEventListFilters = {}) => ['users', 'auth-events', filters] as const,
   },
   /**
    * `listRegistrations` — the requests waiting for, or past, an administrator's decision

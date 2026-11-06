@@ -82,7 +82,7 @@ export function runFindingsPage(items: Finding[]): FindingPage {
 export function accountFixture(roles: Account['roles']): Account {
   return {
     archived_at: null, display_label: 'Сьютова Е.', first_name: 'Е', is_default_credential: false,
-    last_name: 'Сьютова', login: 'e@suite.invalid', middle_name: null, profile_complete: true, roles,
+    last_name: 'Сьютова', last_sign_in_at: null, login: 'e@suite.invalid', middle_name: null, profile_complete: true, roles,
     user_uid: 'usr_01M59N8QNBVN91ACA2HCE6VE74',
   } as Account;
 }

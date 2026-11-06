@@ -11,7 +11,51 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.35.0` (`UI-PARITY-OPT-DECISIONS`)
+## Current contract `1.36.0` (`UI-PARITY-ADMIN-C2`)
+
+Slice for register rows `UI-A-92`, `UI-A-93` and `UI-A-94` (the administrator's side of the original's «Пользователи»)
+and the «Диспетчер» counts, **no migration** (head stays `0056`): the access journal already is the append-only
+`audit_event` table, written in the transaction of the change it describes (`PROD-06`, ADR-0023 section 4), so this slice
+reads it and adds one event type.
+
+- **«Последний вход»** (`UI-A-92`). `Account` gains the required, nullable `last_sign_in_at`: the instant of the
+  account's latest `access.sign_in_succeeded` event, `null` when none is recorded (it never signed in, or signed in before
+  the journal began). It is on every `Account` answer (`listUsers`, `getUser`, `getMe` and the account writes). It is read
+  from the journal for the accounts an answer names, in one statement for the page; the seam's own per-request standing
+  read does not touch the journal.
+- **«Завершить сеансы»** (`UI-A-93`). `endUserSessions` (`POST /users/{user_uid}/sessions/end`, `admin`, keyed) raises the
+  account's credential epoch, the mechanism archive, reset and a role change already use, so every credential the account
+  holds is refused from its next request (`401 authentication_required`) and it signs in again; the password, the roles and
+  the sign-in brake are untouched. It answers the `Account`. Not oneself (`403 permission_denied`: an administrator ends
+  their own sessions by changing their password); an archived or missing account is `404 not_found`. The key is claimed in
+  the transaction of the raise: an exact repeat answers the account unchanged and ends nothing more, the key under another
+  account or administrator is `409 idempotency_key_reuse`. A new event type, `access.sessions_ended`, is journalled in
+  that transaction (the seventh; the command type `end_user_sessions` is an account-side receipt the purge keeps).
+- **«Журнал входов»** (`UI-A-94`). `listAuthEvents` (`GET /auth-events`, `admin`, cursor) is the access journal, newest
+  first. Each row is an `AuthEvent`: its identity (`evt_`), `event_type` (`AuthEventType`: `sign_in_succeeded`,
+  `sign_in_blocked`, `password_changed`, `password_reset`, `role_granted`, `role_revoked`, `sessions_ended`), `occurred_at`,
+  the account it is about (`subject_user_uid` and `subject_label`, the label it has now, `null` once the account has been
+  deleted), the administrator who acted (`actor_user_uid`, `actor_label`; `null` for a sign-in, a refusal and a grant by the
+  host command), `source` (`api` or `host_cli`), and the three facts a type may carry (`role`, `failures`,
+  `default_credential`; `null` otherwise). The order is `(occurred_at, sequence)` and the cursor is the last event's own
+  identity; the sequence is never sent. **What the journal holds is what its writer allows**: identities, a role, a source
+  word, one boolean and one count -- never a password, a token, an address or a login as typed. **A refused sign-in is
+  journalled as `sign_in_blocked`, once per account per cooling-off period (ADR-0023 section 4); a refusal that starts none
+  and an attempt on an unknown login are not journalled** (an unknown login has no identity to name, and a row per guess
+  would let a guesser grow the table). **Sign-out is not journalled**: the web tier closes its own session and the API is
+  not told; an event for it needs an operation of its own.
+- **«Диспетчер»: the numbers of the state chips.** `AssignmentPage` gains the required `total` (the assignments the caller
+  may read under every filter of the request, the status included) and `overview` (`AssignmentStatusCount`: every one of
+  the five statuses with its count, in the order of `AssignmentStatus`, `0` for a status none is in) over the scope
+  filters only (`project_uid`, `mine` and what the caller may read), not the `status` filter, the way the execution queue's
+  `overview` counts its states: each count is what choosing that status would list. The numbers are the server's, never a
+  count of the page held.
+
+The API now has 272 paths, 300 operations and 722 schemas (the four new schemas are `AssignmentStatusCount`, `AuthEvent`,
+`AuthEventPage` and `AuthEventType`); migration head `0056`. The domain catalogs are at candidate revision 53. No error
+code is added.
+
+## Contract `1.35.0` (`UI-PARITY-OPT-DECISIONS`, historical)
 
 Slice for register rows `UI-B-12`, `UI-B-27` and `UI-B-15` (the optimisation decisions of the original that ours lacked),
 migration `0056_optimisation_decisions`:

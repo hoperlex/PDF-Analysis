@@ -14,6 +14,14 @@
   gap: 0.25rem;
 }
 
+/* The state chips (contract 1.36.0): one line of buttons that wraps. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
+}
+
 .tableWrap {
   max-height: min(68vh, 680px);
   overflow: auto;

@@ -145,7 +145,7 @@ const R66: Partial<Record<ScreenGroup, string[]>> = {
   // `R-151m`: «Блоки» is a tab of the version, out of the menu.
   knowledge: ['/knowledge-base', '/norms'],
   system: ['/logs', '/workers', '/analysis-settings', '/queue'],
-  admin: ['/admin/users', '/admin/registrations'],
+  admin: ['/admin/users', '/admin/registrations', '/admin/auth-events'],
   account: [],
   hidden: [],
 };
@@ -172,8 +172,9 @@ describe('the registry is the route tree: every page has a row and every row a p
     // «Диспетчер»: 28 -> 29. `CMP-VC-UI-01` added «Сравнение версий»: 29 -> 30.
     // `CMP-STAGE-PAIR-01` added «Сравнение стадий»: 30 -> 31. `R-151l` added «Раздел»: 31 -> 32. `R-151m` added
     // the version's «Блоки» tab: 32 -> 33. `UI-PARITY-P0P` added «График работ»: 33 -> 34.
-    expect(routeAddresses().length).toBe(34);
-    expect(REGISTRY.length).toBe(34);
+    // `UI-A-94` (contract 1.36.0) added «Журнал входов»: 34 -> 35.
+    expect(routeAddresses().length).toBe(35);
+    expect(REGISTRY.length).toBe(35);
   });
 
   it('has no page without a row and no row without a page', () => {
@@ -238,7 +239,7 @@ describe('every row has the shape §3.1 gives it', () => {
     expect(cycleFindings(REGISTRY)).toEqual([]);
   });
 
-  it('R-60: exactly the three administrator screens require admin; R-150w: four operator screens require expert or admin', () => {
+  it('R-60: exactly the four administrator screens require admin (the access journal is the fourth, 1.36.0); R-150w: four operator screens require expert or admin', () => {
     expect(REGISTRY.filter((row) => Array.isArray(row.roles)).map((row) => [row.address, row.roles])).toEqual([
       ['/dispatcher', ['expert', 'admin']],
       ['/schedule', ['expert', 'admin']],
@@ -248,6 +249,7 @@ describe('every row has the shape §3.1 gives it', () => {
       ['/admin/users', ['admin']],
       ['/admin/users/[user_uid]', ['admin']],
       ['/admin/registrations', ['admin']],
+      ['/admin/auth-events', ['admin']],
     ]);
     for (const address of ['/register', '/register/submitted']) {
       expect(REGISTRY.find((row) => row.address === address)).toMatchObject({
@@ -324,6 +326,7 @@ describe('R-66: the groups, their members and their order', () => {
     expect(labels['/projects']).toBe('Проекты');
     expect(labels['/admin/users']).toBe('Пользователи');
     expect(labels['/admin/registrations']).toBe('Заявки на регистрацию');
+    expect(labels['/admin/auth-events']).toBe('Журнал входов');
   });
 });
 

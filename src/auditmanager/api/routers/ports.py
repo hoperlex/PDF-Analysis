@@ -1107,6 +1107,17 @@ class AccountPort(Protocol):
     ) -> AccountView:
         """Set a temporary password the account must change at its next sign-in."""
 
+    def end_account_sessions(
+        self, *, actor_uid: str, user_uid: str, idempotency_key: str
+    ) -> AccountView:
+        """End every session of the account (contract 1.36.0, `UI-A-93`): its credential epoch rises, so its next
+        request is unauthenticated. Keyed: an exact repeat answers the account unchanged. Not oneself
+        (``permission_denied``); an archived or missing account is ``not_found``."""
+
+    def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
+        """The access journal, newest first, one page (contract 1.36.0, `UI-A-94`). The cursor is the last event's
+        identity and nothing else; an administrator's read, decided by the seam."""
+
 
 @runtime_checkable
 class RegistrationPort(Protocol):
@@ -1467,6 +1478,13 @@ class DispatchPort(Protocol):
         An administrator reads all (``mine`` narrows to their own); an expert always reads
         only the assignments currently given to them.
         """
+
+    def assignment_overview(
+        self, *, user_uid: str, mine: bool, project_uid: str | None
+    ) -> Sequence[models.AssignmentStatusCount]:
+        """Every status with the number of assignments in it, over the same scope as
+        :meth:`list_assignments` (``mine``, ``project_uid``, what the caller may read) and without its status
+        filter, in the order of the status vocabulary; a status with none is 0 (contract 1.36.0)."""
 
     def get_assignment(self, *, assignment_uid: str, user_uid: str) -> models.AssignmentDetail:
         """One assignment and its history; ``not_found`` when absent or not visible."""

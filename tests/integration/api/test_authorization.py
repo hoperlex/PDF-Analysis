@@ -150,6 +150,8 @@ GUARDED = (
     ("restoreUser", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/restore"),
     ("purgeUser", "DELETE", "/users/usr_01M2545JSD15ETSNNV904X991S"),
     ("resetUserPassword", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/password"),
+    ("endUserSessions", "POST", "/users/usr_01M2545JSD15ETSNNV904X991S/sessions/end"),
+    ("listAuthEvents", "GET", "/auth-events"),
     # W52 release reads and the signed-in account's own mark are guarded.
     ("getProductVersion", "GET", "/system/version"),
     ("listReleases", "GET", "/releases"),

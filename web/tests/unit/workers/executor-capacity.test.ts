@@ -251,7 +251,7 @@ describe('starting a form, and changing one field of a revision', () => {
 
 describe('the server’s refusals for the field are said in Russian', () => {
   const refusal = (details: Record<string, string>): ApiError => new ApiError(422, {
-    contract_version: '1.35.0', error_code: 'validation_failed', message: 'Safe.',
+    contract_version: '1.36.0', error_code: 'validation_failed', message: 'Safe.',
     correlation_id: 'cid-capacity-1', retryable: false, details,
   }, null);
   const said = (details: Record<string, string>): string => connectionFailure(refusal(details), true).detail;

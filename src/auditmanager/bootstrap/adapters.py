@@ -3018,8 +3018,12 @@ def _seam_role(role: str) -> str:
 # --------------------------------------------------------------------------------------
 
 
-def _account_view(account: Any) -> AccountView:
-    """``auditmanager.access.models.Account`` as the frozen ``Account`` shape."""
+def _account_view(account: Any, last_sign_in_at: datetime | None) -> AccountView:
+    """``auditmanager.access.models.Account`` as the frozen ``Account`` shape.
+
+    ``last_sign_in_at`` is the access journal's answer for this account (`UI-A-92`), read by the caller for the whole
+    set of accounts it renders: ``get_account`` itself does not read the journal, because the seam calls it on every
+    request."""
     record = account.record
     return AccountView(
         user_uid=str(record.user_uid),
@@ -3032,6 +3036,7 @@ def _account_view(account: Any) -> AccountView:
         profile_complete=record.profile_complete,
         is_default_credential=record.is_default_credential,
         archived_at=record.archived_at,
+        last_sign_in_at=last_sign_in_at,
     )
 
 
@@ -3075,20 +3080,20 @@ class AccountAdapter(_SessionHolder):
         account = self._accounts.get_account(session, user_uid)
         if account is None:
             raise _not_found("User")
-        return _account_view(account)
+        return _account_view(account, _last_sign_ins(session, [account]).get(user_uid))
 
     def get_account(self, *, user_uid: str) -> AccountView:
         return self._read(lambda session: self._view_of(session, user_uid))
 
     def list_accounts(self, *, include_archived: bool) -> Sequence[AccountView]:
-        return self._read(
-            lambda session: tuple(
-                _account_view(account)
-                for account in self._accounts.list_accounts(
-                    session, include_archived=include_archived
-                )
+        def work(session: Session) -> tuple[AccountView, ...]:
+            listed = self._accounts.list_accounts(session, include_archived=include_archived)
+            last = _last_sign_ins(session, listed)
+            return tuple(
+                _account_view(account, last.get(str(account.record.user_uid))) for account in listed
             )
-        )
+
+        return self._read(work)
 
     def update_my_profile(
         self,
@@ -3147,7 +3152,7 @@ class AccountAdapter(_SessionHolder):
             account = self._accounts.get_account(session, user_uid)
             if account is None or account.record.archived:
                 raise _not_found("User")
-            return _account_view(account)
+            return _account_view(account, _last_sign_ins(session, [account]).get(user_uid))
 
         return self._write(work)
 
@@ -3186,10 +3191,120 @@ class AccountAdapter(_SessionHolder):
 
         return self._write(work)
 
+    def end_account_sessions(
+        self, *, actor_uid: str, user_uid: str, idempotency_key: str
+    ) -> AccountView:
+        """``endUserSessions`` (contract 1.36.0, `UI-A-93`): the key is claimed in the transaction of the epoch's raise.
+
+        An exact repeat of the key (same account, same administrator) answers the account as it now stands and raises
+        nothing; another account or another administrator under the key is ``idempotency_key_reuse``. The rules --
+        not oneself, no archived or missing account -- are ``auditmanager.access``'s, checked on a first use only.
+        """
+        from auditmanager.ingest.public import CommandReplay, CommandRepository, payload_fingerprint
+
+        def work(session: Session) -> AccountView:
+            commands = CommandRepository()
+            claim = commands.begin(
+                session,
+                command_type=END_USER_SESSIONS_COMMAND,
+                idempotency_key=idempotency_key,
+                fingerprint=payload_fingerprint(
+                    {"command": "end_user_sessions.v1", "user_uid": user_uid, "actor_uid": actor_uid}
+                ),
+            )
+            if isinstance(claim, CommandReplay):
+                return self._view_of(session, user_uid)
+            self._accounts.end_sessions(session, actor_uid=actor_uid, user_uid=user_uid)
+            commands.succeed(session, claim.command_id, {"user_uid": user_uid})
+            return self._view_of(session, user_uid)
+
+        return self._write(work)
+
+    def list_auth_events(self, *, cursor: str | None, limit: int) -> models.AuthEventPage:
+        """``listAuthEvents``: the access journal, newest first. The cursor is an event identity (``evt_``)."""
+        from auditmanager.access.public import read_access_events
+
+        def work(session: Session) -> models.AuthEventPage:
+            after = _auth_event_cursor(cursor)
+            rows = read_access_events(session, after_event_id=after, limit=limit + 1)
+            items = rows[:limit]
+            labels = _JournalLabels(session, self._accounts)
+            return models.AuthEventPage(
+                items=[
+                    models.AuthEvent(
+                        event_id=row.event_id,
+                        event_type=models.AuthEventType(row.event_type.removeprefix("access.")),
+                        occurred_at=row.occurred_at,
+                        subject_user_uid=row.subject_uid,
+                        subject_label=labels.of(row.subject_uid),
+                        actor_user_uid=row.actor_uid,
+                        actor_label=None if row.actor_uid is None else labels.of(row.actor_uid),
+                        source=row.source,
+                        role=None if row.role is None else models.Role(row.role),
+                        failures=row.failures,
+                        default_credential=row.default_credential,
+                    )
+                    for row in items
+                ],
+                page=models.PageInfo(
+                    next_cursor=encode_cursor((items[-1].event_id,)) if len(rows) > limit else None
+                ),
+            )
+
+        return self._read(work)
+
+
+class _JournalLabels:
+    """Display labels for the accounts a journal page names, each read once. Unlike ``_Labels`` an account that
+    no longer exists is not a fault here: the journal outlives its accounts (a purge deletes the row, not the
+    trail), so such an identity has a ``None`` label."""
+
+    __slots__ = ("_accounts", "_known", "_session")
+
+    def __init__(self, session: Session, accounts: Any) -> None:
+        self._session = session
+        self._accounts = accounts
+        self._known: dict[str, str | None] = {}
+
+    def of(self, user_uid: str) -> str | None:
+        if user_uid not in self._known:
+            account = self._accounts.get_account(self._session, user_uid)
+            self._known[user_uid] = None if account is None else account.record.display_label
+        return self._known[user_uid]
+
+
+def _last_sign_ins(session: Session, accounts: Sequence[Any]) -> Mapping[str, datetime]:
+    """The latest successful sign-in of each of ``accounts``, one journal read for the set (`UI-A-92`)."""
+    from auditmanager.access.public import last_sign_in_times
+
+    return last_sign_in_times(session, [str(account.record.user_uid) for account in accounts])
+
+
+_AUTH_EVENT_ID = re.compile(r"^evt_[0-9A-HJKMNP-TV-Z]{26}$")
+
+
+def _auth_event_cursor(raw: str | None) -> str | None:
+    """The event identity a ``listAuthEvents`` cursor carries, or a typed refusal for anything else."""
+    if raw is None:
+        return None
+    parts = decode_cursor(raw)
+    if len(parts) != 1 or not _AUTH_EVENT_ID.fullmatch(parts[0]):
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="The cursor parameter is not a continuation token from this API.",
+            field="cursor",
+            constraint="format",
+        )
+    return parts[0]
+
 
 #: `W49-SEAL-01`. The command type an approval claims its idempotency key under, beside
 #: `append_decision` and the run and upload commands that share `command_record`.
 APPROVE_REGISTRATION_COMMAND = "approve_registration"
+
+#: Contract 1.36.0. The command type ``endUserSessions`` claims its idempotency key under; an account-side receipt, so
+#: ``scripts/recovery/product_purge.py`` keeps it with the access journal.
+END_USER_SESSIONS_COMMAND = "end_user_sessions"
 
 
 class RegistrationAdapter(_SessionHolder):
@@ -4801,6 +4916,26 @@ class DispatchAdapter(_SessionHolder):
             )
             labels = _Labels(session, accounts)
             return [_assignment_view(record, labels) for record in records]
+
+        return self._read(work)
+
+    def assignment_overview(
+        self, *, user_uid: str, mine: bool, project_uid: str | None
+    ) -> Sequence[models.AssignmentStatusCount]:
+        from auditmanager.access.public import AccountRepository
+        from auditmanager.dispatch.public import assignment_overview
+
+        def work(session: Session) -> list[models.AssignmentStatusCount]:
+            return [
+                models.AssignmentStatusCount(status=models.AssignmentStatus(status), count=count)
+                for status, count in assignment_overview(
+                    session,
+                    viewer_uid=user_uid,
+                    viewer_roles=AccountRepository().roles_of(session, user_uid),
+                    mine=mine,
+                    project_uid=project_uid,
+                )
+            ]
 
         return self._read(work)
 

@@ -297,6 +297,7 @@ describe('decision 4: a session lacking every role a screen lists is sent to /40
     ['/admin/users', {}],
     ['/admin/users/[user_uid]', { user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F' }],
     ['/admin/registrations', {}],
+    ['/admin/auth-events', {}],
   ] as const;
 
   it('applies the live admin rows to expert, empty, unknown and admin sessions', async () => {

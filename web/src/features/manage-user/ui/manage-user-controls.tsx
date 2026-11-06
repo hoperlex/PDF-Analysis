@@ -3,10 +3,15 @@
 /**
  * The administrator's controls for one account (`W51`).
  *
- * Two of them take effect at once and cannot be taken back by pressing again, so both ask
+ * Three of them take effect at once and cannot be taken back by pressing again, so all ask
  * first (`C-24`): «Архивировать» refuses every credential the account holds from its next
- * request, and «Удалить навсегда» removes it. Each shows a confirmation group with its own
- * «Подтвердить …» and «Отмена»; nothing is sent until the confirmation is pressed.
+ * request, «Удалить навсегда» removes it, and «Завершить сеансы» (contract 1.36.0, `UI-A-93`)
+ * refuses every credential it holds from its next request and nothing else, leaving the
+ * account active. Each shows a confirmation group with its own «Подтвердить …» and «Отмена»;
+ * nothing is sent until the confirmation is pressed. The sessions' command is keyed: the key is
+ * minted when the confirmation opens and held until it succeeds or is cancelled, so a retry of
+ * the same intent is a replay and a new intent is a new command. It is not offered for the
+ * signed-in account (the server refuses it: one's own sessions end with a new password).
  *
  * When the account is the signed-in one (`isSelf`), a successful change also re-renders the
  * server components (`router.refresh()`, `C-20`), so the frame's name and menu — read once
@@ -18,7 +23,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 
 import type { Account } from '@/shared/api';
-import { ROLE_VALUES } from '@/shared/api';
+import { ROLE_VALUES, newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { ASSIGNABLE_ROLES, roleLabels, rolesCombinationAllowed } from '@/entities/account';
 import { userFailure } from '@/entities/user';
@@ -39,6 +44,8 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
   const manage = useManageUser(account.user_uid);
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  // The key of the open «Завершить сеансы» confirmation, or `null` while none is open.
+  const [endSessionsKey, setEndSessionsKey] = useState<string | null>(null);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [rolesRefused, setRolesRefused] = useState(false);
 
@@ -117,6 +124,13 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
               <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmArchive(false)}>Отмена</button>
             </div>
           ) : <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setConfirmArchive(true)}>Архивировать учётную запись</button>}
+          {isSelf ? null : endSessionsKey !== null ? (
+            <div role="group" aria-label="Подтверждение завершения сеансов">
+              <p className="am-note">Завершить все сеансы {account.login}? Пользователю придётся войти снова. Пароль, роли и состояние учётной записи не изменятся.</p>
+              <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { void execute({ kind: 'end-sessions', idempotencyKey: endSessionsKey }).then((succeeded) => { if (succeeded) setEndSessionsKey(null); }); }}>Подтвердить завершение сеансов</button>
+              <button className="am-button am-button--quiet" type="button" onClick={() => setEndSessionsKey(null)}>Отмена</button>
+            </div>
+          ) : <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setEndSessionsKey(newIdempotencyKey())}>Завершить сеансы</button>}
           <form className="am-form" onSubmit={resetPassword}>
             <h2>Временный пароль</h2>
             <p className="am-form__hint">После сброса все прежние пропуска отзываются, а новый пароль нужно будет сменить при следующем входе. Значение не показывается после отправки.</p>

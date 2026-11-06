@@ -45,7 +45,8 @@ const R66 = [
   'Знания: База знаний /knowledge-base, Нормы /norms',
   'Система: Журнал выполнения /logs, Исполнители /workers, Настройки анализа /analysis-settings, Очередь /queue',
 ];
-const ADMIN_MENU = 'Администрирование: Пользователи /admin/users, Заявки на регистрацию /admin/registrations';
+const ADMIN_MENU =
+  'Администрирование: Пользователи /admin/users, Заявки на регистрацию /admin/registrations, Журнал входов /admin/auth-events';
 
 describe('the live registry gives exactly R-66', () => {
   it('to a complete expert: Работа, Знания, Система, in that order and with those items', () => {

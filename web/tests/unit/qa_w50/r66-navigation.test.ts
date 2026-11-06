@@ -170,6 +170,7 @@ describe('R-66: the menu’s groups and items equal the ruling’s, in order', (
         items: [
           { address: '/admin/users', label: 'Пользователи' },
           { address: '/admin/registrations', label: 'Заявки на регистрацию' },
+          { address: '/admin/auth-events', label: 'Журнал входов' },
         ],
       });
     }
