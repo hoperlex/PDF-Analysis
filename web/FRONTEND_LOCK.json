@@ -1,7 +1,7 @@
 {
   "lock_version": 1,
   "purpose": "Everything a later regeneration needs to prove the committed API client matches its input: the toolchain pins, the exact generator invocation, and the exact OpenAPI bytes the client was generated from. Verified by web/tests/guards/frontend-lock.guard.test.ts, which recomputes every digest here and fails if one has moved.",
-  "owner": "HOTFIX-PRESENTATION-INT-1030 sole integrator",
+  "owner": "HOTFIX-RUN-PARTIAL-1106 integrator",
   "toolchain": {
     "node": "22.23.1",
     "npm": "10.9.8",
@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c",
-    "content_commit": "55f3108b",
-    "content_commit_subject": "feat(contract): 1.32.0 — the knowledge base's «Все» (D-317, R-151h, UI-PARITY-KB-ALL)",
-    "dispatch_named_commit": "55f3108b7cd16409c922a52d95768b9bc19865cf",
-    "commit_note": "Resealed by UI-PARITY-KB-ALL: contract 1.32.0 (contract 1.32.0 adds listKnowledgeBaseEntries (D-317).).",
+    "sha256": "f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f",
+    "content_commit": "0976d3a637fa434485d5d83d8f64536a69061524",
+    "content_commit_subject": "fix(run): retain partial work and remove Codex answer delivery caps",
+    "dispatch_named_commit": "0976d3a637fa434485d5d83d8f64536a69061524",
+    "commit_note": "Contract 1.33.0 removes the runner answer-text character ceiling; same paths, operations and schemas.",
     "openapi_version": "3.1.0",
-    "info_version": "1.32.0",
+    "info_version": "1.33.0",
     "paths": 267,
     "operations": 295,
     "component_schemas": 711,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "b5fc3f601bbc5c884a5509306ae4a373884e148f94a748db5b5c2285964bcc3c",
+    "snapshot_sha256": "f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "e6b55a01ae5f8232674d59c6cf09b7fddc6e35d8a5c5ba93b3de128a3d8baa11",
-      "index.ts": "89d1f8ab81388c3dff3eaf29f1969a6fd8c4e8853888e61706929df77451a567",
-      "operations.gen.ts": "b300c43c74660d1a636ca694ab0375bce318924cc45b2f6a57976eec7d264b99",
-      "types.gen.ts": "147985802bc185e8958afe5c0cdc66c6acc2e41de44d1b1986f96aaf79628e42"
+      "client.gen.ts": "f656e658a336ebe7af0f08dfd75f316fb8056886103435ee6f42c7b7be7c2ad5",
+      "index.ts": "fdce1db4908f91a0d786cb3b72221293ca38ec272c402541edbe59a3d2de5924",
+      "operations.gen.ts": "6fe22b6378aa08d8fbd1866a3d09474eba1b50e17e66ea2cca841f025774773e",
+      "types.gen.ts": "314c78eddfc868c348724b454f30ba8579f62b5195d5ee6ac3ad06e41ce7c7d9"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

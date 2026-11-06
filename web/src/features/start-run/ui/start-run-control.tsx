@@ -291,8 +291,8 @@ function StartRunControlInner({ projectUid, versionUid, onStarted }: StartRunCon
       </label>
       <p className="am-note">
         {relaxedLimits
-          ? 'Прикладной денежный потолок отключён; фактические вызовы и расход записываются. Ответ до 64 000 токенов за вызов, предел провайдера может быть ниже.'
-          : 'Запрос на ответ до 16 000 токенов. Лимит стоимости подтверждается отдельно.'}
+          ? 'Прикладной денежный потолок отключён; фактические вызовы и расход записываются.'
+          : 'Лимит стоимости подтверждается отдельно.'}
       </p>
       <button type="button" className="am-button" disabled={locked || !complete} onClick={() => { mutation.reset(); cost.request(); }}>
         Оценить стоимость

@@ -9,8 +9,10 @@ dedicated local account whose Codex CLI was signed in with ChatGPT interactively
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -24,7 +26,6 @@ from pathlib import Path
 
 MODEL = "gpt-6-sol"
 MAX_TASK_BYTES = 1024 * 1024
-MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 #: ADR-0025 decision 18: up to eight images, 32 MiB together; each is a portal-block crop or an opaque crop.
 MAX_IMAGES = 8
@@ -32,11 +33,65 @@ MAX_TOTAL_IMAGE_BYTES = 32 * 1024 * 1024
 _IMAGE_KEYS = ("blob_id", "sha256", "size_bytes", "media_type")
 _IDENTITY = {"portal_block_id": re.compile(r"blk_[0-9a-f]{32}"),
              "crop_id": re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")}
-TIMEOUT_SECONDS = 510
 
 
 class TaskError(Exception):
     pass
+
+
+def _deadline(task: dict) -> float:
+    raw = os.environ.get("PDF_ANALYSIS_COMMAND_DEADLINE_MONOTONIC")
+    if raw is not None:
+        try:
+            deadline = float(raw)
+        except ValueError:
+            raise TaskError("invalid_command_deadline") from None
+        if not math.isfinite(deadline):
+            raise TaskError("invalid_command_deadline")
+        return deadline
+    # Direct callers can supply the task deadline; the agent supplies its clock-adjusted
+    # monotonic deadline above. No independent wall-clock cap is imposed on the CLI.
+    raw = task.get("deadline_at")
+    if raw is None:
+        return math.inf
+    try:
+        instant = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if instant.tzinfo is None:
+            raise ValueError
+        return time.monotonic() + instant.timestamp() - time.time()
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        raise TaskError("invalid_task_deadline") from None
+
+
+def _timeout_diagnostics(events_path: Path, answer_path: Path, started: float) -> None:
+    # Retain only counts and allow-listed event names, never messages, prompts or tokens.
+    # Inspect a bounded tail for diagnostics only; successful output has no byte ceiling.
+    count, last, thread = 0, "none", "none"
+    size = events_path.stat().st_size
+    offset = max(0, size - 65536)
+    with events_path.open("rb") as events:
+        events.seek(offset)
+        lines = events.read(65536).splitlines()
+        if offset:
+            lines = lines[1:]
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            count += 1
+            kind = event.get("type")
+            if isinstance(kind, str) and re.fullmatch(r"[a-z][a-z0-9_.]{0,63}", kind):
+                last = kind
+            identity = event.get("thread_id")
+            if isinstance(identity, str) and re.fullmatch(r"[a-fA-F0-9-]{16,64}", identity):
+                thread = identity
+    answer_bytes = answer_path.stat().st_size if answer_path.exists() else 0
+    print(f"codex_diagnostic: elapsed_seconds={time.monotonic() - started:.1f} "
+          f"tail_events={count} last_event={last} thread_id={thread} "
+          f"event_bytes={size} answer_bytes={answer_bytes}", file=sys.stderr)
 
 
 def read_task(payload: bytes) -> dict:
@@ -187,6 +242,9 @@ def _codex_output_schema(schema: dict) -> dict:
 
 
 def answer(task: dict, *, codex: str | None = None) -> str:
+    deadline = _deadline(task)
+    if time.monotonic() >= deadline:
+        raise TaskError("codex_timeout")
     executable = codex or shutil.which("codex")
     if executable is None:
         raise TaskError("codex_cli_missing")
@@ -223,11 +281,13 @@ def answer(task: dict, *, codex: str | None = None) -> str:
             "--output-last-message", str(answer_path), "-", *image_args,
         ]
         with events_path.open("wb") as output:
+            if time.monotonic() >= deadline:
+                raise TaskError("codex_timeout")
             process = subprocess.Popen(
                 command, stdin=subprocess.PIPE, stdout=output, stderr=subprocess.DEVNULL,
                 cwd=root, env=_environment(), start_new_session=True,
             )
-            deadline = time.monotonic() + TIMEOUT_SECONDS
+            started = time.monotonic()
             first = True
             try:
                 while True:
@@ -237,9 +297,8 @@ def answer(task: dict, *, codex: str | None = None) -> str:
                         break
                     except subprocess.TimeoutExpired:
                         first = False
-                    if events_path.stat().st_size > MAX_OUTPUT_BYTES:
-                        raise TaskError("codex_output_too_large")
                     if time.monotonic() >= deadline:
+                        _timeout_diagnostics(events_path, answer_path, started)
                         raise TaskError("codex_timeout")
             finally:
                 if process.poll() is None:
@@ -250,16 +309,12 @@ def answer(task: dict, *, codex: str | None = None) -> str:
                     process.wait()
         if process.returncode != 0:
             raise TaskError("codex_failed")
-        if events_path.stat().st_size > MAX_OUTPUT_BYTES:
-            raise TaskError("codex_output_too_large")
         if not _events_completed(events_path.read_bytes()):
             raise TaskError("codex_turn_incomplete")
         try:
             raw = answer_path.read_bytes()
         except OSError:
             raise TaskError("codex_answer_missing") from None
-        if len(raw) > MAX_OUTPUT_BYTES:
-            raise TaskError("codex_answer_too_large")
         try:
             text = raw.decode("utf-8").strip()
             document = json.loads(text)
@@ -278,7 +333,7 @@ def main() -> int:
         # Reasons are fixed words; no task text, token or Codex output reaches stderr.
         print(f"codex_answer: {error if isinstance(error, TaskError) else 'local_io_error'}",
               file=sys.stderr)
-        return 1
+        return 124 if isinstance(error, TaskError) and str(error) == "codex_timeout" else 1
     return 0
 
 

@@ -18,6 +18,7 @@ import { ProjectParameters } from './project-parameters';
 import { NormativeContext } from './normative-context';
 import { NormativeSearches } from './normative-searches';
 import { extendedCandidateCounts } from './extended-review-summary';
+import { extendedExecutionReason } from './execution-reason';
 import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
@@ -169,13 +170,13 @@ export function ExtendedReviewView({ reading, projectUid }: { reading: ExtendedR
     {v2 ? <p>{fullWindow ? 'Этот прогон принят по плану V2 с обработкой полного документа по частям.' : 'Этот прогон принят по прежнему плану расширенного анализа.'} Новые критика, исправление и подготовка отчёта V3 ему не приписываются; для нового плана нужна свежая оценка и согласие в новом прогоне.</p> : null}
     {v3 ? <p>Рубрики учитывают специфику раздела. Числовые пороги и ссылки из исторических материалов — контекст, а не подтверждённые действующие нормы. Критика и исправление — рекомендации модели, решение остаётся за экспертом.</p> : null}
     {text(result?.rules_sha256) ? <details><summary>Происхождение рубрик раздела</summary><p>Отпечаток набора: <code>{text(result?.rules_sha256)}</code>.</p>{object(result?.source_provenance) ? <pre>{JSON.stringify(result?.source_provenance, null, 2)}</pre> : null}</details> : null}
-    {typeof result?.reason === 'string' ? <p role="status">{reasonLabels[result.reason] ?? 'Сервер сообщил ограничение выполнения; полное завершение не подтверждено.'}</p> : null}
+    {typeof result?.reason === 'string' ? <p role="status">{reasonLabels[result.reason] ?? extendedExecutionReason(result.reason, result.dependency)}</p> : null}
     {full ? <>
       <p>Продолжение базовых этапов. Ход расширенных процедур показан ниже.</p>
       {procedures.length === 0 ? <p>План расширенных процедур ещё не получен.</p> : <ol className={styles.procedures} aria-label="План полного анализа" data-extended-procedure-plan="">
         {procedures.map((procedure, index) => <li key={text(procedure.id) || index} data-extended-procedure={text(procedure.id)} data-procedure-status={text(procedure.status)}>
           <strong>{text(procedure.title) || 'Название процедуры не передано'}</strong> · {procedureLabels[text(procedure.status)] ?? 'Состояние не передано'}
-          {text(procedure.reason) ? <p>{reasonLabels[text(procedure.reason)] ?? 'Есть ограничение выполнения; проверьте источники и состояние прогона.'}</p> : null}
+          {text(procedure.reason) ? <p>{reasonLabels[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency)}</p> : null}
         </li>)}
       </ol>}
     </> : procedures.length === 0 && result?.reason === undefined ? <p>Полная цепочка для этого прогона не подтверждена сервером. Историческим прогонам новые процедуры не приписываются.</p> : null}

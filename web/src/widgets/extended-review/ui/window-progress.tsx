@@ -4,6 +4,7 @@ import { useState } from 'react';
 import styles from './extended-review.module.css';
 import { ObservationList } from './observation-list';
 import { BatchProgress } from './batch-progress';
+import { extendedExecutionReason } from './execution-reason';
 
 type RecordValue = Record<string, unknown>;
 function object(value: unknown): RecordValue | null { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RecordValue : null; }
@@ -26,10 +27,18 @@ export function WindowProgress({ windows: value, progress: reading, fallbackVers
 }) {
   const windows = objects(value);
   const progress = object(reading);
+  const successful = windows.filter((window) => window.status === 'completed').length;
+  const failed = windows.filter((window) => window.status === 'failed').length;
+  const skipped = windows.filter((window) => window.status === 'skipped').length;
+  const partial = windows.filter((window) => window.status === 'partial').length;
+  const unavailable = windows.filter((window) => window.status === 'unavailable').length;
   return <section id="extended-window-progress" aria-label="Окна анализа раздела" className={styles.windows} data-extended-windows="">
     <h3>Окна анализа</h3>
     <p>Объём и число окон определяются принятым серверным планом. Размер окна: до {count(progress?.window_size)} источников. Выполняется только объём принятой оценки; непроверенные источники не считаются исследованными.</p>
-    <p>Окон с итоговым состоянием: {count(progress?.completed)} из {count(progress?.total)}.</p>
+    {windows.length === 0 ? null : <>
+      <p>Полностью завершено окон: {successful} из {count(progress?.total)}.</p>
+      <p>С ошибкой: {failed}; частично: {partial}; пропущено: {skipped}; недоступно: {unavailable}.</p>
+    </>}
     {typeof progress?.visual_completed === 'number' ? <p>Визуальный проход сохранён для окон: {count(progress.visual_completed)}. Это ещё не завершение всей проверки окна.</p> : null}
     {typeof progress?.current === 'string' ? <p>Текущее окно: <code>{progress.current}</code>.</p> : null}
     {windows.length === 0 ? <p>План отдельных окон ещё не получен.</p> : <ol className={styles.windowList}>{windows.map((window, index) => {
@@ -37,13 +46,13 @@ export function WindowProgress({ windows: value, progress: reading, fallbackVers
       return <li key={text(window.window_id) || index} data-extended-window={text(window.window_id)} data-window-status={text(window.status)}>
         <details open={window.status === 'running' || window.status === 'failed' || window.status === 'partial'}>
           <summary>Окно {typeof window.index === 'number' ? window.index + 1 : index + 1} · {STATUS[text(window.status)] ?? 'Состояние не передано'}</summary>
-          {window.visual_phase_complete === true && window.status === 'running' ? <p>Визуальный проход сохранён; ожидаются оставшиеся процедуры окна.</p> : null}
+          {window.visual_phase_complete === true && window.status !== 'completed' ? <p>Визуальный проход сохранён. Остальные процедуры окна показаны отдельно ниже.</p> : null}
           {coverage === null ? null : <p>Исследовано источников: {count(coverage.blocks_processed)} из {count(coverage.blocks_selected ?? coverage.blocks_total)}.</p>}
-          {text(window.reason) ? <p>Ограничение: {text(window.reason)}.</p> : null}
+          {text(window.reason) ? <p>{extendedExecutionReason(window.reason, window.dependency)}</p> : null}
           <WindowBatches window={window} number={typeof window.index === 'number' ? window.index + 1 : index + 1} />
           <ol>{objects(window.procedures).map((procedure, number) => <li key={text(procedure.id) || number} data-window-procedure={text(procedure.id)}>
             {text(procedure.title) || 'Название не передано'} · {STATUS[text(procedure.status)] ?? 'Состояние не передано'}
-            {text(procedure.reason) ? <p>{text(procedure.reason)}</p> : null}
+            {text(procedure.reason) ? <p>{extendedExecutionReason(procedure.reason, procedure.dependency)}</p> : null}
           </li>)}</ol>
           <p>Сохранённых наблюдений окна: {objects(window.observations).length}. Все записи доступны в выгрузке, включая рекомендации и исправленные кандидаты.</p>
           {objects(window.observations).length === 0 ? null : <WindowObservations window={window} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} />}

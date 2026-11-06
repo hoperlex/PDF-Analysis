@@ -30,7 +30,7 @@ from auditmanager.shared.errors import CONTRACT_VERSION as DOMAIN_CONTRACT_VERSI
 from tests.support.expected_facts import FACTS
 
 ROOT = Path(__file__).resolve().parents[3]
-SEALED = "1.32.0"
+SEALED = "1.33.0"
 DRAFT = "1.0.0-draft.1"
 PREVIOUS = "1.31.0"
 FAMILIES = ("analysis", "domain", "events")
@@ -57,7 +57,7 @@ def _version_values(node: object, found: list[tuple[str, str]], where: str = "")
                 key == "const"
                 and isinstance(value, str)
                 and where.endswith(("/contract_version", "/name_map_contract_version"))
-                and value.startswith(("1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0", "1.16.0", "1.17.0", "1.18.0", "1.19.0", "1.20.0", "1.21.0", "1.22.0", "1.23.0", "1.24.0", "1.25.0", "1.26.0", "1.27.0", "1.28.0", "1.29.0", "1.30.0", "1.31.0", "1.32.0"))
+                and value.startswith(("1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0", "1.16.0", "1.17.0", "1.18.0", "1.19.0", "1.20.0", "1.21.0", "1.22.0", "1.23.0", "1.24.0", "1.25.0", "1.26.0", "1.27.0", "1.28.0", "1.29.0", "1.30.0", "1.31.0", "1.33.0"))
             ):
                 found.append((f"{where}/const", value))
             _version_values(value, found, f"{where}/{key}")

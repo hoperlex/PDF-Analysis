@@ -11,7 +11,12 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.32.0` (`UI-PARITY-KB-ALL`)
+## Current contract `1.33.0` (`HOTFIX-RUN-PARTIAL-1106`)
+
+Removes the application character ceiling on runner answer text. Request/response fields,
+paths and operations are unchanged. Analysis and event families share the new seal.
+
+## Previous contract `1.32.0` (`UI-PARITY-KB-ALL`)
 
 Slice for ruling `R-151h` and debt `D-317`: the knowledge base's «Все». `listKnowledgeBaseEntries` (`GET /knowledge-base/entries`,
 a product read, optional `project_uid` filter, cursor and `total`) lists the decisions on findings and on optimisation

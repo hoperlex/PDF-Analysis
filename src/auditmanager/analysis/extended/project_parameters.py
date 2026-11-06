@@ -244,27 +244,54 @@ def _literal_offset(value, text, *, unit=False, attached_unit=""):
     return -1
 
 
-def parse_reply(text, *, batch):
-    answer = _document(text); _validate(answer, response_schema())
-    source = batch["source"]; output = []
+def parse_reply(text, *, batch, rejected=None):
+    """Keep strict callers unchanged; an explicit collector contains individual bad facts.
+
+    Rejection receipts identify a row in the durably saved reply, never a replacement
+    quotation. Every accepted row still passes the original schema and literal guards.
+    """
+    answer = _document(text)
+    schema = response_schema()
+    if rejected is None:
+        _validate(answer, schema)
+    else:
+        envelope = deepcopy(schema)
+        envelope["properties"]["facts"]["items"] = {}
+        _validate(answer, envelope)
+    output = []
     for ordinal, raw in enumerate(answer["facts"]):
-        evidence = []
-        for item in raw["source_evidence"]:
-            relative = _literal_offset(item["quote"], source["quote"])
-            if item["source_id"] != source["source_id"] or relative < 0:
-                raise ValueError("project_parameters_quote_not_in_source")
-            start = source["character_start"] + relative
-            evidence.append({**deepcopy(item), "page_number": source["page_number"],
-                "character_field": source["character_field"], "character_start": start,
-                "character_end": start + len(item["quote"]), "entry_ordinal": source["entry_ordinal"],
-                "quote_occurrence": "first_exact_token_bound_match_in_provided_piece"})
-        if any(raw[field] and not any(_literal_offset(raw[field], row["quote"], unit=field == "unit",
-                attached_unit=raw["unit"] if field == "value" else "") >= 0
-                for row in evidence) for field in ("value", "unit", "subject")):
-            raise ValueError("project_parameters_value_not_in_quote")
-        fact = {**deepcopy(raw), "source_evidence": evidence, "source_ids": [source["source_id"]],
-            "batch_key": batch["batch_key"], "status": "requires_expert_review",
-            "reply_ordinal": ordinal,
-            "normative_verification": "not_performed", "unit_conversion_performed": False}
-        output.append({**fact, "fact_id": "ppf_" + digest(fact)[:32]})
+        try:
+            _validate(raw, schema["properties"]["facts"]["items"])
+            output.append(_parse_fact(raw, batch=batch, ordinal=ordinal))
+        except ValueError as error:
+            if rejected is None:
+                raise
+            reason = str(error)
+            if not reason.startswith("project_parameters_") or not reason.isidentifier():
+                reason = "project_parameters_fact_schema_invalid"
+            rejected.append({"batch_key": batch["batch_key"], "reply_ordinal": ordinal,
+                "source_id": batch["source"]["source_id"], "reason": reason})
     return output
+
+
+def _parse_fact(raw, *, batch, ordinal):
+    source = batch["source"]
+    evidence = []
+    for item in raw["source_evidence"]:
+        relative = _literal_offset(item["quote"], source["quote"])
+        if item["source_id"] != source["source_id"] or relative < 0:
+            raise ValueError("project_parameters_quote_not_in_source")
+        start = source["character_start"] + relative
+        evidence.append({**deepcopy(item), "page_number": source["page_number"],
+            "character_field": source["character_field"], "character_start": start,
+            "character_end": start + len(item["quote"]), "entry_ordinal": source["entry_ordinal"],
+            "quote_occurrence": "first_exact_token_bound_match_in_provided_piece"})
+    if any(raw[field] and not any(_literal_offset(raw[field], row["quote"], unit=field == "unit",
+            attached_unit=raw["unit"] if field == "value" else "") >= 0
+            for row in evidence) for field in ("value", "unit", "subject")):
+        raise ValueError("project_parameters_value_not_in_quote")
+    fact = {**deepcopy(raw), "source_evidence": evidence, "source_ids": [source["source_id"]],
+        "batch_key": batch["batch_key"], "status": "requires_expert_review",
+        "reply_ordinal": ordinal,
+        "normative_verification": "not_performed", "unit_conversion_performed": False}
+    return {**fact, "fact_id": "ppf_" + digest(fact)[:32]}

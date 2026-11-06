@@ -257,6 +257,9 @@ class PullAdapter:
         payload = {**payload, "output_schema": to_wire_schema(payload["output_schema"])}
         started = self._monotonic()
         task = self._write_task(payload, window)
+        _log.info("executor task=%s run=%s request_sha256=%s deadline_seconds=%.1f",
+                  task.task_id, getattr(self._context, "run_id", None),
+                  request.request_sha256, window)
         return self._await(task, started, window)
 
     # -- internals -------------------------------------------------------------------------
@@ -347,6 +350,11 @@ class PullAdapter:
             return _error("outcome_unknown", _DEPENDENCY_IMAGES,
                           "the runner cannot serve every image of the task and did not answer; "
                           "the outcome is unknown")
+        reason = (task.fail_reason or "").split(":", 1)[0].strip()
+        if reason in {"codex_timeout", "timeout"}:
+            return _error("outcome_unknown", "executor_codex_timeout" if reason == "codex_timeout"
+                          else _DEPENDENCY_DEADLINE,
+                          "the runner stopped waiting for the model; the outcome is unknown")
         return _error("outcome_unknown", _DEPENDENCY_FAILED,
                       "the runner reported that it could not answer; the outcome is unknown")
 

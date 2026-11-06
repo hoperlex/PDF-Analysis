@@ -1045,7 +1045,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.32.0"]
+    contract_version: Literal["1.33.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -5372,7 +5372,7 @@ class SubmitExecutorTaskAnswerRequest(_Object):
     it: an assertion the stand records as such, and holds equal to the connection's pinned model.
     The token counts are the runner's own; the call is recorded as unmetered."""
 
-    output_text: Annotated[str, Field(min_length=1, max_length=1000000)]
+    output_text: Annotated[str, Field(min_length=1)]
     model: Annotated[str, Field(min_length=1, max_length=200)]
     input_tokens: Annotated[int, Field(ge=0)] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property

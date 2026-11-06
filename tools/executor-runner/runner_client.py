@@ -293,7 +293,7 @@ class RunnerClient:
         data = None
         if body is not None:
             data = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-            if len(data) > MAX_REQUEST_BYTES:
+            if not path.endswith("/answer") and len(data) > MAX_REQUEST_BYTES:
                 raise RunnerRejected("request body is larger than 1 MiB", status=422, error_code="validation_failed")
             headers["Content-Type"] = "application/json; charset=utf-8"
         request = urllib.request.Request(url, data=data, method="POST", headers=headers)

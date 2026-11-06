@@ -18,4 +18,5 @@ mode = "command"
 [command]
 # Replace the path with the absolute path to this repository on this machine.
 argv = ["/usr/bin/python3", "/path/to/PDF-Analysis/tools/executor-runner/codex_answer.py"]
-timeout_seconds = 540
+# 0 uses the stand's remaining task time, including its clock adjustment.
+timeout_seconds = 0

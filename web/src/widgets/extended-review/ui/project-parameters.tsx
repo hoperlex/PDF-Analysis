@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SourceInspector } from './source-inspector';
+import { extendedExecutionReason } from './execution-reason';
 import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
@@ -55,6 +56,7 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
   const contextPages = Math.max(1, Math.ceil(contextReceipts.length / 25));
   const currentContextPage = Math.min(contextPage, contextPages - 1);
   const facts = objects(body.facts);
+  const rejectedFacts = objects(body.rejected_facts);
   const sources = new Map(objects(body.sources).map((entry) => [text(entry.source_id), entry] as const));
   const needle = search.trim().toLocaleLowerCase('ru');
   const filtered = facts.filter((fact) => (kind === 'all' || fact.parameter_type === kind) && (!needle ||
@@ -65,6 +67,8 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
     <h3>Параметры проекта из источников</h3>
     <p><strong>{STATUS[text(body.status)] ?? 'Состояние ещё не получено'}</strong>. Это предварительно извлечённые значения, а не утверждённый паспорт или проверка норм. Разные объекты и значения сохраняются отдельно; единицы не пересчитывались.</p>
     <p>Обращений по принятому плану: до {count(policy?.max_calls)} на весь прогон. Завершено: {count(coverage?.calls_completed)}. Сохранено кандидатов: {facts.length}.</p>
+    {typeof coverage?.facts_rejected === 'number' ? <p>Отклонено при проверке источников: {count(coverage.facts_rejected)}. Эти записи не включены в параметры проекта.</p> : null}
+    {rejectedFacts.length > 0 ? <details><summary>Причины отклонения параметров · {rejectedFacts.length}</summary><ul>{rejectedFacts.map((fact, index) => <li key={`${text(fact.batch_key)}:${count(fact.reply_ordinal)}:${index}`}>{extendedExecutionReason(fact.reason)}</li>)}</ul><pre>{JSON.stringify(rejectedFacts, null, 2)}</pre></details> : null}
     {contextPolicy === null ? null : <section aria-label="Контекст параметров для изображений"><p>По принятой политике параметры подготавливаются перед визуальным проходом. В один запрос изображений может войти до {count(contextPolicy.max_facts)} полных кандидатов, в пределах {count(contextPolicy.max_characters)} символов контекста. Новые модельные шаги ради передачи контекста не добавляются.</p><p>Подготовлено квитанций контекста: {contextReceipts.length}; сохранён ответ на запрос: {contextReceipts.filter((receipt) => receipt.response_received === true).length}. Переданный контекст не является визуальным подтверждением или решением эксперта.</p><details onToggle={(event) => setShowContext(event.currentTarget.open)}><summary>Фактически подготовленный контекст и ответы</summary>{showContext ? <><p>Квитанции {currentContextPage + 1} из {contextPages}; до25 на странице. Все записи доступны в полной выгрузке.</p><pre>{JSON.stringify(contextReceipts.slice(currentContextPage * 25, (currentContextPage + 1) * 25), null, 2)}</pre>{contextReceipts.length > 25 ? <nav className={styles.toolbar} aria-label="Страницы визуального контекста"><button type="button" className="am-button am-button--quiet" disabled={currentContextPage === 0} onClick={() => setContextPage(currentContextPage - 1)}>Предыдущие</button><button type="button" className="am-button am-button--quiet" disabled={currentContextPage + 1 >= contextPages} onClick={() => setContextPage(currentContextPage + 1)}>Следующие</button></nav> : null}</> : null}</details></section>}
     <ReviewParameterContext body={body} />
     <dl className={styles.coverageGrid}>
@@ -76,7 +80,7 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
     </dl>
     {coverage?.selection_complete === false ? <p>Часть текста находится вне принятого или ресурсного окна. Отсутствие параметра в списке не доказывает его отсутствие в проекте.</p> : <p>Охват текста не доказывает полноту извлечённых параметров или полноту проекта. Неразобранные изображения не заменяются догадками.</p>}
     {body.pending_manifest_truncated === true || body.omitted_manifest_truncated === true ? <p>Список примеров пропусков ограничен. Полные известные счётчики и признаки ограничения приведены в сохранённом покрытии.</p> : null}
-    {text(body.reason) ? <p>Сохранено ограничение или причина завершения; точный код доступен в записи плана ниже.</p> : null}
+    {text(body.reason) ? <p>{extendedExecutionReason(body.reason)}</p> : null}
     <div className={styles.toolbar}><label>Поиск параметров<input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
       <label>Вид параметра<select value={kind} onChange={(event) => { setKind(event.target.value); setPage(0); }}><option value="all">Все</option>{Object.entries(TYPE).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>
       <p>По фильтру {filtered.length} из {facts.length}. Полные выгрузки сохраняют весь список.</p>
@@ -95,7 +99,7 @@ export function ProjectParameters({ value, fallbackVersion, projectUid }: {
     </li>)}</ol>}
     {filtered.length > 25 ? <nav className={styles.toolbar} aria-label="Страницы параметров"><button type="button" className="am-button am-button--quiet" disabled={current === 0} onClick={() => setPage(current - 1)}>Предыдущие</button><span>{current + 1} из {pages}</span><button type="button" className="am-button am-button--quiet" disabled={current + 1 >= pages} onClick={() => setPage(current + 1)}>Следующие</button></nav> : null}
     <details><summary>Сохранённый план, квитанции и пропуски</summary><pre>{JSON.stringify({ version: body.version, policy: body.policy, source_sha256: body.source_sha256,
-      manifest_sha256: body.manifest_sha256, coverage: body.coverage, batches: body.batches, pieces: body.pieces, pending: body.pending, omitted: body.omitted, reason: body.reason }, null, 2)}</pre></details>
+      manifest_sha256: body.manifest_sha256, coverage: body.coverage, batches: body.batches, rejected_facts: body.rejected_facts, pieces: body.pieces, pending: body.pending, omitted: body.omitted, reason: body.reason }, null, 2)}</pre></details>
     <p>MD, HTML, JSON и технический XLSX ниже содержат все сохранённые параметры и их источники. Просмотр и выгрузка не обращаются к модели.</p>
   </section>;
 }

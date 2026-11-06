@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { BatchProgress } from './batch-progress';
 import { ObservationList } from './observation-list';
 import { SourceInspector, sourcePage } from './source-inspector';
+import { extendedExecutionReason } from './execution-reason';
 import styles from './extended-review.module.css';
 
 type RecordValue = Record<string, unknown>;
@@ -46,7 +47,7 @@ function MetadataRecords({ value, title, sourceIndex, fallbackVersion, onSource 
       const record = object(value);
       const source = sourceIndex.get(text(record?.source_id)) ?? record;
       return <li key={text(record?.batch_key) || text(record?.pair_id) || text(record?.source_id) || index}>
-        {text(record?.reason) ? <p>{REASON[text(record?.reason)] ?? 'Сохранена причина ограничения или пропуска; её точный код приведён в записи ниже. Пропуск не означает проверку.'}</p> : null}
+        {text(record?.reason) ? <p>{REASON[text(record?.reason)] ?? extendedExecutionReason(record?.reason, record?.dependency)}</p> : null}
         {source !== null && sourcePage(source) !== null && (text(source.version_uid) || fallbackVersion) ? <button type="button" className="am-button am-button--quiet" onClick={() => onSource(source)}>Открыть исходную страницу {sourcePage(source)}</button> : null}
         <pre>{JSON.stringify(value, null, 2)}</pre>
       </li>;
@@ -80,8 +81,8 @@ export function CrossWindowReview({ value, observations, sources, fallbackVersio
     {coverage?.complete_input_scan === false ? <p>Исходные записи прочитаны не полностью: не просмотрено {count(coverage.source_records_not_scanned)} записей. Известный объём не обозначает весь исходный документ.</p> : null}
     {coverage?.truncated === true ? <p>Отбор ограничен ресурсными границами и принятым числом обращений; часть фрагментов или сочетаний осталась вне сверки.</p> : null}
     {coverage?.pending_manifest_truncated === true || coverage?.omitted_manifest_truncated === true ? <p>Сохранённые списки необработанных сочетаний или пропусков сокращены до границ манифеста. Общие счётчики и признаки ограничения приведены отдельно; показанный список не является полным перечнем всех возможных пропусков.</p> : null}
-    {text(body.reason) ? <p role="status">{REASON[text(body.reason)] ?? 'Сервер сохранил ограничение межоконного прохода; полное выполнение не подтверждено.'}</p> : null}
-    {objects(body.procedures).length > 0 ? <ol className={styles.procedures} aria-label="Процедуры межоконного прохода">{objects(body.procedures).map((procedure, index) => <li key={text(procedure.id) || index}><strong>{text(procedure.title) || PHASE[text(procedure.id)] || 'Сохранённая процедура'}</strong> · {STATUS[text(procedure.status)] ?? 'Состояние не передано'}{text(procedure.reason) ? <p>{REASON[text(procedure.reason)] ?? 'Есть сохранённое ограничение выполнения.'}</p> : null}</li>)}</ol> : null}
+    {text(body.reason) ? <p role="status">{REASON[text(body.reason)] ?? extendedExecutionReason(body.reason, body.dependency)}</p> : null}
+    {objects(body.procedures).length > 0 ? <ol className={styles.procedures} aria-label="Процедуры межоконного прохода">{objects(body.procedures).map((procedure, index) => <li key={text(procedure.id) || index}><strong>{text(procedure.title) || PHASE[text(procedure.id)] || 'Сохранённая процедура'}</strong> · {STATUS[text(procedure.status)] ?? 'Состояние не передано'}{text(procedure.reason) ? <p>{REASON[text(procedure.reason)] ?? extendedExecutionReason(procedure.reason, procedure.dependency)}</p> : null}</li>)}</ol> : null}
     <details><summary>Политика и происхождение межоконного прохода</summary><p>Версия: <code>{text(body.version) || text(policy?.version) || 'Не передана'}</code>.</p>{text(body.source_sha256) ? <p>SHA256 источника: <code>{text(body.source_sha256)}</code>.</p> : null}{text(body.manifest_sha256) ? <p>SHA256 манифеста: <code>{text(body.manifest_sha256)}</code>.</p> : null}<pre>{JSON.stringify({ policy: body.policy, coverage: body.coverage, reason: body.reason }, null, 2)}</pre></details>
     <BatchProgress batches={body.batches} coverage={body.phase_coverage} title="Квитанции межоконного прохода" />
     {selected === null ? null : <SourceInspector key={`${text(selected.source_id) || text(selected.origin_id)}:${sourcePage(selected)}:${text(selected.version_uid) || fallbackVersion}`} source={selected} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} onClose={() => setSelectedSource(null)} />}

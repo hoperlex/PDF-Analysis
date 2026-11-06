@@ -13,7 +13,7 @@ def planned_parameters(policy, *, reason=None, terminal=False):
     return {"version": policy["version"], "policy": deepcopy(policy),
         "status": "skipped" if terminal else "queued", "reason": reason,
         "source_sha256": None, "manifest_sha256": None, "coverage": {"complete_project_claim": False},
-        "facts": [], "sources": [], "batches": [], "pieces": [], "pending": [], "omitted": [],
+        "facts": [], "rejected_facts": [], "sources": [], "batches": [], "pieces": [], "pending": [], "omitted": [],
         "expert_decisions_written": False, "normative_verification": "not_performed"}
 
 
@@ -49,7 +49,9 @@ def run_project_parameters(*, run, model_id, outputs, store, state, accepted, du
         body["batches"] = [{"batch_key": batch["batch_key"], "index": batch["index"], "status": "queued",
             "source_id": batch["source"]["source_id"], "page_number": batch["source"]["page_number"],
             "input_characters": len(batch["source"]["quote"])} for batch in plan["batches"]]
-        body["coverage"].update(calls_completed=0, facts_received=len(body["facts"]))
+        body["rejected_facts"] = []
+        body["coverage"].update(calls_completed=0, calls_partial=0, calls_failed=0,
+            facts_received=len(body["facts"]), facts_rejected=0)
         persist()
         if not plan["batches"]:
             body.update(status="unavailable", reason="no_reliable_text_sources"); persist(); return
@@ -64,19 +66,39 @@ def run_project_parameters(*, run, model_id, outputs, store, state, accepted, du
             response, replayed = durable_call(request, batch["index"])
             receipt.update(response_received=True, response_sha256=response.response_sha256, replayed=replayed)
             persist()
-            if response.truncated:
-                raise ValueError("project_parameters_response_truncated")
-            parsed = parse_project_parameters_reply(response.output_text, batch=batch)
+            rejected = []
+            try:
+                if response.truncated:
+                    raise ValueError("project_parameters_response_truncated")
+                parsed = parse_project_parameters_reply(response.output_text, batch=batch, rejected=rejected)
+            except ValueError as error:
+                # A received bad reply is not an uncertain provider effect. Preserve its
+                # receipt and continue independently sourced batches without reissuing it.
+                reason = str(error)
+                if not reason.startswith("project_parameters_") or not reason.isidentifier():
+                    reason = "project_parameters_reply_invalid"
+                receipt.update(status="failed", reason=reason, fact_count=0)
+                body["coverage"]["calls_failed"] += 1
+                persist()
+                continue
             previous = [fact for fact in body["facts"] if fact["batch_key"] == batch["batch_key"]]
             if previous and previous != parsed:
                 raise ValueError("project_parameters_saved_facts_changed")
             body["facts"] = [fact for fact in body["facts"] if fact["batch_key"] != batch["batch_key"]] + parsed
-            receipt.update(status="completed", fact_count=len(parsed))
+            body["rejected_facts"].extend(rejected)
+            receipt.update(status="partial" if rejected else "completed", fact_count=len(parsed),
+                rejected_fact_count=len(rejected))
+            if rejected:
+                receipt["reason"] = "project_parameters_facts_rejected"
             body["coverage"].update(calls_completed=sum(row["status"] == "completed" for row in body["batches"]),
-                facts_received=len(body["facts"]))
+                calls_partial=sum(row["status"] == "partial" for row in body["batches"]),
+                facts_received=len(body["facts"]), facts_rejected=len(body["rejected_facts"]))
             persist()
-        body.update(status="completed" if body["coverage"]["selection_complete"] else "partial",
-            reason=None if body["coverage"]["selection_complete"] else "accepted_input_selection_limit")
+        rejected_reply = any(row["status"] in {"partial", "failed"} for row in body["batches"])
+        complete = body["coverage"]["selection_complete"] and not rejected_reply
+        body.update(status="completed" if complete else "partial",
+            reason="project_parameters_reply_partially_rejected" if rejected_reply else
+                None if complete else "accepted_input_selection_limit")
         persist()
     except (DomainError, ValueError, TypeError, KeyError) as error:
         if isinstance(error, DomainError) and error.code in {ErrorCode.STALE_ATTEMPT, ErrorCode.EXECUTION_TOKEN_INVALID}:

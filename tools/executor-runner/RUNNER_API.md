@@ -22,8 +22,10 @@ payloads (document text) and returns model answers. It never reaches PostgreSQL 
   never writes it to disk or a log. The one exception is `redeemExecutorEnrollment` (section 9.1),
   whose bearer is a one-time enrollment secret that is exchanged for such a token.
 - **Bodies.** Requests with a body use `Content-Type: application/json; charset=utf-8`.
-  Responses with a body are `application/json`. Request bodies are at most 1 MiB; a
-  larger one is rejected `422 validation_failed`.
+  Responses with a body are `application/json`. Control request bodies are at most 1 MiB; a
+  larger one is rejected `422 validation_failed`. `POST .../answer` has no application
+  response-size ceiling: its complete JSON answer is validated against the task schema
+  without a character or byte truncation (`HOTFIX-RUN-PARTIAL-1106`, contract 1.33.0).
 - **Time.** Timestamps are RFC 3339 in UTC with a `Z` suffix, for example
   `2026-10-22T07:30:15Z`. A runner never trusts its own clock alone: it derives the time
   left on a claim from `claim_expires_at` minus the response's `Date` header. The server
