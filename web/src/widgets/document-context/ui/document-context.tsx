@@ -149,9 +149,10 @@ function VersionSwitch({ projectUid, documentUid, versionUid, onBlocks }: {
           router.push(onBlocks ? routes.versionBlocks(projectUid, event.target.value) : routes.version(projectUid, event.target.value));
         }}
       >
-        {items.map((item) => (
+        {items.map((item, index) => (
           <option key={item.version_uid} value={item.version_uid}>
-            {`Версия ${item.version_ordinal}`}
+            {/* The list is newest first and the newest is the document's current version, as the original's «· текущая». */}
+            {`Версия ${item.version_ordinal}${index === 0 ? ' · текущая' : ''}`}
           </option>
         ))}
       </select>

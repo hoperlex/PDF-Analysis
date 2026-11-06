@@ -15,6 +15,7 @@ import { queryKeys } from '@/shared/api';
 import type { RunState } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { RUN_PAGE_LIMIT } from '@/entities/audit-run';
+import { VERSION_PAGE_LIMIT } from '@/entities/document-version';
 import { DocumentContext, VersionTabsView, latestResultRun, versionTabs } from '@/widgets/document-context';
 
 import { newClient, renderScreen, renderWith } from '../screens/harness';
@@ -145,6 +146,16 @@ describe('the page strip', () => {
     seeded.setQueryData(queryKeys.versions.detail(VERSION_UID), version({ classification: classification({ section_code: 'KJ' }) }));
     const markup = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'blocks' }));
     expect(markup).toContain(`href="${routes.projectSection(PROJECT_UID, 'KJ')}"`);
+  });
+
+  it('offers the document’s versions in the strip, marks the newest as the current one, and keeps «Блоки» on «Блоки»', () => {
+    const second = version({ version_uid: `${VERSION_UID.slice(0, -1)}Z`, version_ordinal: 2 });
+    const seeded = client();
+    seeded.setQueryData(queryKeys.versions.list(DOCUMENT_UID, undefined, VERSION_PAGE_LIMIT), page([second, version()]));
+    const markup = renderScreen(seeded, createElement(DocumentContext, { projectUid: PROJECT_UID, versionUid: VERSION_UID, current: 'blocks' }));
+    expect(markup).toContain('Версия 2 · текущая');
+    expect(markup).not.toContain('Версия 1 · текущая');
+    expect(markup).toContain('>Версия 1<');
   });
 
   it('carries none on the levels that are not a version', () => {
