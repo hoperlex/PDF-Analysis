@@ -5,7 +5,7 @@
 
 .reserve {
   display: grid;
-  gap: 8px;
+  gap: var(--am-gap-sm);
   min-width: 0;
 }
 
@@ -14,7 +14,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--am-gap-sm);
 }
 
 .actions,
@@ -22,23 +22,28 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: calc(var(--am-gap-sm) * 0.75);
 }
 
 .start {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(var(--am-gap-sm) * 0.75);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
 
 .selection {
-  padding: 6px 8px;
+  padding: calc(var(--am-gap-sm) * 0.75) var(--am-gap-sm);
   border: 1px solid var(--am-accent);
   border-radius: var(--am-radius);
   background: var(--am-accent-light);
   font-size: var(--am-text-sm);
+}
+
+/* The date field keeps the paper under its text: on the accent-light bar its placeholder measured 4.34:1. */
+.selection input {
+  background: var(--am-paper);
 }
 
 .hint {
@@ -69,7 +74,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 3px 2px;
+  padding: calc(var(--am-gap-xs) * 0.75) calc(var(--am-gap-xs) / 2);
   background: var(--am-surface);
   font-weight: 600;
   text-align: center;
@@ -80,7 +85,7 @@
   left: 0;
   z-index: 1;
   width: 176px;
-  padding: 4px 8px;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   background: var(--am-paper);
   text-align: left;
 }
@@ -106,7 +111,7 @@
 .dayColumn[data-day-off] {
   width: 18px;
   background: var(--am-surface-sunken);
-  font-size: 9px;
+  font-size: calc(var(--am-text-xs) * 0.8);
 }
 
 .dayColumn[data-today] {
@@ -121,14 +126,14 @@
 
 .weekday {
   color: var(--am-ink-muted);
-  font-size: 10px;
+  font-size: calc(var(--am-text-xs) * 0.87);
   font-weight: 500;
 }
 
 .person {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(var(--am-gap-sm) * 0.75);
   font-weight: 600;
 }
 
@@ -141,7 +146,7 @@
   border-radius: 50%;
   background: var(--am-accent-light);
   color: var(--am-accent-strong);
-  font-size: 10px;
+  font-size: calc(var(--am-text-xs) * 0.87);
   font-weight: 700;
 }
 
@@ -155,30 +160,30 @@
 .count {
   margin-left: auto;
   color: var(--am-ink-muted);
-  font-size: 11px;
+  font-size: var(--am-text-xs);
   font-weight: 500;
 }
 
 .assign {
-  margin: 3px 0 0 28px;
-  padding: 0 6px;
+  margin: calc(var(--am-gap-xs) * 0.75) 0 0 calc(var(--am-gap-lg) + var(--am-gap-xs));
+  padding: 0 calc(var(--am-gap-sm) * 0.75);
   border: 1px dashed var(--am-accent);
   border-radius: var(--am-radius-sm);
   background: transparent;
   color: var(--am-accent-strong);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--am-text-xs);
   cursor: pointer;
 }
 
 .cell {
   height: 34px;
-  padding: 3px;
+  padding: calc(var(--am-gap-xs) * 0.75);
   vertical-align: top;
 }
 
 .cell[data-day-off] {
-  padding: 3px 1px;
+  padding: calc(var(--am-gap-xs) * 0.75) calc(var(--am-gap-xs) / 4);
   background: var(--am-surface-sunken);
 }
 
@@ -199,15 +204,15 @@
   display: block;
   overflow: hidden;
   width: 100%;
-  margin: 0 0 2px;
-  padding: 1px 4px;
+  margin: 0 0 calc(var(--am-gap-xs) / 2);
+  padding: calc(var(--am-gap-xs) / 4) var(--am-gap-xs);
   border: 1px solid transparent;
   border-left: 3px solid var(--am-accent);
   border-radius: var(--am-radius-sm);
   background: var(--am-accent-light);
   color: var(--am-ink);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--am-text-xs);
   line-height: 1.35;
   text-align: left;
   text-overflow: ellipsis;
@@ -235,7 +240,7 @@
 }
 
 .empty {
-  padding: 12px;
+  padding: calc(var(--am-gap) * 0.75);
   color: var(--am-ink-muted);
   text-align: center;
 }
@@ -243,7 +248,7 @@
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: calc(var(--am-gap) * 0.75);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
@@ -252,8 +257,8 @@
   display: inline-block;
   width: 10px;
   height: 10px;
-  margin-right: 5px;
-  border-radius: 2px;
+  margin-right: calc(var(--am-gap-xs) * 1.25);
+  border-radius: calc(var(--am-radius-sm) / 4);
   background: var(--am-accent);
   content: '';
   vertical-align: -1px;

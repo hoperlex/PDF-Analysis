@@ -2235,6 +2235,30 @@ export function screens(): Screen[] {
     reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
     initialSelection: [assignmentUid(1), assignmentUid(3)], initialOver: `${EXPERT_B}|2026-11-05`,
   })));
+  // The plan met (≥ 100 %, `ok`) and half met (≥ 50 %, `warn`), and the month and the reserve with nobody in them.
+  {
+    const month = monthFixture();
+    const [first, second] = month.engineers;
+    add('WorkSchedule month, one plan met and one half met', renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+      schedule: {
+        ...month,
+        engineers: [
+          ...(first === undefined ? [] : [{ ...first, plan: 5, fact: 5 }]),
+          ...(second === undefined ? [] : [{ ...second, plan: 20, fact: 12 }]),
+        ],
+      },
+      admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+    })));
+    add('WorkSchedule month and reserve with no engineers', renderScreen(newClient(), createElement('div', null,
+      createElement(WorkScheduleMonthView, {
+        schedule: { ...month, engineers: [] }, admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+      }),
+      createElement(ReserveCalendarView, {
+        reserve: { ...reserveFixture(), engineers: [] }, admin: false, onStart: noop, today: '2026-11-03',
+        initialSelection: [], initialOver: null,
+      }),
+    )));
+  }
 
   /*
    * A screen carrying `UnsupportedState`, which is the `warning` tone.

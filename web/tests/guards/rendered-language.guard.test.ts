@@ -1260,6 +1260,10 @@ const KEYS = {
   myTasks: queryKeys.assignments.list({ mine: true, limit: MY_TASKS_LIMIT }),
   // The history's assignment is the returned one, `C` in `ASSIGNMENTS` below.
   assignment: queryKeys.assignments.detail(`asg_${'01J9ZQ8K7NHVXW3T2R5M6P4Q8'}C`),
+  // `UI-PARITY-P0P`: «График работ», the month and the reserve the route screens open (`route-screens.ts`), so the
+  // refused state draws «График не загружен» and «Календарь запаса не загружен».
+  workScheduleMonth: queryKeys.workSchedule.month('2026-11'),
+  workScheduleReserve: queryKeys.workSchedule.reserve('2026-11-02', 28),
 } as const;
 
 /**

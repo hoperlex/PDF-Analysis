@@ -6,7 +6,7 @@
 
 .month {
   display: grid;
-  gap: 10px;
+  gap: calc(var(--am-gap-sm) * 1.25);
   min-width: 0;
 }
 
@@ -15,7 +15,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--am-gap-sm);
 }
 
 .nav,
@@ -23,7 +23,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: calc(var(--am-gap-sm) * 0.75);
 }
 
 .period {
@@ -35,21 +35,21 @@
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  gap: var(--am-gap-sm);
 }
 
 .tile {
   position: relative;
   display: grid;
-  gap: 2px;
-  padding: 10px 12px;
+  gap: calc(var(--am-gap-xs) / 2);
+  padding: calc(var(--am-gap-sm) * 1.25) calc(var(--am-gap) * 0.75);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-paper);
 }
 
 .tileRing {
-  padding-right: 60px;
+  padding-right: calc(var(--am-gap-xl) * 2 - var(--am-gap-xs));
 }
 
 .tileLabel {
@@ -110,12 +110,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 8px 12px;
+  gap: var(--am-gap-sm) calc(var(--am-gap) * 0.75);
 }
 
 .setting {
   display: grid;
-  gap: 2px;
+  gap: calc(var(--am-gap-xs) / 2);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
 }
@@ -150,7 +150,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 4px 2px;
+  padding: var(--am-gap-xs) calc(var(--am-gap-xs) / 2);
   background: var(--am-surface);
   font-weight: 600;
   text-align: center;
@@ -167,7 +167,7 @@
 
 .grid thead th.engineerColumn {
   z-index: 3;
-  padding-left: 10px;
+  padding-left: calc(var(--am-gap-sm) * 1.25);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
   letter-spacing: var(--am-tracking-caps);
@@ -196,7 +196,7 @@
 
 .weekday {
   color: var(--am-ink-muted);
-  font-size: 10px;
+  font-size: calc(var(--am-text-xs) * 0.87);
   font-weight: 500;
 }
 
@@ -206,7 +206,7 @@
 
 .dayColumn[data-day-off] .weekday,
 .dayColumn[data-day-off] .dayNumber {
-  font-size: 9px;
+  font-size: calc(var(--am-text-xs) * 0.8);
 }
 
 .dayToggle {
@@ -222,7 +222,7 @@
 }
 
 .engineer {
-  padding: 4px 8px;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -232,11 +232,11 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  margin-right: 6px;
+  margin-right: calc(var(--am-gap-sm) * 0.75);
   border-radius: 50%;
   background: var(--am-accent-light);
   color: var(--am-accent-strong);
-  font-size: 10px;
+  font-size: calc(var(--am-text-xs) * 0.87);
   font-weight: 700;
   vertical-align: middle;
 }
@@ -252,12 +252,12 @@
 .cell {
   position: relative;
   height: 40px;
-  padding: 3px;
+  padding: calc(var(--am-gap-xs) * 0.75);
   vertical-align: top;
 }
 
 .cell[data-day-off] {
-  padding: 3px 1px;
+  padding: calc(var(--am-gap-xs) * 0.75) calc(var(--am-gap-xs) / 4);
   background: var(--am-surface-sunken);
 }
 
@@ -278,28 +278,29 @@
   background: transparent;
   color: var(--am-failed);
   font: inherit;
-  font-size: 10px;
+  font-size: calc(var(--am-text-xs) * 0.87);
   cursor: pointer;
 }
 
+/* The accent, not the strong line: on the accent-soft cell the line measured 3.0:1 in the dark palette (R-33). */
 .absenceToggle:hover {
-  outline: 1px dashed var(--am-line-strong);
+  outline: 1px dashed var(--am-accent);
   outline-offset: -2px;
 }
 
 .stack {
   display: grid;
-  gap: 2px;
+  gap: calc(var(--am-gap-xs) / 2);
 }
 
 .chip {
   display: block;
   overflow: hidden;
-  padding: 1px 4px;
+  padding: calc(var(--am-gap-xs) / 4) var(--am-gap-xs);
   border-radius: var(--am-radius-sm);
   background: var(--am-ok-light);
   color: var(--am-ink);
-  font-size: 11px;
+  font-size: var(--am-text-xs);
   line-height: 1.35;
   text-decoration: none;
   text-overflow: ellipsis;
@@ -312,13 +313,13 @@
 
 .more {
   margin: 0;
-  padding: 0 4px;
+  padding: 0 var(--am-gap-xs);
   border: 0;
   border-radius: var(--am-radius-sm);
   background: var(--am-surface);
   color: var(--am-ink-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--am-text-xs);
   text-align: left;
   cursor: pointer;
 }
@@ -329,9 +330,9 @@
   left: 0;
   z-index: 5;
   display: grid;
-  gap: 2px;
+  gap: calc(var(--am-gap-xs) / 2);
   width: 260px;
-  padding: 6px;
+  padding: calc(var(--am-gap-sm) * 0.75);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-paper);
@@ -339,14 +340,14 @@
 }
 
 .popoverHead {
-  padding: 0 2px 4px;
+  padding: 0 calc(var(--am-gap-xs) / 2) var(--am-gap-xs);
   border-bottom: 1px solid var(--am-line-soft);
   font-weight: 600;
 }
 
 .popoverItem {
   display: grid;
-  padding: 3px 4px;
+  padding: calc(var(--am-gap-xs) * 0.75) var(--am-gap-xs);
   border-radius: var(--am-radius-sm);
   color: var(--am-ink);
   font-size: var(--am-text-sm);
@@ -359,11 +360,11 @@
 
 .popoverProject {
   color: var(--am-ink-muted);
-  font-size: 11px;
+  font-size: var(--am-text-xs);
 }
 
 .empty {
-  padding: 12px;
+  padding: calc(var(--am-gap) * 0.75);
   color: var(--am-ink-muted);
   text-align: center;
 }
@@ -375,7 +376,7 @@
 
 .stats th,
 .stats td {
-  padding: 6px 10px;
+  padding: calc(var(--am-gap-sm) * 0.75) calc(var(--am-gap-sm) * 1.25);
   border-bottom: 1px solid var(--am-line-soft);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -423,7 +424,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--am-gap-sm);
   width: 100%;
 }
 
