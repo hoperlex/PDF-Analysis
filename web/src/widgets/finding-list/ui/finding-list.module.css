@@ -26,6 +26,29 @@
   font-size: var(--am-text-sm);
 }
 
+/* The run's total, the original's «Всего: N», in the ink of the page, not of the counts after it. */
+.total {
+  color: var(--am-ink);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+/* The verdict on a list row: the original's green and red rows. A waiting row keeps the page's paper. */
+.item[data-verdict-bucket='accepted'] > button[data-finding-uid]:not([aria-current='true']) {
+  background: var(--am-ok-light);
+  box-shadow: inset 3px 0 0 var(--am-ok);
+}
+
+.item[data-verdict-bucket='rejected'] > button[data-finding-uid]:not([aria-current='true']) {
+  background: var(--am-failed-light);
+  box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
 .filter {
   display: flex;
   flex-wrap: wrap;

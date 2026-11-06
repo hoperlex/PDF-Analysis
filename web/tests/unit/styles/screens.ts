@@ -1453,6 +1453,40 @@ export function screens(): Screen[] {
     onChoose: noop,
   })));
   // `R-151n`: ✓/✕ in each row, with the three notes a press can leave: recorded, refused, sending.
+  // `UI-A-68`: the full-width table -- verdict tints, a decided severity beside a proposal, norms, merged count -- with
+  // the selected finding opened under its row.
+  add(
+    'FindingList, table view with an opened row',
+    render(
+      createElement(FindingList, {
+        view: 'table',
+        groups: groupByCategory([
+          finding({
+            finding_uid: FINDING_UID,
+            category: 'internal_contradiction',
+            current_verdict: 'accepted',
+            decided_severity: 'critical',
+            observation: V2_OBSERVATION,
+            merged_observations: [V2_OBSERVATION, V2_SIBLING],
+          }),
+          finding({ finding_uid: `${FINDING_UID.slice(0, -1)}C`, category: 'explicit_placeholder', current_verdict: 'rejected' }),
+          finding({
+            finding_uid: `${FINDING_UID.slice(0, -1)}D`,
+            category: 'explicit_placeholder',
+            current_verdict: 'pending',
+            observation: observation({ proposed_severity: 'economic', norm_citations: [] }),
+          }),
+        ]),
+        selectedFindingUid: FINDING_UID,
+        onSelect: noop,
+        renderRowActions: (row: { readonly current_verdict: Verdict }) =>
+          createElement(FindingRowActions, {
+            verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,
+          }),
+        renderExpansion: () => createElement('p', null, 'Открытая находка: цитата на странице и решение эксперта.'),
+      }),
+    ),
+  );
   add(
     'FindingList with row actions, recorded and refused',
     render(
