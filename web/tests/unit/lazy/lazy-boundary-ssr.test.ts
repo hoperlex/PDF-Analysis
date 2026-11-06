@@ -7,20 +7,26 @@
  * second request on the chunk was resolved and the widget was in the first bytes. The streamed
  * variant is revealed, and so hydrated, a few hundred milliseconds after the first paint. By
  * then a sibling that mounted with the page had often filled the same query-cache entry, so the
- * widget's first client render drew data where the server had drawn «Загрузка: …» — React error
- * #418, once per route per server start (`lane V`, 2026-11-07, 4 of 5 fresh stands).
+ * widget's first client render drew its data (`SectionsPanel`'s note) where the server had drawn
+ * «Загрузка: разделы проекта…»: React error #418, once per route per server start (lane V,
+ * 2026-11-07, 4 of 5 fresh stands; reproduced 3 of 16 cold loads on a throwaway server).
  *
  * The wrappers now pass `ssr: false`: the server writes the fallback on every request and the
- * widget exists only on the client. This test serves each wrapper TWICE through React's real
- * streaming renderer and the app router's `next/dynamic` — once before the chunk has resolved
- * and once after the loader has settled — and holds that
+ * widget exists only on the client. This test serves each wrapper TWICE through React's streaming
+ * renderer and the app router's `next/dynamic` — once before the chunk has been asked for and once
+ * after any loader the first response started has settled — and holds that
  *
- *   - the two responses are the same bytes (the property that failed: they differed in exactly
- *     the markup the client later disagreed with);
- *   - neither streams a Suspense boundary (`<template id="B:`) and both carry the wrapper's bare
- *     «Загрузка…»;
+ *   - the server wrote the wrapper's bare «Загрузка…» and nothing of the widget, with no streamed
+ *     Suspense boundary (`<template id="B:`);
+ *   - the two responses are the same bytes, so what the server sends no longer depends on the
+ *     process's history;
  *   - the server never started loading the chunk (a loader that is called on the server is a
  *     loader that can still be in flight when the shell is written).
+ *
+ * Not modelled: the streaming itself. Under `renderToPipeableStream` here the boundary completes
+ * before the first flush, so the pre-fix variant fails on the first two points (the widget is in
+ * the response) rather than on a `$?` boundary; the streamed variant and the mismatch were
+ * measured on a built server (`DEBT_REGISTER.md`, `D-329`).
  *
  * `next/dynamic` is the APP ROUTER's implementation (`next/dist/shared/lib/app-dynamic`), not the
  * pages one vitest would otherwise resolve, because that is the one the build bundles for `app/`.
@@ -56,29 +62,20 @@ vi.mock('next/dynamic', async () => {
   };
 });
 
-interface Served {
-  /** What the server had written when the shell was ready. */
-  readonly shell: string;
-  /** Everything it wrote, to the end of the stream. */
-  readonly full: string;
-}
-
-/** One response of the streaming renderer, the way the app server writes it. */
-function serve(element: ReturnType<typeof createElement>): Promise<Served> {
+/** One response of the streaming renderer, everything it writes to the end of the stream. */
+function serve(element: ReturnType<typeof createElement>): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: string[] = [];
-    let shell = '';
     const sink = new Writable({
       write(chunk: Buffer | string, _encoding, done) {
         chunks.push(String(chunk));
         done();
       },
     });
-    sink.on('finish', () => resolve({ shell, full: chunks.join('') }));
+    sink.on('finish', () => resolve(chunks.join('')));
     const stream = renderToPipeableStream(element, {
       onShellReady() {
         stream.pipe(sink);
-        shell = chunks.join('');
       },
       onShellError: reject,
       // A boundary that gives up on the server (`BailoutToCSRError`) is the design of `ssr: false`.
@@ -132,10 +129,9 @@ describe('D-329: a lazy widget is served the same before and after the server ha
       await new Promise((resolve) => setTimeout(resolve, 25));
       const second = await serve(page());
 
-      expect(first.full).not.toContain('<template id="B:');
-      expect(second.full).not.toContain('<template id="B:');
-      expect(first.shell).toContain(BARE_FALLBACK);
-      expect(first.full).toBe(second.full);
+      expect(first).toBe(second);
+      expect(first, 'no Suspense boundary is streamed').not.toContain('<template id="B:');
+      expect(first, 'the wrapper’s own fallback is what the server writes').toContain(BARE_FALLBACK);
       expect(loader.started - startedBefore, 'the server must not start loading the widget').toBe(0);
     });
   }
