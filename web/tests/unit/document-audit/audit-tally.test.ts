@@ -19,9 +19,11 @@ import {
 } from '@/entities/document-version';
 import { SectionDetailPage } from '@/_pages/section-detail';
 import { ProjectDetailPage } from '@/_pages/project-detail';
-import { ProjectStructureView } from '@/widgets/project-sections';
+import {
+  ProjectSections, ProjectStructureView, UNCLASSIFIED_FIGURES, sectionFigures,
+} from '@/widgets/project-sections';
 
-import { auditCounts } from '../dashboard/audit-counts';
+import { auditCounts, sectionAudit } from '../dashboard/audit-counts';
 import { newClient, renderScreen, renderWith } from '../screens/harness';
 import { PROJECT_UID, classification, otherVersion, page, version } from '../sections/fixtures';
 
@@ -131,5 +133,70 @@ describe('where the row is drawn', () => {
     expect(markup).toContain('data-audit-tally="5"');
     expect(markup).toContain('aria-label="Состояние проверки: Школа"');
     expect(markup).not.toContain('data-tally="findings"');
+  });
+});
+
+// ------------------------------------------------------------------ the server's own count per section
+
+describe('sectionFigures — the section panel as exact figures', () => {
+  const rows = [
+    { section: 'AR' as const, document_count: 80, ...sectionAudit(80, { not_run: 30, awaiting_decision: 10, checked: 40, no_expert_decision: 40 }, 123) },
+    { section: 'KJ' as const, document_count: 5, ...sectionAudit(5, { not_run: 5, no_expert_decision: 5 }) },
+    { document_count: 2, ...sectionAudit(2, { not_run: 2, no_expert_decision: 2 }) },
+  ];
+
+  it('files each row under its section code, the unclassified documents under their own key, with the findings', () => {
+    const figures = sectionFigures(rows);
+    expect(figures.get('AR')).toEqual({ documents: 80, notRun: 30, awaitingDecision: 10, checked: 40, clean: 0, findings: 123 });
+    expect(figures.get('KJ')?.documents).toBe(5);
+    expect(figures.get(UNCLASSIFIED_FIGURES)?.documents).toBe(2);
+    expect(figures.has('OV')).toBe(false);
+  });
+
+  const client = () => {
+    const seeded = newClient();
+    seeded.setQueryData(queryKeys.dashboard.summary(PROJECT_UID), { section_breakdown: rows });
+    return seeded;
+  };
+
+  it('state a section the page does not hold as it is, not as empty, and drop the page caveat', () => {
+    const seeded = client();
+    seeded.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+      page([DOCS[0] as (typeof DOCS)[number]], 'next'),
+    );
+    const markup = renderWith(seeded, createElement(ProjectSections, { projectUid: PROJECT_UID }));
+    const kj = markup.slice(markup.indexOf('data-section-group="KJ"'), markup.indexOf('data-section-group="OV"'));
+    expect(kj).toContain('data-audit-tally="5"');
+    expect(kj).not.toContain('документов нет');
+    expect(kj).toContain('Открыть раздел');
+    expect(markup).toContain('data-audit-tally="80"');
+    expect(markup).not.toContain('по документам этой страницы');
+  });
+
+  it('reads the project’s summary under the key the dashboard uses, so a warm dashboard costs no request', () => {
+    expect(queryKeys.dashboard.summary(PROJECT_UID)).toEqual(['dashboard', 'summary', { project: PROJECT_UID }]);
+  });
+
+  it('counts the page and says so while the server’s figures are not at hand', () => {
+    const empty = newClient();
+    empty.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, undefined, false, undefined, undefined, 'audit'),
+      page(DOCS, 'next'),
+    );
+    const markup = renderWith(empty, createElement(ProjectSections, { projectUid: PROJECT_UID }));
+    expect(markup).toContain('data-audit-tally="6"');
+    expect(markup).toContain('по документам этой страницы');
+  });
+
+  it('gives the section page the server’s count of its section, with no page caveat', () => {
+    const seeded = client();
+    seeded.setQueryData(
+      queryKeys.projects.documents(PROJECT_UID, undefined, DOCUMENT_PAGE_LIMIT, 'AR', false, undefined, undefined, 'audit'),
+      page(DOCS, 'next'),
+    );
+    const markup = renderWith(seeded, createElement(SectionDetailPage, { projectUid: PROJECT_UID, sectionCode: 'AR' }));
+    expect(markup).toContain('data-audit-tally="80"');
+    expect(markup).toContain('data-audit-tally-partial="false"');
   });
 });

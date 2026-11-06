@@ -40,7 +40,7 @@ import type { SectionAuditFilter } from '@/entities/document-version';
 import type { ProjectSection } from '@/entities/project';
 import { findProjectSection, looksLikeProjectUid, projectSectionTitle } from '@/entities/project';
 import { DocumentContext } from '@/widgets/document-context';
-import { ArchivedToggle, BatchBar, TagFilter, selectionSlot, useBatchSelection } from '@/widgets/project-sections';
+import { ArchivedToggle, BatchBar, TagFilter, selectionSlot, useBatchSelection, useSectionFigures } from '@/widgets/project-sections';
 import styles from './section-detail-page.module.css';
 
 export interface SectionDetailPageProps {
@@ -94,6 +94,9 @@ function SectionDetail({
   const wholeSection = routes.projectSection(projectUid, sectionCode);
   // `R-151c`: the cards a reader chose to start together.
   const batch = useBatchSelection(useMayActAsExpert());
+  // `UI-A-35`: the server's count of this section over the whole project, used while nothing narrows the listing.
+  const exact = useSectionFigures(projectUid);
+  const figures = auditFilter === null && !showArchived && tag === null ? exact.data?.get(section.code) : undefined;
 
   let body;
   if (query.isPending) {
@@ -177,8 +180,8 @@ function SectionDetail({
       title={sectionPageTitle(section)}
       subtitle={query.data === undefined ? undefined : (
         <AuditTallyLine
-          tally={auditTally(query.data.items)}
-          partial={partialList}
+          tally={figures ?? auditTally(query.data.items)}
+          partial={partialList && figures === undefined}
           label={`${section.abbr} ${section.name}`}
           // `UI-A-38`: «не запускались N» narrows the page to those documents; narrowed already, it is plain.
           notRunHref={auditFilter === null ? withNotRunFilter(wholeSection) : undefined}

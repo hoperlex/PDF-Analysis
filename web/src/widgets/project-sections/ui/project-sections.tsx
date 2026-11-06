@@ -40,6 +40,9 @@ import {
   AuditTallyLine, DocumentCardGrid, auditTally, useDocumentList,
 } from '@/entities/document-version';
 
+import { useSectionFigures } from '../api/use-section-figures';
+import type { SectionFigures } from '../model/section-figures';
+import { UNCLASSIFIED_FIGURES } from '../model/section-figures';
 import { projectStructure } from '../model/structure';
 import type { CardSelection } from '../model/use-batch-selection';
 import { startable, useBatchSelection } from '../model/use-batch-selection';
@@ -94,10 +97,15 @@ export interface ProjectStructureViewProps {
   readonly hasNextPage: boolean;
   /** `R-151c`: selection boxes on the startable cards, for a reader who may start runs. */
   readonly selection?: CardSelection | undefined;
+  /**
+   * `UI-A-35`: the server's count of each section over the whole project. Given, a section's row of figures is exact;
+   * absent (still loading, failed, or a narrowed listing), it counts the page and says so.
+   */
+  readonly figures?: SectionFigures | undefined;
 }
 
 /** The grouped structure of one page of documents. Rendered by the static harness. */
-export function ProjectStructureView({ projectUid, items, hasNextPage, selection }: ProjectStructureViewProps) {
+export function ProjectStructureView({ projectUid, items, hasNextPage, selection, figures }: ProjectStructureViewProps) {
   const structure = projectStructure(items);
   return (
     <div data-project-structure="" data-document-count={items.length}>
@@ -112,71 +120,92 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
         </p>
       ) : null}
       <ol className={styles.sections}>
-        {structure.sections.map(({ section, documents }) => (
-          <li
-            key={section.code}
-            className={styles.section}
-            data-section-group={section.code}
-            data-section-documents={documents.length}
-          >
-            <details className={styles.card} open={documents.length > 0}>
-              <summary className={styles.cardHeader}>
-                <span className={styles.code}>{section.code}</span>
-                <span className={styles.headText}>
-                  <h3 className={styles.heading}>
-                    <span className={styles.abbr}>{section.abbr}</span> {section.name}
-                    {documents.length === 0 ? <span className={styles.count}> — документов нет</span> : null}
-                  </h3>
-                  {documents.length === 0 ? null : (
-                    // `UI-A-35`: the original's row of numbers, from the page's own documents.
-                    <AuditTallyLine tally={auditTally(documents)} partial={hasNextPage} label={`${section.abbr} ${section.name}`} />
-                  )}
-                </span>
-                <span className={styles.chevron} aria-hidden="true">›</span>
-              </summary>
-              {documents.length === 0 ? null : (
-                <div className={styles.cardBody}>
-                  {/* `R-151l`: the section's own page lists every document of the section, not one page of the project. */}
-                  <p data-section-page-link={section.code}>
-                    <Link href={routes.projectSection(projectUid, section.code)}>Открыть раздел</Link>
-                    {/* `UI-A-53`: the section's optimisation, with the project and the section in the address. */}
-                    {' · '}
-                    <Link href={routes.sectionOptimisation(section.code, projectUid)} data-section-optimisation-link={section.code}>
-                      Оптимизация раздела
-                    </Link>
-                  </p>
-                  <DocumentRows projectUid={projectUid} documents={documents} selection={selection} />
-                </div>
-              )}
-            </details>
-          </li>
-        ))}
-        <li
-          className={styles.section}
-          data-section-group="unclassified"
-          data-section-documents={structure.unclassified.length}
-        >
-          <details className={styles.card} open={structure.unclassified.length > 0}>
-            <summary className={styles.cardHeader}>
-              <span className={styles.code}>—</span>
-              <span className={styles.headText}>
-                <h3 className={styles.heading}>
-                  Не классифицировано
-                  {structure.unclassified.length === 0 ? <span className={styles.count}> — документов нет</span> : null}
-                </h3>
-                {structure.unclassified.length === 0 ? null : (
-                  <AuditTallyLine tally={auditTally(structure.unclassified)} partial={hasNextPage} label="Не классифицировано" />
+        {structure.sections.map(({ section, documents }) => {
+          // The server's count may know of documents on other pages: the group is not empty then, though this page has none.
+          const exact = figures?.get(section.code);
+          const total = Math.max(exact?.documents ?? 0, documents.length);
+          return (
+            <li
+              key={section.code}
+              className={styles.section}
+              data-section-group={section.code}
+              data-section-documents={documents.length}
+            >
+              <details className={styles.card} open={total > 0}>
+                <summary className={styles.cardHeader}>
+                  <span className={styles.code}>{section.code}</span>
+                  <span className={styles.headText}>
+                    <h3 className={styles.heading}>
+                      <span className={styles.abbr}>{section.abbr}</span> {section.name}
+                      {total === 0 ? <span className={styles.count}> — документов нет</span> : null}
+                    </h3>
+                    {total === 0 ? null : (
+                      // `UI-A-35`: the original's row of numbers: the server's, else the page's own documents.
+                      <AuditTallyLine
+                        tally={exact ?? auditTally(documents)}
+                        partial={hasNextPage && exact === undefined}
+                        label={`${section.abbr} ${section.name}`}
+                      />
+                    )}
+                  </span>
+                  <span className={styles.chevron} aria-hidden="true">›</span>
+                </summary>
+                {total === 0 ? null : (
+                  <div className={styles.cardBody}>
+                    {/* `R-151l`: the section's own page lists every document of the section, not one page of the project. */}
+                    <p data-section-page-link={section.code}>
+                      <Link href={routes.projectSection(projectUid, section.code)}>Открыть раздел</Link>
+                      {/* `UI-A-53`: the section's optimisation, with the project and the section in the address. */}
+                      {' · '}
+                      <Link href={routes.sectionOptimisation(section.code, projectUid)} data-section-optimisation-link={section.code}>
+                        Оптимизация раздела
+                      </Link>
+                    </p>
+                    {documents.length === 0 ? null : (
+                      <DocumentRows projectUid={projectUid} documents={documents} selection={selection} />
+                    )}
+                  </div>
                 )}
-              </span>
-              <span className={styles.chevron} aria-hidden="true">›</span>
-            </summary>
-            {structure.unclassified.length === 0 ? null : (
-              <div className={styles.cardBody}>
-                <DocumentRows projectUid={projectUid} documents={structure.unclassified} toClassification />
-              </div>
-            )}
-          </details>
-        </li>
+              </details>
+            </li>
+          );
+        })}
+        {(() => {
+          const exact = figures?.get(UNCLASSIFIED_FIGURES);
+          const total = Math.max(exact?.documents ?? 0, structure.unclassified.length);
+          return (
+            <li
+              className={styles.section}
+              data-section-group="unclassified"
+              data-section-documents={structure.unclassified.length}
+            >
+              <details className={styles.card} open={total > 0}>
+                <summary className={styles.cardHeader}>
+                  <span className={styles.code}>—</span>
+                  <span className={styles.headText}>
+                    <h3 className={styles.heading}>
+                      Не классифицировано
+                      {total === 0 ? <span className={styles.count}> — документов нет</span> : null}
+                    </h3>
+                    {total === 0 ? null : (
+                      <AuditTallyLine
+                        tally={exact ?? auditTally(structure.unclassified)}
+                        partial={hasNextPage && exact === undefined}
+                        label="Не классифицировано"
+                      />
+                    )}
+                  </span>
+                  <span className={styles.chevron} aria-hidden="true">›</span>
+                </summary>
+                {structure.unclassified.length === 0 ? null : (
+                  <div className={styles.cardBody}>
+                    <DocumentRows projectUid={projectUid} documents={structure.unclassified} toClassification />
+                  </div>
+                )}
+              </details>
+            </li>
+          );
+        })()}
       </ol>
     </div>
   );
@@ -190,6 +219,9 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
   const [tag, setTag] = useState<string | null>(null);
   const query = useDocumentList(projectUid, cursor, undefined, showArchived, tag ?? undefined, { order: 'audit' });
   const mayAct = useMayActAsExpert();
+  // `UI-A-35`: the server's own count per section; used only while the listing is not narrowed by a tag or the archive.
+  const exact = useSectionFigures(projectUid);
+  const figures = tag === null && !showArchived ? exact.data : undefined;
   // `R-151c`: the chosen cards, and the batch the panel was opened with (fixed for its life).
   const batch = useBatchSelection(mayAct);
 
@@ -227,6 +259,7 @@ export function ProjectSections({ projectUid }: ProjectSectionsProps) {
           items={query.data.items}
           hasNextPage={nextCursor !== null}
           selection={batch.selection}
+          figures={figures}
         />
         <div className="am-pager">
           {cursor === undefined ? null : (
