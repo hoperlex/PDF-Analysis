@@ -211,6 +211,10 @@ PRODUCT_COMMAND_TYPES = frozenset((
     "create_project", "generate_comparison_summary",
     "decide_optimisation_proposal", "reaudit_run", "set_execution_paused", "set_job_priority",
     "set_worker_intake",
+    # Contract 1.35.0 (`UI-B-15`): the receipt of a proposals workbook loaded back is about a pass's proposals, a product
+    # command like `decide_optimisation_proposal`. Lane C1 sealed it without classifying it; the classification test
+    # (`test_every_event_type_and_command_type_the_source_writes_is_classified`) found it on the 1.36.0 stand.
+    "import_optimisation_proposal_decisions",
     # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
     # references it, and it is deleted only after the group is truncated.
     "start_ar_v3_beta_group",
