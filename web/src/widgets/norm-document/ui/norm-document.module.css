@@ -8,13 +8,13 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.5rem;
+  gap: var(--am-gap-sm);
 }
 
 .paragraph {
   min-width: 0;
   max-width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius);
   background: var(--am-paper);
@@ -22,7 +22,7 @@
 }
 
 .paragraph p {
-  margin: 0 0 0.25rem;
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .unreliable {
@@ -40,5 +40,5 @@
 }
 
 .facts p {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--am-gap-xs);
 }

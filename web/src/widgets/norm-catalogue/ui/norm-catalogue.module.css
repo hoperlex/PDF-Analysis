@@ -1,9 +1,9 @@
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--am-gap-sm);
   align-items: end;
-  padding: var(--am-gap);
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius);
   background: var(--am-paper);
@@ -29,7 +29,7 @@
 
 .table th,
 .table td {
-  padding: 0.5rem 0.75rem;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
@@ -44,23 +44,22 @@
 .views {
   display: flex;
   align-items: stretch;
-  gap: 3px;
+  gap: calc(var(--am-gap-xs) / 2);
   width: max-content;
   max-width: 100%;
-  margin: 18px 0 0;
-  padding: 4px;
+  margin: var(--am-gap) 0 0;
+  padding: var(--am-gap-xs);
   border: 1px solid var(--am-line-soft);
-  border-radius: 14px;
+  border-radius: var(--am-radius);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
 
 .views :global(.am-button) {
   min-width: 96px;
-  min-height: 40px;
-  padding: 7px 14px;
+  min-height: 34px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--am-radius-sm);
   background: transparent;
   box-shadow: none;
   color: var(--am-ink-muted);
