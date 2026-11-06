@@ -99,3 +99,20 @@ describe("the section table's five numbers carry the original's inks", () => {
     expect(markup).not.toMatch(/Итого/);
   });
 });
+
+describe('the front door is compact', () => {
+  const tiles = module('widgets/home-tiles/ui/home-tiles.module.css');
+  const home = module('_pages/home/ui/home-page.module.css');
+
+  it('puts a figure and its label on one line, and a recent project (name, date) on one line', () => {
+    expect(declarations(tiles, '.figures').get('grid-template-columns')).toBe('minmax(0, 1fr) auto');
+    expect(declarations(tiles, '.project').get('display')).toBe('flex');
+    expect(declarations(tiles, '.figures dd').get('font-size')).toBe('var(--am-text-lg)');
+  });
+
+  it('greets in the page-title size on a band no larger than the tiles under it', () => {
+    expect(declarations(home, '.greeting').get('font-size')).toBe('var(--am-text-2xl)');
+    expect(declarations(home, '.hero').get('padding')).toBe('var(--am-gap)');
+    expect(declarations(home, '.hero').get('border-radius')).toBe('var(--am-radius)');
+  });
+});
