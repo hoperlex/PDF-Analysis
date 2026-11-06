@@ -19,72 +19,173 @@
   min-width: 0;
 }
 
-.overviewGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  min-width: 0;
-  margin-bottom: var(--am-gap-lg);
-}
+/* ---- the head: state, the stages and what to do next (the original's pipeline card) ------- */
 
-.factsPanel,
-.resultPanel {
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-sm);
   min-width: 0;
-  padding: 18px;
+  margin-bottom: var(--am-gap-sm);
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
 
-.resultPanel > h2 {
-  margin-top: 0;
+.headTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
 }
 
-.factsPanel > dl {
+.headBody {
   display: grid;
-  grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1fr);
-  gap: var(--am-gap-sm) var(--am-gap);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--am-gap);
+  align-items: center;
+}
+
+@media (min-width: 1100px) {
+  .headBody {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  }
+}
+
+.headActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--am-gap-sm);
   min-width: 0;
-  margin: var(--am-gap) 0 var(--am-gap-lg);
+}
+
+.reviewCall {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+/* Inside the head the rail is not a second card. */
+.head .pipeline {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* ---- the figures: one line under the head (the original's spend bar) -------------------- */
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  min-width: 0;
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding: var(--am-gap-xs) var(--am-gap);
+  border-right: 1px solid var(--am-line-soft);
+}
+
+.figure:last-child {
+  border-right: 0;
+}
+
+.figure dt {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.figure dd {
+  margin: 0;
+  font-size: var(--am-text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the two panels: the run's facts and the stage table --------------------------------- */
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin: var(--am-gap-sm) 0 var(--am-gap);
+}
+
+@media (min-width: 1280px) {
+  .columns {
+    grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1.5fr);
+    align-items: start;
+  }
+}
+
+.panel {
+  min-width: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-paper);
+}
+
+.panel > h2 {
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.caption {
+  margin: 0 0 var(--am-gap-sm);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr);
+  gap: var(--am-gap-xs) var(--am-gap);
+  min-width: 0;
+  margin: 0 0 var(--am-gap-sm);
   padding: 0;
 }
 
-.factsPanel > dl dt,
-.factsPanel > dl dd {
+.facts dt,
+.facts dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-.factsPanel > dl dt {
+.facts dt {
   color: var(--am-ink-muted);
 }
 
-.progress > h2 {
-  margin-top: var(--am-gap-xl);
+/* ---- what qualifies each figure, at the foot ---------------------------------------------- */
+
+.notes {
+  margin-top: var(--am-gap);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }
 
-@media (max-width: 780px) {
-  .factsPanel,
-  .resultPanel {
-    padding: var(--am-gap);
-  }
-
-  .factsPanel > dl {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .factsPanel > dl dt {
-    margin-top: var(--am-gap-sm);
-  }
-}
-
-@media (min-width: 1280px) {
-  .overviewGrid {
-    grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.6fr);
-    align-items: start;
-  }
+.progress > h2,
+.notes h2 {
+  margin-top: var(--am-gap);
 }
 
 .mode {
@@ -121,8 +222,8 @@
   justify-content: center;
   gap: var(--am-gap-xs);
   flex: 1;
-  min-width: 112px;
-  min-height: 94px;
+  min-width: 104px;
+  min-height: 72px;
   padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
