@@ -40,7 +40,7 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
   }
 
   return (
-    <PageShell title="Профиль" subtitle={profileComplete || account.profile_complete ? 'Данные вашей учётной записи.' : 'Завершите профиль, чтобы открыть остальные разделы.'}>
+    <PageShell title="Профиль" subtitle={profileComplete || account.profile_complete ? 'Данные вашей учётной записи.' : 'Завершите профиль, чтобы открыть остальные разделы.'} surface="canvas">
       <div className={styles.profile} data-account-profile-complete={account.profile_complete}>
         <Avatar initials={initialsOf(label)} colourKey={account.login} label={`Аватар: ${label}`} />
         <p className="am-note"><strong>{label}</strong></p>

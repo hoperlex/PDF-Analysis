@@ -1,14 +1,10 @@
 .card {
   width: min(100%, 760px);
-  margin: 0 auto;
-  padding: var(--am-gap-xl);
+  margin: 0;
+  padding: var(--am-gap-md);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-surface);
 }
 
-@media (max-width: 780px) {
-  .card {
-    padding: var(--am-gap);
-  }
-}
+

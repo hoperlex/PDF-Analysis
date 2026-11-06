@@ -13,7 +13,7 @@
   justify-content: space-between;
   gap: 6px;
   min-width: 0;
-  padding: 1px 2px 15px;
+  padding: 0 var(--am-gap-2xs) var(--am-gap-sm);
   border-bottom: 1px solid color-mix(in srgb, var(--am-showcase-line) 28%, transparent);
 }
 
@@ -70,7 +70,7 @@
 
 .row {
   display: grid;
-  gap: 10px;
+  gap: var(--am-gap-xs);
   min-width: 0;
 }
 
@@ -94,7 +94,7 @@
 }
 
 .row :global(.am-disclosure--inline + .am-disclosure--inline) {
-  padding-top: 10px;
+  padding-top: var(--am-gap-xs);
   border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 24%, transparent);
 }
 
@@ -102,9 +102,9 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
-  padding: 4px 9px;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   color: var(--am-ink-muted);
-  font-size: 10.5px;
+  font-size: var(--am-text-xs);
   font-weight: 650;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -124,43 +124,36 @@
   text-decoration: none;
 }
 
+/*
+ * A flat list under each group, as in the original: no tree guide, no indent. The guide cost 21 px of the sidebar's width
+ * and drew a 1.6:1 line (a pending row of the contrast census); the group's name above and the item's own mark say the rest.
+ */
 .row :global(.am-disclosure__panel) {
-  padding: 4px 0 0 0;
+  padding: var(--am-gap-2xs) 0 0 0;
 }
 
 .row :global(.am-disclosure__list) {
-  margin-left: 11px;
-  padding-left: 10px;
-  border-left: 1px solid color-mix(in srgb, var(--am-showcase-line) 38%, transparent);
+  margin: 0;
+  padding: 0;
 }
 
 .row :global(.am-disclosure__item) {
-  position: relative;
-  margin: 2px 0;
-}
-
-.row :global(.am-disclosure__item::before) {
-  position: absolute;
-  top: 50%;
-  left: -10px;
-  width: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 38%, transparent);
-  content: '';
+  margin: 0 0 var(--am-gap-2xs);
 }
 
 .row :global(.am-disclosure__link),
 .stacked :global(.am-disclosure__link) {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--am-gap-sm);
 }
 
 .row :global(.am-disclosure__link) {
   min-width: 0;
-  min-height: 34px;
-  padding: 6px 7px;
+  min-height: 30px;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--am-radius-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
   line-height: var(--am-leading-tight);
@@ -176,7 +169,7 @@
 
 .row :global(.am-disclosure__link[aria-current='page']) {
   border-color: color-mix(in srgb, var(--am-accent) 28%, transparent);
-  box-shadow: inset 2px 0 0 var(--am-accent), 0 0 18px color-mix(in srgb, var(--am-accent) 9%, transparent);
+  box-shadow: inset 2px 0 0 var(--am-accent);
   font-weight: 650;
 }
 
@@ -186,15 +179,15 @@
 }
 
 .row :global(.am-disclosure__icon) {
-  flex: 0 0 17px;
-  width: 17px;
-  height: 17px;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
   opacity: 0.86;
 }
 
 .row :global(.am-disclosure__icon svg) {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .rail {
@@ -204,8 +197,8 @@
 .railGroup {
   display: grid;
   justify-items: center;
-  gap: 2px;
-  padding: 7px 0;
+  gap: var(--am-gap-2xs);
+  padding: var(--am-gap-xs) 0;
   border-bottom: 1px solid color-mix(in srgb, var(--am-showcase-line) 25%, transparent);
 }
 
@@ -226,10 +219,10 @@
   display: grid;
   place-items: center;
   width: 40px;
-  height: 38px;
-  border-radius: 12px;
+  height: 34px;
+  border-radius: var(--am-radius-sm);
   color: var(--am-ink-muted);
-  font-size: 11px;
+  font-size: var(--am-text-xs);
   font-weight: 750;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -372,31 +365,16 @@
   line-height: var(--am-leading-tight);
 }
 
+/*
+ * The screen's place as a one-line breadcrumb («Работа › Очередь»), as the original's header names where the reader is. It
+ * was a 48 px card with a group over the name; it is the strip's own text now, so the strip is 44 px, not 72.
+ */
 .screenContext {
-  display: grid;
-  grid-template-columns: 7px minmax(0, 1fr);
-  align-content: center;
-  column-gap: 11px;
-  row-gap: 1px;
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
   min-width: 0;
   max-width: min(100%, 420px);
-  min-height: 48px;
-  padding: 6px 14px;
-  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
-  border-radius: 14px;
-  background: var(--am-paper);
-  box-shadow: var(--am-shadow-1);
-}
-
-.screenContext::before {
-  grid-row: 1 / span 2;
-  align-self: center;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--am-radius-pill);
-  background: var(--am-accent);
-  box-shadow: 0 0 0 4px var(--am-accent-light);
-  content: '';
 }
 
 .contextGroup,
@@ -405,26 +383,25 @@
 }
 
 .contextGroup {
-  grid-column: 2;
-  font-size: 10px;
+  flex: 0 0 auto;
+  font-size: var(--am-text-xs);
   font-weight: 650;
   letter-spacing: 0.09em;
-  line-height: 1.2;
+  line-height: var(--am-leading-tight);
   text-transform: uppercase;
 }
 
 .contextDivider {
-  display: none;
+  flex: 0 0 auto;
 }
 
 .contextCurrent {
-  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   color: var(--am-ink);
   font-size: var(--am-text-base);
   font-weight: 650;
-  line-height: 1.25;
+  line-height: var(--am-leading-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -448,16 +425,16 @@
 .end :global(.am-theme) {
   flex-wrap: nowrap;
   max-width: 100%;
-  padding: 4px;
+  padding: var(--am-gap-2xs);
   border-color: color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
 
 .end :global(.am-theme__option) {
-  min-width: 31px;
-  min-height: 31px;
-  padding: 4px;
+  min-width: 26px;
+  min-height: 24px;
+  padding: var(--am-gap-2xs) var(--am-gap-xs);
 }
 
 .end :global(.am-theme__option[aria-pressed='true']) {
@@ -469,14 +446,14 @@
   position: relative;
   display: block;
   max-width: 170px;
-  min-height: 40px;
-  padding: 7px 12px 7px 25px;
+  min-height: 28px;
+  padding: var(--am-gap-2xs) var(--am-gap-md) var(--am-gap-2xs) var(--am-gap-lg);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
   border-radius: var(--am-radius-pill);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
-  line-height: 24px;
+  line-height: var(--am-leading-base);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -484,7 +461,7 @@
 .end :global(.am-app__instance::before) {
   position: absolute;
   top: 50%;
-  left: 11px;
+  left: var(--am-gap-md);
   width: 6px;
   height: 6px;
   border-radius: var(--am-radius-pill);
@@ -495,7 +472,7 @@
 
 .end :global(.am-app__signin) {
   margin-left: 0;
-  padding: 9px 12px;
+  padding: var(--am-gap-xs) var(--am-gap-md);
   border: 1px solid color-mix(in srgb, var(--am-accent) 28%, transparent);
   border-radius: var(--am-radius-pill);
   background: var(--am-paper);
@@ -516,7 +493,7 @@
 }
 
 .accountMenu :global(.am-menu__trigger) {
-  padding: 4px;
+  padding: var(--am-gap-2xs);
   border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);

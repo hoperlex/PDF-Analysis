@@ -1,18 +1,14 @@
 .card {
   width: min(100%, 680px);
-  margin: 0 auto;
-  padding: var(--am-gap-xl);
+  margin: 0;
+  padding: var(--am-gap-md);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-surface);
 }
 
 .card > a {
-  margin-top: var(--am-gap-lg);
+  margin-top: var(--am-gap-md);
 }
 
-@media (max-width: 780px) {
-  .card {
-    padding: var(--am-gap);
-  }
-}
+
