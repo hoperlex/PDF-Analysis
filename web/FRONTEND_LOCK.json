@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f",
-    "content_commit": "0976d3a637fa434485d5d83d8f64536a69061524",
-    "content_commit_subject": "fix(run): retain partial work and remove Codex answer delivery caps",
-    "dispatch_named_commit": "0976d3a637fa434485d5d83d8f64536a69061524",
-    "commit_note": "Contract 1.33.0 removes the runner answer-text character ceiling; same paths, operations and schemas.",
+    "sha256": "3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad",
+    "content_commit": "22dba87f",
+    "content_commit_subject": "feat(contract): 1.34.0 — the audit state of each document on listDocuments (UI-PARITY-DOC-AUDIT, UI-A-46/49/38)",
+    "dispatch_named_commit": "22dba87f63eeaf847cc7cb72c5b9358c91b09ad7",
+    "commit_note": "Resealed by UI-PARITY-DOC-AUDIT: contract 1.34.0 (contract 1.34.0 adds the document audit state).",
     "openapi_version": "3.1.0",
-    "info_version": "1.33.0",
+    "info_version": "1.34.0",
     "paths": 267,
     "operations": 295,
-    "component_schemas": 711,
+    "component_schemas": 712,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "f0b8b17dd05625032ea93e87818635728f12d11249822eb083c9cfa156d5648f",
+    "snapshot_sha256": "3822fc66406766307e4922bd90272c7f3b50c2e3e2cc86a9823ea49fb90d82ad",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "f656e658a336ebe7af0f08dfd75f316fb8056886103435ee6f42c7b7be7c2ad5",
-      "index.ts": "fdce1db4908f91a0d786cb3b72221293ca38ec272c402541edbe59a3d2de5924",
-      "operations.gen.ts": "6fe22b6378aa08d8fbd1866a3d09474eba1b50e17e66ea2cca841f025774773e",
-      "types.gen.ts": "314c78eddfc868c348724b454f30ba8579f62b5195d5ee6ac3ad06e41ce7c7d9"
+      "client.gen.ts": "66ada3397ddbeca87de8ca4c2bf9498f892a6534828c0d6efc07d5df8424d15e",
+      "index.ts": "d05cad618c08a90e8e2f2fa5b960d0e15e36c53d8d92540cef4e9dfe85a39e47",
+      "operations.gen.ts": "9ed90142c509babd309cfbe443eed74c96b05651b11c4ffaaf6edceb968b115f",
+      "types.gen.ts": "cdc6bbb910ddd027d0d3a97e2df809b1ca3de23df8edea974a8507e7b18db2d3"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
