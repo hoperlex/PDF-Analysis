@@ -43,7 +43,7 @@ import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal } from '@/widgets/execution-journal';
 import { ExecutionQueue } from '@/widgets/execution-queue';
-import { WorkerList } from '@/widgets/worker-list';
+import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
@@ -1035,6 +1035,15 @@ export function screens(): Screen[] {
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
   }
+  // M-17 (`R-151t`): the overview tiles over «Процессы», with servers not online and a partial registry.
+  add('WorkersOverview with the queue', render(createElement(WorkersOverviewView, {
+    workers: { online: 1, total: 3, onlineSlots: 4, freeSlots: 2, partial: true },
+    queue: [
+      { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 },
+      { state: 'retry_wait', count: 0 }, { state: 'succeeded', count: 12 }, { state: 'failed', count: 2 },
+      { state: 'cancelled', count: 0 }, { state: 'dead_letter', count: 0 },
+    ],
+  })));
   // The worker registry: one row per state, the offline one in the collapsed group, and an
   // administrator's intake switch on each.
   add('WorkerList loaded', withRouter(createElement(WorkerList, {

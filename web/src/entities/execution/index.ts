@@ -13,9 +13,9 @@ export {
 export type { ExecutionAction, QueueItemError } from './model/presentation';
 export {
   groupWorkers, hasUnknownWorkerState, jobHoldsLease, runHoldsLease, runWorker,
-  workerIntakeLabel, workerStateLabel,
+  workerIntakeLabel, workerStateLabel, workersOverview,
 } from './model/workers';
-export type { RunWorker, WorkerGroups } from './model/workers';
+export type { RunWorker, WorkerGroups, WorkersOverview } from './model/workers';
 export { RunWorkerLine } from './ui/run-worker-line';
 export { UpdateTime, updateTimeLabel } from './ui/update-time';
 export type { UpdateTimeProps } from './ui/update-time';

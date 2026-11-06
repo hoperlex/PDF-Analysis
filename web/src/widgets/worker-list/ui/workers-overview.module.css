@@ -1,0 +1,42 @@
+/* M-17: the overview tiles over «Процессы», a dense row as the original's. Tokens only. */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--am-gap-sm);
+  margin: 0 0 var(--am-gap-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  display: grid;
+  min-width: 9rem;
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+}
+
+.label {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.value {
+  font-size: var(--am-text-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.partial {
+  align-self: center;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}

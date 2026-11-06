@@ -46,6 +46,27 @@ export function groupWorkers(items: readonly ExecutionWorker[]): WorkerGroups {
   };
 }
 
+/**
+ * `UI-PARITY` M-17 (ruling `R-151t`, Q-MD-17): the original's overview of the worker processes. «Серверы онлайн» counts
+ * the `online` workers of all listed; free slots are counted over the online workers only («2 / 4»), a `stale` worker is
+ * not online, and the rest are said as «N не в сети». `partial` is true when the registry has pages beyond the one read,
+ * so the figures are of that page only.
+ */
+export interface WorkersOverview {
+  readonly online: number;
+  readonly total: number;
+  readonly onlineSlots: number;
+  readonly freeSlots: number;
+  readonly partial: boolean;
+}
+
+export function workersOverview(items: readonly ExecutionWorker[], partial: boolean): WorkersOverview {
+  const online = items.filter((worker) => worker.state === 'online');
+  const onlineSlots = online.reduce((sum, worker) => sum + worker.slots, 0);
+  const busy = online.reduce((sum, worker) => sum + worker.current_run_ids.length, 0);
+  return { online: online.length, total: items.length, onlineSlots, freeSlots: Math.max(0, onlineSlots - busy), partial };
+}
+
 export function hasUnknownWorkerState(items: readonly ExecutionWorker[]): boolean {
   return items.some((worker) => workerStateLabel(worker.state) === null);
 }
