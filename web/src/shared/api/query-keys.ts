@@ -95,6 +95,8 @@ export const QUERY_NAMESPACES = [
   'analysis',
   'assignments',
   'optimisation',
+  // `UI-PARITY-P0P`: «График работ», one root so a schedule command refreshes the month and the reserve.
+  'work-schedule',
 ] as const;
 
 export type QueryNamespace = (typeof QUERY_NAMESPACES)[number];
