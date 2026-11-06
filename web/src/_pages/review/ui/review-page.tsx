@@ -36,7 +36,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
-import type { FindingObservationId, FindingUid, ProjectUid, RunId } from '@/shared/api';
+import type { FindingObservationId, FindingUid, ProjectUid, RunId, VersionUid } from '@/shared/api';
 import { getFinding, listDecisionHistory, queryKeys } from '@/shared/api';
 import { ErrorState, LoadingState, PageShell, RunStateBadge } from '@/shared/ui';
 import { routes } from '@/shared/lib';
@@ -60,10 +60,12 @@ import { SEVERITY_LABELS, admitFindings, groupByCategory, runFindingsQueryOption
 import { declaredPages, firstDeclaredPage } from '@/entities/finding-observation';
 
 import { presentFailureOrNull, presentFindingsFailure } from '../model/present-failure';
+import { stripPageOf } from '../model/page-blocks';
 import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { ReviewPageBlocks } from './page-blocks';
 import { ReviewRowActions } from './review-row-actions';
 import { ReviewViewerAside, ReviewViewerDialog } from './review-viewer-dialog';
 import styles from './review-page.module.css';
@@ -223,6 +225,18 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       onRetry: evidence.refetch,
     }),
   };
+  // `UI-A-74`: the strip of the page the viewer is on, which is one of the pages the finding cites. The key is
+  // the finding and the page, so a block view left open does not outlive either.
+  const citedPages = detail === null ? [] : declaredPages(detail.observation);
+  const stripPage = stripPageOf(citedPages, activePage);
+  const pageBlocks = detail === null || stripPage === null ? null : (
+    <ReviewPageBlocks
+      key={`${detail.finding_uid}:${stripPage}`}
+      projectUid={projectUid}
+      versionUid={detail.version_uid as VersionUid}
+      page={stripPage}
+    />
+  );
   const decidedOrProposed = detail === null ? null
     : detail.decided_severity !== undefined ? SEVERITY_LABELS[detail.decided_severity]
     : detail.observation.proposed_severity !== undefined
@@ -330,6 +344,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                 <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
               )}
 
+              {expanded ? null : pageBlocks}
+
               {mayAct ? <DecisionPanel
                 currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
                 observationId={detail.observation.finding_observation_id as FindingObservationId}
@@ -423,6 +439,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                       }}
                     />
                   ) : null}
+                  blocks={pageBlocks}
                 />
               }
             />
