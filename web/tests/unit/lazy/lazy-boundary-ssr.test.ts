@@ -33,6 +33,8 @@
  * It is wrapped only to count and await the loader's promises.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -41,6 +43,7 @@ import type { ComponentType } from 'react';
 import { renderToPipeableStream } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { WEB_ROOT, walkFiles } from '../../guards/lib/repo';
 import { newClient } from '../screens/harness';
 import { PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
 
@@ -135,4 +138,19 @@ describe('D-329: a lazy widget is served the same before and after the server ha
       expect(loader.started - startedBefore, 'the server must not start loading the widget').toBe(0);
     });
   }
+});
+
+describe('D-329: no wrapper under _pages is left server-rendered', () => {
+  it('every next/dynamic call in a lazy-*.tsx wrapper passes `ssr: false`', () => {
+    const wrappers = walkFiles(join(WEB_ROOT, 'src', '_pages')).filter((file) => /[\\/]lazy-[^\\/]+\.tsx$/.test(file));
+    // Six wrappers today; a seventh must be added to the lazy-boundary guard as well.
+    expect(wrappers.length).toBeGreaterThanOrEqual(6);
+    for (const file of wrappers) {
+      const source = readFileSync(file, 'utf8');
+      const calls = source.match(/\bdynamic\(/g) ?? [];
+      const ssrOff = source.match(/\{\s*ssr:\s*false\s*,/g) ?? [];
+      expect(calls.length, `${file} calls dynamic()`).toBeGreaterThan(0);
+      expect(ssrOff.length, `${file}: every dynamic() passes ssr: false`).toBe(calls.length);
+    }
+  });
 });
