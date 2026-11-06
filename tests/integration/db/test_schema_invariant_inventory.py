@@ -347,12 +347,17 @@ from sqlalchemy import Engine, text
 #: `CMP-SEAL-C3` adds fifteen tables, 144 columns, 192 constraints, 39 indexes, 28 triggers and nine
 #: functions (one callable profile-scope predicate); views, extensions, sequences, policies and the
 #: state topology remain unchanged. Those were the figures measured on a fresh 0041 DB; the seal below is the head's.
+#: Resealed 2026-11-06 for migrations 0051..0054 (`UI-PARITY-P0F`..`P0I`), measured on a fresh database migrated to
+#: ``0054_finding_execution_status``, then down to ``0050`` and up again: relations +2 (``document_tag``,
+#: ``finding_execution_status``), columns +11 (``audit_run.started_by_user_uid``; ``document.archived_at`` and
+#: ``archived_by_user_uid``; four in each new table), constraints +15 (their keys, references and checks), indexes +4,
+#: triggers the same 241 with a new digest (0051 re-created ``audit_run``'s frozen-column trigger with the starter).
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1549, "fe2af5e66658dda832e26c8d23b0fe6f3603c35e77c22137c04f72cf1b1c446e"),
-    "relations": (141, "ea3f9c4f791bc938db522b27fe80bf1fcaed96eb46f5204df1c5af7f63a55c01"),
-    "constraints": (1900, "99e4bb01d742657a25f39054cecfed53b8e49d471fa07e624c443baf0d485e4b"),
-    "indexes": (450, "9f32323579a83c0cc5de00b51597a1e42a2ddf72985e398feeaf0212a31630f8"),
-    "triggers": (241, "710b638de7200c0e2b57dd9ec4bbc9f237bf1d90f72dbf249cc661d3e83eb8ef"),
+    "columns": (1560, "fa5dba735bf15a36ea095d44b636cb91667fee21c8d26b1dd9631b7aa12c370b"),
+    "relations": (143, "c06587b66005163398d480341ef15a002f27874e9290e0f8abc7fd234981b4b3"),
+    "constraints": (1915, "00ae84ad83f050ea4adab456288c4ab2e53b0aa32bd8ddc8260738ac2bcae677"),
+    "indexes": (454, "ec0a8481f4d1bc9b03b8e6e0515ca7914f37bf4a26bbd302ac54f807818e52df"),
+    "triggers": (241, "a740eb0f42fa677f3a47760d754119746ab7af71d15d686347bb93ee0dc7c483"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

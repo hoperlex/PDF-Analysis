@@ -111,21 +111,20 @@ _ITEM_COLUMNS = """
        r.version_uid, dv.version_ordinal,
        (SELECT min(a.created_at) FROM attempt a WHERE a.job_id = page.job_id) AS started_at,
        r.terminal_reason AS error_code, r.interrupted_reason, r.started_by_user_uid,
-       r.analysis_profile_id, dv.page_count,
-       CASE WHEN page.state = 'queued' THEN 1 + (
-           SELECT count(*) FROM job q
-            WHERE q.state = 'queued'
-              AND (q.priority > page.priority
-                   OR (q.priority = page.priority
-                       AND (q.created_at < page.created_at
-                            OR (q.created_at = page.created_at AND q.job_id < page.job_id))))
-       ) END AS queue_position,
+       r.analysis_profile_id, dv.page_count, qp.queue_position,
        (SELECT count(*) FROM attempt a WHERE a.job_id = page.job_id) AS attempt_count"""
+#: `UI-PARITY-P0M`: a queued job's place in the dispatcher's order (priority, then the oldest first), numbered once per
+#: statement over the queued jobs (``ix_job_dispatch`` leads with ``state``) rather than counted again for every row.
 _ITEM_JOINS = """
   JOIN audit_run r ON r.run_id = page.run_id
   JOIN project p ON p.project_uid = r.project_uid
   JOIN document_version dv ON dv.version_uid = r.version_uid
-  JOIN document d ON d.document_uid = dv.document_uid"""
+  JOIN document d ON d.document_uid = dv.document_uid
+  LEFT JOIN (
+      SELECT q.job_id, row_number() OVER (ORDER BY q.priority DESC, q.created_at, q.job_id) AS queue_position
+        FROM job q
+       WHERE q.state = 'queued'
+  ) qp ON qp.job_id = page.job_id"""
 #: The page of jobs is cut from ``job`` alone, sorted and limited first; only those rows are then joined to the run,
 #: the project and the document, so the cost of a read is the sort it always was plus one lookup per listed row.
 #: The three optional filters bind as ``CAST(:name AS type) IS NULL OR ...``: a state, and the half-open period

@@ -112,7 +112,7 @@ def _replayed(outcome: Mapping[str, Any]) -> DecisionImport:
 
 def import_run_decisions(
     session: Session, *, run_id: str, content: bytes, idempotency_key: str, author_label: str,
-    author_user_uid: str, commands: CommandRepository | None = None,
+    author_user_uid: str | None, commands: CommandRepository | None = None,
 ) -> DecisionImport:
     """Read the edited workbook and append the decisions it changes; one report row per decision row."""
     if session.execute(_RUN, {"run_id": run_id}).first() is None:
@@ -139,7 +139,7 @@ def _refused(row: SheetRow, reason: str, *, known: bool = False) -> ImportedRow:
 
 
 def _import(
-    session: Session, run_id: str, sheet: Sequence[SheetRow], author_label: str, author_user_uid: str,
+    session: Session, run_id: str, sheet: Sequence[SheetRow], author_label: str, author_user_uid: str | None,
 ) -> list[ImportedRow]:
     named = sorted({row.finding_uid for row in sheet if row.finding_uid})
     known = {} if not named else {

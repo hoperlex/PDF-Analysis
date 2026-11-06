@@ -196,7 +196,8 @@ def test_the_workbook_carries_neither_claimed_number_in_any_cell(
     assert required not in every_cell and stated not in every_cell
     findings = _cells(export.content, "xl/worksheets/sheet2.xml")
     assert not {"required_value", "stated_value"} & set(findings.values())
-    assert len(FINDING_COLUMNS) == 11 and not any("required" in c or "stated" in c for c in FINDING_COLUMNS)
+    # Twelve since contract 1.27.0: the last, «ID замечания», is the finding's identity (`R-151d`), not a number.
+    assert len(FINDING_COLUMNS) == 12 and not any("required" in c or "stated" in c for c in FINDING_COLUMNS)
 
 
 @pytest.mark.parametrize("scope", decisions.WITHHELD_SCOPES)
