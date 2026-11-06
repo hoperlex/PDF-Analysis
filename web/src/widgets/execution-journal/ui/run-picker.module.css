@@ -1,0 +1,38 @@
+.picker {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--am-gap-sm);
+}
+
+.step {
+  display: grid;
+  align-content: start;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.step select {
+  width: 100%;
+  min-width: 0;
+}
+
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+}
+
+.scope code {
+  overflow-wrap: anywhere;
+}

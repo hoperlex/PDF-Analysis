@@ -17,7 +17,9 @@ replaced by a **token**, and there are exactly two ways a value may earn one:
 
 1. **The journey already knows it.** It supplied the value, or read it out of an earlier
    response in the same journey (``project_uid``, ``version_uid``, ``run_id``,
-   ``finding_uid``, the cursor, ...). Substitution is by *exact value*, never by pattern.
+   ``finding_uid``, the cursor, ...), or read it out of the frozen contract document
+   (``contract_version``, `D-322`; never out of a response and never out of the product).
+   Substitution is by *exact value*, never by pattern.
 2. **It sits under a declared field name and matches a pinned format.**
    :data:`TIMESTAMP_FIELDS` names them one by one and :data:`TIMESTAMP_FORMAT` /
    :data:`CORRELATION_FORMAT` are literal patterns written out here, not imported from the
@@ -667,6 +669,104 @@ def presented_account_uid() -> str:
         _ACCOUNT_UID_CACHE = str(provisioned_record(ACCOUNT_LABEL).user_uid)
     return _ACCOUNT_UID_CACHE
 
+
+def declare_run_starter(tokens: "Tokens") -> None:
+    """Declare the account that started the run, for a case whose body is a `RunStatus`.
+
+    `R-151v` (contract `1.21.0`, migration `0051`): a `RunStatus` names the account whose
+    ``startRun`` created the run, as ``started_by_user_uid``, and that account's display
+    label as ``started_by_label``. The starter is the account this journey provisions and
+    presents on every request, read from its own row (:func:`presented_account_uid`), so the
+    uid qualifies under the first token rule: it is a value the journey supplied, and it is
+    substituted by exact value. It is **not** a field name the comparison skips -- a run
+    started by some other account leaves its own ``usr_...`` in the live body, where the
+    record expects ``{{user_uid}}``, and the comparison reddens. The label is not a token at
+    all: it is a literal in the expectation, the same ``Сьютова Е.`` records 10 and 11 pin as
+    the ``author_label`` of this very account.
+
+    Called **after** ``tokens.timestamps(...)``: ``ts_N`` is numbered by the entries declared so
+    far, so declaring the uid first would renumber every timestamp token of a record.
+    """
+    tokens.add(
+        "user_uid",
+        presented_account_uid(),
+        "the account this journey provisions and presents on every request, read from its own "
+        "row; it is the account whose startRun created the run (R-151v, started_by_user_uid)",
+    )
+
+
+
+#: `D-322`. The frozen document the journey reads the error envelope's version from, and the pattern of the
+#: contract's `Sha256` schema (``^[0-9a-f]{64}$``), written out rather than imported.
+CONTRACT_DOCUMENT = REPOSITORY_ROOT / "contracts" / "api" / "v1" / "openapi.json"
+SHA256_FORMAT = re.compile(r"^[0-9a-f]{64}$")
+
+
+def contract_envelope_version() -> str:
+    """The ``contract_version`` every error envelope must carry, read from the frozen contract.
+
+    ``ErrorEnvelope.properties.contract_version.const`` of ``contracts/api/v1/openapi.json``, asserted to be the
+    document's own ``info.version`` too ("the two are one value on purpose"). It is read from the contract
+    document -- never from a response and never from ``auditmanager`` -- so it is a value the journey *knows*
+    (the first token rule), and the thing it is compared with is the version the served envelope really emits,
+    which the product loads from ``contracts/domain/v1/error-codes.json``: two documents and a constant that
+    must agree, and a body that names any other version leaves its literal behind and reddens.
+    """
+    document = json.loads(CONTRACT_DOCUMENT.read_text(encoding="utf-8"))
+    declared = document["components"]["schemas"]["ErrorEnvelope"]["properties"]["contract_version"]["const"]
+    assert isinstance(declared, str) and declared == document["info"]["version"], (
+        "the contract no longer says that the envelope's version is the document's version: "
+        f"ErrorEnvelope.contract_version.const is {declared!r}, info.version is {document['info']['version']!r}"
+    )
+    return declared
+
+
+def declare_contract_version(tokens: "Tokens") -> None:
+    """Declare the contract version of a case whose body is an ``ErrorEnvelope`` (`D-322`).
+
+    The sixteen error records captured before the seal carry the literal ``1.0.0`` and are projected to the
+    current version by the comparison, behind a digest. A record added now has no history to protect, and a
+    literal would be edited, byte for byte, at every contract bump without telling anyone anything. So it carries
+    ``{{contract_version}}``: the token stands for exactly the contract's current version
+    (:func:`contract_envelope_version`) and for nothing else. It is **not** a field name the comparison skips and
+    not a pattern it accepts: a served envelope that names an older version, a newer one or none leaves a
+    literal where the record has the token, and the comparison reports the byte.
+    """
+    tokens.add(
+        "contract_version",
+        contract_envelope_version(),
+        "the version the frozen contract declares for every ErrorEnvelope (ErrorEnvelope.contract_version.const of "
+        "contracts/api/v1/openapi.json, equal to its info.version), read from the contract and not from the "
+        "response; a body naming any other version keeps its literal and does not match",
+    )
+
+
+def declare_estimate_digest(tokens: "Tokens", digest: Any) -> None:
+    """Declare the ``estimate_digest`` of a ``RunCostEstimate`` (`D-322`), format-checked first.
+
+    The digest is a SHA-256 over the estimate's authority: the version's source facts (its uid, bytes, manifest
+    blob ids and classification), the route and the model and rate pins, the window and token figures. The
+    version's uid and blob ids are allocated by this capture run, so the value cannot repeat and cannot be a
+    literal; it earns its token by the second rule, a declared field under a pinned format (the contract's
+    ``Sha256`` pattern), checked before it is replaced.
+
+    What this erases is the digest's value. What still pins it: cases 03 to 05 send this very value back as the
+    consent, and the start recomputes the estimate in its own transaction and answers ``409
+    run_cost_estimate_stale`` to a consent whose digest differs, so a digest computed over anything else than
+    the estimate's authority never reaches the 202 of record 03. That the digest *moves* when the source, the
+    route or the rates move is the cost preflight's own unit suite's claim (``tests/unit/runs/test_cost_preflight.py``).
+    """
+    assert isinstance(digest, str) and SHA256_FORMAT.fullmatch(digest), (
+        f"estimate_digest carried {digest!r}, which is not the pinned Sha256 format {SHA256_FORMAT.pattern}"
+    )
+    tokens.add(
+        "estimate_digest",
+        digest,
+        "a verification value the cost preflight computes over the version's source facts, the route and the "
+        "pinned rates, read from the declared field 'estimate_digest' and checked against the contract's "
+        f"Sha256 pattern {SHA256_FORMAT.pattern} before being tokenised; cases 03 to 05 send it back as the "
+        "consent, and the start recomputes it and refuses a different one with run_cost_estimate_stale",
+    )
 
 
 # --- O1: the one ordering this baseline does not pin -------------------------------
@@ -1373,46 +1473,65 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     correlation(classified, t)
     content_length(classified, t)
 
-    # 2c -- startRun without a priced consent: asserted here, deliberately not a record --------
-    # `BETA-COST-PREFLIGHT-1030`: the contract behaviour a start without a confirmed consent now has, asserted
-    # rather than re-captured. It is not a record because every error body carries `contract_version`, which
-    # `test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else` pins for sixteen
-    # historical records and asserts whole: a seventeenth error record would put an unexamined literal in the
-    # corpus. A failed assertion here fails the journey itself, so every record's test goes red with this
-    # message. The refusal is raised before the idempotency key is claimed, so it writes nothing and the
-    # start of case 03 is a fresh one.
+    # 2c -- startRun without a priced consent ------------------------------------------------
+    # `BETA-COST-PREFLIGHT-1030`: since the composition root closes `require_cost_consent`, a start that carries no
+    # confirmed consent is refused before the idempotency key is claimed, so it writes nothing and the start of
+    # case 03 is a fresh one. `D-322`: this is a record now. Its `contract_version` is the journey's own token
+    # (`declare_contract_version`), so the record does not move with the next contract bump and a body that names
+    # any other version still reddens.
+    t = Tokens()
     with plain_analysis_pricing():
-        unpriced_status, _unpriced_headers, unpriced_payload = api.send(
+        unpriced = record(
+            "02c-startRun.refusal.cost_consent_required",
+            "startRun",
+            "startRun with no cost_consent: since BETA-COST-PREFLIGHT-1030 a new paid start requires a fresh "
+            "confirmed consent, so this is 422 validation_failed (cost_consent / confirmation_required) and "
+            "nothing is created",
             "POST",
             "/runs",
-            headers={
-                AUTHORIZATION_HEADER: f"Bearer {static_token()}",
-                "Idempotency-Key": f"w13base-{tag}-unpricedrun",
-                **json_headers,
-            },
+            headers={"Idempotency-Key": f"w13base-{tag}-unpricedrun", **json_headers},
             body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+            body_note="StartRunRequest, version_uid only: no cost_consent",
+            tokens=t,
         )
-    refusal = json.loads(unpriced_payload.decode("utf-8"))
-    assert unpriced_status == 422, (unpriced_status, refusal)
+    refusal = json_of(unpriced)
+    assert unpriced.status == 422, (unpriced.status, refusal)
     assert refusal["error_code"] == "validation_failed", refusal
     assert refusal["retryable"] is False, refusal
     assert refusal["details"] == {
         "field": "cost_consent", "constraint": "confirmation_required",
     }, refusal
+    declare_contract_version(t)
+    correlation(unpriced, t)
+    content_length(unpriced, t)
 
-    # The estimate the person confirms is a read: not a record (the corpus covers sixteen operations and a
-    # price is a function of the pins and the prompt, which this corpus does not own), but it is asserted.
+    # 2d -- estimateRunCost ------------------------------------------------------------------
+    # The price the person confirms: a read, no provider call, no job (`RunCostEstimate`). `D-322`: a record,
+    # with exactly one figure-like value erased, the `estimate_digest` (`declare_estimate_digest` says why and
+    # what keeps it honest). Every other figure is pinned: the fixture, the pinned prompt bundle and the pinned
+    # price table make them a function of nothing the journey varies.
+    t = Tokens()
     with plain_analysis_pricing():
-        estimate_status, _estimate_headers, estimate_payload = api.send(
+        estimated = record(
+            "02d-estimateRunCost.success",
+            "estimateRunCost",
+            "the cost preflight of case 02b's version: 200, a source-bound, recorded-mode, run-scope estimate of "
+            "the plain analysis, read-only. Case 03 confirms exactly this estimate",
             "POST",
             ESTIMATE_RUN_TARGET,
-            headers={AUTHORIZATION_HEADER: f"Bearer {static_token()}", **json_headers},
+            headers=json_headers,
             body=json.dumps({"version_uid": version_uid}).encode("utf-8"),
+            body_note="RunCostEstimateRequest, version_uid only; the operation declares no Idempotency-Key",
+            tokens=t,
         )
-    assert estimate_status == 200, (estimate_status, estimate_payload)
-    estimate = json.loads(estimate_payload.decode("utf-8"))
+    estimate = json_of(estimated)
+    assert estimated.status == 200, (estimated.status, estimate)
     assert estimate["version_uid"] == version_uid, estimate
     assert estimate["scope"] == "run" and estimate["provider_mode"] == "recorded", estimate
+    t.add("version_uid", version_uid, "the identity case 02 allocated")
+    declare_estimate_digest(t, estimate["estimate_digest"])
+    correlation(estimated, t)
+    content_length(estimated, t)
     consent = {
         "estimate_digest": estimate["estimate_digest"],
         "ceiling_micros": estimate["recommended_ceiling_micros"],
@@ -1449,6 +1568,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity this request allocated")
     t.timestamps(run)
+    declare_run_starter(t)
     correlation(started, t)
     content_length(started, t)
 
@@ -1483,6 +1603,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated; the replay returns it")
     t.timestamps(json_of(replay))
+    declare_run_starter(t)
     correlation(replay, t)
     content_length(replay, t)
 
@@ -1514,6 +1635,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(json_of(normalised))
+    declare_run_starter(t)
     correlation(normalised, t)
     content_length(normalised, t)
 
@@ -1569,6 +1691,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(json_of(status_case))
+    declare_run_starter(t)
     correlation(status_case, t)
     content_length(status_case, t)
 
@@ -1590,6 +1713,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(json_of(supplied))
+    declare_run_starter(t)
     content_length(supplied, t)
 
     # 8 -- listRunFindings ----------------------------------------------------------
@@ -2312,6 +2436,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(listed_runs)
+    declare_run_starter(t)
     correlation(runs, t)
     content_length(runs, t)
 

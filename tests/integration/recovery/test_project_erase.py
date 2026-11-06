@@ -128,6 +128,12 @@ SLICES: dict[str, str] = {
     "expert_decision_event": f"finding_uid IN ({_FINDINGS})",
     "work_assignment": "project_uid = :p",
     "work_assignment_event": "assignment_uid IN (SELECT assignment_uid FROM work_assignment WHERE project_uid = :p)",
+    # `0053`..`0055`: a document's tags, a finding's execution status and an assignment's planned dates.
+    "document_tag": "document_uid IN (SELECT document_uid FROM document WHERE project_uid = :p)",
+    "finding_execution_status": f"finding_uid IN ({_FINDINGS})",
+    "work_assignment_schedule_event": (
+        "assignment_uid IN (SELECT assignment_uid FROM work_assignment WHERE project_uid = :p)"
+    ),
     "price_list_revision": "project_uid = :p",
     "price_list_position": "price_list_id IN (SELECT price_list_id FROM price_list_revision WHERE project_uid = :p)",
     "vendor_list_revision": "project_uid = :p",
@@ -444,8 +450,9 @@ def test_the_closure_is_read_from_the_catalog_and_agrees_with_the_hand_written_s
     # and launch queue join it (49 -> 61); the jobs, answers, questions, descriptions, sheet items, extractions, comparisons,
     # reports and the launch queue reference the project directly.
     # `0042_comparison_stage_review`: the twelve tables of the stage AI review, repairs, expert cards and batches join
-    # it (76 -> 88); only the batch references the project directly.
-    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 88
+    # it (76 -> 88); only the batch references the project directly. `0053`..`0055` add the document's tags, the
+    # finding's execution status and the assignment's planned dates (88 -> 91); none references the project directly.
+    assert tool.UNSCOPED_PRODUCT_TABLES == {"worker"} and len(closure.tables) == 91
     assert set(closure.direct) == {
         "ar_v3_run_group", "audit_run", "comparison_ai_job", "comparison_ai_pair_answer", "comparison_ai_pair_question",
         "comparison_ai_sheet_item", "comparison_launch_queue", "comparison_matrix", "comparison_matrix_edit",
@@ -552,15 +559,10 @@ def test_a_dry_run_is_the_default_prints_exact_counts_and_changes_nothing(stand:
     exclusive = exclusive_blobs(stand, target)
     assert int(_line(out, "blobs-exclusive")) == len(exclusive) == 17
     assert int(_line(out, "blobs-shared")) == len(blob_ids_of(stand, target)) - len(exclusive) == 1
-    # The seed drives the real pipeline, whose source-preparation stage journals `stage.pdf_precheck` for the run (`runs/executor.py`,
-    # at most once a second): the 24 are the events that exist whatever the host's speed, and the precheck rows are counted from the
-    # database with this test's own predicate, so the figure is exact and not a timing guess.
-    prechecks = scalars(
-        stand,
-        "SELECT count(*) FROM audit_event WHERE event_type = 'stage.pdf_precheck' "
-        "AND aggregate_id IN (SELECT run_id FROM audit_run WHERE project_uid = :p)", p=target)[0]
-    assert prechecks >= 1, "the seed no longer reaches the PDF precheck: this decomposition would be vacuous"
-    assert f"run-journal events of the project (identities only): {24 + prechecks}" in out
+    # The seed drives the real pipeline, whose source-preparation stage journals `stage.pdf_precheck` for the run (`runs/executor.py`).
+    # `D-327`: the seed holds the throttle's clock still (`precheck_clock`), so those are exactly three (`PRECHECK_EVENTS`): the run's
+    # journal is the 24 + 3 = 27 events, whatever the host's speed.
+    assert "run-journal events of the project (identities only): 27" in out
     assert events(stand) == []
 
 

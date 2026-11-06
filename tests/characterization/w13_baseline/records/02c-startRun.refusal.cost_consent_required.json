@@ -1,0 +1,58 @@
+{
+  "case": "02c-startRun.refusal.cost_consent_required",
+  "operation": "startRun",
+  "purpose": "startRun with no cost_consent: since BETA-COST-PREFLIGHT-1030 a new paid start requires a fresh confirmed consent, so this is 422 validation_failed (cost_consent / confirmation_required) and nothing is created",
+  "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
+  "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
+  "exception": null,
+  "unordered": null,
+  "request": {
+    "method": "POST",
+    "target": "/runs",
+    "headers": [
+      [
+        "Authorization",
+        "Bearer w13-baseline-static-token"
+      ],
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Idempotency-Key",
+        "w13base-{{session_tag}}-unpricedrun"
+      ]
+    ],
+    "body_length": 49,
+    "body_note": "StartRunRequest, version_uid only: no cost_consent"
+  },
+  "response": {
+    "status": 422,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 344,
+      "text": "{\"contract_version\": \"{{contract_version}}\", \"error_code\": \"validation_failed\", \"message\": \"The request or payload violates a declared schema, enum, format or invariant. Nothing was created or changed.\", \"correlation_id\": \"{{correlation_id}}\", \"retryable\": false, \"details\": {\"field\": \"cost_consent\", \"constraint\": \"confirmation_required\"}}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{contract_version}}": "the version the frozen contract declares for every ErrorEnvelope (ErrorEnvelope.contract_version.const of contracts/api/v1/openapi.json, equal to its info.version), read from the contract and not from the response; a body naming any other version keeps its literal and does not match",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key"
+  }
+}

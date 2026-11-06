@@ -1,0 +1,55 @@
+{
+  "case": "02d-estimateRunCost.success",
+  "operation": "estimateRunCost",
+  "purpose": "the cost preflight of case 02b's version: 200, a source-bound, recorded-mode, run-scope estimate of the plain analysis, read-only. Case 03 confirms exactly this estimate. EDITED AFTER CAPTURE, ONE WAY (D-322): the six optional properties the version does not set (connection_revision_id, preset_revision_id, executor_group_id, executor_group_revision_id, routing_rule_revision_id, pin_id) are ABSENT here, as the contract declares them (optional, not nullable); the served body carries them as null, a deviation the comparison projects back in memory (_estimate_nulls_expected) so it is named, counted and removable instead of frozen in this file",
+  "captured_through": "starlette.testclient.TestClient over auditmanager.api.app.create_asgi_app()",
+  "pre_authorization": "Captured after the T-6 seam landed. Every request here presents the configured bearer credential and is answered. No record here exercises a caller's rights, so none pins 401 or 403.",
+  "exception": null,
+  "unordered": null,
+  "request": {
+    "method": "POST",
+    "target": "/runs/cost-estimate",
+    "headers": [
+      [
+        "Authorization",
+        "Bearer w13-baseline-static-token"
+      ],
+      [
+        "Content-Type",
+        "application/json"
+      ]
+    ],
+    "body_length": 49,
+    "body_note": "RunCostEstimateRequest, version_uid only; the operation declares no Idempotency-Key"
+  },
+  "response": {
+    "status": 200,
+    "headers": [
+      [
+        "Content-Type",
+        "application/json"
+      ],
+      [
+        "Content-Length",
+        "{{content_length}}"
+      ],
+      [
+        "X-Correlation-Id",
+        "{{correlation_id}}"
+      ]
+    ],
+    "body": {
+      "kind": "text",
+      "length": 462,
+      "text": "{\"estimate_digest\": \"{{estimate_digest}}\", \"scope\": \"run\", \"version_uid\": \"{{version_uid}}\", \"provider_mode\": \"recorded\", \"billing\": \"metered\", \"model_id\": \"claude-opus-5\", \"text_characters\": 3810, \"page_count\": 8, \"windows\": 1, \"calls\": 1, \"input_tokens\": 20271, \"output_tokens\": 16000, \"estimated_cost_micros\": 501355, \"recommended_ceiling_micros\": 601626, \"currency\": \"USD\", \"relaxed_limits\": false}",
+      "note": ""
+    }
+  },
+  "tokens": {
+    "{{content_length}}": "a function of the body, which is compared byte for byte; the comparison asserts Content-Length == str(len(body)) separately",
+    "{{correlation_id}}": "assigned by the edge because the request carried none; checked against the pinned CorrelationId shape before being tokenised",
+    "{{estimate_digest}}": "a verification value the cost preflight computes over the version's source facts, the route and the pinned rates, read from the declared field 'estimate_digest' and checked against the contract's Sha256 pattern ^[0-9a-f]{64}$ before being tokenised; cases 03 to 05 send it back as the consent, and the start recomputes it and refuses a different one with run_cost_estimate_stale",
+    "{{session_tag}}": "this capture run's tag, carried by every idempotency key",
+    "{{version_uid}}": "the identity case 02 allocated"
+  }
+}

@@ -8,6 +8,130 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-11-06 by `LANE-W13-COST-01`, contract 1.33.0 (`D-322`)
+
+**Thirty-nine records: two added, none edited.** The cost path the journey had only asserted since `EXEC2-FIX-BETA-STUBS` is
+recorded: `02c-startRun.refusal.cost_consent_required` (`startRun` with no `cost_consent`: `422 validation_failed`,
+`details` `cost_consent` / `confirmation_required`, nothing created) and `02d-estimateRunCost.success` (`estimateRunCost`,
+`200`, the plain analysis's recorded-mode, run-scope estimate). **The consented start is not a third new record: it is records
+`03`, `04` and `05`**, which have carried the consent since that amendment (a `202` to a start whose `cost_consent` is the
+estimate's digest and recommended ceiling); a second start would only duplicate them. What was missing was the two records
+either side of it, and a statement that 03-05's consent *is* 02d's: `test_the_consented_start_carries_the_consent_the_estimate_record_gives`
+rebuilds the three request bodies from 02d (digest, recommended ceiling) and requires the lengths 03-05 declare (199, 199, 228).
+Measured on a throwaway stand at `9236b831`: 86 passed before, 99 after (13 new: the two record comparisons and eleven tests).
+
+*How `contract_version` is tokenised in a new error record.* The sixteen records captured before the seal carry the literal
+`1.0.0` and are projected to the current version by the comparison, behind a digest. A record added now has no history to
+protect, and a literal would be edited, byte for byte, at every contract bump (fourteen minor versions, 1.19.0 to 1.33.0, between the
+amendment of 2026-11-05 and this one) without anyone learning anything. A pattern (any `x.y.z`) or a skipped field name would accept a wrong version, which is the claim an error body makes.
+So 02c carries `{{contract_version}}`, a token of the first kind (*the journey already knows it*) with a new source for the
+knowing: `journey.contract_envelope_version()` reads `ErrorEnvelope.contract_version.const` from `contracts/api/v1/openapi.json`
+(asserted equal to its `info.version`), never from a response and never from `auditmanager`. The served envelope takes its
+version from a different file (`contracts/domain/v1/error-codes.json`), so the comparison is a real one -- two documents and a
+constant that must agree -- and a body naming another version, an empty one or none leaves its literal where the record has the
+token and reddens (`test_the_cost_path_records_redden_on_a_planted_difference`; also measured by driving the journey against a
+contract that says `1.34.0` while the server says `1.33.0`: 02c differs at byte 22, the version). The token is exact, not a skip: it
+erases no value but the contract's own. This is not an `exception` block and `PERMITTED_EXCEPTIONS` is unchanged.
+
+*The guard that pins the set.* `test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else` asserted that the
+version-bearing records are exactly the sixteen. It now asserts the set whole in two tables (`_contract_version_census`): the
+sixteen historical literals and `_TOKENISED_CONTRACT_VERSION_CASES` (02c). A record in neither is an unexamined literal; a
+tokenised record must carry exactly one `{{contract_version}}` property and no literal version; a historical one must not carry the
+token. `test_the_contract_version_census_can_fail` plants each of those, and
+`test_the_contract_version_token_is_the_contracts_and_refuses_a_contract_that_disagrees` shows the journey refusing a contract whose
+envelope const and `info.version` part.
+
+*Why 02d is the contract-correct form and not the served bytes.* `RunCostEstimate` declares `connection_revision_id`,
+`preset_revision_id`, `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` and `pin_id` as optional string
+properties (outside `required`, no `null` in their schemas). The cost preflight leaves them out when the route does not set them,
+but the `estimateRunCost` route renders its answer with `model_dump(mode="json")`, so the wire carries each as `"...": null`
+(`executors.py` states the surface's rule -- "Optional properties are absent, never null" -- and dumps with `exclude_unset`).
+Recording those bytes would have frozen a contract violation (`characterization-can-freeze-a-defect`). So record 02d **was edited
+after capture in one way**: the six `null` pairs were removed from the body text, the body `length` went from 635 to 462 (the
+173 bytes of the six pairs), and its `purpose` says so. The comparison projects them back in memory
+(`_estimate_nulls_expected`, the last step of `_projected`), so the deviation is named, counted and removable.
+`test_the_served_estimate_carries_the_six_nulls_the_contract_forbids` measures it on the live body (exactly those six, and nothing
+else in the body fails the schema) and goes red, on purpose, the day the route stops emitting them (measured: with the dump
+changed to `exclude_none`, 02d differs at byte 174); then the projection and that test are deleted and the record needs no edit.
+`estimateArV3GroupCost` renders `RunCostEstimate` the same way and is not in the corpus.
+
+**Fixed the same day:** `estimateRunCost` now dumps with `exclude_none`, so the served body is the record's contract-correct form;
+the projection and its tripwire were deleted as described, and `test_the_served_estimate_has_no_null_property_and_meets_its_schema`
+reddens on any `null` coming back. `estimateArV3GroupCost` (AR v3, not touched) still renders the nulls.
+
+*What 02d pins, and how each figure is justified.* Derived, not copied from the server (`test_the_estimate_follows_from_the_records_around_it`):
+`page_count` is the version's (record 13); `output_tokens` is `windows` x 16 000, the allowance the contract gives for
+`relaxed_limits: false` (`StartRunRequest.relaxed_limits`); `calls` equals `windows` for the plain analysis the journey prices;
+`relaxed_limits`, `scope` and `currency` are the declared defaults and const; `recommended_ceiling_micros` is at least the estimate
+(the contract's "sufficient explicit ceiling"; record 03 answers `202` to it). `test_the_cost_path_records_are_what_the_contract_declares`
+validates 02c as an `ErrorEnvelope` and 02d as a `RunCostEstimate` against the frozen document with a small JSON Schema reader that
+refuses a keyword it does not read (`jsonschema` is not installed), and `test_the_contract_check_can_fail` shows it reject an extra
+property, a missing one, a wrong const, a bound, a pattern, an enum and a `null` for a string. **Only pinned, by design**
+(`text_characters` 3810, `input_tokens`, `estimated_cost_micros`, `recommended_ceiling_micros`, `model_id`, `billing`): they are
+functions of the fixture text, the pinned prompt bundle (record 03 names it) and the pinned price table, and a change to any of them is
+a change to what the person is asked to consent to, so it must be a deliberate record edit. **Erased, one value:** `estimate_digest`
+is the token `{{estimate_digest}}` (`journey.declare_estimate_digest`, the second kind: a declared field under the contract's `Sha256`
+pattern, checked first), because it is a hash over the version's uid and blob ids, which each capture allocates. What still pins it:
+cases 03-05 send this very value back and the start recomputes the estimate in its own transaction, refusing a different digest with
+`409 run_cost_estimate_stale`, so a digest computed over anything but the estimate's authority never reaches record 03's `202`. That the
+digest *moves* with the source, route or rates is the cost preflight's own unit suite's claim, not this corpus's.
+
+*What 02c pins that the contract does not name.* The contract says a new served paid start "requires fresh confirmed cost consent"
+and that a refused request is `422 validation_failed` with free-form `details` keys; it never spells the constraint
+`confirmation_required` (nor `below_estimate`, nor `positive_metered_limit`). That string is pinned by the product and by
+`tests/integration/composition/test_the_served_start_requires_a_priced_consent.py`; the record characterises it and does not
+derive it. `test_the_refused_unconsented_start_left_no_run_behind` reads record 34: the listing after the journey holds the one run
+of the consented start.
+
+*Not recorded here.* The other refusals of a consent (`409 run_cost_estimate_stale`, `422` `ceiling_micros` `below_estimate`, a
+metered `positive_metered_limit`), `reauditRun`'s consent, the group and preset estimates and `estimateArV3GroupCost`; with the
+token above each is now one case and one record, with its own contract-grounded reason.
+
+*How the records were produced: not by `capture.py`.* It rewrites every record, including record 12 and every `Authorization`
+value (see the 2026-10-20 amendment's reasons, unchanged). The journey was driven once into a scratch directory by a temporary test
+(not committed), records 02c and 02d alone were taken, their minted credential was written in the corpus's literal form
+(`Bearer w13-baseline-static-token`) and record 02d lost the six `null` pairs as above. The other 37 were compared by the suite's own
+comparison and reproduce through the projections already described. Edits: `journey.py` (cases 2c and 2d, three helpers, the token
+rule's wording), `test_response_baseline.py` (`SEVENTEEN_OPERATIONS`, the census, the projection and eleven tests), this file.
+
+## Amended 2026-11-06 by `LANE-W13-STARTED-BY-01`, contracts 1.21.0 and 1.23.0
+
+**Thirty-seven records, none added and none edited; eight records move in the comparison only, by two additive properties.**
+Measured on a throwaway stand at `ce08af3d`: nine reds (`03`-`07`, `32`-`34` and the planted-difference test, which builds on `03`),
+from two causes, not one.
+
+- `RunStatus` carries `started_by_user_uid` and `started_by_label` (`R-151v`, contract 1.21.0, migration 0051): records `03`-`07`
+  and the listing `34`.
+- `DocumentVersion` carries `tags` on the two listings (`R-151e`, contract 1.23.0, migration 0053): records `32` and `33`, which
+  were already behind `_schema_compat_expected`.
+
+As with `audit_counts`, the portal kind and the error envelopes, the committed records are left as they were captured and an
+in-memory projection appends the property after pinning the record's body by digest (`_run_starter_expected`, and the third step of
+`_schema_compat_expected`, which sits behind the existing digest of the twenty compatibility records).
+
+*The starter is pinned, not treated as volatile.* A timestamp or a generated id is erased by name because its value is not a
+claim; a run's starter is a claim about who acted, and erasing it would let a run attributed to the wrong account, or to nobody,
+reproduce the record. So the uid is the token `{{user_uid}}` -- the journey provisions one account and presents it on every
+request, so the token is a value the journey supplied (`journey.declare_run_starter`, the first token rule, added after the
+timestamps so no `ts_N` is renumbered) and the live body matches only if the run names that account -- and the label is the literal
+`Сьютова Е.`, the `author_label` of the same account in records `10` and `11`.
+`test_the_run_starter_of_the_run_records_follows_from_the_records_before_it` derives both from those records (and from record
+`13`'s classification confirmer) and shows that taking the two properties out gives the historical body, digest for digest.
+`test_the_run_starter_is_pinned_and_the_comparison_reddens_on_a_wrong_one` tampers the *live* body six ways (another account,
+another label, no label, no starter; and two wrong expectations) and requires each to be reported, and
+`test_the_run_starter_projection_refuses_a_changed_record` shows both guards in front of the projection can fail.
+`test_the_comparison_reddens_on_a_planted_difference` now builds on the projected record `03`, so it still proves the comparison can fail.
+
+*The tags are empty because nothing in the corpus can set one*: `setDocumentTags` is not among the sixteen operations the records
+cover (asserted whole), the listings are the reads the contract says carry the property, and it is the last property of the version
+object, after `classification`.
+`test_the_document_tags_of_records_32_and_33_are_none_because_the_journey_sets_none` pins that;
+`test_the_document_tags_projection_reddens_on_a_wrong_or_missing_tags` shows a tag, or no property, is reported.
+
+The `length` of a projected record is the raw body's (a token stands for the thirty bytes of a `usr_` uid), and is asserted equal
+to the live body's length. Edits: `journey.py` (one helper, six calls), `test_response_baseline.py`, this file. `capture.py` was
+not run.
+
 ## Amended 2026-11-05 by `UI-PARITY-P0B`, contract 1.19.0
 
 **Thirty-seven records, none added and none edited; record 16 moves in the comparison only, by one property.** Every

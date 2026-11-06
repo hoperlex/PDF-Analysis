@@ -95,7 +95,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     assert not {"executor_enrollment", "executor_agent_install", "executor_group", "executor_group_revision",
                 "executor_group_member", "executor_routing_rule_revision",
                 "executor_routing_mode_event"} & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
-    assert len(tool.PRODUCT_TABLES) == 89 and len(tool.KEEP_TABLES) == 37 and len(tool.MIXED_TABLES) == 3
+    # `0053`..`0055`: a document's tags, a finding's execution status and an assignment's planned dates are product
+    # data (PRODUCT 89 -> 92); «График работ»'s settings, plans, calendar and absences are the organisation's
+    # planning and are kept (KEEP 37 -> 41).
+    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 41 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -144,11 +147,9 @@ def test_a_dry_run_prints_the_classification_with_exact_counts_and_changes_nothi
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')")[0] == 3
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')")[0] == 4
     # The seed drives the real pipeline, and its source-preparation stage journals `stage.pdf_precheck` (a PRODUCT event: the
-    # PDF precheck's progress, `runs/executor.py`), at most once a second per run. The 24 are the events that exist whatever
-    # the host's speed; the precheck rows are counted from the database, so the figure is exact and not a timing guess.
-    prechecks = digest_of(stand.engine, "audit_event", "event_type = 'stage.pdf_precheck'")[0]
-    assert prechecks >= 1, "the seed no longer reaches the PDF precheck: this decomposition would be vacuous"
-    assert f"  audit_event  (delete {24 + prechecks} rows, keep 7 rows)" in out
+    # PDF precheck's progress, `runs/executor.py`). `D-327`: the seed holds the throttle's clock still (`precheck_clock`), so
+    # those are exactly three (`PRECHECK_EVENTS`); with the 24 other PRODUCT events that makes 24 + 3 = 27 rows to delete.
+    assert "  audit_event  (delete 27 rows, keep 7 rows)" in out
     assert "  command_record  (delete 10 rows, keep 1 rows)" in out
     assert "norm-owned objects (the custody ledger's, never touched): 2" in out
     assert "other objects (named by no row; never touched): 1 (blobs/ 1)" in out
