@@ -76,7 +76,7 @@ export function ProposalDecisionFormView({
             <button
               key={verdict}
               type="button"
-              className={verdict === 'accept' ? 'am-button' : 'am-button am-button--quiet'}
+              className={verdict === 'accept' ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
               disabled={pending || repeats || blocked}
               aria-pressed={current !== null && current.verdict === verdict}
               onClick={() => onDecide(verdict)}
@@ -88,7 +88,7 @@ export function ProposalDecisionFormView({
         {/* `UI-B-12`: appended like any decision; offered while one is in force. */}
         <button
           type="button"
-          className="am-button am-button--quiet"
+          className="am-button am-button--quiet am-button--small"
           disabled={pending || !decisionInForce(current)}
           data-revoke-decision={proposalId}
           onClick={() => onDecide('revoke')}
