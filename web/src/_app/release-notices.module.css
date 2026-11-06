@@ -1,7 +1,7 @@
 /*
  * The release notices: «Доступна новая версия», «Что нового» and the failed read mark.
  *
- * Strips in the page's own flow, above the screen (`app-frame.tsx` renders them first inside `<main>`), in the manner of
+ * Strips in the page's own flow, above the screen (`app-frame.tsx` renders them first inside the main element), in the manner of
  * the original's `live-banner` and `queue-interrupted-banner`: one line, a coloured edge, the buttons at the right. They
  * used to be fixed cards at the corners (the «Что нового» card covered about 450 px of a 780 px screen, so a press under
  * it landed on the card); a strip in the flow covers nothing and scrolls away with the page. Tokens only.
@@ -9,6 +9,7 @@
 
 .notices {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap-xs);
   margin-bottom: var(--am-gap-sm);
 }
