@@ -133,7 +133,19 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
             >
               <details className={total === 0 ? `${styles.card} ${styles.cardEmpty}` : styles.card} open={total > 0}>
                 <summary className={styles.cardHeader}>
-                  <span className={styles.code}>{section.code}</span>
+                  {total === 0 ? (
+                    <span className={styles.code}>{section.code}</span>
+                  ) : (
+                    // The original's section badge is a link to the section's page; here it is one click from the project.
+                    <Link
+                      className={styles.codeLink}
+                      href={routes.projectSection(projectUid, section.code)}
+                      title={`К разделу ${section.abbr}`}
+                      data-section-code-link={section.code}
+                    >
+                      <span className={styles.code}>{section.code}</span>
+                    </Link>
+                  )}
                   <span className={styles.headText}>
                     <h3 className={styles.heading}>
                       <span className={styles.abbr}>{section.abbr}</span> {section.name}

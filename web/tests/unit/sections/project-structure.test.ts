@@ -102,6 +102,12 @@ describe('the structure as a reader sees it', () => {
     expect(group(markup, 'GP')).not.toMatch(/<details[^>]*open=""/);
   });
 
+  it('makes the badge of a section that holds documents a link to its page, and leaves an empty one plain', () => {
+    expect(group(markup, 'AR')).toMatch(/<a [^>]*data-section-code-link="AR"[^>]*>/);
+    expect(group(markup, 'AR')).toContain(`/projects/${PROJECT_UID}/sections/AR`);
+    expect(group(markup, 'GP')).not.toContain('data-section-code-link');
+  });
+
   it('draws a section that holds nothing as one short line, and one that holds documents as a card', () => {
     expect(group(markup, 'GP')).toMatch(/class="[^"]*cardEmpty/);
     expect(group(markup, 'AR')).not.toMatch(/class="[^"]*cardEmpty/);

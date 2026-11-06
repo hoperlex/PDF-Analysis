@@ -62,6 +62,12 @@
   outline-offset: 2px;
 }
 
+/* The section badge as a link: the badge keeps its look and the link adds no underline. */
+.codeLink {
+  display: inline-flex;
+  text-decoration: none;
+}
+
 .code {
   display: inline-flex;
   align-items: center;
