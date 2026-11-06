@@ -1372,6 +1372,31 @@
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"}
       ],
       "follow": null
+    },
+    {
+      "name": "admin-auth-events",
+      "path": "/admin/auth-events",
+      "page_module": "web/src/app/admin/auth-events/page.tsx",
+      "$comment": [
+        "Admin-only access journal (UI-A-94, contract 1.36.0). It reads listAuthEvents on mount, newest first;",
+        "«Дальше» adds the cursor. An expert is sent to /403 and a guest to /login."
+      ],
+      "expects_api": [
+        {
+          "method": "GET",
+          "path": "/auth-events",
+          "operationId": "listAuthEvents"
+        }
+      ],
+      "optional_api": [
+        {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
+        {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
+        {"method": "GET", "path": "/me", "operationId": "getMe", "$why_optional": "the top strip's pause indicator reads the account's roles beside the pause state (R-151f), only for a session the «Очередь» screen is open to"},
+        {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
+        {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
+        {"method": "GET", "path": "/registrations", "operationId": "listRegistrations", "$why_optional": "the side menu's «Заявки на регистрацию» counter (UI-A-91) reads the pending total (limit 1), only for a session holding `admin`"}
+      ],
+      "follow": null
     }
   ],
   "write": {

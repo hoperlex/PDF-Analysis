@@ -18,6 +18,8 @@ const glyphs = {
   queue: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
   users: <><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M2 20a7 7 0 0 1 14 0H2Zm14-5a5 5 0 0 1 6 5h-4" /></>,
   registrations: <><circle cx="9" cy="8" r="3" /><path d="M2 20a7 7 0 0 1 14 0H2Zm16-13v8m-4-4h8" /></>,
+  // «Журнал входов» (UI-A-94): a shield with a tick — the access journal.
+  authEvents: <><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" /><path d="m9 12 2 2 4-4" /></>,
 } satisfies Record<string, ReactNode>;
 
 type GlyphName = keyof typeof glyphs;
@@ -39,6 +41,7 @@ const byLabel: Readonly<Record<string, GlyphName>> = {
   'Очередь': 'queue',
   'Пользователи': 'users',
   'Заявки на регистрацию': 'registrations',
+  'Журнал входов': 'authEvents',
 };
 
 export const NAVIGATION_GLYPH_LABELS = Object.keys(byLabel);

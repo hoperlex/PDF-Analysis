@@ -1,12 +1,11 @@
-/* A bounded dashboard presentation. Its light and dark tokens live in globals.css. */
+/*
+ * A bounded dashboard presentation. Its light and dark tokens live in globals.css. The card around
+ * it is the page's (`[data-dashboard-screen]` in globals.css: padding, border, radius, surface), so
+ * the widget draws none of its own — two lanes had each drawn one, a frame inside a frame.
+ */
 .showcase {
   min-width: 0;
-  padding: var(--am-gap);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
-  background: var(--am-surface);
   color: var(--am-ink);
-  box-shadow: var(--am-shadow-1);
 }
 
 /*
