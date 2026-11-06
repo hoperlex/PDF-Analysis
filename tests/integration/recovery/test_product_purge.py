@@ -95,7 +95,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     assert not {"executor_enrollment", "executor_agent_install", "executor_group", "executor_group_revision",
                 "executor_group_member", "executor_routing_rule_revision",
                 "executor_routing_mode_event"} & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
-    assert len(tool.PRODUCT_TABLES) == 89 and len(tool.KEEP_TABLES) == 37 and len(tool.MIXED_TABLES) == 3
+    # `0053`..`0055`: a document's tags, a finding's execution status and an assignment's planned dates are product
+    # data (PRODUCT 89 -> 92); «График работ»'s settings, plans, calendar and absences are the organisation's
+    # planning and are kept (KEEP 37 -> 41).
+    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 41 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT

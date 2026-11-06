@@ -668,6 +668,31 @@ def presented_account_uid() -> str:
     return _ACCOUNT_UID_CACHE
 
 
+def declare_run_starter(tokens: "Tokens") -> None:
+    """Declare the account that started the run, for a case whose body is a `RunStatus`.
+
+    `R-151v` (contract `1.21.0`, migration `0051`): a `RunStatus` names the account whose
+    ``startRun`` created the run, as ``started_by_user_uid``, and that account's display
+    label as ``started_by_label``. The starter is the account this journey provisions and
+    presents on every request, read from its own row (:func:`presented_account_uid`), so the
+    uid qualifies under the first token rule: it is a value the journey supplied, and it is
+    substituted by exact value. It is **not** a field name the comparison skips -- a run
+    started by some other account leaves its own ``usr_...`` in the live body, where the
+    record expects ``{{user_uid}}``, and the comparison reddens. The label is not a token at
+    all: it is a literal in the expectation, the same ``Сьютова Е.`` records 10 and 11 pin as
+    the ``author_label`` of this very account.
+
+    Called **after** ``tokens.timestamps(...)``: ``ts_N`` is numbered by the entries declared so
+    far, so declaring the uid first would renumber every timestamp token of a record.
+    """
+    tokens.add(
+        "user_uid",
+        presented_account_uid(),
+        "the account this journey provisions and presents on every request, read from its own "
+        "row; it is the account whose startRun created the run (R-151v, started_by_user_uid)",
+    )
+
+
 
 # --- O1: the one ordering this baseline does not pin -------------------------------
 # `listRunFindings` and `exportRunCsv` return published findings ordered by
@@ -1449,6 +1474,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity this request allocated")
     t.timestamps(run)
+    declare_run_starter(t)
     correlation(started, t)
     content_length(started, t)
 
@@ -1483,6 +1509,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated; the replay returns it")
     t.timestamps(json_of(replay))
+    declare_run_starter(t)
     correlation(replay, t)
     content_length(replay, t)
 
@@ -1514,6 +1541,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(json_of(normalised))
+    declare_run_starter(t)
     correlation(normalised, t)
     content_length(normalised, t)
 
@@ -1569,6 +1597,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(json_of(status_case))
+    declare_run_starter(t)
     correlation(status_case, t)
     content_length(status_case, t)
 
@@ -1590,6 +1619,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(json_of(supplied))
+    declare_run_starter(t)
     content_length(supplied, t)
 
     # 8 -- listRunFindings ----------------------------------------------------------
@@ -2312,6 +2342,7 @@ def run_journey(good: Any, refused: Any) -> list[Exchange]:
     t.add("version_uid", version_uid, "the identity case 02 allocated")
     t.add("run_id", run_id, "the identity case 03 allocated")
     t.timestamps(listed_runs)
+    declare_run_starter(t)
     correlation(runs, t)
     content_length(runs, t)
 

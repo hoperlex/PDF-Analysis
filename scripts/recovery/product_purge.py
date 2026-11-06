@@ -111,9 +111,15 @@ KEEP_EXECUTOR_TABLES = frozenset((
     "executor_group_revision", "executor_probe", "executor_route_event", "executor_routing_mode_event",
     "executor_routing_rule_revision", "executor_runner_token", "executor_secret",
 ))
+#: `0055_work_schedule` (`UI-PARITY-P0P`): «График работ»'s installation settings, the engineers' monthly plans, the
+#: work calendar and the absences are the organisation's planning, like accounts: they reference accounts, never a
+#: project, a document or a run, so a purge of product data keeps them. The planned dates of assignments are PRODUCT.
+KEEP_SCHEDULE_TABLES = frozenset((
+    "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_calendar_event",
+))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
-    | KEEP_EXECUTOR_TABLES
+    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES
 )
 
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
@@ -149,6 +155,10 @@ PRODUCT_TABLES = frozenset((
     "price_list_position", "price_list_revision", "project", "provider_call_effect",
     "stage_result", "vendor_list_entry", "vendor_list_revision", "work_assignment",
     "work_assignment_event", "worker",
+    # `0053_document_tags`, `0054_finding_execution_status`, `0055_work_schedule`: a document's tags, an accepted
+    # finding's execution status and an assignment's planned dates belong to the project's document, finding and
+    # assignment. The two journals are immutable rows, so they leave in the same multi-table TRUNCATE.
+    "document_tag", "finding_execution_status", "work_assignment_schedule_event",
 ))
 
 #: ``audit_event.event_type`` families. ``norm_custody.`` is the custody ledger's, ``executor.``
@@ -181,8 +191,14 @@ KEEP_COMMAND_TYPES = frozenset((
     "set_executor_routing_rule",
     # `ANALYSIS-PRESETS-01`: a preset is administered and kept like the connections it names.
     "archive_analysis_preset", "create_analysis_preset", "revise_analysis_preset",
+    # `UI-PARITY-P0P`: «График работ»'s settings, plans, calendar and absences are kept with their journals.
+    "set_engineer_absences", "set_schedule_plans", "set_schedule_settings", "set_work_calendar_days",
 ))
 PRODUCT_COMMAND_TYPES = frozenset((
+    # `UI-PARITY-P0G`..`P0L`, `P0P`: a document archived, renamed or tagged, an execution status, decisions imported from
+    # a run's workbook, and assignments placed on days are about the project's documents, findings and assignments.
+    "import_run_decisions", "rename_document", "schedule_assignments", "set_document_archived", "set_document_tags",
+    "set_finding_execution_status",
     "start_stage_review_ai", "resume_stage_review_ai", "cancel_stage_review_ai", "apply_stage_link_repair",
     "resume_stage_chain_run", "start_stage_chain_batch", "pause_stage_chain_batch",
     "resume_stage_chain_batch", "cancel_stage_chain_batch", "undo_stage_link_repair",

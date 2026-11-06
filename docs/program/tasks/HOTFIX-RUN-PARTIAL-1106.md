@@ -59,3 +59,22 @@ plus `git diff --check`. Record actual commands and limitations in the release h
 Recheck remote refs and require a clean fast-forward candidate before both pushes. Follow
 the triggered workflow through its exact-tree verifier and public smoke checks. Rollback
 is a forward revert of this task; old run artifacts remain immutable. No new flag is needed.
+
+## Enumerator ownership
+
+- enumerated_set_changed: no
+- enumerator_path: not_applicable
+- enumerator_owner: not_applicable
+
+## Captured premise evidence
+
+- premise: none
+
+## Historical evidence
+
+- correction_mode: none
+
+## Publication authority
+
+- development_target: origin/main
+- origin_main_authority: delegated release integrator HOTFIX-RUN-PARTIAL-1106

@@ -8,6 +8,44 @@ four-times-certified surface. This directory is what that rewrite has to be *wro
 
 **After the rewrite, the FastAPI implementation must reproduce these bytes exactly.**
 
+## Amended 2026-11-06 by `LANE-W13-STARTED-BY-01`, contracts 1.21.0 and 1.23.0
+
+**Thirty-seven records, none added and none edited; eight records move in the comparison only, by two additive properties.**
+Measured on a throwaway stand at `ce08af3d`: nine reds (`03`-`07`, `32`-`34` and the planted-difference test, which builds on `03`),
+from two causes, not one.
+
+- `RunStatus` carries `started_by_user_uid` and `started_by_label` (`R-151v`, contract 1.21.0, migration 0051): records `03`-`07`
+  and the listing `34`.
+- `DocumentVersion` carries `tags` on the two listings (`R-151e`, contract 1.23.0, migration 0053): records `32` and `33`, which
+  were already behind `_schema_compat_expected`.
+
+As with `audit_counts`, the portal kind and the error envelopes, the committed records are left as they were captured and an
+in-memory projection appends the property after pinning the record's body by digest (`_run_starter_expected`, and the third step of
+`_schema_compat_expected`, which sits behind the existing digest of the twenty compatibility records).
+
+*The starter is pinned, not treated as volatile.* A timestamp or a generated id is erased by name because its value is not a
+claim; a run's starter is a claim about who acted, and erasing it would let a run attributed to the wrong account, or to nobody,
+reproduce the record. So the uid is the token `{{user_uid}}` -- the journey provisions one account and presents it on every
+request, so the token is a value the journey supplied (`journey.declare_run_starter`, the first token rule, added after the
+timestamps so no `ts_N` is renumbered) and the live body matches only if the run names that account -- and the label is the literal
+`Сьютова Е.`, the `author_label` of the same account in records `10` and `11`.
+`test_the_run_starter_of_the_run_records_follows_from_the_records_before_it` derives both from those records (and from record
+`13`'s classification confirmer) and shows that taking the two properties out gives the historical body, digest for digest.
+`test_the_run_starter_is_pinned_and_the_comparison_reddens_on_a_wrong_one` tampers the *live* body six ways (another account,
+another label, no label, no starter; and two wrong expectations) and requires each to be reported, and
+`test_the_run_starter_projection_refuses_a_changed_record` shows both guards in front of the projection can fail.
+`test_the_comparison_reddens_on_a_planted_difference` now builds on the projected record `03`, so it still proves the comparison can fail.
+
+*The tags are empty because nothing in the corpus can set one*: `setDocumentTags` is not among the sixteen operations the records
+cover (asserted whole), the listings are the reads the contract says carry the property, and it is the last property of the version
+object, after `classification`.
+`test_the_document_tags_of_records_32_and_33_are_none_because_the_journey_sets_none` pins that;
+`test_the_document_tags_projection_reddens_on_a_wrong_or_missing_tags` shows a tag, or no property, is reported.
+
+The `length` of a projected record is the raw body's (a token stands for the thirty bytes of a `usr_` uid), and is asserted equal
+to the live body's length. Edits: `journey.py` (one helper, six calls), `test_response_baseline.py`, this file. `capture.py` was
+not run.
+
 ## Amended 2026-11-05 by `UI-PARITY-P0B`, contract 1.19.0
 
 **Thirty-seven records, none added and none edited; record 16 moves in the comparison only, by one property.** Every
