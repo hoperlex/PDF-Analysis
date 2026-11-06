@@ -1,16 +1,27 @@
 .filters,
 .results {
   min-width: 0;
-  padding: 16px;
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
 
+/*
+ * `UI-PARITY-DENSE`: the three filters in one row, each label beside its control (the global `.am-kb__filter` stacks a
+ * caption over the control, which made the bar two rows tall for three controls).
+ */
 .filters {
-  margin-bottom: 16px;
-  gap: 12px;
+  align-items: center;
+  margin-bottom: var(--am-gap-sm);
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.filters :global(.am-kb__filter) {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--am-gap-sm);
 }
 
 .results {
@@ -23,7 +34,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
-  margin: 0 0 var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
 }
 
 .chipCount {
@@ -37,7 +48,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--am-gap-sm);
-  margin: 0 0 var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-base);
 }
@@ -60,17 +71,69 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * `UI-PARITY-DENSE`, `UI-B-34`: a decision is a row of the original's table, not a card of five lines. Three columns,
+ * the heading with the place under it, the finding (and the comment under that), and who decided and when with the way to
+ * the finding. The markup is unchanged: the same `<li>` children are placed on a grid, and below 900px they stack.
+ */
 .results :global(.am-kb__records) {
-  gap: 8px;
+  gap: 0;
 }
 
 .results :global(.am-kb__record) {
-  padding-bottom: 4px;
+  display: grid;
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(12rem, 16rem);
+  grid-template-areas:
+    'head text meta'
+    'place comment meta';
+  align-items: start;
+  column-gap: var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-grid-line);
+  border-left-width: 3px;
+}
+
+.results :global(.am-kb__record:hover) {
+  background: var(--am-surface);
+}
+
+.results :global(.am-kb__heading) {
+  grid-area: head;
+}
+
+.results :global(.am-kb__record > [data-record-place]) {
+  grid-area: place;
+}
+
+.results :global(.am-kb__text) {
+  grid-area: text;
+}
+
+.results :global(.am-kb__comment) {
+  grid-area: comment;
+}
+
+.results :global(.am-kb__record > .am-kb__meta:last-child) {
+  grid-area: meta;
+  gap: 0 var(--am-gap-sm);
 }
 
 .results :global(.am-kb__text),
-.results :global(.am-kb__meta) {
-  margin-top: 4px;
+.results :global(.am-kb__meta),
+.results :global(.am-kb__comment) {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .results :global(.am-kb__record) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'place'
+      'text'
+      'comment'
+      'meta';
+  }
 }
 
 .filters:focus-within,
@@ -89,6 +152,6 @@
 @media (max-width: 780px) {
   .filters,
   .results {
-    padding: var(--am-gap);
+    padding: var(--am-gap-sm);
   }
 }
