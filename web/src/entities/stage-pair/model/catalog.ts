@@ -16,6 +16,7 @@ export const STAGE_PAIR_KEYS = {
   projectPairs: (projectUid: string) => [...ROOT, 'pairs', projectUid] as const,
   projectSuggestions: (projectUid: string) => [...ROOT, 'suggestions', projectUid] as const,
   pairs: (projectUid: string, cursor?: string) => [...ROOT, 'pairs', projectUid, cursor ?? ''] as const,
+  documents: (projectUid: string) => [...ROOT, 'documents', projectUid] as const,
   suggestions: (projectUid: string, cursor?: string) => [...ROOT, 'suggestions', projectUid, cursor ?? ''] as const,
 };
 
