@@ -2,7 +2,7 @@
 
 /**
  * `/section-optimisation` — «Оптимизация разделов» (`R-66`, group «Работа»;
- * `W63-SECTION-FORM7-01`, `UI-B-22`, `UI-B-27`).
+ * `W63-SECTION-FORM7-01`, `UI-B-20`, `UI-B-22`, `UI-B-27`).
  *
  * Two tabs, as in the original: «Спецификация» — `getSectionSpecification` answers, for a section, the
  * combined Form-7 specification of the current versions of every project whose document set an expert confirmed in it
@@ -11,7 +11,11 @@
  * decision in force is an acceptance, across the section's projects (`listAcceptedOptimisationProposals`). Both are
  * read views: replicating an accepted optimisation into other projects is a later slice, and nothing here writes. The
  * section code only filters; rows are never merged across projects and the totals exist per project and per currency.
- * Only the open tab is mounted, so a closed tab reads nothing.
+ *
+ * **The address.** `?section=<code>&project=<project_uid>&tab=accepted` opens the page on that section, narrowed to that
+ * project, on that tab (`UI-B-20`); the page keeps the address in step with the choices, and carries the section and the
+ * project from one tab to the other. A parameter the address carries that is not a section code or a project identity is
+ * set aside and said so. Only the open tab is mounted, so a closed tab reads nothing.
  *
  * Not `/optimisation`, which is the optimisation of one project and stays registered, outside
  * the menu, until it becomes a tab of the project screen.
@@ -22,20 +26,49 @@ import type { KeyboardEvent } from 'react';
 
 import type { ProjectSection, ProjectUid } from '@/shared/api';
 import { PageShell } from '@/shared/ui';
-import { ANALYSED_SECTION_CODE } from '@/entities/project';
 import { SectionAcceptedOptimisations } from '@/widgets/section-accepted-optimisations';
 import { SectionSpecificationSection } from '@/widgets/section-specification';
 
+import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, sectionOptimisationSearch } from '../model/address';
+import type { SectionOptimisationAddress } from '../model/address';
 import { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS } from '../model/tabs';
 import type { SectionOptimisationTab } from '../model/tabs';
 import styles from './section-optimisation-page.module.css';
 
-export function SectionOptimisationPage() {
+export interface SectionOptimisationPageProps {
+  /** The tab, section and project the address named; the defaults when absent. */
+  readonly initial?: SectionOptimisationAddress | undefined;
+}
+
+const IGNORED_TEXT = {
+  section: 'раздел',
+  project: 'проект',
+  tab: 'вкладка',
+} as const;
+
+export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION_ADDRESS }: SectionOptimisationPageProps) {
   const base = useId();
   const buttons = useRef<Partial<Record<SectionOptimisationTab, HTMLButtonElement | null>>>({});
-  const [tab, setTab] = useState<SectionOptimisationTab>('specification');
-  const [sectionCode, setSectionCode] = useState<ProjectSection>(ANALYSED_SECTION_CODE);
-  const [projectUid, setProjectUid] = useState<ProjectUid | null>(null);
+  const [tab, setTab] = useState<SectionOptimisationTab>(initial.tab);
+  const [filter, setFilter] = useState<{ readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }>({
+    sectionCode: initial.sectionCode,
+    projectUid: initial.projectUid,
+  });
+
+  function keep(next: { readonly tab: SectionOptimisationTab; readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
+    // A reload or a pasted link opens the same view: the address follows every choice, without a new history entry.
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', sectionOptimisationSearch(next));
+  }
+
+  function chooseTab(next: SectionOptimisationTab) {
+    setTab(next);
+    keep({ tab: next, ...filter });
+  }
+
+  function chooseFilter(next: { readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
+    setFilter(next);
+    keep({ tab, ...next });
+  }
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     const at = SECTION_OPTIMISATION_TABS.indexOf(tab);
@@ -52,7 +85,7 @@ export function SectionOptimisationPage() {
               : undefined;
     if (next === undefined) return;
     event.preventDefault();
-    setTab(next);
+    chooseTab(next);
     buttons.current[next]?.focus();
   };
 
@@ -61,6 +94,11 @@ export function SectionOptimisationPage() {
       title="Оптимизация разделов"
       subtitle="Сводная спецификация раздела по текущим версиям комплектов всех проектов и принятые экспертами оптимизации. Экран только показывает данные: переносить решения между проектами здесь пока нельзя."
     >
+      {initial.ignored.length === 0 ? null : (
+        <p className={styles.notice} data-address-ignored={initial.ignored.join(' ')}>
+          Из адреса не прочитано: {initial.ignored.map((name) => IGNORED_TEXT[name]).join(', ')}. Экран открыт с выбором по умолчанию.
+        </p>
+      )}
       <div className={styles.tabs}>
         <div role="tablist" aria-label="Вкладки оптимизации раздела" className={styles.tablist}>
           {SECTION_OPTIMISATION_TABS.map((name) => (
@@ -77,7 +115,7 @@ export function SectionOptimisationPage() {
               tabIndex={name === tab ? 0 : -1}
               className={styles.tab}
               data-section-optimisation-tab={name}
-              onClick={() => setTab(name)}
+              onClick={() => chooseTab(name)}
               onKeyDown={onKeyDown}
             >
               {SECTION_OPTIMISATION_TAB_LABELS[name]}
@@ -93,16 +131,17 @@ export function SectionOptimisationPage() {
           data-section-optimisation-panel={tab}
         >
           {tab === 'specification' ? (
-            <SectionSpecificationSection />
+            <SectionSpecificationSection
+              initialSectionCode={filter.sectionCode}
+              initialProjectUid={filter.projectUid}
+              onFilterChange={chooseFilter}
+            />
           ) : (
             <SectionAcceptedOptimisations
-              sectionCode={sectionCode}
-              projectUid={projectUid}
-              onSection={(code) => {
-                setSectionCode(code);
-                setProjectUid(null);
-              }}
-              onProject={setProjectUid}
+              sectionCode={filter.sectionCode}
+              projectUid={filter.projectUid}
+              onSection={(sectionCode) => chooseFilter({ sectionCode, projectUid: null })}
+              onProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
             />
           )}
         </div>

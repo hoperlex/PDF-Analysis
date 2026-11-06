@@ -6,5 +6,11 @@
 
 export type { SectionSpecificationAnswerProps } from './ui/section-specification-answer';
 export { SectionSpecificationAnswer } from './ui/section-specification-answer';
-export type { SectionPickerProps } from './ui/section-specification-section';
-export { SectionPicker, SectionSpecificationSection } from './ui/section-specification-section';
+export type { SectionPickerProps, SectionSpecificationSectionProps } from './ui/section-specification-section';
+export type { ProjectFilterOption } from './ui/section-specification-section';
+export {
+  ProjectOptionName,
+  SectionPicker,
+  SectionSpecificationSection,
+  projectFilterOptions,
+} from './ui/section-specification-section';

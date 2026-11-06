@@ -47,7 +47,7 @@ import { WorkerList, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
-import { SectionOptimisationPage } from '@/_pages/section-optimisation';
+import { SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
@@ -959,8 +959,13 @@ export function screens(): Screen[] {
   })));
   // `UI-B-27`: «Принято» — the filters with the project the address names, a page with a saving and one without,
   // the empty page, and a page that has a page before and after it.
-  // The page: its two tabs, the open one by `aria-selected`.
-  add('SectionOptimisationPage specification tab', withRouter(createElement(SectionOptimisationPage)));
+  // The page: its tabs (the open one by `aria-selected`) and the notice for an address it could not read.
+  add('SectionOptimisationPage specification tab', withRouter(createElement(SectionOptimisationPage, {
+    initial: readSectionOptimisationAddress({ section: 'KJ' }),
+  })));
+  add('SectionOptimisationPage accepted tab, an address it could not read', withRouter(createElement(SectionOptimisationPage, {
+    initial: readSectionOptimisationAddress({ section: 'ZZ', tab: 'accepted' }),
+  })));
   add('SectionAcceptedFilters', render(createElement(SectionAcceptedFilters, {
     sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
     projects: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,

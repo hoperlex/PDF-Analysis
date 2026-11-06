@@ -10,6 +10,13 @@
  * proposal, and nothing here ever writes. A project filter offers the projects the section
  * lists when it is not narrowed; the search narrows the rows and never a project's totals.
  *
+ * **Where it starts.** On the section and project the page's address names (`UI-B-20`, optional
+ * `initialSectionCode` and `initialProjectUid`); without them, on АР and every project, as before.
+ * The project an address names has no unfiltered answer yet, so the project select may not list it:
+ * it is offered anyway, named from the answer once the narrowed read lists it (or from its own
+ * read, `getProject`, before that), and never silently dropped. `onFilterChange` reports each new
+ * section and project, so the page can keep the choice across its tabs.
+ *
  * **What is shown** is `SectionSpecificationAnswer`: each project with its sets, its own price
  * list and its own totals, the current versions nobody classified, and the Form-7 rows with
  * project, set, version, sheet and page on every line and the match against that project's
@@ -21,7 +28,7 @@ import { useEffect, useState } from 'react';
 import type { ProjectSection as ContractProjectSection, ProjectUid } from '@/shared/api';
 import { failureMessage } from '@/shared/api/failure-message';
 import { ErrorState, LoadingState } from '@/shared/ui';
-import { ANALYSED_SECTION_CODE, projectSectionTitle, sectionsInStructureOrder } from '@/entities/project';
+import { ANALYSED_SECTION_CODE, projectSectionTitle, sectionsInStructureOrder, useProject } from '@/entities/project';
 import { useSectionSpecification } from '@/entities/section-specification';
 
 import { SectionSpecificationAnswer } from './section-specification-answer';
@@ -59,9 +66,52 @@ export function SectionPicker({ selected, onSelect }: SectionPickerProps) {
   );
 }
 
-export function SectionSpecificationSection() {
-  const [sectionCode, setSectionCode] = useState<ContractProjectSection>(ANALYSED_SECTION_CODE);
-  const [projectUid, setProjectUid] = useState<ProjectUid | null>(null);
+export interface SectionSpecificationSectionProps {
+  /** The section to open on (`UI-B-20`); АР when absent. */
+  readonly initialSectionCode?: ContractProjectSection | undefined;
+  /** The project to open narrowed to; every project of the section when absent. */
+  readonly initialProjectUid?: ProjectUid | null | undefined;
+  /** Told after every change of section or project, so a page can carry the choice to another tab. */
+  readonly onFilterChange?: ((filter: { readonly sectionCode: ContractProjectSection; readonly projectUid: ProjectUid | null }) => void) | undefined;
+}
+
+/** A project option as the select shows it: `name` is `null` while nothing in hand names the project. */
+export interface ProjectFilterOption {
+  readonly projectUid: ProjectUid;
+  readonly name: string | null;
+}
+
+/**
+ * The project options the select shows: the projects an unnarrowed answer listed, and the selected project when that
+ * list lacks it (an address opened on a project has no unnarrowed answer yet), named by `selectedName` when the
+ * narrowed answer lists it and by `null` otherwise — the option then reads the project itself (`ProjectOptionName`).
+ */
+export function projectFilterOptions(
+  members: readonly Member[],
+  selected: ProjectUid | null,
+  selectedName: string | null,
+): readonly ProjectFilterOption[] {
+  if (selected === null || members.some((member) => member.projectUid === selected)) return members;
+  return [...members, { projectUid: selected, name: selectedName }];
+}
+
+/**
+ * The name of a project the lists do not hold, from its own read (`getProject`); its identity — the only label that is
+ * true before anything is read — while that is on its way or refused. Mounted only for a project the address names, so
+ * a screen opened without one reads no project.
+ */
+export function ProjectOptionName({ projectUid }: { readonly projectUid: ProjectUid }) {
+  const project = useProject(projectUid);
+  return <>{project.data?.name ?? projectUid}</>;
+}
+
+export function SectionSpecificationSection({
+  initialSectionCode,
+  initialProjectUid,
+  onFilterChange,
+}: SectionSpecificationSectionProps) {
+  const [sectionCode, setSectionCode] = useState<ContractProjectSection>(initialSectionCode ?? ANALYSED_SECTION_CODE);
+  const [projectUid, setProjectUid] = useState<ProjectUid | null>(initialProjectUid ?? null);
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
@@ -69,6 +119,12 @@ export function SectionSpecificationSection() {
   const specification = useSectionSpecification({ sectionCode, projectUid, query, offset });
   const answer = specification.data;
   const failure = specification.error === null ? null : failureMessage(specification.error);
+  // The narrowed answer lists the project it is narrowed to, so it names it; before it arrives the option reads the project.
+  const answeredName =
+    answer === undefined || projectUid === null
+      ? null
+      : (answer.projects.find((project) => project.project_uid === projectUid)?.name ?? null);
+  const options = projectFilterOptions(members, projectUid, answeredName);
 
   // The unnarrowed answer is the only one that lists every project of the section.
   useEffect(() => {
@@ -82,11 +138,13 @@ export function SectionSpecificationSection() {
     setProjectUid(null);
     setMembers([]);
     setOffset(0);
+    onFilterChange?.({ sectionCode: code, projectUid: null });
   }
 
   function chooseProject(uid: ProjectUid | null) {
     setProjectUid(uid);
     setOffset(0);
+    onFilterChange?.({ sectionCode, projectUid: uid });
   }
 
   return (
@@ -114,12 +172,12 @@ export function SectionSpecificationSection() {
             id="section-specification-project"
             value={projectUid ?? ''}
             onChange={(event) => chooseProject(event.target.value === '' ? null : (event.target.value as ProjectUid))}
-            data-section-project-filter={members.length}
+            data-section-project-filter={options.length}
           >
             <option value="">Все проекты раздела</option>
-            {members.map((member) => (
+            {options.map((member) => (
               <option key={member.projectUid} value={member.projectUid}>
-                {member.name}
+                {member.name ?? <ProjectOptionName projectUid={member.projectUid} />}
               </option>
             ))}
           </select>
