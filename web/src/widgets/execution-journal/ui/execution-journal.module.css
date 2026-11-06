@@ -3,33 +3,40 @@
   max-width: 100%;
 }
 
-.list ol {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--am-gap-sm);
-}
-
-.row {
-  min-width: 0;
+.scroll {
   max-width: 100%;
-  padding: var(--am-gap-sm);
-  border: 1px solid var(--am-line);
-  border-radius: var(--am-radius);
+  overflow-x: auto;
 }
 
-.row p {
-  margin-bottom: 0;
+/* The log is a table of one-line rows, as the original's; five pixels above and below each line. */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
 }
 
-.heading,
-.paging {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--am-gap-sm);
+.table th {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line);
+  color: var(--am-ink-muted);
+  font-weight: 650;
+  text-align: left;
+  vertical-align: bottom;
+}
+
+.table td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  vertical-align: top;
+}
+
+.time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.event {
+  min-width: 0;
 }
 
 .identity {
@@ -39,4 +46,13 @@
 .identity code {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.paging {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  margin-top: var(--am-gap-sm);
 }

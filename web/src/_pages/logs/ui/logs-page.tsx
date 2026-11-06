@@ -66,7 +66,7 @@ export function LogsPage({ initialRunId }: LogsPageProps) {
           onSelection={setSelection}
           onChooseRun={(runId) => showRun(runId ?? '')}
         />
-        <form className="am-form" onSubmit={(event) => {
+        <form className={styles.paste} onSubmit={(event) => {
           event.preventDefault();
           const typed = draft.trim();
           setFilter(typed);
@@ -75,18 +75,16 @@ export function LogsPage({ initialRunId }: LogsPageProps) {
           if (typed === '' || RUN_ID.test(typed)) keepRunInAddress(typed);
         }}>
           <label htmlFor="execution-run-filter">Или вставьте идентификатор прогона</label>
-          <div className="am-form__row">
-            <input
-              id="execution-run-filter"
-              type="text"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Идентификатор прогона"
-              aria-describedby="execution-run-filter-help"
-            />
-            <button type="submit" className="am-button">Показать</button>
-          </div>
-          <p id="execution-run-filter-help" className="am-form__hint">Пустое поле показывает все прогоны.</p>
+          <input
+            id="execution-run-filter"
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Идентификатор прогона"
+            aria-describedby="execution-run-filter-help"
+          />
+          <button type="submit" className="am-button">Показать</button>
+          <span id="execution-run-filter-help" className="am-form__hint">Пустое поле показывает все прогоны.</span>
         </form>
       </div>
       {invalid ? <ErrorState title="Неверный идентификатор прогона" detail="Проверьте идентификатор и повторите отбор." /> : null}

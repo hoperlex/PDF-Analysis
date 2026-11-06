@@ -1,7 +1,7 @@
 .filters,
 .journal {
   min-width: 0;
-  padding: var(--am-gap);
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
@@ -9,8 +9,21 @@
 
 .filters {
   display: grid;
-  gap: var(--am-gap);
-  margin-bottom: var(--am-gap);
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap-sm);
+}
+
+/* The pasted identity on one line: its label, the field, the button and the hint. */
+.paste {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.paste input {
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 
 .journal {
