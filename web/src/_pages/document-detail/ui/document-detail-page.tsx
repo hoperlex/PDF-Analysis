@@ -150,14 +150,17 @@ function DocumentScreen({
         // `UI-A-28`: between the documents of the section the current version is confirmed for.
         aside={<SectionNeighbours projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />}
       />
-      {newest === undefined ? null : mayAct ? (
-        <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
-      ) : archived ? (
-        <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
-      ) : null}
-      {newest === undefined ? null : (
-        <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
-      )}
+      {/* The document's own controls share one row: rename and archive, and its tags. */}
+      <div className={styles.toolbar}>
+        {newest === undefined ? null : mayAct ? (
+          <DocumentLifecycle projectUid={projectUid} documentUid={documentUid} title={title} archived={archived} />
+        ) : archived ? (
+          <p className="am-note" role="status">Документ в архиве: его нет в списках проекта.</p>
+        ) : null}
+        {newest === undefined ? null : (
+          <DocumentTags projectUid={projectUid} documentUid={documentUid} tags={newest.tags ?? []} mayEdit={mayAct} />
+        )}
+      </div>
       <nav className={styles.tabs} aria-label="Разделы документа" data-document-tabs={tab}>
         {DOCUMENT_TABS.map((entry) => (
           <button

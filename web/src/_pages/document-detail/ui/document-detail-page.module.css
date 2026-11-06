@@ -57,3 +57,16 @@
   color: var(--am-ink);
   font-weight: 600;
 }
+
+/* Rename/archive and the tags in one row on a wide screen; each wraps on its own below. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
+}
+
+.toolbar:empty {
+  display: none;
+}
