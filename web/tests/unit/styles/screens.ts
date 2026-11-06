@@ -801,6 +801,7 @@ export function screens(): Screen[] {
         { stage_id: 'source_preparation', status: 'succeeded', error_code: null, started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:00.030Z' },
         { stage_id: 'page_geometry_extraction', status: 'succeeded', error_code: null, started_at: '2026-09-10T08:00:00.030Z', finished_at: '2026-09-10T08:00:01.400Z' },
         { stage_id: 'document_context_build', status: 'partial', error_code: 'analysis_input_budget_exceeded', started_at: '2026-09-10T08:00:01.400Z', finished_at: '2026-09-10T08:01:12.000Z' },
+        { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:01:12.000Z', finished_at: '2026-09-10T08:01:13.250Z' },
       ],
     }),
   );
