@@ -57,7 +57,7 @@ describe('«Все» in the knowledge base', () => {
     expect(markup).toContain('Аналог не подходит.');
     expect(markup).toContain('Иванова А. С.');
     expect(markup).toContain(
-      'href="/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B?tab=optimisation"',
+      'href="/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/documents/doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B?tab=optimisation&amp;pass=opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B"',
     );
     // The section by its title, as a finding's place names it, never the bare code.
     expect(markup).not.toMatch(/Архитектурные решения · AR</);

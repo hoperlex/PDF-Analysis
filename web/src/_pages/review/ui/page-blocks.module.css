@@ -1,0 +1,113 @@
+/*
+ * «Блоки страницы N» under the page on «Разбор» (`UI-A-74`), inline and in the full-screen view's side
+ * column: a row of small thumbnails of the cited page's portal blocks. Every colour, radius and gap is a
+ * global `--am-*` token; the thumbnail's own size is a width and a height, which the length-literal
+ * ratchet does not count.
+ */
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+  margin-top: var(--am-gap);
+}
+
+.title {
+  margin: 0;
+  color: var(--am-ink);
+  font-size: var(--am-text-md);
+  font-weight: 600;
+}
+
+/* One row that scrolls sideways: the side column is narrow, and a page can hold many blocks. */
+.thumbs {
+  display: flex;
+  gap: var(--am-gap-sm);
+  margin: 0;
+  padding: 0 0 var(--am-gap-xs);
+  list-style: none;
+  overflow-x: auto;
+}
+
+.item {
+  flex: none;
+  width: 112px;
+}
+
+.thumb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--am-gap-xs);
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--am-gap-xs);
+  border: 2px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thumb:hover {
+  border-color: var(--am-accent);
+}
+
+.thumb:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.thumbMedia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--am-radius-sm);
+  background: var(--am-surface-sunken);
+}
+
+.thumbImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.thumbNote {
+  padding: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-style: italic;
+  text-align: center;
+}
+
+.thumbType {
+  overflow: hidden;
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.alone {
+  margin-top: var(--am-gap);
+}
+
+.more {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--am-gap-xs);
+}

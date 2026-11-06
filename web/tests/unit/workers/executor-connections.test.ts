@@ -10,6 +10,7 @@
 
 import { createElement } from 'react';
 import type { ComponentType } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { ExecutorProbeOutcome, ExecutorRoute, Role } from '@/shared/api';
@@ -19,6 +20,7 @@ import {
   ROUTE_BLOCKER_SENTENCES,
   CHANGE_WINDOW_DAYS,
   connectionFailure,
+  currentRevision,
   probeOutcomeSentence,
   recentChanges,
   kindIsServed,
@@ -27,7 +29,12 @@ import {
   secretOfPurpose,
 } from '@/entities/executor-connection';
 import { canExecute } from '@/entities/execution';
-import { ExecutorConnections } from '@/widgets/executor-connections';
+import {
+  ExecutorConnections,
+  copyToClipboard,
+  probeDiagnosticText,
+  CopyDiagnosticsView,
+} from '@/widgets/executor-connections';
 import type { ExecutorConnectionsProps } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
@@ -332,6 +339,84 @@ describe('the key form is a slot the route fills', () => {
     const markup = connections(['admin'], ALL_CASES, { secretConnectionId: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4QZZ', secretForm: form });
     expect(markup).toContain('data-executor-secret-target="missing"');
     expect(markup).not.toContain('data-slot-form');
+  });
+});
+
+describe('«Скопировать диагностику» copies the probe outcome the card prints, and no key (UI-B-68)', () => {
+  const diagnostic = (one: (typeof OUTCOME_CASES)[number][1]): string => {
+    const revision = currentRevision(one.connection, one.detail.revisions);
+    if (revision === undefined) throw new Error('the fixture has no current revision');
+    return probeDiagnosticText(one.connection, revision);
+  };
+
+  it('is on every card with settings, for an administrator and for an expert who only reads', () => {
+    for (const roles of [['admin'], ['expert']] as Role[][]) {
+      const markup = connections(roles, [READY]);
+      expect(markup).toContain('data-executor-copy=""');
+      expect(markup).toContain('>Скопировать диагностику<');
+      // It has not been pressed: no message yet.
+      expect(markup).not.toContain('data-executor-copy-result');
+    }
+  });
+
+  it('names the connection, the settings and the outcome in the card’s words', () => {
+    const text = diagnostic(READY);
+    expect(text.split('\n')[0]).toBe('Диагностика подключения');
+    expect(text).toContain(`Подключение: ${READY.connection.display_name} (${READY.connection.connection_id})`);
+    expect(text).toContain('Настройки: версия 1');
+    expect(text).toContain(`Проверка: ${probeOutcomeSentence('ok')}`);
+    expect(text).toMatch(/Проверено: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
+  });
+
+  it('says a sentence for every outcome, and the model, the detail and the hint when the card has them', () => {
+    for (const [outcome, one] of OUTCOME_CASES) {
+      expect(diagnostic(one), outcome).toContain(`Проверка: ${probeOutcomeSentence(outcome)}`);
+    }
+    const mismatch = OUTCOME_CASES.find(([outcome]) => outcome === 'model_mismatch')![1];
+    expect(diagnostic(mismatch)).toContain('Модель в ответе: другая-модель (модель сообщена в ответе)');
+    const timeout = OUTCOME_CASES.find(([outcome]) => outcome === 'timeout')![1];
+    expect(diagnostic(timeout)).toContain('Подробности: ответ не пришёл за отведённое время');
+    const rate = OUTCOME_CASES.find(([outcome]) => outcome === 'rate_mismatch')![1];
+    expect(diagnostic(rate)).toContain('Сверка стоимости: стоимость в ответе расходится с тарифом');
+  });
+
+  it('can fail: a key, its last characters, a fingerprint a probe observed, or who set anything never reach the text', () => {
+    // The fixtures carry each of these on the card’s data; the card prints some of them, the diagnostic none.
+    const hostKey = OUTCOME_CASES.find(([outcome]) => outcome === 'host_key_unpinned')![1];
+    const everything = OUTCOME_CASES.map(([, one]) => diagnostic(one)).join('\n');
+    for (const forbidden of ['4417', '5521', 'открытый-ключ-для-проверки', 'наблюдаемый-отпечаток-узла', 'новый-отпечаток-узла', ADMIN_UID, 'exs_', 'epb_', 'кольцо-1']) {
+      expect(everything, forbidden).not.toContain(forbidden);
+    }
+    // And the same strings are on the screen, so the absence above is the function’s and not the fixture’s.
+    expect(connections(['admin'], [READY])).toContain('4417');
+    expect(connections(['admin'], [hostKey])).toContain('наблюдаемый-отпечаток-узла');
+  });
+
+  it('says a probe still open as the card does, and a connection never probed as not probed', () => {
+    const open = executorCase({ n: 40, name: 'Шлюз в проверке', secrets: [{}], probe: { state: 'running' } });
+    expect(diagnostic(open)).toMatch(/Проверка выполняется; запрошена \d{4}-\d{2}-\d{2}/);
+    const never = executorCase({ n: 41, name: 'Шлюз без проверок', secrets: [{}], probe: null });
+    expect(diagnostic(never)).toContain('Проверка: текущие настройки ещё не проверяли.');
+  });
+
+  it('draws what a press leaves: «Скопировано», or the refusal with the way out, never silence', () => {
+    const view = (outcome: boolean | null) => renderToStaticMarkup(createElement(CopyDiagnosticsView, { outcome, onCopy: () => {} }));
+    expect(view(null)).not.toContain('data-executor-copy-result');
+    expect(view(true)).toContain('data-executor-copy-result="copied"');
+    expect(view(true)).toContain('>Скопировано<');
+    expect(view(true)).toContain('role="status"');
+    expect(view(false)).toContain('data-executor-copy-result="refused"');
+    expect(view(false)).toContain('Не удалось скопировать: браузер не дал доступ к буферу обмена.');
+    expect(view(false)).toContain('role="alert"');
+    expect(view(false)).not.toContain('Скопировано');
+  });
+
+  it('puts the text on the clipboard, and says false for a refusing clipboard and for none', async () => {
+    const written: string[] = [];
+    expect(await copyToClipboard('текст', { writeText: async (text) => { written.push(text); } })).toBe(true);
+    expect(written).toEqual(['текст']);
+    expect(await copyToClipboard('текст', { writeText: async () => { throw new Error('refused'); } })).toBe(false);
+    expect(await copyToClipboard('текст', undefined)).toBe(false);
   });
 });
 

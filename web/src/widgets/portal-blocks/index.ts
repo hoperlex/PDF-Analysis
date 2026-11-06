@@ -10,7 +10,16 @@ export { PortalBlockViewer } from './ui/portal-block-viewer';
 export type { PortalBlockViewerProps } from './ui/portal-block-viewer';
 export { PageSelector } from './ui/page-selector';
 export type { PageSelectorProps } from './ui/page-selector';
-export { NO_PAGE_FINDINGS, completeFindingsOf, findingsByPage, pageReading, worstDecided } from './model/page-findings';
+export {
+  NO_PAGE_FINDINGS,
+  completeFindingsOf,
+  findingsByPage,
+  latestPublishedRunId,
+  pageReading,
+  runSourcePhrase,
+  scopeRunId,
+  worstDecided,
+} from './model/page-findings';
 export type { PageFindings, PageFindingsReading } from './model/page-findings';
 export { severityTone } from './model/severity-tone';
 export type { SeverityTone } from './model/severity-tone';

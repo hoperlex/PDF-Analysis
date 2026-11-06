@@ -12,7 +12,8 @@
  * unknown says so on the tile, because the tile is the only place a reader running down the grid sees it.
  *
  * **The badge is the page's number, not the block's.** See `model/page-findings.ts`: a finding cites
- * pages, so the tile's `title` says «замечаний на странице». The outline is amber when the page has any;
+ * pages, so the tile's `title` says «замечаний на странице», and which run the count is from
+ * («по прогону от <time>»). The outline is amber when the page has any;
  * a page with none carries no badge and no outline, and a tile with no reading carries neither.
  */
 
@@ -28,6 +29,7 @@ import {
 } from '@/entities/block';
 
 import type { PageFindings } from '../model/page-findings';
+import { runSourcePhrase } from '../model/page-findings';
 import { severityTone } from '../model/severity-tone';
 import styles from './portal-blocks.module.css';
 
@@ -36,6 +38,8 @@ export interface PortalBlockTileProps {
   readonly versionUid: VersionUid;
   /** The block's page in the run's findings, or `null` when no number may be shown. */
   readonly pageFindings: PageFindings | null;
+  /** When the run the number is from started (`created_at`); the badge's title says «по прогону от <time>». */
+  readonly runAt?: string | undefined;
   readonly onOpen: () => void;
 }
 
@@ -88,10 +92,11 @@ function Media({ block, versionUid }: { readonly block: PortalBlock; readonly ve
   return <span className={styles.tileNote}>У штампа нет ни изображения, ни текста.</span>;
 }
 
-export function PortalBlockTile({ block, versionUid, pageFindings, onOpen }: PortalBlockTileProps) {
+export function PortalBlockTile({ block, versionUid, pageFindings, runAt, onOpen }: PortalBlockTileProps) {
   const status = portalStatusPresentation(block.status);
   const typeLabel = portalBlockTypeLabel(block.block_type);
   const flagged = pageFindings !== null && pageFindings.count > 0;
+  const source = runSourcePhrase(runAt);
   const meta =
     block.ordinal === null ? `стр. ${block.page_number}` : `стр. ${block.page_number} · порядок ${block.ordinal}`;
 
@@ -120,7 +125,7 @@ export function PortalBlockTile({ block, versionUid, pageFindings, onOpen }: Por
         <span
           className={`am-badge am-badge--${severityTone(pageFindings.worst)} ${styles.tileBadge}`}
           data-tile-badge={pageFindings.count}
-          title={`Замечаний на странице ${block.page_number}: ${pageFindings.count}`}
+          title={`Замечаний на странице ${block.page_number}: ${pageFindings.count}${source === null ? '' : ` (${source})`}`}
         >
           {pageFindings.count}
         </span>
