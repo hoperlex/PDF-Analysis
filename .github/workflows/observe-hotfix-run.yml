@@ -16,6 +16,12 @@ permissions:
 jobs:
   observe:
     if: github.ref == 'refs/heads/dev'
+    name: Snapshot group ${{ matrix.segment }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        segment: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -46,8 +52,16 @@ jobs:
           cd /srv/auditmanager
           test "$(git rev-parse HEAD)" = "$1"
           run_id="$2"
-          # A short snapshot can be re-run read-only while inference continues.
-          docker compose --env-file infra/deploy/env/alpha.env \
-            -f infra/deploy/compose.server.yml exec -T api \
-            python -m auditmanager.runs.hotfix_operator status "$run_id" </dev/null
+          # Completed groups expose safe logs while the analysis continues.
+          for ((attempt=0; attempt<6; attempt++)); do
+            result="$(docker compose --env-file infra/deploy/env/alpha.env \
+              -f infra/deploy/compose.server.yml exec -T api \
+              python -m auditmanager.runs.hotfix_operator status "$run_id" </dev/null)"
+            printf '%s\n' "$result"
+            state="$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)["state"])')"
+            case "$state" in
+              published|partial|failed|cancelled) exit 0 ;;
+            esac
+            sleep 45
+          done
           REMOTE
