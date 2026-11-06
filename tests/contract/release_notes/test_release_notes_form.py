@@ -172,9 +172,11 @@ def test_authored_shape_and_form() -> None:
     # #45 of 2026-11-06, live from the grants hotfix d6e8b4af (its own deploy was refused): document
     # cards, archive and tags, row verdicts, execution status, the queue overview, the dense layout.
     # Revision 2 is the hotfix 65ffb867 deployed the same day (the v3 window's normative context
-    # receipts): the knowledge-base item joins item 4 to leave room for one fixed item.
+    # receipts): the knowledge-base item joins item 4 to leave room for one fixed item. Revision 3 (AGENTS §6.1) is the
+    # same day's dev publications: «Во весь экран» and «Открыть PDF» join item 3, «Все» joins item 4, the run screen's
+    # head joins item 7; the version is full at seven items and a new one would need a later date.
     assert {entry["version"]: entry["revision"] for _, entry in entries} == {
-        "0.12.0": 2, "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
+        "0.12.0": 3, "0.11.0": 1, "0.10.0": 1, "0.9.0": 4, "0.8.2": 1, "0.8.1": 1, "0.8.0": 1, "0.7.0": 2, "0.6.0": 2,
         "0.5.1": 1, "0.5.0": 1, "0.4.0": 1, "0.3.0": 2, "0.2.0": 2,
     }
     assert form_failures(entries, version=(ROOT / "VERSION").read_text().strip(), terms=_dictionary()) == set()
