@@ -76,6 +76,7 @@ import { ProposalDecisions } from '@/widgets/proposal-journal';
 import { ProjectSections } from '@/widgets/project-sections';
 import { WorkScheduleMonthView } from '@/widgets/work-schedule-month';
 import { ReserveCalendarView } from '@/widgets/reserve-calendar';
+import { NO_ENGINEER_FILTER } from '@/entities/work-schedule';
 import { assignmentUid, monthFixture, reserveFixture, EXPERT_A, EXPERT_B } from '../work-schedule/fixtures';
 import { DocumentCardGrid } from '@/entities/document-version';
 import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
@@ -2322,17 +2323,38 @@ export function screens(): Screen[] {
   /*
    * `UI-PARITY-P0P`: «График работ». The month in each mode an administrator opens (the plan's inputs and settings, the
    * calendar's day and absence toggles) with a cell's «+N» list open, and «Календарь запаса» with a selection and a drop
-   * target, so every rule of `work-schedule-month.module.css` and `reserve-calendar.module.css` is reached.
+   * target, so every rule of `work-schedule-month.module.css` and `reserve-calendar.module.css` is reached. `D-319`: the
+   * month with late work in «Просрочки» (the red number), narrowed to one engineer while the count is read and failed, and
+   * with an engineer the read does not carry; the reserve narrowed, and with the same unknown engineer, so the filter's
+   * select and its note (`engineer-filter.module.css`) are measured.
    */
   for (const initialMode of ['view', 'plan', 'calendar'] as const) {
     add(`WorkSchedule month ${initialMode}`, renderScreen(newClient(), createElement(WorkScheduleMonthView, {
       schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode,
+      filter: NO_ENGINEER_FILTER, onEngineer: noop, overdue: { kind: 'ready', count: 2 },
       initialPopover: initialMode === 'view' ? `${EXPERT_A}|2026-11-03` : null,
     })));
   }
+  add('WorkSchedule month narrowed to one engineer, late work still being counted', renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+    schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode: 'view',
+    filter: { uid: EXPERT_A, unknown: false }, onEngineer: noop, overdue: { kind: 'pending' },
+  })));
+  add('WorkSchedule month with an engineer the read does not carry, late work not loaded', renderScreen(newClient(), createElement(WorkScheduleMonthView, {
+    schedule: monthFixture(), admin: true, onMonth: noop, today: '2026-11-03', initialMode: 'view',
+    filter: { uid: null, unknown: true }, onEngineer: noop, overdue: { kind: 'failed' },
+  })));
   add('WorkSchedule reserve', renderScreen(newClient(), createElement(ReserveCalendarView, {
     reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    filter: NO_ENGINEER_FILTER, onEngineer: noop,
     initialSelection: [assignmentUid(1), assignmentUid(3)], initialOver: `${EXPERT_B}|2026-11-05`,
+  })));
+  add('WorkSchedule reserve narrowed to one engineer', renderScreen(newClient(), createElement(ReserveCalendarView, {
+    reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    filter: { uid: EXPERT_B, unknown: false }, onEngineer: noop,
+  })));
+  add('WorkSchedule reserve with an engineer the read does not carry', renderScreen(newClient(), createElement(ReserveCalendarView, {
+    reserve: reserveFixture(), admin: true, onStart: noop, today: '2026-11-03',
+    filter: { uid: null, unknown: true }, onEngineer: noop,
   })));
   // The plan met (≥ 100 %, `ok`) and half met (≥ 50 %, `warn`), and the month and the reserve with nobody in them.
   {
@@ -2347,13 +2369,16 @@ export function screens(): Screen[] {
         ],
       },
       admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+      filter: NO_ENGINEER_FILTER, onEngineer: noop, overdue: { kind: 'ready', count: 0 },
     })));
     add('WorkSchedule month and reserve with no engineers', renderScreen(newClient(), createElement('div', null,
       createElement(WorkScheduleMonthView, {
         schedule: { ...month, engineers: [] }, admin: false, onMonth: noop, today: '2026-11-03', initialMode: 'view', initialPopover: null,
+        filter: NO_ENGINEER_FILTER, onEngineer: noop, overdue: { kind: 'ready', count: 0 },
       }),
       createElement(ReserveCalendarView, {
         reserve: { ...reserveFixture(), engineers: [] }, admin: false, onStart: noop, today: '2026-11-03',
+        filter: NO_ENGINEER_FILTER, onEngineer: noop,
         initialSelection: [], initialOver: null,
       }),
     )));
