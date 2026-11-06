@@ -36,16 +36,25 @@ and `started_by_label` (`R-151v`, contract 1.21.0) on the six records that carry
 `DocumentVersion.tags` (`R-151e`, contract 1.23.0) on the two listings that carry it. The
 starter is pinned, not normalised away: the uid is the journey's own account by token, the
 label a literal, so a run started by anyone else reddens the comparison.
+
+`LANE-W13-COST-01` (`D-322`) adds the cost path -- the refused unconsented `startRun` (02c) and `estimateRunCost`
+(02d) -- as the first records added since the seal. 02c names its `contract_version` by the journey's own
+`{{contract_version}}` token (read from the frozen contract, so it does not move with the next bump and a body naming
+any other version reddens), and the census of version-bearing records is updated deliberately
+(`_contract_version_census`). 02d is the contract-correct `RunCostEstimate`; the six optional properties the served body
+emits as `null` are projected back in memory (`_estimate_nulls_expected`) and the deviation is measured, not hidden.
 """
 
 from __future__ import annotations
 
 import base64
 import csv
+import dataclasses
 import hashlib
 import importlib.util
 import io
 import json
+import re
 import sys
 from functools import cache
 from pathlib import Path
@@ -169,7 +178,7 @@ _COMPAT_CASES = _ERROR_VERSION_CASES | _PORTAL_KIND_CASES
 # reads that carry them (`listDocuments`, `listVersions` and the document commands)". Records 32 and 33 are the two
 # listings; `uploadDocument` and `getDocumentVersion` (records 02 and 13) do not carry it and do not move. The journey sets
 # no tags -- `setDocumentTags` is not one of the operations this corpus covers
-# (:data:`SIXTEEN_OPERATIONS`, asserted whole by `test_every_one_of_the_sixteen_operations_is_covered`) -- so the
+# (:data:`SEVENTEEN_OPERATIONS`, asserted whole by `test_every_one_of_the_seventeen_operations_is_covered`) -- so the
 # document's set is empty, and the property is the last one of the version object, after `classification`.
 _TAGS_CASES = frozenset({"32-listDocuments.success", "33-listVersions.success"})
 _TAGS_BEFORE = '"revision": 1}}], "page": {"next_cursor": null}}'
@@ -331,6 +340,66 @@ def _run_starter_expected(
     return out
 
 
+# `LANE-W13-COST-01` (`D-322`): the cost estimate (record 02d) and the deviation of the served body from the contract.
+#
+# `RunCostEstimate` declares six properties that are optional and **not nullable** -- `connection_revision_id`,
+# `preset_revision_id`, `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` and `pin_id`, each a
+# plain string schema outside `required` -- and the cost preflight leaves them out when the route does not set them (its
+# public dict holds only the non-null ones). `estimateRunCost` then renders the answer with `model_dump(mode="json")`
+# and no `exclude_unset`, so the wire carries each of them as `null`, where `executors.py` states the surface's rule:
+# "Optional properties are absent, never null". A byte-for-byte record of the served body would freeze that
+# (`characterization-can-freeze-a-defect`), so record 02d is the contract-correct form and the six `null`s are projected
+# back **in memory**, named here, counted, and measured on the live body by
+# `test_the_served_estimate_carries_the_six_nulls_the_contract_forbids`. When the product is fixed that test goes red on
+# purpose: delete this projection and that test, and the record needs no edit.
+_ESTIMATE_CASE = "02d-estimateRunCost.success"
+_ESTIMATE_NULL_PROPERTIES = (
+    "connection_revision_id",
+    "preset_revision_id",
+    "executor_group_id",
+    "executor_group_revision_id",
+    "routing_rule_revision_id",
+    "pin_id",
+)
+#: The property they follow (the model emits them right after `model_id`) and the one they precede.
+_ESTIMATE_NULLS_BEFORE = ', "text_characters"'
+
+
+def _estimate_nulls_expected(
+    expected: dict[str, Any], *, names: tuple[str, ...] = _ESTIMATE_NULL_PROPERTIES
+) -> dict[str, Any]:
+    if expected["case"] != _ESTIMATE_CASE:
+        return expected
+    body = expected["response"]["body"]
+    original = body["text"]
+    historical = _historical(_ESTIMATE_CASE)["response"]["body"]["text"]
+    assert body["kind"] == "text" and original == historical, (
+        f"{_ESTIMATE_CASE}: the projection received a changed historical body"
+    )
+    assert not any(f'"{name}"' in original for name in _ESTIMATE_NULL_PROPERTIES), (
+        f"{_ESTIMATE_CASE}: the record already carries one of the six optional properties; "
+        "it is the contract-correct form, without them, that is projected"
+    )
+    assert original.count(_ESTIMATE_NULLS_BEFORE) == 1
+    inserted = "".join(f', "{name}": null' for name in names)
+    projected = original.replace(_ESTIMATE_NULLS_BEFORE, inserted + _ESTIMATE_NULLS_BEFORE, 1)
+    out = json.loads(json.dumps(expected))
+    out["response"]["body"]["text"] = projected
+    # No token sits in the inserted bytes, so the raw length grows by exactly their length.
+    out["response"]["body"]["length"] += len(inserted.encode("utf-8"))
+    return out
+
+
+def _projected(expected: dict[str, Any]) -> dict[str, Any]:
+    """A record as the comparison expects it: every digest-pinned in-memory projection, in the order the suite applies them."""
+    if expected["case"] == "12-exportRunCsv.success":
+        expected = _csv_compat_expected(expected)
+    expected = _schema_compat_expected(expected)
+    expected = _audit_counts_expected(expected)
+    expected = _run_starter_expected(expected)
+    return _estimate_nulls_expected(expected)
+
+
 #: The operationIds this corpus covers, written out rather than read from the contract:
 #: this suite's job is to notice a surface that changed, and an expectation computed from a
 #: file the change could also touch would not.
@@ -346,10 +415,15 @@ def _run_starter_expected(
 #: rule is W18-SEAL's: a new case and a new record, no exception block. The served surface
 #: has more operations than these sixteen; the list is what this corpus records, and the
 #: assertion is that every one of them is covered and nothing else is named.
-SIXTEEN_OPERATIONS = (
+#:
+#: **`LANE-W13-COST-01` (`D-322`) moved it from sixteen to seventeen** with case 02d,
+#: ``estimateRunCost``: the price the person confirms before ``startRun`` may spend
+#: (`BETA-COST-PREFLIGHT-1030`). The rule is W18-SEAL's again: a new case and a new record, no exception block.
+SEVENTEEN_OPERATIONS = (
     "appendDecision",
     "classifyDocumentVersion",
     "createProject",
+    "estimateRunCost",
     "exportRunCsv",
     "getDocumentVersion",
     "getFinding",
@@ -389,16 +463,16 @@ def test_the_record_set_and_the_journey_agree(exchanges: dict[str, Any]) -> None
     assert recorded, "the baseline is empty"
 
 
-def test_every_one_of_the_sixteen_operations_is_covered() -> None:
+def test_every_one_of_the_seventeen_operations_is_covered() -> None:
     covered = set()
     for path in RECORD_FILES:
         operation = json.loads(path.read_text(encoding="utf-8"))["operation"]
         if operation is not None:
             covered.add(operation)
-    assert covered == set(SIXTEEN_OPERATIONS), (
-        f"operations with no record: {sorted(set(SIXTEEN_OPERATIONS) - covered)}; "
+    assert covered == set(SEVENTEEN_OPERATIONS), (
+        f"operations with no record: {sorted(set(SEVENTEEN_OPERATIONS) - covered)}; "
         f"records naming an operation the contract does not declare: "
-        f"{sorted(covered - set(SIXTEEN_OPERATIONS))}"
+        f"{sorted(covered - set(SEVENTEEN_OPERATIONS))}"
     )
 
 
@@ -1003,12 +1077,7 @@ def test_the_authorization_era_check_can_fail() -> None:
 
 @pytest.mark.parametrize("path", RECORD_FILES, ids=lambda p: p.stem)
 def test_the_response_reproduces_the_record(path: Path, exchanges: dict[str, Any]) -> None:
-    expected = json.loads(path.read_text(encoding="utf-8"))
-    if expected["case"] == "12-exportRunCsv.success":
-        expected = _csv_compat_expected(expected)
-    expected = _schema_compat_expected(expected)
-    expected = _audit_counts_expected(expected)
-    expected = _run_starter_expected(expected)
+    expected = _projected(json.loads(path.read_text(encoding="utf-8")))
     exchange = exchanges[expected["case"]]
     found = journey.differences(exchange, expected)
     assert not found, (
@@ -1194,10 +1263,10 @@ def test_the_document_tags_of_records_32_and_33_are_none_because_the_journey_set
     """Both listings carry `"tags": []`, and nothing in the corpus could have given a document a tag.
 
     `setDocumentTags` is not among the operations the records cover, and the set of covered operations is asserted whole by
-    `test_every_one_of_the_sixteen_operations_is_covered`; the listings are the two reads the contract says carry the property.
+    `test_every_one_of_the_seventeen_operations_is_covered`; the listings are the two reads the contract says carry the property.
     The value follows from that, not from the live response; the projection places it last, after `classification`.
     """
-    assert "setDocumentTags" not in SIXTEEN_OPERATIONS
+    assert "setDocumentTags" not in SEVENTEEN_OPERATIONS
     covered = {_historical(path.stem)["operation"] for path in RECORD_FILES}
     assert "setDocumentTags" not in covered
     for case in sorted(_TAGS_CASES):
@@ -1753,6 +1822,47 @@ _PRE_SEAL_CONTRACT_VERSION_BODIES = {
 _DRAFT_VERSION_KEY = '"contract_version": "1.0.0-draft.1"'
 _SEALED_VERSION_KEY = '"contract_version": "1.0.0"'
 
+#: `LANE-W13-COST-01` (`D-322`). The records added after the seal whose body names a contract version, and the only way
+#: they may: as the journey's own `{{contract_version}}` token (`journey.declare_contract_version`), which stands for the
+#: version the frozen contract declares for every `ErrorEnvelope` and for nothing else. A literal would be edited at every
+#: contract bump without telling anyone anything; a pattern or a skipped field name would accept a wrong version. The
+#: sixteen above are historical and stay literal (`1.0.0`, projected to the current version by the comparison behind a
+#: digest); a record is admitted to this table by a commit that says why, like a row of `PERMITTED_EXCEPTIONS`.
+_TOKENISED_CONTRACT_VERSION_CASES = frozenset({"02c-startRun.refusal.cost_consent_required"})
+_TOKENISED_VERSION_KEY = '"contract_version": "{{contract_version}}"'
+_VERSION_TOKEN = "{{contract_version}}"
+
+
+def _contract_version_census(texts: dict[str, str]) -> list[str]:
+    """Every way the records that name a contract version stop being accounted for, as one list.
+
+    One function, used by the guard and by the test that proves the guard can fail, so the proof exercises the rule rather
+    than a copy of it. ``texts`` maps a case to its response body text.
+    """
+    historical = set(_PRE_SEAL_CONTRACT_VERSION_BODIES)
+    tokenised = set(_TOKENISED_CONTRACT_VERSION_CASES)
+    carrying = {case for case, text in texts.items() if "contract_version" in text}
+    found = [
+        f"{case}: names a contract version and is in neither table (an unexamined literal)"
+        for case in sorted(carrying - historical - tokenised)
+    ]
+    found += [f"{case}: is in a table and names no contract version" for case in sorted((historical | tokenised) - carrying)]
+    for case in sorted(tokenised & carrying):
+        text = texts[case]
+        if text.count(_TOKENISED_VERSION_KEY) != 1:
+            found.append(f"{case}: does not carry exactly one {_VERSION_TOKEN}")
+        if re.search(r'"contract_version": "[0-9]', text):
+            found.append(f"{case}: carries a literal contract version")
+    found += [f"{case}: a historical record carries {_VERSION_TOKEN}" for case in sorted(historical & carrying) if _VERSION_TOKEN in texts[case]]
+    return found
+
+
+def _body_texts() -> dict[str, str]:
+    return {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))["response"]["body"].get("text", "")
+        for path in RECORD_FILES
+    }
+
 
 def test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_else() -> None:
     """The re-capture asserted, not merely made: put the draft version back and each body is
@@ -1764,15 +1874,13 @@ def test_the_sixteen_error_records_moved_by_the_contract_version_and_nothing_els
     asserted whole: every record whose body names a contract version is in the table, so a
     seventeenth cannot carry the literal unexamined. No record gains an exception block: this
     is not a debt of one operation but the one literal every error body shares.
+
+    `D-322`: records added after the seal are the second table, `_TOKENISED_CONTRACT_VERSION_CASES`; the
+    census (`_contract_version_census`) requires each of them to carry the journey's token and no literal.
     """
-    carrying = {
-        path.stem
-        for path in RECORD_FILES
-        if "contract_version" in json.loads(path.read_text(encoding="utf-8"))["response"]["body"].get("text", "")
-    }
-    assert carrying == set(_PRE_SEAL_CONTRACT_VERSION_BODIES), sorted(
-        carrying ^ set(_PRE_SEAL_CONTRACT_VERSION_BODIES)
-    )
+    # `D-322`: the set is still asserted whole, now in two tables -- the sixteen historical literals below and the
+    # tokenised records above -- so a record that names a version in any other way is reported.
+    assert _contract_version_census(_body_texts()) == []
     for case, digest in _PRE_SEAL_CONTRACT_VERSION_BODIES.items():
         record = json.loads((journey.RECORDS / f"{case}.json").read_text(encoding="utf-8"))
         body = record["response"]["body"]
@@ -1804,3 +1912,390 @@ def test_the_contract_version_move_test_can_fail() -> None:
         text,
     ):
         assert hashlib.sha256(mutated.encode("utf-8")).hexdigest() != _PRE_SEAL_CONTRACT_VERSION_BODIES[case]
+
+
+def test_the_contract_version_census_can_fail() -> None:
+    """The census above, shown reporting each way a version-bearing record could escape it (`D-322`).
+
+    The plants are in-memory copies of the real bodies: a test that edits ``records/`` would trip the gate's
+    changed-during-the-run check.
+    """
+    texts = _body_texts()
+    assert _contract_version_census(texts) == [], "the unperturbed records are already reported"
+    tokenised = "02c-startRun.refusal.cost_consent_required"
+    historical = "30-getRunStatus.not_found"
+
+    def plant(**changes: str | None) -> list[str]:
+        planted = dict(texts)
+        for case, text in changes.items():
+            if text is None:
+                planted.pop(case)
+            else:
+                planted[case] = text
+        return _contract_version_census(planted)
+
+    # A new record that names the version as a literal, and one that names it as the token but is in no table.
+    literal = plant(new_record=texts[historical])
+    assert literal == ["new_record: names a contract version and is in neither table (an unexamined literal)"], literal
+    unlisted = plant(new_record=texts[tokenised])
+    assert unlisted == ["new_record: names a contract version and is in neither table (an unexamined literal)"], unlisted
+    # A tokenised record that carries a literal instead of the token, or two properties, or loses the property.
+    assert plant(**{tokenised: texts[tokenised].replace(_VERSION_TOKEN, "1.33.0")}) == [
+        f"{tokenised}: does not carry exactly one {_VERSION_TOKEN}",
+        f"{tokenised}: carries a literal contract version",
+    ]
+    assert plant(**{tokenised: texts[tokenised].replace(_TOKENISED_VERSION_KEY, _TOKENISED_VERSION_KEY * 2)}) == [
+        f"{tokenised}: does not carry exactly one {_VERSION_TOKEN}"
+    ]
+    assert plant(**{tokenised: texts[tokenised].replace('"contract_version"', '"version"')}) == [
+        f"{tokenised}: does not carry exactly one {_VERSION_TOKEN}"
+    ]
+    # A historical record that was tokenised, or a table row whose record is gone.
+    assert plant(**{historical: texts[historical].replace('"1.0.0"', '"{{contract_version}}"')}) == [
+        f"{historical}: a historical record carries {_VERSION_TOKEN}"
+    ]
+    assert plant(**{historical: None}) == [f"{historical}: is in a table and names no contract version"]
+
+
+def _contract_schemas() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json"
+    return json.loads(path.read_text(encoding="utf-8"))["components"]["schemas"]  # type: ignore[no-any-return]
+
+
+def _is_type(value: Any, name: str) -> bool:
+    return {
+        "object": isinstance(value, dict),
+        "string": isinstance(value, str),
+        "integer": isinstance(value, int) and not isinstance(value, bool),
+        "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+        "boolean": isinstance(value, bool),
+        "null": value is None,
+        "array": isinstance(value, list),
+    }[name]
+
+
+def _schema_problems(value: Any, schema: dict[str, Any], path: str = "$") -> list[str]:
+    """What the contract's JSON Schema subset says is wrong with ``value``, one line per problem.
+
+    Only the keywords the two schemas of the cost path use -- ``$ref``, ``type``, ``const``, ``enum``, ``pattern``,
+    ``minimum``, ``minLength``, ``maxLength``, ``required``, ``properties``, ``additionalProperties`` -- and it refuses
+    any other keyword it meets rather than ignoring it, so it cannot pass a body on a rule it does not read. (``jsonschema``
+    is not a dependency of this environment.)
+    """
+    known = {
+        "$ref", "type", "const", "enum", "pattern", "minimum", "maximum", "minLength", "maxLength", "required",
+        "properties", "additionalProperties", "propertyNames", "maxProperties",
+        "description", "title", "examples",  # annotations: they constrain nothing
+    }
+    unread = set(schema) - known
+    assert not unread, f"{path}: the contract uses a keyword this check does not read: {sorted(unread)}"
+    if "$ref" in schema:
+        return _schema_problems(value, _contract_schemas()[schema["$ref"].rsplit("/", 1)[1]], path)
+    found: list[str] = []
+    if "const" in schema and value != schema["const"]:
+        found.append(f"{path}: {value!r} is not the const {schema['const']!r}")
+    if "enum" in schema and value not in schema["enum"]:
+        found.append(f"{path}: {value!r} is not one of {schema['enum']}")
+    kinds = schema.get("type")
+    kinds = [kinds] if isinstance(kinds, str) else list(kinds or [])
+    if kinds and not any(_is_type(value, kind) for kind in kinds):
+        return found + [f"{path}: {value!r} is not of type {'/'.join(kinds)}"]
+    if isinstance(value, str):
+        if "pattern" in schema and not re.search(schema["pattern"], value):
+            found.append(f"{path}: {value!r} does not match {schema['pattern']}")
+        if len(value) < schema.get("minLength", 0) or len(value) > schema.get("maxLength", 10**9):
+            found.append(f"{path}: length {len(value)} is outside the declared bounds")
+    if isinstance(value, int) and not isinstance(value, bool):
+        if value < schema.get("minimum", value) or value > schema.get("maximum", value):
+            found.append(f"{path}: {value} is outside the declared bounds")
+    if isinstance(value, dict):
+        properties = schema.get("properties", {})
+        if len(value) > schema.get("maxProperties", len(value)):
+            found.append(f"{path}: {len(value)} properties exceed maxProperties")
+        names = schema.get("propertyNames", {}).get("pattern")
+        found += [f"{path}.{name}: a name that does not match {names}" for name in value if names and not re.search(names, name)]
+        found += [f"{path}.{name}: required and absent" for name in schema.get("required", []) if name not in value]
+        extra = schema.get("additionalProperties")
+        for name, item in value.items():
+            if name in properties:
+                found += _schema_problems(item, properties[name], f"{path}.{name}")
+            elif extra is False:
+                found.append(f"{path}.{name}: not declared (additionalProperties is false)")
+            elif isinstance(extra, dict):
+                found += _schema_problems(item, extra, f"{path}.{name}")
+    return found
+
+
+#: Stand-ins for the tokens of the two cost-path records, shaped as the contract says the values are.
+_STAND_INS = {
+    "{{contract_version}}": None,  # the contract's own const, filled in by the caller
+    "{{correlation_id}}": "cid-" + "0" * 32,
+    "{{estimate_digest}}": "a" * 64,
+    "{{version_uid}}": "ver_" + "0" * 26,
+}
+
+
+def _record_as_contract_value(case: str) -> Any:
+    text = _historical(case)["response"]["body"]["text"]
+    for token, stand_in in _STAND_INS.items():
+        text = text.replace(token, stand_in if stand_in is not None else journey.contract_envelope_version())
+    assert "{{" not in text, f"{case}: a token without a stand-in: {text}"
+    return json.loads(text)
+
+
+def test_the_cost_path_records_are_what_the_contract_declares() -> None:
+    """02c is an `ErrorEnvelope` and 02d a `RunCostEstimate`, validated against `contracts/api/v1/openapi.json` (`D-322`).
+
+    The status of each is the one the operation declares (`startRun`: 422, `RunInputInvalid`; `estimateRunCost`: 200).
+    The checker is shown able to fail below, so a body that satisfied it is evidence and not an absence of checking.
+    """
+    refusal = _historical("02c-startRun.refusal.cost_consent_required")
+    assert refusal["response"]["status"] == 422 and refusal["operation"] == "startRun"
+    assert _schema_problems(_record_as_contract_value(refusal["case"]), {"$ref": "#/components/schemas/ErrorEnvelope"}) == []
+    estimate = _historical(_ESTIMATE_CASE)
+    assert estimate["response"]["status"] == 200 and estimate["operation"] == "estimateRunCost"
+    assert _schema_problems(_record_as_contract_value(_ESTIMATE_CASE), {"$ref": "#/components/schemas/RunCostEstimate"}) == []
+    # The refusal's code, retryability and details are the ones the contract's family allows: validation_failed is
+    # 422 and not retryable; `field` / `constraint` are free-form detail keys (the catalog names them safe).
+    envelope = _record_as_contract_value(refusal["case"])
+    assert (envelope["error_code"], envelope["retryable"]) == ("validation_failed", False)
+    assert envelope["details"] == {"field": "cost_consent", "constraint": "confirmation_required"}
+
+
+def test_the_contract_check_can_fail() -> None:
+    estimate = _record_as_contract_value(_ESTIMATE_CASE)
+    refusal = _record_as_contract_value("02c-startRun.refusal.cost_consent_required")
+    estimate_schema = {"$ref": "#/components/schemas/RunCostEstimate"}
+    envelope_schema = {"$ref": "#/components/schemas/ErrorEnvelope"}
+    assert _schema_problems(estimate, estimate_schema) == []
+    assert _schema_problems(refusal, envelope_schema) == []
+
+    def with_(value: dict[str, Any], **changes: Any) -> dict[str, Any]:
+        return {**value, **changes}
+
+    assert _schema_problems(with_(estimate, extra=1), estimate_schema) == ["$.extra: not declared (additionalProperties is false)"]
+    assert _schema_problems({k: v for k, v in estimate.items() if k != "calls"}, estimate_schema) == ["$.calls: required and absent"]
+    assert _schema_problems(with_(estimate, currency="EUR"), estimate_schema) == ["$.currency: 'EUR' is not the const 'USD'"]
+    assert _schema_problems(with_(estimate, windows=0), estimate_schema) == ["$.windows: 0 is outside the declared bounds"]
+    assert _schema_problems(with_(estimate, estimate_digest="A" * 64), estimate_schema) == [
+        f"$.estimate_digest: {'A' * 64!r} does not match ^[0-9a-f]{{64}}$"
+    ]
+    assert _schema_problems(with_(estimate, scope="batch"), estimate_schema) == ["$.scope: 'batch' is not one of ['run', 'ar_v3_group']"]
+    # The shape the product serves today: a null where the contract says a string. This is the deviation.
+    assert _schema_problems(with_(estimate, pin_id=None), estimate_schema) == ["$.pin_id: None is not of type string"]
+    assert _schema_problems(with_(refusal, contract_version="1.0.0"), envelope_schema) == [
+        f"$.contract_version: '1.0.0' is not the const {journey.contract_envelope_version()!r}"
+    ]
+    assert _schema_problems(with_(refusal, error_code="no_such_code"), envelope_schema)
+    with pytest.raises(AssertionError, match="keyword this check does not read"):
+        _schema_problems(1, {"type": "integer", "multipleOf": 2})
+
+
+def test_the_served_estimate_carries_the_six_nulls_the_contract_forbids(exchanges: dict[str, Any]) -> None:
+    """The deviation, measured on the live answer and counted (`D-322`).
+
+    The six properties are the ones the contract declares optional and not nullable, the served body renders each as
+    `null`, and nothing else in the body violates the schema. This is the test that fixes the projection in place and
+    that goes red, deliberately, the day the route stops emitting them: then delete `_estimate_nulls_expected`, its entry
+    in `_projected`, and this test -- the record already is the contract-correct form and needs no edit.
+    """
+    live = json.loads(exchanges[_ESTIMATE_CASE].body.decode("utf-8"))
+    schema = _contract_schemas()["RunCostEstimate"]
+    optional = {name for name in schema["properties"] if name not in schema["required"]}
+    assert {name for name, value in live.items() if value is None} == set(_ESTIMATE_NULL_PROPERTIES) == optional, (
+        "the set of null properties of the served estimate moved: the product was changed, or the contract was; "
+        "if the nulls are gone, delete the projection (see this test's docstring)"
+    )
+    assert _schema_problems(live, {"$ref": "#/components/schemas/RunCostEstimate"}) == [
+        f"$.{name}: None is not of type string" for name in live if live[name] is None
+    ]
+
+
+def test_the_estimate_nulls_projection_reddens_on_a_wrong_expectation_and_refuses_a_changed_record(
+    exchanges: dict[str, Any],
+) -> None:
+    exchange = exchanges[_ESTIMATE_CASE]
+    record = _historical(_ESTIMATE_CASE)
+    right = _projected(record)
+    assert journey.differences(exchange, right) == []
+    # The projection is what makes the comparison pass: the contract-correct record alone does not match the served body.
+    assert any("body:" in line for line in journey.differences(exchange, record))
+    # One null too few, or none at all, is reported.
+    for names in (_ESTIMATE_NULL_PROPERTIES[:-1], _ESTIMATE_NULL_PROPERTIES[1:], ()):
+        assert any("body:" in line for line in journey.differences(exchange, _estimate_nulls_expected(record, names=names))), names
+    # A record that already carries one of the six, or whose text moved, is refused before it is projected.
+    carrying = json.loads(json.dumps(record))
+    carrying["response"]["body"]["text"] = carrying["response"]["body"]["text"].replace(
+        ', "text_characters"', ', "pin_id": "x", "text_characters"', 1
+    )
+    with pytest.raises(AssertionError, match="changed historical body"):
+        _estimate_nulls_expected(carrying)
+
+
+def _tampered(exchange: Any, mutate: Any) -> Any:
+    """The exchange with its body rewritten by ``mutate(bytes) -> bytes`` and a Content-Length that still describes it."""
+    body = mutate(exchange.body)
+    assert body != exchange.body, "the plant changed nothing"
+    headers = tuple((name, str(len(body)) if name == "Content-Length" else value) for name, value in exchange.headers)
+    return dataclasses.replace(exchange, body=body, headers=headers)
+
+
+def _json_plant(change: Any) -> Any:
+    """A body mutation that parses the live JSON, changes it and renders it the way the surface does (`encode_json`)."""
+    def mutate(raw: bytes) -> bytes:
+        parsed = json.loads(raw.decode("utf-8"))
+        assert json.dumps(parsed, ensure_ascii=False).encode("utf-8") == raw, "the plant would re-render the body"
+        change(parsed)
+        return json.dumps(parsed, ensure_ascii=False).encode("utf-8")
+    return mutate
+
+
+def test_the_cost_path_records_redden_on_a_planted_difference(exchanges: dict[str, Any]) -> None:
+    """Each kind of difference the comparison must catch, planted in the live answer of 02c and of 02d (`D-322`)."""
+    refusal_case = "02c-startRun.refusal.cost_consent_required"
+    refusal = exchanges[refusal_case]
+    refusal_expected = _projected(_historical(refusal_case))
+    assert journey.differences(refusal, refusal_expected) == []
+
+    def set_(name: str, value: Any) -> Any:
+        return _json_plant(lambda body: body.__setitem__(name, value))
+
+    def set_detail(name: str, value: Any) -> Any:
+        return _json_plant(lambda body: body["details"].__setitem__(name, value))
+
+    plants = {
+        "an older contract version": set_("contract_version", "1.0.0"),
+        "a newer contract version": set_("contract_version", "99.0.0"),
+        "an empty contract version": set_("contract_version", ""),
+        "a retryable refusal": set_("retryable", True),
+        "another code": set_("error_code", "conflict"),
+        "another message": set_("message", "Cost consent is required."),
+        "another field": set_detail("field", "ceiling_micros"),
+        "another constraint": set_detail("constraint", "below_estimate"),
+        "no details": _json_plant(lambda body: body.pop("details")),
+        "no contract version": _json_plant(lambda body: body.pop("contract_version")),
+    }
+    for what, mutate in plants.items():
+        assert any("body:" in line for line in journey.differences(_tampered(refusal, mutate), refusal_expected)), (
+            f"{refusal_case}: {what} was not reported"
+        )
+    assert any("status" in line for line in journey.differences(dataclasses.replace(refusal, status=409), refusal_expected))
+    assert journey.differences(
+        dataclasses.replace(refusal, headers=tuple(h for h in refusal.headers if h[0] != "X-Correlation-Id")), refusal_expected
+    )
+
+    estimate = exchanges[_ESTIMATE_CASE]
+    estimate_expected = _projected(_historical(_ESTIMATE_CASE))
+    assert journey.differences(estimate, estimate_expected) == []
+    live = json.loads(estimate.body.decode("utf-8"))
+    figure_plants = {
+        "a dearer estimate": set_("estimated_cost_micros", live["estimated_cost_micros"] + 1),
+        "a lower recommended ceiling": set_("recommended_ceiling_micros", live["recommended_ceiling_micros"] - 1),
+        "more input tokens": set_("input_tokens", live["input_tokens"] + 1),
+        "another model": set_("model_id", "another-model"),
+        "another page count": set_("page_count", live["page_count"] + 1),
+        "another window count": set_("windows", live["windows"] + 1),
+        "the relaxed output allowance": set_("output_tokens", 64000),
+        "another currency": set_("currency", "EUR"),
+        "another scope": set_("scope", "ar_v3_group"),
+        "a metered route that is unmetered": set_("billing", "unmetered"),
+        "a missing figure": _json_plant(lambda body: body.pop("calls")),
+        "a digest that is not the one the journey read": set_("estimate_digest", "0" * 64),
+        "a null fewer": _json_plant(lambda body: body.pop("pin_id")),
+        "a seventh null": _json_plant(lambda body: body.__setitem__("route_id", None)),
+    }
+    for what, mutate in figure_plants.items():
+        assert any("body:" in line for line in journey.differences(_tampered(estimate, mutate), estimate_expected)), (
+            f"{_ESTIMATE_CASE}: {what} was not reported"
+        )
+    assert any("status" in line for line in journey.differences(dataclasses.replace(estimate, status=202), estimate_expected))
+
+
+def test_the_contract_version_token_is_the_contracts_and_refuses_a_contract_that_disagrees(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`journey.contract_envelope_version` is the const of the envelope, equal to the document's `info.version` (`D-322`)."""
+    assert journey.contract_envelope_version() == _current_contract_version()
+    record = _historical("02c-startRun.refusal.cost_consent_required")
+    assert "{{contract_version}}" in record["tokens"]
+    assert "contract_version" in record["response"]["body"]["text"]
+    document = json.loads((Path(__file__).resolve().parents[3] / "contracts/api/v1/openapi.json").read_text(encoding="utf-8"))
+    document["components"]["schemas"]["ErrorEnvelope"]["properties"]["contract_version"]["const"] = "0.0.1"
+    drifted = tmp_path / "openapi.json"
+    drifted.write_text(json.dumps(document), encoding="utf-8")
+    monkeypatch.setattr(journey, "CONTRACT_DOCUMENT", drifted)
+    with pytest.raises(AssertionError, match="no longer says that the envelope's version is the document's version"):
+        journey.contract_envelope_version()
+
+
+def test_the_estimate_digest_must_be_a_sha256_before_it_is_tokenised() -> None:
+    tokens = journey.Tokens()
+    for bad in ("", "A" * 64, "a" * 63, "a" * 65, "g" * 64, "a" * 64 + "\n", None, 7):
+        with pytest.raises(AssertionError, match="not the pinned Sha256 format"):
+            journey.declare_estimate_digest(tokens, bad)
+    assert tokens.values() == {}
+    journey.declare_estimate_digest(tokens, "0123456789abcdef" * 4)
+    assert tokens.values() == {"{{estimate_digest}}": "0123456789abcdef" * 4}
+
+
+def test_the_consented_start_carries_the_consent_the_estimate_record_gives() -> None:
+    """Records 03-05 are the consented start; the estimate record is where their consent comes from (`D-322`).
+
+    The start records keep the request side as lengths only. Rebuild the three request bodies from record 02d -- the
+    version uid and the digest at their fixed contract widths, the ceiling as the recommended one -- and the lengths
+    the start records declare are exactly those: the consent is the estimate's digest and its recommended ceiling, and
+    that ceiling is sufficient, since record 03 answered 202 to it (the contract: "a sufficient explicit ceiling").
+    Records 02c and 02d send the bare `version_uid`.
+    """
+    estimate = _record_as_contract_value(_ESTIMATE_CASE)
+    assert estimate["recommended_ceiling_micros"] >= estimate["estimated_cost_micros"] > 0
+    version, digest = "ver_" + "0" * 26, "a" * 64
+    consent = {"estimate_digest": digest, "ceiling_micros": estimate["recommended_ceiling_micros"], "confirmed": True}
+    expected_lengths = {
+        "03-startRun.success": len(json.dumps({"version_uid": version, "cost_consent": consent})),
+        "04-startRun.replay": len(json.dumps({"version_uid": version, "cost_consent": consent})),
+        "05-startRun.replay_with_normalised_property": len(
+            json.dumps({"version_uid": version, "provider_mode": "recorded", "cost_consent": consent})
+        ),
+        "02c-startRun.refusal.cost_consent_required": len(json.dumps({"version_uid": version})),
+        _ESTIMATE_CASE: len(json.dumps({"version_uid": version})),
+    }
+    for case, length in expected_lengths.items():
+        assert _historical(case)["request"]["body_length"] == length, case
+    assert _historical("03-startRun.success")["response"]["status"] == 202
+    # The estimate is the one of the version the start was made over, in the mode the run reports.
+    assert estimate["provider_mode"] == json.loads(_historical("03-startRun.success")["response"]["body"]["text"])["provider_mode"]
+    assert '"version_uid": "{{version_uid}}"' in _historical(_ESTIMATE_CASE)["response"]["body"]["text"]
+
+
+def test_the_estimate_follows_from_the_records_around_it() -> None:
+    """The figures the contract or an earlier record determines, derived and not copied from the server (`D-322`).
+
+    What is derived: `page_count` is the version's (record 13); `output_tokens` is `windows` times the 16 000 the contract
+    gives for `relaxed_limits: false` ("False requests up to 16,000 output tokens", `StartRunRequest.relaxed_limits`);
+    `calls` equals `windows` for the plain analysis the journey prices; `relaxed_limits` is the request's default.
+    What is only pinned, and moves with the fixture text, the pinned prompt bundle and the pinned price table by design:
+    `text_characters`, `input_tokens`, `estimated_cost_micros`, `recommended_ceiling_micros`, `model_id` and `billing`.
+    """
+    estimate = _record_as_contract_value(_ESTIMATE_CASE)
+    version = json.loads(_historical("13-getDocumentVersion.success")["response"]["body"]["text"])
+    assert estimate["page_count"] == version["page_count"] == 8
+    assert estimate["output_tokens"] == estimate["windows"] * 16000
+    assert estimate["calls"] == estimate["windows"] == 1
+    assert estimate["relaxed_limits"] is False and estimate["scope"] == "run" and estimate["currency"] == "USD"
+    assert not set(_ESTIMATE_NULL_PROPERTIES) & set(estimate), "the record is the contract-correct form"
+
+
+def test_the_refused_unconsented_start_left_no_run_behind() -> None:
+    """Record 34 lists the project's runs after the whole journey: one, the consented start's (`D-322`).
+
+    Record 02c's refusal precedes the idempotency key's claim ("Nothing was created"), so it must not appear as a run.
+    """
+    items = json.loads(_historical("34-listRuns.success")["response"]["body"]["text"])["items"]
+    assert [item["run_id"] for item in items] == ["{{run_id}}"]
+    refusal = _historical("02c-startRun.refusal.cost_consent_required")
+    keys = {
+        case: dict(map(tuple, _historical(case)["request"]["headers"]))["Idempotency-Key"]
+        for case in (refusal["case"], "03-startRun.success")
+    }
+    assert keys[refusal["case"]] != keys["03-startRun.success"], "the refusal and the start must not share a key"
