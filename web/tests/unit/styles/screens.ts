@@ -18,7 +18,7 @@ import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
 import { ProjectsPage } from '@/_pages/projects';
-import { ReviewPage, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
+import { PageBlocksStrip, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
@@ -152,7 +152,8 @@ import {
 } from '../norms/fixtures';
 
 import {
-  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blocksOnFivePages, blocksVersion, everyKindOfBlock, portalPage, runFindings,
+  BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blockId, blocksOnFivePages, blocksVersion, everyKindOfBlock,
+  imageBlock, portalPage, runFindings, stampBlock, textBlock,
 } from '../blocks/fixtures';
 
 import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixtures';
@@ -1903,6 +1904,105 @@ export function screens(): Screen[] {
         createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID }),
       ),
     );
+  }
+
+  /*
+   * `UI-A-74`: «Блоки страницы N» under the page on «Разбор», inline and in the full-screen view's side column. The
+   * default finding cites page 7, so the version's blocks are seeded under the key the «Блоки» tab fills, with
+   * another cursor page waiting (the footer that offers it), and the strip is drawn through the screen itself. The
+   * side column and the block view are drawn open (`staticOpen`) over a complete list; the page past the loaded
+   * blocks and the unreadable blocks are their own views. The crop's address is read from the API base, set for
+   * these renders only and restored.
+   */
+  {
+    const before = process.env.NEXT_PUBLIC_API_BASE_URL;
+    process.env.NEXT_PUBLIC_API_BASE_URL = '/bff/v1';
+    try {
+      const onPage7 = [
+        imageBlock({ portal_block_id: blockId(61), page_number: 7, page_label: 7, ordinal: 1 }),
+        textBlock({ portal_block_id: blockId(62), page_number: 7, page_label: 7, ordinal: 2 }),
+        stampBlock({ portal_block_id: blockId(63), page_number: 7, page_label: 7 }),
+      ];
+      const withBlocks = (more: boolean) => {
+        const client = populatedClient();
+        const page = { next_cursor: null } as { next_cursor: null };
+        client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: { items: FINDINGS, page } });
+        client.setQueryData(queryKeys.findings.detail(FINDING_UID), {
+          data: findingDetail({ finding_uid: FINDING_UID, decision_event_count: 2 }),
+        });
+        client.setQueryData(queryKeys.findings.decisions(FINDING_UID), {
+          data: { items: [decisionEvent({ verdict: 'accepted' })], page },
+        });
+        client.setQueryData(portalBlocksQueryOptions(VERSION_UID).queryKey, {
+          pages: [portalPage(onPage7, more ? { block_count: 300, page: { next_cursor: 'c1' } } : {})],
+          pageParams: [undefined],
+        });
+        return client;
+      };
+      add(
+        'ReviewPage loaded, with the cited page’s blocks',
+        renderScreen(withBlocks(true), createElement(ReviewPage, { projectUid: PROJECT_UID, runId: RUN_ID })),
+      );
+      const strip = (page: number, over: Partial<Parameters<typeof ReviewPageBlocks>[0]> = {}) =>
+        createElement(ReviewPageBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, page, ...over });
+      add(
+        'ReviewViewerDialog open with the cited page’s blocks in the side column',
+        renderScreen(
+          withBlocks(false),
+          createElement(ReviewViewerDialog, {
+            position: 1,
+            total: 1,
+            onClose: noop,
+            title: 'Не указан класс огнестойкости перекрытия',
+            staticOpen: true,
+            children: createElement(ReviewViewerAside, {
+              findingUid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z',
+              meta: 'Критическое · Лист 3 · стр. 7',
+              text: 'Не указан класс огнестойкости перекрытия',
+              recommendation: 'Указать предел огнестойкости REI 45 по СП 2.13130.',
+              blocks: strip(7),
+            }),
+          }),
+        ),
+      );
+      add(
+        'Block view open from the strip on «Разбор»',
+        renderScreen(withBlocks(false), strip(7, { initialOpen: 0, staticOpen: true })),
+      );
+      add(
+        'PageBlocksStrip, the page lies past the loaded blocks, the next portion failed',
+        renderScreen(
+          newClient(),
+          createElement(PageBlocksStrip, {
+            reading: { kind: 'not-loaded', page: 12 }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: false, moreFailed: true,
+          }),
+        ),
+      );
+      add(
+        'PageBlocksStrip, the next portion on its way',
+        renderScreen(
+          newClient(),
+          createElement(PageBlocksStrip, {
+            reading: { kind: 'blocks', page: 7, blocks: onPage7, complete: false }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: true, moreFailed: false,
+          }),
+        ),
+      );
+      add(
+        'PageBlocksStrip, the blocks could not be read',
+        renderScreen(
+          newClient(),
+          createElement(PageBlocksStrip, {
+            reading: { kind: 'unreadable', page: 7 }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: false, moreFailed: false,
+          }),
+        ),
+      );
+    } finally {
+      if (before === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+      else process.env.NEXT_PUBLIC_API_BASE_URL = before;
+    }
   }
 
   /*
