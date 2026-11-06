@@ -23,7 +23,7 @@ import { useState } from 'react';
 
 import type { DocumentUid, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState, PageShell } from '@/shared/ui';
-import { classifyListingFailure, routes } from '@/shared/lib';
+import { classifyListingFailure, routes, withProjectParam } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import { useAddressProject, useProjectList } from '@/entities/project';
 import { useProductVersion } from '@/entities/release';
@@ -32,9 +32,10 @@ import { ComparisonViewer } from '@/widgets/comparison-viewer';
 import { ReportWindow } from '@/widgets/comparison-report';
 import { UploadDialog } from '@/widgets/comparison-upload';
 import type { UploadMode } from '@/widgets/comparison-upload';
-import { ModuleOffState, ProjectsAndStages, SheetsTab } from '@/widgets/version-series';
+import { AiQueueNotice, ModuleOffState, ProjectsAndStages, SheetsTab } from '@/widgets/version-series';
 
 import type { CompareTab } from '../model/tabs';
+import { useCompareAddress } from '../model/use-compare-address';
 
 import { CompareTabs } from './compare-tabs';
 import styles from './version-compare-page.module.css';
@@ -62,8 +63,12 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   const [addressProject, chooseProject] = useAddressProject(routes.versionComparison());
   const chosen = (addressProject ?? initial?.projectUid ?? null) as ProjectUid | null;
   const setChosen = (next: ProjectUid | null) => chooseProject(next);
-  const [tab, setTab] = useState<CompareTab>(initial?.tab ?? 'projects');
-  const [documentUid, setDocumentUid] = useState<DocumentUid | null>(initial?.documentUid ?? null);
+  // `UI-B-102`: the open set and the tab are in the address too (`?set=&tab=`), so Back, reload and a pasted link return to them.
+  const [address, goTo] = useCompareAddress({
+    ...(initial?.documentUid === undefined ? {} : { documentUid: initial.documentUid }),
+    ...(initial?.tab === undefined ? {} : { tab: initial.tab }),
+  });
+  const addressDocument = address.documentUid as DocumentUid | null;
   const [upload, setUpload] = useState<UploadMode | null>(initial?.upload ?? null);
 
   const items = projects.data?.items ?? [];
@@ -75,7 +80,11 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
   const moduleOff = product.data !== undefined && !versionsModuleOn(product.data.comparison_modules);
   const mayAct = expert && !moduleOff;
 
-  const selectedSet = documentUid === null ? undefined : overview.data?.sets.find((set) => set.document_uid === documentUid);
+  const selectedSet = addressDocument === null ? undefined : overview.data?.sets.find((set) => set.document_uid === addressDocument);
+  // A set in the address that the project does not have is said, never replaced by another one (no silent fallback).
+  const unknownSet = addressDocument !== null && overview.data !== undefined && selectedSet === undefined;
+  const documentUid = unknownSet ? null : addressDocument;
+  const tab: CompareTab = documentUid === null ? 'projects' : address.tab;
   const heading = selectedSet === undefined ? 'Комплект' : codeOf(selectedSet) === '' ? 'Комплект без шифра' : codeOf(selectedSet);
 
   const chooser = (
@@ -84,9 +93,8 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
       <select
         value={projectUid ?? ''}
         onChange={(event) => {
+          // The address drops `set` and `tab` with the old project (`switchProject`).
           setChosen(event.target.value === '' ? null : (event.target.value as ProjectUid));
-          setDocumentUid(null);
-          setTab('projects');
           setUpload(null);
         }}
       >
@@ -106,7 +114,7 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
       subtitle="Версии комплектов проекта: загрузка, разбор, сопоставление листов и сравнение соседних версий."
       actions={
         <>
-        {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={routes.stageComparison()}>Сравнение стадий</a> : null}
+        {product.data?.comparison_modules === 'versions,stages' ? <a className="am-button" href={withProjectParam(routes.stageComparison(), projectUid)}>Сравнение стадий</a> : null}
         <button
           type="button"
           className="am-button"
@@ -155,9 +163,15 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
               onClose={() => setUpload(null)}
             />
           )}
+          {unknownSet ? (
+            <p role="status" data-compare-unknown-set="">
+              Комплект из адреса не найден в этом проекте. Выберите комплект в таблице.
+            </p>
+          ) : null}
+          <AiQueueNotice sets={overview.data?.sets ?? []} />
           <CompareTabs
             active={tab}
-            onSelect={setTab}
+            onSelect={(next) => goTo({ documentUid, tab: next })}
             disabled={documentUid === null ? { sheets: 'Сначала выберите комплект на вкладке «Проекты и этапы».' } : {}}
             suffix={{
               ...(overview.data === undefined ? {} : { projects: String(overview.data.sets.length) }),
@@ -168,10 +182,8 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
               <ProjectsAndStages
                 projectUid={projectUid}
                 mayAct={mayAct}
-                onOpen={(uid) => {
-                  setDocumentUid(uid);
-                  setTab('sheets');
-                }}
+                queueOnPage
+                onOpen={(uid) => goTo({ documentUid: uid, tab: 'sheets' })}
               />
             ) : (
               <SheetsTab

@@ -11,3 +11,6 @@
 .focusNotice { padding: .7rem; border: 1px solid var(--am-line); border-radius: .4rem; }
 .row[data-stage-focused-row="true"] { outline: 2px solid var(--am-accent); outline-offset: 2px; }
 @media (max-width: 850px) { .panes { grid-template-columns: 1fr; } }
+.map { display: grid; gap: var(--am-gap-sm); }
+.mapHead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--am-gap-sm); }
+.spacer { flex: 1 1 auto; }

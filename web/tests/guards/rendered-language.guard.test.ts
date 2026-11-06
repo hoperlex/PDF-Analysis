@@ -162,6 +162,7 @@ import { STAGE_RUN_KEYS } from '@/widgets/stage-run-controls/model/runs';
 import { StageSheetMap } from '@/widgets/stage-sheet-map';
 import { StageTextEvidence } from '@/widgets/stage-text-evidence';
 import { STAGE_PAIR_KEYS } from '@/entities/stage-pair';
+import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { StageUploadPanel } from '@/_pages/stage-compare/ui/stage-upload-panel';
 import { StageWorkspace } from '@/_pages/stage-compare/ui/stage-workspace';
 import { StageComparePage } from '@/_pages/stage-compare';
@@ -2759,6 +2760,39 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }]);
       client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
       client.setQueryData(['stage-full-run', STAGE_RUN_ID], stageRun({ pair_id: STAGE_OTHER_PAIR_ID }));
+    },
+  },
+  {
+    // `UI-B-88`: the rail of seven steps under the bar of the second step, a run that has reached the fifth; the catalog names the
+    // pair by its documents. One pass cannot press a chip, so the description of a step stays in `UNREACHABLE_IN_ONE_PASS`.
+    name: 'stage-workspace-rail',
+    make: () => createElement(SearchParamsContext.Provider, { value: new URLSearchParams('tab=sheets') },
+      createElement(StageWorkspace, { projectUid: PROJECT_UID, mayAct: false })),
+    seedClient: (client) => {
+      const pair = {
+        pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'unknown',
+        left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
+      };
+      const run = stageRun({
+        state: 'running',
+        steps: [1, 2, 3, 4, 5, 6, 7].map((no) => ({ step_id: `cst_01J9ZQ8K7NHVXW3T2R5M6P4Q8${no}`, step_no: no, state: no < 5 ? 'completed' : no === 5 ? 'running' : 'queued', counts: {} })),
+      });
+      client.setQueryData([...STAGE_PAIR_KEYS.projectPairs(PROJECT_UID), 'workspace'], [pair]);
+      client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [run]);
+      client.setQueryData(['stage-full-run', STAGE_RUN_ID], run);
+    },
+  },
+  {
+    name: 'stage-pair-catalog-rows',
+    make: () => createElement(StagePairCatalog, { projectUid: PROJECT_UID, mayAct: false }),
+    seedClient: (client) => {
+      client.setQueryData(STAGE_PAIR_KEYS.pairs(PROJECT_UID), { items: [{
+        pair_id: STAGE_PAIR_ID, project_uid: PROJECT_UID, state: 'confirmed', completeness: 'partial',
+        left_document_uid: DOCUMENT_UID, right_document_uid: DOCUMENT_UID, created_at: '2026-10-09T10:00:00Z',
+      }], page: STAGE_PAGE });
+      client.setQueryData(STAGE_PAIR_KEYS.suggestions(PROJECT_UID), { items: [], page: STAGE_PAGE });
+      client.setQueryData(['stage-full-runs', STAGE_PAIR_ID], [stageRun()]);
+      client.setQueryData(['stage-run-card-counts', STAGE_RUN_ID], { total: 4, review: 1, project_changes: 3 });
     },
   },
   {

@@ -14,8 +14,9 @@ import { StageEngineSelector, StageExperimentalProgress } from '@/widgets/stage-
 import type { StageEngine } from '@/widgets/stage-v3-experimental';
 
 import { readRuns } from '../api/reads';
-import { IntentKey, latestFullRun, RUN_WORDS, runActive, STAGE_RUN_KEYS, STEP_WORDS } from '../model/runs';
+import { IntentKey, latestFullRun, RUN_WORDS, runActive, STAGE_RUN_KEYS } from '../model/runs';
 import { StageEstimateConsent } from './estimate-consent';
+import { StageRail } from './stage-rail';
 import { StageRepairHistory } from './stage-repair-history';
 import styles from './stage-run-controls.module.css';
 
@@ -25,6 +26,8 @@ export interface StageRunControlsProps {
   readonly runId?: string;
   readonly mayAct: boolean;
   readonly compact?: boolean;
+  /** Only what starts and continues a run: no summary, no rail. The catalog's row already says the rest. */
+  readonly launcher?: boolean;
   readonly onRunChange?: (run: StageChainRun) => void;
   readonly onOpenBatch?: (batchId: string) => void;
 }
@@ -33,7 +36,7 @@ export function StageRunControls(props: StageRunControlsProps) {
   return <StageRunBody key={`${props.pairId}|${props.linkRevisionId ?? ''}|${props.runId ?? ''}`} {...props} />;
 }
 
-function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, onRunChange, onOpenBatch }: StageRunControlsProps) {
+function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, launcher = false, onRunChange, onOpenBatch }: StageRunControlsProps) {
   const cache = useQueryClient();
   const map = useQuery({ queryKey: STAGE_RUN_KEYS.map(pairId),
     queryFn: async () => {
@@ -112,34 +115,41 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
   const sameActive = runActive(run) && run?.link_revision_id === revisionId;
   const openIntent = (next: 'start' | 'resume') => { setIntent(next); setAgreedDigest(null); setCommandError(null); };
   const allowed = !needsAi || (!estimate.isFetching && estimate.error === null && estimate.data !== undefined && !isBlocked(estimate.data) && agreementStands(agreedDigest, estimate.data));
+  const full = !compact && !launcher;
+  const stopButton = mayAct && runActive(run)
+    ? <button type="button" className="am-button" disabled={busy} onClick={() => void command('cancel')}>Остановить сравнение</button> : null;
+  const resumeButton = mayAct && (run?.state === 'paused' || run?.state === 'failed')
+    ? <button type="button" className="am-button" disabled={busy || intent !== null} onClick={() => openIntent('resume')}>Продолжить</button> : null;
+  const refreshButton = <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={() => { void runs.refetch(); if (selectedId !== undefined) void current.refetch(); if (linkRevisionId === undefined) void map.refetch(); }}>Обновить состояние</button>;
   return <section className={styles.controls} aria-label="Полное сравнение стадий">
     {run === undefined ? <p>Полное сравнение ещё не запускалось.</p> : <>
-      <p><strong>{RUN_WORDS[run.state]}</strong> · {formatInstant(run.created_at)}</p>
-      <p>Метод: {run.engine === 'v3_native_text_experimental' ? 'V3 · эксперимент, только текст PDF' : 'Классическая цепочка'}{run.with_ai === false ? ' · без ИИ' : run.with_ai === true ? ' · с ИИ' : ''}</p>
-      <p>Изменений проектных решений: {counts.data?.project_changes ?? '—'} · Требуют проверки: {counts.data?.review ?? '—'}</p>
-      {run.engine === 'v3_native_text_experimental' ? <StageExperimentalProgress progress={run.experimental_progress} state={run.state} /> : <p>Шаги: {run.steps.filter((step) => step.state === 'completed').length} / {run.steps.length}</p>}
-      {run.stale ? <p role="status">Результат устарел. Запустите сравнение для текущей карты связей.</p> : null}
+      {/* `UI-B-88`: the head of the rail — the run's state with «Остановить» and «Продолжить» beside it, as the original's «Остановить анализ» sits in the rail's head. */}
+      <div className={styles.head}>
+        <strong>{RUN_WORDS[run.state]}</strong><span>· {formatInstant(run.created_at)}</span>
+        {full ? <><span className={styles.spacer} />{stopButton}{resumeButton}{refreshButton}</> : null}
+      </div>
+      {launcher ? null : <p>Метод: {run.engine === 'v3_native_text_experimental' ? 'V3 · эксперимент, только текст PDF' : 'Классическая цепочка'}{run.with_ai === false ? ' · без ИИ' : run.with_ai === true ? ' · с ИИ' : ''}</p>}
+      {launcher ? null : <p>Изменений проектных решений: {counts.data?.project_changes ?? '—'} · Требуют проверки: {counts.data?.review ?? '—'}</p>}
+      {launcher ? null : run.engine === 'v3_native_text_experimental' ? <StageExperimentalProgress progress={run.experimental_progress} state={run.state} /> : full ? <StageRail run={run} /> : <p>Шаги: {run.steps.filter((step) => step.state === 'completed').length} / {run.steps.length}</p>}
+      {run.stale ? <p role="status">{mayAct ? 'Результат устарел. Запустите сравнение для текущей карты связей.' : 'Есть новые документы или изменены связи — сравнение ещё не обновлено. Обновит его эксперт.'}</p> : null}
       {run.pause_reason === undefined ? null : <p>Причина остановки: {run.pause_reason}</p>}
       {run.failure_reason === undefined ? null : <p role="alert">{run.failure_reason}</p>}
-      {!compact && run.engine !== 'v3_native_text_experimental' ? <ol>{run.steps.map((step) => <li key={step.step_id}>{String(step.step_no).padStart(2, '0')} {STEP_WORDS[step.step_no] ?? 'Шаг сравнения'} · {RUN_WORDS[step.state]}
-        {Object.entries(step.counts).map(([name, count]) => <span key={name}> · {name}: {count}</span>)}</li>)}</ol> : null}
-      {onRunChange === undefined ? null : <button type="button" className="am-button" onClick={() => onRunChange(run)}>Открыть результат</button>}
-      {run.batch_id === undefined || onOpenBatch === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenBatch(run.batch_id!)}>Открыть очередь</button>}
+      {!launcher && onRunChange !== undefined ? <button type="button" className="am-button" onClick={() => onRunChange(run)}>Открыть результат</button> : null}
+      {launcher || run.batch_id === undefined || onOpenBatch === undefined ? null : <button type="button" className="am-button" onClick={() => onOpenBatch(run.batch_id!)}>Открыть очередь</button>}
     </>}
     {map.isPending && linkRevisionId === undefined ? <LoadingState what="карту связей" /> : null}
     {linkRevisionId === undefined && map.isSuccess && map.data === null
       ? <p role="status">Сначала откройте «2. Сопоставление листов» и нажмите «Сохранить решение эксперта». После этого сравнение можно запустить.</p> : null}
     {message === null ? null : <ErrorState title="Сравнение не открыто или команда не выполнена" detail={message.detail} correlationId={message.correlationId} />}
-    <button type="button" className="am-button" disabled={busy} onClick={() => { void runs.refetch(); if (selectedId !== undefined) void current.refetch(); if (linkRevisionId === undefined) void map.refetch(); }}>Обновить состояние</button>
+    {full && run !== undefined ? null : refreshButton}
     {mayAct ? <div className={styles.actions}>
       <StageEngineSelector value={engine} disabled={busy || intent !== null} onChange={(value) => { setEngine(value); if (value === 'v3_native_text_experimental') setWithAi(true); setAgreedDigest(null); setIntent(null); setCommandError(null); held.current.clear(); }} />
       <label><input type="checkbox" checked={withAi} disabled={busy || intent !== null || engine === 'v3_native_text_experimental'} onChange={(event) => { setWithAi(event.target.checked); setAgreedDigest(null); held.current.clear(); }} />С описанием изменений ИИ</label>
       <label><input type="checkbox" checked={restart} disabled={busy} onChange={(event) => setRestart(event.target.checked)} />Пересчитать заново</label>
       <button type="button" className="am-button" disabled={busy || revisionId === undefined || sameActive || intent !== null}
         onClick={() => openIntent('start')}>Запустить полное сравнение</button>
-      {run?.state === 'paused' || run?.state === 'failed' ? <button type="button" className="am-button" disabled={busy || intent !== null}
-        onClick={() => openIntent('resume')}>Продолжить</button> : null}
-      {runActive(run) ? <button type="button" className="am-button" disabled={busy} onClick={() => void command('cancel')}>Остановить сравнение</button> : null}
+      {full ? null : resumeButton}
+      {full ? null : stopButton}
     </div> : null}
     {mayAct && intent !== null ? <div className={styles.estimate}>
       <h3>{intent === 'start' ? 'Запуск сравнения' : 'Продолжение сравнения'}</h3>
@@ -150,6 +160,6 @@ function StageRunBody({ pairId, linkRevisionId, runId, mayAct, compact = false, 
       <div className={styles.actions}><button type="button" className="am-button" disabled={busy || !allowed} onClick={() => void command(intent)}>Подтвердить</button>
         <button type="button" className="am-button" disabled={busy} onClick={() => setIntent(null)}>Отмена</button></div>
     </div> : null}
-    {!compact && run !== undefined && run.engine !== 'v3_native_text_experimental' ? <StageRepairHistory run={run} mayAct={mayAct} /> : null}
+    {full && run !== undefined && run.engine !== 'v3_native_text_experimental' ? <StageRepairHistory run={run} mayAct={mayAct} /> : null}
   </section>;
 }

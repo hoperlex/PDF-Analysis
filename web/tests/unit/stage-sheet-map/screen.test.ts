@@ -42,7 +42,9 @@ describe('stage sheet map screen', () => {
     expect(html).toContain('Найти лист по штампу');
     expect(html).toContain('корпус 4');
     expect(html).toContain('Добавить связь');
-    expect(html).toContain('Принять видимые точные подсказки');
+    expect(html).toContain('Принять предложенные (1)');
+    expect(html).toContain('Требуют проверки (0)');
+    expect(html).toContain('Карта листов');
     expect(html).toContain('Высокая уверенность: 1');
   });
 

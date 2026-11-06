@@ -4,6 +4,17 @@
   min-width: 0;
 }
 
+.tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}
+
+.tabbar > .tabs {
+  flex: 1 1 auto;
+}
+
 .selection,
 .tabs {
   display: flex;
