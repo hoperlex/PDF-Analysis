@@ -142,7 +142,9 @@ def _classify(world: dict[str, Any], version_uid: str, stage: str = "P") -> None
         f"/projects/{world['project_uid']}/documents/{world['document_uid']}"
         f"/versions/{version_uid}/classification",
         headers=world["auth"] | {"Content-Type": "application/json"},
-        # `PROD-11-AR-V1-V2-REMOVAL-01`: the served startRun refuses an АР version, so the version that must run is classified ПБ, whose recording carries the corpus run's findings.
+        # The version that must run is classified ПБ, not АР: the served startRun routes an АР version to the draft
+        # original-source АР profile (`HOTFIX-AR-ORIGINAL-PROFILE-INT-20261030`), which has no synthetic recording,
+        # so a recorded run of it has nothing to replay; ПБ's recording carries the corpus run's findings.
         content=json.dumps({"project_stage": stage, "section_code": "PB"}).encode("utf-8"),
     )
     assert answer.status_code == 200, answer.content

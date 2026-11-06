@@ -64,17 +64,23 @@ SCHEDULE_PAGE = (
     "Стадия Лист Листов\n"
     "10\n"
 )
-#: Page 2: a Form-7 specification with a split header.
+#: Page 2: a Form-7 specification with a split header. Row 4 is an area (``м2``) against a price per
+#: ``м``: a different dimension, so it stays a ``unit_mismatch`` (D-315). It was ``п. м`` until
+#: `BETA-UNIT-ALIASES-1030` (d93d245c, owner decision 2026-10-30) made running metres and metres one
+#: pricing unit at factor one; that case is now `RUNNING_METRES_PAGE`, below, and priced on purpose.
 FORM7_PAGE = (
     "Поз. Наименование и техническая характеристика Тип, марка Код Завод- Ед. Кол. Масса Примечание\n"
     "изготовитель изм. 1 ед., кг\n"
     "1 Дверь противопожарная ДПМ-01/60 EI60 ООО «Промет» шт. 4 45,5\n"
     "2 Окно ПВХ двухкамерное ОП В2 1460х1460 шт 12\n"
     "3 Анкер химический HIT-HY 200 шт 200\n"
-    "4 Профиль направляющий ПН 50х40 п. м 120\n"
+    "4 Профиль направляющий ПН 50х40 м2 120\n"
     "5 Пена монтажная шт 3\n"
     "6 Монтажная лента компл. - по месту\n"
 )
+#: The same page with row 4 as it was written before the owner's decision: 120 running metres.
+RUNNING_METRES_PAGE = FORM7_PAGE.replace("50х40 м2 120", "50х40 п. м 120")
+assert RUNNING_METRES_PAGE != FORM7_PAGE
 PAGES = {1: SCHEDULE_PAGE, 2: FORM7_PAGE}
 
 PRICE_LIST = (
@@ -367,6 +373,37 @@ def test_the_current_ar_version_is_priced_from_the_current_price_list(
         "unit_mismatch": 2, "ambiguous": 1, "quantity_not_numeric": 1,
     }
     assert dict(result.extraction.skipped_by_reason) == {"position_missing": 1}
+
+
+def test_running_metres_are_priced_per_metre_at_factor_one(
+    session: Session, store, factory, cast, world
+) -> None:
+    """The owner's decision of 2026-10-30 (d93d245c), end to end: ``п. м`` on the page, ``м`` in the price list.
+
+    D-315: this was a ``unit_mismatch`` row in the main test until that decision. Now the row is
+    priced at factor one (120 x 95), its source unit stays as the page wrote it, and only the
+    steel row (``шт`` against ``кг``) is still a unit mismatch.
+    """
+    _classify(session, cast, world, "AR")
+    _upload(store, factory, cast, PRICE_LIST, "prices-1")
+    result = _read(session, cast, world, _published_reader({1: SCHEDULE_PAGE, 2: RUNNING_METRES_PAGE}), limit=200)
+
+    assert result.state == STATE_READY
+    assert result.rows is not None and result.matching is not None
+    profile = {match.row.name: match for match in result.rows.items}["Профиль направляющий ПН 50х40"]
+    assert (profile.status, profile.basis, profile.reason, profile.excluded_reason) == (
+        "matched", "name", None, None,
+    )
+    assert (profile.position.unit, profile.row.unit, profile.row.quantity) == ("м", "п.м", Decimal("120"))
+    assert profile.amount == Decimal("120") * Decimal("95") == Decimal("11400")
+
+    assert [(t.currency, t.amount, t.row_count) for t in result.totals] == [
+        ("EUR", Decimal("2550.00"), 1),
+        ("RUB", Decimal("180000") + Decimal("100000") + Decimal("222006.0") + Decimal("11400"), 4),
+    ]
+    assert dict(result.matching.excluded_by_reason) == {
+        "unit_mismatch": 1, "ambiguous": 1, "quantity_not_numeric": 1,
+    }
 
 
 def test_rows_are_paged_while_counts_and_totals_cover_every_row(
