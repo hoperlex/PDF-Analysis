@@ -1219,8 +1219,10 @@ def _section_report_v3(state, *, window_id=None):
             text.get("characters_provided",0)))+" из "+str(text.get("characters_total",0))+".")
         for kind,counts in state.get("phase_coverage",{}).items():
             lines.append(f"{kind}: пакетов {counts['completed']} из {counts['planned']}; "
-                f"остаток {counts['remaining']}; принятый лимит вызовов {counts['limit']}.")
-        lines.append("Остаток сверх принятого лимита не проверен; первоначальные наблюдения сохранены.")
+                f"остаток {counts['remaining']}." + (" План рассчитан по исходному материалу."
+                    if state.get("source_sized_calls") else f" Принятый лимит вызовов {counts['limit']}."))
+        if not state.get("source_sized_calls"):
+            lines.append("Остаток сверх принятого лимита не проверен; первоначальные наблюдения сохранены.")
     consolidation = state.get("consolidation")
     if isinstance(consolidation, dict):
         if consolidation.get("complete"):
@@ -1868,7 +1870,9 @@ def _norm_batched_v3(*, session, run, binding, state, snapshot_id, phase, call, 
     phase(kind, 'partial' if incomplete else 'completed', 'approved_phase_call_limit' if deferred
         else f'{kind}_reply_refused' if refused_replies
         else 'norm_quote_variants_retained' if quote_variants
-        else 'norm_paragraph_context_incomplete' if context_incomplete else None)
+        else 'norm_paragraph_context_incomplete' if context_incomplete
+        else next((item.get('norm_reason') for item in state['observations']
+            if item.get('norm_status') == 'unavailable'), 'normative_query_required') if unprocessed else None)
 
 
 def _review_batched_v3(*, run, binding, state, phase, call, window_context, contexts):
