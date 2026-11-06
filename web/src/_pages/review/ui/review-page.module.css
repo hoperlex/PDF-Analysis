@@ -32,6 +32,11 @@
   min-width: 0;
 }
 
+/* The page viewer's own top margin separates it from a heading that the table's row has already said. */
+.expansion > :first-child {
+  margin-top: 0;
+}
+
 /*
  * The open finding in the list view, set smaller (`UI-PARITY-DENSE`): the original's strip reads at table size, and a
  * 19px heading with a padded quotation block spent a quarter of the screen before the page was in sight.
