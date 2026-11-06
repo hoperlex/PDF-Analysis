@@ -6,7 +6,7 @@
 }
 
 .rule {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--am-gap-sm);
   color: var(--am-ink-muted);
 }
 
@@ -18,7 +18,7 @@
   margin: 0 0 var(--am-gap);
   padding: var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-surface);
 }
 
@@ -31,21 +31,21 @@
   margin: 0 0 var(--am-gap);
   padding: var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-surface);
 }
 
 .subheading {
-  margin: 0 0 0.25rem;
+  margin: 0 0 var(--am-gap-xs);
 }
 
 .list {
-  margin: 0.25rem 0;
-  padding-left: 1.25rem;
+  margin: var(--am-gap-xs) 0;
+  padding-left: calc(var(--am-gap) + var(--am-gap-xs));
 }
 
 .details {
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--am-gap-sm);
 }
 
 .details summary {
@@ -67,7 +67,7 @@
 }
 
 .cell {
-  padding: 0.7rem 0.8rem;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border-bottom: 1px solid var(--am-line-soft);
   text-align: left;
   vertical-align: top;
@@ -86,11 +86,4 @@
 
 .group {
   color: var(--am-ink-muted);
-}
-
-@media (max-width: 780px) {
-  .filters,
-  .project {
-    padding: var(--am-gap);
-  }
 }

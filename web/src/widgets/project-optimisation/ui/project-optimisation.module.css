@@ -12,7 +12,7 @@
 }
 
 .cell {
-  padding: 0.5rem 0.75rem;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border-bottom: 1px solid var(--am-grid-line);
   text-align: left;
   vertical-align: top;
@@ -29,14 +29,10 @@
 }
 
 .report {
-  margin: 0.5rem 0 1rem;
-}
-
-.report dd {
-  margin: 0 0 0.5rem;
+  margin: var(--am-gap-sm) 0;
 }
 
 .entries {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: calc(var(--am-gap) + var(--am-gap-xs));
 }

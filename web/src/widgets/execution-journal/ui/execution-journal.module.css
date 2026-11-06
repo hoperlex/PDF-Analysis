@@ -8,15 +8,15 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: var(--am-gap-sm);
 }
 
 .row {
   min-width: 0;
   max-width: 100%;
-  padding: 1rem;
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
-  border-radius: 0.5rem;
+  border-radius: var(--am-radius);
 }
 
 .row p {
@@ -29,7 +29,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--am-gap-sm);
 }
 
 .identity {

@@ -2,17 +2,17 @@
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: var(--am-gap);
-  margin-bottom: var(--am-gap-lg);
-  padding: var(--am-gap);
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius);
   background: var(--am-paper);
 }
-.list { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
+.list { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--am-gap-sm); }
 .item {
   min-width: 0;
-  padding: var(--am-gap);
+  padding: var(--am-gap-sm);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-paper);

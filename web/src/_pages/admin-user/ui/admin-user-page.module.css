@@ -2,12 +2,6 @@
   min-width: 0;
   padding: var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-surface);
-}
-
-@media (max-width: 780px) {
-  .panel {
-    padding: var(--am-gap);
-  }
 }
