@@ -408,9 +408,12 @@ export function SectionSpecificationAnswer({ answer, onPage, onSelectProject }: 
             {tooLarge ? '.' : `, строк спецификации: ${answer.row_count}.`}
             {' '}Итоги считаются отдельно по каждому проекту и каждой валюте; итога по разделу нет.
           </p>
-          {answer.projects.map((project) => (
-            <ProjectPanel key={project.project_uid} project={project} onSelectProject={answer.project_filter === null ? onSelectProject : null} />
-          ))}
+          {/* `UI-PARITY-DENSE`: the projects side by side, as the original lists its projects in one table (they were stacked, one panel of five paragraphs each). */}
+          <div className={styles.projects}>
+            {answer.projects.map((project) => (
+              <ProjectPanel key={project.project_uid} project={project} onSelectProject={answer.project_filter === null ? onSelectProject : null} />
+            ))}
+          </div>
         </>
       )}
       <Excluded answer={answer} />

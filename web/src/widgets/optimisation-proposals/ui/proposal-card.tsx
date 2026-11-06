@@ -174,17 +174,22 @@ export function ProposalCard({ proposal, controls, history, documentUrl }: Propo
           </tbody>
         </table>
       </div>
-      <p>
+      <p className={styles.figures}>
         Количество: {describeQuantity(proposal)}. {describeSaving(proposal)}
       </p>
-      <p className={styles.hint}>
-        Строка сопоставлена {MATCH_BASIS_LABELS[proposal.matched_basis]}; аналог выбран:{' '}
-        {ANALOG_BASIS_LABELS[proposal.analog_basis]}, доля общих слов {formatDecimal(proposal.name_similarity)}.
-      </p>
-      <p className={styles.hint}>{proposal.rationale}</p>
-      <ProposalDecisionLine decision={proposal.current_decision} />
-      {controls}
-      {history}
+      <div className={styles.basis}>
+        <p className={styles.hint}>
+          Строка сопоставлена {MATCH_BASIS_LABELS[proposal.matched_basis]}; аналог выбран:{' '}
+          {ANALOG_BASIS_LABELS[proposal.analog_basis]}, доля общих слов {formatDecimal(proposal.name_similarity)}.
+        </p>
+        <p className={styles.hint}>{proposal.rationale}</p>
+      </div>
+      {/* The verdict, its form and its history in the last column (`UI-B-06`): the original's «Решение» column. */}
+      <div className={styles.judgement}>
+        <ProposalDecisionLine decision={proposal.current_decision} />
+        {controls}
+        {history}
+      </div>
     </article>
   );
 }

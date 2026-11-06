@@ -8,7 +8,7 @@
   grid-template-columns: minmax(0, 1fr) auto 16px;
   align-items: end;
   gap: var(--am-gap-sm);
-  padding: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
   font-weight: 700;
@@ -39,7 +39,7 @@
   align-items: center;
   gap: var(--am-gap-sm);
   min-width: 0;
-  min-height: 44px;
+  padding-block: var(--am-gap-xs);
   padding-inline: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-sm);
@@ -68,8 +68,7 @@
   align-items: center;
   gap: var(--am-gap-sm);
   width: 100%;
-  min-height: 44px;
-  padding-block: var(--am-gap-sm);
+  padding-block: 0;
   padding-inline: 0;
   border: 0;
   border-radius: inherit;
@@ -91,8 +90,7 @@
   align-items: center;
   gap: var(--am-gap-sm);
   width: 100%;
-  min-height: 44px;
-  padding: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap);
 }
 
 .badge {
@@ -111,13 +109,15 @@
 .name {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: var(--am-text-md);
-  font-weight: 600;
+  font-size: var(--am-text-base);
+  font-weight: 500;
 }
 
 .metric {
   text-align: center;
-  color: var(--am-accent-strong);
+  color: var(--am-ink);
+  font-size: var(--am-text-base);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -125,6 +125,26 @@
   color: var(--am-ink-muted);
   font-size: var(--am-text-lg);
   text-align: right;
+  text-decoration: none;
+}
+
+a.arrow:hover {
+  color: var(--am-accent-strong);
+}
+
+.totalLabel {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--am-gap-sm);
+  min-width: 0;
+}
+
+/* The original's total row: set off from the rows above by a heavier line, the figures in bold, no hover. */
+.totalRow {
+  margin-top: var(--am-gap-xs);
+  border-top: 2px solid var(--am-line-strong);
+  font-weight: 700;
 }
 
 .unclassified {
@@ -206,9 +226,28 @@
   text-underline-offset: 0.2em;
 }
 
-.metrics [data-attention='true'] {
+/*
+ * The original's colours by column (`dash-stat--todo/proc/done/total/find`): not run in the warning amber, without an
+ * expert decision in the accent, checked in green, all in the muted ink, remarks in red. Tokens, so both palettes.
+ */
+.notRun {
+  color: var(--am-degraded);
+}
+
+.awaiting {
+  color: var(--am-accent-strong);
+}
+
+.checked {
+  color: var(--am-ok);
+}
+
+.total {
+  color: var(--am-ink-muted);
+}
+
+.remarks {
   color: var(--am-failed);
-  font-weight: 650;
 }
 
 /* After the base rule, so a narrow screen's number columns win. */

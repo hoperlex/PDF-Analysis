@@ -168,6 +168,13 @@ export interface ProposalListViewProps {
   readonly historyFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   /** `UI-B-09`: the pass's version PDF; absent, the cards offer no «Открыть лист». */
   readonly sheet?: SheetDocument | undefined;
+  /**
+   * `UI-B-05`/`UI-B-16`: the pass's actions (the export, the import of decisions). The original puts its counts by
+   * decision and its buttons in one strip above the table; they stand beside the decision filter here.
+   */
+  readonly actions?: ReactNode;
+  /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
+  readonly summary?: ReactNode;
 }
 
 export function ProposalListView({
@@ -178,16 +185,22 @@ export function ProposalListView({
   controlsFor,
   historyFor,
   sheet,
+  actions,
+  summary,
 }: ProposalListViewProps) {
   const pass = page.optimisation_pass;
   return (
     <div data-proposal-list={page.total}>
-      <DecisionFilter
-        selected={page.decision}
-        counts={pass.decision_counts}
-        total={pass.proposal_count}
-        onSelect={onDecision}
-      />
+      <div className={styles.strip}>
+        <DecisionFilter
+          selected={page.decision}
+          counts={pass.decision_counts}
+          total={pass.proposal_count}
+          onSelect={onDecision}
+        />
+        {actions ?? null}
+      </div>
+      {summary ?? null}
       {sheet === undefined ? null : <SheetDocumentNote sheet={sheet} />}
       {page.items.length === 0 ? (
         <EmptyState
@@ -245,10 +258,14 @@ export interface ProposalListProps {
   readonly onPage: ((offset: number) => void) | null;
   /** `UI-B-09`: the pass's version PDF; the container reads it once for every card. */
   readonly sheet?: SheetDocument | undefined;
+  /** The pass's export and import, beside the decision filter (`UI-B-05`). */
+  readonly actions?: ReactNode;
+  /** The pass's facts, between the strip and the proposals (`UI-B-05`). */
+  readonly summary?: ReactNode;
 }
 
 /** The live list: decision forms for an expert and a lazily read history under each card. */
-export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: ProposalListProps) {
+export function ProposalList({ page, canDecide, onDecision, onPage, sheet, actions, summary }: ProposalListProps) {
   return (
     <ProposalListView
       page={page}
@@ -256,6 +273,8 @@ export function ProposalList({ page, canDecide, onDecision, onPage, sheet }: Pro
       onDecision={onDecision}
       onPage={onPage}
       sheet={sheet}
+      actions={actions}
+      summary={summary}
       controlsFor={(proposal) => (
         <ProposalDecisionForm passId={page.optimisation_pass.optimisation_pass_id} proposal={proposal} />
       )}

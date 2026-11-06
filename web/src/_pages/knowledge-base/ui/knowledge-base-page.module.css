@@ -1,16 +1,27 @@
 .filters,
 .results {
   min-width: 0;
-  padding: 16px;
+  padding: var(--am-gap-sm) var(--am-gap);
   border: 1px solid var(--am-line);
-  border-radius: var(--am-radius-lg);
+  border-radius: var(--am-radius);
   background: var(--am-paper);
   box-shadow: var(--am-shadow-1);
 }
 
+/*
+ * `UI-PARITY-DENSE`: the three filters in one row, each label beside its control (the global `.am-kb__filter` stacks a
+ * caption over the control, which made the bar two rows tall for three controls).
+ */
 .filters {
-  margin-bottom: 16px;
-  gap: 12px;
+  align-items: center;
+  margin-bottom: var(--am-gap-sm);
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.filters :global(.am-kb__filter) {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--am-gap-sm);
 }
 
 .results {
@@ -23,7 +34,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
-  margin: 0 0 var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
 }
 
 .chipCount {
@@ -37,7 +48,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--am-gap-sm);
-  margin: 0 0 var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-base);
 }
@@ -60,19 +71,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.results :global(.am-kb__records) {
-  gap: 8px;
-}
-
-.results :global(.am-kb__record) {
-  padding-bottom: 4px;
-}
-
-.results :global(.am-kb__text),
-.results :global(.am-kb__meta) {
-  margin-top: 4px;
-}
-
 .filters:focus-within,
 .results:focus-within {
   border-color: var(--am-line-strong);
@@ -89,6 +87,6 @@
 @media (max-width: 780px) {
   .filters,
   .results {
-    padding: var(--am-gap);
+    padding: var(--am-gap-sm);
   }
 }

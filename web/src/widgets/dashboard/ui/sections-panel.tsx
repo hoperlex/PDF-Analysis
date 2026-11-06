@@ -81,7 +81,7 @@ function SectionMetrics({
 }) {
   return (
     <span className={styles.metrics}>
-      <span className={styles.metric} title="Не запускались" data-metric="not-run">
+      <span className={`${styles.metric} ${styles.notRun}`} title="Не запускались" data-metric="not-run">
         {audit !== undefined && notRunHref !== null && audit.notRun > 0 ? (
           <Link
             className={styles.metricLink}
@@ -95,12 +95,12 @@ function SectionMetrics({
           (audit?.notRun ?? '—')
         )}
       </span>
-      <span className={styles.metric} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
+      <span className={`${styles.metric} ${styles.awaiting}`} title="Нет решений эксперта" data-attention={audit !== undefined && audit.noExpertDecision > 0 ? 'true' : 'false'}>
         {audit?.noExpertDecision ?? '—'}
       </span>
-      <span className={styles.metric} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
-      <span className={styles.metric} title="Документы"><strong>{documents}</strong></span>
-      <span className={styles.metric} title="Находок">{audit?.findings ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.checked}`} title="Проверено экспертом">{audit?.checked ?? '—'}</span>
+      <span className={`${styles.metric} ${styles.total}`} title="Документы"><strong>{documents}</strong></span>
+      <span className={`${styles.metric} ${styles.remarks}`} title="Находок">{audit?.findings ?? '—'}</span>
     </span>
   );
 }
@@ -160,9 +160,30 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
               audit={summary.auditByCode[section.code]}
               notRunHref={projectUid === null ? null : withNotRunFilter(routes.projectSection(projectUid, section.code))}
             />
-            <span className={styles.arrow} aria-hidden="true">›</span>
+            {projectUid === null ? (
+              <span className={styles.arrow} aria-hidden="true">›</span>
+            ) : (
+              /* The original's row opens the section in one click; with a project to open it in, so does the arrow. */
+              <Link
+                className={styles.arrow}
+                href={routes.projectSection(projectUid, section.code)}
+                aria-label={`Открыть раздел «${section.name}»`}
+                data-section-open={section.code}
+              >
+                ›
+              </Link>
+            )}
           </li>
         ))}
+        {/* `UI-A-36`: the original's «Σ Итого», the column sums of the rows above; the unclassified row below is not in it. */}
+        <li className={`${styles.row} ${styles.totalRow}`} data-section="total">
+          <span className={styles.totalLabel}>
+            <span className={styles.badge}>Σ</span>
+            <span className={styles.name}>Итого по разделам</span>
+          </span>
+          <SectionMetrics documents={summary.totals.documents} audit={summary.totals.audit} notRunHref={null} />
+          <span className={styles.arrow} aria-hidden="true" />
+        </li>
         <li className={`${styles.row} ${styles.unclassified}`} data-section="unclassified">
           <span className={styles.badge}>—</span>
           <span className={styles.name}>Без раздела:</span>

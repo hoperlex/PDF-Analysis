@@ -103,78 +103,84 @@ export function PriceListPositionsView({ page, onOffset }: PriceListPositionsVie
   const previous = page.offset === 0 ? null : Math.max(0, page.offset - page.limit);
   return (
     <div data-price-list-positions={page.revision.price_list_id}>
-      <h4>Как прочитан файл</h4>
-      <dl className={styles.report}>
-        <dt>Источник</dt>
-        <dd>{sourceDescription(report)}</dd>
-        <dt>Столбцы</dt>
-        <dd>
-          {report.columns
-            .map((column) => `${FIELD_LABELS[column.field]} — «${column.header}» (столбец ${column.column})`)
-            .join('; ')}
-        </dd>
-        {report.ambiguous_columns.length > 0 ? (
-          <>
-            <dt>Не прочитаны, потому что неоднозначны</dt>
-            <dd>
-              {report.ambiguous_columns
-                .map((item) => `${FIELD_LABELS[item.field]}: ${item.headers.map((h) => `«${h}»`).join(', ')}`)
-                .join('; ')}
-            </dd>
-          </>
-        ) : null}
-        {report.ignored_columns.length > 0 ? (
-          <>
-            <dt>Не использованы</dt>
-            <dd>{report.ignored_columns.map((header) => `«${header}»`).join(', ')}</dd>
-          </>
-        ) : null}
-        <dt>Строки</dt>
-        <dd>
-          строк данных — {report.data_rows}, принято — {report.accepted_rows}, пропущено —{' '}
-          {report.skipped_rows}
-        </dd>
-        <dt>Валюта</dt>
-        <dd>
-          {report.currency_sources
-            .map((item) => `${CURRENCY_SOURCE_LABELS[item.source]} — ${item.count}`)
-            .join('; ')}
-        </dd>
-        {report.skipped_by_reason.length > 0 ? (
-          <>
-            <dt>Пропущенные строки</dt>
-            <dd>
-              {report.skipped_by_reason
-                .map((item) => `${ROW_REASON_LABELS[item.reason]} — ${item.count}`)
-                .join('; ')}
-              <ul className={styles.entries}>
-                {report.skipped.map((note) => (
-                  <li key={`skip-${note.row}`} data-skipped-row={note.row}>
-                    строка {note.row}: {ROW_REASON_LABELS[note.reason]}
-                  </li>
-                ))}
-              </ul>
-              {report.skipped_listed_in_full ? null : (
-                <p className="am-note">Перечислены первые 1000 пропущенных строк; счёт выше полный.</p>
-              )}
-            </dd>
-          </>
-        ) : null}
-        {report.warnings.length > 0 ? (
-          <>
-            <dt>Предупреждения</dt>
-            <dd>
-              <ul className={styles.entries}>
-                {report.warnings.map((note) => (
-                  <li key={`warn-${note.row}`}>
-                    строка {note.row}: {ROW_REASON_LABELS[note.reason]}
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </>
-        ) : null}
-      </dl>
+      {/*
+        * `UI-PARITY-DENSE`: how the file was read is a seven-line block that a reader needs when something was skipped or
+        * left unread, and not otherwise; it is open then, and one click away when the file was read whole.
+        */}
+      <details className={styles.details} data-price-list-report="" open={report.skipped_rows > 0 || report.warnings.length > 0 || report.ambiguous_columns.length > 0}>
+        <summary>Как прочитан файл</summary>
+        <dl className={styles.report}>
+          <dt>Источник</dt>
+          <dd>{sourceDescription(report)}</dd>
+          <dt>Столбцы</dt>
+          <dd>
+            {report.columns
+              .map((column) => `${FIELD_LABELS[column.field]} — «${column.header}» (столбец ${column.column})`)
+              .join('; ')}
+          </dd>
+          {report.ambiguous_columns.length > 0 ? (
+            <>
+              <dt>Не прочитаны, потому что неоднозначны</dt>
+              <dd>
+                {report.ambiguous_columns
+                  .map((item) => `${FIELD_LABELS[item.field]}: ${item.headers.map((h) => `«${h}»`).join(', ')}`)
+                  .join('; ')}
+              </dd>
+            </>
+          ) : null}
+          {report.ignored_columns.length > 0 ? (
+            <>
+              <dt>Не использованы</dt>
+              <dd>{report.ignored_columns.map((header) => `«${header}»`).join(', ')}</dd>
+            </>
+          ) : null}
+          <dt>Строки</dt>
+          <dd>
+            строк данных — {report.data_rows}, принято — {report.accepted_rows}, пропущено —{' '}
+            {report.skipped_rows}
+          </dd>
+          <dt>Валюта</dt>
+          <dd>
+            {report.currency_sources
+              .map((item) => `${CURRENCY_SOURCE_LABELS[item.source]} — ${item.count}`)
+              .join('; ')}
+          </dd>
+          {report.skipped_by_reason.length > 0 ? (
+            <>
+              <dt>Пропущенные строки</dt>
+              <dd>
+                {report.skipped_by_reason
+                  .map((item) => `${ROW_REASON_LABELS[item.reason]} — ${item.count}`)
+                  .join('; ')}
+                <ul className={styles.entries}>
+                  {report.skipped.map((note) => (
+                    <li key={`skip-${note.row}`} data-skipped-row={note.row}>
+                      строка {note.row}: {ROW_REASON_LABELS[note.reason]}
+                    </li>
+                  ))}
+                </ul>
+                {report.skipped_listed_in_full ? null : (
+                  <p className="am-note">Перечислены первые 1000 пропущенных строк; счёт выше полный.</p>
+                )}
+              </dd>
+            </>
+          ) : null}
+          {report.warnings.length > 0 ? (
+            <>
+              <dt>Предупреждения</dt>
+              <dd>
+                <ul className={styles.entries}>
+                  {report.warnings.map((note) => (
+                    <li key={`warn-${note.row}`}>
+                      строка {note.row}: {ROW_REASON_LABELS[note.reason]}
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          ) : null}
+        </dl>
+      </details>
 
       <h4>Позиции</h4>
       {page.items.length === 0 ? (

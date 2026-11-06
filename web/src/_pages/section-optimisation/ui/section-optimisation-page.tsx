@@ -21,10 +21,12 @@
  * the menu, until it becomes a tab of the project screen.
  */
 
+import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import type { ProjectSection, ProjectUid } from '@/shared/api';
+import { routes } from '@/shared/lib';
 import { PageShell } from '@/shared/ui';
 import { SectionAcceptedOptimisations } from '@/widgets/section-accepted-optimisations';
 import { SectionSpecificationSection } from '@/widgets/section-specification';
@@ -99,6 +101,17 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
           Из адреса не прочитано: {initial.ignored.map((name) => IGNORED_TEXT[name]).join(', ')}. Экран открыт с выбором по умолчанию.
         </p>
       )}
+      {/*
+        * The original's «←» on this screen leads back to the section's projects. The way back here is where the reader came
+        * from: the project's section page when the address names a project, and the dashboard (the section table) when it names none.
+        */}
+      <p className={styles.back} data-section-optimisation-back={filter.projectUid === null ? 'dashboard' : 'section'}>
+        {filter.projectUid === null ? (
+          <Link href="/dashboard">← К дашборду</Link>
+        ) : (
+          <Link href={routes.projectSection(filter.projectUid, filter.sectionCode)}>← К разделу проекта</Link>
+        )}
+      </p>
       <div className={styles.tabs}>
         <div role="tablist" aria-label="Вкладки оптимизации раздела" className={styles.tablist}>
           {SECTION_OPTIMISATION_TABS.map((name) => (

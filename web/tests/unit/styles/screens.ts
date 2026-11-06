@@ -2323,6 +2323,24 @@ export function screens(): Screen[] {
   add('KnowledgeBase', render(createElement(KnowledgeBase, { records: RECORDS })));
   // `UI-PARITY-P0A`: the place line of a record of a classified version (the rows above carry none).
   add('KnowledgeBase with a place line', render(createElement(KnowledgeBase, { records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })) })));
+  // `D-317`, `UI-B-34`: «Все» -- a finding's row and a proposal's row on the same three columns, under the legend.
+  add('KnowledgeBase all kinds', render(createElement(KnowledgeBase, {
+    records: [],
+    entries: [
+      ...RECORDS.slice(0, 2).map((row) => ({ kind: 'finding' as const, occurred_at: row.recorded_at, finding: { ...row, section: 'AR' as const } })),
+      {
+        kind: 'proposal' as const,
+        occurred_at: '2026-11-06T09:00:00Z',
+        proposal: {
+          proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8D', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8D',
+          optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'accept' as const, comment: 'Аналог подходит по характеристикам.',
+          actor_label: 'Иванова А. С.', decided_at: '2026-11-06T09:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+          document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID, section: 'AR' as const,
+          row_text: 'Дверь металлическая ДМ-1', proposed_vendor: 'ООО «Двери»', unit: 'шт',
+        },
+      },
+    ],
+  })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
   // `D-313`: an empty page under a category, a verdict or a project says so, with both ways out on the surface.
   add('KnowledgeBase empty under a filter', render(createElement(KnowledgeBase, {

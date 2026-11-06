@@ -1,0 +1,85 @@
+/*
+ * `UI-PARITY-DENSE`, `UI-B-34`: a decision is a row of the original's table (`kb-table`), not a card of five lines.
+ *
+ * Three columns -- the heading with the place under it, the finding with the comment under that, and who decided and when
+ * with the way to the finding -- and a legend line above them, as the original's table has its header. The markup of a row
+ * is unchanged: its own children are placed on the grid by their classes, and below 900px they stack in reading order. The
+ * widget owns this layout, so every screen that draws the list (the page, the census, the preview) draws the same rows.
+ */
+
+.legend {
+  display: grid;
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(12rem, 16rem);
+  column-gap: var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-strong);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  letter-spacing: var(--am-tracking-caps);
+  text-transform: uppercase;
+}
+
+ol.records {
+  gap: 0;
+}
+
+.records > :global(.am-kb__record) {
+  display: grid;
+  grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(12rem, 16rem);
+  grid-template-areas:
+    'head text meta'
+    'place comment meta';
+  align-items: start;
+  column-gap: var(--am-gap);
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-grid-line);
+  border-left-width: 3px;
+}
+
+.records > :global(.am-kb__record):hover {
+  background: var(--am-surface);
+}
+
+.records :global(.am-kb__heading) {
+  grid-area: head;
+}
+
+.records > :global(.am-kb__record) > [data-record-place] {
+  grid-area: place;
+}
+
+.records :global(.am-kb__text) {
+  grid-area: text;
+}
+
+.records :global(.am-kb__comment) {
+  grid-area: comment;
+}
+
+.records > :global(.am-kb__record) > :global(.am-kb__meta):last-child {
+  grid-area: meta;
+  gap: 0 var(--am-gap-sm);
+}
+
+.records :global(.am-kb__text),
+.records :global(.am-kb__meta),
+.records :global(.am-kb__comment) {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .legend {
+    display: none;
+  }
+
+  .records > :global(.am-kb__record) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'place'
+      'text'
+      'comment'
+      'meta';
+  }
+}

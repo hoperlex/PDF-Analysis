@@ -3,7 +3,7 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--am-gap-sm);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -12,14 +12,14 @@
 .item {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--am-gap-xs);
 }
 
 .head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--am-gap-sm);
 }
 
 .text {
@@ -28,5 +28,5 @@
 }
 
 .more {
-  margin: 0.75rem 0 0;
+  margin: var(--am-gap-sm) 0 0;
 }
