@@ -1296,7 +1296,9 @@ function loadedClient(runOverrides: Partial<RunStatus> = {}): Client {
   client.setQueryData(KEYS.sectionReview, sectionReview());
   client.setQueryData(KEYS.runs, { items: [run(runOverrides)], page });
   client.setQueryData(KEYS.run, run(runOverrides));
-  client.setQueryData(KEYS.findings, { items: FINDINGS, page });
+  // The run's findings key holds the transport envelope (`entities/finding/api/run-findings-query.ts`), as the review
+  // seed below writes it; a bare page here was a shape no screen reads (found by the «Блоки» lane, 2026-11-06).
+  client.setQueryData(KEYS.findings, { data: { items: FINDINGS, page } });
   client.setQueryData(KEYS.finding, detail());
   client.setQueryData(KEYS.decisions, { items: DECISIONS, page });
   /*
