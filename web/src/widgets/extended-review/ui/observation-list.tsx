@@ -3,6 +3,8 @@
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { routes } from '@/shared/lib';
+import { CriticQueueTabs, queueTabId } from './critic-queue-tabs';
+import { CRITIC_QUEUES, CRITIC_QUEUE_NOTES, criticQueueCounts, criticQueueOf } from './critic-queues';
 import { MachineAdvice } from './machine-advice';
 import { SourceInspector, sourceKind, sourcePage } from './source-inspector';
 import styles from './extended-review.module.css';
@@ -16,29 +18,11 @@ const ASSESSMENT: Readonly<Record<string, string>> = { supports: 'Цитата �
 const NORMS: Readonly<Record<string, string>> = { candidates: 'Есть кандидаты нормативных ссылок', not_found: 'Поиск выполнен; нормативное основание не найдено', not_applicable: 'В наблюдении нет нормативного вопроса', unavailable: 'Нормативные основания не проверены или недоступны' };
 
 /**
- * `R-151q` (UI-B-78): the critic's queues as chips, the original «Critic v2» screen's queues inside our extended
- * review. Each chip counts the whole run's observations this response carries (never one page of them) and sets the
- * «Рекомендация критика» filter. The critic's word is a recommendation, not the expert's decision.
+ * `R-151q` (UI-B-78): the critic's queues as tabs, the original «Critic v2» screen's queues inside our extended review.
+ * The words, the counts and the keys are `critic-queues.ts`'s; they are re-exported here, where the widget's public
+ * API has always taken them from.
  */
-export const CRITIC_QUEUES: readonly (readonly [string, string])[] = [
-  ['all', 'Все'],
-  ['accept', 'Сохранить'],
-  ['reject', 'Снять'],
-  ['borderline', 'Пограничные'],
-  ['needs_human', 'Нужен человек'],
-  ['rewrite', 'Уточнить'],
-  ['not_reviewed', 'Без критики'],
-];
-
-export function criticQueueCounts(observations: readonly RecordValue[]): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = Object.fromEntries(CRITIC_QUEUES.map(([value]) => [value, 0]));
-  for (const item of observations) {
-    counts.all = (counts.all ?? 0) + 1;
-    const key = item.review_status === 'not_reviewed' ? 'not_reviewed' : text(object(item.review ?? item.critic)?.llm_decision);
-    if (key in counts) counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return counts;
-}
+export { CRITIC_QUEUES, criticQueueCounts };
 
 export function ObservationList({ observations, sources, fallbackVersion, projectUid, anchorId = 'extended-observations' }: {
   readonly observations: readonly RecordValue[]; readonly sources: readonly RecordValue[]; readonly fallbackVersion: string; readonly projectUid?: string; readonly anchorId?: string;
@@ -67,12 +51,14 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
   const requiredPage = /^[1-9]\d*$/.test(pageSearch.trim()) && Number.isSafeInteger(Number(pageSearch)) ? Number(pageSearch) : null;
   const invalidPage = pageSearch.trim() !== '' && requiredPage === null;
   const needle = search.trim().toLocaleLowerCase('ru');
-  const matches = indexed.filter((row) => (!needle || row.searchable.includes(needle))
-    && (advice === 'all' || (advice === 'not_reviewed' ? row.item.review_status === 'not_reviewed' : text(row.critic?.llm_decision) === advice))
+  // The filters other than the critic's queue: the tabs count what each queue would show under them («видимо»).
+  const underOtherFilters = indexed.filter((row) => (!needle || row.searchable.includes(needle))
     && (correction === 'all' || (correction === 'candidate' ? row.candidate !== null : correction === 'needs_context' ? row.fixed?.action === 'needs_context' : row.fixed === null))
     && (norm === 'all' || (norm === 'assessment' ? object(row.item.norm_assessment) !== null : norm === 'candidates' ? objects(row.item.norm_candidates).length > 0 : object(row.item.norm_assessment) === null))
     && (origin === 'all' || (origin === 'global' ? row.item.origin_scope === 'global_cross_window' : row.item.origin_scope !== 'global_cross_window'))
     && (requiredPage === null || row.pages.includes(requiredPage)));
+  const visibleCounts = criticQueueCounts(underOtherFilters.map((row) => row.item));
+  const matches = underOtherFilters.filter((row) => advice === 'all' || criticQueueOf(row.item) === advice);
   const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const shown = matches.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
@@ -81,19 +67,13 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
   return <section id={anchorId} aria-label="Кандидаты расширенного анализа" className={styles.candidatePanel}>
     <h3>Наблюдения и источники</h3>
     <p>Поиск и фильтры меняют только этот список. MD, HTML, JSON и технический XLSX сохраняют полную запись, включая скрытые фильтром наблюдения и исходные варианты.</p>
-    <div className={styles.queues} role="group" aria-label="Очереди критика" data-critic-queues="">
-      {CRITIC_QUEUES.map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          className={advice === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
-          aria-pressed={advice === value}
-          onClick={() => { setAdvice(value); setPage(0); }}
-        >
-          {label} <span className={styles.queueCount}>{queueCounts[value] ?? 0}</span>
-        </button>
-      ))}
-    </div>
+    <CriticQueueTabs
+      value={advice}
+      onChange={(value) => { setAdvice(value); setPage(0); }}
+      total={queueCounts}
+      visible={visibleCounts}
+      panelId={`${anchorId}-queue`}
+    />
     <div className={styles.filters}>
       <label>Поиск по заголовку, описанию, рекомендации или источнику<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
       <label>Рекомендация критика<select value={advice} onChange={(event) => { setAdvice(event.target.value); setPage(0); }}><option value="all">Все рекомендации</option><option value="not_reviewed">Критика не выполнялась</option><option value="accept">Рекомендует сохранить</option><option value="reject">Рекомендует снять</option><option value="borderline">Пограничный случай</option><option value="needs_human">Нужна проверка человека</option><option value="rewrite">Рекомендует уточнить</option></select></label>
@@ -104,28 +84,31 @@ export function ObservationList({ observations, sources, fallbackVersion, projec
       <label>На странице<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
     </div>
     {invalidPage ? <p role="status">Введите целый положительный номер физической страницы. Пока фильтр страницы не применяется.</p> : null}
-    <div className={styles.toolbar}><p aria-live="polite">По фильтрам: <strong>{matches.length}</strong> из {observations.length}. Показано {shown.length === 0 ? 0 : currentPage * pageSize + 1}–{currentPage * pageSize + shown.length}.</p><button type="button" className="am-button am-button--quiet" onClick={reset}>Сбросить фильтры</button></div>
-    <div ref={sourcePanel} id={`${anchorId}-source`}>{selectedSource === null ? null : <SourceInspector key={`${text(selectedSource.source_id)}:${text(selectedSource.version_uid) || fallbackVersion}`} source={selectedSource} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} onClose={() => setSelectedSource(null)} />}</div>
-    {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждает отсутствие проблем в документе.</p> : matches.length === 0 ? <p>Под выбранные фильтры записи не попали. Полный набор сохранён и доступен в выгрузках.</p> : <ol className={styles.observations} start={currentPage * pageSize + 1}>{shown.map(({ item, index, ids, pages }) => <li key={`${text(item.observation_id)}:${index}`} data-extended-observation={text(item.observation_id)}>
-      <article>
-        <div className={styles.toolbar}><h4>{text(item.title) || 'Наблюдение без заголовка'}</h4><span>{pages.length === 0 ? 'Страница не указана' : `Физические страницы: ${pages.join(', ')}`}</span></div>
-        <p className={styles.description}>{text(item.description)}</p>
-        {item.origin_scope === 'global_cross_window' ? <p data-cross-window-origin="">Межоконная сверка · пакет <code>{text(item.cross_window_batch_key) || 'Не передан'}</code> · исходные окна: {strings(item.window_ids).join(', ') || 'Не переданы'}.</p> : null}
-        {objects(item.source_evidence).length > 0 ? <details><summary>Цитаты исходного наблюдения</summary><ul>{objects(item.source_evidence).map((evidence, number) => <li key={`${text(evidence.source_id)}:${number}`}><code>{text(evidence.source_id)}</code><blockquote>{text(evidence.quote)}</blockquote></li>)}</ul><p>Цитаты проверяются по указанным источникам; это не решение эксперта.</p></details> : null}
-        <details><summary>Идентификаторы и происхождение</summary><p>Наблюдение: <code>{text(item.observation_id) || 'Не передано'}</code>. {text(item.window_id) ? <>Окно: <code>{text(item.window_id)}</code>.</> : null}</p><p>Источники: {ids.join(', ') || 'Не переданы'}.</p></details>
-        <section aria-label="Источники кандидата"><h5>Проверить исходные материалы</h5>{ids.length === 0 ? <p>Идентификаторы исходных материалов не переданы.</p> : <ul className={styles.sourceButtons}>{ids.map((id) => {
-          const source = sourceIndex.get(id);
-          const sourceNumber = sourcePage(source);
-          return <li key={id}>{source === undefined ? <span>Источник <code>{id}</code> отсутствует в этой записи; переход недоступен.</span> : <button type="button" className="am-button am-button--quiet" onClick={() => inspect(source)}>{sourceNumber === null ? 'Страница не указана' : `Стр. ${sourceNumber}`} · {sourceKind(source)}</button>}</li>;
-        })}</ul>}</section>
-        <details className={styles.adviceDetails} open={item.review_status === 'not_reviewed'}><summary>Машинная критика и предложенное уточнение</summary><MachineAdvice review={item.review ?? item.critic} correction={item.correction} reviewStatus={item.review_status} reviewReason={item.review_reason} />{object(item.review ?? item.critic) === null && object(item.correction) === null && item.review_status !== 'not_reviewed' ? <p>Записи критика и корректора пока не переданы. Это не означает одобрения наблюдения.</p> : null}</details>
-        <details className={styles.adviceDetails}><summary>Нормативные основания · {NORMS[text(item.norm_status)] ?? 'Требуют проверки'}</summary>
-          {object(item.norm_assessment) ? <aside data-norm-model-review="provisional"><strong>Модельная сверка по цитате</strong><p>{ASSESSMENT[text(object(item.norm_assessment)?.relation)] ?? 'Результат требует проверки'}</p><p>{text(object(item.norm_assessment)?.explanation)}</p><ul>{objects(object(item.norm_assessment)?.citations).map((citation, number) => <li key={text(citation.paragraph_id) || number}><code>{text(citation.paragraph_id)}</code><blockquote>{text(citation.quote)}</blockquote></li>)}</ul></aside> : item.norm_status === 'not_applicable' ? <p>Нормативный вопрос не выделен; модельная сверка цитат для этого наблюдения не проводилась.</p> : item.norm_status === 'not_found' ? <p>Поиск завершён без подходящих цитат. Нормативное основание не подтверждено; отсутствие требования не доказано.</p> : <p>Модельная сверка нормативных цитат не передана.</p>}
-          {objects(item.norm_candidates).map((candidate, number) => <section key={text(candidate.paragraph_id) || number}><h5>{text(candidate.designation) || 'Кандидат нормативного документа'}</h5>{text(candidate.document_id) ? <Link href={routes.normDocument(text(candidate.document_id))}>Открыть исходный документ нормы</Link> : null}<p>{text(candidate.clause_number) ? `Пункт ${text(candidate.clause_number)}. ` : ''}Страница документа нормы: {text(candidate.page_label) || (typeof candidate.page_label === 'number' ? candidate.page_label : 'Не передана')}.</p><blockquote>{text(candidate.quote)}</blockquote></section>)}
-          <p>Действующая редакция, применимость и решение эксперта не подтверждены.</p>
-        </details>
-      </article>
-    </li>)}</ol>}
-    {matches.length > 0 ? <nav className={styles.toolbar} aria-label="Страницы списка кандидатов"><button type="button" className="am-button am-button--quiet" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Предыдущие</button><span>Страница {currentPage + 1} из {pageCount}</span><button type="button" className="am-button am-button--quiet" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>Следующие</button></nav> : null}
+    <div role="tabpanel" id={`${anchorId}-queue`} aria-labelledby={queueTabId(`${anchorId}-queue`, advice)} data-critic-queue={advice}>
+      {CRITIC_QUEUE_NOTES[advice] === undefined ? null : <p data-critic-queue-note={advice}>{CRITIC_QUEUE_NOTES[advice]}</p>}
+      <div className={styles.toolbar}><p aria-live="polite">По фильтрам: <strong>{matches.length}</strong> из {observations.length}. Показано {shown.length === 0 ? 0 : currentPage * pageSize + 1}–{currentPage * pageSize + shown.length}.</p><button type="button" className="am-button am-button--quiet" onClick={reset}>Сбросить фильтры</button></div>
+      <div ref={sourcePanel} id={`${anchorId}-source`}>{selectedSource === null ? null : <SourceInspector key={`${text(selectedSource.source_id)}:${text(selectedSource.version_uid) || fallbackVersion}`} source={selectedSource} fallbackVersion={fallbackVersion} {...(projectUid === undefined ? {} : { projectUid })} onClose={() => setSelectedSource(null)} />}</div>
+      {observations.length === 0 ? <p>Предварительные наблюдения не получены. Это не подтверждает отсутствие проблем в документе.</p> : matches.length === 0 ? <p>Под выбранные фильтры записи не попали. Полный набор сохранён и доступен в выгрузках.</p> : <ol className={styles.observations} start={currentPage * pageSize + 1}>{shown.map(({ item, index, ids, pages }) => <li key={`${text(item.observation_id)}:${index}`} data-extended-observation={text(item.observation_id)}>
+        <article>
+          <div className={styles.toolbar}><h4>{text(item.title) || 'Наблюдение без заголовка'}</h4><span>{pages.length === 0 ? 'Страница не указана' : `Физические страницы: ${pages.join(', ')}`}</span></div>
+          <p className={styles.description}>{text(item.description)}</p>
+          {item.origin_scope === 'global_cross_window' ? <p data-cross-window-origin="">Межоконная сверка · пакет <code>{text(item.cross_window_batch_key) || 'Не передан'}</code> · исходные окна: {strings(item.window_ids).join(', ') || 'Не переданы'}.</p> : null}
+          {objects(item.source_evidence).length > 0 ? <details><summary>Цитаты исходного наблюдения</summary><ul>{objects(item.source_evidence).map((evidence, number) => <li key={`${text(evidence.source_id)}:${number}`}><code>{text(evidence.source_id)}</code><blockquote>{text(evidence.quote)}</blockquote></li>)}</ul><p>Цитаты проверяются по указанным источникам; это не решение эксперта.</p></details> : null}
+          <details><summary>Идентификаторы и происхождение</summary><p>Наблюдение: <code>{text(item.observation_id) || 'Не передано'}</code>. {text(item.window_id) ? <>Окно: <code>{text(item.window_id)}</code>.</> : null}</p><p>Источники: {ids.join(', ') || 'Не переданы'}.</p></details>
+          <section aria-label="Источники кандидата"><h5>Проверить исходные материалы</h5>{ids.length === 0 ? <p>Идентификаторы исходных материалов не переданы.</p> : <ul className={styles.sourceButtons}>{ids.map((id) => {
+            const source = sourceIndex.get(id);
+            const sourceNumber = sourcePage(source);
+            return <li key={id}>{source === undefined ? <span>Источник <code>{id}</code> отсутствует в этой записи; переход недоступен.</span> : <button type="button" className="am-button am-button--quiet" onClick={() => inspect(source)}>{sourceNumber === null ? 'Страница не указана' : `Стр. ${sourceNumber}`} · {sourceKind(source)}</button>}</li>;
+          })}</ul>}</section>
+          <details className={styles.adviceDetails} open={item.review_status === 'not_reviewed'}><summary>Машинная критика и предложенное уточнение</summary><MachineAdvice review={item.review ?? item.critic} correction={item.correction} reviewStatus={item.review_status} reviewReason={item.review_reason} />{object(item.review ?? item.critic) === null && object(item.correction) === null && item.review_status !== 'not_reviewed' ? <p>Записи критика и корректора пока не переданы. Это не означает одобрения наблюдения.</p> : null}</details>
+          <details className={styles.adviceDetails}><summary>Нормативные основания · {NORMS[text(item.norm_status)] ?? 'Требуют проверки'}</summary>
+            {object(item.norm_assessment) ? <aside data-norm-model-review="provisional"><strong>Модельная сверка по цитате</strong><p>{ASSESSMENT[text(object(item.norm_assessment)?.relation)] ?? 'Результат требует проверки'}</p><p>{text(object(item.norm_assessment)?.explanation)}</p><ul>{objects(object(item.norm_assessment)?.citations).map((citation, number) => <li key={text(citation.paragraph_id) || number}><code>{text(citation.paragraph_id)}</code><blockquote>{text(citation.quote)}</blockquote></li>)}</ul></aside> : item.norm_status === 'not_applicable' ? <p>Нормативный вопрос не выделен; модельная сверка цитат для этого наблюдения не проводилась.</p> : item.norm_status === 'not_found' ? <p>Поиск завершён без подходящих цитат. Нормативное основание не подтверждено; отсутствие требования не доказано.</p> : <p>Модельная сверка нормативных цитат не передана.</p>}
+            {objects(item.norm_candidates).map((candidate, number) => <section key={text(candidate.paragraph_id) || number}><h5>{text(candidate.designation) || 'Кандидат нормативного документа'}</h5>{text(candidate.document_id) ? <Link href={routes.normDocument(text(candidate.document_id))}>Открыть исходный документ нормы</Link> : null}<p>{text(candidate.clause_number) ? `Пункт ${text(candidate.clause_number)}. ` : ''}Страница документа нормы: {text(candidate.page_label) || (typeof candidate.page_label === 'number' ? candidate.page_label : 'Не передана')}.</p><blockquote>{text(candidate.quote)}</blockquote></section>)}
+            <p>Действующая редакция, применимость и решение эксперта не подтверждены.</p>
+          </details>
+        </article>
+      </li>)}</ol>}
+      {matches.length > 0 ? <nav className={styles.toolbar} aria-label="Страницы списка кандидатов"><button type="button" className="am-button am-button--quiet" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Предыдущие</button><span>Страница {currentPage + 1} из {pageCount}</span><button type="button" className="am-button am-button--quiet" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>Следующие</button></nav> : null}
+    </div>
   </section>;
 }

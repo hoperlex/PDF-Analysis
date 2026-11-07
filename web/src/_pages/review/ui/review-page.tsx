@@ -357,6 +357,8 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       isPending={exporter.isPending}
       lastFileName={exporter.lastFileName}
       mayImportDecisions={mayAct}
+      // `UI-A-76`: the run's ZIP, for the session that may export, of the version this run read.
+      auditPackage={mayAct ? { versionUid: run.version_uid } : undefined}
       error={presentFailureOrNull(exporter.error, {
         title: 'В выгрузке отказано',
       })}
