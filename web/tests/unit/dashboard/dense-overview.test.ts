@@ -32,6 +32,21 @@ function declarations(css: string, selector: string): ReadonlyMap<string, string
   return rule.declarations;
 }
 
+/**
+ * The one minimum a row's control may declare: 24 px, the WCAG 2.5.8 target size (`--am-gap-lg` is the 24 px token; the
+ * stylesheet has no target token of its own). Any other `min-height` is a row height fixed in CSS, which is what the
+ * dense overview gave up.
+ */
+const TARGET_FLOOR = 'var(--am-gap-lg)';
+
+/** The rules of a stylesheet that declare a `min-height` other than the target floor. */
+function fixedHeights(css: string) {
+  return parseRules(css, 'module').filter((rule) => {
+    const height = rule.declarations.get('min-height');
+    return height !== undefined && height !== TARGET_FLOOR;
+  });
+}
+
 const SUMMARY: DashboardSummary = {
   documents_by_project: [{ project_uid: 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', name: 'Проект Альфа', document_count: 3 }],
   findings_by_verdict: [
@@ -68,9 +83,18 @@ describe('the dashboard opens on its table', () => {
     expect(selectors).not.toMatch(/orbit|heroArt|heroCopy|eyebrow|heroDescription/);
     expect(declarations(css, '.hero').get('min-height')).toBeUndefined();
     const sections = module('widgets/dashboard/ui/sections-panel.module.css');
-    for (const rule of parseRules(sections, 'module')) {
-      expect(rule.declarations.get('min-height'), `${rule.selector} keeps a fixed height`).toBeUndefined();
-    }
+    expect(fixedHeights(sections).map((rule) => rule.selector), 'a rule that fixes a height').toEqual([]);
+  });
+
+  it('can fail: a fixed row height is reported, the 24 px target floor is not', () => {
+    const css = '.a { min-height: 44px; }\n.b { min-height: var(--am-gap-lg); }\n.c { padding: 0; }\n.d, .e { min-height: 3rem; }';
+    expect(fixedHeights(css).map((rule) => rule.selector)).toEqual(['.a', '.d, .e']);
+  });
+
+  it('gives the row\'s button and toggle the 24 px target floor and nothing taller', () => {
+    const css = module('widgets/dashboard/ui/sections-panel.module.css');
+    expect(declarations(css, '.rowButton').get('min-height')).toBe(TARGET_FLOOR);
+    expect(declarations(css, '.toggle').get('min-height')).toBe(TARGET_FLOOR);
   });
 });
 
