@@ -91,6 +91,7 @@ def test_relaxed_group_skips_only_the_cost_derived_input_preflight(monkeypatch) 
     kwargs = dict(
         version_uid=VERSION, idempotency_key="v3-relaxed-test", provider_mode="live",
         pack=SimpleNamespace(sha256="a" * 64), input_budget_characters=100,
+        start_allowed=True,  # `AR-V3-OPT-IN`: the allowance is the command's first refusal; this test is about the next
     )
     with pytest.raises(DomainError) as standard:
         v3_group.start_ar_v3_group(object(), **kwargs)

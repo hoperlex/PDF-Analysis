@@ -26,13 +26,14 @@ from tests.integration.comparison.test_service_db import (  # type: ignore[impor
     PROJECT,
     R1,
     R2,
+    SOURCE_PAGES,
+    TARGET_PAGES,
     V1,
     V2,
     _Classifications,
     _seed,
 )
 
-PAGES = {1: "Лист 1\nпозиция 1 размер 10\n"}
 V3_NEW = "run_01M2545JSD15ETSNNV904XB001"
 V3_OLD = "run_01M2545JSD15ETSNNV904XB002"
 
@@ -47,7 +48,8 @@ class _Analyses:
         return self._runs.get(version_uid, ())
 
     def saved_page_text(self, session, *, run_id, version):
-        return SavedPageText(run_id, "e" * 64, PAGES)
+        # The seeded versions have 500 pages each; only the standard runs' text is ever read.
+        return SavedPageText(run_id, "e" * 64, {R1: SOURCE_PAGES, R2: TARGET_PAGES}[run_id])
 
     def published_findings(self, session, *, run_id):
         return ()

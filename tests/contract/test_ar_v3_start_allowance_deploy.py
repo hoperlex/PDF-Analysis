@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import re
+
 from tests.contract.test_compose_flag_forwarding import (  # type: ignore[import-not-found]
     compose_default,
-    example_assignments,
     service_environments,
 )
 
@@ -21,6 +22,11 @@ ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "infra" / "deploy" / "compose.server.yml"
 EXAMPLE = ROOT / "infra" / "deploy" / "env" / "alpha.env.example"
 NAME = "AR_V3_BETA_START_ALLOWED"
+
+
+def example_values(example: str) -> list[str]:
+    """Every assignment of the variable in the example file, by line (the neighbour's reader only knows `AUDITMANAGER_*`)."""
+    return [match.group(1) for line in example.splitlines() if (match := re.fullmatch(rf"{NAME}=(.*)", line))]
 
 
 def problems(compose: str, example: str) -> list[str]:
@@ -34,7 +40,7 @@ def problems(compose: str, example: str) -> list[str]:
     for service, values in environments.items():
         if service != "api" and NAME in values:
             out.append(f"{service} names the allowance; only the api reads it")
-    if example_assignments(example).get(NAME) != [""]:
+    if example_values(example) != [""]:
         out.append("alpha.env.example does not list the allowance once, blank")
     return out
 

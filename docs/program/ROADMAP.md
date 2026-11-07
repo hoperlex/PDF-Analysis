@@ -250,7 +250,8 @@ Set by the owner on 2026-11-07. They come after the functional and navigational 
 original and the active product tasks around the beta, and are built when those leave room:
 
 1. **AR v3 as an opt-in mode.** The imported (current) analysis stays the default; v3 is
-   switched on per deployment or per run, never replacing the default silently.
+   switched on per deployment or per run, never replacing the default silently. *Built switched off on 2026-11-08*
+   (P1 to P3 of `AR-V3-OPT-IN-01.md`, contract `1.38.0`); P4 and P5 are `D-338`.
 2. **Expert decision memory.** Every expert decision is kept together with the crop or crops it
    concerns in a vectorised segment of PostgreSQL (pgvector, as the normative corpus already
    uses), so that it can feed fine-tuning data, dynamic prompts and hints to an expert facing a

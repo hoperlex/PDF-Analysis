@@ -291,6 +291,7 @@
         }
       ],
       "optional_api": [
+        {"method": "GET", "path": "/ar-v3-beta/pack", "operationId": "getArV3BetaPackStatus", "$why_optional": "AR-V3-OPT-IN: the run list of an АР version reads whether the deployment allows a start of AR v3 (start_allowed) to decide whether its start form offers the choice; asked of an АР version only, which this walk's bundle is not"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
         {"method": "GET", "path": "/executor-connections", "operationId": "listExecutorConnections", "$why_optional": "the run-start form offers the executors a run may start on, drawn for a session that may act as an expert"},
@@ -421,6 +422,7 @@
         }
       ],
       "optional_api": [
+        {"method": "GET", "path": "/ar-v3-beta/pack", "operationId": "getArV3BetaPackStatus", "$why_optional": "AR-V3-OPT-IN: a standard run's page reads whether the deployment allows a start of AR v3 to decide whether to name its analysis; a run of AR v3 asks nothing"},
         {"method": "GET", "path": "/execution/workers", "operationId": "listWorkers", "$why_optional": "read only while the run is running or validating, to name the worker holding it (W54-WORKERS-WEB)"},
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/dashboard", "operationId": "getDashboardSummary", "$why_optional": "the side menu's «Разделы» group reads the current project's sections (UI-A-04), only for a session offered the section page"},
