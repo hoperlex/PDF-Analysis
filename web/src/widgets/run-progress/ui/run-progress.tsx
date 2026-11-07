@@ -84,9 +84,9 @@ import { RunLiveLine } from './run-live-line';
 import { ExtendedReview } from '@/widgets/extended-review';
 
 import {
-  AR_V3_BETA_PROFILE_ID,
   StageTable,
   type StageRow,
+  arV3GroupReviewAddress,
   badgeProviderMode,
   costBasisCaption,
   diagnosticObservationCount,
@@ -96,7 +96,10 @@ import {
   hasKnownRunVocabulary,
   interruptedReason,
   isRunAnimating,
+  looksLikeArV3GroupId,
   providerModeCaption,
+  runAnalysis,
+  runAnalysisKind,
   runCost,
   runExecutorLine,
   runExecutorValue,
@@ -108,6 +111,7 @@ import {
   runWaitingSentence,
   stageRows,
   terminalReasonNote,
+  useArV3StartAllowed,
   useRunStatus,
 } from '@/entities/audit-run';
 
@@ -180,9 +184,38 @@ function V3PublishedSentence({ findingCount }: { readonly findingCount: number |
   );
 }
 
+/**
+ * `AR-V3-OPT-IN`: «Анализ» in the run's facts -- which analysis produced it. A run of AR v3 (beta) always says so, with its
+ * scope, and links to the review of its group; a standard run says «Стандартный» only where the deployment allows a
+ * start of v3 (`start_allowed`), so a deployment with one analysis shows no line about the other. Only a standard run asks
+ * the server whether v3 is allowed; a v3 run needs no answer.
+ */
+function AnalysisFact({ status }: { readonly status: RunStatus }) {
+  const standard = runAnalysisKind(status) === 'standard';
+  const bothOffered = useArV3StartAllowed(standard);
+  const analysis = runAnalysis(status);
+  if (standard && !bothOffered) return null;
+  return (
+    <>
+      <dt>Анализ</dt>
+      <dd data-run-analysis={analysis.kind} data-run-scope={analysis.scope ?? undefined}>
+        {analysis.label}
+        {looksLikeArV3GroupId(analysis.groupId) ? (
+          <>
+            {' · '}
+            <Link href={arV3GroupReviewAddress(analysis.groupId)} data-run-group-review>
+              шесть проверок группы
+            </Link>
+          </>
+        ) : null}
+      </dd>
+    </>
+  );
+}
+
 function Outcome({ status }: { readonly status: RunStatus }) {
   const outcome = runOutcome(status);
-  const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
+  const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
 
   switch (outcome.kind) {
     case 'in_flight':
@@ -453,7 +486,7 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
   const preset = runPresetLine(status);
   const waiting = executor === null ? null : runWaitingSentence(executor);
 
-  const v3Beta = status.analysis_profile_id === AR_V3_BETA_PROFILE_ID;
+  const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
   const reviewable = !v3Beta && runHasPublishedResult(status.state, status.analysis_profile_id);
 
   return (
@@ -517,6 +550,7 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
                 <code>{status.version_uid}</code>
               </Link>
             </dd>
+            <AnalysisFact status={status} />
             {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
             {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
             {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}

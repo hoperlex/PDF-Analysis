@@ -12,8 +12,20 @@ export const PACK_TITLE = 'АР v3: пакет проверенных норм';
 export const PACK_NOT_INSTALLED_SENTENCE =
   'Пакет проверенных норм АР v3 не установлен: запуск шести проверок недоступен.';
 
-export const PACK_INSTALLED_SENTENCE =
-  'Пакет проверенных норм АР v3 установлен: шесть проверок можно запустить из списка прогонов версии.';
+export const PACK_INSTALLED_SENTENCE = 'Пакет проверенных норм АР v3 установлен.';
+
+/**
+ * `AR-V3-OPT-IN`: whether this server lets a start of AR v3 be chosen. The pack alone does not: the deployment allows a start
+ * separately (`AR_V3_BETA_START_ALLOWED`), and until it does every АР version starts the standard analysis and the form
+ * offers nothing else. A reading from a server that does not say is read as not allowed.
+ */
+export const START_ALLOWED_LABEL = 'Запуск АР v3';
+export const START_ALLOWED_SENTENCE = 'разрешён на этом сервере';
+export const START_NOT_ALLOWED_SENTENCE = 'не разрешён на этом сервере';
+export const START_ALLOWED_NOTE =
+  'В форме запуска версии АР можно выбрать шесть проверок АР v3; по умолчанию всегда выбран стандартный анализ.';
+export const START_NOT_ALLOWED_NOTE =
+  'Версии АР запускаются стандартным анализом; шесть проверок в форме запуска не предлагаются.';
 
 export const PACK_READ_FAILED_TITLE = 'Не удалось прочитать статус пакета проверенных норм АР v3';
 

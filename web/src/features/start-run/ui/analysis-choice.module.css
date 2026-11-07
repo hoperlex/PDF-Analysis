@@ -1,0 +1,18 @@
+/* The choice of analysis above the start form (`AR-V3-OPT-IN`): a radio group, as the three ways to start are. Layout only. */
+.choice {
+  display: grid;
+  gap: var(--am-gap-xs);
+  min-width: 0;
+}
+
+.label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  cursor: pointer;
+}
