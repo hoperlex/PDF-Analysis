@@ -16,5 +16,5 @@ export { ArchivedToggle, TagFilter } from './ui/document-filters';
 
 // `UI-A-35`: the server's own figures per section, for the screens that would otherwise count a page.
 export type { SectionFigures } from './model/section-figures';
-export { UNCLASSIFIED_FIGURES, sectionFigures } from './model/section-figures';
+export { UNCLASSIFIED_FIGURES, sectionFigures, totalFigures } from './model/section-figures';
 export { useSectionFigures } from './api/use-section-figures';
