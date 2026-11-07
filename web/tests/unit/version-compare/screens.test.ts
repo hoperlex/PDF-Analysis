@@ -510,9 +510,10 @@ describe('«Сравнение листов»', () => {
 
   it('writes no Latin word a reader would read', () => {
     const readable = text(sheets({ draft: DRAFT, dropped: [{ kind: 'unlink', page: page(V2, 40) }] }));
-    // «MD» is the original's name of the file of the summary (a permitted name of the language guard); a file name under a version
-    // in the column head is the reader's own data, not a word the screen writes.
-    expect(readable.replace(/\(MD\)/g, '').replace(/\S+\.pdf/g, '')).not.toMatch(LATIN);
+    // «MD» is the original's name of the file of the summary and «PDF» the name of the document format (both permitted names of the
+    // language guard; «Сформировать PDF-отчёт…» is drawn at all times now); a file name under a version in the column head is the
+    // reader's own data, not a word the screen writes.
+    expect(readable.replace(/\(MD\)/g, '').replace(/PDF/g, '').replace(/\S+\.pdf/g, '')).not.toMatch(LATIN);
   });
 });
 
