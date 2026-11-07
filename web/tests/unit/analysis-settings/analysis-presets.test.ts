@@ -209,6 +209,17 @@ describe('lane N1: the section is a few lines', () => {
   });
 });
 
+describe('lane N1: the preset form is one grid of two fields', () => {
+  it('marks the create and the revise form for the two-column grid, and keeps both fields and the button', () => {
+    const markup = section(seeded([preset(1)]), ['admin']);
+    expect(markup).toMatch(/<form class="am-form [^"]*form[^"]*" data-preset-form="create"/);
+    expect(markup).toMatch(/<form class="am-form [^"]*form[^"]*" data-preset-form="revise"/);
+    expect(markup.match(/Название пресета/g)).toHaveLength(2);
+    expect(markup.match(/>Сохранить новую версию</g)).toHaveLength(1);
+    expect(markup.match(/>Сохранить пресет</g)?.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 // -- words ------------------------------------------------------------------------------------
 
 describe('the entity decides what can start a run', () => {
