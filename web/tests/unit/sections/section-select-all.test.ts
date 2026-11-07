@@ -17,8 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, queryKeys } from '@/shared/api';
 import type { DocumentAudit, DocumentVersion } from '@/shared/api';
 import { DOCUMENT_PAGE_LIMIT } from '@/entities/document-version';
-import { SectionDetailPage } from '@/_pages/section-detail';
-import { SectionBatchBar } from '@/_pages/section-detail/ui/section-batch-bar';
+import { SectionBatchBar, SectionDetailPage } from '@/_pages/section-detail';
 import type { BatchSelection } from '@/widgets/project-sections';
 
 import { newClient, renderWith, seedError } from '../screens/harness';

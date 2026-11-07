@@ -28,6 +28,14 @@ import { SectionSpecificationAnswer } from './section-specification-answer';
 import type { SectionSpecificationColumns } from './section-specification-answer';
 import styles from './section-specification.module.css';
 
+/**
+ * The ids of the section and project selects. The selects are drawn by the page, in the row of the tabs (`UI-B-24`), but these are
+ * the handles the browser journey (`section-form7`) has always pressed them by; they stay authored here, with the screen's
+ * other controls, so the journey's handles and the page's selects cannot drift apart.
+ */
+export const SECTION_SELECT_ID = 'section-specification-section';
+export const PROJECT_SELECT_ID = 'section-specification-project';
+
 export interface SectionSpecificationSectionProps {
   /** The section read; АР when absent. */
   readonly sectionCode?: ContractProjectSection | undefined;

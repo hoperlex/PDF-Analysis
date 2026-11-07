@@ -7,4 +7,4 @@
 export type { SectionSpecificationAnswerProps, SectionSpecificationColumns } from './ui/section-specification-answer';
 export { SectionSpecificationAnswer, groupRowsByProject } from './ui/section-specification-answer';
 export type { SectionSpecificationSectionProps } from './ui/section-specification-section';
-export { SectionSpecificationSection } from './ui/section-specification-section';
+export { PROJECT_SELECT_ID, SECTION_SELECT_ID, SectionSpecificationSection } from './ui/section-specification-section';

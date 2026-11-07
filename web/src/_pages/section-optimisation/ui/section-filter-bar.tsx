@@ -14,6 +14,7 @@
 
 import type { ProjectSection, ProjectUid } from '@/shared/api';
 import { projectSectionTitle, sectionsInStructureOrder, useProject } from '@/entities/project';
+import { PROJECT_SELECT_ID, SECTION_SELECT_ID } from '@/widgets/section-specification';
 
 import styles from './section-optimisation-page.module.css';
 
@@ -67,7 +68,7 @@ export function SectionFilterBar({ sectionCode, projectUid, options, onSection, 
       <label className={styles.filterField}>
         <span>Раздел</span>
         <select
-          id="section-optimisation-section"
+          id={SECTION_SELECT_ID}
           value={sectionCode}
           onChange={(event) => onSection(event.target.value as ProjectSection)}
           data-section-picker={sectionsInStructureOrder().length}
@@ -82,7 +83,7 @@ export function SectionFilterBar({ sectionCode, projectUid, options, onSection, 
       <label className={styles.filterField}>
         <span>Проект</span>
         <select
-          id="section-optimisation-project"
+          id={PROJECT_SELECT_ID}
           value={projectUid ?? ''}
           onChange={(event) => onProject(event.target.value === '' ? null : (event.target.value as ProjectUid))}
           data-section-project-filter={options.length}
