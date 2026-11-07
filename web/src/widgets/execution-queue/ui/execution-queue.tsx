@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import type { ExecutionQueueItem, Role, RunId } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
@@ -9,6 +12,7 @@ import type { RunWorker } from '@/entities/execution';
 import { QueueItemWaiting } from '@/entities/audit-run';
 import { EmptyState, ErrorState } from '@/shared/ui';
 
+import { keyboardTarget, planReorder, reorderRefusalText } from '../model/reorder';
 import { queueTiming } from '../model/timing';
 
 import styles from './execution-queue.module.css';
@@ -31,6 +35,14 @@ export interface ExecutionQueueProps {
   readonly onCancel: (item: ExecutionQueueItem) => void;
   readonly onReaudit: (item: ExecutionQueueItem) => void;
   readonly onPriority: (item: ExecutionQueueItem, priority: number) => void;
+  /**
+   * `UI-B-52`: the original's drag of a waiting job to another place. One call per move, with the one priority that puts the job
+   * there (`planReorder`) and the place it is meant to take; the page sends the priority command and answers in `reorderNote`.
+   * Absent, the rows carry no handle. Offered only to the roles that may set a priority.
+   */
+  readonly onReorder?: ((item: ExecutionQueueItem, priority: number, place: number | null) => void) | undefined;
+  /** What the last move came to, said in the polite live region under the list: moving, moved, or the server's refusal. */
+  readonly reorderNote?: string | null | undefined;
   readonly onNext: (() => void) | null;
   readonly onPrevious: (() => void) | null;
 }
@@ -58,8 +70,40 @@ function QueueTimingLine({ item, asOf }: { readonly item: ExecutionQueueItem; re
 }
 
 export function ExecutionQueue({
-  items, roles, asOf, busy, filtered = false, workerOf, onCancel, onReaudit, onPriority, onNext, onPrevious,
+  items, roles, asOf, busy, filtered = false, workerOf, onCancel, onReaudit, onPriority, onReorder, reorderNote, onNext, onPrevious,
 }: ExecutionQueueProps) {
+  const hintId = useId();
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const [localNote, setLocalNote] = useState<string | null>(null);
+  const handles = useRef(new Map<string, HTMLElement>());
+  const refocus = useRef<string | null>(null);
+  // A moved row is a different element after the list is read again; the key that moved it gets its handle back.
+  useEffect(() => {
+    if (refocus.current === null) return;
+    handles.current.get(refocus.current)?.focus();
+    refocus.current = null;
+  }, [items]);
+  const queued = items.filter((item) => item.state === 'queued');
+  const mayReorder = onReorder !== undefined && canExecute(roles, 'priority') && queued.length > 1;
+
+  /** One move: the slot `toIndex` among the queued rows in view, as one priority command or a sentence saying why not. */
+  function move(item: ExecutionQueueItem, toIndex: number, byKey: boolean) {
+    if (onReorder === undefined || busy) return;
+    const plan = planReorder(queued, item.job_id, toIndex, { top: onPrevious === null, bottom: onNext === null });
+    if (plan.kind === 'refused') {
+      setLocalNote(reorderRefusalText(plan.reason));
+      return;
+    }
+    if (plan.kind === 'keep') {
+      setLocalNote('Задача уже стоит на этом месте.');
+      return;
+    }
+    setLocalNote(null);
+    refocus.current = byKey ? item.job_id : null;
+    onReorder(item, plan.priority, queued[Math.max(0, Math.min(queued.length - 1, toIndex))]?.queue_position ?? null);
+  }
+
   if (items.some((item) => jobStateLabel(item.state) === null)) {
     return <ErrorState title="Неизвестное состояние задачи" detail="Очередь содержит состояние вне набора, который умеет показывать это приложение." />;
   }
@@ -71,6 +115,12 @@ export function ExecutionQueue({
   return (
     <section aria-label="Задачи выполнения" className={styles.list}>
       {items.length === 0 ? <EmptyState title="На этой странице задач нет" detail="Вернитесь к предыдущей странице." /> : null}
+      {mayReorder ? (
+        <p id={hintId} className="am-note" data-queue-reorder-hint="">
+          Порядок ожидающих задач можно менять: перетащите ручку «⋮⋮» строки на новое место или нажмите на ручке Alt+↑ либо Alt+↓.
+          Меняется приоритет этой задачи, порядок определяет сервер.
+        </p>
+      ) : null}
       <ol>
         {items.map((item) => {
           const error = queueItemError(item);
@@ -78,9 +128,64 @@ export function ExecutionQueue({
           const mayReaudit = canExecute(roles, 'reaudit') && canReaudit(item);
           const mayPrioritise = canExecute(roles, 'priority') && item.state === 'queued';
           return (
-          <li key={item.job_id} className={styles.row} data-queue-row={item.state}>
+          <li
+            key={item.job_id}
+            className={over === item.job_id && dragging !== item.job_id ? `${styles.row} ${styles.dropOver}` : styles.row}
+            data-queue-row={item.state}
+            data-queue-drop-over={over === item.job_id && dragging !== item.job_id ? '' : undefined}
+            data-queue-moving={dragging === item.job_id ? '' : undefined}
+            onDragOver={mayReorder && dragging !== null && item.state === 'queued' ? (event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+              if (over !== item.job_id) setOver(item.job_id);
+            } : undefined}
+            onDrop={mayReorder && dragging !== null && item.state === 'queued' ? (event) => {
+              event.preventDefault();
+              const moving = queued.find((candidate) => candidate.job_id === dragging);
+              setDragging(null);
+              setOver(null);
+              if (moving !== undefined) move(moving, queued.findIndex((candidate) => candidate.job_id === item.job_id), false);
+            } : undefined}
+          >
             {/* One line as the original's queue item: state, place, the work, its times; the rest of the facts under it. */}
             <div className={styles.line}>
+              {mayReorder && item.state === 'queued' ? (
+                // The original's six-dot handle: the drag source, and the focus the keyboard moves the row from.
+                <span
+                  ref={(element) => {
+                    if (element === null) handles.current.delete(item.job_id);
+                    else handles.current.set(item.job_id, element);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  draggable={!busy}
+                  className={styles.handle}
+                  data-queue-handle=""
+                  aria-label={`Переместить задачу: ${item.document_name}, версия ${item.version_ordinal}`}
+                  aria-describedby={hintId}
+                  title="Перетащите, чтобы изменить порядок; Alt+↑ и Alt+↓ — на место выше и ниже"
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', item.job_id);
+                    const row = event.currentTarget.closest('li');
+                    if (row !== null) event.dataTransfer.setDragImage(row, 0, 0);
+                    setLocalNote(null);
+                    setDragging(item.job_id);
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setOver(null);
+                  }}
+                  onKeyDown={(event) => {
+                    const target = keyboardTarget(queued, item.job_id, event.key, event.altKey);
+                    if (target === null) return;
+                    event.preventDefault();
+                    move(item, target, true);
+                  }}
+                >
+                  ⋮⋮
+                </span>
+              ) : null}
               <JobStateBadge state={item.state} />
               {/* `UI-PARITY-P0M`: a queued job's place in the dispatcher's order, as the original numbers its queue. */}
               {item.queue_position === undefined ? null : <span data-queue-position={item.queue_position}>№ {item.queue_position} в очереди</span>}
@@ -153,6 +258,12 @@ export function ExecutionQueue({
           );
         })}
       </ol>
+      {/* `UI-B-52`: what a move came to, said where a screen reader hears it; mounted whenever a move is possible. */}
+      {mayReorder || localNote !== null || (reorderNote ?? null) !== null ? (
+        <p role="status" aria-live="polite" className="am-note" data-queue-reorder-note="">
+          {localNote ?? reorderNote ?? ''}
+        </p>
+      ) : null}
       <nav aria-label="Страницы очереди" className={styles.actions}>
         <button type="button" className="am-button am-button--quiet" disabled={onPrevious === null} onClick={onPrevious ?? undefined}>Назад</button>
         <button type="button" className="am-button am-button--quiet" disabled={onNext === null} onClick={onNext ?? undefined}>Далее</button>

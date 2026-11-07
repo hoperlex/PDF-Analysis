@@ -17,7 +17,9 @@
  * **The original's section page, in full** (`UI-A-35`, `UI-A-38`, `UI-A-51`, `UI-A-52`, `UI-A-53`). The row under the title is
  * the original's row of numbers (documents, not started, awaiting a decision, checked, findings), counted over the
  * documents the page holds, with no further request. The cards open with the Σ card «Оптимизация раздела». «Выбрать
- * все» and «Запустить аудит (N)» start the section's documents together, one consent for the batch (`R-151c`); the
+ * все» and «Запустить аудит (N)» start the section's documents together, one consent for the batch (`R-151c`); «Выбрать все»
+ * and «Выбрать не запускавшиеся» choose across every page of the listing in view, read to its end by the server's cursor
+ * (`useListingWalk`), with the count in the button and no cap; the
  * tag filter and «Показать архивные» are the project page's (`R-151e`, `R-151a`); «Добавить документ» leads to the
  * project's upload.
  *
@@ -40,7 +42,9 @@ import type { SectionAuditFilter } from '@/entities/document-version';
 import type { ProjectSection } from '@/entities/project';
 import { findProjectSection, looksLikeProjectUid, projectSectionTitle } from '@/entities/project';
 import { DocumentContext } from '@/widgets/document-context';
-import { ArchivedToggle, BatchBar, TagFilter, selectionSlot, useBatchSelection, useSectionFigures } from '@/widgets/project-sections';
+import { ArchivedToggle, TagFilter, selectionSlot, useBatchSelection, useSectionFigures } from '@/widgets/project-sections';
+import { useListingWalk } from '../model/use-listing-walk';
+import { SectionBatchBar } from './section-batch-bar';
 import styles from './section-detail-page.module.css';
 
 export interface SectionDetailPageProps {
@@ -93,7 +97,11 @@ function SectionDetail({
   });
   const wholeSection = routes.projectSection(projectUid, sectionCode);
   // `R-151c`: the cards a reader chose to start together.
-  const batch = useBatchSelection(useMayActAsExpert());
+  const mayAct = useMayActAsExpert();
+  const batch = useBatchSelection(mayAct);
+  // `UI-A-35`: a listing of more than one page is read to its end for «Выбрать все», but only for a session that can start an audit.
+  const partialList = query.data !== undefined && (cursors.length > 0 || query.data.page.next_cursor !== null);
+  const walk = useListingWalk(mayAct && partialList, { projectUid, sectionCode, auditFilter, includeArchived: showArchived, tag });
   // `UI-A-35`: the server's count of this section over the whole project, used while nothing narrows the listing.
   const exact = useSectionFigures(projectUid);
   const figures = auditFilter === null && !showArchived && tag === null ? exact.data?.get(section.code) : undefined;
@@ -174,7 +182,6 @@ function SectionDetail({
   }
 
   // `UI-A-35`: the original's row of numbers, counted over the documents this page holds.
-  const partialList = query.data !== undefined && (cursors.length > 0 || query.data.page.next_cursor !== null);
   return (
     <PageShell
       title={sectionPageTitle(section)}
@@ -211,7 +218,9 @@ function SectionDetail({
           />
           <TagFilter projectUid={projectUid} tag={tag} onTag={(next) => { setTag(next); setCursors([]); }} />
         </div>
-        {query.data === undefined ? null : <BatchBar projectUid={projectUid} selection={batch} documents={query.data.items} />}
+        {query.data === undefined ? null : (
+          <SectionBatchBar projectUid={projectUid} selection={batch} pageDocuments={query.data.items} walk={walk} />
+        )}
         {body}
       </section>
     </PageShell>
