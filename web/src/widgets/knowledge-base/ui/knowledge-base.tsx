@@ -23,6 +23,10 @@
  * finding's version and is absent while that version is unclassified; the row then carries the
  * project and the document and no third part — no label is made up for the absence.
  *
+ * **A carried decision says where it came from** (`D-344`): a finding's row carries «↩ Перенесено из V#» beside the verdict when the
+ * record names a source (`carried_from`), in both views and in «Все». A proposal's row carries none -- its record has no
+ * `carried_from` yet (`D-335`).
+ *
  * Every row is one **event**, not one finding. A finding the reviewer returned to carries
  * two rows, and `decision_event_count` on each says so — which is the fact a knowledge
  * base is read for: that this question has been asked before.
@@ -39,7 +43,7 @@ import {
 import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { formatInstant, routes } from '@/shared/lib';
-import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, CarriedMark, VERDICT_LABELS } from '@/entities/expert-decision';
 import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
@@ -150,6 +154,12 @@ function FindingRecordItem({ record, kindLabel = false }: { readonly record: Dec
           </span>
         )}
         <span className="am-kb__event">{EVENT_TYPE_LABELS[record.event_type]}</span>
+        {/*
+         * `D-344`, `UI-A-73`: a decision carried over from an earlier version's finding says so, «↩ Перенесено из V2», beside the
+         * verdict; a decision made directly has no `carried_from` and draws nothing. The heading is a flex row, so the mark
+         * needs no spacing of its own.
+         */}
+        {record.carried_from === undefined ? null : <CarriedMark carriedFrom={record.carried_from} />}
       </p>
       <p className="am-kb__meta" data-record-place="true">
         {placeOf(record)}
