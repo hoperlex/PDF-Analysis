@@ -684,6 +684,17 @@ code {
 }
 
 /*
+ * A dump (a JSON receipt, a code block of a report) is wider than a phone and than a narrow column. It scrolls inside
+ * its own box instead of pushing the page sideways; the words in it are not broken, because a hash is read whole.
+ */
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+}
+
+/*
  * `R-18` names identifiers set in body text beside content as a defect a manual test must
  * not meet. Every one of them is inside a `<code>` — the slices already marked them — so
  * the repair is here and needs no markup: an identifier becomes a quiet chip that reads as
@@ -802,6 +813,13 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
+  /*
+   * A field never outgrows its column: a select with a long option, a textarea with a wide cols. `min-width: 0` is the half that
+   * matters in a grid or a flex row: the automatic minimum is the control's own intrinsic width (770 px for the routes select),
+   * and a track or a flex item will not shrink below it, so `max-width: 100%` alone has nothing to resolve against.
+   */
+  min-width: 0;
+  max-width: 100%;
   /* As tall as a button (34px), so a field and its button line up in one row, as in the original. */
   min-height: 34px;
   padding: 5px 10px;
@@ -1714,6 +1732,7 @@ li.am-state .am-state__detail {
 .am-badge {
   display: inline-flex;
   align-items: baseline;
+  max-width: 100%;
   gap: 6px;
   padding: 1px var(--am-gap-sm);
   border-radius: var(--am-radius-pill);
@@ -1723,6 +1742,22 @@ li.am-state .am-state__detail {
   line-height: 1.5;
   white-space: nowrap;
   vertical-align: baseline;
+}
+
+/* A badge that is a link or a button is pressed, so it is a target: 24 px tall at the least (it was 21.3 and 22.5). */
+a.am-badge,
+button.am-badge {
+  align-items: center;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+/* A status with a sentence in it (a reason, a key that is not ready) wraps at a phone width instead of running off it. */
+@media (max-width: 590px) {
+  .am-badge {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 .am-badge--pending,
@@ -2247,6 +2282,7 @@ li.am-state .am-state__detail {
   font-size: var(--am-text-base);
   line-height: var(--am-leading-relaxed);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .am-quotation__anchor {
@@ -2578,6 +2614,8 @@ li.am-state .am-state__detail {
 
 .am-form {
   display: grid;
+  /* One track that may shrink: an `auto` track is as wide as the widest select option (770 px at 390 on the routes form). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap-sm);
   max-width: 44rem;
 }
@@ -2601,6 +2639,9 @@ li.am-state .am-state__detail {
 
 .am-form__field {
   display: grid;
+  /* The same one shrinking track inside a field: its select stays in the column instead of sizing the track to its longest option. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--am-gap-xs);
 }
 
