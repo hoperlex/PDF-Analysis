@@ -352,6 +352,12 @@ from sqlalchemy import Engine, text
 #: ``finding_execution_status``), columns +11 (``audit_run.started_by_user_uid``; ``document.archived_at`` and
 #: ``archived_by_user_uid``; four in each new table), constraints +15 (their keys, references and checks), indexes +4,
 #: triggers the same 241 with a new digest (0051 re-created ``audit_run``'s frozen-column trigger with the starter).
+#: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
+#: PostgreSQL (the project image, stand ``am-lane-c4-pg``) upgraded to ``0058``, down to ``0057`` and up again: the column
+#: ``expert_decision_event.carried_from_decision_id`` (columns +1, to 1589), its foreign key to the table itself and three
+#: checks (the ``dec_`` shape, not its own source, only an accept or a reject: constraints +4, to 1953) and its partial index
+#: (indexes +1, to 465). Relations, triggers, functions, views, extensions, sequences, policies and the state topology are
+#: byte-identical to the ``0057`` seal.
 #: Resealed 2026-11-07 for ``0057_decision_carryover`` (`UI-PARITY-OPT-CARRYOVER`, `UI-B-14`), measured on a throwaway
 #: PostgreSQL (the project image, stand ``am-lane-c3-pg``) upgraded to ``0057``, down to ``0056`` and up again: the column
 #: ``optimisation_proposal_decision.carried_from_decision_id`` (columns +1, to 1588), its foreign key to the table itself and
@@ -371,10 +377,10 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1588, "596e512e5cdeb23548b53bc7d1849014f730446400d4f805a57fc43393e5c9a3"),
+    "columns": (1589, "6d99ac225f555b3ab62c914a1eeff7b911cb0ae66846872b0d26f46e1c10533b"),
     "relations": (148, "2bef8303c7c1cc9481b938e72e8c241fd9b3e391f55d8c3a4fdde713d60e3384"),
-    "constraints": (1949, "7f49914982ae3d08e0b840905e3ac740d36625dead4d151ca21e3ef4eeedb66a"),
-    "indexes": (464, "237cd49f236816c3e422084e3f1a15cd842bc8ee5b1a0110769bdcb6f30aef7c"),
+    "constraints": (1953, "5029d0d1f8ed233ae2ca5cfc629a9393a7ca88fd7267a9c45ce546289d47d65d"),
+    "indexes": (465, "2f698084f43e23e76b955bd503b2b696ed5b2893fba57b1bc3bca48b7e1b0037"),
     "triggers": (246, "d74c3af6c99e6d5fc8f5d06e6ec2f38918b5f8ea6fb5686d5533e5bb6cc1fc36"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),

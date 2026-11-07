@@ -32,9 +32,12 @@ from auditmanager.decisions.carryover import (
     CONFLICT_CARRYOVER_SOURCE_DECISION_NOT_CURRENT,
     CONFLICT_CARRYOVER_TARGET_ALREADY_DECIDED,
     CarriedDecision,
+    CarriedOrigin,
     CarryoverProvenance,
+    carried_origins,
     carry_over_decision,
     carryover_comment,
+    current_verdict_origins,
 )
 from auditmanager.decisions.ledger import decision_events_by_id
 from auditmanager.decisions.projection import current_verdicts
@@ -50,6 +53,7 @@ __all__ = [
     "CONFLICT_CARRYOVER_SOURCE_DECISION_NOT_CURRENT",
     "CONFLICT_CARRYOVER_TARGET_ALREADY_DECIDED",
     "CarriedDecision",
+    "CarriedOrigin",
     "CarryoverProvenance",
     "CurrentVerdict",
     "DECLARED_EVENT_TYPES",
@@ -58,9 +62,11 @@ __all__ = [
     "PC01_EVENT_TYPES",
     "VERDICT_FOR_EVENT",
     "append_decision_under_key",
+    "carried_origins",
     "carry_over_decision",
     "carryover_comment",
     "current_verdict",
+    "current_verdict_origins",
     "current_verdicts",
     "decision_events_by_id",
     "decision_history",

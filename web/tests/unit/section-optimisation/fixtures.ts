@@ -51,6 +51,7 @@ export function acceptedRow(over: Partial<AcceptedOptimisationProposal> = {}): A
     comment: 'Подходит по огнестойкости.',
     actor_label: 'Петрова А.',
     decided_at: '2026-11-06T09:30:00Z',
+    carried_from: null,
     ...over,
   };
 }

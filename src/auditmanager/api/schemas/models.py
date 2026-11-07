@@ -1049,7 +1049,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.38.0"]
+    contract_version: Literal["1.39.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -2250,6 +2250,19 @@ class NormCurrentSnapshot(_Object):
 # --- findings ----------------------------------------------------------------------
 
 
+class DecisionCarriedFrom(_Object):
+    """`UI-A-73` (contract 1.39.0): where a carried decision came from -- the decision of an earlier version's finding
+    that an expert carried over to this finding (`W59-DECISION-CARRYOVER-01`).
+
+    ``decision_id`` is the source decision's own identity and ``finding_uid`` and ``version_uid`` the finding and the
+    version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity."""
+
+    decision_id: DecisionId
+    finding_uid: FindingUid
+    version_uid: VersionUid
+    version_ordinal: Annotated[int, Field(ge=1)]
+
+
 class Evidence(_Object):
     evidence_ordinal: Annotated[int, Field(ge=0)]
     page_number: Annotated[int, Field(ge=1)]
@@ -2350,6 +2363,11 @@ class Finding(_Object):
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
+    #: `UI-A-73` (contract 1.39.0): where the decision that carries ``current_verdict`` came from, when an expert carried
+    #: it over from an earlier version; absent when the verdict was decided directly (and for every verdict decided
+    #: before the field existed).
+    current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class FindingDetail(_Object):
@@ -2387,6 +2405,9 @@ class FindingDetail(_Object):
     current_verdict: Verdict
     latest_decision_id: DecisionId | None = Field(default=None, json_schema_extra=optional_property)
     decision_recorded_at: datetime | None = Field(default=None, json_schema_extra=optional_property)
+    #: `UI-A-73` (contract 1.39.0): as on ``Finding``.
+    current_verdict_carried_from: DecisionCarriedFrom = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
     latest_comment: str | None = Field(default=None, json_schema_extra=optional_property)
     decision_event_count: Annotated[int, Field(ge=0)] = Field(
         default=None, json_schema_extra=optional_property
@@ -2580,6 +2601,9 @@ class DecisionEvent(_Object):
     comment: str | None = Field(default=None, json_schema_extra=optional_property)
     author_label: Annotated[str, Field(min_length=1, max_length=128)]
     recorded_at: datetime
+    #: `UI-A-73` (contract 1.39.0): the decision this event carries over from an earlier version's finding; absent for an
+    #: event an expert made directly (and for every event written before the field existed).
+    carried_from: DecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class AppendDecisionResponse(_Object):
@@ -2628,6 +2652,8 @@ class DecisionRecord(_Object):
     finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
     current_verdict: Verdict
     decision_event_count: Annotated[int, Field(ge=0)]
+    #: `UI-A-73` (contract 1.39.0): as on ``DecisionEvent``.
+    carried_from: DecisionCarriedFrom = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DecisionRecordPage(_Object):
@@ -4537,6 +4563,10 @@ class AcceptedOptimisationProposal(_Object):
     comment: Annotated[str, Field(min_length=1, max_length=2000)] | None
     actor_label: Annotated[str, Field(min_length=1, max_length=254)]
     decided_at: datetime
+    #: `D-335` (contract 1.39.0): as on ``ProposalDecision`` -- ``null`` for an acceptance an expert made directly, the
+    #: source decision (with its pass, version and the version's display ordinal) for one carried over from an earlier
+    #: version's pass.
+    carried_from: ProposalDecisionCarriedFrom | None
 
 
 class AcceptedOptimisationProposalPage(_Object):

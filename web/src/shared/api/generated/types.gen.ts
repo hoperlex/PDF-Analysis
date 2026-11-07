@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.38.0 (OpenAPI 3.1.0)
- *   sha256 7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c
+ *   AuditManager PC-01 API 1.39.0 (OpenAPI 3.1.0)
+ *   sha256 79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.38.0';
+export const CONTRACT_VERSION = '1.39.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c';
+export const CONTRACT_DIGEST = '79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -288,6 +288,7 @@ export const SCHEMA_NAMES = [
   'Cursor',
   'DashboardSummary',
   'DecideOptimisationProposalRequest',
+  'DecisionCarriedFrom',
   'DecisionEvent',
   'DecisionEventPage',
   'DecisionEventType',
@@ -754,10 +755,11 @@ export const SCHEMA_NAMES = [
  *
  * A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
  * locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
- * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number.
+ * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. `carried_from` (`D-335`, contract 1.39.0) is `null` for an acceptance an expert made directly and names the source decision -- with its pass, version and the version's display ordinal -- when the acceptance was carried over from an earlier version's pass (`UI-B-14`).
  */
 export type AcceptedOptimisationProposal = {
   actor_label: string;
+  carried_from: ProposalDecisionCarriedFrom | null;
   comment: string | null;
   currency: string;
   current_unit_price: string;
@@ -3821,10 +3823,25 @@ export type DecideOptimisationProposalRequest = {
   verdict: ProposalVerdict;
 };
 
-/** One appended event. Never updated and never removed. */
+/**
+ * `UI-A-73` (contract 1.39.0): where a carried decision came from -- the decision of an earlier version's finding
+ * that an expert carried over to this finding (`W59-DECISION-CARRYOVER-01`).
+ *
+ * ``decision_id`` is the source decision's own identity and ``finding_uid`` and ``version_uid`` the finding and the
+ * version it was made on. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+ */
+export type DecisionCarriedFrom = {
+  decision_id: DecisionId;
+  finding_uid: FindingUid;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/** One appended event. Never updated and never removed. `carried_from` (`UI-A-73`, contract 1.39.0) names the decision of an earlier version's finding that an expert carried over to this finding (`DecisionCarriedFrom`); it is absent for an event an expert made directly, and for every event written before migration `0058`, whose rendered `comment` still says where it came from. */
 export type DecisionEvent = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
+  carried_from?: DecisionCarriedFrom;
   comment?: string | null;
   decision_id: DecisionId;
   event_type: DecisionEventType;
@@ -3897,10 +3914,11 @@ export type DecisionImportRow = {
   row: number;
 };
 
-/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). */
+/** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
   author_label: string;
+  carried_from?: DecisionCarriedFrom;
   category: FindingCategory;
   comment?: string | null;
   current_verdict: Verdict;
@@ -4093,7 +4111,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.38.0";
+  contract_version: "1.39.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4884,10 +4902,11 @@ export type FailExecutorTaskRequest = {
   reason: string;
 };
 
-/** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. */
+/** A published finding. Every listed finding is grounded: its quotations were verified present at their declared anchors. `current_verdict_carried_from` (`UI-A-73`, contract 1.39.0) names where the decision that carries `current_verdict` came from, when an expert carried it over from an earlier version's finding; it is absent when the verdict was decided directly, was withdrawn, or was carried before migration `0058`. A later verdict an expert gives the finding replaces it, and a comment leaves it standing. */
 export type Finding = {
   category: FindingCategory;
   current_verdict: Verdict;
+  current_verdict_carried_from?: DecisionCarriedFrom;
   decided_severity?: Severity;
   decision_recorded_at?: string | null;
   execution_status?: FindingExecutionStatus;
@@ -4936,10 +4955,11 @@ export type FindingComparison = {
   unavailable_reason: "findings_over_limit" | null;
 };
 
-/** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. */
+/** One finding with its full current-verdict projection. Restates `Finding` rather than composing it with `allOf`: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `Finding` would reject the two properties the sibling branch adds. Both shapes stay closed, and tests/contract/api_v1 asserts this property set stays `Finding`'s plus exactly `latest_comment` and `decision_event_count`. `current_verdict_carried_from` (`UI-A-73`) is as on `Finding`. */
 export type FindingDetail = {
   category: FindingCategory;
   current_verdict: Verdict;
+  current_verdict_carried_from?: DecisionCarriedFrom;
   decided_severity?: Severity;
   decision_event_count?: number;
   decision_recorded_at?: string | null;

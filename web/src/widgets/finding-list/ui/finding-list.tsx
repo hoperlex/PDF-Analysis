@@ -28,7 +28,7 @@ import type { ErrorStateProps } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import type { FindingGroup } from '@/entities/finding';
 import { EXECUTION_STATUS_LABELS, SEVERITY_LABELS, SeverityBadge, countGrouped } from '@/entities/finding';
-import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
 import { findingNumbers, pagesLabel, verdictBucket } from '../model/presentation';
@@ -435,15 +435,19 @@ export function FindingList({
                     <span className="am-finding-row__text">
                       {finding.observation.finding_text}
                     </span>
-                    {finding.decided_severity === undefined ? (
+                    {finding.decided_severity === undefined && finding.current_verdict_carried_from === undefined ? (
                       <VerdictBadge verdict={finding.current_verdict} />
                     ) : (
                       <span className={styles.badges} data-decided-severity={finding.decided_severity}>
                         <VerdictBadge verdict={finding.current_verdict} />
-                        <SeverityBadge
-                          severity={finding.decided_severity}
-                          title="Важность, решённая экспертом"
-                        />
+                        {finding.decided_severity === undefined ? null : (
+                          <SeverityBadge
+                            severity={finding.decided_severity}
+                            title="Важность, решённая экспертом"
+                          />
+                        )}
+                        {/* `UI-A-73`: the verdict was carried over from an earlier version. */}
+                        <CarriedMark carriedFrom={finding.current_verdict_carried_from} />
                       </span>
                     )}
                     {finding.execution_status === undefined ? null : (

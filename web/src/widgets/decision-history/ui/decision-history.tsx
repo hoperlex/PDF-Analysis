@@ -37,7 +37,7 @@ import { DECISION_EVENT_TYPE_VALUES, SEVERITY_VALUES, VERDICT_VALUES } from '@/s
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, LoadingState, NotApplicableState } from '@/shared/ui';
 import { formatInstant } from '@/shared/lib';
-import { VERDICT_LABELS, orderEvents } from '@/entities/expert-decision';
+import { CarriedMark, VERDICT_LABELS, orderEvents } from '@/entities/expert-decision';
 import { SeverityBadge } from '@/entities/finding';
 
 export interface DecisionHistoryProps {
@@ -145,6 +145,17 @@ export function DecisionHistory({ events, isLoading, error }: DecisionHistoryPro
               )}
               <span className="am-history__at"> {formatInstant(event.recorded_at)}</span>
               <span className="am-history__author"> {event.author_label}</span>
+              {/*
+                * `UI-A-73`: an event the expert carried over from an earlier version's finding says so,
+                * «↩ Перенесено из V2». The mark is the server's structured link (`carried_from`); an event
+                * written before it existed has none and reads as made directly.
+                */}
+              {event.carried_from === undefined ? null : (
+                <>
+                  {' '}
+                  <CarriedMark carriedFrom={event.carried_from} />
+                </>
+              )}
             </p>
             {event.comment !== null && event.comment !== undefined ? (
               <p className="am-history__comment" data-comment={event.comment}>

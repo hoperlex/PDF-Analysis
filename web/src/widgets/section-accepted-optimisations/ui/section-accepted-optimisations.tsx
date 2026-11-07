@@ -24,6 +24,7 @@ import { formatInstant, routes } from '@/shared/lib';
 import type { TableColumn } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
+import { CarriedMark } from '@/entities/expert-decision';
 import { formatAmount, formatDecimal, useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
 
 import styles from './section-accepted-optimisations.module.css';
@@ -89,6 +90,13 @@ const COLUMNS: readonly TableColumn<AcceptedOptimisationProposal>[] = [
     cell: (row) => (
       <>
         {row.actor_label}, <time dateTime={row.decided_at}>{formatInstant(row.decided_at)}</time>
+        {/* `D-335`: an acceptance carried over from an earlier version's pass says so, «↩ Перенесено из V2». */}
+        {row.carried_from === null ? null : (
+          <>
+            {' '}
+            <CarriedMark carriedFrom={row.carried_from} />
+          </>
+        )}
         {row.comment === null ? null : <span className={styles.comment}>{row.comment}</span>}
       </>
     ),

@@ -1777,6 +1777,7 @@
       "Cursor",
       "DashboardSummary",
       "DecideOptimisationProposalRequest",
+      "DecisionCarriedFrom",
       "DecisionEvent",
       "DecisionEventPage",
       "DecisionEventType",
@@ -2241,6 +2242,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0057_decision_carryover",
-  "contract_version": "1.38.0"
+  "migration_head": "0058_finding_decision_origin",
+  "contract_version": "1.39.0"
 }

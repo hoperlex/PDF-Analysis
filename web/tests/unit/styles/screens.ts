@@ -191,7 +191,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.38.0',
+    contract_version: '1.39.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -2881,6 +2881,22 @@ export function screens(): Screen[] {
     const client = newClient();
     shape.seedClient?.(client);
     add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
+  }
+  // `UI-A-73`: «↩ Перенесено из V2» beside the verdict of a finding carried over from an earlier version, in the list and
+  // in the table. Also at the very end, for the reason above.
+  const carriedFrom = {
+    decision_id: 'dec_01J9ZQ8K7NHVXW3T2R5M6P4Q9A', finding_uid: 'fnd_01J9ZQ8K7NHVXW3T2R5M6P4Q9B',
+    version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q9C', version_ordinal: 2,
+  };
+  for (const view of ['list', 'table'] as const) {
+    add(`FindingList ${view} with a carried verdict`, render(createElement(FindingList, {
+      groups: groupByCategory(FINDINGS.map((finding, index) => index === 0
+        ? { ...finding, current_verdict: 'accepted' as const, current_verdict_carried_from: carriedFrom }
+        : { ...finding, current_verdict: 'rejected' as const })),
+      selectedFindingUid: null,
+      onSelect: noop,
+      view,
+    })));
   }
   return out;
 }
