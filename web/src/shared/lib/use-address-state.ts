@@ -44,8 +44,11 @@ export function useAddressState<T>(
     const query = write(base, next).toString();
     if (query === base.toString()) return;
     const href = query === '' ? window.location.pathname : `${window.location.pathname}?${query}`;
-    if (how === 'push') window.history.pushState(window.history.state, '', href);
-    else window.history.replaceState(window.history.state, '', href);
+    // The data is `null`, and Next copies its own history state into the new entry. Handed `window.history.state` (which carries
+    // Next's `__NA` marker), Next's patch of these two functions passes the call straight through with no sync, and
+    // `useSearchParams` never follows: the URL changed and the screen did not (D-341; the test holds it).
+    if (how === 'push') window.history.pushState(null, '', href);
+    else window.history.replaceState(null, '', href);
   };
   return [value, go] as const;
 }

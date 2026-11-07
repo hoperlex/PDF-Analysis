@@ -57,10 +57,25 @@ async function checkedLabel(page, label, wanted = true) {
   if (found.value.checked !== wanted) await page.click('label', { text: label });
   assert.equal((await page.evaluate(expression)).checked, wanted, label);
 }
+// `UI-B-85`/`UI-B-93`: «Пара стадий» and «Запуск сравнения» stand on «Сопоставление листов», «Изменения проекта» and «Журнал» only, not on
+// «Документация», where a run opens, so every phase opens its tab before it chooses the pair or the run.
 async function tab(page, name) { await page.click(`[data-stage-tab="${name}"]`); await visible(page, `#stage-panel-${name}`); }
 async function choosePair(page, pair) { await visible(page, '[data-stage-pair-select]'); await page.select('[data-stage-pair-select]', { optionValue: pair }); }
 
+// `UI-B-85`: the upload panel stands closed under «Загрузить проекты» at the right of the steps bar (first step only), so
+// the file input and «Загрузить новый набор» have a zero box until the bar's button opens it.
+async function openUploadPanel(page) {
+  await visible(page, '[data-stage-upload-open]');
+  const hidden = await page.evaluate("document.querySelector('#stage-upload-panel')?.hidden === true");
+  if (hidden) {
+    await page.click('[data-stage-upload-open]');
+    await page.settle({ settleMs: 150, timeoutMs: 700 });
+  }
+  await visible(page, '#stage-upload-panel');
+}
+
 async function upload(page, action, state, repositoryRoot) {
+  await openUploadPanel(page);
   const documents = []; let candidateId;
   for (const source of action.documents) {
     const after = page.exchanges().length;
@@ -68,9 +83,12 @@ async function upload(page, action, state, repositoryRoot) {
     await click(page, 'Загрузить новый набор');
     const made = (await observed(page, 'POST', `/projects/${state.project_uid}/stage-uploads`, { after })).value;
     id(made.upload_id, 'stu');
-    const candidate = (await observed(page, 'GET', `/stage-uploads/${made.upload_id}`, {
-      after, accept: (value) => value?.candidates?.some((item) => item.state === 'proposed'),
-    })).value.candidates.find((item) => item.state === 'proposed');
+    // The panel reads the project's list of sets (`listStageUploads`) and draws each set's candidates from it; it never asks for
+    // the one set (`getStageUpload` is only behind «Продолжить передачу»). The completed file's candidate is in the first list read.
+    const listed = (await observed(page, 'GET', `/projects/${state.project_uid}/stage-uploads`, {
+      after, accept: (value) => value?.items?.some((item) => item.upload_id === made.upload_id && item.candidates?.some((c) => c.state === 'proposed')),
+    })).value;
+    const candidate = listed.items.find((item) => item.upload_id === made.upload_id).candidates.find((item) => item.state === 'proposed');
     id(candidate.candidate_id, 'suc');
     candidateId = candidate.candidate_id;
     const scope = 'article:has(select)';
@@ -92,6 +110,10 @@ async function assembly(page, state) {
   await page.click('summary', { text: 'Создать сборку Р и связать со стадией П' });
   const scope = 'details:has(input[maxlength="200"])';
   const old = sources.find((s) => s.stage === 'P');
+  // The form reads the project's documents only once it is opened (`enabled: open`), so its options come after the click.
+  const offered = await page.waitFor(`document.querySelector(${JSON.stringify(`${scope} select option[value="${old.document_uid}"]`)}) ? true : null`,
+    { boundMs: 60000, what: 'the stage P document among the options of the assembly form' });
+  assert.ok(offered.ok, 'the assembly form never offered the uploaded stage P document');
   await page.select(scope, { label: 'Документ П', optionValue: old.document_uid });
   await page.fill(scope, 'SP-1 · Р1 + Р2 + Р3', { label: 'Название сборки' });
   const checks = await page.evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(scope + ' fieldset input[type="checkbox"]')})).length`);
@@ -104,12 +126,31 @@ async function assembly(page, state) {
   await click(page, 'Подтвердить пару П ↔ сборка Р', scope + ' button');
   const pair = (await observed(page, 'POST', `/projects/${state.project_uid}/stage-pairs`, { after })).value;
   id(pair.pair_id, 'stp'); assert.equal(pair.assembly_id, made.assembly_id);
-  await choosePair(page, pair.pair_id);
+  // The pair is not chosen here: every later phase opens a tab and chooses it itself, and opening «Сопоставление листов» now would
+  // read the sheets before the worker has profiled the pages (`sheet-passports` answers 503 `comparison_stage_profiles`).
   return { cmp_stage_pair_id: pair.pair_id, cmp_stage_assembly_id: made.assembly_id };
 }
 
+// The sheet reads answer 503 `dependency_unavailable` (`comparison_stage_profiles`, retryable) until every page of both stages has a
+// ready profile, and the harness counts every error answer a finding. So the first phase that opens the sheets waits for the profile
+// step of the four uploaded documents on the overview, which answers 200 whatever the worker has done.
+async function waitStageProfiles(page, state) {
+  const wanted = state.cmp_stage_documents.map((item) => item.document_uid);
+  const read = `fetch('/bff/v1/projects/${state.project_uid}/comparison-overview').then((r) => r.json()).then((o) => ${JSON.stringify(wanted)}.map((uid) => {
+    const set = (o.sets || []).find((x) => x.document_uid === uid);
+    const step = set ? (set.steps.find((st) => st.step === 'profile') || {}) : {};
+    return set ? step.state + ' ' + JSON.stringify(step.counts || {}) : 'absent'; }))`;
+  const waited = await page.waitFor(`(${read}).then((states) => states.every((value) => value.startsWith('done')) ? true : null)`,
+    { boundMs: 120000, pollMs: 2000, what: 'the page profiles of the four stage documents (overview, step profile)' });
+  if (!waited.ok) {
+    // Say what the overview did read, so the finding names the state and not only the timeout.
+    assert.fail(`the stage documents' page profiles were not ready after ${waited.waitedMs} ms; the overview's profile step reads: ${JSON.stringify(await page.evaluate(read))}`);
+  }
+}
+
 async function swappedMap(page, state) {
-  await choosePair(page, state.cmp_stage_pair_id); await tab(page, 'sheets');
+  await waitStageProfiles(page, state);
+  await tab(page, 'sheets'); await choosePair(page, state.cmp_stage_pair_id);
   await click(page, 'Принять видимые точные подсказки');
   const mapScope = '#stage-panel-sheets';
   await visible(page, '[data-stage-map-row="1"]');
@@ -142,6 +183,7 @@ async function swappedMap(page, state) {
 }
 
 async function startRun(page, state, { restart = false } = {}) {
+  await tab(page, 'sheets');
   await choosePair(page, state.cmp_stage_pair_id);
   await checkedLabel(page, 'С описанием изменений ИИ', true);
   if (restart) await checkedLabel(page, 'Пересчитать заново', true);
@@ -194,6 +236,7 @@ async function fullRun(page, state) {
 }
 
 async function repairUndo(page, state) {
+  await tab(page, 'sheets');
   await choosePair(page, state.cmp_stage_pair_id);
   await page.select('[data-stage-run-select]', { optionValue: state.cmp_stage_initial_run_id });
   const after = page.exchanges().length;
@@ -218,9 +261,9 @@ async function repairUndo(page, state) {
 }
 
 async function verdict(page, state) {
+  await tab(page, 'changes');
   await choosePair(page, state.cmp_stage_pair_id);
   await page.select('[data-stage-run-select]', { optionValue: state.cmp_stage_run_id });
-  await tab(page, 'changes');
   const cards = (await observed(page, 'GET', `/stage-chain-runs/${state.cmp_stage_run_id}/cards`)).value;
   const card = cards.items.find((c) => c.class_name !== 'SERVICE_STRUCTURE');
   assert.ok(card && card.evidence.length > 0, 'no evidence-bound editable card');
@@ -240,9 +283,9 @@ async function verdict(page, state) {
 }
 
 async function journal(page, state) {
+  await tab(page, 'journal');
   await choosePair(page, state.cmp_stage_pair_id);
   await page.select('[data-stage-run-select]', { optionValue: state.cmp_stage_run_id });
-  await tab(page, 'journal');
   for (const grouping of ['designation','section','system']) {
     const after = page.exchanges().length;
     await page.select('#stage-panel-journal', { label: 'Группировать', optionValue: grouping });
@@ -262,9 +305,9 @@ async function journal(page, state) {
 }
 
 async function promote(page, state) {
+  await tab(page, 'sheets');
   await choosePair(page, state.cmp_stage_pair_id);
   await page.select('[data-stage-run-select]', { optionValue: state.cmp_stage_run_id });
-  await tab(page, 'sheets');
   await visible(page, 'details:has([data-stage-masked-fragment]) > summary');
   await page.click('details:has([data-stage-masked-fragment]) > summary');
   await visible(page, '[data-stage-masked-fragment]');

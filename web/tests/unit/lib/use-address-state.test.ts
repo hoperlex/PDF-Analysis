@@ -8,7 +8,11 @@
  *   - the value is `read` over the router's params, and `initial` only where there is no router;
  *   - a write goes over the address AS IT IS NOW and carries the parameters it does not own;
  *   - `push` adds a history entry, `replace` rewrites the current one, and the default is `push`;
- *   - a write that changes nothing touches the history not at all.
+ *   - a write that changes nothing touches the history not at all;
+ *   - the data handed to the history call is `null`, never `window.history.state` (D-341): Next patches `pushState` and
+ *     `replaceState` so that `useSearchParams` follows a write, but passes straight through, with no sync, a call whose
+ *     data carries its own marker (`__NA` / `_N`) — and the history state always does. With the state handed over, the URL
+ *     bar changed and the screen did not (browser journey, 2026-11-07: a tab, a pair, a set and the queue's period).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,16 +33,19 @@ const write = (params: Pick<URLSearchParams, 'toString'>, next: Shape): URLSearc
 };
 
 let calls: string[] = [];
+let states: unknown[] = [];
 
 beforeEach(() => {
   calls = [];
+  states = [];
   router.params = new URLSearchParams('');
   vi.stubGlobal('window', {
     location: { search: '', pathname: '/screen' },
     history: {
-      state: { marker: 1 },
-      pushState: (_state: unknown, _title: string, href: string) => calls.push(`push ${href}`),
-      replaceState: (_state: unknown, _title: string, href: string) => calls.push(`replace ${href}`),
+      // What Next leaves in the real history state: its own marker.
+      state: { marker: 1, __NA: true },
+      pushState: (state: unknown, _title: string, href: string) => { states.push(state); calls.push(`push ${href}`); },
+      replaceState: (state: unknown, _title: string, href: string) => { states.push(state); calls.push(`replace ${href}`); },
     },
   });
 });
@@ -66,12 +73,20 @@ describe('reading', () => {
 });
 
 describe('writing', () => {
-  it('pushes by default and replaces on request, keeping the history state', () => {
+  it('pushes by default and replaces on request', () => {
     const [, go] = useAddressState(read, write);
     go({ tab: 'second' });
     go({ tab: 'second' }, 'push');
     go({ tab: 'third' }, 'replace');
     expect(calls).toEqual(['push /screen?tab=second', 'push /screen?tab=second', 'replace /screen?tab=third']);
+  });
+
+  it('hands the history call null data, never the history state, so Next syncs useSearchParams (D-341)', () => {
+    const [, go] = useAddressState(read, write);
+    go({ tab: 'second' });
+    go({ tab: 'third' }, 'replace');
+    expect(calls).toHaveLength(2);
+    expect(states).toEqual([null, null]);
   });
 
   it('writes over the address as it is when the handler runs, and carries what it does not own', () => {

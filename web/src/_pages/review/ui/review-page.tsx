@@ -102,7 +102,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     const query = params.toString();
     // Next keeps `usePathname`/`useSearchParams` in step with the native history API, so the address is
     // written without the app router -- and the page renders where no router is mounted (a static render).
-    window.history.replaceState(window.history.state, '', query === '' ? pathname : `${pathname}?${query}`);
+    // The data is `null`: Next's patch skips the sync for a state that carries its own marker, which is what
+    // `window.history.state` is, and the filters, the view and the finding would then never follow the URL
+    // (D-341; `tests/unit/review/review-address-sync.test.ts`).
+    window.history.replaceState(null, '', query === '' ? pathname : `${pathname}?${query}`);
   };
   // Choosing a finding writes it to the address; turning a page inside the same finding does not.
   const setSelection = (next: ReviewSelection | null | ((current: ReviewSelection | null) => ReviewSelection | null)) => {
