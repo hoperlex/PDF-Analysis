@@ -14,7 +14,6 @@
 
 import type { ProjectSection, ProjectUid } from '@/shared/api';
 import { projectSectionTitle, sectionsInStructureOrder, useProject } from '@/entities/project';
-import { PROJECT_SELECT_ID, SECTION_SELECT_ID } from '@/widgets/section-specification';
 
 import styles from './section-optimisation-page.module.css';
 
@@ -67,8 +66,10 @@ export function SectionFilterBar({ sectionCode, projectUid, options, onSection, 
     <form className={styles.filterBar} aria-label="Раздел и проект" onSubmit={(event) => event.preventDefault()} data-section-filter-bar="">
       <label className={styles.filterField}>
         <span>Раздел</span>
+        {/* The literal id is what the PC-01 journey's write half addresses (`section-form7-without-members`), and its
+            conformance test finds the handle by this text in web/src; `SECTION_SELECT_ID` names the same value. */}
         <select
-          id={SECTION_SELECT_ID}
+          id="section-specification-section"
           value={sectionCode}
           onChange={(event) => onSection(event.target.value as ProjectSection)}
           data-section-picker={sectionsInStructureOrder().length}
@@ -83,7 +84,7 @@ export function SectionFilterBar({ sectionCode, projectUid, options, onSection, 
       <label className={styles.filterField}>
         <span>Проект</span>
         <select
-          id={PROJECT_SELECT_ID}
+          id="section-specification-project"
           value={projectUid ?? ''}
           onChange={(event) => onProject(event.target.value === '' ? null : (event.target.value as ProjectUid))}
           data-section-project-filter={options.length}

@@ -5362,6 +5362,13 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
           'pressing a row action: «Отменить прогон», «Повторный аудит» or the priority form. `intent` is a `useState` and one ' +
           'static pass presses nothing. «Исполнители» and «Нормы» confirm the same way, behind their own press.',
       },
+      {
+        text: 'Возобновить выдачу',
+        why:
+          'The queue header\'s switch (`queue-page.tsx`) reads «Возобновить выдачу» only while the dispatcher is paused, and ' +
+          'the journey reaches that state by pressing «Приостановить выдачу» first (lane V2, 2026-11-08, presses both by ' +
+          'their words). The static seed draws the unpaused queue, so one pass carries only «Приостановить выдачу».',
+      },
     ];
     const excused = new Set(PRESSED_BEFORE_IT_EXISTS.map((entry) => entry.text));
     const missing = [...new Set(texts)].filter((text) => !carried(text));
