@@ -66,7 +66,11 @@ export function AdminUsersPage({ initialUserUid = null }: AdminUsersPageProps) {
           id="user-detail"
           aria-label="Учётная запись"
           tabIndex={-1}
-          onKeyDown={(event) => { if (event.key === 'Escape' && selected !== null) close(); }}
+          onKeyDown={(event) => {
+            // Escape closes the card, but not while a field has the focus: there it is the field's, and a half-typed name is not lost to it.
+            const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
+            if (event.key === 'Escape' && selected !== null && !typing) close();
+          }}
         >
           {selected === null ? (
             <p className="am-note" data-user-detail-empty="">
