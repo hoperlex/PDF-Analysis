@@ -52,29 +52,32 @@ function PresetCard({
   const blocker = presetBlocker(preset, choices);
   const archived = preset.state === 'archived';
   return (
-    <li className="am-state" data-preset-state={preset.state}>
-      <p className="am-state__title">
-        <strong data-preset-name>{preset.name}</strong> · {PRESET_STATE_LABELS[preset.state]} · версия{' '}
-        {preset.revision_no}
-      </p>
-      <div className="am-state__detail">
+    <li className={`am-state ${styles.card}`} data-preset-state={preset.state}>
+      {/* The name, its state and version, and when it was changed, on one line; what follows is one line each. */}
+      <div className={styles.head}>
+        <p className={`am-state__title ${styles.title}`}>
+          <strong data-preset-name>{preset.name}</strong> · {PRESET_STATE_LABELS[preset.state]} · версия{' '}
+          {preset.revision_no}
+        </p>
+        <p className={styles.when}>
+          {archived ? 'Убран в архив' : 'Изменён'} {formatInstant(preset.revised_at)}
+        </p>
+      </div>
+      <div className={`am-state__detail ${styles.detail}`}>
         <p data-preset-executor>Исполнитель: {executorPhrase(presetExecutor(preset, choices))}</p>
         {archived || blocker === null ? null : (
           <p data-preset-blocker role="status">
             Сейчас этим пресетом прогон не запустить: {blocker}.
           </p>
         )}
-        <p>
-          {archived ? 'Убран в архив' : 'Изменён'} {formatInstant(preset.revised_at)}
-        </p>
         {canManage && !archived ? (
-          <>
-            <details data-preset-revise>
+          <div className={styles.actions}>
+            <details data-preset-revise className={styles.revise}>
               <summary>Изменить</summary>
               <PresetForm preset={preset} choices={choices} />
             </details>
             <ArchivePresetControl preset={preset} />
-          </>
+          </div>
         ) : null}
       </div>
     </li>
@@ -149,18 +152,24 @@ export function AnalysisPresets({ roles }: AnalysisPresetsProps) {
 
   return (
     <section className="am-section" aria-label="Пресеты запуска" data-analysis-presets>
-      <h2>Пресеты запуска</h2>
-      <p className="am-note">
-        Пресет — сохранённый выбор того, как запускается прогон: название и исполнитель. Эксперт выбирает пресет при
-        запуске вместо того, чтобы выбирать исполнителя вручную; прогон идёт на исполнителе пресета и помнит, какой
-        версией пресета он запущен. Предел стоимости прогона задаётся на стенде один для всех прогонов и в пресет не
-        входит.
-      </p>
-      <p>
-        <button className="am-button am-button--quiet" type="button" onClick={() => void presets.refetch()}>
+      <div className={styles.bar}>
+        <h2 className={styles.heading}>Пресеты запуска</h2>
+        <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => void presets.refetch()}>
           Обновить пресеты
         </button>
+      </div>
+      <p className={styles.lead}>
+        Пресет — сохранённый выбор исполнителя для прогона: название и исполнитель. Эксперт выбирает его при запуске.
       </p>
+      <details className={styles.about} data-preset-about>
+        <summary>Что входит в пресет и что нет</summary>
+        <p className="am-note">
+          Пресет — сохранённый выбор того, как запускается прогон: название и исполнитель. Эксперт выбирает пресет при
+          запуске вместо того, чтобы выбирать исполнителя вручную; прогон идёт на исполнителе пресета и помнит, какой
+          версией пресета он запущен. Предел стоимости прогона задаётся на стенде один для всех прогонов и в пресет не
+          входит.
+        </p>
+      </details>
       {body}
     </section>
   );

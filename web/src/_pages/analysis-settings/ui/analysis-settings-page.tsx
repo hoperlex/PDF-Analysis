@@ -31,7 +31,7 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
   return (
     <PageShell
       title="Настройки анализа"
-      subtitle="Профиль анализа каждого раздела: с ним сервер выполняет прогон версии, раздел которой подтвердил эксперт. Профили экран только показывает — изменить их здесь нельзя. Пресеты запуска — сохранённый выбор исполнителя для прогона."
+      subtitle="Профиль анализа каждого раздела, с которым сервер выполняет прогон, и пресеты запуска. Профили здесь только показываются, изменить их нельзя."
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
       <div className={styles.stack}>

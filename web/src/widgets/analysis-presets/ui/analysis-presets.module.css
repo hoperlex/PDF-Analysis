@@ -4,3 +4,70 @@
   padding: 0;
   list-style: none;
 }
+
+/* The heading and its refresh on one line. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--am-text-lg);
+}
+
+.lead {
+  margin: var(--am-gap-xs) 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.about {
+  margin: 0 0 var(--am-gap-sm);
+}
+
+/* A preset: name, state and version on the left, the date of the change on the right, then a line each. */
+.card {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--am-gap);
+}
+
+.title {
+  min-width: 0;
+}
+
+.when {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.detail {
+  margin-top: 0;
+}
+
+.detail p {
+  margin: 0 0 var(--am-gap-xs);
+}
+
+/* «Изменить» and «В архив» side by side; an opened form takes its own width and pushes «В архив» under it. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.revise {
+  flex: 0 1 auto;
+}

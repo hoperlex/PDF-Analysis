@@ -27,6 +27,12 @@ export interface AnalysisProfileTableProps {
   readonly items: readonly AnalysisProfileListItem[];
 }
 
+/** A draft still waits for an expert's review, so it is amber; a reviewed one is green; anything else is inert. */
+const STATUS_TONES: Readonly<Record<string, string>> = {
+  draft: 'am-badge--degraded',
+  reviewed: 'am-badge--ok',
+};
+
 function ProfileDetails({ profile }: { readonly profile: AnalysisProfileSummary }) {
   const { source } = profile;
   return (
@@ -77,7 +83,9 @@ function SectionRow({ item }: { readonly item: AnalysisProfileListItem }) {
       ) : (
         <>
           <td className={styles.cell}>версия {profile.profile_version}</td>
-          <td className={styles.cell} data-profile-status={profile.status}>{analysisProfileStatusLabel(profile.status)}</td>
+          <td className={styles.cell} data-profile-status={profile.status}>
+            <span className={`am-badge ${STATUS_TONES[profile.status] ?? 'am-badge--inert'}`}>{analysisProfileStatusLabel(profile.status)}</span>
+          </td>
           <td className={styles.cell}><code title={profile.prompt_bundle_sha256}>{shortDigest(profile.prompt_bundle_sha256)}</code></td>
           <td className={styles.cell}><ProfileDetails profile={profile} /></td>
         </>
@@ -87,22 +95,32 @@ function SectionRow({ item }: { readonly item: AnalysisProfileListItem }) {
 }
 
 export function AnalysisProfileTable({ items }: AnalysisProfileTableProps) {
+  const withProfile = items.filter((item) => item.profile !== null);
+  const drafts = withProfile.filter((item) => item.profile?.status === 'draft').length;
   return (
-    <div className={styles.frame}>
-      <table className={styles.table} aria-label="Профили анализа по разделам">
-        <thead>
-          <tr>
-            <th className={styles.cell} scope="col">Раздел</th>
-            <th className={styles.cell} scope="col">Профиль</th>
-            <th className={styles.cell} scope="col">Состояние</th>
-            <th className={styles.cell} scope="col">Хэш набора подсказок</th>
-            <th className={styles.cell} scope="col">Подробнее</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => <SectionRow key={item.section_code} item={item} />)}
-        </tbody>
-      </table>
-    </div>
+    <section aria-labelledby="analysis-profiles-heading" data-analysis-profiles={items.length}>
+      <h2 id="analysis-profiles-heading" className={styles.heading}>Профили по разделам</h2>
+      <p role="status" className={styles.count} data-analysis-profiles-count={withProfile.length}>
+        Разделов: {items.length}, с профилем: {withProfile.length}
+        {drafts === 0 ? '' : `, из них черновиков: ${drafts}`}.
+      </p>
+      {/* A table wider than its box scrolls inside it, and Tab reaches the box. */}
+      <div className={styles.frame} role="region" aria-label="Профили анализа по разделам, таблица" tabIndex={0}>
+        <table className={styles.table} aria-label="Профили анализа по разделам">
+          <thead>
+            <tr>
+              <th className={styles.cell} scope="col">Раздел</th>
+              <th className={styles.cell} scope="col">Профиль</th>
+              <th className={styles.cell} scope="col">Состояние</th>
+              <th className={styles.cell} scope="col">Хэш набора подсказок</th>
+              <th className={styles.cell} scope="col">Источник и хэши</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => <SectionRow key={item.section_code} item={item} />)}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
