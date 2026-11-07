@@ -1789,6 +1789,7 @@
       "DecisionRecord",
       "DecisionRecordPage",
       "DiffHunk",
+      "DocumentActiveRun",
       "DocumentAudit",
       "DocumentAuditCounts",
       "DocumentTagCount",
@@ -2243,5 +2244,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0058_finding_decision_origin",
-  "contract_version": "1.39.0"
+  "contract_version": "1.40.0"
 }

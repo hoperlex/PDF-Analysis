@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.39.0 (OpenAPI 3.1.0)
- *   sha256 79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116
+ *   AuditManager PC-01 API 1.40.0 (OpenAPI 3.1.0)
+ *   sha256 86aa35c0623ccc61e1cb678c34f21a811051bb02b1fcea7fe91070876d101895
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -3335,7 +3335,7 @@ export type GetRunNormVerificationResult = NormVerificationReport;
 /**
  * Read run state and per-stage state.
  *
- * The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state.
+ * The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state. `estimated_finish_at` (`UI-A-65`, contract 1.40.0) is the same estimate the queue shows for the run's job, present only while the run is being worked on.
  */
 export type GetRunStatusInput = {
   /** Path parameters, substituted into `/runs/{run_id}`. */
@@ -4566,7 +4566,7 @@ export type ListDocumentTagsResult = DocumentTagList;
  *
  * An unknown project is `404`, never an empty page: "this project has nothing in it yet" is a different answer from "there is no such project".
  *
- * `UI-PARITY-DOC-AUDIT` (contract 1.34.0): each item carries `audit`, the audit state of the version it shows (`DocumentAudit`), read for the page in one statement and never one request per document. No other operation that returns a `DocumentVersion` carries it. The optional `audit_state` filter and the `order` parameter are applied by the server to the whole listing before it is paged.
+ * `UI-PARITY-DOC-AUDIT` (contract 1.34.0): each item carries `audit`, the audit state of the version it shows (`DocumentAudit`), read for the page in one statement and never one request per document. No other operation that returns a `DocumentVersion` carries it. The optional `audit_state` filter and the `order` parameter are applied by the server to the whole listing before it is paged. `UI-A-47` (contract 1.40.0): `audit.active_run` names the run of the version that is in flight, read in the same statement.
  */
 export type ListDocumentsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents`. */
@@ -4891,7 +4891,7 @@ export type ListOptimisationPassesResult = OptimisationPassList;
 /**
  * List Optimisation Proposals
  *
- * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`. `UI-B-07` (contract 1.40.0): each proposal carries `saving_percent`, the percent of the current unit price it saves.
  */
 export type ListOptimisationProposalsInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/proposals`. */

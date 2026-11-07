@@ -1090,6 +1090,17 @@ The migration's downgrade refuses while a carried decision exists. No counts wer
 `SectionSpecification.row_count` and `AcceptedOptimisationProposalPage.total` already are the server's figures for «Форма 7 · N»
 and «Принято N».
 
+`UI-PARITY-AUDIT-STATE` (contract `1.40.0`, no migration, no new operation) gives three screens the server data they lacked.
+`DocumentAudit.active_run` (`UI-A-47`) is the version's run in flight -- its latest run of the standard analysis in state `queued`,
+`running` or `validating`, in the result run's order -- read by `DocumentAuditReadModel.audits` in the same statement as the
+audit and rendered by `listDocuments` only; it changes none of the four audit words and the counters never read it, and a run
+of an AR v3 group is never an active run (as it is never a result). `RunStatus.estimated_finish_at` (`UI-A-65` / `UI-B-45`) is
+the queue item's estimate, from the one function `execution.eta.job_estimated_finish` (the queue calls it too; `run_estimated_finish`
+reads the same four facts for one run), present only while the run's job is leased or running and has started.
+`OptimisationProposal.saving_percent` (`UI-B-07`) is `(current - proposed) / current * 100` over the two stored unit prices, exact
+and rounded half up to two decimals, computed by `saving_percent_for` beside `saving_for`; the quantity cancels, so it exists where
+`saving` is `null`. Each of the three is optional and absent when it has nothing to say; the one new schema is `DocumentActiveRun`.
+
 `UI-PARITY-FINDING-ORIGIN` (contract `1.39.0`, migration `0058_finding_decision_origin`, no new operation) gives a carried finding
 decision a structured source (`UI-A-73`, the original's «↩ Перенесено из V1»). The new nullable
 `expert_decision_event.carried_from_decision_id` (foreign key to the table itself, `dec_` shape, not itself, only an `accept` or a

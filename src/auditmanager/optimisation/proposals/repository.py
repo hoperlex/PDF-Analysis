@@ -33,7 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..matching import canonical_amount
-from .generator import ProposalDraft
+from .generator import ProposalDraft, saving_percent_for
 from .identity import OptimisationPassId, OptimisationProposalId, ProposalDecisionId
 from .policy import DECISION_PENDING, VERDICT_REVOKE, VERDICTS
 
@@ -322,6 +322,14 @@ class OptimisationProposalRecord:
         if self.current_decision is None or self.current_decision.verdict == VERDICT_REVOKE:
             return DECISION_PENDING
         return self.current_decision.verdict
+
+    @property
+    def saving_percent(self) -> Decimal | None:
+        """`UI-B-07`: the percent the proposed unit price is below the current one -- :func:`saving_percent_for` of
+        the two stored prices, nothing else read, so it cannot disagree with them."""
+        return saving_percent_for(
+            current_unit_price=self.current_unit_price, proposed_unit_price=self.proposed_unit_price
+        )
 
 
 def _counts(raw: Any) -> dict[str, int]:

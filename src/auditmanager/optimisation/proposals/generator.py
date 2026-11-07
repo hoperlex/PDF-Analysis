@@ -97,6 +97,7 @@ __all__ = [
     "head_word",
     "name_similarity",
     "saving_for",
+    "saving_percent_for",
     "vendor_key",
 ]
 
@@ -190,6 +191,26 @@ def saving_for(
     if quantity is None:
         return None
     return (current_unit_price - proposed_unit_price) * quantity
+
+
+def saving_percent_for(*, current_unit_price: Decimal, proposed_unit_price: Decimal) -> Decimal | None:
+    """How much cheaper the proposed unit price is than the current one, in percent of the current unit price (`UI-B-07`).
+
+    ``(current − proposed) ÷ current × 100`` computed exactly (rational arithmetic, no float, no context
+    precision) and rounded **half up to two decimals** -- the one place a figure of a proposal is rounded, because a
+    third is not a decimal and a percent is read to the hundredth. It is the share the ``saving`` is of the cost at
+    the current price, ``saving ÷ (current × quantity)``, in which the quantity cancels: so it does not wait for a
+    numeric quantity and is present where ``saving`` is ``None``. ``None`` only when the current unit price is zero
+    (no base to be a share of). A proposed price above the current one is refused, not turned into a negative
+    percent: a proposal is stored only for a strictly cheaper position (migration ``0027``).
+    """
+    if proposed_unit_price > current_unit_price:
+        raise ValueError("a proposal's unit price is never above the current one")
+    if current_unit_price == 0:
+        return None
+    share = Fraction(current_unit_price - proposed_unit_price) * 100 / Fraction(current_unit_price)
+    hundredths = (share * 100 + Fraction(1, 2)).__floor__()
+    return Decimal(hundredths).scaleb(-2)
 
 
 # --- records ------------------------------------------------------------------------------

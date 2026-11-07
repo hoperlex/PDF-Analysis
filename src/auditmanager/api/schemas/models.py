@@ -1049,7 +1049,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.39.0"]
+    contract_version: Literal["1.40.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1264,6 +1264,19 @@ class VersionUploadKind(str, enum.Enum):
     COMPARISON_PDF = "comparison_pdf"
 
 
+class DocumentActiveRun(_Object):
+    """`UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
+
+    `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and
+    a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is
+    never the version's result). No progress figure is carried: the run reports its stages, and a figure of
+    «пакет n/m» would need a plan of its own (`D-345`).
+    """
+
+    run_id: RunId
+    state: Literal["queued", "running", "validating"]
+
+
 class DocumentAudit(_Object):
     """The audit of one version, as `listDocuments` shows it on each document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
 
@@ -1283,6 +1296,11 @@ class DocumentAudit(_Object):
     `finding_count` is the number of published findings of the result run and `undecided_finding_count` the number of
     those still undecided; both are zero when there is no result run. Optimisation proposals are not part of any
     figure (`R-150u`).
+
+    `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard
+    analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none
+    is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still
+    `not_run`, and a `checked` one with a re-run in flight is still `checked`.
     """
 
     state: Literal["not_run", "clean", "awaiting_decision", "checked"]
@@ -1291,6 +1309,7 @@ class DocumentAudit(_Object):
     result_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     finding_count: Annotated[int, Field(ge=0)]
     undecided_finding_count: Annotated[int, Field(ge=0)]
+    active_run: DocumentActiveRun = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class DocumentVersion(_Object):
@@ -1788,6 +1807,11 @@ class RunStatus(_Object):
     ar_v3_group_id: ArV3RunGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     ar_v3_scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
+    #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule of
+    #: `ExecutionQueueItem.estimated_finish_at` (`R-151u`) and by the same function -- the job's first attempt plus the
+    #: median duration of similar recent runs. Absent while the run's job is not leased or running, before its first
+    #: attempt, and without enough similar history; never invented.
+    estimated_finish_at: datetime = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class RunStatusPage(_Object):
@@ -4284,6 +4308,8 @@ ProposalDecisionId = TypeAliasType(
 #: (the product of a price difference below 10^14 by such a quantity, at most twelve
 #: decimals), plain text with no exponent and no trailing zero.
 _EXACT_DECIMAL = r"^(0|[1-9][0-9]{0,26})(\.[0-9]{0,11}[1-9])?$"
+#: `UI-B-07` (contract 1.40.0): a percent between 0 and 100 with at most two decimals, no trailing zero.
+_PERCENT = r"^(0|100|(0|[1-9][0-9]?)\.[0-9]?[1-9]|[1-9][0-9]?)$"
 #: The share of shared words of two names, ``0`` to ``1`` with at most four decimals.
 _SIMILARITY = r"^(0|1|0\.[0-9]{0,3}[1-9])$"
 _SPEC_ROW_KEY = r"^sr-[0-9a-f]{32}$"
@@ -4469,6 +4495,10 @@ class OptimisationProposal(_Object):
     rationale: Annotated[str, Field(min_length=1, max_length=10000)]
     current_verdict: ProposalDecisionState
     current_decision: ProposalDecision | None
+    #: `UI-B-07` (contract 1.40.0): how much cheaper the proposed unit price is than the current one, in percent of the
+    #: current unit price, rounded half up to two decimals; absent when the current unit price is zero.
+    saving_percent: Annotated[str, Field(pattern=_PERCENT)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
 
 
 class OptimisationProposalPage(_Object):

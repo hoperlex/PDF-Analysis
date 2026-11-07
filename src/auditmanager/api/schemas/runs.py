@@ -161,6 +161,9 @@ class RunStatusView:
     analysis_kind: str | None = None
     ar_v3_group_id: str | None = None
     ar_v3_scope_id: str | None = None
+    #: `UI-A-65` / `UI-B-45` (contract 1.40.0): the estimated finish of a run being worked on, by the queue item's own
+    #: rule (``execution.eta.job_estimated_finish``); ``None`` when the run has none, rendered only when present.
+    estimated_finish_at: datetime | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -261,6 +264,8 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
         }
     if view.queue_reason is not None:
         body["queue_reason"] = view.queue_reason
+    if view.estimated_finish_at is not None:
+        body["estimated_finish_at"] = timestamp(view.estimated_finish_at)
     if view.started_by_user_uid is not None:
         body["started_by_user_uid"] = view.started_by_user_uid
         if view.started_by_label is not None:

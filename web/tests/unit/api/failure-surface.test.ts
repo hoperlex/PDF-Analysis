@@ -45,7 +45,7 @@ import {
 
 function envelope(overrides: Partial<ErrorEnvelope> = {}): ErrorEnvelope {
   const base: ErrorEnvelope = {
-    contract_version: '1.39.0',
+    contract_version: '1.40.0',
     error_code: 'validation_failed',
     message: 'The request is not valid.',
     correlation_id: 'corr-1',

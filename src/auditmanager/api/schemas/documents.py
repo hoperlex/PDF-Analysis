@@ -18,6 +18,7 @@ from typing import Any, Sequence
 from auditmanager.api.schemas.common import timestamp
 
 __all__ = [
+    "DocumentActiveRunView",
     "DocumentAuditView",
     "DocumentVersionView",
     "ManifestEntryView",
@@ -37,12 +38,21 @@ class ManifestEntryView:
 
 
 @dataclass(frozen=True, slots=True)
+class DocumentActiveRunView:
+    """Exactly the frozen ``DocumentActiveRun`` (`UI-A-47`, contract 1.40.0): the run in flight and its state."""
+
+    run_id: str
+    state: str
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentAuditView:
     """Exactly the frozen ``DocumentAudit`` (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
 
     Nothing is decided here: the read model (``auditmanager.dashboard.audit_state``) classifies and the adapter
     copies its record field for field. ``result_run_id`` is ``None`` exactly when ``state`` is ``not_run`` and is
-    then omitted on the wire.
+    then omitted on the wire. ``active_run`` (`UI-A-47`) is ``None`` when no run of the version is in flight and is
+    then omitted too.
     """
 
     state: str
@@ -50,6 +60,7 @@ class DocumentAuditView:
     result_run_id: str | None
     finding_count: int
     undecided_finding_count: int
+    active_run: DocumentActiveRunView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +113,8 @@ def document_audit_body(view: DocumentAuditView) -> dict[str, Any]:
     }
     if view.result_run_id is not None:
         body["result_run_id"] = view.result_run_id
+    if view.active_run is not None:
+        body["active_run"] = {"run_id": view.active_run.run_id, "state": view.active_run.state}
     return body
 
 
