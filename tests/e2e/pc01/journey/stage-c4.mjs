@@ -60,7 +60,20 @@ async function checkedLabel(page, label, wanted = true) {
 async function tab(page, name) { await page.click(`[data-stage-tab="${name}"]`); await visible(page, `#stage-panel-${name}`); }
 async function choosePair(page, pair) { await visible(page, '[data-stage-pair-select]'); await page.select('[data-stage-pair-select]', { optionValue: pair }); }
 
+// `UI-B-85`: the upload panel stands closed under «Загрузить проекты» at the right of the steps bar (first step only), so
+// the file input and «Загрузить новый набор» have a zero box until the bar's button opens it.
+async function openUploadPanel(page) {
+  await visible(page, '[data-stage-upload-open]');
+  const hidden = await page.evaluate("document.querySelector('#stage-upload-panel')?.hidden === true");
+  if (hidden) {
+    await page.click('[data-stage-upload-open]');
+    await page.settle({ settleMs: 150, timeoutMs: 700 });
+  }
+  await visible(page, '#stage-upload-panel');
+}
+
 async function upload(page, action, state, repositoryRoot) {
+  await openUploadPanel(page);
   const documents = []; let candidateId;
   for (const source of action.documents) {
     const after = page.exchanges().length;

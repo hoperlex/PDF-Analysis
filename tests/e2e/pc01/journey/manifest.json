@@ -365,6 +365,12 @@
           "method": "GET",
           "path": "/system/version",
           "operationId": "getProductVersion"
+        },
+        {
+          "method": "GET",
+          "path": "/projects/{project_uid}",
+          "operationId": "getProject",
+          "$why": "UI-PARITY-P0N: the context strip (or the page's own heading) names the project by its identity, read as soon as the address carries a valid project uid"
         }
       ],
       "optional_api": [
@@ -418,6 +424,12 @@
           "path": "/me",
           "operationId": "getMe",
           "$why": "the page decides which controls it draws from the account's roles (`useMayActAsExpert`), mounted with the page"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions",
+          "$why": "UI-A-24: the context strip's VersionSwitch reads the document's versions once the version it shows has answered; mounted by the strip on a run, its «Разбор» and the version's «Блоки» as on the version"
         }
       ],
       "optional_api": [
@@ -479,6 +491,12 @@
           "path": "/versions/{version_uid}/sheet-labels",
           "operationId": "listVersionSheetLabels",
           "$why": "UI-PARITY-P0O: each page's drawing-sheet label, read as soon as the run has named its version"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions",
+          "$why": "UI-A-24: the context strip's VersionSwitch reads the document's versions once the version it shows has answered; mounted by the strip on a run, its «Разбор» and the version's «Блоки» as on the version"
         }
       ],
       "optional_api": [
@@ -588,6 +606,12 @@
           "path": "/versions/{version_uid}/runs",
           "operationId": "listRuns",
           "$why": "the first page of the version's runs, read to learn which run the blocks are tied to"
+        },
+        {
+          "method": "GET",
+          "path": "/documents/{document_uid}/versions",
+          "operationId": "listVersions",
+          "$why": "UI-A-24: the context strip's VersionSwitch reads the document's versions once the version it shows has answered; mounted by the strip on a run, its «Разбор» and the version's «Блоки» as on the version"
         }
       ],
       "optional_api": [
@@ -1213,6 +1237,7 @@
         {"method": "GET", "path": "/projects/{project_uid}/stage-pairs", "operationId": "listStagePairs", "$why_optional": "read after a project is selected, automatically for exactly one project"},
         {"method": "GET", "path": "/projects/{project_uid}/stage-pair-suggestions", "operationId": "listStagePairSuggestions", "$why_optional": "read after a project is selected, automatically for exactly one project"},
         {"method": "GET", "path": "/projects/{project_uid}/stage-uploads", "operationId": "listStageUploads", "$why_optional": "only once a project is chosen: the page opens on the first project the list offers"},
+        {"method": "GET", "path": "/projects/{project_uid}/documents", "operationId": "listDocuments", "$why_optional": "only once a project is chosen: the pair catalogue reads the project's documents to offer the members of an assembly (assemblies.ts readDocuments), automatically for exactly one project"},
         {"method": "GET", "path": "/execution/dispatch", "operationId": "getExecutionDispatch", "$why_optional": "the top strip's pause indicator (R-151f) reads the queue's pause state on every screen, only for a session the «Очередь» screen is open to: not a guest, a viewer, a default credential or an incomplete profile"},
         {"method": "GET", "path": "/execution/queue", "operationId": "listExecutionQueue", "$why_optional": "the side menu's «Очередь» counter (UI-A-05) reads the queue's overview every 10 s, only for a session holding `expert` or `admin`: the queue is closed to a viewer"},
         {"method": "GET", "path": "/knowledge-base/entries", "operationId": "listKnowledgeBaseEntries", "$why_optional": "the side menu's «База знаний» counter (UI-A-06) reads the entries' total (limit 1), for any session that has a menu"},
@@ -1905,6 +1930,46 @@
         "expects_present": [
           {
             "selector": "[data-event-type=\"accept\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[role=\"alert\"]"
+        ],
+        "screen": "run-review",
+        "case": "action"
+      },
+      {
+        "name": "review-view-and-filter-follow-the-address",
+        "at": "/projects/{project_uid}/runs/{run_id}/review",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/review/page.tsx",
+        "control_module": "web/src/widgets/finding-list/ui/finding-list.tsx",
+        "$comment": [
+          "D-338. The list/table switch and the verdict filter of «Разбор» are written to the address (`?view=`, `?verdict=`) and",
+          "READ BACK from it through `useSearchParams`. A write that Next does not sync (`history.replaceState` handed",
+          "`window.history.state`) changed the URL bar and left the pressed buttons as they were, and the second write rebuilt",
+          "the query from the stale first one -- no unit test can see that, it has no history. The two presses are made in",
+          "this order on purpose: after the second, BOTH buttons must read pressed, which only holds when the first write",
+          "reached the page before the second built its query from it. The verdict `accepted` has one finding, the decision",
+          "`record-decision` has just recorded."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-finding-view=\"table\"]",
+            "settle": true
+          },
+          {
+            "do": "click",
+            "selector": "[data-verdict-filter=\"accepted\"]",
+            "settle": true
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-finding-view=\"table\"][aria-pressed=\"true\"]"
+          },
+          {
+            "selector": "[data-verdict-filter=\"accepted\"][aria-pressed=\"true\"]"
           }
         ],
         "forbids_rendered": [
@@ -2935,6 +3000,12 @@
             "settle": true
           },
           {
+            "do": "wait_for",
+            "selector": "[data-comparison-sheets] button",
+            "text_contains": "Подготовить",
+            "bound_ms": 60000
+          },
+          {
             "do": "click",
             "selector": "[data-comparison-sheets] button",
             "text": "Подготовить"
@@ -3018,6 +3089,12 @@
             "do": "click",
             "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-transition-summary] button",
+            "text_contains": "Запустить",
+            "bound_ms": 60000
           },
           {
             "do": "click",
@@ -3119,6 +3196,12 @@
             "do": "click",
             "selector": "tr[data-document-uid=\"{document_uid}\"] th button",
             "settle": true
+          },
+          {
+            "do": "wait_for",
+            "selector": "tr[data-transition-state=\"completed\"] button",
+            "text_contains": "Открыть",
+            "bound_ms": 60000
           },
           {
             "do": "click",
@@ -8372,7 +8455,7 @@
         "captures": [
           {
             "kind": "text",
-            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) > p > code",
+            "selector": "ol > li:has(a[href*=\"{queued_run_id}\"]) > p > span > code",
             "as": [
               "job_id"
             ],
@@ -8654,12 +8737,14 @@
         "page_module": "web/src/app/queue/page.tsx",
         "control_module": "web/src/_pages/queue/ui/queue-page.tsx",
         "$comment": [
-          "Dispatch resumes (confirmation first); the paused notice goes and the waiting re-audit is taken by a worker."
+          "Dispatch resumes (confirmation first); the paused notice goes and the waiting re-audit is taken by a worker.",
+          "The paused notice is an in-flow strip (UI-PARITY: `p[data-execution-paused]`) and no longer sits beside the toggle, which is in the filter row; the button is found by its words, as the pause step finds it."
         ],
         "actions": [
           {
             "do": "click",
-            "selector": "[data-execution-paused] + button",
+            "selector": "button",
+            "text": "Возобновить выдачу",
             "settle": true
           },
           {
@@ -8700,7 +8785,7 @@
         "captures": [
           {
             "kind": "text",
-            "selector": "ol[data-worker-group=\"active\"] > li > div > p > code",
+            "selector": "ol[data-worker-group=\"active\"] > li > div > span > code",
             "as": [
               "worker_id"
             ],

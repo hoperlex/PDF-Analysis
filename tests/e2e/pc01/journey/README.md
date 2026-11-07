@@ -129,6 +129,19 @@ modules off on the ordinary worker, as "CMP-JOURNEY-C4-01" above asks). Two sett
   left that covers about 450 px of a 780 px screen, so a press under it lands on the card. `session.mjs` closes it once, through
   its own button, in every sign-in (and records `releaseNotice` in the envelope).
 
+Also measured on this stand (lane V2, 2026-11-07, the 0.14.1 tree, ten fresh stands):
+
+* **Ports.** Lanes run side by side, so the script takes `LANE_PG_PORT`, `LANE_S3_PORT`, `LANE_API_PORT`, `LANE_HEALTH_PORT` and
+  `LANE_WEB_PORT` (defaults 55701–55705) as well as `LANE_PG_NAME` / `LANE_S3_NAME`.
+* **No priming sign-in.** The first sign-in after a fresh `next start` is the journey's own; since `D-329` it must record no page error
+  (`session.pageErrors` in the envelope), and it did on every stand.
+* **`--steps` is PARTIAL.** `--steps <the active, non-`cmp-*` write steps>` with `--phase all` ends `exit 3` however green it is; that is the
+  expected end of a lane run until the `cmp-*` steps (`D-330`, `D-338`) can run in the same journey.
+* **The comparison steps need more than the stand gives.** `cmp-version-recorded-ai-consent` meets `GET …/ai-sheet-changes/estimate` 503
+  («не выбрано подключение исполнителя») because no executor route is assigned to `comparison_sheet_changes` and no recorded worker serves
+  version AI; the `cmp-stage-*` steps need `LANE_C4=1`. Opening a set or a stage tab by a click is blocked by `D-338` until
+  `use-compare-address.ts` and `use-stage-address.ts` write their address with `null` as the history data.
+
 ## W51 identity continuation
 
 `identity.mjs` consumes the completed PC-01 write envelope so the newly approved expert can
