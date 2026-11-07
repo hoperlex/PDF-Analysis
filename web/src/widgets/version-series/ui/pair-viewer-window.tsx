@@ -27,7 +27,7 @@ export function PairViewerWindow({ children, onClose, staticOpen = false }: Pair
       <div className={styles.viewerBox}>
         <header className={styles.viewerBar}>
           <strong>{PAIR_WINDOW_TITLE}</strong>
-          <button type="button" className="am-button am-button--quiet am-button--small" onClick={onClose} title="Закрыть окно и вернуться к матрице (Esc).">
+          <button type="button" className="am-button am-button--quiet am-button--small" onClick={onClose} title="Закрыть окно и вернуться к матрице.">
             ✕ Закрыть
           </button>
         </header>

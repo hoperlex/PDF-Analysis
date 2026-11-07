@@ -274,7 +274,7 @@ export function TransitionSummary({
                     <th scope="col" title="Изменены только служебные зоны">◐</th>
                     <th scope="col" title="Есть отличия">●</th>
                     <th scope="col" title="Нужна проверка">⚠</th>
-                    <th scope="col" title="+N — листов только в новой версии (добавлены), −M — только в прежней (удалены).">Состав</th>
+                    <th scope="col" title="Первое число — листов только в новой версии (добавлены), второе — листов только в прежней (удалены).">Состав</th>
                     <th scope="col">Вывод</th>
                     <th scope="col">
                       <span className={styles.visuallyHidden}>Действие</span>
