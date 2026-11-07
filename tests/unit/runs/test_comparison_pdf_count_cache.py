@@ -153,7 +153,9 @@ class Documents:
 class Runs:
     def get(self, session: Any, run_id: str) -> Any:
         return SimpleNamespace(run_id=run_id, project_uid=PROJECT, version_uid=VERSION, state="failed", frozen_input_digest="c" * 64,
-                               norms_snapshot_id=None)
+                               norms_snapshot_id=None,
+                               # `AR-V3-OPT-IN`: the source's pinned pair (a standard analysis), which a repeat reads.
+                               analysis_profile_id="ap_01M5M28ZCDD8VPSP1BTAEW92YF", prompt_bundle_id="pb_01M5M28ZCDVCR37BX1884JGSPN",)
 
     def chosen_executor_connection(self, session: Any, run_id: str) -> None:
         return None

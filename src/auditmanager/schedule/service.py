@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from auditmanager.access.public import ROLE_ADMIN, ROLE_EXPERT
 from auditmanager.ingest.public import CommandReplay, CommandRepository, CommandStarted, payload_fingerprint
+from auditmanager.runs.public import STANDARD_RUN_SQL
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import AuditEventId, IdempotencyKey
 
@@ -95,9 +96,10 @@ _ABSENCES = text(
     """
 )
 #: The ``checked`` documents of the audit read model (`dashboard/audit_state.py`, the same rules) whose latest verdict
-#: falls in ``[:start, :stop)`` of the schedule's zone, with that verdict's author.
+#: falls in ``[:start, :stop)`` of the schedule's zone, with that verdict's author. The result run is the newest published or
+#: partial run **of the standard analysis** (`AR-V3-OPT-IN`, `Q3`; ``STANDARD_RUN_SQL``), as the audit state reads it.
 _FACTS = text(
-    """
+    f"""
     WITH current_docs AS (
         SELECT d.document_uid, d.display_title, d.project_uid, p.name AS project_name, v.version_uid
         FROM document d
@@ -108,7 +110,8 @@ _FACTS = text(
     result_run AS (
         SELECT DISTINCT ON (r.version_uid) r.version_uid, r.run_id
         FROM audit_run r
-        WHERE r.state IN ('published', 'partial') AND r.version_uid IN (SELECT version_uid FROM current_docs)
+        WHERE r.state IN ('published', 'partial') AND {STANDARD_RUN_SQL}
+          AND r.version_uid IN (SELECT version_uid FROM current_docs)
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     ),
     run_finding AS (

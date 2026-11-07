@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.37.0 (OpenAPI 3.1.0)
- *   sha256 f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928
+ *   AuditManager PC-01 API 1.38.0 (OpenAPI 3.1.0)
+ *   sha256 7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2109,6 +2109,8 @@ export type EnqueueComparisonLaunchResult = ComparisonLaunchQueue;
  * Estimate all six AR v3 checks before spend.
  *
  * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend.
+ *
+ * `AR-V3-OPT-IN`: the price of the six checks of one AR v3 beta group, asked before startArV3BetaGroup. While a reviewed pack is installed and the deployment has not allowed starts (`AR_V3_BETA_START_ALLOWED`, off by default), the answer is `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and no figure, as the start's is. With no pack installed the answer is the `503 dependency_unavailable` it always was.
  */
 export type EstimateArV3GroupCostInput = {
   /** Request body, sent as `application/json`. */
@@ -2226,7 +2228,7 @@ export type EstimateComparisonSpecificationResult = ComparisonAiEstimate;
 /**
  * Estimate selected section analysis before spend.
  *
- * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them.
+ * Read-only cost preflight. A changed source, profile, preset, route or model makes an earlier estimate digest stale. Unmetered connections are explicit; estimates are not measured spend. With reaudit_of_run_id, version_uid must match the source Run and no executor, preset or raised-limit override is allowed: the server derives same-version/current-section/current-route execution, retaining an originally named connection. Source Run ID is bound into the estimate digest. `EXEC2-SEAL-2`: `executor_group_id` (exclusive with `executor_connection_id` and `preset_id`, with the same refusals as `startRun`) estimates a run on the group's current revision; the estimate then carries `executor_group_id`, `executor_group_revision_id`, `routing_rule_revision_id` (when a rule routed it) and the planned `pin_id`, and no `connection_revision_id`. The estimate digest binds them. `AR-V3-OPT-IN`: with reaudit_of_run_id naming a member of an AR v3 group the answer is the repeat's refusal, `409 conflict` with `conflict_reason` `ar_v3_member_not_repeatable`, and no figure.
  */
 export type EstimateRunCostInput = {
   /** Request body, sent as `application/json`. */
@@ -2587,7 +2589,11 @@ export type GetArV3BetaGroupReviewResult = ArV3BetaGroupReview;
 // getArV3BetaPackStatus - GET /ar-v3-beta/pack
 // ------------------------------------------------------------------------------------
 
-/** Get Ar V3 Beta Pack Status */
+/**
+ * Get Ar V3 Beta Pack Status
+ *
+ * `AR-V3-OPT-IN`: when the pack is installed, `start_allowed` says whether this deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). The pack is the capability to execute, read and review; `start_allowed` is the separate permission to start. A screen offers the choice of AR v3 only when the pack is installed and `start_allowed` is true, and never makes it the default.
+ */
 export type GetArV3BetaPackStatusInput = {
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -6065,7 +6071,7 @@ export type ReadRegistrationStatusResult = RegistrationStatusResponse;
 /**
  * Reaudit Run
  *
- * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). A v3 re-audit may refuse absent verified retrieval set with 422 required_norm_unavailable and reference_kind norm_retrieval_set. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
+ * A re-audit runs the same version on the current configuration (R-82), so it faces today's limit (the one-call analysis input budget times the number of windows a run may use), not the source run's: over it, the answer is `422 analysis_input_budget_exceeded` with `details.character_count` and `details.budget_characters`, and no run exists (R-118). `AR-V3-OPT-IN`: the source must be a run of the standard analysis. A member of an AR v3 group is refused with `409 conflict` and `conflict_reason` `ar_v3_member_not_repeatable` before the key is claimed, and nothing is written: the repeat would route by the section now and silently become the other analysis. AR v3 is repeated by a new startArV3BetaGroup. `W59-SECTION-SEAL-01`: the new run is routed from the version's persisted classification exactly as `startRun` is, never from the source run's profile; an unclassified version is `422 version_classification_required` and a section with no registered text profile is `422 section_profile_unavailable`. `EXEC-PAR-START-01`: a re-audit of a run whose executor was named at its start runs on that same connection (its current revision), not on today's route; if that connection can no longer serve, the answer is `503 dependency_unavailable` with `details.dependency` `executor_connection` and no run exists. It is never redirected to the standby or to another connection. New served re-audits require fresh confirmed cost consent from estimateRunCost with reaudit_of_run_id before any new spend; the parent approval is never reused. Accepted historical command keys replay their recorded outcome.
  */
 export type ReauditRunInput = {
   /** Path parameters, substituted into `/runs/{run_id}/reaudit`. */
@@ -7341,7 +7347,11 @@ export type SetWorkerIntakeResult = ExecutionWorker;
 // startArV3BetaGroup - POST /ar-v3-beta/groups
 // ------------------------------------------------------------------------------------
 
-/** Start Ar V3 Beta Group */
+/**
+ * Start Ar V3 Beta Group
+ *
+ * `AR-V3-OPT-IN`: AR v3 is an opt-in analysis and its own operation; `startRun` and `reauditRun` never reach it, and no default, preset or repeat starts it. While a reviewed pack is installed and the deployment has not allowed starts (`AR_V3_BETA_START_ALLOWED`, off by default; getArV3BetaPackStatus.start_allowed says which), the answer is `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and nothing is written (no command, run, group or job). A repeat of an accepted key replays the group it created whether or not starts are still allowed, and runs already accepted finish when the allowance is withdrawn. With no pack installed the answer is the `503 dependency_unavailable` it always was. Each member records the account that started it.
+ */
 export type StartArV3BetaGroupInput = {
   /** Request body, sent as `application/json`. */
   body: StartArV3BetaGroupRequest;

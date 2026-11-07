@@ -32,7 +32,7 @@ from auditmanager.bootstrap import composition as composition_module
 from auditmanager.bootstrap.composition import build_worker_runtime
 from auditmanager.bootstrap.settings import EXECUTION_ROLE_ENV
 from auditmanager.norms.public import SetIdentity
-from auditmanager.runs.public import PACK_MANIFEST_ENV, ReviewAttestation, seal_manifest
+from auditmanager.runs.public import PACK_MANIFEST_ENV, START_ALLOWED_ENV, ReviewAttestation, seal_manifest
 from auditmanager.runs.v3_group import SCOPES, ReviewedScope, TrustedPack, TrustedPackRegistry
 from auditmanager.shared.identity import NormRetrievalSetId
 
@@ -235,6 +235,8 @@ def test_the_api_reports_the_installed_pack_and_its_attestation(
         "prompt_bundle_id": pack.prompt_bundle_id,
         "pack_sha256": pack.sha256,
         "scope_ids": list(SCOPES),
+        # `AR-V3-OPT-IN`: the pack is the capability; starting is a separate permission, off unless the environment says `1`.
+        "start_allowed": False,
         "review": {
             "reviewer": REVIEW.reviewer, "capacity": REVIEW.capacity,
             "reviewed_at": REVIEW.reviewed_at, "decision_ref": REVIEW.decision_ref,
@@ -262,3 +264,74 @@ def test_the_worker_root_still_needs_and_gets_only_the_registry(
     path, pack = manifest
     registry = _worker_registry(monkeypatch, _worker_env(**{PACK_MANIFEST_ENV: str(path)}))
     assert registry.select_beta() == pack
+
+
+# --- `AR-V3-OPT-IN`: the allowance is a second layer, read by the api build only, off by default ------------
+
+
+def _built_adapter(monkeypatch: pytest.MonkeyPatch, env: dict[str, str]) -> adapters_module.RunAdapter:
+    built: dict[str, Any] = {}
+
+    class RunAdapterSpy(adapters_module.RunAdapter):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            built["adapter"] = self
+
+    monkeypatch.setattr(composition_module, "RunAdapter", RunAdapterSpy)
+    build_application(environ=env)
+    return built["adapter"]
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    (None, False), ("", False), ("   ", False), ("0", False), ("1", True), (" 1 ", True),
+], ids=["unset", "blank", "spaces", "zero", "one", "padded-one"])
+def test_the_api_build_reads_the_allowance_strictly_and_a_pack_alone_never_allows_a_start(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack], value: str | None, expected: bool,
+) -> None:
+    path, _pack_ = manifest
+    extra = {PACK_MANIFEST_ENV: str(path), **({} if value is None else {START_ALLOWED_ENV: value})}
+    status, answer, _body = _api_status(monkeypatch, _api_env(**extra))
+    assert status == 200 and answer["state"] == "installed" and answer["start_allowed"] is expected
+    assert _built_adapter(monkeypatch, _api_env(**extra))._ar_v3_start_allowed is expected
+
+
+def test_without_a_pack_the_allowance_is_not_in_the_answer_whatever_the_environment_says(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status, answer, _body = _api_status(monkeypatch, _api_env(**{START_ALLOWED_ENV: "1"}))
+    assert (status, answer) == (200, {"state": "not_installed"})
+
+
+@pytest.mark.parametrize("value", ["true", "yes", "2", "1x", "on"])
+def test_a_value_that_is_not_plainly_zero_or_one_stops_the_api_naming_the_variable(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack], value: str,
+) -> None:
+    path, _pack_ = manifest
+    monkeypatch.setattr(composition_module, "RunAdapter", adapters_module.RunAdapter)
+    with pytest.raises(ConfigurationError) as refused:
+        build_application(environ=_api_env(**{PACK_MANIFEST_ENV: str(path), START_ALLOWED_ENV: value}))
+    assert START_ALLOWED_ENV in str(refused.value)
+
+
+def test_the_worker_root_does_not_read_the_allowance_so_what_was_accepted_still_runs(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack],
+) -> None:
+    """A worker given a malformed allowance still builds and still installs the pack: the variable is the api's."""
+    path, pack = manifest
+    for value in ("true", "0", "1"):
+        registry = _worker_registry(monkeypatch, _worker_env(**{PACK_MANIFEST_ENV: str(path), START_ALLOWED_ENV: value}))
+        assert registry.select_beta() == pack
+
+
+def test_with_the_allowance_off_the_served_price_and_start_of_a_group_are_the_typed_conflict(
+    monkeypatch: pytest.MonkeyPatch, manifest: tuple[Path, TrustedPack],
+) -> None:
+    """The served composition, a pack installed and no allowance: the price is refused before the database is asked."""
+    from auditmanager.shared.errors import DomainError, ErrorCode
+
+    path, _pack_ = manifest
+    adapter = _built_adapter(monkeypatch, _api_env(**{PACK_MANIFEST_ENV: str(path)}))
+    with pytest.raises(DomainError) as refused:
+        adapter.estimate_ar_v3_group_cost(version_uid="ver_01M2545JSD15ETSNNV904XA001")
+    assert refused.value.code is ErrorCode.CONFLICT
+    assert refused.value.detail_fields["conflict_reason"] == "ar_v3_start_not_enabled"

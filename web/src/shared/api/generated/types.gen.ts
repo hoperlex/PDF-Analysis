@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.37.0 (OpenAPI 3.1.0)
- *   sha256 f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928
+ *   AuditManager PC-01 API 1.38.0 (OpenAPI 3.1.0)
+ *   sha256 7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.37.0';
+export const CONTRACT_VERSION = '1.38.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928';
+export const CONTRACT_DIGEST = '7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -1089,6 +1089,8 @@ export type ArV3BetaPackStatus = {
   prompt_bundle_id?: PromptBundleId;
   review?: ArV3BetaPackReview;
   scope_ids?: Array<("F1" | "F2" | "A1" | "A2" | "S1" | "S2")>;
+  /** `AR-V3-OPT-IN` (contract 1.38.0): present exactly when `state` is `installed`. Whether this deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`, off unless set to `1`). Installed is the capability to execute, read and review; this is the separate permission to start. While it is false startArV3BetaGroup and estimateArV3GroupCost answer `409 conflict` (`ar_v3_start_not_enabled`) and runs already accepted finish. A screen offers AR v3 only when the pack is installed and this is true, and never makes it the default. */
+  start_allowed?: boolean;
   state: "installed" | "not_installed";
 };
 
@@ -2734,7 +2736,7 @@ export type ComparisonRasterSize = {
 
 /** Why two versions are not compared; ``side`` when the reason is one side's. */
 export type ComparisonRefusal = {
-  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "text_unavailable" | "text_too_large";
+  reason: "same_version" | "version_not_found" | "different_set" | "foreign_project" | "version_not_published" | "version_order_invalid" | "stage_unclassified" | "section_unconfirmed" | "project_stage_mismatch" | "confirmed_section_mismatch" | "stage_pair_invalid" | "analysis_missing" | "run_not_of_version" | "run_not_published" | "analysis_not_comparable" | "text_unavailable" | "text_too_large";
   side: "source" | "target" | null;
 };
 
@@ -4091,7 +4093,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.37.0";
+  contract_version: "1.38.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -6476,7 +6478,13 @@ export type RunStateCount = {
 };
 
 export type RunStatus = {
+  /** `AR-V3-OPT-IN` (contract 1.38.0): which analysis produced the run -- `standard` (the text profile the section table routes the version to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the run's pinned profile and bundle pair and from nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two. */
+  analysis_kind?: "standard" | "ar_v3_beta";
   analysis_profile_id?: AnalysisProfileId;
+  /** `AR-V3-OPT-IN`: the AR v3 group the run is one of; present for a member of a group only. */
+  ar_v3_group_id?: ArV3RunGroupId;
+  /** `AR-V3-OPT-IN`: the scope (`F1` .. `S2`) the run covers in its AR v3 group; present for a member of a group only. */
+  ar_v3_scope_id?: "F1" | "F2" | "A1" | "A2" | "S1" | "S2";
   /** `EXEC2-SEAL-2`: the connection revision and model dispatch bound the run to; present exactly when `binding_state` is `bound`. `executor` then names the same connection. */
   binding?: ExecutorBinding;
   /** `EXEC2-SEAL-2` (ADR-0026 decision 12): whether the run's executor was frozen at start (`frozen_at_start`), is still to be chosen (`pending`) or was chosen at dispatch (`bound`). Absent is read as `frozen_at_start`. */

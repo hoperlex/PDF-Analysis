@@ -102,12 +102,14 @@ from auditmanager.bootstrap.settings import AppSettings, ConfigurationError
 from auditmanager.bootstrap.settings import load as load_settings
 from auditmanager.runs.public import (
     PACK_MANIFEST_ENV,
+    START_ALLOWED_ENV,
     DurableCarrier,
     PackManifestRefused,
     ParsedPackManifest,
     ReclaimingCarrier,
     TrustedPackRegistry,
     load_manifest,
+    parse_start_allowed,
     run_to_terminal,
 )
 from auditmanager.sections.public import SECTION_CODES, section_names
@@ -175,6 +177,27 @@ def _ar_v3_installed_pack(env: dict[str, str]) -> ParsedPackManifest | None:
         raise ConfigurationError(
             f"{PACK_MANIFEST_ENV} names a reviewed-pack manifest the server refuses: {exc}"
         ) from exc
+
+
+def _ar_v3_start_allowed(env: dict[str, str], installed: ParsedPackManifest | None) -> bool:
+    """`AR-V3-OPT-IN` (design 4.2): the deployment's allowance to start AR v3, read once, strictly, by the ``api`` build.
+
+    Absent, blank or ``0`` is off (the default); ``1`` is on; anything else refuses the start of the process, because a
+    value that silently read as «on» would be a permission nobody gave. The worker build does not call this: it executes
+    what was accepted whether or not the allowance is still on. The value and the pack state are logged once, here, so an
+    operator can see at start-up what the deployment will accept.
+    """
+    try:
+        allowed = parse_start_allowed(env.get(START_ALLOWED_ENV))
+    except ValueError as exc:
+        raise ConfigurationError(str(exc)) from exc
+    _log.info(
+        "AR v3 beta: pack %s, starts %s (%s)",
+        "installed" if installed is not None else "not installed",
+        "allowed" if allowed else "not allowed",
+        START_ALLOWED_ENV,
+    )
+    return allowed
 
 
 def _registry_of(installed: ParsedPackManifest | None) -> TrustedPackRegistry:
@@ -609,6 +632,8 @@ def build_application(
         ar_v3_pack_registry=_registry_of(ar_v3_installed_pack),
         # `AR-V3-BETA-PACK-STATUS-API-01`: the same load, with the attestation that came with it.
         ar_v3_installed_pack=ar_v3_installed_pack,
+        # `AR-V3-OPT-IN`: permission to start, separate from the capability above, off unless the environment says `1`.
+        ar_v3_start_allowed=_ar_v3_start_allowed(env, ar_v3_installed_pack),
     )
     if isinstance(carrier, DurableCarrier):
         carrier.configure_runner(run_adapter._job)

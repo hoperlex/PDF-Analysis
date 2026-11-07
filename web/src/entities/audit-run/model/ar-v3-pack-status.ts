@@ -33,6 +33,7 @@ export type ArV3PackFaultReason =
   | 'bad_identifier'
   | 'bad_digest'
   | 'bad_scope_list'
+  | 'bad_start_allowed'
   | 'bad_attestation';
 
 export type ArV3PackReading =
@@ -45,6 +46,12 @@ export type ArV3PackReading =
       readonly packSha256: string;
       readonly scopeIds: readonly ArV3PackScopeId[];
       readonly review: ArV3BetaPackReview;
+      /**
+       * `AR-V3-OPT-IN` (contract 1.38.0): whether this deployment allows a start of AR v3 now. The pack is the capability to
+       * execute, read and review; this is the separate permission to start. **Absent is not allowed**: a server that
+       * predates the allowance, or one that omits it, never has a screen offer the choice.
+       */
+      readonly startAllowed: boolean;
     }
   | { readonly kind: 'fault'; readonly reason: ArV3PackFaultReason };
 
@@ -55,7 +62,11 @@ const INSTALLED_MEMBERS: readonly string[] = [
   'pack_sha256',
   'scope_ids',
   'review',
+  'start_allowed',
 ];
+
+/** The members an installed answer must carry; `start_allowed` is optional (`AR-V3-OPT-IN`) and read apart. */
+const REQUIRED_INSTALLED_MEMBERS: readonly string[] = INSTALLED_MEMBERS.filter((key) => key !== 'start_allowed');
 
 const REVIEW_MEMBERS = ['reviewer', 'capacity', 'reviewed_at', 'decision_ref', 'scope_statement'] as const;
 
@@ -93,7 +104,7 @@ export function readArV3PackStatus(body: unknown): ArV3PackReading {
   if (body.state !== 'installed') return fault('unknown_state');
 
   if (keys.some((key) => !INSTALLED_MEMBERS.includes(key))) return fault('unknown_member');
-  if (INSTALLED_MEMBERS.some((key) => !(key in body))) return fault('missing_member');
+  if (REQUIRED_INSTALLED_MEMBERS.some((key) => !(key in body))) return fault('missing_member');
 
   const { analysis_profile_id: profileId, prompt_bundle_id: bundleId, pack_sha256: digest } = body;
   if (!isNonEmptyString(profileId) || !isNonEmptyString(bundleId)) return fault('missing_member');
@@ -109,6 +120,10 @@ export function readArV3PackStatus(body: unknown): ArV3PackReading {
     return fault('bad_scope_list');
   }
 
+  // A present `start_allowed` must be a boolean; a null, a number or a word is a fault, never «probably allowed».
+  const allowed = body.start_allowed;
+  if (allowed !== undefined && typeof allowed !== 'boolean') return fault('bad_start_allowed');
+
   const review = body.review;
   if (!isRecord(review)) return fault('bad_attestation');
   if (Object.keys(review).length !== REVIEW_MEMBERS.length) return fault('bad_attestation');
@@ -123,6 +138,7 @@ export function readArV3PackStatus(body: unknown): ArV3PackReading {
     promptBundleId: bundleId,
     packSha256: digest,
     scopeIds: AR_V3_PACK_SCOPE_IDS,
+    startAllowed: allowed === true,
     review: {
       reviewer: review.reviewer as string,
       capacity: review.capacity as string,

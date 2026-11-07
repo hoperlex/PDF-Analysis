@@ -660,7 +660,7 @@ def _drive_group(
     with factory() as session, session.begin():
         group = start_ar_v3_group(
             session, version_uid=source.version_uid, idempotency_key=key,
-            provider_mode=provider_mode, pack=pack, input_budget_characters=1_000_000,
+            provider_mode=provider_mode, pack=pack, input_budget_characters=1_000_000, start_allowed=True,
         ).group
     registry = TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (pack,))
     adapter: Any

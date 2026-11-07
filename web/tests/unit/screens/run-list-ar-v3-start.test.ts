@@ -2,6 +2,11 @@
  * `AR-V3-BETA-PACK-STATUS-WEB-01`, as `3821261a` ("restore original-source text profile") left it: the
  * version's run list offers the six-check start on NO answer of the pack status.
  *
+ * `AR-V3-OPT-IN` (2026-11-07) made v3 an opt-in choice on the start form of an АР version, offered on ONE answer
+ * (installed AND `start_allowed`): that successor, with its own grid, is `run-list-analysis-choice.test.ts`. What this
+ * file still pins is the half that stays true: a version that is not АР, or has no confirmed section, is offered the
+ * ordinary start and nothing else on every answer, and does not read the status at all.
+ *
  * It used to draw the control beside the ordinary start on an installed, valid pack (and only then). The
  * owner restored the ordinary АР start with its original-source text profile and took the six-check
  * control off the run list; its API, the old group review and the control's own component remain
@@ -48,7 +53,7 @@ function listMarkup(client: Client): string {
 
 const SIX_CHECKS = 'Запустить шесть проверок АР v3';
 
-describe('the six-check start is drawn on no answer of the pack status', () => {
+describe('the six-check start is drawn on no answer of the pack status, for a version that is not АР', () => {
   // The third member is what the old rule drew; it is kept in the grid, because "installed and valid" is
   // exactly the row a reintroduction would turn back on.
   const statuses: ReadonlyArray<readonly [string, (client: Client) => void]> = [
@@ -56,7 +61,7 @@ describe('the six-check start is drawn on no answer of the pack status', () => {
     [
       'a failed read',
       (client) => seedError(client, PACK, new ApiError(503, {
-        contract_version: '1.37.0', error_code: 'dependency_unavailable', message: 'm',
+        contract_version: '1.38.0', error_code: 'dependency_unavailable', message: 'm',
         correlation_id: 'c', retryable: true,
       }, 'c')),
     ],

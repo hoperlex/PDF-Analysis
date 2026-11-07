@@ -2242,5 +2242,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0057_decision_carryover",
-  "contract_version": "1.37.0"
+  "contract_version": "1.38.0"
 }

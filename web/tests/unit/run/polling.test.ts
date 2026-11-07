@@ -154,7 +154,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.37.0',
+              contract_version: '1.38.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -183,7 +183,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.37.0',
+            contract_version: '1.38.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',

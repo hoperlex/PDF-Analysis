@@ -1,6 +1,19 @@
 # AR-V3-OPT-IN-01 — AR v3 as an opt-in mode
 
-**Status: design only.** Written 2026-11-07 by design lane A3 (`agent/lane-ar-v3-optin-01`), base `origin/dev`
+**Status: P1, P2 and P3 implemented 2026-11-08, switched off** (lane AV, `agent/lane-ar-v3-switch-01`; contract `1.38.0`, no
+migration; product code, tests and the web are in that branch, the version note and the publication are the integrator's).
+P4 (acceptance on a throwaway stand with a real pack) and P5 (a runtime admin toggle) are not built. The owner answers of
+2026-11-07 to Q1 to Q7 were the recommended options (the owner was unreachable and the owner's words were «реализуй как
+переключаемую функцию — по умолчанию используется импортированный вариант»): Q1 allow-only, Q2 an environment switch
+`AR_V3_BETA_START_ALLOWED` read by `api` only, Q3 counters and picks count the standard analysis only, Q4 re-auditing a v3
+member is refused, Q5 a v3 member named in a comparison is refused, Q6 the label «АР v3 (бета)» with no human-review wording,
+Q7 build P1 to P3 now. What differs from the text below: the allowance check of a price sits in `RunAdapter` and not in
+`preflight.py:453`, so `estimate_group` and its tests are untouched; `start_ar_v3_group` takes `start_allowed` and is **closed by
+default**; `analysis_kind` is sent on every run; the web labels a v3 run always and a standard run only where `start_allowed`
+is true (the run list, the run page); `estimateRunCost` with `reaudit_of_run_id` of a member is the same refusal as the repeat.
+`startRun`, `reauditRun` and the section route table gained no path to v3, and tests pin that.
+
+*Original status line, as written by the design lane:* **design only.** Written 2026-11-07 by design lane A3 (`agent/lane-ar-v3-optin-01`), base `origin/dev`
 `6ce57252a` (product `0.14.0`, API contract `1.36.0`, migration head `0056_optimisation_decisions`). This document changes
 no contract, migration, product code, test, AR v3 file, pack, prompt, data or activation state, and ran no model call, stand
 or script. Sections 4 to 7 are a proposal until the owner has answered section 9. Sources are cited as `path:line` at the

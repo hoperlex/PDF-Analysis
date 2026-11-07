@@ -35,6 +35,11 @@ import {
   PACK_NOT_INSTALLED_SENTENCE,
   PACK_READ_FAILED_TITLE,
   PACK_TITLE,
+  START_ALLOWED_LABEL,
+  START_ALLOWED_NOTE,
+  START_ALLOWED_SENTENCE,
+  START_NOT_ALLOWED_NOTE,
+  START_NOT_ALLOWED_SENTENCE,
   packDigestShown,
 } from '../model/pack-presentation';
 
@@ -57,7 +62,13 @@ function InstalledPack({ pack }: { readonly pack: Installed }) {
         </dd>
         <dt>Области шести проверок</dt>
         <dd data-ar-v3-pack-scopes={pack.scopeIds.join(' ')}>{pack.scopeIds.join(', ')}</dd>
+        {/* `AR-V3-OPT-IN`: read-only, for every role; the permission is the deployment's, not the pack's. */}
+        <dt>{START_ALLOWED_LABEL}</dt>
+        <dd data-ar-v3-start-allowed={pack.startAllowed ? 'allowed' : 'not_allowed'}>
+          {pack.startAllowed ? START_ALLOWED_SENTENCE : START_NOT_ALLOWED_SENTENCE}
+        </dd>
       </dl>
+      <p className="am-note">{pack.startAllowed ? START_ALLOWED_NOTE : START_NOT_ALLOWED_NOTE}</p>
       <div className={styles.attestation} data-ar-v3-pack-attestation>
         <h3>Запись рецензента</h3>
         <dl className={styles.facts}>

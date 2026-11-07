@@ -246,7 +246,7 @@ def test_current_attempt_resolves_all_six_reviewed_member_pins(migrated_engine: 
     with Session(migrated_engine) as session, session.begin():
         started = start_ar_v3_group(
             session, version_uid=version, idempotency_key="ar-v3-preflight",
-            provider_mode="recorded", pack=pack, input_budget_characters=1000,
+            provider_mode="recorded", pack=pack, input_budget_characters=1000, start_allowed=True,
         )
     registry = TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (pack,))
     with Session(migrated_engine) as session, session.begin():
@@ -278,7 +278,7 @@ def test_preflight_refuses_missing_changed_pack_foreign_run_and_stale_attempt(
     with Session(migrated_engine) as session, session.begin():
         started = start_ar_v3_group(
             session, version_uid=version, idempotency_key="ar-v3-preflight-refusals",
-            provider_mode="recorded", pack=pack, input_budget_characters=1000,
+            provider_mode="recorded", pack=pack, input_budget_characters=1000, start_allowed=True,
         )
     member = started.group.members[0]
     registry = TrustedPackRegistry("ar-v3-beta-reviewed-pack-registry/1", (pack,))
@@ -382,7 +382,7 @@ def test_six_pins_replay_readback_and_refusals(migrated_engine: Engine, monkeypa
     with Session(migrated_engine) as session, session.begin():
         first = start_ar_v3_group(
             session, version_uid=version, idempotency_key="ar-v3-six",
-            provider_mode="recorded", pack=pack, input_budget_characters=1000,
+            provider_mode="recorded", pack=pack, input_budget_characters=1000, start_allowed=True,
         )
         assert not first.replayed
         assert tuple(m.scope_id for m in first.group.members) == ("F1", "F2", "A1", "A2", "S1", "S2")
@@ -415,13 +415,13 @@ def test_six_pins_replay_readback_and_refusals(migrated_engine: Engine, monkeypa
         with pytest.raises(DomainError):
             start_ar_v3_group(session, version_uid=version, idempotency_key="ar-v3-duplicate",
                               provider_mode="recorded", pack=duplicate,
-                              input_budget_characters=1000)
+                              input_budget_characters=1000, start_allowed=True)
         wrong_set = replace(pack.scopes[0], set_id=str(NormRetrievalSetId.new()))
         foreign = replace(pack, scopes=(wrong_set, *pack.scopes[1:]))
         with pytest.raises(DomainError):
             start_ar_v3_group(session, version_uid=version, idempotency_key="ar-v3-foreign",
                               provider_mode="recorded", pack=foreign,
-                              input_budget_characters=1000)
+                              input_budget_characters=1000, start_allowed=True)
         assert _counts(session) == before
 
     # A failure after the third INSERT rolls back command, group and child Runs together.
@@ -441,7 +441,7 @@ def test_six_pins_replay_readback_and_refusals(migrated_engine: Engine, monkeypa
             with Session(migrated_engine) as session, session.begin():
                 start_ar_v3_group(
                     session, version_uid=version, idempotency_key="ar-v3-rollback",
-                    provider_mode="recorded", pack=pack, input_budget_characters=1000,
+                    provider_mode="recorded", pack=pack, input_budget_characters=1000, start_allowed=True,
                 )
     with Session(migrated_engine) as session:
         assert _counts(session) == before
@@ -469,7 +469,7 @@ def test_six_pins_replay_readback_and_refusals(migrated_engine: Engine, monkeypa
         with pytest.raises(DomainError) as refused:
             start_ar_v3_group(
                 session, version_uid=version, idempotency_key="ar-v3-stale-snapshot",
-                provider_mode="recorded", pack=pack, input_budget_characters=1000,
+                provider_mode="recorded", pack=pack, input_budget_characters=1000, start_allowed=True,
             )
         assert refused.value.code is ErrorCode.REQUIRED_NORM_UNAVAILABLE
         assert _counts(session) == before
