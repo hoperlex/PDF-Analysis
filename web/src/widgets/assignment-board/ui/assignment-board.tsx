@@ -28,6 +28,7 @@ import {
   AssignmentStatusLabel,
   assignmentFailure,
   assignmentScope,
+  emptyAssignmentsTitle,
   movesFor,
   useAssignments,
 } from '@/entities/assignment';
@@ -84,7 +85,10 @@ export function AssignmentRows({ items, roles, viewerUid, experts }: AssignmentR
                   {assignment.note === null ? null : <p className={styles.note}>{assignment.note}</p>}
                   <p className={styles.meta}>Назначил: {assignment.created_by_label}</p>
                 </td>
-                <td>{assignment.assignee_label}</td>
+                <td>
+                  {assignment.assignee_label}
+                  {viewerIsAssignee === true ? <span className="am-note"> (вы)</span> : null}
+                </td>
                 <td>
                   <AssignmentStatusLabel status={assignment.status} />
                   {assignment.status_reason === null ? null : (
@@ -102,6 +106,7 @@ export function AssignmentRows({ items, roles, viewerUid, experts }: AssignmentR
                     type="button"
                     className="am-button am-button--quiet am-button--small"
                     data-assignment-history-toggle={assignment.assignment_uid}
+                    aria-expanded={open === assignment.assignment_uid}
                     onClick={() => setOpen(open === assignment.assignment_uid ? null : assignment.assignment_uid)}
                   >
                     {open === assignment.assignment_uid ? 'Скрыть историю' : 'История'}
@@ -215,14 +220,19 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
       {query.isSuccess ? (
         query.data.items.length === 0 ? (
           <EmptyState
-            title="Назначений нет."
-            detail={admin ? 'Назначьте работу эксперту формой выше.' : 'Вам пока ничего не назначено.'}
+            title={emptyAssignmentsTitle(status, admin && mine)}
+            detail={status !== '' ? 'Выберите другое состояние или «Все».' : admin ? 'Назначьте работу эксперту формой выше.' : 'Вам пока ничего не назначено.'}
+            action={status === '' ? undefined : (
+              <button type="button" className="am-button am-button--quiet am-button--small" data-assignment-show-all="" onClick={() => choose('')}>
+                Показать все
+              </button>
+            )}
           />
         ) : (
           <>
             <AssignmentRows items={query.data.items} roles={roles} viewerUid={viewerUid} experts={experts} />
             <div className="am-pager">
-              <span className="am-note" data-assignment-total={query.data.total}>Найдено: {query.data.total}</span>
+              <span className="am-note" aria-live="polite" data-assignment-total={query.data.total}>Найдено: {query.data.total}</span>
               {cursor === undefined ? null : (
                 <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setCursor(undefined)}>
                   В начало

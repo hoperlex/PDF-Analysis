@@ -27,6 +27,18 @@ export const ASSIGNMENT_STATUS_LABELS: Readonly<Record<AssignmentStatus, string>
   cancelled: 'Отменено',
 };
 
+/**
+ * The tone of a status badge: work given and waiting is neutral, work in hand is the accent, done is green, work handed
+ * back (it waits for an administrator) is amber, and a cancelled one is inert. The badge says it before the words are read.
+ */
+export const ASSIGNMENT_STATUS_TONES: Readonly<Record<AssignmentStatus, 'pending' | 'active' | 'ok' | 'degraded' | 'inert'>> = {
+  assigned: 'pending',
+  in_progress: 'active',
+  done: 'ok',
+  returned: 'degraded',
+  cancelled: 'inert',
+};
+
 export const ASSIGNMENT_EVENT_LABELS: Readonly<Record<AssignmentEventKind, string>> = {
   assigned: 'Назначено',
   started: 'Взято в работу',
@@ -95,4 +107,14 @@ export function assignmentScope(assignment: Pick<Assignment, 'project_name' | 'd
   return assignment.document_title === null
     ? `Проект «${assignment.project_name}»`
     : `Документ «${assignment.document_title}» проекта «${assignment.project_name}»`;
+}
+
+/**
+ * What an empty list says (`UI-PARITY`, `UI-B-62`): the chosen status when there is one, «Только мои» when it is on, and
+ * otherwise that nothing is assigned. A short sentence that names the filter, so an empty list is never read as an empty system.
+ */
+export function emptyAssignmentsTitle(status: AssignmentStatus | '', mine: boolean): string {
+  if (status !== '') return `Назначений в состоянии «${ASSIGNMENT_STATUS_LABELS[status]}» нет.`;
+  if (mine) return 'Вам не назначено ничего.';
+  return 'Назначений нет.';
 }

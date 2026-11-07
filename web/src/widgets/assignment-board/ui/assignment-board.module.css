@@ -1,17 +1,17 @@
-/* «Диспетчер» (`W61-DISPATCHER-01`). Layout only; the table, buttons and states take the shared
+/* «Диспетчер» (`W61-DISPATCHER-01`). Layout only; the table, buttons, badges and states take the shared
    tokens. */
 
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--am-gap-md);
+  margin-bottom: var(--am-gap-sm);
 }
 
 .filter {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--am-gap-xs);
 }
 
 /* The state chips (contract 1.36.0): one line of buttons that wraps. */
@@ -19,7 +19,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--am-gap-sm);
-  margin-bottom: var(--am-gap);
+  margin-bottom: var(--am-gap-sm);
 }
 
 .tableWrap {
@@ -36,9 +36,13 @@
 
 .table th,
 .table td {
-  padding: 7px 9px;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   text-align: left;
   vertical-align: top;
+}
+
+.table tbody td {
+  border-top: 1px solid var(--am-line-soft);
 }
 
 .table th {
@@ -55,13 +59,13 @@
 
 .note,
 .meta {
-  margin: 0.25rem 0 0;
+  margin: var(--am-gap-xs) 0 0;
   overflow-wrap: anywhere;
 }
 
 .history {
-  margin: 0.5rem 0 0;
-  padding-left: 1.25rem;
+  margin: var(--am-gap-sm) 0 0;
+  padding-left: var(--am-gap-lg);
 }
 
 @media (max-width: 780px) {

@@ -12,12 +12,11 @@
 import { useState } from 'react';
 
 import { ErrorState } from '@/shared/ui';
-import { assignmentFailure } from '@/entities/assignment';
+import { assignmentFailure, assignmentScope } from '@/entities/assignment';
 import { useDocumentList } from '@/entities/document-version';
 import { useProjectList } from '@/entities/project';
 
 import { useCreateAssignment } from '../model/use-create-assignment';
-import styles from './create-assignment-form.module.css';
 
 export interface ExpertChoice {
   readonly userUid: string;
@@ -26,6 +25,11 @@ export interface ExpertChoice {
 
 export interface CreateAssignmentFormProps {
   readonly experts: readonly ExpertChoice[];
+  /**
+   * `R-151m`: the header's project, which the form starts on so an administrator working in one project does not pick it again;
+   * `null` or absent for «Все проекты». Only the start: the field stays free, and a change of the header re-mounts the form.
+   */
+  readonly defaultProjectUid?: string | null | undefined;
 }
 
 function DocumentChoice({
@@ -40,7 +44,7 @@ function DocumentChoice({
   const documents = useDocumentList(projectUid);
   const items = documents.isSuccess ? documents.data.items : [];
   return (
-    <label className={styles.field}>
+    <label className="am-form__field">
       Документ (необязательно)
       <select value={value} onChange={(event) => onChange(event.target.value)} disabled={!documents.isSuccess}>
         <option value="">Весь проект</option>
@@ -54,21 +58,21 @@ function DocumentChoice({
   );
 }
 
-export function CreateAssignmentForm({ experts }: CreateAssignmentFormProps) {
+export function CreateAssignmentForm({ experts, defaultProjectUid = null }: CreateAssignmentFormProps) {
   const projects = useProjectList();
   const create = useCreateAssignment();
-  const [projectUid, setProjectUid] = useState('');
+  const [projectUid, setProjectUid] = useState(defaultProjectUid ?? '');
   const [documentUid, setDocumentUid] = useState('');
   const [assignee, setAssignee] = useState('');
   const [note, setNote] = useState('');
-  const [created, setCreated] = useState<string | null>(null);
+  const [created, setCreated] = useState<{ readonly uid: string; readonly what: string; readonly who: string } | null>(null);
 
   const projectItems = projects.isSuccess ? projects.data.items : [];
   const ready = projectUid !== '' && assignee !== '' && !create.isPending;
 
   return (
     <form
-      className={styles.form}
+      className="am-form"
       data-create-assignment=""
       onSubmit={(event) => {
         event.preventDefault();
@@ -77,7 +81,7 @@ export function CreateAssignmentForm({ experts }: CreateAssignmentFormProps) {
           { projectUid, documentUid: documentUid === '' ? null : documentUid, assigneeUserUid: assignee, note },
           {
             onSuccess: (assignment) => {
-              setCreated(assignment.assignment_uid);
+              setCreated({ uid: assignment.assignment_uid, what: assignmentScope(assignment), who: assignment.assignee_label });
               setDocumentUid('');
               setNote('');
             },
@@ -85,7 +89,7 @@ export function CreateAssignmentForm({ experts }: CreateAssignmentFormProps) {
         );
       }}
     >
-      <label className={styles.field}>
+      <label className="am-form__field">
         Проект
         <select
           value={projectUid}
@@ -106,7 +110,7 @@ export function CreateAssignmentForm({ experts }: CreateAssignmentFormProps) {
       {projectUid === '' ? null : (
         <DocumentChoice projectUid={projectUid} value={documentUid} onChange={setDocumentUid} />
       )}
-      <label className={styles.field}>
+      <label className="am-form__field">
         Эксперт
         <select value={assignee} required onChange={(event) => setAssignee(event.target.value)}>
           <option value="">Выберите эксперта</option>
@@ -117,18 +121,23 @@ export function CreateAssignmentForm({ experts }: CreateAssignmentFormProps) {
           ))}
         </select>
       </label>
-      <label className={styles.field}>
+      <label className="am-form__field">
         Комментарий (необязательно)
         <textarea value={note} maxLength={2000} rows={2} onChange={(event) => setNote(event.target.value)} />
       </label>
-      <div>
+      <div className="am-form__row">
         <button type="submit" className="am-button" disabled={!ready} data-create-assignment-submit="">
           Назначить
         </button>
+        {projectUid === '' || assignee === '' ? (
+          <span className="am-form__hint" data-create-assignment-hint="">
+            {projectUid === '' ? 'Выберите проект' : 'Выберите эксперта'}, чтобы назначить работу.
+          </span>
+        ) : null}
       </div>
       {created !== null && !create.isError ? (
-        <p className="am-note" data-create-assignment-done={created}>
-          Назначение создано.
+        <p className="am-form__created" role="status" data-create-assignment-done={created.uid}>
+          Назначение создано. {created.what}, ответственный: {created.who}.
         </p>
       ) : null}
       {create.isError ? (() => {
