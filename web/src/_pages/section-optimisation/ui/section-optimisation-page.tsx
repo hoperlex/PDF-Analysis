@@ -20,12 +20,16 @@
  * opening it. The two reads are the tabs' own first reads -- the same query keys, so an open tab and its number are one
  * request -- and the number of a tab whose read has not answered, was refused or was stopped at a bound is left off.
  *
+ * **The row of the tabs** holds the section and the project (`UI-B-24`), as the original's toolbar holds its project: one choice
+ * for both tabs, made once. The «Форма 7» tab shows the form's nine graphs with the rows grouped under a row per project that
+ * folds («+» and «−» unfold and fold them all), as the original draws it (`UI-B-23`).
+ *
  * Not `/optimisation`, which is the optimisation of one project and stays registered, outside
  * the menu, until it becomes a tab of the project screen.
  */
 
 import Link from 'next/link';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import type { ProjectSection, ProjectUid } from '@/shared/api';
@@ -40,6 +44,8 @@ import { DEFAULT_SECTION_OPTIMISATION_ADDRESS, sectionOptimisationSearch } from 
 import type { SectionOptimisationAddress } from '../model/address';
 import { SECTION_OPTIMISATION_TABS, sectionOptimisationTabText } from '../model/tabs';
 import type { SectionOptimisationTab, SectionOptimisationTabCounts } from '../model/tabs';
+import { SectionFilterBar, projectFilterOptions } from './section-filter-bar';
+import type { SectionMember } from './section-filter-bar';
 import styles from './section-optimisation-page.module.css';
 
 export interface SectionOptimisationPageProps {
@@ -79,6 +85,22 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
     accepted: accepted.data?.total ?? null,
   };
 
+  // The projects of the section, from the unnarrowed read: the only answer that lists every one. Kept while a project is chosen,
+  // when the read lists that project alone, and dropped with the section.
+  const [members, setMembers] = useState<readonly SectionMember[]>([]);
+  const answer = specification.data;
+  useEffect(() => {
+    if (answer !== undefined && answer.section_code === filter.sectionCode && answer.project_filter === null) {
+      setMembers(answer.projects.map((project) => ({ projectUid: project.project_uid, name: project.name })));
+    }
+  }, [answer, filter.sectionCode]);
+  // The narrowed answer lists the project it is narrowed to, so it names it; before it arrives the option reads the project.
+  const answeredName =
+    answer === undefined || filter.projectUid === null || answer.section_code !== filter.sectionCode
+      ? null
+      : (answer.projects.find((project) => project.project_uid === filter.projectUid)?.name ?? null);
+  const projectOptions = projectFilterOptions(members, filter.projectUid, answeredName);
+
   function keep(next: { readonly tab: SectionOptimisationTab; readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
     // A reload or a pasted link opens the same view: the address follows every choice, without a new history entry.
     if (typeof window !== 'undefined') window.history.replaceState(null, '', sectionOptimisationSearch(next));
@@ -90,6 +112,7 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
   }
 
   function chooseFilter(next: { readonly sectionCode: ProjectSection; readonly projectUid: ProjectUid | null }) {
+    if (next.sectionCode !== filter.sectionCode) setMembers([]);
     setFilter(next);
     keep({ tab, ...next });
   }
@@ -135,27 +158,37 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
         )}
       </p>
       <div className={styles.tabs}>
-        <div role="tablist" aria-label="Вкладки оптимизации раздела" className={styles.tablist}>
-          {SECTION_OPTIMISATION_TABS.map((name) => (
-            <button
-              key={name}
-              ref={(element) => {
-                buttons.current[name] = element;
-              }}
-              type="button"
-              role="tab"
-              id={`${base}-tab-${name}`}
-              aria-selected={name === tab}
-              aria-controls={`${base}-panel`}
-              tabIndex={name === tab ? 0 : -1}
-              className={styles.tab}
-              data-section-optimisation-tab={name}
-              onClick={() => chooseTab(name)}
-              onKeyDown={onKeyDown}
-            >
-              {sectionOptimisationTabText(name, counts)}
-            </button>
-          ))}
+        {/* `UI-B-24`: as the original's toolbar, the tabs on the left and the choice of section and project beside them. */}
+        <div className={styles.toolbar}>
+          <div role="tablist" aria-label="Вкладки оптимизации раздела" className={styles.tablist}>
+            {SECTION_OPTIMISATION_TABS.map((name) => (
+              <button
+                key={name}
+                ref={(element) => {
+                  buttons.current[name] = element;
+                }}
+                type="button"
+                role="tab"
+                id={`${base}-tab-${name}`}
+                aria-selected={name === tab}
+                aria-controls={`${base}-panel`}
+                tabIndex={name === tab ? 0 : -1}
+                className={styles.tab}
+                data-section-optimisation-tab={name}
+                onClick={() => chooseTab(name)}
+                onKeyDown={onKeyDown}
+              >
+                {sectionOptimisationTabText(name, counts)}
+              </button>
+            ))}
+          </div>
+          <SectionFilterBar
+            sectionCode={filter.sectionCode}
+            projectUid={filter.projectUid}
+            options={projectOptions}
+            onSection={(sectionCode) => chooseFilter({ sectionCode, projectUid: null })}
+            onProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
+          />
         </div>
         <div
           role="tabpanel"
@@ -167,17 +200,12 @@ export function SectionOptimisationPage({ initial = DEFAULT_SECTION_OPTIMISATION
         >
           {tab === 'specification' ? (
             <SectionSpecificationSection
-              initialSectionCode={filter.sectionCode}
-              initialProjectUid={filter.projectUid}
-              onFilterChange={chooseFilter}
-            />
-          ) : (
-            <SectionAcceptedOptimisations
               sectionCode={filter.sectionCode}
               projectUid={filter.projectUid}
-              onSection={(sectionCode) => chooseFilter({ sectionCode, projectUid: null })}
-              onProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
+              onSelectProject={(projectUid) => chooseFilter({ sectionCode: filter.sectionCode, projectUid })}
             />
+          ) : (
+            <SectionAcceptedOptimisations sectionCode={filter.sectionCode} projectUid={filter.projectUid} />
           )}
         </div>
       </div>

@@ -11,9 +11,8 @@
  * pass the proposal belongs to (`UI-B-02`). Every price and the saving are the API's exact text; a saving the API
  * leaves out is said to be not computed, never shown as zero.
  *
- * **Filters.** The section is chosen from the fifteen in the structure's order; the project from the projects the
- * installation lists, and a project the address names is offered even when the first page of projects lacks it (it is
- * read on its own), so an address never opens on a selection the control cannot show.
+ * **Filters.** The section and the project are the page's, chosen in the row of the tabs (`UI-B-24`) and shared with the
+ * specification tab; this widget reads them as props and starts from its first page whenever either changes.
  */
 
 import Link from 'next/link';
@@ -24,15 +23,10 @@ import { failureMessage } from '@/shared/api/failure-message';
 import { formatInstant, routes } from '@/shared/lib';
 import type { TableColumn } from '@/shared/ui';
 import { EmptyState, ErrorState, LoadingState, Table } from '@/shared/ui';
-import { findProjectSection, projectSectionTitle, sectionsInStructureOrder, useProject, useProjectList } from '@/entities/project';
+import { findProjectSection, projectSectionTitle } from '@/entities/project';
 import { formatAmount, formatDecimal, useAcceptedOptimisationProposals } from '@/entities/optimisation-proposal';
 
 import styles from './section-accepted-optimisations.module.css';
-
-export interface ProjectOption {
-  readonly projectUid: ProjectUid;
-  readonly name: string;
-}
 
 /** «16 000 руб.», or why there is no figure. Never `0` for an absent saving. */
 export function acceptedSaving(row: AcceptedOptimisationProposal): string {
@@ -101,57 +95,6 @@ const COLUMNS: readonly TableColumn<AcceptedOptimisationProposal>[] = [
   },
 ];
 
-export interface SectionAcceptedFiltersProps {
-  readonly sectionCode: ProjectSection;
-  readonly projectUid: ProjectUid | null;
-  readonly projects: readonly ProjectOption[];
-  readonly onSection: (code: ProjectSection) => void;
-  readonly onProject: (uid: ProjectUid | null) => void;
-}
-
-/** The section and project selects. Rendered by the static harness. */
-export function SectionAcceptedFilters({ sectionCode, projectUid, projects, onSection, onProject }: SectionAcceptedFiltersProps) {
-  return (
-    <form className={`am-form ${styles.filters}`} aria-label="Отбор принятых оптимизаций" onSubmit={(event) => event.preventDefault()}>
-      <div className="am-form__field">
-        <label htmlFor="section-accepted-section">
-          <strong>Раздел</strong>
-        </label>
-        <select
-          id="section-accepted-section"
-          value={sectionCode}
-          onChange={(event) => onSection(event.target.value as ProjectSection)}
-          data-accepted-section-picker={sectionsInStructureOrder().length}
-        >
-          {sectionsInStructureOrder().map((section) => (
-            <option key={section.code} value={section.code}>
-              {projectSectionTitle(section)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="am-form__field">
-        <label htmlFor="section-accepted-project">
-          <strong>Проект</strong>
-        </label>
-        <select
-          id="section-accepted-project"
-          value={projectUid ?? ''}
-          onChange={(event) => onProject(event.target.value === '' ? null : (event.target.value as ProjectUid))}
-          data-accepted-project-filter={projects.length}
-        >
-          <option value="">Все проекты раздела</option>
-          {projects.map((project) => (
-            <option key={project.projectUid} value={project.projectUid}>
-              {project.name}
-            </option>
-          ))}
-        </select>
-      </div>
-    </form>
-  );
-}
-
 export interface SectionAcceptedListProps {
   readonly page: AcceptedOptimisationProposalPage;
   readonly hasPrevious: boolean;
@@ -189,42 +132,21 @@ export function SectionAcceptedList({ page, hasPrevious, onPrevious, onNext }: S
 export interface SectionAcceptedOptimisationsProps {
   readonly sectionCode: ProjectSection;
   readonly projectUid: ProjectUid | null;
-  readonly onSection: (code: ProjectSection) => void;
-  readonly onProject: (uid: ProjectUid | null) => void;
 }
 
-/**
- * The project options: the first page of projects, and the selected project even when that page lacks it (read on its
- * own by `getProject`; until it answers, its identity is the only honest label).
- */
-export function projectOptions(
-  listed: readonly { readonly project_uid: ProjectUid; readonly name: string }[],
-  selected: ProjectUid | null,
-  selectedName: string | null,
-): readonly ProjectOption[] {
-  const options = listed.map((project) => ({ projectUid: project.project_uid, name: project.name }));
-  if (selected !== null && !options.some((option) => option.projectUid === selected)) {
-    options.push({ projectUid: selected, name: selectedName ?? selected });
-  }
-  return options;
-}
-
-export function SectionAcceptedOptimisations({ sectionCode, projectUid, onSection, onProject }: SectionAcceptedOptimisationsProps) {
+export function SectionAcceptedOptimisations({ sectionCode, projectUid }: SectionAcceptedOptimisationsProps) {
   const [cursors, setCursors] = useState<readonly string[]>([]);
+  // A cursor belongs to the section and project it was issued under: another choice starts from the first page.
+  const scope = `${sectionCode}|${projectUid ?? ''}`;
+  const [seenScope, setSeenScope] = useState(scope);
+  if (seenScope !== scope) {
+    setSeenScope(scope);
+    setCursors([]);
+  }
   const cursor = cursors.at(-1);
   const accepted = useAcceptedOptimisationProposals({ sectionCode, projectUid, ...(cursor === undefined ? {} : { cursor }) });
-  const listed = useProjectList();
-  const selected = useProject(projectUid);
-  const options = projectOptions(listed.data?.items ?? [], projectUid, selected.data?.name ?? null);
   const failure = accepted.error === null ? null : failureMessage(accepted.error);
   const page = accepted.data;
-
-  function restart<T>(change: (value: T) => void) {
-    return (value: T) => {
-      setCursors([]);
-      change(value);
-    };
-  }
 
   return (
     <section className={styles.section} aria-label="Принятые оптимизации раздела" data-section-accepted="">
@@ -233,13 +155,6 @@ export function SectionAcceptedOptimisations({ sectionCode, projectUid, onSectio
         Раздел и проект только отбирают записи; каждая строка остаётся предложением своего проекта и прохода, и по ссылке открывается
         вкладка «Оптимизация» его комплекта.
       </p>
-      <SectionAcceptedFilters
-        sectionCode={sectionCode}
-        projectUid={projectUid}
-        projects={options}
-        onSection={restart(onSection)}
-        onProject={restart(onProject)}
-      />
       {accepted.isPending ? <LoadingState what="принятых оптимизаций" /> : null}
       {failure !== null ? (
         <div data-accepted-failure={failure.kind}>

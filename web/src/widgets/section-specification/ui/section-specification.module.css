@@ -100,3 +100,109 @@
 .group {
   color: var(--am-ink-muted);
 }
+
+/* `UI-B-23`: the original's Form 7 — the nine graphs of the form, the rows grouped under a row per project that folds. */
+.center {
+  text-align: center;
+}
+
+.address {
+  display: block;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.positionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs);
+}
+
+.allToggle {
+  display: inline-flex;
+  gap: var(--am-gap-2xs);
+}
+
+.allToggle button {
+  min-width: var(--am-gap-lg);
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.allToggle button:focus-visible,
+.groupToggle:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.columnNumbers th {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 400;
+  text-align: center;
+}
+
+.groupRow {
+  background: var(--am-surface-sunken);
+}
+
+.groupCell {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+}
+
+.groupToggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--am-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.caret {
+  display: inline-block;
+  min-width: var(--am-gap);
+  text-align: center;
+}
+
+.groupName {
+  font-weight: 600;
+}
+
+.missing {
+  color: var(--am-failed);
+  font-weight: 600;
+}
+
+.noteRow td,
+.categoryRow td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-soft);
+  color: var(--am-ink-muted);
+}
+
+.categoryRow td {
+  font-weight: 600;
+  background: var(--am-surface);
+  color: var(--am-ink);
+}
+
+.options {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}

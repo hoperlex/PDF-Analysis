@@ -28,7 +28,9 @@ import {
   sectionSpecificationQueryOptions,
   stageMark,
 } from '@/entities/section-specification';
-import { SectionPicker, SectionSpecificationAnswer, SectionSpecificationSection } from '@/widgets/section-specification';
+import { SectionFilterBar, projectFilterOptions } from '@/_pages/section-optimisation';
+import type { SectionSpecificationColumns } from '@/widgets/section-specification';
+import { SectionSpecificationAnswer, SectionSpecificationSection, groupRowsByProject } from '@/widgets/section-specification';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
 import {
@@ -43,9 +45,14 @@ import {
   sectionPagedAnswer,
 } from './fixtures';
 
-function render(answer: SectionSpecification, onSelect: ((uid: string) => void) | null = () => undefined): string {
+/** The answer as the reader sees it with «Показать сопоставление с прайс-листом» on, the table these rules were written for. */
+function render(
+  answer: SectionSpecification,
+  onSelect: ((uid: string) => void) | null = () => undefined,
+  columns: SectionSpecificationColumns = 'priced',
+): string {
   return renderToStaticMarkup(
-    createElement(SectionSpecificationAnswer, { answer, onPage: () => undefined, onSelectProject: onSelect }),
+    createElement(SectionSpecificationAnswer, { answer, onPage: () => undefined, onSelectProject: onSelect, columns }),
   );
 }
 
@@ -133,14 +140,15 @@ describe('rows are addressed and never merged', () => {
   it('gives every row its project, set, version, sheet and page', () => {
     const first = rowMarkup(markup, A_COUNTED);
     expect(first).toContain(`data-section-row-project="${SECTION_PROJECT_A}"`);
-    expect(text(first)).toContain('Школа на пятьсот мест');
+    // The project is the row's group (`UI-B-23`): its name is on the group's row, above the rows it holds.
     expect(text(first)).toContain('Архитектурные решения');
+    expect(markup.indexOf('data-section-group-row="' + SECTION_PROJECT_A + '"')).toBeLessThan(markup.indexOf('data-section-row="' + A_COUNTED + '"'));
+    expect(text(markup.slice(markup.indexOf('data-section-group-row="' + SECTION_PROJECT_A + '"')))).toContain('Школа на пятьсот мест');
     expect(text(first)).toContain('версия 2');
     expect(text(first)).toContain('л. 10 / с. 14');
     expect(first).toContain('title="строки 3–3"');
     const other = rowMarkup(markup, B_FIRST);
     expect(other).toContain(`data-section-row-project="${SECTION_PROJECT_B}"`);
-    expect(text(other)).toContain('Детский сад');
     expect(text(other)).toContain('версия 1');
     expect(text(other)).toContain('с. 9');
     expect(other).toContain(`/projects/${SECTION_PROJECT_B}/documents/${SECTION_DOCUMENT_B}`);
@@ -167,19 +175,28 @@ describe('rows are addressed and never merged', () => {
   it('shows the same product of two projects as two rows, each under its own project', () => {
     const name = 'Металлический щит МЩ-1';
     expect((text(markup).match(new RegExp(name, 'g')) ?? []).length).toBe(2);
-    expect(rowMarkup(markup, A_COUNTED)).toContain('Школа на пятьсот мест');
-    expect(rowMarkup(markup, B_FIRST)).toContain('Детский сад');
+    const groupA = markup.indexOf(`data-section-group-row="${SECTION_PROJECT_A}"`);
+    const groupB = markup.indexOf(`data-section-group-row="${SECTION_PROJECT_B}"`);
+    expect(groupA).toBeGreaterThan(-1);
+    expect(groupB).toBeGreaterThan(groupA);
+    // Each row sits between its own project's group row and the next project's.
+    expect(markup.indexOf(`data-section-row="${A_COUNTED}"`)).toBeGreaterThan(groupA);
+    expect(markup.indexOf(`data-section-row="${A_COUNTED}"`)).toBeLessThan(groupB);
+    expect(markup.indexOf(`data-section-row="${B_FIRST}"`)).toBeGreaterThan(groupB);
   });
 
   it('keeps the nine columns of the form, with type, code and maker said to be inside the name', () => {
     for (const heading of [
-      'Проект', 'Комплект', 'Лист / стр.', 'Поз.', 'Наименование и техническая характеристика', 'Ед. изм.',
-      'Кол.', 'Масса ед.', 'Примечание', 'Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма',
+      'Позиция', 'Наименование и техническая характеристика', 'Тип, марка, обозначение документа, опросного листа',
+      'Код оборудования, изделия, материала', 'Завод-изготовитель', 'Единица измерения', 'Количество', 'Масса единицы, кг',
+      'Примечание', 'Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма',
     ]) {
-      expect(markup).toContain(`>${heading}</th>`);
+      expect(markup).toContain(`${heading}</th>`);
     }
     expect(text(markup)).toContain('графы «Тип, марка», «Код» и «Завод-изготовитель» не отделены от наименования');
-    expect(text(rowMarkup(markup, A_COUNTED))).toContain('Изделия: Металлический щит МЩ-1');
+    // The row's category is the form's own divider row; the name is the name.
+    expect(markup).toContain('data-section-category="Изделия"');
+    expect(text(rowMarkup(markup, A_COUNTED))).toContain('Металлический щит МЩ-1');
     expect(text(rowMarkup(markup, A_COUNTED))).toContain('45,5');
     expect(text(rowMarkup(markup, A_COUNTED))).toContain('по месту');
   });
@@ -277,21 +294,33 @@ describe('what is said instead of a table', () => {
 });
 
 describe('the section picker and the container', () => {
-  it('lists the fifteen sections in the owner’s order, АР first', () => {
-    const markup = renderToStaticMarkup(createElement(SectionPicker, { selected: 'AR', onSelect: () => undefined }));
-    const values = [...markup.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
+  it('lists the fifteen sections in the owner’s order, АР first, in the row of the tabs', () => {
+    const markup = renderToStaticMarkup(
+      createElement(SectionFilterBar, { sectionCode: 'AR', projectUid: null, options: [], onSection: () => undefined, onProject: () => undefined }),
+    );
+    const values = [...markup.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]).filter((value) => value !== '');
     expect(values).toEqual([...PROJECT_STRUCTURE_ORDER]);
     expect(values).toHaveLength(15);
     expect(markup).toContain('Архитектурные решения (АР)');
     expect(markup).toContain('data-section-picker="15"');
+    expect(markup).toContain('Все проекты раздела');
+    expect(markup).toContain('data-section-project-filter="0"');
+  });
+
+  it('offers the project of the address although the list lacks it, and does not list one twice', () => {
+    const members = [{ projectUid: SECTION_PROJECT_A as never, name: 'Школа на пятьсот мест' }];
+    expect(projectFilterOptions(members, SECTION_PROJECT_B as never, null)).toEqual([
+      ...members, { projectUid: SECTION_PROJECT_B, name: null },
+    ]);
+    expect(projectFilterOptions(members, SECTION_PROJECT_A as never, 'Другое')).toEqual(members);
+    expect(projectFilterOptions(members, null, null)).toEqual(members);
   });
 
   it('opens on АР, unfiltered, and waits on its read', () => {
     const client = newClient();
     const markup = renderScreen(client, createElement(SectionSpecificationSection));
     expect(markup).toContain('data-section-specification');
-    expect(markup).toContain('Все проекты раздела');
-    expect(markup).toContain('selected=""');
+    expect(markup).toContain('Показать сопоставление с прайс-листом');
     expect(client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([sectionKey()]);
   });
 
@@ -317,5 +346,85 @@ describe('the section picker and the container', () => {
     expect(queryKeys.optimisation.sectionSpecification('AR')).toEqual(
       ['optimisation', 'section-specification', 'AR', { projectUid: null, q: null, offset: 0, limit: null }],
     );
+  });
+});
+
+describe('the original’s Form 7: nine graphs, the rows grouped under a project that folds (`UI-B-23`)', () => {
+  const markup = render(sectionAnswer(), () => undefined, 'form7');
+
+  it('shows the nine graphs and their numbers, and none of the price columns, by default', () => {
+    expect(markup).toContain('data-section-columns="form7"');
+    const head = markup.slice(markup.indexOf('<thead>'), markup.indexOf('</thead>'));
+    expect((head.match(/scope="col"/g) ?? []).length).toBe(9);
+    for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9]) expect(head).toContain(`>${number}</th>`);
+    for (const heading of ['Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма']) {
+      expect(head).not.toContain(`>${heading}</th>`);
+    }
+    expect(rowMarkup(markup, A_COUNTED)).not.toContain('data-section-price');
+    expect(rowMarkup(markup, A_COUNTED)).not.toContain('data-section-amount');
+    // The default of the component is the form; the price columns are asked for.
+    expect(renderToStaticMarkup(createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), onPage: null, onSelectProject: null }))).toContain(
+      'data-section-columns="form7"',
+    );
+  });
+
+  it('adds the four price columns, and only them, when asked', () => {
+    const priced = render(sectionAnswer());
+    const head = priced.slice(priced.indexOf('<thead>'), priced.indexOf('</thead>'));
+    expect((head.match(/scope="col"/g) ?? []).length).toBe(13);
+    expect(priced).toContain('data-section-columns="priced"');
+  });
+
+  it('groups the rows under one row per project, with its name, sets and rows, folded open', () => {
+    expect((markup.match(/data-section-group-row=/g) ?? []).length).toBe(2);
+    const groups = groupRowsByProject(sectionAnswer());
+    expect(groups.map((group) => [group.projectUid, group.rows.length])).toEqual([[SECTION_PROJECT_A, 4], [SECTION_PROJECT_B, 2]]);
+    const header = markup.slice(markup.indexOf(`data-section-group-row="${SECTION_PROJECT_A}"`));
+    expect(text(header.slice(0, header.indexOf('</tr>')))).toContain('Школа на пятьсот мест · 4 комплекта · 4 строки');
+    expect(header).toContain('aria-expanded="true"');
+    expect(markup).toContain('data-section-group-collapsed="no"');
+    expect(markup).not.toContain('data-section-group-collapsed="yes"');
+  });
+
+  it('says a project with no specification has none, and keeps its group', () => {
+    const answer = sectionAnswer();
+    const bare = sectionAnswer({
+      projects: answer.projects.map((project, index) => (index === 1 ? { ...project, row_count: 0 } : project)),
+      rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 4 },
+    });
+    const html = render(bare, () => undefined, 'form7');
+    expect(html).toContain('data-section-group-empty="missing"');
+    expect(text(html)).toContain('Спецификация отсутствует');
+    // Not a number of rows it has not got.
+    const group = html.slice(html.indexOf(`data-section-group-row="${SECTION_PROJECT_B}"`));
+    expect(text(group.slice(0, group.indexOf('</tr>')))).not.toMatch(/ 0 строк/);
+  });
+
+  it('says a project whose rows are on another page has rows, and a search that spared none of them found none', () => {
+    const answer = sectionAnswer();
+    const otherPage = sectionAnswer({ rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 6 } });
+    expect(render(otherPage, () => undefined, 'form7')).toContain('data-section-group-empty="page"');
+    expect(text(render(otherPage, () => undefined, 'form7'))).toContain('Строки этого проекта — на другой странице списка.');
+    const searched = sectionAnswer({ query: 'щит', rows: { ...answer.rows!, items: answer.rows!.items.slice(0, 4), total: 4 } });
+    expect(text(render(searched, () => undefined, 'form7'))).toContain('По текущему поиску строки спецификации этого проекта на этой странице не найдены.');
+  });
+
+  it('has the original’s «+» and «−» for every project in the heading of the first graph', () => {
+    expect(markup).toContain('data-section-expand-all=""');
+    expect(markup).toContain('data-section-collapse-all=""');
+    expect(markup).toContain('aria-label="Развернуть все проекты"');
+    expect(markup).toContain('aria-label="Свернуть все проекты"');
+  });
+
+  it('keeps every row’s address under its name, and does not drop a row of a project the answer does not list', () => {
+    const row = rowMarkup(markup, A_COUNTED);
+    expect(text(row)).toContain('версия 2');
+    expect(text(row)).toContain('л. 10 / с. 14');
+    const answer = sectionAnswer();
+    const stray = sectionAnswer({ projects: answer.projects.slice(0, 1) });
+    const groups = groupRowsByProject(stray);
+    expect(groups.map((group) => group.projectUid)).toEqual([SECTION_PROJECT_A, SECTION_PROJECT_B]);
+    expect(groups[1]!.project).toBeUndefined();
+    expect(groups[1]!.rows).toHaveLength(2);
   });
 });

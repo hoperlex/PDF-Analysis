@@ -14,13 +14,11 @@ import { ApiError, queryKeys } from '@/shared/api';
 import type { ProjectUid } from '@/shared/api';
 import { ACCEPTED_PAGE_LIMIT, acceptedProposalsQueryOptions } from '@/entities/optimisation-proposal';
 import {
-  SectionAcceptedFilters,
   SectionAcceptedList,
   SectionAcceptedOptimisations,
   acceptedQuantity,
   acceptedSaving,
   acceptedSectionTitle,
-  projectOptions,
 } from '@/widgets/section-accepted-optimisations';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
@@ -33,7 +31,6 @@ import {
   acceptedPage,
   acceptedRow,
   acceptedTape,
-  projectRead,
 } from './fixtures';
 
 const noop = (): void => undefined;
@@ -125,56 +122,13 @@ describe('the empty answer and the pager', () => {
   });
 });
 
-describe('the filters', () => {
-  const render = (sectionCode: 'AR' | 'KJ', projectUid: ProjectUid | null, projects = projectOptions([], projectUid, null)) =>
-    renderToStaticMarkup(
-      createElement(SectionAcceptedFilters, { sectionCode, projectUid, projects, onSection: noop, onProject: noop }),
-    );
-
-  it('offer the fifteen sections in the structure’s order with the chosen one selected', () => {
-    const markup = render('KJ', null);
-    expect(markup).toContain('data-accepted-section-picker="15"');
-    expect(markup).toMatch(/<option[^>]*value="KJ"[^>]*selected=""|<option[^>]*selected=""[^>]*value="KJ"/);
-    expect(markup).toContain('Все проекты раздела');
-  });
-
-  it('offer the project the address names even when the listed projects lack it', () => {
-    const projects = projectOptions(
-      [{ project_uid: ACCEPTED_PROJECT_A as ProjectUid, name: 'Школа на пятьсот мест' }],
-      ACCEPTED_PROJECT_B as ProjectUid,
-      'Детский сад',
-    );
-    expect(projects.map((project) => project.projectUid)).toEqual([ACCEPTED_PROJECT_A, ACCEPTED_PROJECT_B]);
-    const markup = render('AR', ACCEPTED_PROJECT_B as ProjectUid, projects);
-    expect(markup).toContain('data-accepted-project-filter="2"');
-    expect(markup).toMatch(new RegExp(`<option[^>]*value="${ACCEPTED_PROJECT_B}"[^>]*selected=""|<option[^>]*selected=""[^>]*value="${ACCEPTED_PROJECT_B}"`));
-    expect(text(markup)).toContain('Детский сад');
-  });
-
-  it('name an unread project by its identity, the only label that is true before its read', () => {
-    expect(projectOptions([], ACCEPTED_PROJECT_B as ProjectUid, null)).toEqual([
-      { projectUid: ACCEPTED_PROJECT_B, name: ACCEPTED_PROJECT_B },
-    ]);
-    expect(projectOptions([], null, null)).toEqual([]);
-  });
-
-  it('do not duplicate a project the list already holds', () => {
-    const options = projectOptions(
-      [{ project_uid: ACCEPTED_PROJECT_A as ProjectUid, name: 'Школа на пятьсот мест' }],
-      ACCEPTED_PROJECT_A as ProjectUid,
-      'Другое имя',
-    );
-    expect(options).toEqual([{ projectUid: ACCEPTED_PROJECT_A, name: 'Школа на пятьсот мест' }]);
-  });
-});
-
 describe('the tab as a screen', () => {
   it('reads one page under its section and project, and waits on the read', () => {
     const client = newClient();
     const markup = renderScreen(
       client,
       createElement(SectionAcceptedOptimisations, {
-        sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B as ProjectUid, onSection: noop, onProject: noop,
+        sectionCode: 'KJ', projectUid: ACCEPTED_PROJECT_B as ProjectUid,
       }),
     );
     expect(markup).toContain('data-section-accepted');
@@ -188,21 +142,19 @@ describe('the tab as a screen', () => {
     client.setQueryData(acceptedKey({ sectionCode: 'AR' }), acceptedPage());
     const markup = renderScreen(
       client,
-      createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: null, onSection: noop, onProject: noop }),
+      createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: null }),
     );
     expect(markup).toContain('data-accepted-count="2"');
   });
 
-  it('names the address’s project from its own read when the project list lacks it', () => {
+  it('reads nothing of the projects: the section and project choice is the page’s (`UI-B-24`)', () => {
     const client = newClient();
-    client.setQueryData(queryKeys.projects.detail(ACCEPTED_PROJECT_B as ProjectUid), projectRead(ACCEPTED_PROJECT_B, 'Детский сад'));
-    const markup = renderScreen(
+    renderScreen(
       client,
-      createElement(SectionAcceptedOptimisations, {
-        sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_B as ProjectUid, onSection: noop, onProject: noop,
-      }),
+      createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_B as ProjectUid }),
     );
-    expect(text(markup)).toContain('Детский сад');
+    const heads = client.getQueryCache().getAll().map((query) => (query.queryKey as string[])[0]);
+    expect(heads).toEqual(['optimisation']);
   });
 
   it('says a refused read is refused and offers to try again', () => {
@@ -214,7 +166,7 @@ describe('the tab as a screen', () => {
     }, correlation));
     const markup = renderScreen(
       client,
-      createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: null, onSection: noop, onProject: noop }),
+      createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: null }),
     );
     expect(markup).toContain('data-accepted-failure=');
     expect(text(markup)).toContain('Принятые оптимизации не прочитаны');

@@ -51,7 +51,7 @@ import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widg
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
-import { SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
+import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
@@ -63,7 +63,7 @@ import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisati
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
-import { SectionAcceptedFilters, SectionAcceptedList } from '@/widgets/section-accepted-optimisations';
+import { SectionAcceptedList } from '@/widgets/section-accepted-optimisations';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
@@ -1114,6 +1114,9 @@ export function screens(): Screen[] {
   add('SectionSpecificationAnswer ready', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer(), onPage: noop, onSelectProject: noop,
   })));
+  add('SectionSpecificationAnswer ready, with the price match', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer(), onPage: noop, onSelectProject: noop, columns: 'priced',
+  })));
   add('SectionSpecificationAnswer too large', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer({
       ...SECTION_NO_ROWS, state: 'section_too_large', limit_reason: 'sources',
@@ -1136,9 +1139,9 @@ export function screens(): Screen[] {
   add('SectionOptimisationPage accepted tab, an address it could not read', withRouter(createElement(SectionOptimisationPage, {
     initial: readSectionOptimisationAddress({ section: 'ZZ', tab: 'accepted' }),
   })));
-  add('SectionAcceptedFilters', render(createElement(SectionAcceptedFilters, {
+  add('SectionFilterBar', render(createElement(SectionFilterBar, {
     sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
-    projects: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
+    options: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
   })));
   add('SectionAcceptedList ready', render(createElement(SectionAcceptedList, {
     page: acceptedPage(), hasPrevious: false, onPrevious: noop, onNext: noop,
