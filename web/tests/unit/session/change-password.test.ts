@@ -466,6 +466,10 @@ describe('the screen this seam redirects to can render every outcome it produces
     expect(free).toContain('data-change-password-back=""');
     expect(free).toContain('href="/account"');
     expect(free).not.toContain('Выйти');
+    // after a change the way on is the front door, not the profile
+    const changed = render(createElement(ChangePasswordPage, { outcome: 'changed' }));
+    expect(changed).toContain('data-change-password-onward=""');
+    expect(changed).not.toContain('data-change-password-back');
   });
 
   it('says out loud that changing the password revokes what was issued', () => {
