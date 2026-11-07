@@ -93,6 +93,7 @@ import type { AiActRequest, AiRow } from './ai-step-cell';
 import { AiStepCellView, SelectBox, useAiRow } from './ai-step-cell';
 import type { AiStartDialogProps } from './ai-dialogs';
 import { AiStartDialog, ReportDraftDialog, SelectionDialog } from './ai-dialogs';
+import { ModalWindow } from './modal-window';
 import { AiQueueStrip, LaunchQueueStrip } from './queue-strips';
 import { SpecificationPanel } from './specification-panel';
 import type { LaunchAct } from './queue-strips';
@@ -153,8 +154,10 @@ export interface ProjectsAndStagesViewProps {
   readonly aiQueue: ComparisonAiQueue | undefined;
   readonly onAiAct: (request: AiActRequest) => void;
   readonly onSummary: (seriesId: string) => void;
-  /** The open estimate dialog, or `null`. */
+  /** The open estimate dialog, or `null`; it opens in a window over the table, as the original's `vcp-dlg` does. */
   readonly dialog: ReactNode;
+  /** Esc on that window: what the dialog's own «Отмена» does. */
+  readonly onDialogClose?: () => void;
 }
 
 function Chip({ set }: { readonly set: ComparisonOverviewSet }) {
@@ -501,7 +504,11 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
         </div>
       )}
 
-      {dialog}
+      {dialog === null || dialog === undefined ? null : (
+        <ModalWindow label="Подтверждение запуска" className={styles.modalWindow} onClose={props.onDialogClose} markers={{ 'data-start-window': '' }}>
+          {dialog}
+        </ModalWindow>
+      )}
 
       {total === 0 ? null : (
         <div className={aiStyles.selectionBar} role="group" aria-label="Выбор шагов" data-selection-bar={total}>
@@ -917,6 +924,7 @@ export function ProjectsAndStages({ projectUid, mayAct, onOpen, queueOnPage = fa
         download.mutate({ kind: 'summary-md', seriesId: seriesId as ComparisonSeriesId, fileName: 'svodka-izmeneniy.md' })
       }
       dialog={dialogNode}
+      onDialogClose={close}
     />
   );
 }

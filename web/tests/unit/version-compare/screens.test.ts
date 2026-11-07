@@ -91,6 +91,14 @@ describe('«Проекты и этапы»', () => {
     for (const legend of ['готово', 'есть что проверить', 'идёт', 'не запускалось', 'ошибка']) expect(t).toContain(legend);
   });
 
+  it('opens the estimate and consent dialog in a window over the table, and draws no window while none is open (UI-B-97)', () => {
+    const open = projects({ dialog: createElement('p', null, 'Оценка запуска'), onDialogClose: noop });
+    expect(open).toMatch(/<dialog[^>]*aria-label="Подтверждение запуска"[^>]*data-start-window=""/);
+    expect(text(open)).toContain('Оценка запуска');
+    expect(projects()).not.toContain('data-start-window');
+    expect(projects()).not.toContain('<dialog');
+  });
+
   it('shows the server\'s counters when nothing is searched and the visible sets\' counts when something is', () => {
     expect(projects()).toContain('<span class="');
     const all = projects();
