@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928",
-    "content_commit": "e59e9ffd",
-    "content_commit_subject": "feat(contract): 1.37.0 — carry optimisation decisions over from an earlier version (UI-PARITY-OPT-CARRYOVER)",
-    "dispatch_named_commit": "e59e9ffdbed316250d1723b576cbbd75cba0d0e2",
-    "commit_note": "Resealed by UI-PARITY-OPT-CARRYOVER: contract 1.37.0 (carryOverProposalDecisions, ProposalDecision.carried_from, OptimisationPass.version_ordinal and the AnalysisProfileStatus description).",
+    "sha256": "7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c",
+    "content_commit": "1ab2391a",
+    "content_commit_subject": "feat(contract): 1.38.0 — AR v3 as an opt-in mode: the allowance, the analysis of a run, the result of a version (AR-V3-OPT-IN, P1+P2)",
+    "dispatch_named_commit": "1ab2391a80b5b80bb2833ec7ba347d7513cff820",
+    "commit_note": "Resealed by AR-V3-OPT-IN: contract 1.38.0 (RunStatus.analysis_kind/ar_v3_group_id/ar_v3_scope_id, ArV3BetaPackStatus.start_allowed, ComparisonRefusal analysis_not_comparable and the two conflict reasons).",
     "openapi_version": "3.1.0",
-    "info_version": "1.37.0",
+    "info_version": "1.38.0",
     "paths": 273,
     "operations": 301,
     "component_schemas": 725,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928",
+    "snapshot_sha256": "7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "d104e8682e175bb435892e86bafbf05fc7cf7d28e49df79e688288cc91c17f3a",
-      "index.ts": "63decdb7ebe78e4c5d4428d121a8c53fb58ea8d30c1b5e5c661ad02d1fe2c7f5",
-      "operations.gen.ts": "c41f48f91e2eb01285f35a5e78e50283b791a6f5db426dfbf210896047a84d12",
-      "types.gen.ts": "3a5baa16957823f4cba59d1719ffd7643ad2c3da46c25a21a7bb451656b771f3"
+      "client.gen.ts": "3043d27ac8cda03e0d398b9e824d612c572f19203111da9dce3682d226a9fb69",
+      "index.ts": "a3db9aa0a5690a15affa69086bd140b89c40fc26b9a093a2797e8784b5fc30cc",
+      "operations.gen.ts": "97d84edc67ca1f90d2074b0cc4c8e0dba6b9ef83ac124de12ca8c763ece3e32c",
+      "types.gen.ts": "bcc8d12c95047a594fecc22560b46575032460c58bdb5617606df457aaf51e7c"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
