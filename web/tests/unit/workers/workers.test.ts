@@ -9,6 +9,7 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
+import type { ComponentType } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import type { ExecutionQueueItem, ExecutionWorker, ExecutionWorkerPage, Role } from '@/shared/api';
@@ -22,6 +23,7 @@ import { ExecutionQueue } from '@/widgets/execution-queue';
 import { CopyDiagnosticsView, WorkerList, copyToClipboard, workerDiagnosticText } from '@/widgets/worker-list';
 import { QueuePage } from '@/_pages/queue/ui/queue-page';
 import { WorkersPage, intakeIntentLabel } from '@/_pages/workers/ui/workers-page';
+import type { WorkersPageProps } from '@/_pages/workers';
 
 import { newClient, renderScreen, seedError } from '../screens/harness';
 import { QUEUE_WORK } from '../execution/queue-work';
@@ -253,7 +255,7 @@ describe('the «Исполнители» page', () => {
     }
     if (roles === 'failed') seedError(client, queryKeys.account.me(), new TransportError('connection closed'));
     else client.setQueryData(queryKeys.account.me(), { roles });
-    return renderScreen(client, createElement(WorkersPage));
+    return renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'processes' }));
   }
 
   it('is no longer the placeholder', () => {
@@ -309,7 +311,7 @@ describe('the «Исполнители» page', () => {
       status: 'error', error: new ApiError(503, envelope('dependency_unavailable'), null),
       fetchStatus: 'idle', errorUpdatedAt: Date.now(), fetchFailureCount: 1,
     });
-    const markup = renderScreen(client, createElement(WorkersPage));
+    const markup = renderScreen(client, createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'processes' }));
     expect(markup).toContain('data-update-state="stale"');
     expect(markup).toContain('Данные могли устареть');
     expect(markup).toContain('Исполнители не обновились');

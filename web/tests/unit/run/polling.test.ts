@@ -222,7 +222,9 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
 });
 
 describe('this slice adds no second polling loop', () => {
-  const OWNED = ['_pages', 'widgets', 'features', 'entities'];
+  // `D-333`: `_app` is read too. The side menu's counters poll from there (`_app/use-menu-badges.ts`), and a walk that stopped at `entities`
+  // left them outside the census while the prose above said four reads poll.
+  const OWNED = ['_app', '_pages', 'widgets', 'features', 'entities'];
 
   const sources = OWNED.flatMap((layer) =>
     walkFiles(join(WEB_ROOT, 'src', layer), (p) => /\.(ts|tsx)$/.test(p)).map((path) => ({
@@ -344,11 +346,31 @@ describe('this slice adds no second polling loop', () => {
     ALLOWED_EXTENDED_REVIEW_POLL.some((allowed) => path.endsWith(allowed));
 
   // The fourth named exception, the operational-list policy (`OPERATIONAL_LIST_POLLING`, `web/docs/PC01_UI_SEAM.md` §7.1). The
-  // execution queue, the execution journal and the «Исполнители» worker list refresh themselves. The option is written once, in
-  // `operational-poll.ts`, and applied by spread to those three queries only; the assertion further down holds the source to that shape.
+  // execution queue, the execution journal, the «Исполнители» worker list and the pause state refresh themselves. The option is written
+  // once, in `operational-poll.ts`, and applied by spread to those four queries only; the assertion further down holds the source to that
+  // shape. The side menu's counters (`_app/use-menu-badges.ts`: the queue, the knowledge base, the pending registrations) are the same
+  // policy's second home and are named below (`D-333`).
   const ALLOWED_OPERATIONAL_LIST_POLL = [join('entities', 'execution', 'api', 'operational-poll.ts')];
   const isAllowedOperationalListPoll = ({ path }: { path: string }) =>
     ALLOWED_OPERATIONAL_LIST_POLL.some((allowed) => path.endsWith(allowed));
+
+  // The operational-list policy's second home, `D-333`: the side menu's three counters (`_app/use-menu-badges.ts`). They follow the policy
+  // by SPREAD (`...OPERATIONAL_LIST_POLL`), which carries the one `refetchInterval` from `operational-poll.ts` into a query, so the token
+  // the sibling assertions search for never appears in the file. A guard that reads only the token therefore cannot see them; this one
+  // reads the spread. Where the spread may be written is a closed list, and a new consumer is a visible decision, not drift.
+  const ALLOWED_OPERATIONAL_SPREAD = [
+    join('entities', 'execution', 'api', 'operational-poll.ts'), // defines it
+    join('entities', 'execution', 'api', 'use-execution.ts'), // the queue, the journal, the worker list and the pause state (asserted below)
+    join('entities', 'execution', 'index.ts'), // re-exports it
+    join('_app', 'use-menu-badges.ts'), // the side menu's counters (asserted below)
+  ];
+  const MENU_COUNTERS = join('_app', 'use-menu-badges.ts');
+  /** The files that name the policy's spread (`OPERATIONAL_LIST_POLL`, not the config's `OPERATIONAL_LIST_POLLING`) outside the closed list. */
+  const operationalSpreadOutsideTheList = (files: readonly { path: string; text: string }[]): string[] =>
+    files
+      .filter((file) => /\bOPERATIONAL_LIST_POLL\b/.test(code(file)) && !ALLOWED_OPERATIONAL_SPREAD.some((allowed) => file.path.endsWith(allowed)))
+      .map((file) => file.path);
+  const spreadsIn = (text: string): number => (text.match(/\.\.\.OPERATIONAL_LIST_POLL\b/g) ?? []).length;
 
   it('schedules no interval and no timer of its own', () => {
     const offenders = sources.filter(
@@ -477,7 +499,7 @@ describe('this slice adds no second polling loop', () => {
     }
   });
 
-  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal, the worker list and the pause state', () => {
+  it('lets the operational lists poll only through the policy function, only while visible, and only the queue, the journal, the worker list and the pause state (the menu’s counters are the next case)', () => {
     const named = sources.filter(isAllowedOperationalListPoll);
     expect(named.map((f) => f.path)).toHaveLength(ALLOWED_OPERATIONAL_LIST_POLL.length);
     for (const file of named) {
@@ -508,6 +530,56 @@ describe('this slice adds no second polling loop', () => {
     for (const hook of ['useExecutionQueue', 'useExecutionJournal', 'useWorkers', 'useWorkerLookup', 'useExecutionDispatch']) {
       expect(section(hook), hook).not.toMatch(/OPERATIONAL_LIST_POLL|refetchInterval/);
     }
+  });
+
+  it('applies the operational-list spread only in the closed list of files', () => {
+    expect(operationalSpreadOutsideTheList(sources)).toEqual([]);
+    // The list must not rot into paths that no longer exist or no longer name the policy.
+    for (const allowed of ALLOWED_OPERATIONAL_SPREAD) {
+      const file = sources.find((candidate) => candidate.path.endsWith(allowed));
+      expect(file, `${allowed} is read by the walk`).toBeDefined();
+      expect(/\bOPERATIONAL_LIST_POLL\b/.test(code(file!)), `${allowed} names the policy`).toBe(true);
+    }
+  });
+
+  it('can fail: a spread anywhere else is found, and a comment or the config’s name is not one', () => {
+    const probe = (path: string, text: string) => ({ path: join('widgets', 'probe', path), text });
+    expect(operationalSpreadOutsideTheList([probe('ui/poller.tsx', 'useQuery({ queryKey, ...OPERATIONAL_LIST_POLL })')])).toEqual([
+      join('widgets', 'probe', 'ui/poller.tsx'),
+    ]);
+    expect(operationalSpreadOutsideTheList([probe('ui/import.ts', "import { OPERATIONAL_LIST_POLL } from '@/entities/execution';")])).toHaveLength(1);
+    expect(operationalSpreadOutsideTheList([probe('ui/note.ts', '// follows OPERATIONAL_LIST_POLL\nconst x = 1;')])).toEqual([]);
+    expect(operationalSpreadOutsideTheList([probe('ui/display.ts', "import { OPERATIONAL_LIST_POLLING } from '@/shared/config';")])).toEqual([]);
+    expect(operationalSpreadOutsideTheList([{ path: join('_app', 'use-menu-badges.ts'), text: '...OPERATIONAL_LIST_POLL' }])).toEqual([]);
+    expect(spreadsIn('{ ...OPERATIONAL_LIST_POLL, a: 1 }, { ...OPERATIONAL_LIST_POLL }')).toBe(2);
+    expect(spreadsIn('{ ...OPERATIONAL_LIST_POLLING }')).toBe(0);
+  });
+
+  it('lets the side menu’s counters poll only by the policy’s spread, gated by the session’s menu, with no timer of their own', () => {
+    const named = sources.filter((file) => file.path.endsWith(MENU_COUNTERS));
+    expect(named, 'the walk reads _app/use-menu-badges.ts').toHaveLength(1);
+    const text = code(named[0]!);
+    // No schedule of its own: React Query owns it and the policy function answers "how long?".
+    expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchInterval|refetchIntervalInBackground/);
+    // Two queries spell the spread (the knowledge base's total and the pending registrations), each also re-reading on the tab's return.
+    expect(spreadsIn(text)).toBe(2);
+    expect(text.match(/refetchOnWindowFocus:\s*'always'/g) ?? []).toHaveLength(2);
+    // The third counter is the entity's own queue read, so the screen and the menu are one answer and one cadence.
+    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(\{\s*\.\.\.queueQueryOptions\(\),\s*enabled:\s*sources\.has\('queue'\)\s*\}\)/);
+    // Every counter is read only for a session whose menu holds the item it feeds.
+    expect(text.match(/enabled:\s*sources\.has\('(?:queue|knowledge-base|registrations)'\)/g) ?? []).toHaveLength(3);
+    // The reads are the three list operations and none of them is the run endpoint.
+    expect(text).toMatch(/listKnowledgeBaseEntries/);
+    expect(text).toMatch(/listRegistrations/);
+    expect(text).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
+  });
+
+  it('can fail: the menu counters’ shape is read from the source, so a counter that polls on its own is found', () => {
+    const own = "useQuery({ queryKey, queryFn, refetchInterval: 5000, enabled: sources.has('registrations') })";
+    expect(/refetchInterval/.test(own)).toBe(true);
+    const ungated = "useQuery({ queryKey, queryFn, ...OPERATIONAL_LIST_POLL })";
+    expect(ungated.match(/enabled:\s*sources\.has\('(?:queue|knowledge-base|registrations)'\)/g) ?? []).toHaveLength(0);
+    expect(spreadsIn(ungated)).toBe(1);
   });
 
   it('lets the named probe poll schedule only its bounded 3 s refetch, and nothing else', () => {

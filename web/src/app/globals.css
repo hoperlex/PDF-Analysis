@@ -1931,13 +1931,6 @@ li.am-state .am-state__detail {
   font-size: var(--am-text-sm);
 }
 
-/* The export panel follows the review grid: it is about the run, not about the finding. */
-.am-review__export {
-  margin-top: var(--am-gap-lg);
-  padding-top: var(--am-gap);
-  border-top: 1px solid var(--am-line);
-}
-
 /* ---- the identifier line on a screen header -------------------------------------- */
 
 /*

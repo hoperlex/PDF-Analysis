@@ -33,8 +33,9 @@ import { HomeSectionsEagerSeam } from '@/_pages/home';
 import { EvidenceViewerEagerSeam } from '@/_pages/review';
 import { RunProgressEagerSeam } from '@/_pages/run';
 import { StageComparisonEagerSeam } from '@/_pages/stage-comparison';
+import { DocumentViewerEagerSeam } from '@/_pages/version-detail';
 import { Dashboard, HomeSectionsOverview } from '@/widgets/dashboard';
-import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { DocumentViewer, EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RunProgress } from '@/widgets/run-progress';
 import { StageComparison } from '@/widgets/stage-comparison';
@@ -80,7 +81,12 @@ function withEagerWidgets(element: ReactElement): ReactElement {
           createElement(
             StageComparisonEagerSeam.Provider,
             { value: StageComparison },
-            createElement(HomeSectionsEagerSeam.Provider, { value: HomeSectionsOverview }, element),
+            createElement(
+              HomeSectionsEagerSeam.Provider,
+              { value: HomeSectionsOverview },
+              // `UI-A-27`: the version page's PDF drawer, the seventh wrapper (the second over `evidence-viewer`).
+              createElement(DocumentViewerEagerSeam.Provider, { value: DocumentViewer }, element),
+            ),
           ),
         ),
       ),

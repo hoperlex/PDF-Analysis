@@ -18,8 +18,8 @@
  * of «Назначения» are drawn read-only inside «Правила» while the mode is `legacy` (the slot below), and
  * become history on their own tab once rules are in force.
  *
- * The screen opens on «Процессы», as it always has, unless the address names a tab (`?tab=`):
- * the redirect from the key form names «Подключения», a link to the overview names `overview`. The overview and the
+ * The screen opens on «Обзор», as the original's dispatcher does, unless the address names a tab (`?tab=`):
+ * the redirect from the key form names «Подключения», a link to the worker list names `processes`. The overview and the
  * worker list of «Процессы» refresh themselves under the operational-list policy (`OPERATIONAL_LIST_POLLING`,
  * `web/docs/PC01_UI_SEAM.md` §7.1) while the browser tab is visible, as the queue and the journal do, and says when it was last
  * read («Обновлено ЧЧ:ММ:СС», or that the data may be out of date). Everything is also refreshed on
@@ -51,7 +51,7 @@ import type { WorkersTab } from '../model/tabs';
 import { WorkersTabs } from './workers-tabs';
 
 export interface WorkersPageProps {
-  /** The tab the address named; the screen opens on «Процессы» when it names none. */
+  /** The tab the address named; the screen opens on «Обзор» when it names none. */
   readonly initialTab?: WorkersTab | undefined;
   /** The connection the key form was opened for, from the address. */
   readonly secretConnectionId?: string | null | undefined;

@@ -1,0 +1,95 @@
+/*
+ * «Просмотр PDF» on the version page: the original's drawer that rises from the bottom (`.version-pdf-drawer`: fixed to the bottom
+ * edge, 85vh, above the page and below the dialogs). Every colour, radius, gap and shadow is a global `--am-*` token; this module
+ * declares none of its own and spells no length.
+ */
+
+.drawer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  height: 85vh;
+  border-top: 1px solid var(--am-line);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm) var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-paper);
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.steps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  flex: none;
+}
+
+.step,
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--am-strip-height);
+  height: var(--am-gap-xl);
+  margin: 0;
+  padding: 0 var(--am-gap-xs);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  color: var(--am-ink);
+  font: inherit;
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step:hover,
+.close:hover {
+  border-color: var(--am-accent);
+  background: var(--am-accent-light);
+  color: var(--am-accent-strong);
+}
+
+.step:disabled,
+.step:disabled:hover {
+  border-color: var(--am-line);
+  background: var(--am-paper);
+  color: var(--am-ink-soft);
+  cursor: default;
+}
+
+.position {
+  color: var(--am-ink-muted);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+  text-align: center;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap);
+}

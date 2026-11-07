@@ -190,7 +190,7 @@ import {
 } from '../unit/workers/executor-fixtures';
 import { RunWorkerLine, WORKER_PAGE_LIMIT } from '@/entities/execution';
 import type { ExecutionWorker } from '@/shared/api';
-import { EvidenceViewer } from '@/widgets/evidence-viewer';
+import { DocumentViewer, EvidenceViewer } from '@/widgets/evidence-viewer';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 import { RECENT_PROJECT_LIMIT } from '@/widgets/home-tiles';
 import {
@@ -2768,6 +2768,19 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       jobsPartial: true,
       processesHref: '?tab=processes',
     }),
+  },
+  /*
+   * `UI-A-27` «Просмотр PDF»: the version page's drawer is mounted by a press, so it is rendered here on its own -- the bytes on their
+   * way (the viewer's loading sentence) and the read refused (its typed error).
+   */
+  {
+    name: 'version-pdf-drawer-loading',
+    make: () => createElement(DocumentViewer, { versionUid: VERSION_UID, title: 'Комплект АР · Версия 1', pageCount: 3, onClose: () => undefined }),
+  },
+  {
+    name: 'version-pdf-drawer-failed',
+    make: () => createElement(DocumentViewer, { versionUid: VERSION_UID, title: 'Комплект АР · Версия 1', pageCount: 3, onClose: () => undefined }),
+    seedClient: (client) => seedError(client, queryKeys.versions.content(VERSION_UID), apiError(503, 'dependency_unavailable')),
   },
   /*
    * `CMP-SEAL-C3`/`C4`: «Сравнение стадий», widget by widget. See STAGE_PAIR_ID above for why each has its own seed.

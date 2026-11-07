@@ -450,15 +450,6 @@ describe('the census is taken over rendered screens, not over a list', () => {
      *   which is what the assertion below says in as many words.
      */
     {
-      selector: '.am-review__export',
-      why:
-        'A DEAD rule, listed rather than deleted because it lives in `globals.css`, which this lane does not ' +
-        'own. The export panel of «Разбор» moved from under the findings to a bar over them (UI-A-68) and no ' +
-        'markup carries the class any more; its one declaration (a hairline above the old placement) pairs no ' +
-        'ink with any ground. Delete the rule from `globals.css` in the next pass over that file and delete ' +
-        'this entry with it: the ratchet below reddens the day the rule is gone.',
-    },
-    {
       selector: '::selection',
       why:
         'A browser pseudo-element on the user\'s own selection highlight. No element in any ' +
@@ -969,7 +960,7 @@ describe('the register is held to the census in both directions, and in both pal
  */
 const PENDING_PAIR_ROWS = 62;
 /** Likewise for the colour rules no screen reaches. */
-const PENDING_UNREACHED_ROWS = 57; // 61 at the base; lane D5 removed one row, lane D1 three
+const PENDING_UNREACHED_ROWS = 54; // 61 at the base; lane D5 removed one row, lane D1 three, lane P2 three (the home page at `/` joined the census loaded)
 
 describe('the pending list is a ratchet: it may only shrink, and nothing on it may get worse', () => {
   const rows = PENDING_PAIRS.flatMap((row) => row.themes.map((theme) => ({ row, theme })));

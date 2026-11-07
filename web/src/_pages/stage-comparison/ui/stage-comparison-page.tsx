@@ -39,9 +39,9 @@ import { routes } from '@/shared/lib';
 import { looksLikeProjectUid } from '@/entities/project';
 import { looksLikeVersionUid, useDocumentVersion } from '@/entities/document-version';
 
+import { DocumentContext } from '@/widgets/document-context';
 import { VersionComparison } from '@/widgets/version-comparison';
 
-import { ComparisonContext } from './comparison-context';
 import { ComparisonOnlyNote } from './comparison-only-note';
 import { LazyStageComparison } from './lazy-stage-comparison';
 import styles from './stage-comparison-page.module.css';
@@ -89,7 +89,8 @@ export function StageComparisonPage({ projectUid, versionUid }: StageComparisonP
         </>
       }
     >
-      <ComparisonContext projectUid={projectUid} versionUid={versionUid as VersionUid} />
+      {/* `UI-A-22`: «Проекты › Проект › Документ › Версия N › Сравнение», the shared strip at its `comparison` level. */}
+      <DocumentContext projectUid={projectUid} versionUid={versionUid} current="comparison" />
       <div className={styles.stack}>
         <section className={styles.panel} aria-label="Сравнение версий комплекта">
           <p>
