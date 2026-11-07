@@ -53,32 +53,36 @@ export function SetExecutorSecretForm({ connectionId, outcome }: SetExecutorSecr
       <SubmitLock />
       <input type="hidden" name="intent" value={newIdempotencyKey()} />
       <div className="am-form__field">
-        <label htmlFor={fieldId}>
-          <strong>Ключ доступа к модели</strong>
-        </label>
-        <input
-          id={fieldId}
-          name="value"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          required
-          minLength={8}
-          maxLength={8192}
-          placeholder="Вставьте ключ"
-        />
-      </div>
-      <div className="am-form__row">
-        <button type="submit" className="am-button">
-          Сохранить ключ
-        </button>
+        <label htmlFor={fieldId}>Ключ доступа к модели</label>
+        {/* The field and its button on one line. */}
+        <div className="am-form__row">
+          <input
+            id={fieldId}
+            name="value"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            required
+            minLength={8}
+            maxLength={8192}
+            placeholder="Вставьте ключ"
+          />
+          <button type="submit" className="am-button">
+            Сохранить ключ
+          </button>
+        </div>
       </div>
       <p className="am-form__hint">
         Ключ привязан к адресу, для которого он введён, и запечатывается при отправке. Прочитать
         его обратно нельзя нигде: после сохранения видны только последние четыре символа, время
-        и автор. Если сменить адрес подключения, прежний ключ перестанет открываться, и его
-        придётся вставить заново.
+        и автор.
       </p>
+      <details data-executor-secret-moves="">
+        <summary>Если сменить адрес подключения</summary>
+        <p className="am-form__hint">
+          Прежний ключ перестанет открываться, и его придётся вставить заново.
+        </p>
+      </details>
       {reported !== null ? (
         <div data-executor-secret-outcome={reported}>
           {isExecutorSecretSuccess(reported) ? (

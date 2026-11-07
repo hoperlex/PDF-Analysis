@@ -16,6 +16,7 @@ import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { ExecutorRules } from '@/widgets/executor-rules';
 import { CreateConnectionForm, ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { RuleEditor } from '@/features/manage-executor-group';
+import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { CLIENT_DOCUMENTS_NOTICE } from '@/entities/executor-connection';
 
 import { newClient, renderScreen } from '../screens/harness';
@@ -193,5 +194,24 @@ describe('the two connection forms stand in two columns', () => {
   it('gives the create form the same grid', () => {
     const markup = renderScreen(newClient(), createElement(CreateConnectionForm, { pinnedModels: PINNED }));
     expect(markup).toMatch(/<form class="am-form [^"]*form[^"]*"[^>]*data-executor-create-form/);
+  });
+});
+
+describe('the key form: the field and its button on one line, the address note folded', () => {
+  const form = () => renderScreen(newClient(), createElement(SetExecutorSecretForm, { connectionId: READY.connection.connection_id }));
+
+  it('puts the password field and «Сохранить ключ» in one row, as the search forms do', () => {
+    const markup = form();
+    const row = markup.slice(markup.indexOf('<div class="am-form__row">'), markup.indexOf('</div>', markup.indexOf('<div class="am-form__row">')));
+    expect(row).toContain('type="password"');
+    expect(row).toContain('>Сохранить ключ</button>');
+    expect(markup).toContain('<label for="executor-secret-');
+  });
+
+  it('says what the key is bound to in the open and folds what a changed address does to it', () => {
+    const markup = form();
+    expect(markup).toContain('запечатывается при отправке');
+    expect(markup).toMatch(/<details[^>]*data-executor-secret-moves=""[^>]*><summary>Если сменить адрес подключения<\/summary>/);
+    expect(markup).toContain('Прежний ключ перестанет открываться, и его придётся вставить заново.');
   });
 });
