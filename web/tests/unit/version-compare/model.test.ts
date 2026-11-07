@@ -512,7 +512,7 @@ describe('the matrix as the screen reads it', () => {
     // The two that «Только изменённые листы» drops are the same one and the one that differs in service zones only.
     expect(list.filter((pair) => !isChangedPair(pair)).map((pair) => pair.status)).toEqual(['same', 'same_zones_changed']);
     // A pair that has no status yet (not computed) is neither changed nor unchanged: the filter keeps none of them.
-    expect(isChangedPair({ ...(list[0] as ComparisonSheetPair), status: undefined } as ComparisonSheetPair)).toBe(false);
+    expect(isChangedPair({ ...(list[0] as ComparisonSheetPair), status: undefined } as unknown as ComparisonSheetPair)).toBe(false);
   });
 
   it('gives the second part of a split sheet its own pair although the older sheet stands in both (CMP-SERIES-01)', () => {

@@ -18,7 +18,7 @@ export interface ModalWindowProps {
   /** What the window is called for a reader of the screen. */
   readonly label: string;
   /** The module class that sizes it. */
-  readonly className: string;
+  readonly className: string | undefined;
   /** Esc and the window's own way out; absent in the static harness. */
   readonly onClose?: (() => void) | undefined;
   /** The census and the static render: drawn open without `showModal`. */
