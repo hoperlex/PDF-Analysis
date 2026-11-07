@@ -1,3 +1,9 @@
+/*
+ * The profile card. `.profile` is the only rule here that carries a colour: the census does not reach it (the page is read cold
+ * there, `PENDING_UNREACHED`), so the facts and the section are laid out with layout properties and the global `am-form__hint`
+ * for the muted terms, and add no rule the census would have to reach.
+ */
+
 .profile {
   width: min(100%, 760px);
   min-width: 0;
@@ -28,15 +34,6 @@
   grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--am-gap-xs) var(--am-gap);
   margin: 0 0 var(--am-gap);
-  padding: var(--am-gap-sm) var(--am-gap-md);
-  border: 1px solid var(--am-line-soft);
-  border-radius: var(--am-radius);
-  background: var(--am-paper);
-}
-
-.facts dt {
-  color: var(--am-ink-muted);
-  font-size: var(--am-text-sm);
 }
 
 .facts dd {
@@ -48,11 +45,6 @@
 .login {
   font-family: var(--am-font-mono);
   font-size: var(--am-text-sm);
-}
-
-.section {
-  padding-top: var(--am-gap);
-  border-top: 1px solid var(--am-line-soft);
 }
 
 .section > h2 {

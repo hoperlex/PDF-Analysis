@@ -48,14 +48,14 @@ export function AccountPage({ profileComplete, next }: AccountPageProps) {
           <h2 className={styles.name}>{label}</h2>
         </header>
         <dl className={styles.facts}>
-          <dt>Адрес входа</dt>
+          <dt className="am-form__hint">Адрес входа</dt>
           <dd className={styles.login}>{account.login}</dd>
-          <dt>Роли</dt>
+          <dt className="am-form__hint">Роли</dt>
           <dd data-account-profile-roles="">{roles.length ? roles.join(', ') : 'не назначены'}</dd>
-          <dt>Последний вход</dt>
+          <dt className="am-form__hint">Последний вход</dt>
           <dd data-account-last-sign-in={account.last_sign_in_at === null ? 'never' : 'at'}>{lastSignInText(account.last_sign_in_at)}</dd>
         </dl>
-        <section className={styles.section} aria-labelledby="account-profile-heading">
+        <section className={`am-section ${styles.section}`} aria-labelledby="account-profile-heading">
           <h2 id="account-profile-heading">Данные профиля</h2>
           <EditProfileForm account={account} next={next ?? null} />
         </section>
