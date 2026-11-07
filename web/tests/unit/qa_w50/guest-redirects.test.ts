@@ -162,7 +162,9 @@ describe('decision 1: a guest is sent to /login with the concrete path and its q
       const route = await routeAt(row.address);
       const { path, params } = filled(row.address);
       const location = await sentTo(route({ params: Promise.resolve(params), searchParams: Promise.resolve({}) }));
-      expect(location).toBe(`/login?next=${encodeURIComponent(path)}`);
+      // `next` is exactly what it is for a first visit; the one addition is the reason, after it:
+      // the browser presented a session cookie that names no session here (`P7`, sign-in hints).
+      expect(location).toBe(`/login?next=${encodeURIComponent(path)}&reason=invalid`);
     });
   }
 

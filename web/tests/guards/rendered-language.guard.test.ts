@@ -2638,6 +2638,14 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
    */
   { name: 'sign-in-refused', make: () => createElement(SignInPage, { refusal: 'credentials' }) },
   { name: 'sign-in-unknown-refusal', make: () => createElement(SignInPage, { unknownRefusal: true }) },
+  /*
+   * The three sentences above the form when the server knows why there is no session
+   * (`/login?reason=…`, `shared/lib/session-end-reason.ts`): selected by a prop the address
+   * does not carry, so a pass over the registry's addresses never renders them.
+   */
+  { name: 'sign-in-session-expired', make: () => createElement(SignInPage, { reason: 'expired' }) },
+  { name: 'sign-in-session-ended', make: () => createElement(SignInPage, { reason: 'ended' }) },
+  { name: 'sign-in-session-invalid', make: () => createElement(SignInPage, { reason: 'invalid' }) },
   { name: 'sign-in-open', make: () => createElement(SignInPage, { login: 'проверяющий' }) },
   { name: 'registration-refused', make: () => createElement(RegisterPage, { refusal: 'validation' }) },
   { name: 'registration-unknown-refusal', make: () => createElement(RegisterPage, { unknownRefusal: true }) },

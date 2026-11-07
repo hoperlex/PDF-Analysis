@@ -21,5 +21,15 @@ export {
   signInRefusalUrl,
 } from './model/exchange';
 
+// Why a guest is here without a session, said above the form (`/login?reason=…`).
+export type { SessionEndReason } from './model/session-reason';
+export {
+  SESSION_END_REASONS,
+  SIGN_IN_REASON_PARAM,
+  isSessionEndReason,
+  sessionEndReasonOf,
+  signInReasonMessage,
+} from './model/session-reason';
+
 export type { SignInFormProps } from './ui/sign-in-form';
 export { SignInForm } from './ui/sign-in-form';

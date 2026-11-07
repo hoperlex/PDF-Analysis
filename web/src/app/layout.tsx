@@ -11,13 +11,28 @@
  *
  * Reading a cookie makes every screen dynamic, which they are anyway: this application has
  * no page whose bytes are the same for two reviewers.
+ *
+ * **The one inline script in the application is here** (`P7-1`): a blocking `<script>` in
+ * `<head>` that applies a stored light/dark choice to `<html data-theme>` before the first
+ * paint, so a visitor who chose the opposite of their system's theme no longer sees one frame
+ * of the system's (`shared/lib/theme-boot-script.ts` says what it does and what it never
+ * does). Its text is fixed by three constants and carries nothing of the request, so every
+ * response has the same bytes in that place.
+ *
+ * `suppressHydrationWarning` is on `<html>` and nowhere else, and only because of that
+ * script: the server cannot render `data-theme`, the script adds it before React hydrates,
+ * and React would otherwise report the attribute as a mismatch. The flag silences attribute
+ * differences on this one element and does not reach its children, so the `D-329` rule — no
+ * server markup the client disagrees with — still holds for everything inside `<body>`;
+ * `ThemeToggle` still starts at `system` on both sides and moves in an effect.
  */
 
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 
-import { AppFrame, AppProviders } from '@/_app';
+import { AppFrame, AppProviders, THEME_ATTRIBUTE, THEME_CHOICES, THEME_STORAGE_KEY } from '@/_app';
+import { themeBootScript } from '@/shared/lib/theme-boot-script';
 
 import { SESSION_COOKIE, subjectOf } from './bff/session/store';
 
@@ -46,7 +61,19 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           profileComplete: subject.profileComplete,
         };
   return (
-    <html lang="ru">
+    <html lang="ru" suppressHydrationWarning>
+      <head>
+        <script
+          // The text is `themeBootScript` over three module constants: no request data.
+          dangerouslySetInnerHTML={{
+            __html: themeBootScript({
+              storageKey: THEME_STORAGE_KEY,
+              attribute: THEME_ATTRIBUTE,
+              choices: THEME_CHOICES,
+            }),
+          }}
+        />
+      </head>
       <body>
         <AppProviders>
           <AppFrame session={session}>{children}</AppFrame>

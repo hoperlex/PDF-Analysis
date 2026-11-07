@@ -15,11 +15,15 @@
  * right answer for every visitor who has never chosen — and the stored choice is applied in
  * an effect.
  *
- * WHAT THIS COSTS, NAMED RATHER THAN HIDDEN: a visitor who chose the OPPOSITE of their
- * system preference sees one frame of the system's theme before the effect runs. Closing it
- * needs a blocking inline script in `web/src/app/layout.tsx`, which is outside this task's
- * allowed paths. Everyone else — no choice stored, or a choice that agrees with the system —
- * sees no flash at all, because the media query has already resolved before the first paint.
+ * WHAT THE EFFECT NO LONGER COSTS (`P7-1`). It used to cost a visitor who chose the OPPOSITE
+ * of their system preference one frame of the system's theme before the effect ran. The root
+ * layout (`web/src/app/layout.tsx`) now runs a blocking inline script in `<head>`
+ * (`shared/lib/theme-boot-script.ts`) that reads the same storage key and sets the same
+ * `data-theme` on `<html>` before the first paint, so the PALETTE is right from the start.
+ * What this effect still decides is the control's own state — which of the two buttons is
+ * pressed — and it applies the choice again, which is idempotent. The script touches only the
+ * attribute on `<html>`, which `<html suppressHydrationWarning>` covers; this component's
+ * markup is unchanged and still equals the server's.
  */
 
 import { useEffect, useState } from 'react';
