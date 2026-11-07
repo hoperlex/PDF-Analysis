@@ -442,7 +442,7 @@ SEQUENCES = {
 #: checks (the identity's shape, not itself, never a withdrawal) and one foreign key (the source decision): c 1304, f 371,
 #: measured on a throwaway database at ``0057`` on 2026-11-07. `0058_finding_decision_origin` (`UI-A-73`) adds the same
 #: three kinds to ``expert_decision_event`` (the identity's shape, not itself, only an accept or a reject) and one foreign
-#: key: c 1307, f 372 (to be measured on a throwaway database at ``0058``).
+#: key: c 1307, f 372 measured on a throwaway database at ``0058`` on 2026-11-08.
 CONSTRAINT_COUNTS = {"c": 1307, "f": 372, "p": 135, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
