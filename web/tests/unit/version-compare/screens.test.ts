@@ -476,6 +476,10 @@ describe('«Сравнение листов»', () => {
     expect(t).toContain('только в №3: 1');
     expect(markup).toContain('data-tally-only="old"');
     expect(markup).toContain('data-tally-only="new"');
+    // The «Состав» column of the transitions says what its «+N / −M» count.
+    expect(markup).toContain('data-composition=""');
+    expect(markup).toContain('Листов только в новой версии:');
+    expect(markup).toContain('Листов только в прежней:');
     // No pairs, no numbers: the pair was not compared (the line would be invented).
     expect(sheets({ pairs: null })).not.toContain('data-pair-tally');
     expect(sheets({ pairs: [] })).not.toContain('data-pair-tally');
