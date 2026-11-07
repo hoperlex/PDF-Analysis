@@ -50,8 +50,9 @@ describe('the fold of the map', () => {
     live = null;
   });
 
+  const client = seeded();
   const mount = async (props: Record<string, unknown>) => {
-    live = await mountLive(createElement(QueryClientProvider, { client: seeded() },
+    live = await mountLive(createElement(QueryClientProvider, { client },
       createElement(StageSheetMap, { projectUid: PROJECT_UID, mayAct: false, pairId: PAIR, ...props })));
     return live;
   };
@@ -74,7 +75,7 @@ describe('the fold of the map', () => {
     expect(told).toEqual([true]);
     // The page did not move the address, so the map still shows the fold: the address is the only source.
     expect(view.markup()).toMatch(/aria-expanded="false"[^>]*>Развернуть</);
-    await view.update(createElement(QueryClientProvider, { client: seeded() },
+    await view.update(createElement(QueryClientProvider, { client },
       createElement(StageSheetMap, { projectUid: PROJECT_UID, mayAct: false, pairId: PAIR, rowsOpen: true, onRowsOpenChange: () => {} })));
     expect(view.markup()).toMatch(/aria-expanded="true"[^>]*>Свернуть</);
   });
