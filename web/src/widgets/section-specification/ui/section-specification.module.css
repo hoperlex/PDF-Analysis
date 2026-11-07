@@ -97,10 +97,6 @@
   font-size: var(--am-text-sm);
 }
 
-.group {
-  color: var(--am-ink-muted);
-}
-
 /* `UI-B-23`: the original's Form 7 — the nine graphs of the form, the rows grouped under a row per project that folds. */
 .center {
   text-align: center;

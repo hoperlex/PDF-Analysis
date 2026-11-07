@@ -54,8 +54,7 @@
 }
 
 .dropOver {
-  border-color: var(--am-accent);
-  box-shadow: 0 0 0 2px var(--am-accent-light);
+  box-shadow: 0 0 0 2px var(--am-accent);
 }
 
 .work {

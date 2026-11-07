@@ -964,6 +964,20 @@ export function screens(): Screen[] {
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
   })));
+  // `UI-B-52`: two waiting jobs, each with the drag handle, the hint that names the keys and the note under the list.
+  add('ExecutionQueue, waiting jobs with a handle to move each', withRouter(createElement(ExecutionQueue, {
+    items: ['A', 'B'].map((suffix, index) => ({
+      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`,
+      run_id: RUN_ID, state: 'queued', priority: 2 - index,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+      ...QUEUE_WORK,
+    })),
+    roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+    busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
+    onPriority: noop, onReorder: noop, reorderNote: 'Задача перемещена на место 1: приоритет 3. Порядок определил сервер.',
+    onNext: null, onPrevious: null,
+  })));
   // `UI-PARITY-QUEUE-A`, the queue as a line per job: a finished job with its timing, its reason and its muted facts.
   add('ExecutionQueue finished, its timing and its reason', withRouter(createElement(ExecutionQueue, {
     items: [{
@@ -1116,6 +1130,14 @@ export function screens(): Screen[] {
   })));
   add('SectionSpecificationAnswer ready, with the price match', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer(), onPage: noop, onSelectProject: noop, columns: 'priced',
+  })));
+  // `UI-B-23`: a project with no specification keeps its group, said in the red of the original's «Спецификация отсутствует».
+  add('SectionSpecificationAnswer, a project without a specification', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer({
+      projects: sectionAnswer().projects.map((item, index) => (index === 1 ? { ...item, row_count: 0 } : item)),
+      rows: { ...sectionAnswer().rows!, items: sectionAnswer().rows!.items.slice(0, 4), total: 4 },
+    }),
+    onPage: noop, onSelectProject: noop,
   })));
   add('SectionSpecificationAnswer too large', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer({

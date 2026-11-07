@@ -78,6 +78,8 @@ export function ExecutionQueue({
   const [localNote, setLocalNote] = useState<string | null>(null);
   const handles = useRef(new Map<string, HTMLElement>());
   const refocus = useRef<string | null>(null);
+  // The row whose drag has begun and not ended; the mark on the screen follows it a turn later.
+  const dragLive = useRef<string | null>(null);
   // A moved row is a different element after the list is read again; the key that moved it gets its handle back.
   useEffect(() => {
     if (refocus.current === null) return;
@@ -142,6 +144,7 @@ export function ExecutionQueue({
             onDrop={mayReorder && dragging !== null && item.state === 'queued' ? (event) => {
               event.preventDefault();
               const moving = queued.find((candidate) => candidate.job_id === dragging);
+              dragLive.current = null;
               setDragging(null);
               setOver(null);
               if (moving !== undefined) move(moving, queued.findIndex((candidate) => candidate.job_id === item.job_id), false);
@@ -170,9 +173,14 @@ export function ExecutionQueue({
                     const row = event.currentTarget.closest('li');
                     if (row !== null) event.dataTransfer.setDragImage(row, 0, 0);
                     setLocalNote(null);
-                    setDragging(item.job_id);
+                    // Marked on the next turn: a change of the dragged row's markup inside `dragstart` can end the drag at once.
+                    dragLive.current = item.job_id;
+                    window.setTimeout(() => {
+                      if (dragLive.current === item.job_id) setDragging(item.job_id);
+                    }, 0);
                   }}
                   onDragEnd={() => {
+                    dragLive.current = null;
                     setDragging(null);
                     setOver(null);
                   }}

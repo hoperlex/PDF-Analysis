@@ -191,7 +191,8 @@ describe('rows are addressed and never merged', () => {
       'Код оборудования, изделия, материала', 'Завод-изготовитель', 'Единица измерения', 'Количество', 'Масса единицы, кг',
       'Примечание', 'Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма',
     ]) {
-      expect(markup).toContain(`${heading}</th>`);
+      // The first graph's heading shares its cell with the «+» and «−» of the project folds.
+      expect(markup).toContain(heading === 'Позиция' ? `<span>${heading}</span>` : `${heading}</th>`);
     }
     expect(text(markup)).toContain('графы «Тип, марка», «Код» и «Завод-изготовитель» не отделены от наименования');
     // The row's category is the form's own divider row; the name is the name.
