@@ -16,6 +16,10 @@
  * **Dense, as the original's version bar** (`UI-A-24`): the number, the title, the badges and the link to the
  * document sit on one line, the facts and the identity on the next, instead of a bordered block of five paragraphs.
  *
+ * `UI-A-45`: a version that carries the contract's `audit` (the document's current version, as `listDocuments` or the
+ * document screen read it) draws the chip of its audit state after the badges, as a document card does; one that carries
+ * none -- an older version, which no read gives an audit -- draws no chip, and so says nothing about its runs.
+ *
  * `CMP-VERSION-MARK-01`: a version admitted for comparison only (`upload_kind` `comparison_pdf`)
  * carries the mark «PDF без пакета портала» under its badges. Any
  * other version, and a version without the field, draws exactly what it drew before.
@@ -28,6 +32,7 @@ import { formatInstant } from '@/shared/lib';
 
 import { formatBytes } from '../model/upload-envelope';
 import { isComparisonOnly } from '../model/upload-kind';
+import { AuditChip } from './audit-chip';
 import { ClassificationBadges } from './classification-badges';
 import { ComparisonOnlyMark } from './comparison-only-mark';
 import styles from './version-row.module.css';
@@ -38,9 +43,11 @@ export interface VersionRowProps {
   readonly href: string;
   /** An optional second address, e.g. the document this version belongs to. */
   readonly secondary?: { readonly href: string; readonly label: string } | undefined;
+  /** `UI-A-45`: where «Разбор» of a result run opens, for the chip of a version that was run; the screen builds it. */
+  readonly reviewAddress?: ((runId: string) => string) | undefined;
 }
 
-export function VersionRow({ version, href, secondary }: VersionRowProps) {
+export function VersionRow({ version, href, secondary, reviewAddress }: VersionRowProps) {
   return (
     <li
       className={styles.row}
@@ -53,6 +60,16 @@ export function VersionRow({ version, href, secondary }: VersionRowProps) {
           {version.display_title ?? version.source_filename ?? version.version_uid}
         </Link>
         <ClassificationBadges classification={version.classification} />
+        {version.audit === undefined ? null : (
+          <AuditChip
+            audit={version.audit}
+            reviewHref={
+              version.audit.result_run_id === undefined || reviewAddress === undefined
+                ? undefined
+                : reviewAddress(version.audit.result_run_id)
+            }
+          />
+        )}
         {isComparisonOnly(version) ? <ComparisonOnlyMark version={version} /> : null}
         {secondary === undefined ? null : (
           <Link className={styles.secondary} href={secondary.href}>{secondary.label}</Link>

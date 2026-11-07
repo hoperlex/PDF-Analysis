@@ -25,7 +25,9 @@ export type {
   ProposalDecisionLineProps,
   ProposalHistoryViewProps,
 } from './ui/proposal-card';
-export { ProposalCard, ProposalDecisionLine, ProposalHistoryView } from './ui/proposal-card';
+export { ProposalCard, ProposalDecisionLine, ProposalHistoryView, namedPage } from './ui/proposal-card';
+export type { ProposalSheetBlocksProps } from './ui/proposal-sheet-blocks';
+export { ProposalSheetBlocks, ProposalSheetBlocksBody } from './ui/proposal-sheet-blocks';
 export type {
   DecisionFilterProps,
   ProposalHistoryPanelViewProps,

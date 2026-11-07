@@ -123,6 +123,8 @@ export interface ProposalCardProps {
    * link; the list above says why (loading, or the refusal).
    */
   readonly documentUrl?: string | null | undefined;
+  /** `UI-B-09`: the block strip of the sheet, behind its own press; the container passes the live one. */
+  readonly blocks?: ReactNode;
 }
 
 /** The page a proposal names, when it names one a PDF reader can be pointed at. */
@@ -130,7 +132,7 @@ export function namedPage(proposal: OptimisationProposal): number | null {
   return Number.isInteger(proposal.page_number) && proposal.page_number >= 1 ? proposal.page_number : null;
 }
 
-export function ProposalCard({ proposal, controls, history, documentUrl }: ProposalCardProps) {
+export function ProposalCard({ proposal, controls, history, documentUrl, blocks }: ProposalCardProps) {
   const page = namedPage(proposal);
   const sheetUrl = documentUrl === undefined || documentUrl === null || page === null ? null : pdfPageUrl(documentUrl, page);
   const current = formatAmount(proposal.current_unit_price, proposal.currency);
@@ -202,6 +204,8 @@ export function ProposalCard({ proposal, controls, history, documentUrl }: Propo
         {controls}
         {history}
       </div>
+      {/* `UI-B-09`: the sheet's blocks, across the card under the row, behind their own press. */}
+      {blocks ?? null}
     </article>
   );
 }

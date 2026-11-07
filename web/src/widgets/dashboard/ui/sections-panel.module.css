@@ -62,6 +62,11 @@
   background: var(--am-accent-light);
 }
 
+/* `UI-A-37`: the stretched link below is positioned against the row. */
+.sectionRow {
+  position: relative;
+}
+
 .rowButton {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
@@ -82,6 +87,33 @@
 .rowButton:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 2px;
+}
+
+/*
+ * `UI-A-37`: with a project chosen the name is a link and its box covers the whole row, so a click anywhere on the row opens
+ * the section, as the original's row does. What must stay a target of its own (the «Не запускались» figure, the toggle) is lifted
+ * above it with `z-index`; the figures that are plain numbers are covered, and a click on them opens the section too.
+ */
+a.rowLink {
+  text-decoration: none;
+}
+
+.rowLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+/* Keyboard focus shows on the whole row, not on the name alone, because the whole row is what the link opens. */
+.rowLink:focus-visible {
+  outline: none;
+}
+
+.rowLink:focus-visible::after {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
 }
 
 .unclassified {
@@ -128,8 +160,31 @@
   text-decoration: none;
 }
 
-a.arrow:hover {
+a.arrow:hover,
+.toggle:hover {
   color: var(--am-accent-strong);
+}
+
+/* `UI-A-37`: the toggle of the panel under the list, in the arrow's place; it turns down while its panel is open. */
+.toggle {
+  position: relative;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--am-text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.toggle[aria-expanded='true'] {
+  transform: rotate(90deg);
 }
 
 .totalLabel {
@@ -221,6 +276,8 @@ a.arrow:hover {
 
 /* `UI-A-38`: «Не запускались» as a link to the narrowed section page; it keeps the figure's colour and is underlined. */
 .metricLink {
+  position: relative;
+  z-index: 1;
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 0.2em;

@@ -146,15 +146,33 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
             data-analysed-by={section.analysedBy}
             data-open={selected === section.code ? 'true' : 'false'}
           >
-            <button
-              type="button"
-              className={styles.rowButton}
-              aria-expanded={selected === section.code}
-              onClick={() => setSelected(selected === section.code ? null : section.code)}
-            >
-              <span className={styles.badge}>{section.code}</span>
-              <span className={styles.name}>{section.name}</span>
-            </button>
+            {projectUid === null ? (
+              <button
+                type="button"
+                className={styles.rowButton}
+                aria-expanded={selected === section.code}
+                onClick={() => setSelected(selected === section.code ? null : section.code)}
+              >
+                <span className={styles.badge}>{section.code}</span>
+                <span className={styles.name}>{section.name}</span>
+              </button>
+            ) : (
+              /*
+               * `UI-A-37`: the original's row is the link (a click on it opens the section) and has nothing to unfold. With a
+               * project to open the section in, the name is that link and its box is stretched over the whole row (`rowLink`),
+               * so a click anywhere on the row opens the section; the figure of «Не запускались» and the toggle at the row's
+               * end stay targets of their own, above it. The toggle keeps what the row used to do -- the panel under the
+               * list with «Открыть раздел» and «Оптимизация раздела» -- reachable.
+               */
+              <Link
+                className={`${styles.rowButton} ${styles.rowLink}`}
+                href={routes.projectSection(projectUid, section.code)}
+                data-section-open={section.code}
+              >
+                <span className={styles.badge}>{section.code}</span>
+                <span className={styles.name}>{section.name}</span>
+              </Link>
+            )}
             <SectionMetrics
               documents={summary.byCode[section.code]}
               audit={summary.auditByCode[section.code]}
@@ -163,15 +181,17 @@ export function SectionsPanel({ rows, projectUid = null }: SectionsPanelProps) {
             {projectUid === null ? (
               <span className={styles.arrow} aria-hidden="true">›</span>
             ) : (
-              /* The original's row opens the section in one click; with a project to open it in, so does the arrow. */
-              <Link
-                className={styles.arrow}
-                href={routes.projectSection(projectUid, section.code)}
-                aria-label={`Открыть раздел «${section.name}»`}
-                data-section-open={section.code}
+              <button
+                type="button"
+                className={`${styles.arrow} ${styles.toggle}`}
+                aria-expanded={selected === section.code}
+                aria-label={`Сведения о разделе «${section.name}»`}
+                title="Сведения о разделе"
+                data-section-toggle={section.code}
+                onClick={() => setSelected(selected === section.code ? null : section.code)}
               >
                 ›
-              </Link>
+              </button>
             )}
           </li>
         ))}

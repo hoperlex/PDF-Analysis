@@ -56,6 +56,14 @@ import { useProjectList } from '@/entities/project';
 import { LazyKnowledgeBase } from './lazy-knowledge-base';
 import styles from './knowledge-base-page.module.css';
 
+/**
+ * `UI-B-34`: how the decisions are drawn -- the original's table (the default, as the original's), or the rows as events.
+ * It is a way of drawing the page already read, so it changes no request and no cache key.
+ */
+type KbView = 'table' | 'events';
+
+const VIEW_LABELS: Readonly<Record<KbView, string>> = { table: 'Таблица', events: 'События' };
+
 /** `Все` is the absence of the parameter, never a value sent to the server. */
 type CategoryChoice = FindingCategory | 'all';
 type VerdictChoice = Verdict | 'all';
@@ -198,6 +206,7 @@ export function KnowledgeBasePage() {
   // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base, or
   // both as one journal («Все», `D-317`). «Замечания» stays the first screen, as it was before «Все».
   const [kind, setKind] = useState<'all' | 'findings' | 'proposals'>('findings');
+  const [view, setView] = useState<KbView>('table');
   const [proposalCursors, setProposalCursors] = useState<readonly string[]>(NO_CURSORS);
   const [allCursors, setAllCursors] = useState<readonly string[]>(NO_CURSORS);
   /*
@@ -298,6 +307,23 @@ export function KnowledgeBasePage() {
             </button>
           ))}
         </div>
+        {kind === 'proposals' ? null : (
+          <div className="am-kb__filter" role="group" aria-label="Вид списка">
+            <span>Вид</span>
+            {(['table', 'events'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={view === value ? 'am-button am-button--small' : 'am-button am-button--quiet am-button--small'}
+                aria-pressed={view === value}
+                data-kb-view={value}
+                onClick={() => setView(value)}
+              >
+                {VIEW_LABELS[value]}
+              </button>
+            ))}
+          </div>
+        )}
         {kind !== 'findings' ? null : <>
         <div className="am-kb__filter">
           <label htmlFor="kb-filter-category">Категория</label>
@@ -382,6 +408,7 @@ export function KnowledgeBasePage() {
             </p>
           )}
           <LazyKnowledgeBase
+            view={view}
             records={[]}
             entries={everything.data?.items ?? []}
             isLoading={everything.isPending}
@@ -452,6 +479,7 @@ export function KnowledgeBasePage() {
           )}
         </p>
         <LazyKnowledgeBase
+          view={view}
           records={journal.data?.items ?? []}
           isLoading={journal.isPending}
           narrowing={narrowing}

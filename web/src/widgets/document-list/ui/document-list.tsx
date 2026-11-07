@@ -70,6 +70,7 @@ export function DocumentList({ projectUid }: DocumentListProps) {
             key={version.document_uid}
             version={version}
             href={routes.version(projectUid, version.version_uid)}
+            reviewAddress={(runId) => routes.review(projectUid, runId)}
             secondary={{
               href: routes.document(projectUid, version.document_uid),
               label: 'Все версии документа',

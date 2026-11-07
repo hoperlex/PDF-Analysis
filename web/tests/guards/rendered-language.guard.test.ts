@@ -5482,6 +5482,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'Загрузка: блоки листа…',
+    why: 'UI-B-09: the block strip of a proposal\'s sheet reads the version and its blocks only after «Блоки листа» is pressed on a proposal card; one static pass renders the closed strip. tests/unit/optimisation-proposals/sheet-blocks.test.ts renders the loading branch of the open strip.',
+  },
+  {
+    label: 'Версия не прочитана: блоков листа нет',
+    why: 'UI-B-09: the open strip of a proposal\'s sheet says this only when the read of the pass\'s version was refused, after «Блоки листа» is pressed; one static pass cannot press it. tests/unit/optimisation-proposals/sheet-blocks.test.ts seeds the refusal and renders the branch.',
+  },
+  {
     label: 'Загрузка: решения по предложениям…',
     why: 'R-151h: the knowledge base reads the proposal journal only after «Тип: Предложения» is pressed; one static pass renders «Замечания». tests/unit/knowledge-base/proposal-journal.test.ts renders the loading branch of ProposalDecisions.',
   },

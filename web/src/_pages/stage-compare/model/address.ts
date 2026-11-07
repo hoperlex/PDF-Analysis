@@ -1,5 +1,6 @@
 /**
- * What «Сравнение стадий» keeps in its address (`UI-B-93`, `R-150c`): the pair, the run and the tab. The original remembered the last
+ * What «Сравнение стадий» keeps in its address (`UI-B-93`, `R-150c`): the pair, the run and the tab, and whether the sheet map is folded
+ * (`map`, below). The original remembered the last
  * pair of the object and the view in `localStorage` (`stage-comparison:*`); the address replaces it, so a reload, a pasted link and
  * Back/Forward open the same step of the same comparison. The project is `?project=` and is not touched here; `pair`, `run` and
  * `tab` are three of the `PROJECT_DEPENDENT_PARAMS`, dropped with the project when the header changes it.
@@ -51,5 +52,31 @@ export function writeStageAddress(params: Params, next: StageAddress): URLSearch
   else written.set(RUN_PARAM, next.runId);
   if (next.tab === DEFAULT_STAGE_TAB) written.delete(TAB_PARAM);
   else written.set(TAB_PARAM, next.tab);
+  return written;
+}
+
+/**
+ * `UI-B-93`: the fold of the sheet map. The original keeps four more things in `localStorage` (`stage-comparison:view-mode|thumbs|
+ * sheet-map-collapsed|v3-model|upload-rows`); of them only the fold of the map has an equivalent on this screen, so it is the one
+ * written here: `?map=closed` folds the rows of «Карта листов», and the open map is the absent parameter. It is a reader's choice about
+ * how the screen looks, held apart from the pair so that choosing another pair keeps it, as the original's flag does.
+ *
+ * What is not kept, and why: the paged or continuous sheet viewer and the thumbnail rail (this screen's viewer has neither), the order of
+ * the upload rows (the upload panel here lists one folder's candidates, not rows the reader arranged), and the analysis model, which
+ * is a choice made for one start and is not carried by a link a colleague opens (`StageRunControls` keeps its own).
+ */
+export const MAP_PARAM = 'map';
+const MAP_CLOSED = 'closed';
+
+/** The map is open unless the address says it is folded. */
+export function readMapOpen(params: Params): boolean {
+  return params.get(MAP_PARAM) !== MAP_CLOSED;
+}
+
+/** The query after the reader folds or opens the map; every other parameter is carried through. */
+export function writeMapOpen(params: Params, open: boolean): URLSearchParams {
+  const written = new URLSearchParams(params.toString());
+  if (open) written.delete(MAP_PARAM);
+  else written.set(MAP_PARAM, MAP_CLOSED);
   return written;
 }

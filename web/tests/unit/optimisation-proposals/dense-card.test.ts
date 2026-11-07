@@ -33,13 +33,14 @@ describe('a proposal row', () => {
       figs: area('.figures'),
       basis: area('.basis'),
       judgement: area('.judgement'),
-    }).toEqual({ head: 'head', prov: 'prov', quote: 'quote', frame: 'frame', figs: 'figs', basis: 'basis', judgement: 'judgement' });
+      blocks: area('.sheetBlocks'),
+    }).toEqual({ head: 'head', prov: 'prov', quote: 'quote', frame: 'frame', figs: 'figs', basis: 'basis', judgement: 'judgement', blocks: 'blocks' });
   });
 
-  it('stacks the same areas, in the old order, below 1100px', () => {
+  it('stacks the same areas, in the old order, below 1100px, with the sheet’s block strip (UI-B-09) last', () => {
     const narrow = /@media \(max-width: 1100px\)\s*\{[^}]*\.card\s*\{[^}]*grid-template-areas:\s*([^;]*);/.exec(CSS);
     expect(narrow, 'no stacked layout under 1100px').not.toBeNull();
-    expect((narrow?.[1] ?? '').match(/'([a-z]+)'/g)).toEqual(["'head'", "'prov'", "'quote'", "'frame'", "'figs'", "'basis'", "'judgement'"]);
+    expect((narrow?.[1] ?? '').match(/'([a-z]+)'/g)).toEqual(["'head'", "'prov'", "'quote'", "'frame'", "'figs'", "'basis'", "'judgement'", "'blocks'"]);
   });
 
   it('keeps the decision line, the controls and the history in the verdict group', () => {
