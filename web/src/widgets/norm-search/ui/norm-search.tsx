@@ -117,6 +117,11 @@ export function NormSearchResults({ items, onFirst, onNext }: NormSearchResultsP
       <EmptyState
         title="Ничего не найдено"
         detail="В текущем снимке нет надёжно распознанного абзаца, подходящего под этот запрос. Попробуйте другое обозначение, пункт или слова."
+        action={
+          <Link className="am-button am-button--quiet am-button--small" href={routes.norms()} data-norm-search-reset="">
+            Сбросить поиск
+          </Link>
+        }
       />
     );
   }
