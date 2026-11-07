@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c",
-    "content_commit": "1ab2391a",
-    "content_commit_subject": "feat(contract): 1.38.0 — AR v3 as an opt-in mode: the allowance, the analysis of a run, the result of a version (AR-V3-OPT-IN, P1+P2)",
-    "dispatch_named_commit": "1ab2391a80b5b80bb2833ec7ba347d7513cff820",
-    "commit_note": "Resealed by AR-V3-OPT-IN: contract 1.38.0 (RunStatus.analysis_kind/ar_v3_group_id/ar_v3_scope_id, ArV3BetaPackStatus.start_allowed, ComparisonRefusal analysis_not_comparable and the two conflict reasons).",
+    "sha256": "79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116",
+    "content_commit": "e8f741a8",
+    "content_commit_subject": "feat(contract): 1.39.0 — a carried finding decision names its source (UI-PARITY-FINDING-ORIGIN)",
+    "dispatch_named_commit": "e8f741a88135bb86b2335ff9acc531318cdbb1de",
+    "commit_note": "Resealed by UI-PARITY-FINDING-ORIGIN: contract 1.39.0 (DecisionCarriedFrom on DecisionEvent, DecisionRecord, Finding and FindingDetail; AcceptedOptimisationProposal.carried_from).",
     "openapi_version": "3.1.0",
-    "info_version": "1.38.0",
+    "info_version": "1.39.0",
     "paths": 273,
     "operations": 301,
-    "component_schemas": 725,
+    "component_schemas": 726,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "7ed18b37572873bae36e6f8438a733b8f31ed473e831c0cbee59f97e6412af9c",
+    "snapshot_sha256": "79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "3043d27ac8cda03e0d398b9e824d612c572f19203111da9dce3682d226a9fb69",
-      "index.ts": "a3db9aa0a5690a15affa69086bd140b89c40fc26b9a093a2797e8784b5fc30cc",
-      "operations.gen.ts": "97d84edc67ca1f90d2074b0cc4c8e0dba6b9ef83ac124de12ca8c763ece3e32c",
-      "types.gen.ts": "bcc8d12c95047a594fecc22560b46575032460c58bdb5617606df457aaf51e7c"
+      "client.gen.ts": "ae2a31b0e7f155134b1e7ab9412dbf862b1c1b542924a12eee5fbc5a68d7ffb3",
+      "index.ts": "7db3d81dec042e2a8a053e532f2a0be4f6d0f5da1684e0f615e2964b2c65b29a",
+      "operations.gen.ts": "e665838d057c47d76c7cde50fd55dbbaf3dbc9fc61125398f3115a2a4bf85b91",
+      "types.gen.ts": "1177d1c277499b500703a1f5d94edff430a63b4a6675209fe4ce6ae816f49bb8"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },
