@@ -120,6 +120,10 @@ describe('the screen has one shape, and offers the way to register (C-21, C-25)'
     expect(markup).toMatch(new RegExp(`<a href="${REGISTER_SCREEN}"[^>]*>Подать заявку на доступ</a>`));
   });
 
+  it('starts on the login field, as the original does', () => {
+    expect(render(createElement(SignInPage, {}))).toMatch(/<input[^>]*id="sign-in-login"[^>]*autofocus=""/);
+  });
+
   it('mounts the submit lock inside the credentials form', () => {
     const markup = render(createElement(SignInPage, {}));
     const form = /<form[^>]*>[\s\S]*?<\/form>/.exec(markup)?.[0] ?? '';

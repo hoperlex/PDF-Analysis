@@ -13,9 +13,13 @@
  * that could not be reached).
  */
 
+import Link from 'next/link';
+
+import { PROFILE_SCREEN } from '@/shared/config';
 import { PageShell } from '@/shared/ui';
 import type { ChangePasswordOutcome } from '@/features/change-password';
 import { ChangePasswordForm } from '@/features/change-password';
+import { SESSION_CLOSE_PATH } from '@/features/sign-in';
 import styles from './change-password-page.module.css';
 
 export interface ChangePasswordPageProps {
@@ -60,6 +64,15 @@ export function ChangePasswordPage({ outcome, mustChange, next }: ChangePassword
           Новый пропуск выдаётся сразу после смены и остаётся на сервере: в браузер
           возвращается только непрозрачный номер сеанса.
         </p>
+        {mustChange === true ? (
+          // The original's page ends with «Выйти»: an account that is shut out of every other screen until it changes its
+          // password can still leave. A POST to the session's own door, as the frame's menu does; no script.
+          <form method="post" action={SESSION_CLOSE_PATH} className={styles.leave} data-change-password-leave="">
+            <button type="submit" className="am-button am-button--quiet">Выйти</button>
+          </form>
+        ) : (
+          <p className={styles.leave} data-change-password-back=""><Link href={PROFILE_SCREEN}>Вернуться к профилю</Link></p>
+        )}
       </div>
     </PageShell>
   );
