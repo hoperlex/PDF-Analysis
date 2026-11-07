@@ -17,7 +17,7 @@ import {
 } from '@/widgets/optimisation-proposals';
 
 import { BLOCKS_PROJECT_UID, BLOCKS_VERSION_UID, blocksVersion, everyKindOfBlock, portalPage } from '../blocks/fixtures';
-import { newClient, renderScreen } from '../screens/harness';
+import { newClient, renderScreen, seedError } from '../screens/harness';
 import { pass, proposal, proposalPage } from './fixtures';
 
 const PROJECT = BLOCKS_PROJECT_UID as ProjectUid;
@@ -42,6 +42,14 @@ describe('the strip behind its press', () => {
     // Page 2 of the fixture holds two blocks; page 1 is not drawn.
     expect(markup.split('data-portal-page=').length - 1).toBe(1);
     expect(markup).toContain('data-portal-page="2"');
+  });
+
+  it('names the refusal, and offers no strip, when the version could not be read', () => {
+    const client = newClient();
+    seedError(client, queryKeys.versions.detail(VERSION), new Error('refused'));
+    const markup = renderScreen(client, createElement(ProposalSheetBlocksBody, { projectUid: PROJECT, versionUid: VERSION, page: 2 }));
+    expect(markup).toContain('Версия не прочитана: блоков листа нет');
+    expect(markup).not.toContain('data-portal-blocks-loaded');
   });
 
   it('says it while the version is on its way', () => {

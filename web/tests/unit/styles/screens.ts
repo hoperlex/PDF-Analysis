@@ -100,7 +100,7 @@ import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
-import { ProjectStructureView } from '@/widgets/project-sections';
+import { ProjectStructureView, sectionFigures } from '@/widgets/project-sections';
 import { VersionClassificationView } from '@/widgets/version-classification';
 import { portalBlocksQueryOptions } from '@/entities/block';
 import type {
@@ -2144,6 +2144,21 @@ export function screens(): Screen[] {
         }),
       ),
     );
+    // `UI-A-36`: the same structure with the server's figures of every section, so the «Σ Итого» card is drawn.
+    add(
+      'ProjectStructureView with the total',
+      at(
+        createElement(ProjectStructureView, {
+          projectUid: PROJECT_UID,
+          items: [version()],
+          hasNextPage: false,
+          figures: sectionFigures([
+            ...PROJECT_SECTION_VALUES.map((section) => ({ section, document_count: 2, ...sectionAudit(2) })),
+            { document_count: 1, ...sectionAudit(1) },
+          ]),
+        }),
+      ),
+    );
     add(
       'VersionClassificationView confirmed',
       at(
@@ -2483,6 +2498,28 @@ export function screens(): Screen[] {
   // `UI-B-34`: the original's table, the page's own default view: project, section, severity, verdict, reason and date by column.
   add('KnowledgeBase table', render(createElement(KnowledgeBase, {
     view: 'table', records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })),
+  })));
+  // The table's quiet cells: a decision with no comment, and «Все» with a proposal (no severity of its own).
+  add('KnowledgeBase table without comments', render(createElement(KnowledgeBase, {
+    view: 'table', records: RECORDS.map((row) => ({ ...row, comment: null })),
+  })));
+  add('KnowledgeBase table all kinds', render(createElement(KnowledgeBase, {
+    view: 'table',
+    records: [],
+    entries: [
+      { kind: 'finding' as const, occurred_at: RECORDS[0]!.recorded_at, finding: { ...RECORDS[0]!, section: 'AR' as const } },
+      {
+        kind: 'proposal' as const,
+        occurred_at: '2026-11-06T09:00:00Z',
+        proposal: {
+          proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', optimisation_proposal_id: 'opr_01J9ZQ8K7NHVXW3T2R5M6P4Q8E',
+          optimisation_pass_id: 'opp_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', verdict: 'reject' as const, comment: null,
+          actor_label: 'Иванова А. С.', decided_at: '2026-11-06T09:00:00Z', project_uid: PROJECT_UID, project_name: 'Мост через Неву',
+          document_uid: DOCUMENT_UID, document_name: 'Архитектурные решения', version_uid: VERSION_UID, section: 'AR' as const,
+          row_text: 'Дверь металлическая ДМ-1', proposed_vendor: 'ООО «Двери»', unit: 'шт',
+        },
+      },
+    ],
   })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
   // `D-313`: an empty page under a category, a verdict or a project says so, with both ways out on the surface.
