@@ -128,7 +128,7 @@ describe('when the package cannot be made', () => {
   });
 
   it('names the extended record when its read fails, and never packs a package without the record it could not read', async () => {
-    const { value, asked } = deps(refusal(503, 'service_unavailable'));
+    const { value, asked } = deps(refusal(503, 'dependency_unavailable'));
     const failure = await buildAuditPackage({ runId: RUN, versionUid: VERSION, signal: new AbortController().signal, deps: value })
       .then(() => null, (error: unknown) => error);
     expect(asked).toHaveLength(0);
