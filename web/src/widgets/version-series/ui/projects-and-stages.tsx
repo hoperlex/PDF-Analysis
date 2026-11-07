@@ -287,41 +287,43 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
   }, [reachKey]);
   return (
     <tr className={styles.row} data-document-uid={set.document_uid} onClick={() => onOpen(set.document_uid)}>
-      <th scope="row" className={styles.code}>
-        <button
-          type="button"
-          className={styles.open}
-          title="Открыть сравнение листов этого комплекта."
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen(set.document_uid);
-          }}
-        >
-          {codeOf(set) === '' ? 'Комплект без шифра' : codeOf(set)}
-        </button>
-        <Chip set={set} />
-        {row.summaryReady && row.seriesId !== null ? (
+      <th scope="row" className={styles.codeCell}>
+        <div className={styles.code}>
           <button
             type="button"
-            className="am-button am-button--small am-button--quiet"
-            title="Скачать «Сводку изменений (MD)»: все изменения комплекта от первой версии до последней одним файлом."
-            data-summary-md=""
+            className={styles.open}
+            title="Открыть сравнение листов этого комплекта."
             onClick={(event) => {
               event.stopPropagation();
-              onSummary(row.seriesId as string);
+              onOpen(set.document_uid);
             }}
           >
-            Сводка изменений (MD)
+            {codeOf(set) === '' ? 'Комплект без шифра' : codeOf(set)}
           </button>
-        ) : null}
-        {/* The original has no such exports (its reports are backend only); here they are folded under one line so that the row stays the original's height. */}
-        {row.seriesId === null ? null : <details className={styles.history} onClick={(event) => event.stopPropagation()} data-technical-downloads="">
-          <summary title="Полные сохранённые данные сравнения для проверки: XLSX и HTML с изображениями.">Технические выгрузки</summary>
-          <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
-          <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
-          <p className={styles.note}>Выгрузки включают полные сохранённые позиции СО, в том числе неизменённые, и покрытие извлечения. В XLSX полные данные — на листе RawJSON; в ZIP — JSON/CSV и манифест. Неполное или отсутствующее извлечение остаётся явно отмеченным. Новые обращения к модели не выполняются.</p>
-          {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
-        </details>}
+          <Chip set={set} />
+          {row.summaryReady && row.seriesId !== null ? (
+            <button
+              type="button"
+              className="am-button am-button--small am-button--quiet"
+              title="Скачать «Сводку изменений (MD)»: все изменения комплекта от первой версии до последней одним файлом."
+              data-summary-md=""
+              onClick={(event) => {
+                event.stopPropagation();
+                onSummary(row.seriesId as string);
+              }}
+            >
+              Сводка изменений (MD)
+            </button>
+          ) : null}
+          {/* The original has no such exports (its reports are backend only); here they are folded under one line so that the row stays the original's height. */}
+          {row.seriesId === null ? null : <details className={styles.history} onClick={(event) => event.stopPropagation()} data-technical-downloads="">
+            <summary title="Полные сохранённые данные сравнения для проверки: XLSX и HTML с изображениями.">Технические выгрузки</summary>
+            <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
+            <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
+            <p className={styles.note}>Выгрузки включают полные сохранённые позиции СО, в том числе неизменённые, и покрытие извлечения. В XLSX полные данные — на листе RawJSON; в ZIP — JSON/CSV и манифест. Неполное или отсутствующее извлечение остаётся явно отмеченным. Новые обращения к модели не выполняются.</p>
+            {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
+          </details>}
+        </div>
       </th>
       <td>
         <span>{set.version_count}</span>
@@ -538,7 +540,7 @@ export function ProjectsAndStagesView(props: ProjectsAndStagesViewProps) {
           }
         />
       ) : (
-        <div className={styles.scroller}>
+        <div className={styles.tableBox}>
           <table className={styles.table}>
             <thead>
               <tr>

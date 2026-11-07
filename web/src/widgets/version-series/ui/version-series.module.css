@@ -159,11 +159,52 @@
   background: var(--am-degraded-light);
 }
 
+/*
+ * The table of the sets scrolls in its own box, as the original's `vcp-table-wrap` does (a height that leaves room for the page above it):
+ * the heads of the columns and the code of the set stay in view while the rows and the seven steps are read.
+ */
+.tableBox {
+  overflow: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 20rem);
+  min-height: 7.5rem;
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+}
+
+.tableBox thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--am-surface-sunken);
+}
+
+.tableBox thead th:first-child {
+  left: 0;
+  z-index: 3;
+}
+
+.codeCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 10rem;
+  max-width: 16rem;
+  background: var(--am-surface);
+}
+
+@media (max-width: 780px) {
+  .tableBox {
+    max-height: none;
+  }
+}
+
 .row {
   cursor: pointer;
 }
 
-.row:hover {
+.row:hover,
+.row:hover .codeCell {
   background: var(--am-surface-sunken);
 }
 
