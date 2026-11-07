@@ -5,6 +5,12 @@
   overflow-x: auto;
 }
 
+/* A table wider than its column scrolls inside this box, which Tab reaches (a scrolling region must be focusable). */
+.scroll:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: -2px;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
