@@ -222,7 +222,9 @@
   min-width: 10rem;
 }
 
+/* A project's code is the matrix's entrance: a 24 px target (it was 18.5). */
 .open {
+  min-height: var(--am-gap-lg);
   padding: 0;
   border: 0;
   background: transparent;
@@ -242,6 +244,7 @@
 }
 
 .sortButton {
+  min-height: var(--am-gap-lg);
   padding: 0;
   border: 0;
   background: transparent;
@@ -626,10 +629,13 @@
   font-style: italic;
 }
 
+/* The handle of a cell's menu: 24 x 24 px at the least (it was 20 x 18). */
 .cellMenu {
   position: absolute;
   top: 0;
   right: 0;
+  min-width: var(--am-gap-lg);
+  min-height: var(--am-gap-lg);
   padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);
