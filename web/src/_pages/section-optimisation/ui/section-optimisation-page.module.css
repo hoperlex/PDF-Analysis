@@ -28,6 +28,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  /* The bar is a flex item of the toolbar and its automatic minimum is its content's (a select as wide as its longest option). */
+  min-width: 0;
+  max-width: 100%;
   gap: var(--am-gap-xs) var(--am-gap);
   margin: 0;
 }

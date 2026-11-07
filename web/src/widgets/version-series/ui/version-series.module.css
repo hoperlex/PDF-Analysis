@@ -295,10 +295,12 @@
 }
 
 /* The name of the set is the button of the caret (the original's whole header is): it folds the blocks above the matrix. */
+/* 24 px tall at the least (it was 20.8); centred, not baseline-aligned, so the text stays in the middle of the taller box. */
 .setToggle {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--am-gap-xs);
+  min-height: var(--am-gap-lg);
   margin: 0;
   padding: 0;
   border: 0;

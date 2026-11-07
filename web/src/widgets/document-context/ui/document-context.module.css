@@ -59,6 +59,8 @@
 .neighbours > a {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: var(--am-gap-lg);
   min-height: var(--am-gap-lg);
 }
 
