@@ -48,6 +48,8 @@ export type ComparisonViewerData = Omit<ComparisonSheetPair, 'sheet_pair_id' | '
 export interface ComparisonViewerViewProps {
   readonly pair: ComparisonViewerData;
   readonly showEvidencePanels?: boolean;
+  /** The versions the two sheets belong to, as the screen names them («Версия №2 · ЭМ-изм1.pdf»); absent: the sheets are named alone. */
+  readonly versionLabels?: { readonly a?: string; readonly b?: string };
   /** `null`: the pair has no sheet the viewer can draw (no canvas, no resolution, no size passed). */
   readonly geometry: ViewerGeometry | null;
   readonly context: ViewerContext;
@@ -79,10 +81,12 @@ const BADGE_TONE: Readonly<Record<string, string>> = {
 };
 
 /** «Было: л. 5 · План освещения» and «Стало: нет в этой версии»: the sheet of one side, by its place in the pair. */
-function sheetName(side: Side, page: ComparisonPairPageLike | undefined): string {
+function sheetName(side: Side, page: ComparisonPairPageLike | undefined, version?: string): string {
   if (page === undefined) return `${SIDE_WORDS[side]}: нет в этой версии`;
   const number = page.sheet_number === undefined ? `стр. ${(page.page as ComparisonPageRef).page_number}` : `л. ${page.sheet_number}`;
-  return `${SIDE_WORDS[side]}: ${number}${page.title === undefined ? '' : ` · ${page.title}`}`;
+  // The version first, as the original's header says «A <label> · стр. N · лист S»: the window covers the matrix, so it must say which versions it holds.
+  const where = version === undefined || version === '' ? number : `${version} · ${number}`;
+  return `${SIDE_WORDS[side]}: ${where}${page.title === undefined ? '' : ` · ${page.title}`}`;
 }
 
 type ComparisonPairPageLike = NonNullable<ComparisonSheetPair['page_a']>;
@@ -101,7 +105,7 @@ function Choice({ checked, disabled, title, layer, onChange, children }: { check
 }
 
 export function ComparisonViewerView({
-  pair, geometry, context, state, tiles, dispatch, navigation, stageRef, rootRef, onKeyDown, paneHandlers, dragging, sidePanel, evidence, onEvidence,
+  pair, geometry, context, state, tiles, dispatch, navigation, stageRef, rootRef, onKeyDown, paneHandlers, dragging, sidePanel, evidence, onEvidence, versionLabels,
   showEvidencePanels = true,
 }: ComparisonViewerViewProps) {
   const differences = pair.differences ?? [];
@@ -265,8 +269,8 @@ export function ComparisonViewerView({
       {...(onKeyDown === undefined ? {} : { tabIndex: -1, onKeyDown })}
     >
       <header className={styles.header}>
-        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('a', pair.page_a)}</span></h2>
-        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('b', pair.page_b)}</span></h2>
+        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('a', pair.page_a, versionLabels?.a)}</span></h2>
+        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('b', pair.page_b, versionLabels?.b)}</span></h2>
         <div className={styles.facts}>
           {status === undefined ? null : <span className={`am-badge am-badge--${BADGE_TONE[status] ?? 'inert'}`}>{STATUS_LABELS[status]}</span>}
           {pair.ai_dependent === true ? <span className="am-badge am-badge--inert">пара связана с участием ИИ</span> : null}

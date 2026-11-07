@@ -60,6 +60,18 @@ function html(pair: ComparisonSheetPair, steps: ViewerAction[] = [], tiles: Tile
 }
 
 describe('the viewer of a compared pair', () => {
+  it('names the version of each sheet first when the screen says them, as the original\'s header does (UI-B-99)', () => {
+    const labelled = html(comparedPair(), [], arrived, { versionLabels: { a: 'Версия №2 · ЭМ-изм1.pdf', b: 'Версия №3 · ЭМ-изм2.pdf' } });
+    expect(labelled).toContain('Было: Версия №2 · ЭМ-изм1.pdf · л. 5 · План освещения. Корпус 1, этаж 1');
+    expect(labelled).toContain('Стало: Версия №3 · ЭМ-изм2.pdf · л. 5 · План освещения. Корпус 1, этаж 1');
+    // a side without a label keeps the sheet alone; an empty label is no label
+    const half = html(comparedPair(), [], arrived, { versionLabels: { b: '' } });
+    expect(half).toContain('Было: л. 5 · План освещения');
+    expect(half).toContain('Стало: л. 5 · План освещения');
+    // a sheet the version does not have says so, label or not
+    expect(html(comparedPair({ page_a: undefined as never }), [], arrived, { versionLabels: { a: 'Версия №2' } })).toContain('Было: нет в этой версии');
+  });
+
   it('names the sheets and the status in Russian', () => {
     const markup = html(comparedPair());
     expect(markup).toContain('Было: л. 5 · План освещения. Корпус 1, этаж 1');

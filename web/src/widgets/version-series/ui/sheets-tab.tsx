@@ -83,6 +83,8 @@ import styles from './version-series.module.css';
 /** What the page that composes this tab hands in to draw the viewer of one pair. */
 export interface ViewerSlotProps {
   readonly pair: ComparisonSheetPair;
+  /** The versions of the sheets A and B as the matrix names them («Версия №2 · ЭМ-изм1.pdf»). */
+  readonly versionLabels: { readonly a?: string; readonly b?: string };
   readonly rasterSize?: { readonly widthPx: number; readonly heightPx: number };
   readonly navigation: {
     readonly onPrevious?: () => void;
@@ -372,11 +374,15 @@ export function PairViewerSlot({
   siblings,
   renderViewer,
   onOpen,
+  names,
+  titles,
 }: {
   readonly pairId: string;
   readonly siblings: readonly ComparisonSheetPair[];
   readonly renderViewer: RenderViewer;
   readonly onOpen: (pairId: string) => void;
+  readonly names?: ReadonlyMap<string, string>;
+  readonly titles?: ReadonlyMap<string, string>;
 }) {
   const [onlyChanged, setOnlyChanged] = useState(false);
   const pair = useSheetPair(pairId);
@@ -403,10 +409,20 @@ export function PairViewerSlot({
     const target = kept.find((item) => all.indexOf(item) > at) ?? kept[0];
     if (target !== undefined) onOpen(target.sheet_pair_id);
   };
+  const labelOf = (versionUid: string | undefined): string | undefined => {
+    if (versionUid === undefined || names === undefined) return undefined;
+    const name = names.get(versionUid);
+    if (name === undefined) return undefined;
+    const file = titles?.get(versionUid) ?? '';
+    return file === '' ? `Версия ${name}` : `Версия ${name} · ${file}`;
+  };
+  const labelA = labelOf(pair.data.page_a?.page.version_uid);
+  const labelB = labelOf(pair.data.page_b?.page.version_uid);
   return (
     <>
       {renderViewer({
         pair: pair.data,
+        versionLabels: { ...(labelA === undefined ? {} : { a: labelA }), ...(labelB === undefined ? {} : { b: labelB }) },
         ...(rasterSize === undefined ? {} : { rasterSize }),
         navigation: {
           ...(previous === undefined ? {} : { onPrevious: () => onOpen(previous.sheet_pair_id) }),
@@ -618,6 +634,8 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
             siblings={pairs.data ?? []}
             renderViewer={renderViewer}
             onOpen={setOpenPairId}
+            names={names}
+            titles={titles}
           />
         )
       }

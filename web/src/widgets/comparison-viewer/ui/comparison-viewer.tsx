@@ -40,6 +40,8 @@ export interface ComparisonViewerProps {
    */
   readonly rasterSize?: RasterSize;
   readonly navigation?: ViewerNavigation;
+  /** The versions of the two sheets, named as the matrix names them; the header of the viewer says them. */
+  readonly versionLabels?: { readonly a?: string; readonly b?: string };
   /**
    * `CMP-VC-UI-02`: draw the side panel «Изменения в листе» beside the sheet. `mayAct` is an expert on a module that is on: only
    * then is «Описать этот лист…» offered. Absent: the viewer is what `CMP-VIEWER-01` made.
@@ -49,7 +51,7 @@ export interface ComparisonViewerProps {
 
 const EMPTY_RASTER: RasterSize = { widthPx: 1, heightPx: 1 };
 
-export function ComparisonViewer({ pair, rasterSize, navigation, changes }: ComparisonViewerProps) {
+export function ComparisonViewer({ pair, rasterSize, navigation, changes, versionLabels }: ComparisonViewerProps) {
   const geometry = useMemo(() => viewerGeometry(pair, rasterSize), [pair, rasterSize]);
   const context: ViewerContext = useMemo(
     () => ({
@@ -212,6 +214,7 @@ export function ComparisonViewer({ pair, rasterSize, navigation, changes }: Comp
       onEvidence={onEvidence}
       {...(changes === undefined ? {} : { sidePanel: <ChangesPanel pair={pair} mayAct={changes.mayAct} onShow={onShow} /> })}
       {...(navigation === undefined ? {} : { navigation })}
+      {...(versionLabels === undefined ? {} : { versionLabels })}
     />
   );
 }

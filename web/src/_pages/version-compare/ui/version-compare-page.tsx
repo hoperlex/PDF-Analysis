@@ -191,8 +191,14 @@ export function VersionComparePage({ initial }: VersionComparePageProps) {
                 documentUid={documentUid}
                 heading={heading}
                 mayEdit={mayAct}
-                renderViewer={({ pair, rasterSize, navigation }) => (
-                  <ComparisonViewer pair={pair} navigation={navigation} changes={{ mayAct }} {...(rasterSize === undefined ? {} : { rasterSize })} />
+                renderViewer={({ pair, rasterSize, navigation, versionLabels }) => (
+                  <ComparisonViewer
+                    pair={pair}
+                    navigation={navigation}
+                    versionLabels={versionLabels}
+                    changes={{ mayAct }}
+                    {...(rasterSize === undefined ? {} : { rasterSize })}
+                  />
                 )}
                 renderReport={({ series, names, mayAct: allowed, onClose }) => (
                   <ReportWindow series={series} names={names} mayAct={allowed} onClose={onClose} />

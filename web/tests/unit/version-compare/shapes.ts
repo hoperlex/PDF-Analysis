@@ -566,8 +566,10 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
       createElement(PairViewerSlot, {
         pairId: PAIR_ID,
         siblings: pairs(),
-        renderViewer: ({ pair, rasterSize, navigation }) => createElement(ComparisonViewer, { pair, navigation, ...(rasterSize === undefined ? {} : { rasterSize }) }),
+        renderViewer: ({ pair, rasterSize, navigation, versionLabels }) => createElement(ComparisonViewer, { pair, navigation, versionLabels, ...(rasterSize === undefined ? {} : { rasterSize }) }),
         onOpen: noop,
+        names: SET_NAMES,
+        titles: new Map([[V1, 'ЭМ-изм0.pdf'], [V2, 'ЭМ-изм1.pdf'], [V3, 'ЭМ-изм2.pdf']]),
       }),
     seedClient: (c) => c.setQueryData(COMPARISON_KEYS.pair(PAIR_ID), comparedPair({ sheet_pair_id: PAIR_ID })),
   },
