@@ -357,7 +357,7 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(markup).not.toContain('data-route="/section-optimisation"');
     // One read, under its own key: the analysed section, unfiltered, first page.
     const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
-    expect(keys).toHaveLength(1);
+    expect(keys, `the reads the screen made: ${JSON.stringify(keys)}`).toHaveLength(1);
     expect(keys[0]?.slice(0, 3)).toEqual(['optimisation', 'section-specification', 'AR']);
     expect(keys[0]?.[3]).toEqual({ projectUid: null, q: null, offset: 0, limit: 50 });
   });

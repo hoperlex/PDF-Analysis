@@ -2527,6 +2527,11 @@ export function screens(): Screen[] {
    */
   add('SignInPage refused', render(createElement(SignInPage, { refusal: 'credentials' })));
   add('SignInPage open', render(createElement(SignInPage, { login: 'проверяющий' })));
+  // The sentence above the form when the server knows why there is no session
+  // (`/login?reason=…`): a rule of its own in `sign-in-page.module.css`, so the census must reach it.
+  for (const reason of ['expired', 'ended', 'invalid'] as const) {
+    add(`SignInPage session ${reason}`, render(createElement(SignInPage, { reason })));
+  }
   add('ChangePasswordPage', render(createElement(ChangePasswordPage, { login: 'проверяющий' })));
   add(
     'ChangePasswordPage refused',
