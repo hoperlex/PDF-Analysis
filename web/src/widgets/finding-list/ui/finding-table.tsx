@@ -27,7 +27,7 @@ import {
   normCitationStateLabel,
   normCitationStateMeaning,
 } from '@/entities/finding';
-import { CATEGORY_LABELS, VerdictBadge } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 import { clauseLabel } from '@/entities/norms';
 
@@ -172,6 +172,8 @@ export function FindingTable({
                   <td>
                     <div className={styles.decision}>
                       <VerdictBadge verdict={finding.current_verdict} />
+                      {/* `UI-A-73`: the verdict was carried over from an earlier version; absent, nothing is drawn. */}
+                      <CarriedMark carriedFrom={finding.current_verdict_carried_from} />
                       {renderRowActions === undefined ? null : renderRowActions(finding)}
                     </div>
                   </td>
