@@ -113,7 +113,8 @@ describe('UI-A-45: the audit chip in a version row', () => {
   });
 
   describe('on the document screen', () => {
-    const current = version({ version_ordinal: 2, classification: classification(), audit: run });
+    // `listVersions` carries no audit: only the section's listing does (contract 1.34.0), so the current version is read without one.
+    const current = version({ version_ordinal: 2, classification: classification() });
     const older = version({
       version_uid: `${current.version_uid.slice(0, -1)}Z`, version_ordinal: 1, classification: classification(),
     });
@@ -126,7 +127,7 @@ describe('UI-A-45: the audit chip in a version row', () => {
 
     it('gets the current version’s chip from its section’s listing, and none for the older version', () => {
       const client = seeded();
-      client.setQueryData(sectionKey, page([otherVersion('B'), current]));
+      client.setQueryData(sectionKey, page([otherVersion('B'), { ...current, audit: run }]));
       const markup = renderWith(client, createElement(VersionList, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID as DocumentUid, sectionCode: 'AR' }));
       expect(markup.match(/data-audit-state=/g) ?? []).toHaveLength(1);
       const row = markup.slice(markup.indexOf(`data-version-uid="${current.version_uid}"`), markup.indexOf(`data-version-uid="${older.version_uid}"`));
