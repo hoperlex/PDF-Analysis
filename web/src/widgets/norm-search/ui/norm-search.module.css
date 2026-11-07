@@ -11,34 +11,46 @@
   gap: var(--am-gap-xs);
 }
 
+/* How many results this page holds, and that more are one button away. */
+.count {
+  margin: 0 0 var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .hit {
   min-width: 0;
   max-width: 100%;
+  margin: 0;
   padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line-strong);
-  border-radius: var(--am-radius);
+  border-radius: var(--am-radius-sm);
   background: var(--am-paper);
   overflow-wrap: anywhere;
 }
 
 .hit p {
-  margin: 0 0 var(--am-gap-xs);
+  margin: 0;
 }
 
-.head,
-.foot {
+/* The document on the left, the clause and the page with the way into the PDF on the right; it wraps under the title on a phone. */
+.head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 0 var(--am-gap);
+  gap: var(--am-gap-xs) var(--am-gap);
 }
 
-.foot {
-  align-items: center;
+.document {
+  flex: 1 1 16rem;
+  min-width: 0;
 }
 
 .where {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-sm);
   white-space: nowrap;
@@ -49,24 +61,47 @@
   white-space: pre-wrap;
 }
 
+.source {
+  line-height: var(--am-leading-tight);
+}
+
 .match {
   background: var(--am-accent-light);
   color: var(--am-ink);
   border-radius: calc(var(--am-gap-xs) / 2);
 }
 
+/* The search is one line: the field with its label, the button, and the help folded under them. */
 .search {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--am-gap-sm);
-  align-items: end;
-  padding: var(--am-gap-sm);
-  border: 1px solid var(--am-line-soft);
-  border-radius: var(--am-radius);
-  background: var(--am-paper);
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  max-width: none;
+  margin-bottom: var(--am-gap-sm);
 }
 
-.search input {
+.field {
+  display: flex;
+  flex: 1 1 24rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   min-width: 0;
-  width: min(36rem, 100%);
+}
+
+.field input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  max-width: 36rem;
+}
+
+.help {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.help summary {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }

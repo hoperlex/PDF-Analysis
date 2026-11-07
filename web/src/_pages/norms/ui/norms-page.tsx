@@ -72,20 +72,25 @@ const REFUSALS: ReadonlySet<string> = new Set([
   'unrecognized',
 ]);
 
+/** The first twelve characters of a snapshot's content key, for a line; the whole key stays in the title. */
+export function shortSnapshotKey(key: string): string {
+  return key.length > 12 ? `${key.slice(0, 12)}…` : key;
+}
+
 function CurrentSnapshotStatus({ reading }: { readonly reading: CurrentSnapshotReading }) {
   if (reading.kind === 'none') return <NoCurrentSnapshot />;
   if (reading.kind === 'beyond') {
     return (
-      <p role="status" className="am-note" data-norm-current="beyond">
+      <p role="status" className={styles.status} data-norm-current="beyond">
         Текущий снимок не найден среди прочитанных снимков. Поиск всё равно идёт по тому снимку,
         который сервер считает текущим.
       </p>
     );
   }
   return (
-    <p role="status" className="am-note" data-norm-current="current">
-      Поиск идёт по текущему снимку <code>{reading.snapshot.content_key}</code>: документов{' '}
-      {reading.snapshot.document_count}, абзацев {reading.snapshot.paragraph_count}.
+    <p role="status" className={styles.status} data-norm-current="current">
+      Поиск идёт по текущему снимку <code title={reading.snapshot.content_key}>{shortSnapshotKey(reading.snapshot.content_key)}</code>:
+      документов {reading.snapshot.document_count}, абзацев {reading.snapshot.paragraph_count}.
     </p>
   );
 }
@@ -266,10 +271,13 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void snapshots.refetch()}>Обновить</button>}
       surface="canvas"
     >
-      <section className={styles.panel} aria-label="Текущий снимок норм">
-        {snapshots.isPending ? <LoadingState what="снимки норм" /> : null}
+      {/* One line: the two views and which snapshot they read; a refusal or a failed read opens under it. */}
+      <section className={styles.bar} aria-label="Текущий снимок норм">
+        <NormViews active={catalogue === null ? 'search' : 'catalogue'} />
+        {reading !== null && reading.kind !== 'none' ? <CurrentSnapshotStatus reading={reading} /> : null}
+        {snapshots.isPending ? <div className={styles.wide}><LoadingState what="снимки норм" /></div> : null}
         {readFailure !== null ? (
-          <div data-norms-snapshots-failure={readFailure.kind}>
+          <div className={styles.wide} data-norms-snapshots-failure={readFailure.kind}>
             <ErrorState
               title="Снимки норм не прочитаны"
               detail={readFailure.detail}
@@ -278,26 +286,24 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
             />
           </div>
         ) : null}
-        {reading !== null ? <CurrentSnapshotStatus reading={reading} /> : null}
+        {reading !== null && reading.kind === 'none' ? <div className={styles.wide}><NoCurrentSnapshot /></div> : null}
       </section>
 
-      <NormViews active={catalogue === null ? 'search' : 'catalogue'} />
       {catalogue === null ? (
         <section className={styles.panel} aria-label="Поиск по нормам">
           <NormSearchForm query={query} disabled={searchRefused} />
           {query !== null && !searchRefused ? <SearchSection key={query} query={query} /> : null}
         </section>
-      ) : (
+      ) : searchRefused ? null : (
+        // The refusal before a snapshot is current is said once, in the line above.
         <section className={styles.panel} aria-label="Каталог документов текущего снимка" data-norms-catalogue>
-          {searchRefused ? <NoCurrentSnapshot /> : (
-            <CatalogueSection key={`${catalogue.q ?? ''}\u0000${catalogue.kind ?? ''}`} filter={catalogue} />
-          )}
+          <CatalogueSection key={`${catalogue.q ?? ''}\u0000${catalogue.kind ?? ''}`} filter={catalogue} />
         </section>
       )}
 
       {administrator ? (
         <section className={styles.panel} aria-label="Снимки нормативной базы" data-norms-administration>
-          <h2>Снимки нормативной базы</h2>
+          <h2 className={styles.subheading}>Снимки нормативной базы</h2>
           {snapshots.data !== undefined && reading !== null ? (
             <NormSnapshotList
               items={snapshots.data.items}
@@ -308,19 +314,26 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
             />
           ) : null}
           {intent !== null ? (
-            <section role="group" aria-label="Подтверждение назначения текущего снимка" data-norms-intent={intent.snapshot.norms_snapshot_id}>
+            <section
+              role="group"
+              aria-label="Подтверждение назначения текущего снимка"
+              className={`am-state am-state--warning ${styles.intent}`}
+              data-norms-intent={intent.snapshot.norms_snapshot_id}
+            >
               <p>{designationIntentLabel(intent)}</p>
-              <button type="button" className="am-button" disabled={busy} onClick={() => void execute(intent)}>
-                {commandFailure === null ? 'Подтвердить' : 'Повторить'}
-              </button>{' '}
-              <button
-                type="button"
-                className="am-button am-button--quiet"
-                disabled={busy}
-                onClick={() => { sequence.current += 1; setIntent(null); setCommandFailure(null); }}
-              >
-                Отмена
-              </button>
+              <div className={styles.intentActions}>
+                <button type="button" className="am-button am-button--small" disabled={busy} onClick={() => void execute(intent)}>
+                  {commandFailure === null ? 'Подтвердить' : 'Повторить'}
+                </button>
+                <button
+                  type="button"
+                  className="am-button am-button--quiet am-button--small"
+                  disabled={busy}
+                  onClick={() => { sequence.current += 1; setIntent(null); setCommandFailure(null); }}
+                >
+                  Отмена
+                </button>
+              </div>
             </section>
           ) : null}
           {commandFailure !== null ? (
@@ -342,7 +355,7 @@ export function NormsPage({ roles, query = null, catalogue = null }: NormsPagePr
             </div>
           ) : null}
           {completed ? <p role="status" className="am-note">Текущий снимок назначен.</p> : null}
-          <h2>История назначений</h2>
+          <h2 className={styles.subheading}>История назначений</h2>
           <DesignationHistory />
         </section>
       ) : null}
