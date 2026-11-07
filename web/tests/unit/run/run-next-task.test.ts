@@ -12,7 +12,7 @@ import type { Account, ExecutionQueueItem, ExecutionQueuePage, RunStatus } from 
 import { meQueryOptions } from '@/entities/account';
 import { nextTaskPlace, nextTaskWhy, nextTaskWork, runNextTask } from '@/entities/audit-run';
 import { queueQueryOptions } from '@/entities/execution';
-import { RunNextTask } from '@/widgets/run-progress/ui/run-next-task';
+import { RunNextTask } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
 

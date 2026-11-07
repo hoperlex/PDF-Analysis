@@ -11,8 +11,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { CRITIC_QUEUES, ObservationList, criticQueueCounts } from '@/widgets/extended-review';
-import { queueAfterKey } from '@/widgets/extended-review/ui/critic-queues';
+import { CRITIC_QUEUES, ObservationList, criticQueueCounts, queueAfterKey } from '@/widgets/extended-review';
 
 import { mountLive } from '../analysis-settings/live-render';
 

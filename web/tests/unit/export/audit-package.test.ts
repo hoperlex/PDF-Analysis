@@ -16,10 +16,10 @@ import type { DownloadSink } from '@/features/export-run';
 import { EvidencePackageError } from '@/features/export-evidence-package';
 import type { EvidencePackageOptions } from '@/features/export-evidence-package';
 import {
-  AUDIT_PACKAGE_TITLE, AuditPackageStepError, ExportPanel, auditPackageDoneLine, auditPackageFailure, buildAuditPackage,
+  AUDIT_PACKAGE_TITLE, AuditPackageDownload, AuditPackageStepError, ExportPanel, auditPackageDoneLine, auditPackageFailure,
+  buildAuditPackage,
 } from '@/widgets/export-panel';
 import type { AuditPackageDeps } from '@/widgets/export-panel';
-import { AuditPackageDownload } from '@/widgets/export-panel/ui/audit-package-download';
 
 import { mountLive } from '../analysis-settings/live-render';
 import { RUN_ID, VERSION_UID, render } from '../review/fixtures';
