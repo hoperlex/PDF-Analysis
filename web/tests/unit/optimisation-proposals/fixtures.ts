@@ -320,6 +320,83 @@ function failure(detail: string) {
   };
 }
 
+/** A decision an expert carried over from the pass of version 1 (`UI-B-14`). */
+export function carriedDecision(): ProposalDecision {
+  return decision({
+    proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q9E',
+    verdict: 'accept',
+    comment: null,
+    carried_from: {
+      proposal_decision_id: 'opd_01J9ZQ8K7NHVXW3T2R5M6P4Q8V',
+      optimisation_pass_id: OLDER_PASS_ID,
+      version_uid: 'ver_01J9ZQ8K7NHVXW3T2R5M6P4Q9F',
+      version_ordinal: 1,
+    },
+  });
+}
+
+/**
+ * `UI-B-14`: «Перенести решения из V#» offered, asking for confirmation, working, answered and refused, and a card whose
+ * decision was carried. Kept apart from `proposalShapes` and appended at the end of the contrast census, because that census
+ * samples every 25th screen and a screen inserted in the middle shifts which screens are sampled.
+ */
+export function carryOverShapes(): readonly ProposalShape[] {
+  return [
+    {
+      name: 'proposal-carryover-offered',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: null, pending: false, report: null, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carryover-confirming',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: carryOverSources()[0] ?? null, pending: false, report: null, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carryover-working',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: carryOverSources()[0] ?? null, pending: true, report: null, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carryover-reported',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: null, pending: false, failure: null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+        report: {
+          optimisation_pass_id: PASS_ID, source_optimisation_pass_id: OLDER_PASS_ID, source_version_ordinal: 1,
+          source_decided: 8, carried: 5, target_decided: 1, ambiguous: 1, unmatched: 1,
+        },
+      }),
+    },
+    {
+      name: 'proposal-carryover-refused',
+      make: () => createElement(CarryOverProposalDecisionsView, {
+        sources: carryOverSources(), confirming: null, pending: false, report: null,
+        failure: CARRYOVER_REFUSAL_TEXT['carryover_source_not_earlier'] ?? null,
+        onAsk: noop, onConfirm: noop, onCancel: noop,
+      }),
+    },
+    {
+      name: 'proposal-carried-decision',
+      make: () => createElement(ProposalCard, {
+        proposal: proposal({ current_verdict: 'accept', current_decision: carriedDecision() }),
+        controls: null,
+        history: createElement(ProposalHistoryPanelView, {
+          open: true, pending: false, failure: null,
+          items: [decision({ verdict: 'reject', comment: null }), carriedDecision()],
+          onToggle: noop, onRetry: noop,
+        }),
+      }),
+    },
+  ];
+}
+
 /** Every shape the section can show, for the static renders. */
 export function proposalShapes(): readonly ProposalShape[] {
   const section = (roles: readonly ('expert' | 'admin')[]) => () =>
@@ -597,47 +674,6 @@ export function proposalShapes(): readonly ProposalShape[] {
       make: () => createElement(ImportProposalDecisionsView, {
         pending: false, report: null, onChoose: noop,
         failure: 'Это не наша выгрузка: нужен лист «Предложения» с колонкой идентификаторов предложений. Выгрузите таблицу решений заново.',
-      }),
-    },
-    // `UI-B-14`: «Перенести решения из V#» offered, asking for confirmation, working, answered, and refused.
-    {
-      name: 'proposal-carryover-offered',
-      make: () => createElement(CarryOverProposalDecisionsView, {
-        sources: carryOverSources(), confirming: null, pending: false, report: null, failure: null,
-        onAsk: noop, onConfirm: noop, onCancel: noop,
-      }),
-    },
-    {
-      name: 'proposal-carryover-confirming',
-      make: () => createElement(CarryOverProposalDecisionsView, {
-        sources: carryOverSources(), confirming: carryOverSources()[0] ?? null, pending: false, report: null, failure: null,
-        onAsk: noop, onConfirm: noop, onCancel: noop,
-      }),
-    },
-    {
-      name: 'proposal-carryover-working',
-      make: () => createElement(CarryOverProposalDecisionsView, {
-        sources: carryOverSources(), confirming: carryOverSources()[0] ?? null, pending: true, report: null, failure: null,
-        onAsk: noop, onConfirm: noop, onCancel: noop,
-      }),
-    },
-    {
-      name: 'proposal-carryover-reported',
-      make: () => createElement(CarryOverProposalDecisionsView, {
-        sources: carryOverSources(), confirming: null, pending: false, failure: null,
-        onAsk: noop, onConfirm: noop, onCancel: noop,
-        report: {
-          optimisation_pass_id: PASS_ID, source_optimisation_pass_id: OLDER_PASS_ID, source_version_ordinal: 1,
-          source_decided: 8, carried: 5, target_decided: 1, ambiguous: 1, unmatched: 1,
-        },
-      }),
-    },
-    {
-      name: 'proposal-carryover-refused',
-      make: () => createElement(CarryOverProposalDecisionsView, {
-        sources: carryOverSources(), confirming: null, pending: false, report: null,
-        failure: CARRYOVER_REFUSAL_TEXT['carryover_source_not_earlier'] ?? null,
-        onAsk: noop, onConfirm: noop, onCancel: noop,
       }),
     },
     {

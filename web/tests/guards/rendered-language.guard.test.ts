@@ -226,7 +226,7 @@ import {
   AVAILABLE_RUN_ID, accountFixture, runFindingsPage, v3FindingFixture,
 } from '../unit/analysis-settings/ar-v3-beta-review-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
-import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
+import { carryOverShapes, proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 import {
   ADMIN_AND_EXPERT,
@@ -2427,6 +2427,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   ...optimisationShapes(),
   // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.
   ...proposalShapes(),
+  // `UI-B-14`: «Перенести решения из V#» in every state and a carried decision (kept apart so the contrast census's sampling holds).
+  ...carryOverShapes(),
   {
     name: 'update-banner',
     make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),
