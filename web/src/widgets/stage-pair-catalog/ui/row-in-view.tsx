@@ -9,7 +9,7 @@ export interface RowInViewProps {
   readonly pairId: string;
   /** Called with the row's pair and whether the row is in view; the catalog keeps the set of rows in view. */
   readonly onVisibility: (pairId: string, visible: boolean) => void;
-  readonly className?: string;
+  readonly className?: string | undefined;
   readonly children: ReactNode;
 }
 

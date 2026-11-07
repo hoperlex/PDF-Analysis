@@ -16,6 +16,13 @@ import { QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// React Query decides once, when it is loaded, whether it runs on a server (no `window`) and, if so, never schedules a refetch
+// interval. The polling cases below need the intervals, so a `window` exists before the library is imported; it has no document,
+// so nothing that looks for a DOM finds one, and `mountLive` puts back what it finds.
+vi.hoisted(() => {
+  (globalThis as { window?: unknown }).window = { addEventListener: () => undefined, removeEventListener: () => undefined };
+});
+
 vi.mock('@/shared/api', async (importOriginal) => ({
   ...await importOriginal<Record<string, unknown>>(),
   listStageChainRuns: vi.fn(),
@@ -102,6 +109,20 @@ function viewport(): ScriptedObserver {
   return first;
 }
 
+/**
+ * The rows read, then the card counts of the finished runs are asked for: a few turns, each of which lets React and the cache hear
+ * the last (the counts are enabled by the run list the first turn brings).
+ */
+async function settleReads(view: LiveRender): Promise<void> {
+  for (let turn = 0; turn < 4; turn += 1) await view.settle(() => undefined);
+}
+
+/** The rows in view become `visible`, as the browser would report them while the reader scrolls. */
+async function scrollTo(view: LiveRender, visible: ReadonlySet<string>): Promise<void> {
+  await view.settle(() => viewport().report(visible));
+  await settleReads(view);
+}
+
 let live: LiveRender | undefined;
 
 beforeEach(() => {
@@ -132,7 +153,7 @@ describe('the catalog of a hundred pairs', () => {
     answerRuns('completed');
     live = await mountCatalog();
     const first = new Set(indexes(0, 10));
-    await live.settle(() => viewport().report(first));
+    await scrollTo(live, first);
     expect(readPairs().sort()).toEqual(indexes(0, 10).sort());
     // Ten rows in view, five of them (the even pairs) with a finished run: five card-count reads, none for the rest of the hundred.
     expect(vi.mocked(listStageChangeCards)).toHaveBeenCalledTimes(5);
@@ -144,8 +165,8 @@ describe('the catalog of a hundred pairs', () => {
   it('reads the rows that scroll in, and not again the rows that scroll out', async () => {
     answerRuns('completed');
     live = await mountCatalog();
-    await live.settle(() => viewport().report(new Set(indexes(0, 10))));
-    await live.settle(() => viewport().report(new Set(indexes(10, 20))));
+    await scrollTo(live, new Set(indexes(0, 10)));
+    await scrollTo(live, new Set(indexes(10, 20)));
     // Twenty rows were in view over the scroll, each read once: the first ten were not read again on their way out.
     expect(readPairs().sort()).toEqual(indexes(0, 20).sort());
   });
@@ -155,7 +176,7 @@ describe('the catalog of a hundred pairs', () => {
     answerRuns('running');
     live = await mountCatalog();
     const mounted = live;
-    await mounted.settle(() => viewport().report(new Set(indexes(0, 10))));
+    await scrollTo(mounted, new Set(indexes(0, 10)));
     // Ten rows read once; five of them (even pairs) have a running run and so poll.
     expect(readPairs()).toHaveLength(10);
     for (let elapsed = 0; elapsed < 30_000; elapsed += 500) {
@@ -167,7 +188,7 @@ describe('the catalog of a hundred pairs', () => {
     expect(readPairs()).toHaveLength(10 + 5 * 3);
     expect(new Set(readPairs()).size).toBe(10);
     // The five rows scroll out: their polling stops, and nothing is read for the rest.
-    await mounted.settle(() => viewport().report(new Set()));
+    await scrollTo(mounted, new Set());
     const before = readPairs().length;
     for (let elapsed = 0; elapsed < 30_000; elapsed += 500) {
       await mounted.settle(() => vi.advanceTimersByTime(500));
