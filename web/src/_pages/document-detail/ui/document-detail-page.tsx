@@ -190,7 +190,8 @@ function DocumentScreen({
       <div className={styles.stack}>
         <section className={styles.panel} aria-labelledby="document-versions-title">
           <h2 id="document-versions-title">Опубликованные версии</h2>
-          <VersionList projectUid={projectUid} documentUid={documentUid} />
+          {/* `UI-A-45`: the current version's audit chip comes from its section's listing, the one the strip above reads. */}
+          <VersionList projectUid={projectUid} documentUid={documentUid} sectionCode={newest?.classification?.section_code} />
         </section>
         <section className={styles.panel} aria-label="Загрузить новую версию">
           <UploadVersionPanel
