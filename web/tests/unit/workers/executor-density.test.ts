@@ -86,6 +86,16 @@ describe('«Подключения»: the card’s own actions are at the row he
     }
   });
 
+  it('folds the facts of a version under a line that names its version, model and billing, and keeps every fact in the markup', () => {
+    const markup = connections(['expert']);
+    const folded = markup.match(/<details[^>]*data-executor-settings=""[^>]*><summary>Настройки: версия \d+ · модель [^<]+ · [^<]+<\/summary><dl[^>]*data-executor-revision=/g) ?? [];
+    expect(folded.length).toBeGreaterThan(5);
+    // One fold for every connection that has a version: the facts are the same ones as before, only under the line.
+    expect(markup.match(/data-executor-revision="/g)?.length).toBe(folded.length);
+    expect(markup).toContain('data-executor-billing=');
+    expect(markup).toContain('data-executor-active-runs=');
+  });
+
   it('says who made the connection as a muted hint line, not a paragraph of the card’s own weight', () => {
     expect(connections(['expert'])).toMatch(/<p class="am-form__hint [^"]*identity[^"]*">Подключение <code>/);
   });

@@ -54,7 +54,7 @@ function ParagraphRow({ paragraph, normDocumentId }: { readonly paragraph: NormP
       data-norm-kind={paragraph.kind}
     >
       {unreliable ? (
-        <p data-norm-unreliable>
+        <p className={styles.warning} data-norm-unreliable>
           <strong>Текст распознан ненадёжно</strong> — сверьте его с PDF на странице {paragraph.page_label}.
         </p>
       ) : null}

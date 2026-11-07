@@ -38,6 +38,14 @@
   }
 }
 
+.settings {
+  margin-bottom: var(--am-gap-xs);
+}
+
+.settings summary {
+  cursor: pointer;
+}
+
 .card {
   min-width: 0;
   max-width: 100%;

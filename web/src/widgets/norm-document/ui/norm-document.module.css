@@ -42,7 +42,7 @@
   margin: 0;
 }
 
-.paragraph > p:first-child:not(.text) {
+.warning {
   grid-column: 1 / -1;
 }
 

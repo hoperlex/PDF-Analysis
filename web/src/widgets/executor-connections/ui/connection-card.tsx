@@ -118,44 +118,50 @@ function RevisionSummary({ revision }: { readonly revision: ExecutorRevision }) 
   // A revision without the member is a revision from before capacity existed: one at a time.
   const activeRuns = revision.max_active_runs ?? 1;
   return (
-    <dl className={styles.revision} data-executor-revision={revision.revision_no}>
-      <dt>Настройки</dt>
-      <dd>
-        версия {revision.revision_no}, сохранена <Moment at={revision.created_at} />, автор{' '}
-        <code>{revision.created_by}</code>
-      </dd>
-      {revision.base_url !== undefined ? (<><dt>Адрес</dt><dd><code>{revision.base_url}</code></dd></>) : null}
-      {revision.api_flavour !== undefined ? (<><dt>Формат запросов</dt><dd data-executor-flavour={revision.api_flavour}>{FLAVOUR_LABELS[revision.api_flavour]}</dd></>) : null}
-      {revision.transport !== undefined ? (<><dt>Способ связи</dt><dd data-executor-transport={revision.transport}>{TRANSPORT_LABELS[revision.transport]}</dd></>) : null}
-      {revision.ssh_host !== undefined ? (
-        <>
-          <dt>Узел SSH</dt>
-          <dd><code>{revision.ssh_user !== undefined ? `${revision.ssh_user}@` : ''}{revision.ssh_host}:{revision.ssh_port}</code></dd>
-        </>
-      ) : null}
-      {revision.ssh_profile !== undefined ? (<><dt>Профиль команды</dt><dd data-executor-ssh-profile={revision.ssh_profile}>{SSH_PROFILE_LABELS[revision.ssh_profile]}</dd></>) : null}
-      {revision.ssh_host !== undefined ? (
-        <>
-          <dt>Отпечаток узла</dt>
-          <dd>{revision.host_key_fingerprint !== undefined ? <code>{revision.host_key_fingerprint}</code> : 'не закреплён'}</dd>
-        </>
-      ) : null}
-      {revision.pull_client !== undefined ? (<><dt>Клиент</dt><dd data-executor-pull-client={revision.pull_client}>{PULL_CLIENT_LABELS[revision.pull_client]}</dd></>) : null}
-      {revision.answer_deadline_seconds !== undefined ? (<><dt>Срок ответа</dt><dd>{revision.answer_deadline_seconds} с</dd></>) : null}
-      {revision.max_claimed_tasks !== undefined ? (<><dt>Заданий в работе</dt><dd>{revision.max_claimed_tasks}</dd></>) : null}
-      <dt>Модель</dt>
-      <dd>
-        <code>{revision.pin_id}</code>; на шлюзе <code>{revision.gateway_model}</code>
-      </dd>
-      <dt>Тарификация</dt>
-      <dd data-executor-billing={revision.billing}>{BILLING_LABELS[revision.billing]}</dd>
-      <dt>{CAPACITY_FIELD_LABEL}</dt>
-      <dd data-executor-active-runs={activeRuns}>{activeRuns}</dd>
-      <dt>Ожидание ответа</dt>
-      <dd>{revision.timeout_seconds} с{revision.max_parallel_calls !== undefined ? `; параллельных вызовов ${revision.max_parallel_calls}` : ''}</dd>
-      <dt>Документы заказчика</dt>
-      <dd>{revision.allow_client_documents ? 'разрешены' : 'не отправляются'}</dd>
-    </dl>
+    <details className={styles.settings} data-executor-settings="">
+      {/* What an administrator scans for is on the handle; the nine to twelve facts are one click under it. */}
+      <summary>
+        Настройки: версия {revision.revision_no} · модель {revision.pin_id} · {BILLING_LABELS[revision.billing]}
+      </summary>
+      <dl className={styles.revision} data-executor-revision={revision.revision_no}>
+        <dt>Настройки</dt>
+        <dd>
+          версия {revision.revision_no}, сохранена <Moment at={revision.created_at} />, автор{' '}
+          <code>{revision.created_by}</code>
+        </dd>
+        {revision.base_url !== undefined ? (<><dt>Адрес</dt><dd><code>{revision.base_url}</code></dd></>) : null}
+        {revision.api_flavour !== undefined ? (<><dt>Формат запросов</dt><dd data-executor-flavour={revision.api_flavour}>{FLAVOUR_LABELS[revision.api_flavour]}</dd></>) : null}
+        {revision.transport !== undefined ? (<><dt>Способ связи</dt><dd data-executor-transport={revision.transport}>{TRANSPORT_LABELS[revision.transport]}</dd></>) : null}
+        {revision.ssh_host !== undefined ? (
+          <>
+            <dt>Узел SSH</dt>
+            <dd><code>{revision.ssh_user !== undefined ? `${revision.ssh_user}@` : ''}{revision.ssh_host}:{revision.ssh_port}</code></dd>
+          </>
+        ) : null}
+        {revision.ssh_profile !== undefined ? (<><dt>Профиль команды</dt><dd data-executor-ssh-profile={revision.ssh_profile}>{SSH_PROFILE_LABELS[revision.ssh_profile]}</dd></>) : null}
+        {revision.ssh_host !== undefined ? (
+          <>
+            <dt>Отпечаток узла</dt>
+            <dd>{revision.host_key_fingerprint !== undefined ? <code>{revision.host_key_fingerprint}</code> : 'не закреплён'}</dd>
+          </>
+        ) : null}
+        {revision.pull_client !== undefined ? (<><dt>Клиент</dt><dd data-executor-pull-client={revision.pull_client}>{PULL_CLIENT_LABELS[revision.pull_client]}</dd></>) : null}
+        {revision.answer_deadline_seconds !== undefined ? (<><dt>Срок ответа</dt><dd>{revision.answer_deadline_seconds} с</dd></>) : null}
+        {revision.max_claimed_tasks !== undefined ? (<><dt>Заданий в работе</dt><dd>{revision.max_claimed_tasks}</dd></>) : null}
+        <dt>Модель</dt>
+        <dd>
+          <code>{revision.pin_id}</code>; на шлюзе <code>{revision.gateway_model}</code>
+        </dd>
+        <dt>Тарификация</dt>
+        <dd data-executor-billing={revision.billing}>{BILLING_LABELS[revision.billing]}</dd>
+        <dt>{CAPACITY_FIELD_LABEL}</dt>
+        <dd data-executor-active-runs={activeRuns}>{activeRuns}</dd>
+        <dt>Ожидание ответа</dt>
+        <dd>{revision.timeout_seconds} с{revision.max_parallel_calls !== undefined ? `; параллельных вызовов ${revision.max_parallel_calls}` : ''}</dd>
+        <dt>Документы заказчика</dt>
+        <dd>{revision.allow_client_documents ? 'разрешены' : 'не отправляются'}</dd>
+      </dl>
+    </details>
   );
 }
 
