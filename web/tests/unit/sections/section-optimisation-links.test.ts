@@ -80,12 +80,14 @@ describe('the dashboard’s sections panel', () => {
     { document_count: 0, finding_count: 0, audit_counts: auditCounts(0) },
   ] as unknown as SectionDocumentCount[];
 
-  /** A section row's button: its code and its name, as the panel draws them. */
+  /** A section row's button across all projects: its code and its name, as the panel draws them. */
   const buttonOf = (code: string): string => {
     const section = PROJECT_SECTIONS.find((candidate) => candidate.code === code);
     if (section === undefined) throw new Error(`no section ${code}`);
     return `${section.code}${section.name}`;
   };
+  /** `UI-A-37`: with a project the row is a link, and the panel is opened by the toggle at the row's end. */
+  const toggle = (view: LiveRender, code: string): Promise<boolean> => view.pressMarked('data-section-toggle', code);
 
   async function mountPanel(projectUid: string | null): Promise<LiveRender> {
     live = await mountLive(createElement(SectionsPanel, { rows, projectUid }));
@@ -95,7 +97,7 @@ describe('the dashboard’s sections panel', () => {
   it('links the chosen section’s optimisation, with the project the dashboard follows', async () => {
     const view = await mountPanel(PROJECT_UID);
     expect(view.markup()).not.toContain('data-section-optimisation-link');
-    expect(await view.press(buttonOf('AR'))).toBe(true);
+    expect(await toggle(view, 'AR')).toBe(true);
     const tag = view.markup().match(/<a [^>]*data-section-optimisation-link="AR"[^>]*>/)?.[0];
     expect(tag).toContain(`href="${routes.sectionOptimisation('AR', PROJECT_UID)}"`);
     expect(view.markup()).toContain('Оптимизация раздела');
@@ -103,8 +105,8 @@ describe('the dashboard’s sections panel', () => {
 
   it('follows the section the reader chose, not the first one', async () => {
     const view = await mountPanel(PROJECT_UID);
-    await view.press(buttonOf('AR'));
-    await view.press(buttonOf('KJ'));
+    await toggle(view, 'AR');
+    await toggle(view, 'KJ');
     expect(view.markup()).toContain('data-section-optimisation-link="KJ"');
     expect(view.markup()).not.toContain('data-section-optimisation-link="AR"');
   });
