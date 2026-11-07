@@ -26,7 +26,8 @@ import {
 import { ProposalDecisionForm } from '@/features/decide-optimisation-proposal';
 
 import styles from './optimisation-proposals.module.css';
-import { ProposalCard, ProposalHistoryView } from './proposal-card';
+import { ProposalCard, ProposalHistoryView, namedPage } from './proposal-card';
+import { ProposalSheetBlocks } from './proposal-sheet-blocks';
 
 export interface DecisionFilterProps {
   readonly selected: ProposalDecisionState | null;
@@ -166,6 +167,8 @@ export interface ProposalListViewProps {
   /** Draw the controls of one proposal; the container passes the live form. */
   readonly controlsFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   readonly historyFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
+  /** `UI-B-09`: the block strip of the sheet a proposal names; the container passes the live one. */
+  readonly blocksFor?: ((proposal: OptimisationProposal) => ReactNode) | undefined;
   /** `UI-B-09`: the pass's version PDF; absent, the cards offer no «Открыть лист». */
   readonly sheet?: SheetDocument | undefined;
   /**
@@ -184,6 +187,7 @@ export function ProposalListView({
   onPage,
   controlsFor,
   historyFor,
+  blocksFor,
   sheet,
   actions,
   summary,
@@ -222,6 +226,7 @@ export function ProposalListView({
             proposal={proposal}
             controls={canDecide ? (controlsFor?.(proposal) ?? null) : null}
             history={historyFor?.(proposal) ?? null}
+            blocks={blocksFor?.(proposal) ?? null}
             documentUrl={sheet?.url ?? null}
           />
         ))
@@ -279,6 +284,14 @@ export function ProposalList({ page, canDecide, onDecision, onPage, sheet, actio
         <ProposalDecisionForm passId={page.optimisation_pass.optimisation_pass_id} proposal={proposal} />
       )}
       historyFor={(proposal) => <ProposalHistory proposal={proposal} />}
+      blocksFor={(proposal) => {
+        // A proposal that names no page has no sheet to show the blocks of.
+        const sheetPage = namedPage(proposal);
+        const pass = page.optimisation_pass;
+        return sheetPage === null ? null : (
+          <ProposalSheetBlocks projectUid={pass.project_uid} versionUid={pass.version_uid} page={sheetPage} />
+        );
+      }}
     />
   );
 }
