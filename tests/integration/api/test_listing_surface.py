@@ -361,6 +361,9 @@ def listing_router(
 class _UnusedProjectPort:
     """`build_router` needs six ports; this module drives none of the project ones."""
 
+    def get_project(self, **_: Any) -> Any:  # pragma: no cover - never called
+        raise AssertionError("this suite does not drive getProject")
+
     def create_project(self, **_: Any) -> Any:  # pragma: no cover - never called
         raise AssertionError("this suite does not drive createProject")
 

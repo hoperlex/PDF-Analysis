@@ -12,6 +12,7 @@ import { formatInstant, routes } from '@/shared/lib';
 import { queueItemError, workerStateLabel } from '@/entities/execution';
 
 import { attentionItems, nextJobs } from '../model/attention';
+import { queueStateHref } from '../model/queue-links';
 import styles from './workers-overview-sections.module.css';
 
 export interface WorkersOverviewSectionsProps {
@@ -105,7 +106,16 @@ export function WorkersOverviewSections({
         </section>
       )}
       <section className={styles.block} aria-label="Требует внимания" data-overview-attention="">
-        <h3 className={styles.title}>Требует внимания</h3>
+        <h3 className={styles.title}>
+          Требует внимания
+          {/* The queue narrowed to what ended badly: the block shows the first page, the link shows all of it. */}
+          <span className={styles.more}>
+            <a href={queueStateHref('failed')} data-overview-attention-link="failed">Задачи с ошибкой →</a>
+            {attention.some((entry) => entry.kind === 'job' && entry.item.state === 'dead_letter') ? (
+              <>{' · '}<a href={queueStateHref('dead_letter')} data-overview-attention-link="dead_letter">Остановленные после повторов →</a></>
+            ) : null}
+          </span>
+        </h3>
         {attention.length === 0 ? (
           <p className={styles.ok} data-overview-attention-none="">✓ Проблем не обнаружено</p>
         ) : (

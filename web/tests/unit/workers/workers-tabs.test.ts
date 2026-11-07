@@ -14,12 +14,12 @@ import {
 import { WorkersTabs } from '@/_pages/workers/ui/workers-tabs';
 
 describe('the tabs', () => {
-  it('are «Обзор», «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order, and open on «Процессы»', () => {
+  it('are «Обзор», «Подключения», «Процессы», «Группы», «Правила», «Назначения», in that order, and open on «Обзор»', () => {
     // `EXEC2-WEB-GROUPS-01` adds «Группы» and «Правила»; «Назначения» stays last as the legacy editor and history.
-    // UI-B-63 puts «Обзор» first and leaves the default alone: an address that names no tab keeps its meaning.
+    // UI-B-63 puts «Обзор» first; the second UX pass (2026-11-07) makes it the one the screen opens on, as the original's dispatcher does.
     expect([...WORKERS_TABS]).toEqual(['overview', 'connections', 'processes', 'groups', 'rules', 'routes']);
     expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual(['Обзор', 'Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения']);
-    expect(DEFAULT_WORKERS_TAB).toBe('processes');
+    expect(DEFAULT_WORKERS_TAB).toBe('overview');
     expect(WORKERS_TAB_PARAM).toBe('tab');
   });
 

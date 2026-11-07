@@ -688,6 +688,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "decideOptimisationProposal": _EXPERT,
         # `UI-B-15`: loading edited decisions back appends decisions, so it is an expert's act like `decideOptimisationProposal`.
         "importOptimisationProposalDecisions": _EXPERT,
+        # `UI-B-14` (contract 1.37.0): carrying decisions over from an earlier version appends decisions, an expert's act.
+        "carryOverProposalDecisions": _EXPERT,
         "exportRunCsv": _EXPERT_OR_VIEWER,
         # `W57B-NORMS-CATALOGUE-XLSX-01`. The workbook is the CSV's sibling: the same role.
         "exportRunXlsx": _EXPERT_OR_VIEWER,

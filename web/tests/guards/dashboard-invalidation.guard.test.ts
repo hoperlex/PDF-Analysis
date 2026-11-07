@@ -207,6 +207,8 @@ const EXPECTED_INVALIDATION: Readonly<Record<string, boolean>> = {
   'src/features/decide-optimisation-proposal/model/use-decide-optimisation-proposal.ts': false,
   // `UI-B-15`: a workbook's decisions are decisions on proposals, which touch no finding and no dashboard count.
   'src/features/import-proposal-decisions/model/use-import-proposal-decisions.ts': false,
+  // `UI-B-14`: a carried decision is a decision on a proposal, which touches no finding and no dashboard count.
+  'src/features/carry-over-proposal-decisions/model/use-carry-over-proposal-decisions.ts': false,
   // `W59-SECTION-UI-01` (integrator grant): confirming a version's stage and section. The
   // breakdown groups by the document's legacy `section` today, which a classification does
   // not write; the backend half of the window is still being written, so the hook

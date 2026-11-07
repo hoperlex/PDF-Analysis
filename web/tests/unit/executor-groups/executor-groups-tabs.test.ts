@@ -30,7 +30,7 @@ describe('the tabs', () => {
     expect(WORKERS_TABS.map((tab) => WORKERS_TAB_LABELS[tab])).toEqual([
       'Обзор', 'Подключения', 'Процессы', 'Группы', 'Правила', 'Назначения',
     ]);
-    expect(DEFAULT_WORKERS_TAB).toBe('processes');
+    expect(DEFAULT_WORKERS_TAB).toBe('overview');
     expect(WORKERS_TAB_PARAM).toBe('tab');
   });
 

@@ -2124,6 +2124,7 @@ def test_optimisation_proposals_read_the_query_parameters_they_declare(
                     "project_uid": "prj_01M2545JSD15ETSNNV904X991F",
                     "document_uid": "doc_01M2545JSD15ETSNNV904X991H",
                     "version_uid": "ver_01M2545JSD15ETSNNV904X991J",
+                    "version_ordinal": 1,
                     "run_id": "run_01M2545JSD15ETSNNV904X991K",
                     "text_layer_sha256": "e" * 64,
                     "price_list_id": "prl_01M2545JSD15ETSNNV904X991N",

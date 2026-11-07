@@ -55,6 +55,7 @@ import {
   useOptimisationProposals,
 } from '@/entities/optimisation-proposal';
 import { useEvidenceDocument } from '@/features/open-evidence';
+import { CarryOverProposalDecisions } from '@/features/carry-over-proposal-decisions';
 import { ImportProposalDecisions } from '@/features/import-proposal-decisions';
 import { StartOptimisationPass } from '@/features/start-optimisation-pass';
 
@@ -207,10 +208,19 @@ export interface ExportProposalsViewProps {
   readonly onDownloadXlsx?: (() => void) | undefined;
   /** `UI-B-15`: «Загрузить решения», offered to an expert only. */
   readonly importControl?: ReactNode;
+  /** `UI-B-14`: «Перенести решения из V#», offered to an expert only, and only when an earlier version has a pass. */
+  readonly carryOverControl?: ReactNode;
 }
 
 /** «Выгрузить CSV», «Выгрузить таблицу решений» and «Загрузить решения» with the refusal, from state already in hand. Rendered by the harness. */
-export function ExportProposalsView({ pending, failure, onDownload, onDownloadXlsx, importControl }: ExportProposalsViewProps) {
+export function ExportProposalsView({
+  pending,
+  failure,
+  onDownload,
+  onDownloadXlsx,
+  importControl,
+  carryOverControl,
+}: ExportProposalsViewProps) {
   return (
     <div data-proposals-export="">
       <p>
@@ -227,6 +237,7 @@ export function ExportProposalsView({ pending, failure, onDownload, onDownloadXl
         )}
       </p>
       {importControl ?? null}
+      {carryOverControl ?? null}
       {failure !== null ? (
         <ErrorState
           title="Файл не выгружен"
@@ -242,9 +253,11 @@ export function ExportProposalsView({ pending, failure, onDownload, onDownloadXl
 interface ActivePassProps {
   readonly passId: OptimisationPassId;
   readonly canDecide: boolean;
+  /** The set's passes, newest first: the earlier versions' decisions can be carried from them (`UI-B-14`). */
+  readonly passes: readonly OptimisationPass[];
 }
 
-function ActivePass({ passId, canDecide }: ActivePassProps) {
+function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
   const [decision, setDecision] = useState<ProposalDecisionState | null>(null);
   const [offset, setOffset] = useState(0);
   const proposals = useOptimisationProposals(passId, decision, offset);
@@ -298,6 +311,9 @@ function ActivePass({ passId, canDecide }: ActivePassProps) {
                 onDownload={exporter.download}
                 onDownloadXlsx={workbook.download}
                 importControl={canDecide ? <ImportProposalDecisions passId={passId} /> : null}
+                carryOverControl={
+                  canDecide ? <CarryOverProposalDecisions pass={proposals.data.optimisation_pass} passes={passes} /> : null
+                }
               />
             }
             sheet={sheet}
@@ -426,7 +442,7 @@ export function OptimisationProposals({
           ) : null}
           <PassList passes={list} active={activePass} onOpen={setChosenPass} />
           {activePass !== null ? (
-            <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} />
+            <ActivePass key={activePass} passId={activePass} canDecide={roles.includes('expert')} passes={list} />
           ) : null}
         </>
       ) : null}

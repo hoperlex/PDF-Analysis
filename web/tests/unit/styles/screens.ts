@@ -17,6 +17,7 @@
 import { createElement } from 'react';
 import type { ComponentType, ReactElement } from 'react';
 
+import { HomePage } from '@/_pages/home';
 import { ProjectsPage } from '@/_pages/projects';
 import { PageBlocksStrip, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
@@ -40,7 +41,7 @@ import { Dashboard } from '@/widgets/dashboard';
 import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { DocumentList } from '@/widgets/document-list';
-import { EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
+import { DocumentViewerView, EvidenceViewer, QuotationCard } from '@/widgets/evidence-viewer';
 import { PageViewerView } from '@/features/open-evidence';
 import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
@@ -154,6 +155,7 @@ import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
 import { description as aiDescription } from '../version-compare/ai-fixtures';
 import { COMPARISON_SHAPES, panelProps } from '../version-compare/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
+import { ADMIN as HOME_ADMIN, EXPERT as HOME_EXPERT, LABEL as HOME_LABEL, loaded as loadedHome } from '../screens/home-fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
   NORM_CATALOGUE_ITEMS, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
@@ -169,7 +171,7 @@ import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixt
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
 } from '../workers/executor-fixtures';
-import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
+import { carryOverShapes, proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
 import {
@@ -189,7 +191,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -2007,6 +2009,29 @@ export function screens(): Screen[] {
     add('ProjectDetailPage loaded', at(createElement(ProjectDetailPage, { projectUid: PROJECT_UID, roles: ['expert'] })));
     add('DocumentDetailPage loaded', at(createElement(DocumentDetailPage, { projectUid: PROJECT_UID, documentUid: DOCUMENT_UID, roles: ['expert'] })));
     add('VersionDetailPage loaded', at(createElement(VersionDetailPage, { projectUid: PROJECT_UID, versionUid: VERSION_UID, roles: ['expert'] })));
+    /*
+     * `UI-A-27` «Просмотр PDF»: the drawer is mounted by a press, which a one-pass render cannot make, so its view is drawn open from plain
+     * data -- on the first page (‹ disabled, the bytes here and «Открыть PDF ↗» offered) and on the last with the bytes not yet here
+     * (› disabled, no link), the two states the bar's colours branch on.
+     */
+    add('VersionDetailPage PDF drawer open', withRouter(createElement(DocumentViewerView, {
+      title: 'АР-1 · Версия 3', page: 1, pageCount: 5, onPage: () => undefined,
+      externalHref: 'blob:http://web.test/0a1b2c3d#page=1', onClose: () => undefined,
+      children: createElement(LoadingState, { what: 'PDF версии' }),
+    })));
+    add('VersionDetailPage PDF drawer on the last page, document not read', withRouter(createElement(DocumentViewerView, {
+      title: 'АР-1 · Версия 3', page: 5, pageCount: 5, onPage: () => undefined,
+      externalHref: null, onClose: () => undefined,
+      children: createElement(ErrorState, { title: 'PDF не удалось открыть', detail: 'Байты документа не пришли.' }),
+    })));
+    /*
+     * The home page at `/` (`W50-HOME-01`). The derived screens above render it COLD, where it draws only its loading states; the tiles, the
+     * recent projects, the expert's own work and the administrator's pending-requests tile exist only over answered reads, which are seeded
+     * as `tests/unit/screens/home.test.ts` seeds them (`home-fixtures.ts` is the one set).
+     */
+    add('HomePage loaded, expert', renderScreen(loadedHome(), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_EXPERT })));
+    add('HomePage loaded, administrator with requests waiting', renderScreen(loadedHome({ pending: 3 }), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_ADMIN })));
+    add('HomePage loaded, administrator with none waiting', renderScreen(loadedHome({ pending: 0 }), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_ADMIN })));
     // `CMP-VERSION-MARK-01`: the same four screens over a version admitted for comparison only
     // (`upload_kind` `comparison_pdf`): the mark on a row and in the panel, and the run list with
     // its disabled start — over a list with a run and over an empty one — so the badge's tone, the
@@ -2822,5 +2847,15 @@ export function screens(): Screen[] {
    * -- the one that says "no retry will help" -- was never measured in either palette. An
    * address that is not an identifier is the one way one static pass reaches it.
    */
+
+  /*
+   * `UI-B-14`: «Перенести решения из V#» in every state, and a card whose decision was carried over. They stand at the very end,
+   * because the census's index test samples every 25th screen and a screen inserted earlier shifts which screens it samples.
+   */
+  for (const shape of carryOverShapes()) {
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
+  }
   return out;
 }

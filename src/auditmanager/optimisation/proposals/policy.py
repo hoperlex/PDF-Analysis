@@ -19,6 +19,14 @@ its latest event unless that event is a ``revoke``; a proposal without one is ``
 here, and nothing in the generator, ever writes a decision: a verdict is what an expert said
 (``AGENTS.md`` §4).
 
+**Carrying decisions over** (`UI-B-14`, «Перенести решения из V#») is an expert's act, like deciding: the decisions in
+force of one pass are carried into the pass of a *later version of the same document set* (``conflict`` /
+:data:`CARRYOVER_REFUSAL_REASONS` otherwise). Each carried decision is an ordinary appended event of the target proposal,
+authored by the confirming expert, that names its source decision; it is appended only where the match is by **content**
+and unambiguous -- never by a display number, a name alone or a position -- and only into a proposal that has no event at
+all (a decision or a withdrawal is an expert's act and a carryover does not overwrite or resurrect it). What each source
+decision came to is counted as :data:`CARRYOVER_OUTCOMES`.
+
 **Refusals of a pass** are ``conflict`` with a ``conflict_reason`` naming the unmet
 precondition (:data:`PASS_REFUSAL_REASONS`, in the order they are checked): the specification
 read's own states (``version_unclassified``, ``section_not_ar``, ``price_list_missing``,
@@ -47,6 +55,10 @@ from ..project_match import (
 __all__ = [
     "AGGREGATE_OPTIMISATION_PASS",
     "AGGREGATE_OPTIMISATION_PROPOSAL",
+    "CARRYOVER_OUTCOMES",
+    "CARRYOVER_REFUSAL_REASONS",
+    "COMMAND_TYPE_CARRY_OVER",
+    "COMMAND_TYPE_CARRY_OVER_ONE",
     "COMMAND_TYPE_DECIDE_PROPOSAL",
     "COMMAND_TYPE_START_PASS",
     "DECISION_FILTERS",
@@ -56,6 +68,10 @@ __all__ = [
     "MAX_PASS_PAGE",
     "MAX_PROPOSAL_PAGE",
     "PASS_REFUSAL_REASONS",
+    "REFUSAL_CARRYOVER_SOURCE_IS_TARGET",
+    "REFUSAL_CARRYOVER_SOURCE_NOT_EARLIER",
+    "REFUSAL_CARRYOVER_SOURCE_OTHER_DOCUMENT",
+    "REFUSAL_CARRYOVER_SOURCE_UNKNOWN",
     "REFUSAL_NOTHING_TO_REVOKE",
     "REFUSAL_VENDOR_LIST_MISSING",
     "STORED_VERDICTS",
@@ -77,6 +93,10 @@ AGGREGATE_OPTIMISATION_PROPOSAL: Final[str] = "OptimisationProposal"
 #: Match ``ck_command_record_command_type`` (lowercase snake_case, 3-64 characters).
 COMMAND_TYPE_START_PASS: Final[str] = "start_optimisation_pass"
 COMMAND_TYPE_DECIDE_PROPOSAL: Final[str] = "decide_optimisation_proposal"
+#: `UI-B-14`: the receipt of one carryover request, and the receipt of each decision it appends (a derived key, so a
+#: decision is carried once however the request is retried).
+COMMAND_TYPE_CARRY_OVER: Final[str] = "carry_over_proposal_decisions"
+COMMAND_TYPE_CARRY_OVER_ONE: Final[str] = "carry_over_proposal_decision"
 
 VERDICT_ACCEPT: Final[str] = "accept"
 VERDICT_REJECT: Final[str] = "reject"
@@ -101,6 +121,22 @@ MAX_PROPOSAL_PAGE: Final[int] = 200
 MAX_PASS_PAGE: Final[int] = 100
 
 REFUSAL_VENDOR_LIST_MISSING: Final[str] = "vendor_list_missing"
+#: The ``conflict_reason`` of a carryover whose source pass cannot be used (`UI-B-14`), in the order checked: the source
+#: names no pass, is the target itself, belongs to another document set, or was not started over an earlier version.
+REFUSAL_CARRYOVER_SOURCE_UNKNOWN: Final[str] = "carryover_source_unknown"
+REFUSAL_CARRYOVER_SOURCE_IS_TARGET: Final[str] = "carryover_source_is_target"
+REFUSAL_CARRYOVER_SOURCE_OTHER_DOCUMENT: Final[str] = "carryover_source_other_document"
+REFUSAL_CARRYOVER_SOURCE_NOT_EARLIER: Final[str] = "carryover_source_not_earlier"
+CARRYOVER_REFUSAL_REASONS: Final[tuple[str, ...]] = (
+    REFUSAL_CARRYOVER_SOURCE_UNKNOWN,
+    REFUSAL_CARRYOVER_SOURCE_IS_TARGET,
+    REFUSAL_CARRYOVER_SOURCE_OTHER_DOCUMENT,
+    REFUSAL_CARRYOVER_SOURCE_NOT_EARLIER,
+)
+#: What one decision in force of the source pass came to: ``carried`` (appended), ``target_decided`` (the one proposal
+#: with the same content already has an event), ``ambiguous`` (more than one proposal of either pass has that content)
+#: or ``unmatched`` (no proposal of the target pass has it). Every source decision is counted in exactly one.
+CARRYOVER_OUTCOMES: Final[tuple[str, ...]] = ("carried", "target_decided", "ambiguous", "unmatched")
 #: The ``conflict_reason`` of a ``revoke`` over a proposal with no standing decision.
 REFUSAL_NOTHING_TO_REVOKE: Final[str] = "no_decision_to_revoke"
 #: Every ``conflict_reason`` a refused pass can carry, in the order the preconditions are

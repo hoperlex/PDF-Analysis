@@ -11,6 +11,13 @@ from auditmanager.optimisation.proposals.accepted import (
     AcceptedProposal,
     list_accepted_proposals,
 )
+from auditmanager.optimisation.proposals.carryover import (
+    CarryoverMatch,
+    ProposalDecisionCarryover,
+    carry_over_proposal_decisions,
+    content_key,
+    plan_carryover,
+)
 from auditmanager.optimisation.proposals.commands import (
     PassStart,
     ProposalDecision,
@@ -53,6 +60,10 @@ from auditmanager.optimisation.proposals.identity import (
 from auditmanager.optimisation.proposals.policy import (
     AGGREGATE_OPTIMISATION_PASS,
     AGGREGATE_OPTIMISATION_PROPOSAL,
+    CARRYOVER_OUTCOMES,
+    CARRYOVER_REFUSAL_REASONS,
+    COMMAND_TYPE_CARRY_OVER,
+    COMMAND_TYPE_CARRY_OVER_ONE,
     COMMAND_TYPE_DECIDE_PROPOSAL,
     COMMAND_TYPE_START_PASS,
     DECISION_FILTERS,
@@ -75,6 +86,7 @@ from auditmanager.optimisation.proposals.queries import (
     list_proposal_decisions,
 )
 from auditmanager.optimisation.proposals.repository import (
+    CarriedFromRecord,
     OptimisationPassRecord,
     OptimisationProposalRecord,
     PositionSummary,
@@ -85,6 +97,10 @@ __all__ = [
     "AGGREGATE_OPTIMISATION_PASS",
     "AGGREGATE_OPTIMISATION_PROPOSAL",
     "ANALOG_BASES",
+    "CARRYOVER_OUTCOMES",
+    "CARRYOVER_REFUSAL_REASONS",
+    "COMMAND_TYPE_CARRY_OVER",
+    "COMMAND_TYPE_CARRY_OVER_ONE",
     "COMMAND_TYPE_DECIDE_PROPOSAL",
     "COMMAND_TYPE_START_PASS",
     "DECISION_FILTERS",
@@ -112,6 +128,8 @@ __all__ = [
     "STORED_VERDICTS",
     "VERDICTS",
     "AcceptedProposal",
+    "CarriedFromRecord",
+    "CarryoverMatch",
     "GeneratorOutcome",
     "OptimisationPassId",
     "OptimisationPassRecord",
@@ -120,11 +138,14 @@ __all__ = [
     "PassStart",
     "PositionSummary",
     "ProposalDecision",
+    "ProposalDecisionCarryover",
     "ProposalDecisionId",
     "ProposalDecisionRecord",
     "ProposalDraft",
     "ProposalPage",
     "ProposalsCsv",
+    "carry_over_proposal_decisions",
+    "content_key",
     "decide_optimisation_proposal",
     "escape_formula",
     "export_optimisation_proposals_csv",
@@ -134,5 +155,6 @@ __all__ = [
     "list_optimisation_passes",
     "list_optimisation_proposals",
     "list_proposal_decisions",
+    "plan_carryover",
     "start_optimisation_pass",
 ]

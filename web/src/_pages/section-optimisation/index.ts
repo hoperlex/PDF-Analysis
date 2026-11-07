@@ -6,7 +6,7 @@ export {
   readSectionOptimisationAddress,
   sectionOptimisationSearch,
 } from './model/address';
-export type { SectionOptimisationTab } from './model/tabs';
-export { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS } from './model/tabs';
+export type { SectionOptimisationTab, SectionOptimisationTabCounts } from './model/tabs';
+export { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS, sectionOptimisationTabText } from './model/tabs';
 export type { SectionOptimisationPageProps } from './ui/section-optimisation-page';
 export { SectionOptimisationPage } from './ui/section-optimisation-page';

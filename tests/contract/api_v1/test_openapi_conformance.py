@@ -596,7 +596,8 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-OPT-DECISIONS` adds two: `exportOptimisationProposalsXlsx` and `importOptimisationProposalDecisions`
         # address a pass by identity. (`listAcceptedOptimisationProposals` names no parent and declares no `404`.)
         # `UI-PARITY-ADMIN-C2` adds one: `endUserSessions` addresses an account by identity. (`listAuthEvents` names no parent.)
-        assert len(report) == 221, report
+        # `UI-PARITY-OPT-CARRYOVER` adds one: `carryOverProposalDecisions` addresses the target pass by identity.
+        assert len(report) == 222, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

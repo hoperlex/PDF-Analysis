@@ -22,26 +22,3 @@
     padding: var(--am-gap);
   }
 }
-
-.context {
-  margin-bottom: var(--am-gap);
-  font-size: var(--am-text-sm);
-}
-
-.steps {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--am-gap-xs);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.step {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--am-gap-xs);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}

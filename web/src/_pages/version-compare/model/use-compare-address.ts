@@ -2,31 +2,21 @@
 
 /**
  * The open document set and tab of «Сравнение версий», read from and written to the address (`UI-B-102`). Opening a set or a
- * tab is a step in the history, so Back returns to the table; nothing else is kept in client state. The address is written through the
- * native history API, which Next keeps `useSearchParams` in step with (as «Блоки» writes `?page=`), so a step costs no server round
- * trip. Outside the app router both hooks answer `null` and the static render starts from `initial`.
+ * tab is a step in the history, so Back returns to the table; nothing else is kept in client state. The mechanics (the native
+ * history API, a write that changes nothing dropped, the empty address outside the app router) are `useAddressState`'s, shared with
+ * «Сравнение стадий» and «Очередь»; this file only says what the two parameters are and where a static render starts.
  */
 
-import { useSearchParams } from 'next/navigation';
+import { useAddressState } from '@/shared/lib';
 
 import { readCompareAddress, writeCompareAddress } from './address';
 import type { CompareAddress } from './address';
 
-const NO_PARAMS = new URLSearchParams();
-
 export function useCompareAddress(initial?: Partial<CompareAddress>): readonly [CompareAddress, (next: CompareAddress) => void] {
-  const searchParams = useSearchParams() ?? NO_PARAMS;
-  const read = readCompareAddress(searchParams);
+  const [read, go] = useAddressState(readCompareAddress, writeCompareAddress);
   const address: CompareAddress =
     read.documentUid === null && initial?.documentUid !== undefined
       ? { documentUid: initial.documentUid, tab: initial.tab ?? 'projects' }
       : read;
-  const go = (next: CompareAddress) => {
-    if (typeof window === 'undefined') return;
-    const base = new URLSearchParams(window.location.search);
-    const query = writeCompareAddress(base, next).toString();
-    if (query === base.toString()) return;
-    window.history.pushState(window.history.state, '', query === '' ? window.location.pathname : `${window.location.pathname}?${query}`);
-  };
-  return [address, go] as const;
+  return [address, (next: CompareAddress) => go(next)] as const;
 }

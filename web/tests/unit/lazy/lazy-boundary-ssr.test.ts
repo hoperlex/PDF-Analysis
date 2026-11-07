@@ -115,6 +115,13 @@ const WRAPPERS: readonly {
     exported: 'LazyStageComparison',
     props: { versionUid: VERSION_UID },
   },
+  {
+    // Lane P2 (2026-11-07): «Просмотр PDF» on the version page; `ssr: false` like the rest.
+    name: 'the version page PDF viewer',
+    path: '@/_pages/version-detail/ui/version-pdf-chunk',
+    exported: 'LazyDocumentViewer',
+    props: { versionUid: VERSION_UID, title: 'Документ', pageCount: 3, onClose: () => undefined },
+  },
 ];
 
 describe('D-329: a lazy widget is served the same before and after the server has loaded it', () => {

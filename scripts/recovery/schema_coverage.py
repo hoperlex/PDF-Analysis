@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0056_optimisation_decisions"
+HEAD = "0057_decision_carryover"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -438,7 +438,10 @@ SEQUENCES = {
 #: `0050_viewer_role` adds none. `0051`..`0054` (`UI-PARITY-P0F`..`P0I`) add c 7, f 6, p 2 (who started a run, the
 #: document's archive, the tag and execution-status tables) and `0055_work_schedule` adds c 17, f 8, p 5 (the five
 #: journals of «График работ»): c 1301, f 370, p 135, measured on a fresh database at ``0055`` on 2026-11-06.
-CONSTRAINT_COUNTS = {"c": 1301, "f": 370, "p": 135, "t": 10, "u": 129}
+#: `0056` replaces one check by a wider one under its name (no change) and `0057_decision_carryover` (`UI-B-14`) adds three
+#: checks (the identity's shape, not itself, never a withdrawal) and one foreign key (the source decision): c 1304, f 371,
+#: measured on a throwaway database at ``0057`` on 2026-11-07.
+CONSTRAINT_COUNTS = {"c": 1304, "f": 371, "p": 135, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -448,8 +451,9 @@ CONSTRAINT_COUNTS = {"c": 1301, "f": 370, "p": 135, "t": 10, "u": 129}
 #: keys, four unique constraints, the partial unique index of an active group name, and one index each on the member's
 #: connection and the rule's group revision); 0048 adds four (a group-revision index and a pending-work index on each of
 #: `audit_run` and `comparison_ai_job`); 0049 and 0050 add none; 0051..0054 add four (the two new tables' keys and one
-#: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06.
-INDEX_COUNT = 463
+#: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06; `0057` adds the partial
+#: index of the carried-from decision: 464, measured at ``0057`` on 2026-11-07.
+INDEX_COUNT = 464
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

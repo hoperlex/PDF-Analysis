@@ -1640,6 +1640,12 @@ class OptimisationProposalPort(Protocol):
     ) -> models.ProposalDecisionImportReport:
         """`UI-B-15`: read the edited workbook and append the decisions it changes, one keyed command, one report."""
 
+    def carry_over_proposal_decisions(
+        self, *, optimisation_pass_id: str, source_optimisation_pass_id: str, idempotency_key: str, user_uid: str
+    ) -> models.ProposalDecisionCarryoverReport:
+        """`UI-B-14`: carry the decisions in force of an earlier version's pass into this pass, matched by content,
+        one keyed command, one report."""
+
     def list_accepted_optimisation_proposals(
         self, *, project_uid: str | None, section_code: str | None, user_uid: str
     ) -> Sequence[models.AcceptedOptimisationProposal]:

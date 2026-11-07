@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 272,
+    "path_count": 273,
     "operations": [
       [
         "DELETE",
@@ -1070,6 +1070,11 @@
       ],
       [
         "POST",
+        "/optimisation-passes/{optimisation_pass_id}/decision-carryovers",
+        "carryOverProposalDecisions"
+      ],
+      [
+        "POST",
         "/optimisation-passes/{optimisation_pass_id}/decision-imports",
         "importOptimisationProposalDecisions"
       ],
@@ -1562,6 +1567,7 @@
       "BlockGeometry",
       "CarryOverDecisionRequest",
       "CarryOverDecisionResponse",
+      "CarryOverProposalDecisionsRequest",
       "CarryoverCandidate",
       "CarryoverSourceDecision",
       "ChangePasswordRequest",
@@ -1980,6 +1986,8 @@
       "PromptBundleId",
       "ProposalAnalogBasis",
       "ProposalDecision",
+      "ProposalDecisionCarriedFrom",
+      "ProposalDecisionCarryoverReport",
       "ProposalDecisionCounts",
       "ProposalDecisionId",
       "ProposalDecisionImportRefusal",
@@ -2233,6 +2241,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0056_optimisation_decisions",
-  "contract_version": "1.36.0"
+  "migration_head": "0057_decision_carryover",
+  "contract_version": "1.37.0"
 }

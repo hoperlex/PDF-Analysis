@@ -219,7 +219,10 @@ def test_the_document_declares_no_operation_outside_the_declared_capabilities(
     paths = set(openapi_document["paths"])
     #: The exact paths admitted under an otherwise forbidden fragment. Exact, because
     #: "anything under /auth" would readmit the user management this surface does not have.
-    ADMITTED = {"/auth/token", "/auth/password"}
+    #: `/auth-events` (`listAuthEvents`, contract 1.36.0, UI-A-94) is not under `/auth/`: it is a
+    #: sibling path that only starts with the same letters — the administrator's read-only
+    #: access journal, not user management — so it is admitted by name like the other two.
+    ADMITTED = {"/auth/token", "/auth/password", "/auth-events"}
     forbidden = ("/auth", "/login", "/token", "/tenants", "/exports", "/jobs", "/imports")
     for fragment in forbidden:
         trespassers = sorted(

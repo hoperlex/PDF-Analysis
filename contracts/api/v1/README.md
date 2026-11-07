@@ -11,7 +11,48 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.36.0` (`UI-PARITY-ADMIN-C2`)
+## Current contract `1.37.0` (`UI-PARITY-OPT-CARRYOVER`)
+
+Slice for register row `UI-B-14` (carry the decisions of an earlier version's optimisation pass over to a later one, the
+original's «↩ Перенесено из V2»), migration `0057_decision_carryover`, and two corrections:
+
+- **«Перенести решения из V#»** (`UI-B-14`). `carryOverProposalDecisions`
+  (`POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers`, body `source_optimisation_pass_id`, `expert`,
+  keyed) carries the decisions in force of the source pass into the pass of the path. The source must be a pass of the same
+  document set started over an earlier version; otherwise `409 conflict` with `conflict_reason` `carryover_source_unknown`,
+  `carryover_source_is_target`, `carryover_source_other_document` or `carryover_source_not_earlier`, and nothing is written.
+  A source decision (`accept`, `reject` or `revise`; a proposal nobody decided, or whose decision was withdrawn, carries
+  nothing) is matched to a proposal of the target pass by **content only** -- the type, the specification row's text, the
+  unit and the currency, the matched and the proposed position by code, mark, name and supplier, and both exact unit prices;
+  never a display number, a name alone, a place in the drawing, a price-list identity or the quantity -- and only when
+  exactly one proposal of each pass has that content and the target proposal has no event at all (a decision or a
+  withdrawal there is an expert's act and stands). Each match is appended as an ordinary decision event of the target
+  proposal: the source's verdict and comment, authored by the caller, with `carried_from` naming the source; a later decision
+  on the proposal supersedes it like any other. The answer (`ProposalDecisionCarryoverReport`) counts every decision in force
+  of the source (`source_decided`) in exactly one of `carried`, `target_decided`, `ambiguous` (more than one proposal of
+  either pass has that content) and `unmatched`, and names the source version's display ordinal. An exact repeat of the key
+  answers the stored report and appends nothing; the key for another source or caller is `409 idempotency_key_reuse`; a new
+  key repeats the matching and carries nothing more once the targets are decided. The migration adds the nullable
+  `optimisation_proposal_decision.carried_from_decision_id` (foreign key to the table itself, the `opd_` shape, not its own
+  source, never a `revoke`) and a partial index; its downgrade refuses while a carried decision exists.
+- **`ProposalDecision.carried_from`** is a required, nullable `ProposalDecisionCarriedFrom` (`proposal_decision_id`,
+  `optimisation_pass_id`, `version_uid`, `version_ordinal`): `null` for a decision made directly and for every decision
+  recorded before the migration. It is on every `ProposalDecision` (`decideOptimisationProposal`, `listProposalDecisions`
+  and the `current_decision` of each proposal).
+- **`OptimisationPass.version_ordinal`** is the required display order of the version the pass was started over («V2»), so a
+  screen can name an earlier version's pass; it is never an identity.
+- **The tabs of «Оптимизация разделов»** need no new field: `SectionSpecification.row_count` (every row in scope, apart from
+  the text search) and `AcceptedOptimisationProposalPage.total` are the server's figures for «Форма 7 · N» and «Принято N»,
+  and the screen never counts rows.
+- **`AnalysisProfileStatus`** (`D-223`): the description now says what `R-146ag` and `A-7` say -- `reviewed` is a package whose
+  open questions a lane answered in writing, with no human review -- and no longer that an expert reviewed it or that the
+  original-source АР profile is `draft` until expert review (АР has no profile status at all: its row carries `profile: null`).
+
+The API now has 273 paths, 301 operations and 725 schemas (the three new schemas are `CarryOverProposalDecisionsRequest`,
+`ProposalDecisionCarriedFrom` and `ProposalDecisionCarryoverReport`); migration head `0057`. The domain catalogs are at
+candidate revision 54. No error code is added.
+
+## Contract `1.36.0` (`UI-PARITY-ADMIN-C2`, historical)
 
 Slice for register rows `UI-A-92`, `UI-A-93` and `UI-A-94` (the administrator's side of the original's «Пользователи»)
 and the «Диспетчер» counts, **no migration** (head stays `0056`): the access journal already is the append-only

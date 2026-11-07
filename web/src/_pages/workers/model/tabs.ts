@@ -24,11 +24,12 @@ export const WORKERS_TABS = ['overview', 'connections', 'processes', 'groups', '
 export type WorkersTab = (typeof WORKERS_TABS)[number];
 
 /**
- * The tab the screen opens on when the address names none: the worker list the screen has
- * always shown, not the first tab, so an address that names no tab keeps its meaning. A redirect from the key
- * form names «Подключения» itself, and a link to the overview names `?tab=overview`.
+ * The tab the screen opens on when the address names none: «Обзор», as the original's dispatcher opens on its overview
+ * (`UI-PARITY` UI-B-63). It was «Процессы», the worker list the screen had always shown, until the second UX pass of
+ * 2026-11-07; the list is one click away (`?tab=processes`), and a link that wants it names it. A redirect from the key
+ * form names «Подключения» itself, and a link to the overview needs no `?tab=`.
  */
-export const DEFAULT_WORKERS_TAB: WorkersTab = 'processes';
+export const DEFAULT_WORKERS_TAB: WorkersTab = 'overview';
 
 export const WORKERS_TAB_LABELS: Readonly<Record<WorkersTab, string>> = {
   overview: 'Обзор',

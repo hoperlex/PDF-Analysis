@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-300 operations, sealed. `A5` generates the typed client from this document; `B6`
+301 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1056,6 +1056,22 @@ column is the proposal's identity and the decisions loaded back from it by that 
 keyed decision event authored by the caller (`revoke` for «не решено» over a decision in force), and the report names every
 row that carries an ID or a decision.
 
+`UI-PARITY-OPT-CARRYOVER` (contract `1.37.0`, migration `0057_decision_carryover`) carries the decisions of an earlier version's
+optimisation pass over to the pass of a later version (`UI-B-14`, «Перенести решения из V#»). `carryOverProposalDecisions` is
+a keyed expert write: it matches the source pass's decisions in force to the target pass's proposals by **content** alone (the
+type, the specification row's text, the unit and currency, both positions by code, mark, name and supplier, both unit prices;
+never a display number, a name alone or a place in the drawing), appends each unambiguous match as an ordinary decision event
+authored by the confirming expert, only into a proposal that has no event at all, and reports every source decision as
+`carried`, `target_decided`, `ambiguous` or `unmatched`. The new nullable `optimisation_proposal_decision.carried_from_decision_id`
+(foreign key to the table itself, `opd_` shape, not itself, never a `revoke`) is the provenance; it reaches the wire as
+`ProposalDecision.carried_from` (the source decision, pass, version and the version's display ordinal) and is `null` for a
+decision made directly. `OptimisationPass.version_ordinal` names the version a pass was started over, so a screen can offer
+«Перенести решения из V2». The source must be a pass of the same document set over an earlier version (`conflict` /
+`carryover_source_unknown`, `carryover_source_is_target`, `carryover_source_other_document`, `carryover_source_not_earlier`).
+The migration's downgrade refuses while a carried decision exists. No counts were added for the tabs of «Оптимизация разделов»:
+`SectionSpecification.row_count` and `AcceptedOptimisationProposalPage.total` already are the server's figures for «Форма 7 · N»
+and «Принято N».
+
 `UI-PARITY-ADMIN-C2` (contract `1.36.0`, no migration) brings the administrator's side of the original's «Пользователи»
 and the «Диспетчер» counts. `Account.last_sign_in_at` (`UI-A-92`, «Последний вход») is the instant of the account's latest
 `access.sign_in_succeeded` event, read from the access journal for the accounts an answer names and never by the seam's
@@ -1151,6 +1167,7 @@ could.
 | `listAcceptedOptimisationProposals` | `GET /optimisation-proposals/accepted` |
 | `exportOptimisationProposalsXlsx` | `GET /optimisation-passes/{optimisation_pass_id}/export.xlsx` |
 | `importOptimisationProposalDecisions` | `POST /optimisation-passes/{optimisation_pass_id}/decision-imports` |
+| `carryOverProposalDecisions` | `POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers` |
 | `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
 | `getProject` | `GET /projects/{project_uid}` |
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
@@ -1444,7 +1461,7 @@ Rules that hold across the whole surface:
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
   `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
-  `importRunDecisions`, `importOptimisationProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
+  `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
   `approveSheetPairing`, `withdrawSheetPairing`, `generateComparisonSummary`, `uploadPriceList`, `startOptimisationPass`, `decideOptimisationProposal`,
   `createExecutorConnection`, `reviseExecutorConnection`, `archiveExecutorConnection`,

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { routes } from '@/shared/lib';
-import { contextSteps } from '@/widgets/document-context';
+import { contextSteps, versionTabs } from '@/widgets/document-context';
 
 const FACTS = {
   projectUid: 'prj_A',
@@ -31,6 +31,27 @@ describe('contextSteps', () => {
     expect(steps.at(-1)?.href).toBeNull();
   });
 
+  // Second UX pass: the version's comparison screen kept a copy of the strip; it is a level of the shared one now.
+  it('ends the version comparison at «Сравнение», with the version a link back to the version page', () => {
+    const steps = contextSteps(FACTS, 'comparison');
+    expect(steps.map((s) => s.label)).toEqual(['Проекты', 'Школа', 'АР-1', 'Версия 3', 'Сравнение']);
+    expect(steps.map((s) => s.key)).toEqual(['projects', 'project', 'document', 'version', 'comparison']);
+    expect(steps.find((s) => s.key === 'version')?.href).toBe(routes.version('prj_A', 'ver_V'));
+    expect(steps.at(-1)?.href).toBeNull();
+    expect(steps.slice(0, -1).every((s) => s.href !== null)).toBe(true);
+    // No run and no «Разбор» on the way, whatever the facts carry.
+    expect(steps.map((s) => s.key)).not.toContain('run');
+    expect(steps.map((s) => s.key)).not.toContain('review');
+  });
+
+  it('draws the comparison strip alone: the version’s tab row is not part of it', () => {
+    // `blocks` is a tab and ends the strip too; `comparison` is a place under the version and has no tab.
+    expect(contextSteps(FACTS, 'blocks').at(-1)?.key).toBe('blocks');
+    expect(contextSteps(FACTS, 'comparison').at(-1)?.key).toBe('comparison');
+    expect(versionTabs({ projectUid: 'prj_A', versionUid: 'ver_V', documentUid: 'doc_D', runs: [], current: 'version' }).map((t) => t.key))
+      .not.toContain('comparison');
+  });
+
   it('uses the generic words while names are unknown', () => {
     const steps = contextSteps({ projectUid: 'prj_A', documentUid: 'doc_D', versionUid: 'ver_V' }, 'version');
     expect(steps.map((s) => s.label)).toEqual(['Проекты', 'Проект', 'Документ', 'Версия']);
@@ -54,7 +75,7 @@ describe('contextSteps', () => {
   });
 
   it('keeps the section on every level under the document', () => {
-    for (const level of ['document', 'version', 'blocks', 'run', 'review'] as const) {
+    for (const level of ['document', 'version', 'blocks', 'comparison', 'run', 'review'] as const) {
       expect(contextSteps({ ...FACTS, sectionCode: 'KJ' }, level).map((s) => s.key)).toContain('section');
     }
   });

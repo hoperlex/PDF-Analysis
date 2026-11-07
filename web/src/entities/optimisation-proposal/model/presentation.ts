@@ -13,6 +13,8 @@ import type {
   OptimisationPass,
   OptimisationProposal,
   ProposalAnalogBasis,
+  ProposalDecision,
+  ProposalDecisionCarryoverReport,
   ProposalDecisionState,
   ProposalMatchBasis,
   ProposalVerdict,
@@ -121,4 +123,66 @@ export function proposalsCsvFileName(passId: string): string {
 /** The suggested name of the pass's workbook (`UI-B-15`), from the pass identity alone. */
 export function proposalsXlsxFileName(passId: string): string {
   return `${passId}-proposals.xlsx`;
+}
+
+/**
+ * `UI-B-14`: «↩ Перенесено из V2», the mark of a decision that an expert carried over from an earlier version's pass
+ * (the original's wording); `null` for a decision made directly. The ordinal is the version's display order, never an
+ * identity.
+ */
+export function carriedFromLabel(decision: Pick<ProposalDecision, 'carried_from'>): string | null {
+  return decision.carried_from === null ? null : `↩ Перенесено из V${decision.carried_from.version_ordinal}`;
+}
+
+/** One earlier version a pass's decisions can be carried from: its display ordinal, and the pass to carry them from. */
+export interface CarrySource {
+  readonly versionOrdinal: number;
+  readonly pass: OptimisationPass;
+}
+
+/** The decisions in force of a pass (`accept`, `reject` and `revise`); the pending ones carry nothing. */
+export function decidedCount(pass: OptimisationPass): number {
+  const counts = pass.decision_counts;
+  return counts.accept + counts.reject + counts.revise;
+}
+
+/**
+ * `UI-B-14`: the earlier versions whose decisions can be carried into `target`, newest version first, each with the pass
+ * to carry from. A pass is a source only when it belongs to an earlier version of the same document set (the server
+ * refuses any other); of several passes over one version the newest that holds a decision in force is offered, or the
+ * newest when none does. A version with no pass offers nothing, and a pass is never offered for itself.
+ */
+export function carrySources(passes: readonly OptimisationPass[], target: OptimisationPass): readonly CarrySource[] {
+  const byVersion = new Map<number, OptimisationPass[]>();
+  for (const pass of passes) {
+    if (pass.document_uid !== target.document_uid || pass.version_ordinal >= target.version_ordinal) continue;
+    byVersion.set(pass.version_ordinal, [...(byVersion.get(pass.version_ordinal) ?? []), pass]);
+  }
+  return [...byVersion.entries()]
+    .sort(([left], [right]) => right - left)
+    .map(([versionOrdinal, ofVersion]) => ({
+      versionOrdinal,
+      // `passes` is newest first, so the first with a decision is the newest with one.
+      pass: ofVersion.find((pass) => decidedCount(pass) > 0) ?? ofVersion[0]!,
+    }));
+}
+
+/**
+ * What a carryover did, in sentences: how many of the source's decisions were carried, then each reason the rest were
+ * not. Every source decision is in exactly one count, so the sentences add up to `source_decided`.
+ */
+export function describeCarryover(report: ProposalDecisionCarryoverReport): readonly string[] {
+  const version = `V${report.source_version_ordinal}`;
+  if (report.source_decided === 0) return [`В ${version} нет решений для переноса.`];
+  const lines = [`Перенесено ${report.carried} из ${report.source_decided} решений ${version}.`];
+  if (report.target_decided > 0) {
+    lines.push(`Уже решено в этом проходе, оставлено как есть: ${report.target_decided}.`);
+  }
+  if (report.ambiguous > 0) {
+    lines.push(`Не перенесено, потому что одинаковых предложений несколько: ${report.ambiguous}.`);
+  }
+  if (report.unmatched > 0) {
+    lines.push(`Не перенесено, потому что такого предложения в этом проходе нет: ${report.unmatched}.`);
+  }
+  return lines;
 }

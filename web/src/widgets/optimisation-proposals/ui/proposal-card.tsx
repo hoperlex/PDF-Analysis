@@ -21,6 +21,7 @@ import {
   DECISION_STATE_LABELS,
   MATCH_BASIS_LABELS,
   VERDICT_LABELS,
+  carriedFromLabel,
   describeProvenance,
   describeQuantity,
   describeSaving,
@@ -70,11 +71,21 @@ export function ProposalDecisionLine({ decision }: ProposalDecisionLineProps) {
   if (decision === null) {
     return <p className={styles.decision}>Решение: {DECISION_STATE_LABELS.pending}.</p>;
   }
+  // `UI-B-14`: a decision carried over from an earlier version says so, as the original's «↩ Перенесено из V2».
+  const carried = carriedFromLabel(decision);
   return (
     <p className={styles.decision}>
       Решение: <strong>{DECISION_EVENT_LABELS[decision.verdict]}</strong>, {decision.actor_label},{' '}
       {formatInstant(decision.decided_at)}
       {decision.comment !== null ? <> — {decision.comment}</> : null}
+      {carried === null ? null : (
+        <>
+          {' '}
+          <span className={styles.carried} data-carried-from={decision.carried_from?.version_ordinal}>
+            {carried}
+          </span>
+        </>
+      )}
     </p>
   );
 }
@@ -94,6 +105,7 @@ export function ProposalHistoryView({ items }: ProposalHistoryViewProps) {
         <li key={entry.proposal_decision_id}>
           {VERDICT_LABELS[entry.verdict]} — {entry.actor_label}, {formatInstant(entry.decided_at)}
           {entry.comment !== null ? <>: {entry.comment}</> : null}
+          {entry.carried_from === null ? null : <span className={styles.carried}> ({carriedFromLabel(entry)})</span>}
         </li>
       ))}
     </ol>
