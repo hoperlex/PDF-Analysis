@@ -1,8 +1,10 @@
 /**
- * The critic's queues as chips in the extended review (`R-151q`, register row UI-B-78).
+ * The critic's queues as tabs in the extended review (`R-151q`, register row UI-B-78).
  *
- * Each chip counts the whole run's observations the review carries, never one page, and pressing it sets the same
- * «Рекомендация критика» filter the select offers. A critic's word is a recommendation, never a decision.
+ * Each tab says «видимо / всего»: the whole run's observations the review carries (never one page) and how many of them
+ * the list's other filters leave. Choosing a tab sets the same «Рекомендация критика» filter the select offers, and the
+ * row of tabs is the tabs pattern: the chosen one is the only stop of the Tab key, the arrows, `Home` and `End` move
+ * between them. A critic's word is a recommendation, never a decision.
  */
 
 import { createElement } from 'react';
@@ -10,6 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { CRITIC_QUEUES, ObservationList, criticQueueCounts } from '@/widgets/extended-review';
+import { queueAfterKey } from '@/widgets/extended-review/ui/critic-queues';
 
 import { mountLive } from '../analysis-settings/live-render';
 
@@ -29,23 +32,42 @@ describe('the critic’s queues', () => {
     });
   });
 
-  it('draw one chip per queue with its number, «Все» pressed at first', () => {
+  it('draw one tab per queue with «видимо / всего», «Все» chosen at first and the only stop of the Tab key', () => {
     const markup = renderToStaticMarkup(createElement(ObservationList, { observations: OBSERVATIONS, sources: [], fallbackVersion: 'ver_x' }));
     expect(markup).toContain('data-critic-queues');
+    expect(markup).toContain('role="tablist"');
     for (const [, label] of CRITIC_QUEUES) expect(markup).toContain(label);
-    expect(markup).toMatch(/aria-pressed="true"[^>]*>Все <span[^>]*>6</);
-    expect(markup).toMatch(/>Сохранить <span[^>]*>2</);
+    expect(markup.match(/role="tab"/g)?.length).toBe(CRITIC_QUEUES.length);
+    expect(markup).toMatch(/aria-selected="true"[^>]*tabindex="0"[^>]*>Все <span[^>]*>6 \/ 6</);
+    expect(markup).toMatch(/aria-selected="false"[^>]*tabindex="-1"[^>]*>Сохранить <span[^>]*>2 \/ 2</);
+    // The list is the tab's panel, named by the chosen tab.
+    expect(markup).toMatch(/role="tabpanel"[^>]*aria-labelledby="extended-observations-queue-tab-all"/);
   });
 
-  it('pressing a chip sets the recommendation filter over the same list', async () => {
+  it('choosing a tab sets the recommendation filter over the same list, and the other tabs count under the other filters', async () => {
     const live = await mountLive(createElement(ObservationList, { observations: OBSERVATIONS, sources: [], fallbackVersion: 'ver_x' }));
     try {
       expect(live.markup()).toMatch(/По фильтрам: <strong>6<\/strong> из 6/);
-      expect(await live.press('Снять 1')).toBe(true);
+      expect(await live.press('Снять 1 / 1')).toBe(true);
       expect(live.markup()).toMatch(/По фильтрам: <strong>1<\/strong> из 6/);
-      expect(live.markup()).toMatch(/aria-pressed="true"[^>]*>Снять /);
+      expect(live.markup()).toMatch(/aria-selected="true"[^>]*>Снять /);
+      expect(live.markup()).toMatch(/data-critic-queue-note="reject"/);
+      // A search that keeps only «Первое» leaves one of the two kept observations visible; the whole count stays two.
+      expect(await live.change('Поиск по заголовку, описанию, рекомендации или источнику', 'первое')).toBe(true);
+      expect(live.markup()).toMatch(/>Сохранить <span[^>]*>1 \/ 2</);
+      expect(live.markup()).toMatch(/>Снять <span[^>]*>0 \/ 1</);
     } finally {
       await live.unmount();
     }
+  });
+
+  it('moves between tabs by the arrows, Home and End, round the row, and by no other key', () => {
+    expect(queueAfterKey('all', 'ArrowRight')).toBe('accept');
+    expect(queueAfterKey('all', 'ArrowLeft')).toBe('not_reviewed');
+    expect(queueAfterKey('not_reviewed', 'ArrowRight')).toBe('all');
+    expect(queueAfterKey('reject', 'Home')).toBe('all');
+    expect(queueAfterKey('reject', 'End')).toBe('not_reviewed');
+    expect(queueAfterKey('reject', 'Enter')).toBeNull();
+    expect(queueAfterKey('reject', 'ArrowDown')).toBeNull();
   });
 });
