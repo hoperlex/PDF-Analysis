@@ -3473,10 +3473,11 @@
           },
           {
             "method": "GET",
-            "path": "/stage-uploads/{stage_upload_id}",
-            "operationId": "getStageUpload",
+            "path": "/projects/{project_uid}/stage-uploads",
+            "operationId": "listStageUploads",
             "expect_status": 200,
-            "last_response": true
+            "last_response": true,
+            "$why": "the upload panel draws each set's candidates from the project's list of sets and never reads the one set (`getStageUpload` is only behind «Продолжить передачу»), so the proposed candidate is in a list response"
           },
           {
             "method": "POST",

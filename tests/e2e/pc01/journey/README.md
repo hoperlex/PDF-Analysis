@@ -137,10 +137,13 @@ Also measured on this stand (lane V2, 2026-11-07, the 0.14.1 tree, ten fresh sta
   (`session.pageErrors` in the envelope), and it did on every stand.
 * **`--steps` is PARTIAL.** `--steps <the active, non-`cmp-*` write steps>` with `--phase all` ends `exit 3` however green it is; that is the
   expected end of a lane run until the `cmp-*` steps (`D-330`, `D-338`) can run in the same journey.
-* **The comparison steps need more than the stand gives.** `cmp-version-recorded-ai-consent` meets `GET …/ai-sheet-changes/estimate` 503
-  («не выбрано подключение исполнителя») because no executor route is assigned to `comparison_sheet_changes` and no recorded worker serves
-  version AI; the `cmp-stage-*` steps need `LANE_C4=1`. Opening a set or a stage tab by a click is blocked by `D-338` until
-  `use-compare-address.ts` and `use-stage-address.ts` write their address with `null` as the history data.
+* **The comparison steps need more than the stand gives.** With the address writers fixed (`D-338`) the version chain runs by clicks
+  through `cmp-version-viewer-real-tiles`. `cmp-version-recorded-ai-consent` then meets `GET …/ai-sheet-changes/estimate` 503
+  («не выбрано подключение исполнителя») because no executor route is assigned to `comparison_sheet_changes` and no recorded worker
+  serves version AI (the recorded adapter for it is in-memory, in the tests); `cmp-version-summary-download` follows it. The `cmp-stage-*`
+  steps need `LANE_C4=1`: `cmp-stage-upload` and `cmp-stage-assembly` run through the real panels; `cmp-stage-swapped-map` waits for the
+  four stage documents' page profiles on the overview and reads `not_started … ready 0` after two minutes, because nothing enqueues the
+  profiles of a stage upload (`D-330`): the sheets answer 503 `comparison_stage_profiles` until something does.
 
 ## W51 identity continuation
 
