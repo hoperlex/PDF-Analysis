@@ -1,0 +1,26 @@
+/* The two decisions of a waiting request side by side where the row is wide enough: approve on the left, reject on the right. */
+
+.decision {
+  display: grid;
+  gap: var(--am-gap);
+  padding-top: var(--am-gap-sm);
+  border-top: 1px solid var(--am-line-soft);
+}
+
+.roles {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.roles legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+@media (min-width: 900px) {
+  .decision {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
