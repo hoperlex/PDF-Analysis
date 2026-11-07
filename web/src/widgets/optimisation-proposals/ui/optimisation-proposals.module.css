@@ -250,6 +250,13 @@
   margin: 0 0 var(--am-gap-xs);
 }
 
+/* `UI-B-14`: «↩ Перенесено из V2» -- the mark of a decision carried over from an earlier version. */
+.carried {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  white-space: nowrap;
+}
+
 .history {
   margin: var(--am-gap-sm) 0;
   padding-left: calc(var(--am-gap) + var(--am-gap-xs));

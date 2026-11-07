@@ -25,7 +25,7 @@ from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.engine import create_database_engine
 
-HEAD = "0056_optimisation_decisions"
+HEAD = "0057_decision_carryover"  # the head the fixture migrates to; 0056 is a step below it
 PREVIOUS = "0055_work_schedule"
 CHECK = "ck_optimisation_proposal_decision_verdict"
 
@@ -107,7 +107,7 @@ def test_the_downgrade_refuses_over_a_withdrawal_and_restores_the_old_vocabulary
     refused = foundation_command(_alembic("downgrade", PREVIOUS), url)
     assert refused.returncode != 0, refused.describe()
     assert "withdrawals" in (refused.stdout + refused.stderr), refused.describe()
-    assert _head(engine) == HEAD  # the refusal left the schema at 0056, with the withdrawal in it
+    assert _head(engine) == HEAD  # the refusal rolled the whole downgrade back, with the withdrawal still in it
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT count(*) FROM optimisation_proposal_decision WHERE verdict = 'revoke'")

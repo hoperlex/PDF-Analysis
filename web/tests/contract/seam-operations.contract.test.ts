@@ -149,6 +149,8 @@ describe('the seam operations', () => {
       'cancelStageUpload',
       // `W59-DECISION-CARRYOVER-01`: the carryover appends a decision, keyed like `appendDecision`.
       'carryOverDecision',
+      // `UI-B-14` (contract 1.37.0): the carried decisions of a pass are appended under one key.
+      'carryOverProposalDecisions',
       'clearComparisonLaunchQueue',
       'completeComparisonUploadFile',
       'completeStageUploadFile',

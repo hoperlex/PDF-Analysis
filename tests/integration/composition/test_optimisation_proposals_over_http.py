@@ -752,3 +752,44 @@ def test_the_workbook_is_exported_and_the_edited_decisions_are_loaded_back_by_pr
     foreign = load(b"not a workbook", expert | _key("import-garbage"))
     assert foreign.status_code == 422 and foreign.json()["details"] == {"field": "file", "constraint": "unreadable"}
     assert client.get(f"/optimisation-proposals/{door}/decisions", headers=expert).json()["items"][-1]["verdict"] == "accept"
+
+
+def test_carrying_decisions_over_is_an_experts_keyed_act_and_refuses_what_it_cannot_use(
+    world, expert, admin, started, kj_started
+) -> None:
+    """`UI-B-14` (contract 1.37.0), the refusals over HTTP. The happy path needs a second version of a set with its own
+    published run and is held against the database in ``tests/integration/optimisation/proposals/test_carryover.py``;
+    here the route, the role, the key, the body and every conflict a source can raise are proved, and each leaves the
+    pass's history as it was."""
+    client, pass_id = world["client"], started["body"]["optimisation_pass_id"]
+    kj_pass = kj_started["answer"].json()["optimisation_pass_id"]
+    path = f"/optimisation-passes/{pass_id}/decision-carryovers"
+    before = client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json()
+    # The pass says which version it was started over, and a decision made directly names no source.
+    assert before["optimisation_pass"]["version_ordinal"] == 1
+    _exact_keys(before["optimisation_pass"], "OptimisationPass")
+    decided = next(item["current_decision"] for item in before["items"] if item["current_decision"] is not None)
+    _exact_keys(decided, "ProposalDecision")
+    assert decided["carried_from"] is None
+
+    def carry(source: str, headers: dict[str, str], tag: str = "carry") -> Any:
+        return client.post(path, json={"source_optimisation_pass_id": source}, headers=headers | _key(tag))
+
+    assert carry(pass_id, admin).status_code == 403  # an administrator who is not an expert
+    assert client.post(path, json={"source_optimisation_pass_id": pass_id}, headers=expert).status_code == 422  # no key
+    assert carry("not-a-pass", expert).status_code == 422
+    assert client.post(path, json={}, headers=expert | _key("carry-empty")).status_code == 422
+    assert client.post(
+        f"/optimisation-passes/{UNKNOWN_PASS}/decision-carryovers",
+        json={"source_optimisation_pass_id": pass_id}, headers=expert | _key("carry-missing"),
+    ).status_code == 404
+    for source, reason, tag in (
+        (pass_id, "carryover_source_is_target", "carry-itself"),
+        (UNKNOWN_PASS, "carryover_source_unknown", "carry-unknown"),
+        (kj_pass, "carryover_source_other_document", "carry-other-set"),
+    ):
+        refused = carry(source, expert, tag)
+        assert refused.status_code == 409, refused.content
+        assert refused.json()["error_code"] == "conflict"
+        assert refused.json()["details"]["conflict_reason"] == reason
+    assert client.get(f"/optimisation-passes/{pass_id}/proposals", headers=expert).json() == before

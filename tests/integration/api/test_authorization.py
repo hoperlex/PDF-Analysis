@@ -554,6 +554,7 @@ GUARDED = (
     ("listAcceptedOptimisationProposals", "GET", "/optimisation-proposals/accepted"),
     ("exportOptimisationProposalsXlsx", "GET", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/export.xlsx"),
     ("importOptimisationProposalDecisions", "POST", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/decision-imports"),
+    ("carryOverProposalDecisions", "POST", "/optimisation-passes/opp_01M2545JSD15ETSNNV904X991N/decision-carryovers"),
     ("importRunDecisions", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/decision-imports"),
     ("getProject", "GET", "/projects/prj_01M2545JSD15ETSNNV904X991F"),
     ("listVersionSheetLabels", "GET", "/versions/ver_01M2545JSD15ETSNNV904X991J/sheet-labels"),

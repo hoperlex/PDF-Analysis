@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.36.0 (OpenAPI 3.1.0)
- *   sha256 f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296
+ *   AuditManager PC-01 API 1.37.0 (OpenAPI 3.1.0)
+ *   sha256 f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -43,6 +43,7 @@ import type {
   AuthEventPage,
   CarryOverDecisionRequest,
   CarryOverDecisionResponse,
+  CarryOverProposalDecisionsRequest,
   ChangePasswordRequest,
   ClaimExecutorTaskRequest,
   ClaimedExecutorTask,
@@ -204,6 +205,7 @@ import type {
   ProjectPage,
   ProjectSection,
   ProjectUid,
+  ProposalDecisionCarryoverReport,
   ProposalDecisionImportReport,
   ProposalDecisionList,
   ProposalDecisionRecordPage,
@@ -360,6 +362,7 @@ export const OPERATION_IDS = [
   'cancelStageChainRun',
   'cancelStageUpload',
   'carryOverDecision',
+  'carryOverProposalDecisions',
   'changePassword',
   'claimExecutorTask',
   'classifyDocumentVersion',
@@ -1249,6 +1252,36 @@ export type CarryOverDecisionInput = {
 
 /** Success body of `carryOverDecision` (`application/json`, HTTP 201). */
 export type CarryOverDecisionResult = CarryOverDecisionResponse;
+
+// ------------------------------------------------------------------------------------
+// carryOverProposalDecisions - POST /optimisation-passes/{optimisation_pass_id}/decision-carryovers
+// ------------------------------------------------------------------------------------
+
+/**
+ * Carry Over Proposal Decisions
+ *
+ * `UI-B-14` (contract 1.37.0), «Перенести решения из V#»: carry the decisions in force of `source_optimisation_pass_id` -- a pass of the same document set started over an earlier version -- into the pass of the path. A source decision (an `accept`, a `reject` or a `revise`; a proposal nobody decided or whose decision was withdrawn carries nothing) is appended to a proposal of this pass only where exactly one proposal of each pass has the same content -- the type, the specification row's text, the unit, the currency, both positions by code, mark, name and supplier, and both unit prices; never a display number, a name alone or a position in the drawing -- and only when that proposal has no event at all. Each carried decision is an ordinary appended event, authored by the caller, with the source's verdict and comment and `carried_from` naming the source decision and its version; a later decision on the proposal supersedes it. The report counts every decision in force of the source in exactly one of `carried`, `target_decided` (the proposal already has an event, which stands), `ambiguous` (more than one proposal of either pass has that content) and `unmatched` (no proposal of this pass has it). An unknown target pass is `404`; a source that names no pass, is the target, belongs to another document set or was not started over an earlier version is `409 conflict` with `conflict_reason` `carryover_source_unknown`, `carryover_source_is_target`, `carryover_source_other_document` or `carryover_source_not_earlier`, and nothing is written. An exact repeat of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another source or caller is `409 idempotency_key_reuse`; a new key repeats the matching and carries nothing more once the targets are decided. `expert` only (`admin` alone is `permission_denied`).
+ */
+export type CarryOverProposalDecisionsInput = {
+  /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/decision-carryovers`. */
+  path: {
+    optimisation_pass_id: OptimisationPassId;
+  };
+  /** Request body, sent as `application/json`. */
+  body: CarryOverProposalDecisionsRequest;
+  /**
+   * Required `Idempotency-Key`. Mint it once per intent and reuse the same
+   * value on every retry: a new key is a new command, not a retry.
+   */
+  idempotencyKey: IdempotencyKey;
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `carryOverProposalDecisions` (`application/json`, HTTP 200). */
+export type CarryOverProposalDecisionsResult = ProposalDecisionCarryoverReport;
 
 // ------------------------------------------------------------------------------------
 // changePassword - POST /auth/password
@@ -8708,6 +8741,20 @@ export const OPERATIONS = {
     successStatuses: [201],
     errorStatuses: [401, 403, 404, 409, 422, 500, 503],
     tags: ['decisions'],
+  },
+  carryOverProposalDecisions: {
+    operationId: 'carryOverProposalDecisions',
+    method: 'POST',
+    path: '/optimisation-passes/{optimisation_pass_id}/decision-carryovers',
+    pathParams: ['optimisation_pass_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: true,
+    requestMediaType: 'application/json',
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 409, 422, 500, 503],
+    tags: ['optimisation'],
   },
   changePassword: {
     operationId: 'changePassword',

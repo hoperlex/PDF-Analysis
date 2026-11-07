@@ -1,0 +1,46 @@
+/* `UI-B-14`: «Перенести решения из V#» beside the proposals' exports. Tokens only. */
+.control {
+  display: grid;
+  gap: var(--am-gap-xs);
+  justify-items: start;
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}
+
+.confirm {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius);
+  background: var(--am-surface);
+  font-size: var(--am-text-sm);
+}
+
+.confirm p {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}
+
+.report {
+  margin: 0;
+  padding-left: var(--am-gap);
+  font-size: var(--am-text-sm);
+  color: var(--am-ink-muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--am-failed);
+  font-size: var(--am-text-sm);
+}

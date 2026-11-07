@@ -169,7 +169,7 @@ import { optimisationShapes, seedLoadedOptimisation } from '../optimisation/fixt
 import {
   ALL_CASES as EXECUTOR_CASES, PINNED as EXECUTOR_PINNED, READY as EXECUTOR_READY, seedExecutors,
 } from '../workers/executor-fixtures';
-import { proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
+import { carryOverShapes, proposalShapes, seedLoadedProposals } from '../optimisation-proposals/fixtures';
 import { SECTION_NO_ROWS, sectionAnswer } from '../section-specification/fixtures';
 import { ACCEPTED_PROJECT_A, acceptedPage } from '../section-optimisation/fixtures';
 import {
@@ -189,7 +189,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -2822,5 +2822,15 @@ export function screens(): Screen[] {
    * -- the one that says "no retry will help" -- was never measured in either palette. An
    * address that is not an identifier is the one way one static pass reaches it.
    */
+
+  /*
+   * `UI-B-14`: «Перенести решения из V#» in every state, and a card whose decision was carried over. They stand at the very end,
+   * because the census's index test samples every 25th screen and a screen inserted earlier shifts which screens it samples.
+   */
+  for (const shape of carryOverShapes()) {
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`OptimisationProposals ${shape.name}`, renderScreen(client, shape.make()));
+  }
   return out;
 }

@@ -342,6 +342,11 @@ class IngestProjectAdapter:
     def __init__(self, ingest: IngestService) -> None:
         self._ingest = ingest
 
+    def get_project(self, *, project_uid: str) -> ProjectView | None:
+        """`UI-PARITY-P0N`: one project as ``list_projects`` gives it, or ``None`` -- the port's own definition, so no
+        second reading of the project table is written here."""
+        return next((view for view in self.list_projects() if view.project_uid == project_uid), None)
+
     def create_project(self, *, name: str, idempotency_key: str) -> ProjectView:
         record = self._ingest.create_project(name)
         return ProjectView(
@@ -393,6 +398,21 @@ class IngestDocumentAdapter:
     def __init__(self, ingest: IngestService, session: Session) -> None:
         self._ingest = ingest
         self._session = session
+
+    # `D-74`: the document operations below were added to `DocumentPort` after this stand-in was written. None of the
+    # suites that wire it drives them (the shipped `bootstrap.adapters.DocumentAdapter` is proved against its own
+    # tests), so each fails loudly if one starts to; a silent default would be a second, unreviewed implementation.
+    def set_document_archived(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive setDocumentArchived")
+
+    def rename_document(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive renameDocument")
+
+    def set_document_tags(self, **_: Any) -> DocumentVersionView:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive setDocumentTags")
+
+    def list_document_tags(self, **_: Any) -> Any:  # pragma: no cover - never called
+        raise AssertionError("this stand-in does not drive listDocumentTags")
 
     def _view(self, record: Any) -> DocumentVersionView:
         ordinal = self._session.execute(
@@ -547,6 +567,10 @@ class DatabaseFindingAdapter:
     patched into ``B4``.
     """
 
+    def set_execution_status(self, **_: Any) -> Any:  # pragma: no cover - never called
+        """`D-74`: added to ``FindingPort`` after this stand-in; no suite that wires it drives ``setFindingExecutionStatus``."""
+        raise AssertionError("this stand-in does not drive setFindingExecutionStatus")
+
     _FINDINGS = text(
         """
         SELECT f.finding_uid, f.project_uid, f.version_uid, f.allocated_by_run_id,
@@ -694,6 +718,10 @@ class LedgerDecisionAdapter:
     #: command handler section 7 says the router passes the key through to -- and it is
     #: `B1`'s `CommandRepository`, because `auditmanager.decisions` publishes none.
     COMMAND_TYPE = "append_expert_decision"
+
+    def proposal_decision_journal(self, **_: Any) -> Any:  # pragma: no cover - never called
+        """`D-74`: added to ``DecisionPort`` after this stand-in; no suite that wires it drives the proposals' journal."""
+        raise AssertionError("this stand-in does not drive listProposalDecisionJournal")
 
     def __init__(self, session: Session) -> None:
         self._session = session

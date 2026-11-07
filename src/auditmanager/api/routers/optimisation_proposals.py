@@ -21,6 +21,10 @@ deterministic proposals and the experts' decisions on them.
   /optimisation-passes/{optimisation_pass_id}/decision-imports``: the pass's workbook, and the
   decisions loaded back from it by proposal identity.
 
+* ``carryOverProposalDecisions`` (`UI-B-14`, contract 1.37.0) -- ``POST /optimisation-passes/
+  {optimisation_pass_id}/decision-carryovers`` (``expert``, ``Idempotency-Key`` required): the decisions in force of
+  an earlier version's pass, carried into this pass where the content matches exactly once on both sides.
+
 The routes parse, call one port method and render; the rules -- roles read in the writing
 transaction, the preconditions of a pass, the generator, the exact repeats, the append-only
 decisions, the CSV bytes -- live in ``auditmanager.optimisation.proposals``. A proposal is a
@@ -267,6 +271,58 @@ def build_optimisation_proposal_routes(
             user_uid=subject.user_uid,
         )
         return json_response(201, encode_json(result.model_dump(mode="json")))
+
+    @router.post(
+        "/optimisation-passes/{optimisation_pass_id}/decision-carryovers",
+        operation_id="carryOverProposalDecisions",
+        tags=["optimisation"],
+        status_code=200,
+        response_model=models.ProposalDecisionCarryoverReport,
+        responses={
+            **success(200, "What the carryover did: the source's decisions in force, counted by what each came to."),
+            **envelope_responses(
+                401, 403, 404, 409, 422, 500, 503,
+                descriptions={
+                    409: "The source pass cannot be used (`conflict` with `details.conflict_reason`: "
+                    "`carryover_source_unknown`, `carryover_source_is_target`, `carryover_source_other_document` or "
+                    "`carryover_source_not_earlier`) or an idempotency key already used with a different payload.",
+                },
+            ),
+        },
+        description=(
+            "`UI-B-14` (contract 1.37.0), «Перенести решения из V#»: carry the decisions in force of "
+            "`source_optimisation_pass_id` -- a pass of the same document set started over an earlier version -- into "
+            "the pass of the path. A source decision (an `accept`, a `reject` or a `revise`; a proposal nobody decided or "
+            "whose decision was withdrawn carries nothing) is appended to a proposal of this pass only where exactly one "
+            "proposal of each pass has the same content -- the type, the specification row's text, the unit, the currency, "
+            "both positions by code, mark, name and supplier, and both unit prices; never a display number, a name alone "
+            "or a position in the drawing -- and only when that proposal has no event at all. Each carried decision is an "
+            "ordinary appended event, authored by the caller, with the source's verdict and comment and `carried_from` "
+            "naming the source decision and its version; a later decision on the proposal supersedes it. The report counts "
+            "every decision in force of the source in exactly one of `carried`, `target_decided` (the proposal already "
+            "has an event, which stands), `ambiguous` (more than one proposal of either pass has that content) and "
+            "`unmatched` (no proposal of this pass has it). An unknown target pass is `404`; a source that names no pass, "
+            "is the target, belongs to another document set or was not started over an earlier version is `409 conflict` "
+            "with `conflict_reason` `carryover_source_unknown`, `carryover_source_is_target`, "
+            "`carryover_source_other_document` or `carryover_source_not_earlier`, and nothing is written. An exact repeat "
+            "of the `Idempotency-Key` answers the stored report and appends nothing; the same key with another source "
+            "or caller is `409 idempotency_key_reuse`; a new key repeats the matching and carries nothing more once the "
+            "targets are decided. `expert` only (`admin` alone is `permission_denied`)."
+        ),
+    )
+    def carry_over_proposal_decisions(
+        subject: CurrentSubject,
+        optimisation_pass_id: PassIdPath,
+        body: models.CarryOverProposalDecisionsRequest,
+        idempotency_key: RequiredIdempotencyKey,
+    ) -> WireResponse:
+        report = proposals.carry_over_proposal_decisions(
+            optimisation_pass_id=optimisation_pass_id,
+            source_optimisation_pass_id=body.source_optimisation_pass_id,
+            idempotency_key=idempotency_key,
+            user_uid=subject.user_uid,
+        )
+        return json_response(200, encode_json(report.model_dump(mode="json")))
 
     @router.get(
         "/optimisation-proposals/accepted",

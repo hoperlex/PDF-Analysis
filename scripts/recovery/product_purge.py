@@ -215,6 +215,10 @@ PRODUCT_COMMAND_TYPES = frozenset((
     # command like `decide_optimisation_proposal`. Lane C1 sealed it without classifying it; the classification test
     # (`test_every_event_type_and_command_type_the_source_writes_is_classified`) found it on the 1.36.0 stand.
     "import_optimisation_proposal_decisions",
+    # Contract 1.37.0 (`UI-B-14`): the receipt of a carryover request and the receipt of each decision it appends are about a
+    # pass's proposals, product commands like `decide_optimisation_proposal`; ``optimisation_proposal_decision.command_id``
+    # references the second, so it is deleted only after the decision table is truncated.
+    "carry_over_proposal_decisions", "carry_over_proposal_decision",
     # `0032_ar_v3_run_group`: the receipt of a group start. ``ar_v3_run_group.command_id``
     # references it, and it is deleted only after the group is truncated.
     "start_ar_v3_beta_group",

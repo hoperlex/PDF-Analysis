@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296",
-    "content_commit": "ac562ba4",
-    "content_commit_subject": "feat(contract): 1.36.0 — last sign-in, end an account's sessions, the access journal, the dispatcher's status counts (UI-PARITY-ADMIN-C2)",
-    "dispatch_named_commit": "ac562ba4fbf70e96fbd3edf54e939df3286744ba",
-    "commit_note": "Resealed by UI-PARITY-ADMIN-C2: contract 1.36.0 (last_sign_in_at, endUserSessions, listAuthEvents and the dispatcher status counts).",
+    "sha256": "f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928",
+    "content_commit": "e59e9ffd",
+    "content_commit_subject": "feat(contract): 1.37.0 — carry optimisation decisions over from an earlier version (UI-PARITY-OPT-CARRYOVER)",
+    "dispatch_named_commit": "e59e9ffdbed316250d1723b576cbbd75cba0d0e2",
+    "commit_note": "Resealed by UI-PARITY-OPT-CARRYOVER: contract 1.37.0 (carryOverProposalDecisions, ProposalDecision.carried_from, OptimisationPass.version_ordinal and the AnalysisProfileStatus description).",
     "openapi_version": "3.1.0",
-    "info_version": "1.36.0",
-    "paths": 272,
-    "operations": 300,
-    "component_schemas": 722,
+    "info_version": "1.37.0",
+    "paths": 273,
+    "operations": 301,
+    "component_schemas": 725,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296",
+    "snapshot_sha256": "f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "06c71f2e396d1cc0bee01ef6bad4837b38547788c937c06115b3bc0f9fc90271",
-      "index.ts": "309084b6cef1aee77fd2f98dd47760ba568bb1e14996b57ba198f4a9ee92d354",
-      "operations.gen.ts": "228059f01a0b98908c58bf2fef2c23c5e9b75a8b93b06ead75164f22f261e06f",
-      "types.gen.ts": "46f35b4d554f1f605fcb07ef9eb37ef97814fcd346020fc0da3ba03cd381c5dd"
+      "client.gen.ts": "d104e8682e175bb435892e86bafbf05fc7cf7d28e49df79e688288cc91c17f3a",
+      "index.ts": "63decdb7ebe78e4c5d4428d121a8c53fb58ea8d30c1b5e5c661ad02d1fe2c7f5",
+      "operations.gen.ts": "c41f48f91e2eb01285f35a5e78e50283b791a6f5db426dfbf210896047a84d12",
+      "types.gen.ts": "3a5baa16957823f4cba59d1719ffd7643ad2c3da46c25a21a7bb451656b771f3"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

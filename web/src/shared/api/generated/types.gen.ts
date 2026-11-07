@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.36.0 (OpenAPI 3.1.0)
- *   sha256 f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296
+ *   AuditManager PC-01 API 1.37.0 (OpenAPI 3.1.0)
+ *   sha256 f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.36.0';
+export const CONTRACT_VERSION = '1.37.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = 'f685f8e6f6a0cda6f39ea29a718b7e90f2f0518c10cc5a6891a3a8e33325b296';
+export const CONTRACT_DIGEST = 'f8c4d7e3dfd8ec247c091f092216282983be8e9b3cf15f27a5f714c50c7ac928';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -78,6 +78,7 @@ export const SCHEMA_NAMES = [
   'BlockGeometry',
   'CarryOverDecisionRequest',
   'CarryOverDecisionResponse',
+  'CarryOverProposalDecisionsRequest',
   'CarryoverCandidate',
   'CarryoverSourceDecision',
   'ChangePasswordRequest',
@@ -496,6 +497,8 @@ export const SCHEMA_NAMES = [
   'PromptBundleId',
   'ProposalAnalogBasis',
   'ProposalDecision',
+  'ProposalDecisionCarriedFrom',
+  'ProposalDecisionCarryoverReport',
   'ProposalDecisionCounts',
   'ProposalDecisionId',
   'ProposalDecisionImportRefusal',
@@ -886,7 +889,8 @@ export type AnalysisProfileSourceFile = {
  * ``draft``: a package ported from the legacy prompts, or authored in this repository, whose
  * open questions no lane has answered in writing. ``reviewed``: a package whose open questions a
  * lane answered in writing; no human review (`R-146ag`). Every status is executable; the status is
- * recorded, never hidden. The new original-source АР profile has ``draft`` status until expert review.
+ * recorded, never hidden. АР has no status because it has no text profile
+ * (`PROD-11-AR-V1-V2-REMOVAL-01`): its row carries ``profile: null``.
  */
 export const ANALYSIS_PROFILE_STATUS_VALUES = [
   'draft',
@@ -1345,6 +1349,11 @@ export type CarryOverDecisionResponse = {
   source_version_ordinal: number;
   source_version_uid: VersionUid;
   target_version_uid: VersionUid;
+};
+
+/** `UI-B-14` (contract 1.37.0): the pass whose decisions in force are carried into the pass of the path. */
+export type CarryOverProposalDecisionsRequest = {
+  source_optimisation_pass_id: OptimisationPassId;
 };
 
 /**
@@ -4082,7 +4091,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.36.0";
+  contract_version: "1.37.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5464,6 +5473,9 @@ export type ObservationProvenance = {
  * One optimisation pass, pinned to everything it read: the version, its published run
  * and that run's text layer, the price-list revision and the vendor-list revision (global
  * or the project's own, ``vendor_list_source``), and the three algorithm versions.
+ *
+ * ``version_ordinal`` (contract 1.37.0, `UI-B-14`) is the display order of the version the pass was started over
+ * («V2»), so a screen can name an earlier version's pass; it is never an identity.
  */
 export type OptimisationPass = {
   decision_counts: ProposalDecisionCounts;
@@ -5485,6 +5497,7 @@ export type OptimisationPass = {
   text_layer_sha256: Sha256;
   vendor_list_id: VendorListId;
   vendor_list_source: VendorListScope;
+  version_ordinal: number;
   version_uid: VersionUid;
 };
 
@@ -5963,15 +5976,52 @@ export type ProposalAnalogBasis = (typeof PROPOSAL_ANALOG_BASIS_VALUES)[number];
 /**
  * One appended expert decision. Never changed; the proposal's latest one is current -- unless
  * that is a ``revoke``, which withdrew the decision before it and left the proposal ``pending``.
+ *
+ * ``carried_from`` (`UI-B-14`) is ``null`` for a decision an expert made directly and names the source when the
+ * expert carried it over from an earlier version's pass; the decision is the confirming expert's own either way
+ * (``actor_user_uid``), and a later decision on the proposal supersedes it like any other.
  */
 export type ProposalDecision = {
   actor_label: string;
   actor_user_uid: UserUid;
+  carried_from: ProposalDecisionCarriedFrom | null;
   comment: string | null;
   decided_at: string;
   optimisation_proposal_id: OptimisationProposalId;
   proposal_decision_id: ProposalDecisionId;
   verdict: ProposalVerdict;
+};
+
+/**
+ * `UI-B-14` (contract 1.37.0): where a carried decision came from -- the decision of an earlier version's pass
+ * that an expert carried over to this proposal.
+ *
+ * ``proposal_decision_id`` is the source decision's own identity and ``optimisation_pass_id`` and ``version_uid`` the
+ * pass and version it was made in. ``version_ordinal`` is the version's display order («V2») and is never an identity.
+ */
+export type ProposalDecisionCarriedFrom = {
+  optimisation_pass_id: OptimisationPassId;
+  proposal_decision_id: ProposalDecisionId;
+  version_ordinal: number;
+  version_uid: VersionUid;
+};
+
+/**
+ * `UI-B-14`: what a carryover did. Every decision in force of the source pass (``source_decided``) is counted in
+ * exactly one of four outcomes: ``carried`` (appended to the target pass), ``target_decided`` (the one proposal of the
+ * target with the same content already has an event, which stands), ``ambiguous`` (more than one proposal of either
+ * pass has that content, so nothing is guessed) or ``unmatched`` (no proposal of the target pass has it).
+ * ``source_version_ordinal`` is the display order of the source's version («V2»), never an identity.
+ */
+export type ProposalDecisionCarryoverReport = {
+  ambiguous: number;
+  carried: number;
+  optimisation_pass_id: OptimisationPassId;
+  source_decided: number;
+  source_optimisation_pass_id: OptimisationPassId;
+  source_version_ordinal: number;
+  target_decided: number;
+  unmatched: number;
 };
 
 /**

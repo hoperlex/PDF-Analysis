@@ -990,7 +990,8 @@
       ],
       "constants": {"section_code": "AR"},
       "expects_api": [
-        {"method": "GET", "path": "/sections/{section_code}/specification", "operationId": "getSectionSpecification"}
+        {"method": "GET", "path": "/sections/{section_code}/specification", "operationId": "getSectionSpecification"},
+        {"method": "GET", "path": "/optimisation-proposals/accepted", "operationId": "listAcceptedOptimisationProposals", "$why": "the number on the «Принято» tab (UI-B-22, contract 1.37.0): the tab carries the server's total without being opened"}
       ],
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},

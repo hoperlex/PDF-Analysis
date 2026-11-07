@@ -307,7 +307,7 @@ describe('a group whose rates are stale (M2)', () => {
   const stale = (reason = 'cost_estimate_binding_changed'): ApiError => new ApiError(
     422,
     {
-      contract_version: '1.36.0', error_code: 'analysis_input_invalid', message: 'A caller-safe sentence in English.',
+      contract_version: '1.37.0', error_code: 'analysis_input_invalid', message: 'A caller-safe sentence in English.',
       correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100', retryable: false,
       details: { stage_id: 'comparison_pair_check', reason },
     },

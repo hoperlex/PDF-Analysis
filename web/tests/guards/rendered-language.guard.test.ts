@@ -226,7 +226,7 @@ import {
   AVAILABLE_RUN_ID, accountFixture, runFindingsPage, v3FindingFixture,
 } from '../unit/analysis-settings/ar-v3-beta-review-fixtures';
 import { optimisationShapes } from '../unit/optimisation/fixtures';
-import { proposalShapes } from '../unit/optimisation-proposals/fixtures';
+import { carryOverShapes, proposalShapes } from '../unit/optimisation-proposals/fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../unit/screens/route-screens';
 import {
   ADMIN_AND_EXPERT,
@@ -1088,7 +1088,7 @@ const record = (over: Partial<DecisionRecord> = {}): DecisionRecord => ({
 
 function apiError(status: number, code: ErrorCode): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1100,7 +1100,7 @@ function apiError(status: number, code: ErrorCode): ApiError {
 /** A norms refusal with the one classifier the seal registered for it (`W55A-WEB-NORMS`). */
 function normsRefusal(code: ErrorCode, details: Readonly<Record<string, string>>): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -1967,7 +1967,7 @@ function startRefusal(
   details?: Record<string, string | number | boolean | null>,
 ): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.36.0',
+    contract_version: '1.37.0',
     error_code: code,
     message: 'Сообщение об отказе.',
     correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -2175,7 +2175,7 @@ function startRunExecutorShapes(): ReactElement {
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
   ): ApiError => new ApiError(status, {
-    contract_version: '1.36.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
+    contract_version: '1.37.0', error_code: code, message, correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
     retryable, details,
   }, '0f0e9d8c-7b6a-4948-b726-150413021100');
   const cannotServe = (reason: string) =>
@@ -2427,6 +2427,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
   ...optimisationShapes(),
   // `W60-OPT-PROPOSALS-01`: «Предложения» in every branch its widget, features and entity have.
   ...proposalShapes(),
+  // `UI-B-14`: «Перенести решения из V#» in every state and a carried decision (kept apart so the contrast census's sampling holds).
+  ...carryOverShapes(),
   {
     name: 'update-banner',
     make: () => createElement(UpdateBannerView, { onUpdate: () => undefined, onLater: () => undefined }),
@@ -4419,7 +4421,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           422,
           {
-            contract_version: '1.36.0',
+            contract_version: '1.37.0',
             error_code: 'validation_failed',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
@@ -4441,7 +4443,7 @@ describe('the guard can tell an English label from a legitimate Latin string', (
         new ApiError(
           503,
           {
-            contract_version: '1.36.0',
+            contract_version: '1.37.0',
             error_code: 'dependency_unavailable',
             message: 'A caller-safe sentence.',
             correlation_id: '0f0e9d8c-7b6a-4948-b726-150413021100',
