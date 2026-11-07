@@ -429,6 +429,22 @@ describe('«Сравнение листов»', () => {
     expect(sheets({ viewer: createElement('p', null, 'x') })).toMatch(/<dialog(?![^>]*open=)/);
   });
 
+  it('opens «Порядок версий» and «Сформировать PDF-отчёт…» in windows too, and draws none while they are closed (UI-B-98)', () => {
+    const open = sheets({
+      orderDialog: createElement('p', null, 'Диалог порядка'),
+      reportWindow: createElement('p', null, 'Окно отчёта'),
+      viewerStatic: true,
+      onCloseOrder: noop,
+      onCloseReport: noop,
+    });
+    expect(open).toMatch(/<dialog[^>]*open=""[^>]*aria-label="Порядок версий"[^>]*data-order-window=""/);
+    expect(open).toMatch(/<dialog[^>]*open=""[^>]*aria-label="Сформировать PDF-отчёт"[^>]*data-report-modal=""/);
+    expect(text(open)).toContain('Диалог порядка');
+    expect(text(open)).toContain('Окно отчёта');
+    expect(sheets()).not.toContain('data-order-window');
+    expect(sheets()).not.toContain('data-report-modal');
+  });
+
   it('folds the pair choice and the blocks above the matrix with the caret of the header, and keeps the matrix (UI-B-98)', () => {
     const shown = sheets();
     expect(shown).toContain('data-sheets-top-toggle=""');

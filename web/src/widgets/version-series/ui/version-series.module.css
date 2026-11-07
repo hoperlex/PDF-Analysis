@@ -656,6 +656,20 @@
   overflow: hidden;
 }
 
+/* «Порядок версий» and «Сформировать PDF-отчёт…» in a window: the card stays the card, the window gives it a width to stand in. */
+.modalWindow {
+  width: min(64rem, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  max-height: 94vh;
+  padding: var(--am-gap-sm);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: auto;
+}
+
 .viewerBox {
   display: flex;
   flex-direction: column;

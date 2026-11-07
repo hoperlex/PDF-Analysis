@@ -72,6 +72,7 @@ import {
 import { AiChangesBlock, SpecificationsBlock, SummaryReportBlock } from './ai-blocks';
 import { DraftPanel, EditHistory } from './draft-panel';
 import { MatrixState } from './matrix-state';
+import { ModalWindow } from './modal-window';
 import { FailureState } from './module-state';
 import { PairViewerWindow } from './pair-viewer-window';
 import { SheetMatrix } from './sheet-matrix';
@@ -168,7 +169,10 @@ export interface SheetsTabViewProps {
   readonly onToggleTop?: () => void;
   /** Closes the window of the opened pair (its «✕ Закрыть», Esc). */
   readonly onCloseViewer?: () => void;
-  /** The static harness and the census: the window of the pair is drawn open without `showModal`. */
+  /** Esc on the window «Порядок версий» and on «Сформировать PDF-отчёт…»: what each one's own cancel does. */
+  readonly onCloseOrder?: () => void;
+  readonly onCloseReport?: () => void;
+  /** The static harness and the census: the windows (the pair, the order, the report) are drawn open without `showModal`. */
   readonly viewerStatic?: boolean;
 }
 
@@ -266,8 +270,16 @@ export function SheetsTabView(props: SheetsTabViewProps) {
         </span>
       </header>
 
-      {props.orderDialog}
-      {props.reportWindow}
+      {props.orderDialog === null ? null : (
+        <ModalWindow label="Порядок версий" className={styles.modalWindow} onClose={props.onCloseOrder} staticOpen={props.viewerStatic === true} markers={{ 'data-order-window': '' }}>
+          {props.orderDialog}
+        </ModalWindow>
+      )}
+      {props.reportWindow === undefined || props.reportWindow === null ? null : (
+        <ModalWindow label="Сформировать PDF-отчёт" className={styles.modalWindow} onClose={props.onCloseReport} staticOpen={props.viewerStatic === true} markers={{ 'data-report-modal': '' }}>
+          {props.reportWindow}
+        </ModalWindow>
+      )}
 
       <MatrixState matrix={matrix} mayPrepare={mayEdit} busy={props.prepareBusy} onPrepare={props.onPrepare} />
 
@@ -640,6 +652,11 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
         )
       }
       onCloseViewer={() => setOpenPairId(null)}
+      onCloseOrder={() => {
+        append.reset();
+        setOrderOpen(false);
+      }}
+      onCloseReport={() => setReportOpen(false)}
       topHidden={topHidden}
       onToggleTop={() => setTopHidden((hidden) => !hidden)}
       clickNote={clickNote}
