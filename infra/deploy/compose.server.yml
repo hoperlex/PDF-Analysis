@@ -289,6 +289,13 @@ services:
       # `AR-V3-BETA-PACK-INSTALL-01`. Path INSIDE the container of the sealed reviewed-pack
       # manifest (`/run/ar-v3/<file>`, mounted read-only below); blank installs no pack.
       AR_V3_BETA_PACK_MANIFEST: ${AR_V3_BETA_PACK_MANIFEST:-}
+      # `AR-V3-OPT-IN`. The PERMISSION to start AR v3, separate from the pack above (the capability to execute, read and
+      # review). Blank or `0` (the default) refuses every start and every price of a group with `409 conflict`
+      # (`ar_v3_start_not_enabled`) while the imported analysis stays the only one a screen offers; `1` allows a start where a
+      # pack is also installed. Read by THIS service only: the `worker` below does not name it, so switching it off stops new
+      # starts and lets accepted runs finish. Any other value stops the service at start. Apply a change with
+      # `up -d --no-deps api` (a plain `restart` re-reads no environment).
+      AR_V3_BETA_START_ALLOWED: ${AR_V3_BETA_START_ALLOWED:-}
       # `T-6`. Required at construction since `W14-PKG`: a container started without it
       # exits non-zero instead of serving `authentication_required` to everything.
       AUDITMANAGER_API_TOKEN: ${AUDITMANAGER_API_TOKEN:?AUDITMANAGER_API_TOKEN is unset. The seam is fail-closed; see infra/deploy/env/alpha.env.example.}

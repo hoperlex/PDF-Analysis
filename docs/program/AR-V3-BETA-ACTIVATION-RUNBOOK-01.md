@@ -9,7 +9,7 @@ approval, no expert decision and no legal-source check.
 
 | Step | Where | State |
 | --- | --- | --- |
-| six Run group start / read / review read | `startArV3BetaGroup`, `getArV3BetaGroup`, `getArV3BetaGroupReview` | served; refuses `dependency_unavailable / ar_v3_trusted_pack` while no pack is installed |
+| six Run group start / read / review read | `startArV3BetaGroup`, `getArV3BetaGroup`, `getArV3BetaGroupReview` | served; refuses `dependency_unavailable / ar_v3_trusted_pack` while no pack is installed, and (`AR-V3-OPT-IN`, contract 1.38.0) `409 conflict / ar_v3_start_not_enabled` while a pack is installed and `AR_V3_BETA_START_ALLOWED` is not `1` (the default) |
 | v3 dispatch, journal, saved reply, CITE stage, review-only terminal | `runs/v3_*` | served behind the pack |
 | decisions → six canonical scope maps, validation (distinct SHA, <= 22,000 chars, no upgrade of `context_only`) | `python -m auditmanager.analysis.profiles.ar_v3.norm_map.map_pack {build,validate}` | `AR-V3-BETA-MAP-TOOL-01`; exercised on synthetic data only |
 | promote one reviewed set into custody (`plan` read-only, `promote` after the reviewer's digests match, idempotent replay) | `python -m auditmanager.norms.retrieval.promote_cli {new-id,plan,promote}` | `AR-V3-BETA-SET-TOOL-01`; 72 tests incl. real PostgreSQL/S3 |
