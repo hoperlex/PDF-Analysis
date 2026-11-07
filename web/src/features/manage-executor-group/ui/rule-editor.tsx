@@ -23,6 +23,7 @@ import { LoadingState } from '@/shared/ui';
 
 import { useSetExecutorRoutingRule } from '../model/use-manage-executor-group';
 import { GroupCommandFailure } from './group-command-failure';
+import styles from './rule-editor.module.css';
 
 export interface RuleEditorProps {
   readonly groups: readonly ExecutorGroup[];
@@ -70,14 +71,14 @@ export function RuleEditor({ groups, mode }: RuleEditorProps) {
 
   return (
     <form
-      className="am-form"
+      className={`am-form ${styles.form}`}
       data-rule-editor
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
-      <div className="am-form__field">
+      <div className={`am-form__field ${styles.field}`}>
         <label htmlFor={kindId}>Вид работы</label>
         <select
           id={kindId}
@@ -94,7 +95,7 @@ export function RuleEditor({ groups, mode }: RuleEditorProps) {
           ))}
         </select>
       </div>
-      <div className="am-form__field">
+      <div className={`am-form__field ${styles.field}`}>
         <label htmlFor={groupFieldId}>Группа для правила</label>
         <select
           id={groupFieldId}
@@ -112,15 +113,8 @@ export function RuleEditor({ groups, mode }: RuleEditorProps) {
             </option>
           ))}
         </select>
-        {targets.length === 0 ? (
-          <p className="am-form__hint" role="status" data-rule-editor-no-groups>
-            Действующих групп нет: сначала создайте группу на вкладке «Группы».
-          </p>
-        ) : (
-          <p className="am-form__hint">Правило называет версию группы, которая текущая сейчас. Новая версия группы правило не сдвигает.</p>
-        )}
       </div>
-      <div className="am-form__row">
+      <div className={`am-form__row ${styles.submit}`}>
         {/* The click is the submission (and the Enter key in a field clicks this button): it is not sent twice. */}
         <button
           className="am-button"
@@ -134,6 +128,13 @@ export function RuleEditor({ groups, mode }: RuleEditorProps) {
           Назначить группу
         </button>
       </div>
+      {targets.length === 0 ? (
+        <p className={`am-form__hint ${styles.wide}`} role="status" data-rule-editor-no-groups>
+          Действующих групп нет: сначала создайте группу на вкладке «Группы».
+        </p>
+      ) : (
+        <p className={`am-form__hint ${styles.wide}`}>Правило называет версию группы, которая текущая сейчас. Новая версия группы правило не сдвигает.</p>
+      )}
       {save.isPending ? <LoadingState what="сохранение правила" /> : null}
       {saved !== null ? <p className="am-note" role="status" data-rule-saved>{saved}</p> : null}
       {failure !== null ? <GroupCommandFailure failure={failure} /> : null}

@@ -1,0 +1,25 @@
+/*
+ * The rule editor (`EXEC2-WEB-GROUPS-01`) as one line: the kind of work, the group, the button; the hint and the
+ * outcome take the line under them. Colour is absent: hints, notes and buttons take theirs from `globals.css`.
+ */
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
+  max-width: none;
+}
+
+.field {
+  flex: 1 1 16rem;
+}
+
+.submit {
+  flex: 0 0 auto;
+}
+
+.wide {
+  flex: 1 1 100%;
+  margin: 0;
+}

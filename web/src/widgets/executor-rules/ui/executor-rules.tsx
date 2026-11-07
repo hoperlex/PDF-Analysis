@@ -76,7 +76,7 @@ export function ExecutorRules({ roles, legacyRoutes }: ExecutorRulesProps) {
 
   return (
     <div className={styles.panel} data-executor-rules>
-      <section className="am-section" aria-label="Режим маршрутизации" data-rules-mode-section>
+      <section className={`am-section ${styles.section}`} aria-label="Режим маршрутизации" data-rules-mode-section>
         <h2>Режим маршрутизации</h2>
         <p data-routing-mode={mode}>
           Сейчас работу распределяют: {ROUTING_MODE_LABELS[mode]}.
@@ -100,7 +100,7 @@ export function ExecutorRules({ roles, legacyRoutes }: ExecutorRulesProps) {
         )}
       </section>
 
-      <section className="am-section" aria-label="Правила по видам работы" data-rules-section>
+      <section className={`am-section ${styles.section}`} aria-label="Правила по видам работы" data-rules-section>
         <h2>Правила по видам работы</h2>
         <RulesTable rows={rows} mode={mode} />
         {canManage ? (
@@ -113,7 +113,7 @@ export function ExecutorRules({ roles, legacyRoutes }: ExecutorRulesProps) {
         )}
       </section>
 
-      <section className="am-section" aria-label="Переход между режимами" data-rules-cut-over-section>
+      <section className={`am-section ${styles.section}`} aria-label="Переход между режимами" data-rules-cut-over-section>
         <h2>{mode === 'legacy' ? 'Переход на правила' : 'Возврат к основному и резервному подключениям'}</h2>
         {canManage ? (
           <CutOverPanel mode={mode} connections={connections} />
@@ -123,7 +123,7 @@ export function ExecutorRules({ roles, legacyRoutes }: ExecutorRulesProps) {
       </section>
 
       {mode === 'legacy' && legacyRoutes !== undefined ? (
-        <section className="am-section" aria-label="Прежние назначения" data-rules-legacy-routes>
+        <section className={`am-section ${styles.section}`} aria-label="Прежние назначения" data-rules-legacy-routes>
           <h2>Прежние назначения</h2>
           <p className="am-note">
             Пока действует прежний режим, работу распределяют эти назначения. Менять их можно на вкладке «Назначения»; после

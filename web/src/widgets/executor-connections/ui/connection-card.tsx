@@ -280,7 +280,7 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
           </span>
         )}
       </div>
-      <p className={styles.identity}>Подключение <code>{connection.connection_id}</code>, создано <Moment at={connection.created_at} />, автор <code>{connection.created_by}</code></p>
+      <p className={`am-form__hint ${styles.identity}`}>Подключение <code>{connection.connection_id}</code>, создано <Moment at={connection.created_at} />, автор <code>{connection.created_by}</code></p>
       {connection.routed_work_kinds.length > 0 ? (
         <p data-executor-routed>Назначено: {connection.routed_work_kinds.map((work) => WORK_KIND_LABELS[work]).join(', ')}.</p>
       ) : null}
@@ -305,11 +305,11 @@ export function ConnectionCard({ connection, detail, detailFailed, pinnedModels,
       {canManage && !archived ? (
         <>
           <div className={styles.actions}>
-            <button className="am-button am-button--quiet" type="button" disabled={detail === undefined} onClick={() => setEditing((now) => !now)}>
+            <button className="am-button am-button--quiet am-button--small" type="button" disabled={detail === undefined} onClick={() => setEditing((now) => !now)}>
               {editing ? 'Скрыть настройки' : 'Изменить настройки'}
             </button>
             {takesApiKey && revision !== undefined ? (
-              <a className="am-button am-button--quiet" href={executorSecretScreenUrl(connection.connection_id)} data-executor-key-link>
+              <a className="am-button am-button--quiet am-button--small" href={executorSecretScreenUrl(connection.connection_id)} data-executor-key-link>
                 {secretOfPurpose(connection, 'api_key') === null ? 'Ввести ключ' : 'Заменить ключ'}
               </a>
             ) : null}

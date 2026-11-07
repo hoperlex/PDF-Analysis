@@ -47,6 +47,16 @@
   overflow-wrap: anywhere;
 }
 
+/* A card is a dozen short lines: they sit a quarter-row apart, not a row apart, as the dense lists' do. */
+.card p,
+.card ul {
+  margin-bottom: var(--am-gap-xs);
+}
+
+.card ul {
+  padding-left: var(--am-gap-lg);
+}
+
 .heading {
   display: flex;
   flex-wrap: wrap;
@@ -60,21 +70,38 @@
   overflow-wrap: anywhere;
 }
 
+/* Who made the connection and when is reference, not the card's subject: a muted small line. */
+.identity {
+  max-width: none;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   align-items: center;
-  margin-top: var(--am-gap-sm);
+  margin-top: var(--am-gap-xs);
 }
 
 .changes {
-  margin-top: var(--am-gap);
+  margin-top: 0;
+}
+
+.changes p {
+  margin-bottom: var(--am-gap-xs);
 }
 
 .changes ul {
-  margin: var(--am-gap-sm) 0 0;
+  margin: var(--am-gap-xs) 0 0;
   padding-left: var(--am-gap-lg);
+}
+
+.moreChanges {
+  margin-top: var(--am-gap-xs);
+}
+
+.moreChanges summary {
+  cursor: pointer;
 }
 
 .history {

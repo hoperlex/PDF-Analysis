@@ -14,10 +14,20 @@
   list-style: none;
 }
 
+.about {
+  margin: var(--am-gap-xs) 0;
+}
+
+.about summary {
+  cursor: pointer;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .members {
   display: grid;
-  gap: var(--am-gap-xs);
-  margin: 0;
+  gap: var(--am-gap-2xs);
+  margin: 0 0 var(--am-gap-xs);
   padding: 0;
   list-style: none;
 }
@@ -26,4 +36,36 @@
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* A group is a few lines a quarter-row apart; who made it and when is a muted line, and the controls share one row. */
+.card {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+}
+
+.detail {
+  margin-top: 0;
+}
+
+.detail p {
+  margin: 0 0 var(--am-gap-xs);
+}
+
+.created {
+  max-width: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.revise {
+  flex: 0 1 auto;
+}
+
+.revise summary {
+  cursor: pointer;
 }

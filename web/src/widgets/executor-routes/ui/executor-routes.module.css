@@ -11,3 +11,65 @@
   margin: var(--am-gap-sm) 0 0;
   padding-left: var(--am-gap-lg);
 }
+
+/* A kind of work: its name and what it is on one line, the route in one line under them, the editor folded. */
+.kind {
+  margin-top: var(--am-gap-md);
+}
+
+.kind:first-child {
+  margin-top: 0;
+}
+
+.kindHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--am-gap);
+}
+
+.kindTitle {
+  margin: 0;
+  font-size: var(--am-text-base);
+}
+
+.kindNote {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* The route is three facts: the global key/value grid made each one a bordered row, so they take one wrapping line. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-2xs) var(--am-gap-sm);
+  margin: var(--am-gap-xs) 0;
+}
+
+.summary dt,
+.summary dd {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.summary dt {
+  color: var(--am-ink-muted);
+}
+
+.summary dd {
+  margin-right: var(--am-gap-sm);
+}
+
+.none {
+  margin: var(--am-gap-xs) 0;
+}
+
+.edit {
+  margin-top: var(--am-gap-xs);
+}
+
+.edit summary {
+  cursor: pointer;
+}
