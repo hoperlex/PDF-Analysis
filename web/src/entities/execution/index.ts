@@ -8,7 +8,7 @@ export type { ExecutionQueueFilter, ExecutionQueueState } from './api/use-execut
 export { OPERATIONAL_LIST_POLL } from './api/operational-poll';
 export { journalCopyLine, journalCopyText } from './model/journal-copy';
 export type { JournalCopyScope } from './model/journal-copy';
-export { executionFailure } from './model/failure';
+export { AR_V3_MEMBER_NOT_REPEATABLE_TEXT, AR_V3_START_NOT_ENABLED_TEXT, arV3ConflictSentence, executionFailure } from './model/failure';
 export type { ExecutionFailure, ExecutionFailureKind } from './model/failure';
 export {
   QUEUE_STATE_OPTIONS, canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel, queueItemError,

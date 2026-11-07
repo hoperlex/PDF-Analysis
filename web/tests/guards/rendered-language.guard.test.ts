@@ -2006,6 +2006,7 @@ function startGroupViews(): ReactElement {
     startRefusal(404, 'not_found'),
     startRefusal(401, 'authentication_required'),
     startRefusal(403, 'permission_denied'),
+    startRefusal(409, 'conflict', { conflict_reason: 'ar_v3_start_not_enabled' }),
     startRefusal(500, 'internal_error'),
     new TransportError('Запрос не дошёл.', { retryable: true }),
   ].map(classifyArV3GroupStartFailure);

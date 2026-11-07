@@ -74,6 +74,11 @@ const SPECIFIC: ReadonlyArray<readonly [string, ApiError, ArV3GroupStartFailureK
   ['the version does not exist', refusal(404, 'not_found'), 'not_found'],
   ['the caller is not signed in', refusal(401, 'authentication_required'), 'not_authenticated'],
   ['the caller may not start it', refusal(403, 'permission_denied'), 'not_permitted'],
+  [
+    'the server does not allow starts of AR v3',
+    refusal(409, 'conflict', { details: { conflict_reason: 'ar_v3_start_not_enabled' } }),
+    'start_not_allowed',
+  ],
 ];
 
 describe('every refusal the six-check start raises is told as itself', () => {
@@ -102,6 +107,7 @@ describe('every refusal the six-check start raises is told as itself', () => {
       'norm_unavailable',
       'pack_unavailable',
       'section_not_ar',
+      'start_not_allowed',
       'version_unclassified',
     ]);
     // The pack refusal says retry is pointless even though the envelope marks a 503 retryable.
