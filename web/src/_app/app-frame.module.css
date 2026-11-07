@@ -5,6 +5,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .brandRow {
@@ -70,24 +71,26 @@
 
 .row {
   display: grid;
+  /* One track that may shrink: an `auto` track was as wide as its widest item, 188 px in a 182 px column, and the nav clipped the 6. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap-xs);
   min-width: 0;
 }
 
 .guestPreview { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .guestPreviewHeading, .guestPreviewGroupName { margin: 0; color: var(--am-showcase-soft); font-size: 9px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; }
-.guestPreviewHeading { margin: 2px 8px 14px; }
-.guestPreviewGroup { display: grid; gap: 4px; margin: 0 3px 17px 8px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--am-showcase-line) 32%, transparent); }
-.guestPreviewGroupName { margin: 0 0 4px -10px; }
+.guestPreviewHeading { margin: var(--am-gap-2xs) var(--am-gap-sm) 14px; }
+.guestPreviewGroup { display: grid; gap: var(--am-gap-xs); margin: 0 3px 17px var(--am-gap-sm); padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--am-showcase-line) 32%, transparent); }
+.guestPreviewGroupName { margin: 0 0 var(--am-gap-xs) -10px; }
 .guestPreviewRow { display: flex; align-items: center; gap: 9px; min-height: 30px; color: var(--am-showcase-muted); font-size: 11px; }
 .guestPreviewIcon { display: grid; place-items: center; flex: 0 0 16px; width: 16px; color: var(--am-showcase-soft); }
 .guestPreviewIcon svg { width: 15px; height: 15px; }
 .guestPreviewLabel { white-space: nowrap; }
 .guestPreviewNote { margin-top: auto; padding: 13px 10px 10px; border: 1px solid color-mix(in srgb, var(--am-showcase-line) 34%, transparent); border-radius: 15px; background: var(--am-showcase-card-alt); color: var(--am-showcase-ink); font-size: 10px; }
-.guestPreviewNoteIcon { display: grid; place-items: center; width: 22px; height: 22px; margin-bottom: 8px; border-radius: 8px; background: var(--am-showcase-accent-soft); color: var(--am-showcase-accent-strong); font-size: 14px; }
+.guestPreviewNoteIcon { display: grid; place-items: center; width: 22px; height: 22px; margin-bottom: var(--am-gap-sm); border-radius: 8px; background: var(--am-showcase-accent-soft); color: var(--am-showcase-accent-strong); font-size: 14px; }
 .guestPreviewNote strong { font-size: 11px; }
 .guestPreviewNote p { margin: 5px 0 10px; color: var(--am-showcase-muted); line-height: 1.45; }
-.guestPreviewPill { display: inline-block; padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--am-showcase-line) 40%, transparent); border-radius: 99px; color: var(--am-showcase-accent-strong); font-size: 9px; }
+.guestPreviewPill { display: inline-block; padding: var(--am-gap-xs) var(--am-gap-sm); border: 1px solid color-mix(in srgb, var(--am-showcase-line) 40%, transparent); border-radius: 99px; color: var(--am-showcase-accent-strong); font-size: 9px; }
 
 .row :global(.am-disclosure--inline) {
   width: 100%;
@@ -102,6 +105,8 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
+  /* 11.5 px type and 4 px padding made this 23 px tall, one under the 24 px a target needs (WCAG 2.5.8). */
+  min-height: 24px;
   padding: var(--am-gap-xs) var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
@@ -282,7 +287,7 @@
 
 .stackedList {
   display: grid;
-  gap: 2px;
+  gap: var(--am-gap-2xs);
   min-width: 12rem;
   margin: 0;
   padding: 0;
@@ -410,7 +415,7 @@
 .end {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--am-gap-sm);
   flex: 0 0 auto;
   margin-left: auto;
   min-width: 0;
@@ -506,7 +511,7 @@
  */
 .account {
   display: grid;
-  gap: 2px;
+  gap: var(--am-gap-2xs);
   min-width: 0;
 }
 
@@ -533,8 +538,8 @@
   :global(.am-app[data-sidebar='compact']) .guestPreviewIcon svg { width: 18px; height: 18px; }
   :global(.am-app[data-sidebar='compact']) .brandRow {
     flex-direction: column;
-    gap: 8px;
-    padding: 0 0 12px;
+    gap: var(--am-gap-sm);
+    padding: 0 0 var(--am-gap-md);
   }
 
   :global(.am-app[data-sidebar='compact']) .brandMark {
@@ -591,9 +596,26 @@
     display: block;
   }
 
-  .stacked :global(.am-disclosure__panel) {
-    left: auto;
-    right: 0;
+  /*
+   * The «Меню» panel hangs from the bar, not from its button: a panel anchored to the button's right edge ran 128 px off the
+   * left of a 390 px screen whenever the button stood near it, and one anchored to its left edge ran off the right. Anchored to
+   * the bar it is as wide as the screen less a gutter, wherever the button is, and it scrolls inside itself when the menu is
+   * taller than what is left of the screen.
+   */
+  .stacked > :global(.am-disclosure) {
+    position: static;
+  }
+
+  .stacked > :global(.am-disclosure) > :global(.am-disclosure__panel) {
+    top: calc(100% + var(--am-gap-xs));
+    right: var(--am-gap-sm);
+    left: var(--am-gap-sm);
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - 72px);
+    max-height: calc(100dvh - 72px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
 }
