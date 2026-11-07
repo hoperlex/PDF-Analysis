@@ -2480,6 +2480,10 @@ export function screens(): Screen[] {
       },
     ],
   })));
+  // `UI-B-34`: the original's table, the page's own default view: project, section, severity, verdict, reason and date by column.
+  add('KnowledgeBase table', render(createElement(KnowledgeBase, {
+    view: 'table', records: RECORDS.map((row) => ({ ...row, section: 'AR' as const })),
+  })));
   add('KnowledgeBase empty', render(createElement(KnowledgeBase, { records: [] })));
   // `D-313`: an empty page under a category, a verdict or a project says so, with both ways out on the surface.
   add('KnowledgeBase empty under a filter', render(createElement(KnowledgeBase, {

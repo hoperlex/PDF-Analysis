@@ -83,3 +83,70 @@ ol.records {
       'meta';
   }
 }
+
+/*
+ * `UI-B-34`: the table view, the original's `kb-table`. Tokens only; the colours are the global ones the rows already read
+ * (`.am-kb__verdict`, `.am-badge--*`). The frame scrolls sideways on a narrow screen rather than squeezing the nine columns, and
+ * a row's verdict is the stripe at its left edge, as the events view's border is.
+ */
+.tableFrame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--am-text-sm);
+}
+
+.table th {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-line-strong);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+  letter-spacing: var(--am-tracking-caps);
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-bottom: 1px solid var(--am-grid-line);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.table tbody tr:hover {
+  background: var(--am-surface);
+}
+
+.table tbody tr[data-current-verdict='accepted'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-ok);
+}
+
+.table tbody tr[data-current-verdict='rejected'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
+/* The project's name over the document's, and a date over its author: the second line is the quieter one. */
+.project {
+  display: block;
+  font-weight: 600;
+}
+
+.document {
+  display: block;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+}
+
+.cellMuted {
+  color: var(--am-ink-muted);
+}
+
+.event {
+  margin-left: var(--am-gap-xs);
+}

@@ -255,7 +255,41 @@ describe('the screen states its scope and how many entries match', () => {
   });
 });
 
-describe('each record says where it belongs', () => {
+// `UI-B-34`: the page opens on the original's table, as the original does; the events are one press away and cost no read.
+describe('the page opens on the table', () => {
+  let live: LiveRender | null = null;
+  afterEach(async () => {
+    await live?.unmount();
+    live = null;
+  });
+
+  it('draws the table with the project and the section in their own cells, and the events after a press, with no further read', async () => {
+    live = await mountLive(page(freshClient(), ''));
+    await settled(live);
+    expect(live.markup()).toContain('data-knowledge-base-table');
+    expect(live.markup()).not.toContain('class="am-kb__record"');
+    expect(live.markup()).toMatch(/<button[^>]*aria-pressed="true"[^>]*data-kb-view="table"/);
+    expect(visible(live.markup())).toContain('Проект Альфа АР-1');
+    const reads = queries().length;
+    expect(await press(live, 'События')).toBe(true);
+    expect(live.markup()).toContain('class="am-kb__record"');
+    expect(live.markup()).not.toContain('data-knowledge-base-table');
+    expect(await press(live, 'Таблица')).toBe(true);
+    expect(live.markup()).toContain('data-knowledge-base-table');
+    expect(queries()).toHaveLength(reads);
+  });
+
+  it('keeps the page’s paging and its project in the table: the next page is another table of the same project', async () => {
+    live = await mountLive(page(freshClient(), `project=${A}`));
+    await settled(live);
+    expect(await press(live, 'Далее')).toBe(true);
+    expect(live.markup()).toContain('data-knowledge-base-table');
+    expect(live.markup()).toContain('Решение номер 13<');
+  });
+});
+
+// `UI-B-34`: the page opens on the original's table; the place line «Проект · Документ · Раздел» is the events view's, one press away.
+describe('each record says where it belongs, in the events view', () => {
   let live: LiveRender | null = null;
   afterEach(async () => {
     await live?.unmount();
@@ -265,12 +299,14 @@ describe('each record says where it belongs', () => {
   it('prints «Проект · Документ · Раздел» with the section’s name from the catalogue', async () => {
     live = await mountLive(page(freshClient(), ''));
     await settled(live);
+    await press(live, 'События');
     expect(visible(live.markup())).toContain('Проект Альфа · АР-1 · Архитектурные решения (АР)');
   });
 
   it('drops the section, and invents no label for its absence, when the version is not classified', async () => {
     live = await mountLive(page(freshClient(), `project=${B}`));
     await settled(live);
+    await press(live, 'События');
     const text = visible(live.markup());
     expect(text).toContain('Проект Бета · АР-1');
     expect(text).not.toContain('Проект Бета · АР-1 ·');
