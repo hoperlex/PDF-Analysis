@@ -381,8 +381,10 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
     # 110 at 0041 (fifteen comparison-stage tables added to the 0040 inventory); then 0042 adds twelve (the stage AI review,
     # repairs, expert cards and batches), 0046 two (``executor_enrollment``, ``executor_agent_install``) and 0047 five
     # (``executor_group``, ``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
-    # ``executor_routing_mode_event``); 0043-0045 and 0048 add none: 110 + 12 + 2 + 5 = 129.
-    assert refused == sorted(coverage.TABLES) and len(refused) == 129
+    # ``executor_routing_mode_event``); 0043-0045 and 0048 add none: 110 + 12 + 2 + 5 = 129. 0053-0055 add seven (document
+    # tags, the execution status of a finding, and the five «График работ» journals); 0049-0052 and 0056-0058 add none:
+    # 129 + 7 = 136, which is `len(coverage.TABLES)` (measured 2026-11-08; lane C4 saw this pin red at 136 on its stand).
+    assert refused == sorted(coverage.TABLES) and len(refused) == 136
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -418,8 +420,9 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
     # 55 at 0041 (eight immutable stage tables added to the 0040 inventory); then 0042 adds nine immutable stage tables
     # and 0047 four (``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
     # ``executor_routing_mode_event``; ``executor_group`` is read-write: its rotation cursor advances and its archive is
-    # write-once): 55 + 9 + 4 = 68.
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 68
+    # write-once): 55 + 9 + 4 = 68; 0053-0055 add five append-only tables (`len(grants.APPEND_ONLY)` is 73, measured
+    # 2026-11-08): 68 + 5 = 73.
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 73
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:
