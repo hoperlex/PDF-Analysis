@@ -33,7 +33,9 @@ import { ChangePasswordPage } from '@/_pages/change-password';
 import { SignInPage } from '@/_pages/sign-in';
 import { ManageUserControls } from '@/features/manage-user';
 import { AuthEventList } from '@/widgets/auth-event-list';
+import { UserCard } from '@/widgets/user-card';
 import { UserList } from '@/widgets/user-list';
+import { AdminAreaTabsView } from '@/entities/user';
 import { RegistrationQueue } from '@/widgets/registration-queue';
 import { VersionHistoryView } from '@/widgets/version-history';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
@@ -2541,11 +2543,17 @@ export function screens(): Screen[] {
       items: [USER_ACCOUNT], page: { next_cursor: null },
     });
     add('UserList populated', renderScreen(client, createElement(UserList)));
+    // `UI-A-92`: the row open beside the list is tinted, and the card stands in its panel variant.
+    add('UserList with an open row', renderScreen(client, createElement(UserList, { selectedUid: USER_ACCOUNT.user_uid, onSelect: () => undefined })));
+    client.setQueryData(queryKeys.users.detail(USER_ACCOUNT.user_uid), { ...USER_ACCOUNT, is_default_credential: true });
+    add('UserCard panel', renderScreen(client, createElement(UserCard, { userUid: USER_ACCOUNT.user_uid, variant: 'panel', onClose: () => undefined })));
+    add('UserCard page', renderScreen(client, createElement(UserCard, { userUid: USER_ACCOUNT.user_uid })));
+    add('AdminAreaTabs with waiting requests', renderScreen(client, createElement(AdminAreaTabsView, { active: 'registrations', pendingTotal: 2 })));
   }
   {
     // Contract 1.36.0 (`UI-A-94`): «Журнал входов», with a line that carries a detail and one about a deleted account.
     const client = newClient();
-    client.setQueryData(queryKeys.users.authEvents({ limit: 50 }), {
+    client.setQueryData(queryKeys.users.authEvents({ limit: 200 }), {
       items: [
         { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8A', event_type: 'sign_in_succeeded', occurred_at: '2026-11-05T09:30:15Z', subject_user_uid: USER_ACCOUNT.user_uid, subject_label: USER_ACCOUNT.display_label, actor_user_uid: null, actor_label: null, source: 'api', role: null, failures: null, default_credential: true },
         { event_id: 'evt_01J9ZQ8K7NHVXW3T2R5M6P4Q8B', event_type: 'role_revoked', occurred_at: '2026-11-05T09:20:00Z', subject_user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', subject_label: null, actor_user_uid: USER_ACCOUNT.user_uid, actor_label: USER_ACCOUNT.display_label, source: 'api', role: 'expert', failures: null, default_credential: null },
