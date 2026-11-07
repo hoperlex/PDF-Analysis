@@ -1056,6 +1056,24 @@ column is the proposal's identity and the decisions loaded back from it by that 
 keyed decision event authored by the caller (`revoke` for «не решено» over a decision in force), and the report names every
 row that carries an ID or a decision.
 
+`AR-V3-OPT-IN` (contract `1.38.0`, no migration, no new operation) makes AR v3 an **opt-in** analysis beside the standard one
+(`docs/program/AR-V3-OPT-IN-01.md`; owner answers Q1 to Q7 of 2026-11-07). The standard (imported) analysis stays the default
+and `startRun` / `reauditRun` gain no path to v3; v3 remains its own operation, `startArV3BetaGroup`. Two layers, both off by
+default: the pack (`AR_V3_BETA_PACK_MANIFEST`) is the capability to execute, read and review; `AR_V3_BETA_START_ALLOWED=1`,
+read by the `api` service only, is the permission to start. While a pack is installed and the permission is off,
+`startArV3BetaGroup` and `estimateArV3GroupCost` answer `409 conflict` / `ar_v3_start_not_enabled` and write nothing; with no
+pack they answer the `dependency_unavailable` they always did; a repeat of an accepted key replays whatever the permission now
+is, and runs already accepted finish because the worker does not read the variable. `ArV3BetaPackStatus.start_allowed` (present
+exactly when installed) tells a screen which. `RunStatus.analysis_kind` (`standard` | `ar_v3_beta`, derived from the pinned
+profile and bundle pair, `runs/analysis_kind.py`) is sent on every run, with `ar_v3_group_id` and `ar_v3_scope_id` on a member;
+a member also records the account that started it (`R-151v`). **The result of a version is its newest published or partial run
+of the standard analysis** (`Q3`): the counters and `listDocuments`' audit state (`STANDARD_RUN_SQL`), the schedule's facts,
+the default run of a comparison and the text the optimisation reads. A v3 run named in a comparison is the refusal
+`analysis_not_comparable` (the findings of the two analyses are not the same kind of object; carry-over recomputes the
+comparison and inherits it); `reauditRun` (and `estimateRunCost` with `reaudit_of_run_id`) of a member is `409 conflict` /
+`ar_v3_member_not_repeatable` before the key is claimed, because the repeat would route by the section and silently become the
+other analysis.
+
 `UI-PARITY-OPT-CARRYOVER` (contract `1.37.0`, migration `0057_decision_carryover`) carries the decisions of an earlier version's
 optimisation pass over to the pass of a later version (`UI-B-14`, «Перенести решения из V#»). `carryOverProposalDecisions` is
 a keyed expert write: it matches the source pass's decisions in force to the target pass's proposals by **content** alone (the

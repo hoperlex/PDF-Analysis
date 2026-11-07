@@ -11,7 +11,32 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.37.0` (`UI-PARITY-OPT-CARRYOVER`)
+## Current contract `1.38.0` (`AR-V3-OPT-IN`)
+
+AR v3 as an **opt-in mode** (`docs/program/AR-V3-OPT-IN-01.md`; owner words of 2026-11-07: «реализуй как переключаемую
+функцию -- по умолчанию используется импортированный вариант»). **No operation, no schema, no error code, no migration.**
+
+- **The allowance.** `ArV3BetaPackStatus.start_allowed` (optional; present exactly when `state` is `installed`) says whether
+  the deployment allows a start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`, read by the `api` service, off unless `1`,
+  anything but absent, blank, `0` or `1` refuses the process start). The pack is the capability to execute, read and review;
+  this is the separate permission to start. While a pack is installed and it is false, `startArV3BetaGroup` and
+  `estimateArV3GroupCost` answer `409 conflict` with `conflict_reason` `ar_v3_start_not_enabled` and write nothing; a repeat of
+  an accepted key still replays its group; runs already accepted finish. With no pack the answers are what they were.
+- **Which analysis produced a run.** `RunStatus.analysis_kind` (`standard` | `ar_v3_beta`) is derived from the pinned profile
+  and bundle pair and sent on every run; `ar_v3_group_id` and `ar_v3_scope_id` name the group and scope of a member only. Each
+  member records the account that started it (`started_by_user_uid`, `R-151v`).
+- **The result of a version** is its newest published or partial run **of the standard analysis**: the audit state of a document
+  and every counter read off it, the schedule's facts, the default run of a comparison and the text the optimisation reads. A
+  published v3 member never displaces it (`Q3`).
+- **Refusals.** `reauditRun` (and `estimateRunCost` with `reaudit_of_run_id`) of a member of an AR v3 group is `409 conflict`
+  with `conflict_reason` `ar_v3_member_not_repeatable`, before the key is claimed (`Q4`); a v3 run named as `source_run_id` or
+  `target_run_id` of a comparison is the refusal `analysis_not_comparable` (new reason of `ComparisonRefusal`, with its side;
+  `Q5`), checked after `run_not_of_version` and before `run_not_published`.
+
+The API keeps 273 paths, 301 operations and 725 schemas; migration head `0057`. The domain catalogs are at candidate
+revision 55.
+
+## Contract `1.37.0` (`UI-PARITY-OPT-CARRYOVER`, historical)
 
 Slice for register row `UI-B-14` (carry the decisions of an earlier version's optimisation pass over to a later one, the
 original's «↩ Перенесено из V2»), migration `0057_decision_carryover`, and two corrections:
