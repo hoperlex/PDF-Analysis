@@ -36,6 +36,7 @@ import {
   dragPayload,
   dropOnCell,
   groupOf,
+  isChangedPair,
   isSoleSheet,
   isStale,
   linkCandidate,
@@ -45,6 +46,7 @@ import {
   nextSort,
   nextStepSentence,
   pairOfRow,
+  pairTally,
   parseDragged,
   rebase,
   referencePage,
@@ -478,6 +480,16 @@ describe('the matrix as the screen reads it', () => {
     ]);
     const none: readonly ComparisonSheetPair[] = [];
     expect(changedRows(rows, sides, none)).toEqual([]);
+  });
+
+  it('counts the sheets of the chosen transition, and those that stand in one version only (UI-B-98)', () => {
+    const list = pairs();
+    expect(pairTally(list)).toEqual({ sheets: 8, onlyOld: 1, onlyNew: 1, changed: 6, needsReview: 2 });
+    expect(pairTally([])).toEqual({ sheets: 0, onlyOld: 0, onlyNew: 0, changed: 0, needsReview: 0 });
+    // The two that «Только изменённые листы» drops are the same one and the one that differs in service zones only.
+    expect(list.filter((pair) => !isChangedPair(pair)).map((pair) => pair.status)).toEqual(['same', 'same_zones_changed']);
+    // A pair that has no status yet (not computed) is neither changed nor unchanged: the filter keeps none of them.
+    expect(isChangedPair({ ...(list[0] as ComparisonSheetPair), status: undefined } as ComparisonSheetPair)).toBe(false);
   });
 
   it('gives the second part of a split sheet its own pair although the older sheet stands in both (CMP-SERIES-01)', () => {

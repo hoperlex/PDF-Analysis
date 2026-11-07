@@ -131,7 +131,7 @@ export {
   RESTART_CONFIRM_TITLE,
   stepActions,
 } from './model/step-actions';
-export type { Sides } from './model/matrix-view';
+export type { PairTally, Sides } from './model/matrix-view';
 export {
   adjacentSides,
   columnName,
@@ -139,9 +139,11 @@ export {
   cellOf,
   changedRows,
   defaultSides,
+  isChangedPair,
   isSoleSheet,
   matchedCells,
   openablePairs,
+  pairTally,
   pageKey,
   pairOfRow,
   referencePage,
