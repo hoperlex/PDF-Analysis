@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { readStageAddress, writeStageAddress } from '@/_pages/stage-compare/model/address';
+import { readMapOpen, readStageAddress, writeMapOpen, writeStageAddress } from '@/_pages/stage-compare/model/address';
 import { STAGE_TAB_LABELS, stageTabAfterKey } from '@/_pages/stage-compare/model/tabs';
 import { readCompareAddress, writeCompareAddress } from '@/_pages/version-compare/model/address';
 
@@ -83,5 +83,27 @@ describe('the address of «Сравнение версий»', () => {
     expect(writeCompareAddress(q('project=prj_1'), { documentUid: 'doc_1', tab: 'sheets' }).toString()).toBe('project=prj_1&set=doc_1&tab=sheets');
     expect(writeCompareAddress(q('project=prj_1&set=doc_1&tab=sheets'), { documentUid: 'doc_1', tab: 'projects' }).toString()).toBe('project=prj_1&set=doc_1');
     expect(writeCompareAddress(q('project=prj_1&set=doc_1&tab=sheets'), { documentUid: null, tab: 'sheets' }).toString()).toBe('project=prj_1');
+  });
+});
+
+describe('the fold of the sheet map in the address (UI-B-93)', () => {
+  it('reads the map as open unless the address folds it', () => {
+    expect(readMapOpen(q(''))).toBe(true);
+    expect(readMapOpen(q('map=closed'))).toBe(false);
+    expect(readMapOpen(q('map=open'))).toBe(true);
+    expect(readMapOpen(q('map=anything'))).toBe(true);
+  });
+
+  it('writes the fold as map=closed and the open map as no parameter, carrying every other parameter through', () => {
+    expect(writeMapOpen(q('project=prj_1&pair=stp_1&tab=sheets'), false).toString()).toBe('project=prj_1&pair=stp_1&tab=sheets&map=closed');
+    expect(writeMapOpen(q('project=prj_1&map=closed&tab=sheets'), true).toString()).toBe('project=prj_1&tab=sheets');
+    expect(writeMapOpen(q(''), true).toString()).toBe('');
+  });
+
+  it('round-trips, and leaves the pair, the run and the step to their own functions', () => {
+    for (const open of [true, false]) expect(readMapOpen(writeMapOpen(q(''), open))).toBe(open);
+    const withFold = q('pair=stp_1&run=crn_1&tab=changes&map=closed');
+    expect(readStageAddress(withFold)).toEqual({ pairId: 'stp_1', runId: 'crn_1', tab: 'changes' });
+    expect(writeStageAddress(withFold, { pairId: 'stp_2', runId: null, tab: 'sheets' }).toString()).toBe('pair=stp_2&tab=sheets&map=closed');
   });
 });

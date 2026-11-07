@@ -22,6 +22,7 @@ import type { StageTab } from '../model/address';
 import { assertRunRevision, evidenceFocus, rawFocus } from '../model/navigation';
 import { STAGE_TAB_LABELS, stageTabAfterKey } from '../model/tabs';
 import { useStageAddress } from '../model/use-stage-address';
+import { useStageMapOpen } from '../model/use-stage-map-open';
 import { StageUploadPanel } from './stage-upload-panel';
 import styles from './stage-workspace.module.css';
 
@@ -33,6 +34,8 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
   const cache = useQueryClient();
   // `UI-B-93`: the pair, the run and the step are in the address (`?pair=&run=&tab=`), so Back, a reload and a pasted link return to them.
   const [address, goTo] = useStageAddress();
+  // `UI-B-93`: the fold of the sheet map is in the address too (`?map=closed`), as the original keeps it.
+  const [mapOpen, setMapOpen] = useStageMapOpen();
   const tab = address.tab;
   const chosenPair = address.pairId;
   const chosenRun = address.runId;
@@ -183,7 +186,7 @@ export function StageWorkspace({ projectUid, mayAct }: { readonly projectUid: st
     </section> : null}
     {visitedSheets || tab === 'sheets' ? <section className={styles.panel} hidden={tab !== 'sheets'} role="tabpanel" id="stage-panel-sheets" aria-labelledby="stage-tab-sheets">
       <StageSheetMap projectUid={projectUid} mayAct={mayAct && pair?.state === 'confirmed'} pairId={pairId}
-        onPairChange={choosePair} textProvider={storedPageText} {...(coherentRun === undefined ? {} : { runId: coherentRun.run_id })}
+        onPairChange={choosePair} textProvider={storedPageText} rowsOpen={mapOpen} onRowsOpenChange={setMapOpen} {...(coherentRun === undefined ? {} : { runId: coherentRun.run_id })}
         {...(focus === undefined ? {} : { focus })} onClearFocus={() => setFocus(undefined)}
         onReviewCreated={(card) => { if (card.run_id === selection.current.runId) { setFocusedCardId(card.card_id); setTab('changes'); } }} />
     </section> : null}
