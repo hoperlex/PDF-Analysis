@@ -101,7 +101,7 @@ def _written(session: Session) -> list[int]:
 def _start(session: Session, version_uid: str, key: str) -> None:
     start_ar_v3_group(
         session, version_uid=version_uid, idempotency_key=key, provider_mode="recorded", pack=_pack(),
-        input_budget_characters=1000,
+        input_budget_characters=1000, start_allowed=True,
     )
 
 
@@ -136,7 +136,7 @@ def test_the_refusal_stands_under_the_served_consent_policy_and_nothing_is_price
         start_ar_v3_group(
             session, version_uid=version, idempotency_key="v3-comparison-only-served", provider_mode="recorded",
             pack=_pack(), input_budget_characters=1000, cost_preflight=_PreflightThatMustNotBeAsked(),
-            cost_consent=None,
+            cost_consent=None, start_allowed=True,
         )
     assert refused.value.code is ErrorCode.ANALYSIS_INPUT_INVALID
     assert refused.value.detail_fields == {"reason": COMPARISON_ONLY_VERSION_REASON}

@@ -31,7 +31,7 @@ REVIEW = ReviewAttestation(
     decision_ref="TEST-RULING-1", scope_statement="six synthetic scopes, test only",
 )
 INSTALLED_KEYS = {
-    "state", "analysis_profile_id", "prompt_bundle_id", "pack_sha256", "scope_ids", "review",
+    "state", "analysis_profile_id", "prompt_bundle_id", "pack_sha256", "scope_ids", "review", "start_allowed",
 }
 REVIEW_KEYS = {"reviewer", "capacity", "reviewed_at", "decision_ref", "scope_statement"}
 
@@ -57,7 +57,7 @@ def _installed() -> ParsedPackManifest:
     return parse_manifest(seal_manifest(pack, REVIEW))
 
 
-def _adapter(installed: ParsedPackManifest | None) -> RunAdapter:
+def _adapter(installed: ParsedPackManifest | None, *, start_allowed: bool = False, cost_preflight: Any = None) -> RunAdapter:
     return RunAdapter(
         None,  # type: ignore[arg-type]
         blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
@@ -65,6 +65,7 @@ def _adapter(installed: ParsedPackManifest | None) -> RunAdapter:
         prompt_bundle_id=str(PROFILE.prompt_bundle_id), carrier=None,
         ar_v3_pack_registry=None if installed is None else installed.registry,
         ar_v3_installed_pack=installed,
+        ar_v3_start_allowed=start_allowed, cost_preflight=cost_preflight,
     )
 
 
@@ -95,6 +96,7 @@ def test_an_installed_pack_answers_its_ids_digest_scopes_and_attestation() -> No
         "prompt_bundle_id": str(PROFILE.prompt_bundle_id),
         "pack_sha256": installed.pack.sha256,
         "scope_ids": ["F1", "F2", "A1", "A2", "S1", "S2"],
+        "start_allowed": False,  # `AR-V3-OPT-IN`: the pack is the capability, the permission is off by default
         "review": {
             "reviewer": "Test Reviewer", "capacity": "expert", "reviewed_at": "2026-10-26",
             "decision_ref": "TEST-RULING-1", "scope_statement": "six synthetic scopes, test only",
@@ -146,3 +148,82 @@ def test_the_route_is_a_bodyless_get_with_the_sealed_responses() -> None:
     route = next(route for route in router.routes if route.operation_id == "getArV3BetaPackStatus")
     assert (route.path, sorted(route.methods), route.status_code) == ("/ar-v3-beta/pack", ["GET"], 200)
     assert sorted(route.responses) == [200, 401, 403, 500, 503]
+
+
+# --- `AR-V3-OPT-IN`: the allowance is a second layer, off by default ----------------------------
+
+
+def test_the_allowance_is_served_with_the_pack_and_is_the_deployments_not_the_packs() -> None:
+    for allowed in (False, True):
+        _status, body = _served(_adapter(_installed(), start_allowed=allowed))
+        assert json.loads(body)["start_allowed"] is allowed
+
+
+def test_without_a_pack_the_allowance_is_not_a_property_whatever_the_switch_says() -> None:
+    _status, body = _served(_adapter(None, start_allowed=True))
+    assert json.loads(body) == {"state": "not_installed"}
+
+
+def test_a_bare_adapter_does_not_allow_a_start() -> None:
+    assert RunAdapter(
+        None,  # type: ignore[arg-type]
+        blob_store=None, adapter=None, provider_config=None, provider_mode="recorded",
+        analysis_profile_id=str(PROFILE.analysis_profile_id), prompt_bundle_id=str(PROFILE.prompt_bundle_id), carrier=None,
+    )._ar_v3_start_allowed is False
+
+
+def test_the_allowance_must_be_a_boolean() -> None:
+    with pytest.raises(ValueError, match="boolean"):
+        _adapter(None, start_allowed=1)  # type: ignore[arg-type]
+
+
+class _Preflight:
+    """Records that the estimate was asked for; refuses the way a deployment without a usable pack does."""
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    def estimate_group(self, session: Any, **_: Any) -> Any:
+        self.asked += 1
+        from auditmanager.shared.errors import DomainError, ErrorCode
+
+        raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="ar_v3_trusted_pack")
+
+
+def _estimating(adapter: RunAdapter) -> RunAdapter:
+    adapter._read = lambda work: work(object())  # type: ignore[method-assign]  # no database: the estimator is the fake
+    return adapter
+
+
+def test_a_price_is_refused_like_the_start_while_the_pack_is_installed_and_starts_are_not_allowed() -> None:
+    from auditmanager.shared.errors import DomainError, ErrorCode
+
+    preflight = _Preflight()
+    adapter = _estimating(_adapter(_installed(), start_allowed=False, cost_preflight=preflight))
+    with pytest.raises(DomainError) as refused:
+        adapter.estimate_ar_v3_group_cost(version_uid="ver_01M2545JSD15ETSNNV904XA001")
+    assert refused.value.code is ErrorCode.CONFLICT
+    assert refused.value.detail_fields["conflict_reason"] == "ar_v3_start_not_enabled"
+    assert preflight.asked == 0, "the price was computed for a start that would be refused"
+
+
+def test_with_starts_allowed_the_estimate_is_asked_for() -> None:
+    from auditmanager.shared.errors import DomainError
+
+    preflight = _Preflight()
+    adapter = _estimating(_adapter(_installed(), start_allowed=True, cost_preflight=preflight))
+    with pytest.raises(DomainError) as asked:
+        adapter.estimate_ar_v3_group_cost(version_uid="ver_01M2545JSD15ETSNNV904XA001")
+    assert asked.value.detail_fields == {"dependency": "ar_v3_trusted_pack"} and preflight.asked == 1
+
+
+def test_with_no_pack_the_estimate_answers_what_it_always_did_whatever_the_switch_says() -> None:
+    """A deployment without a pack sees no new answer: the preflight's own `dependency_unavailable` stands."""
+    from auditmanager.shared.errors import DomainError, ErrorCode
+
+    for allowed in (False, True):
+        preflight = _Preflight()
+        adapter = _estimating(_adapter(None, start_allowed=allowed, cost_preflight=preflight))
+        with pytest.raises(DomainError) as refused:
+            adapter.estimate_ar_v3_group_cost(version_uid="ver_01M2545JSD15ETSNNV904XA001")
+        assert refused.value.code is ErrorCode.DEPENDENCY_UNAVAILABLE and preflight.asked == 1

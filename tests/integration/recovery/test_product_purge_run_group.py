@@ -66,7 +66,7 @@ def grouped(migrated_database, monkeypatch) -> Iterator[Stand]:
         with Session(engine) as session, session.begin():
             started = start_ar_v3_group(
                 session, version_uid=version, idempotency_key="purge-inventory-group",
-                provider_mode="recorded", pack=pack, input_budget_characters=1000,
+                provider_mode="recorded", pack=pack, input_budget_characters=1000, start_allowed=True,
             )
         assert len(started.group.members) == 6 and not started.replayed
         yield Stand(str(migrated_database.url.database), bucket, migrated_database, engine, values,
