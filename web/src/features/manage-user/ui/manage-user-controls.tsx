@@ -3,15 +3,22 @@
 /**
  * The administrator's controls for one account (`W51`).
  *
- * Three of them take effect at once and cannot be taken back by pressing again, so all ask
+ * Four of them take effect at once and cannot be taken back by pressing again, so all ask
  * first (`C-24`): «Архивировать» refuses every credential the account holds from its next
- * request, «Удалить навсегда» removes it, and «Завершить сеансы» (contract 1.36.0, `UI-A-93`)
+ * request, «Удалить навсегда» removes it, «Завершить сеансы» (contract 1.36.0, `UI-A-93`)
  * refuses every credential it holds from its next request and nothing else, leaving the
- * account active. Each shows a confirmation group with its own «Подтвердить …» and «Отмена»;
- * nothing is sent until the confirmation is pressed. The sessions' command is keyed: the key is
- * minted when the confirmation opens and held until it succeeds or is cancelled, so a retry of
- * the same intent is a replay and a new intent is a new command. It is not offered for the
- * signed-in account (the server refuses it: one's own sessions end with a new password).
+ * account active, and a change of roles that makes an account an administrator, or takes the
+ * role from the signed-in administrator's own account (`UI-A-93`, the original asks the first).
+ * Each shows a confirmation group with its own «Подтвердить …» and «Отмена»; nothing is sent
+ * until the confirmation is pressed. The sessions' command is keyed: the key is minted when the
+ * confirmation opens and held until it succeeds or is cancelled, so a retry of the same intent
+ * is a replay and a new intent is a new command. It is not offered for the signed-in account
+ * (the server refuses it: one's own sessions end with a new password).
+ *
+ * The controls are four groups, in the order an administrator reaches for them: the name, the
+ * roles, access (the sessions and the temporary password) and, last, the account's standing
+ * (archive, restore, delete). A command that went through is answered in the words of what it did
+ * (`userCommandDone`), so a press is never followed by silence.
  *
  * When the account is the signed-in one (`isSelf`), a successful change also re-renders the
  * server components (`router.refresh()`, `C-20`), so the frame's name and menu — read once
@@ -22,7 +29,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
-import type { Account } from '@/shared/api';
+import type { Account, Role } from '@/shared/api';
 import { ROLE_VALUES, newIdempotencyKey } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { ASSIGNABLE_ROLES, roleLabels, rolesCombinationAllowed } from '@/entities/account';
@@ -31,7 +38,9 @@ import { ErrorState } from '@/shared/ui';
 
 import type { UserCommand } from '../model/use-manage-user';
 import { followUserCommand, useManageUser } from '../model/use-manage-user';
-import { confirmedTemporaryPassword } from '../model/confirmation';
+import { confirmedTemporaryPassword, roleChangeConfirmation, userCommandDone } from '../model/confirmation';
+import type { RoleChangeConfirmation } from '../model/confirmation';
+import styles from './manage-user-controls.module.css';
 
 export interface ManageUserControlsProps {
   readonly account: Account;
@@ -46,6 +55,8 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
   const [confirmArchive, setConfirmArchive] = useState(false);
   // The key of the open «Завершить сеансы» confirmation, or `null` while none is open.
   const [endSessionsKey, setEndSessionsKey] = useState<string | null>(null);
+  // The roles an administrator asked for that wait for a confirmation, and what they wait for.
+  const [roleConfirm, setRoleConfirm] = useState<{ readonly roles: Role[]; readonly reason: RoleChangeConfirmation } | null>(null);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [rolesRefused, setRolesRefused] = useState(false);
 
@@ -78,6 +89,9 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
     // combination as well, so the form asks first and sends nothing it would refuse.
     if (!rolesCombinationAllowed(roles)) { setRolesRefused(true); return; }
     setRolesRefused(false);
+    // `UI-A-93`: the two changes that hand over or give up the most ask before they are sent.
+    const reason = roleChangeConfirmation(account.roles, roles, isSelf);
+    if (reason !== null) { setRoleConfirm({ roles, reason }); return; }
     void execute({ kind: 'roles', roles });
   }
 
@@ -97,8 +111,9 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
   }
 
   const failure = manage.isError ? userFailure(manage.error) : null;
+  const doneKind = manage.isSuccess ? manage.variables.kind : null;
   return (
-    <div>
+    <div className={styles.controls}>
       <form className="am-form" key={`names-${account.last_name}-${account.first_name}-${account.middle_name}`} onSubmit={saveNames}>
         <h2>Имя пользователя</h2>
         <div className="am-form__field"><label htmlFor="user-last"><strong>Фамилия</strong></label><input id="user-last" name="last_name" type="text" defaultValue={account.last_name ?? ''} required maxLength={60} /></div>
@@ -107,52 +122,84 @@ export function ManageUserControls({ account, isSelf = false }: ManageUserContro
         <button className="am-button" type="submit" disabled={manage.isPending}>Сохранить имя</button>
       </form>
 
-      <form className="am-form" key={`roles-${account.roles.join('-')}`} onSubmit={saveRoles}>
+      <form className="am-form" key={`roles-${account.roles.join('-')}`} onSubmit={saveRoles} onChange={() => { setRolesRefused(false); setRoleConfirm(null); }}>
         <h2>Роли</h2>
         {ASSIGNABLE_ROLES.map((role) => <label key={role} className="am-form__field"><span><input type="checkbox" name="role" value={role} defaultChecked={account.roles.includes(role)} /> {roleLabels([role])[0]}</span></label>)}
         <p className="am-form__hint">При изменении ролей все прежние пропуска этой учётной записи отзываются. Пользователю потребуется войти снова.</p>
         {rolesRefused ? <div data-user-failure="viewer_exclusive"><ErrorState title="Роли не сохранены" detail="Роль «Наблюдатель» не сочетается с другими ролями. Запрос не отправлен." /></div> : null}
-        <button className="am-button" type="submit" disabled={manage.isPending}>Сохранить роли</button>
+        {roleConfirm === null ? (
+          <button className="am-button" type="submit" disabled={manage.isPending}>Сохранить роли</button>
+        ) : (
+          <div role="group" aria-label="Подтверждение изменения ролей">
+            <p className="am-note" data-user-role-confirm={roleConfirm.reason}>
+              {roleConfirm.reason === 'grant-admin'
+                ? `Назначить ${account.login} администратором? Администратор может всё, включая управление пользователями.`
+                : 'Снять с себя роль администратора? Вы потеряете доступ к управлению пользователями, а ваши сеансы будут завершены.'}
+            </p>
+            <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { const roles = roleConfirm.roles; setRoleConfirm(null); void execute({ kind: 'roles', roles }); }}>Подтвердить изменение ролей</button>
+            <button className="am-button am-button--quiet" type="button" onClick={() => setRoleConfirm(null)}>Отмена</button>
+          </div>
+        )}
       </form>
 
       {account.archived_at === null ? (
-        <div>
-          {confirmArchive ? (
-            <div role="group" aria-label="Подтверждение архивирования">
-              <p className="am-note">Архивировать учётную запись {account.login}? Она не сможет войти, а все её пропуска перестанут приниматься. Учётную запись можно будет восстановить.</p>
-              <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { setConfirmArchive(false); void execute({ kind: 'archive' }); }}>Подтвердить архивирование</button>
-              <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmArchive(false)}>Отмена</button>
-            </div>
-          ) : <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setConfirmArchive(true)}>Архивировать учётную запись</button>}
-          {isSelf ? null : endSessionsKey !== null ? (
-            <div role="group" aria-label="Подтверждение завершения сеансов">
-              <p className="am-note">Завершить все сеансы {account.login}? Пользователю придётся войти снова. Пароль, роли и состояние учётной записи не изменятся.</p>
-              <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { void execute({ kind: 'end-sessions', idempotencyKey: endSessionsKey }).then((succeeded) => { if (succeeded) setEndSessionsKey(null); }); }}>Подтвердить завершение сеансов</button>
-              <button className="am-button am-button--quiet" type="button" onClick={() => setEndSessionsKey(null)}>Отмена</button>
-            </div>
-          ) : <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setEndSessionsKey(newIdempotencyKey())}>Завершить сеансы</button>}
-          <form className="am-form" onSubmit={resetPassword}>
-            <h2>Временный пароль</h2>
-            <p className="am-form__hint">После сброса все прежние пропуска отзываются, а новый пароль нужно будет сменить при следующем входе. Значение не показывается после отправки.</p>
-            <div className="am-form__field"><label htmlFor="user-password"><strong>Временный пароль</strong></label><input id="user-password" name="temporary_password" type="password" autoComplete="new-password" required minLength={8} maxLength={1024} /></div>
-            <div className="am-form__field"><label htmlFor="user-password-confirm"><strong>Повторите временный пароль</strong></label><input id="user-password-confirm" name="confirm_password" type="password" autoComplete="new-password" required minLength={8} maxLength={1024} /></div>
-            {passwordMismatch ? <div data-user-failure="password_mismatch"><ErrorState title="Пароль не сброшен" detail="Пароль и его повтор не совпадают. Запрос не отправлен." /></div> : null}
-            <button className="am-button" type="submit" disabled={manage.isPending}>Сбросить пароль</button>
-          </form>
-        </div>
+        <>
+          <section className={styles.group} aria-label="Доступ">
+            <h2>Доступ</h2>
+            {isSelf ? null : endSessionsKey !== null ? (
+              <div role="group" aria-label="Подтверждение завершения сеансов">
+                <p className="am-note">Завершить все сеансы {account.login}? Пользователю придётся войти снова. Пароль, роли и состояние учётной записи не изменятся.</p>
+                <div className={styles.actions}>
+                  <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { void execute({ kind: 'end-sessions', idempotencyKey: endSessionsKey }).then((succeeded) => { if (succeeded) setEndSessionsKey(null); }); }}>Подтвердить завершение сеансов</button>
+                  <button className="am-button am-button--quiet" type="button" onClick={() => setEndSessionsKey(null)}>Отмена</button>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.actions}>
+                <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setEndSessionsKey(newIdempotencyKey())}>Завершить сеансы</button>
+                <span className="am-form__hint">Пользователю придётся войти снова; пароль и роли не меняются.</span>
+              </div>
+            )}
+            <form className="am-form" onSubmit={resetPassword}>
+              <h3>Временный пароль</h3>
+              <p className="am-form__hint">После сброса все прежние пропуска отзываются, а новый пароль нужно будет сменить при следующем входе. Значение не показывается после отправки.</p>
+              <div className="am-form__field"><label htmlFor="user-password"><strong>Временный пароль</strong></label><input id="user-password" name="temporary_password" type="password" autoComplete="new-password" required minLength={8} maxLength={1024} onChange={() => setPasswordMismatch(false)} /></div>
+              <div className="am-form__field"><label htmlFor="user-password-confirm"><strong>Повторите временный пароль</strong></label><input id="user-password-confirm" name="confirm_password" type="password" autoComplete="new-password" required minLength={8} maxLength={1024} onChange={() => setPasswordMismatch(false)} /></div>
+              {passwordMismatch ? <div data-user-failure="password_mismatch"><ErrorState title="Пароль не сброшен" detail="Пароль и его повтор не совпадают. Запрос не отправлен." /></div> : null}
+              <button className="am-button" type="submit" disabled={manage.isPending}>Сбросить пароль</button>
+            </form>
+          </section>
+          <section className={styles.group} aria-label="Состояние учётной записи">
+            <h2>Состояние</h2>
+            {confirmArchive ? (
+              <div role="group" aria-label="Подтверждение архивирования">
+                <p className="am-note">Архивировать учётную запись {account.login}? Она не сможет войти, а все её пропуска перестанут приниматься. Учётную запись можно будет восстановить.</p>
+                <div className={styles.actions}>
+                  <button className="am-button" type="button" disabled={manage.isPending} onClick={() => { setConfirmArchive(false); void execute({ kind: 'archive' }); }}>Подтвердить архивирование</button>
+                  <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmArchive(false)}>Отмена</button>
+                </div>
+              </div>
+            ) : <div className={styles.actions}><button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => setConfirmArchive(true)}>Архивировать учётную запись</button></div>}
+          </section>
+        </>
       ) : (
-        <div>
-          <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => void execute({ kind: 'restore' })}>Восстановить учётную запись</button>
+        <section className={styles.group} aria-label="Состояние учётной записи">
+          <h2>Состояние</h2>
+          <div className={styles.actions}>
+            <button className="am-button am-button--quiet" type="button" disabled={manage.isPending} onClick={() => void execute({ kind: 'restore' })}>Восстановить учётную запись</button>
+          </div>
           {confirmPurge ? (
             <div role="group" aria-label="Подтверждение удаления">
               <p className="am-note">Безвозвратно удалить учётную запись {account.login}? Это действие нельзя отменить.</p>
-              <button className="am-button" type="button" disabled={manage.isPending} onClick={() => void execute({ kind: 'purge' })}>Подтвердить удаление</button>
-              <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmPurge(false)}>Отмена</button>
+              <div className={styles.actions}>
+                <button className="am-button" type="button" disabled={manage.isPending} onClick={() => void execute({ kind: 'purge' })}>Подтвердить удаление</button>
+                <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmPurge(false)}>Отмена</button>
+              </div>
             </div>
-          ) : <button className="am-button am-button--quiet" type="button" onClick={() => setConfirmPurge(true)}>Удалить навсегда</button>}
-        </div>
+          ) : <div className={styles.actions}><button className="am-button am-button--quiet" type="button" onClick={() => setConfirmPurge(true)}>Удалить навсегда</button></div>}
+        </section>
       )}
-      {manage.isSuccess ? <p className="am-note" role="status">Действие выполнено.</p> : null}
+      {doneKind !== null ? <p className="am-form__created" role="status" data-user-done={doneKind}>{userCommandDone(doneKind)}</p> : null}
       {failure ? <div data-user-failure={failure.kind}><ErrorState title="Изменение не выполнено" detail={failure.detail} correlationId={failure.correlationId} /></div> : null}
     </div>
   );
