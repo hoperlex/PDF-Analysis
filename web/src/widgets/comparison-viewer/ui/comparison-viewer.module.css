@@ -17,6 +17,8 @@
   min-width: 0;
   max-width: 100%;
   color: var(--am-ink);
+  /* The island focuses the root so that the arrows work at once; the focus is not a thing to draw round the whole viewer. */
+  outline: none;
 }
 
 .header {

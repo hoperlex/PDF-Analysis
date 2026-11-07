@@ -238,6 +238,22 @@ describe('the viewer of a compared pair', () => {
     expect(markup).toContain('лист ›');
     expect(markup).toContain('✕ Закрыть');
   });
+
+  it('says where the sheet is among those the arrows walk, and offers «Только изменённые листы» (UI-B-99)', () => {
+    const plain = html(comparedPair(), [], arrived, { navigation: { onNext: () => {} } });
+    expect(plain).not.toContain('data-sheet-position');
+    expect(plain).not.toContain('Только изменённые листы');
+    const walked = html(comparedPair(), [], arrived, {
+      navigation: { onNext: () => {}, position: { index: 3, total: 12 }, onlyChanged: { checked: true, onChange: () => {} } },
+    });
+    expect(walked).toMatch(/<span[^>]*data-sheet-position="3"[^>]*>\s*3\s*\/\s*12\s*<\/span>/);
+    expect(walked).toMatch(/<input type="checkbox" checked=""[^>]*\/>Только изменённые листы/);
+  });
+
+  it('takes ← and → on the whole viewer and makes its root focusable only when it is walked', () => {
+    expect(html(comparedPair())).not.toContain('tabindex="-1"');
+    expect(html(comparedPair(), [], arrived, { onKeyDown: () => {} })).toMatch(/<div[^>]*data-comparison-viewer=""[^>]*tabindex="-1"/);
+  });
 });
 
 describe('the viewer carries the markers the language guard reads', () => {

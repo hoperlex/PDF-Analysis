@@ -11,7 +11,7 @@
  * a slot: `widgets/comparison-viewer` is a sibling widget, so the page that composes both hands `renderViewer` in.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type {
@@ -40,6 +40,7 @@ import {
   columnNames,
   comparisonFailure,
   defaultSides,
+  isChangedPair,
   isStale,
   openablePairs,
   pairOfRow,
@@ -72,6 +73,7 @@ import { AiChangesBlock, SpecificationsBlock, SummaryReportBlock } from './ai-bl
 import { DraftPanel, EditHistory } from './draft-panel';
 import { MatrixState } from './matrix-state';
 import { FailureState } from './module-state';
+import { PairViewerWindow } from './pair-viewer-window';
 import { SheetMatrix } from './sheet-matrix';
 import { TransitionSummary } from './transition-summary';
 import { VersionOrderDialog } from './version-order-dialog';
@@ -154,10 +156,24 @@ export interface SheetsTabViewProps {
   readonly onOpenReport?: () => void;
   /** «Сводка изменений (MD)» in the header; absent while there is no summary. */
   readonly onSummary?: () => void;
+  // ---- the second pass (UI-B-98, as the original's card of one set)
+  /**
+   * The caret of the header has folded the pair choice and the blocks above the matrix («Сводка переходов», the AI blocks):
+   * the original's `topHidden`. Absent: they are shown.
+   */
+  readonly topHidden?: boolean;
+  /** The caret and the name in the header; the static harness has none. */
+  readonly onToggleTop?: () => void;
+  /** Closes the window of the opened pair (its «✕ Закрыть», Esc). */
+  readonly onCloseViewer?: () => void;
+  /** The static harness and the census: the window of the pair is drawn open without `showModal`. */
+  readonly viewerStatic?: boolean;
 }
 
 export function SheetsTabView(props: SheetsTabViewProps) {
   const { matrix, draft, mayEdit, sides } = props;
+  const topId = useId();
+  const topHidden = props.topHidden === true;
   const columns = matrix.columns ?? [];
   const hasRows = (matrix.rows ?? []).length > 0;
   const savedUndoable = props.edits.some((edit) => edit.status === 'applied' && edit.kind !== 'undo');
@@ -167,7 +183,22 @@ export function SheetsTabView(props: SheetsTabViewProps) {
   return (
     <div className={styles.sheets} data-comparison-sheets="" data-matrix-state={matrix.state}>
       <header className={styles.setHeader}>
-        <h2 className={styles.setTitle}>{props.heading}</h2>
+        <h2 className={styles.setTitle}>
+          <button
+            type="button"
+            className={styles.setToggle}
+            aria-expanded={!topHidden}
+            {...(topHidden ? {} : { 'aria-controls': topId })}
+            title={topHidden ? 'Развернуть выбор пары и сводку переходов' : 'Свернуть выбор пары и сводку переходов'}
+            data-sheets-top-toggle=""
+            onClick={props.onToggleTop}
+          >
+            <span className={styles.caret} aria-hidden="true">
+              {topHidden ? '▶' : '▼'}
+            </span>
+            <span title="Комплект, с которым работаете. Другой комплект выбирается на вкладке «Проекты и этапы».">{props.heading}</span>
+          </button>
+        </h2>
         <span className={styles.muted}>· версий: {columns.length}</span>
         <span className={styles.setActions}>
           {mayEdit && draft.edits.length > 0 ? (
@@ -215,7 +246,17 @@ export function SheetsTabView(props: SheetsTabViewProps) {
               Порядок версий
             </button>
           ) : null}
-          {props.onOpenReport === undefined ? null : (
+          {props.onOpenReport === undefined ? (
+            <button
+              type="button"
+              className="am-button am-button--quiet"
+              disabled
+              data-report-window-open=""
+              title="Отчёт строится по «Сводке изменений (MD)»: сначала сравните соседние версии комплекта."
+            >
+              Сформировать PDF-отчёт…
+            </button>
+          ) : (
             <button type="button" className="am-button am-button--quiet" data-report-window-open="" title="Отчёт PDF по «Сводке изменений (MD)»: источник, вид отчёта, ход и скачивание." onClick={props.onOpenReport}>
               Сформировать PDF-отчёт…
             </button>
@@ -228,25 +269,29 @@ export function SheetsTabView(props: SheetsTabViewProps) {
 
       <MatrixState matrix={matrix} mayPrepare={mayEdit} busy={props.prepareBusy} onPrepare={props.onPrepare} />
 
-      <TransitionSummary
-        series={props.series}
-        names={props.names}
-        openTransitionId={props.openTransitionId}
-        mayAct={mayEdit}
-        busy={props.seriesBusy}
-        failure={props.seriesFailure}
-        notCompared={notCompared}
-        chooseTwo={chooseTwo}
-        confirmingRestart={props.confirmingRestart}
-        onOpen={props.onOpenTransition}
-        onAct={props.onSeriesAct}
-        onStart={props.onStartSeries}
-        onAskRestart={props.onAskRestart}
-        onConfirmRestart={props.onConfirmRestart}
-        onCancelRestart={props.onCancelRestart}
-      />
+      {topHidden ? null : (
+        <div id={topId} className={styles.top} data-sheets-top="">
+          <TransitionSummary
+            series={props.series}
+            names={props.names}
+            openTransitionId={props.openTransitionId}
+            mayAct={mayEdit}
+            busy={props.seriesBusy}
+            failure={props.seriesFailure}
+            notCompared={notCompared}
+            chooseTwo={chooseTwo}
+            confirmingRestart={props.confirmingRestart}
+            onOpen={props.onOpenTransition}
+            onAct={props.onSeriesAct}
+            onStart={props.onStartSeries}
+            onAskRestart={props.onAskRestart}
+            onConfirmRestart={props.onConfirmRestart}
+            onCancelRestart={props.onCancelRestart}
+          />
 
-      {props.aiBlocks}
+          {props.aiBlocks}
+        </div>
+      )}
 
       <DraftPanel
         draft={draft}
@@ -289,9 +334,12 @@ export function SheetsTabView(props: SheetsTabViewProps) {
       <EditHistory edits={props.edits} orphanedIds={matrix.orphaned_edit_ids ?? []} names={props.names} />
 
       {props.viewer === null ? null : (
-        <section className={styles.viewerHost} aria-label="Просмотр пары листов" data-pair-viewer="">
+        <PairViewerWindow
+          {...(props.onCloseViewer === undefined ? {} : { onClose: props.onCloseViewer })}
+          {...(props.viewerStatic === true ? { staticOpen: true } : {})}
+        >
           {props.viewer}
-        </section>
+        </PairViewerWindow>
       )}
     </div>
   );
@@ -313,25 +361,30 @@ function profileIdOf(pair: ComparisonSheetPair): string | null {
   return pair.page_a?.page.page_profile_id ?? pair.page_b?.page.page_profile_id ?? null;
 }
 
-/** The viewer of one opened pair: reads the pair (and the raster of an added or removed sheet) and hands them to the slot. */
+/**
+ * The viewer of one opened pair: reads the pair (and the raster of an added or removed sheet) and hands them to the slot. The
+ * arrows of the viewer walk the openable pairs of the transition in the order of the rows; «Только изменённые листы» drops the
+ * sheets that are the same (the original's `onlyChangedSheets`), and the place is said as «3 / 12». The window's own «✕ Закрыть»
+ * closes it, so the slot does not hand a second one in.
+ */
 export function PairViewerSlot({
   pairId,
   siblings,
   renderViewer,
   onOpen,
-  onClose,
 }: {
   readonly pairId: string;
   readonly siblings: readonly ComparisonSheetPair[];
   readonly renderViewer: RenderViewer;
   readonly onOpen: (pairId: string) => void;
-  readonly onClose: () => void;
 }) {
+  const [onlyChanged, setOnlyChanged] = useState(false);
   const pair = useSheetPair(pairId);
   const profile = usePageProfile(pair.data !== undefined && pair.data.canvas === undefined ? profileIdOf(pair.data) : null);
   if (pair.isPending) return <LoadingState what="пару листов" />;
   if (pair.isError) return <FailureState error={pair.error} title="Пара листов не открылась" onRetry={() => void pair.refetch()} />;
-  const list = openablePairs(siblings);
+  const all = openablePairs(siblings);
+  const list = onlyChanged ? all.filter(isChangedPair) : all;
   const index = list.findIndex((item) => item.sheet_pair_id === pairId);
   const previous = index > 0 ? list[index - 1] : undefined;
   const next = index >= 0 ? list[index + 1] : undefined;
@@ -340,6 +393,16 @@ export function PairViewerSlot({
     raster?.raster_width_px !== undefined && raster.raster_height_px !== undefined
       ? { widthPx: raster.raster_width_px, heightPx: raster.raster_height_px }
       : undefined;
+  const onFilter = (on: boolean): void => {
+    setOnlyChanged(on);
+    if (!on) return;
+    // The sheet that is open may be one the filter drops: go to the next changed one after it, else the first (`filterSheets`).
+    const kept = all.filter(isChangedPair);
+    if (kept.some((item) => item.sheet_pair_id === pairId)) return;
+    const at = all.findIndex((item) => item.sheet_pair_id === pairId);
+    const target = kept.find((item) => all.indexOf(item) > at) ?? kept[0];
+    if (target !== undefined) onOpen(target.sheet_pair_id);
+  };
   return (
     <>
       {renderViewer({
@@ -348,9 +411,11 @@ export function PairViewerSlot({
         navigation: {
           ...(previous === undefined ? {} : { onPrevious: () => onOpen(previous.sheet_pair_id) }),
           ...(next === undefined ? {} : { onNext: () => onOpen(next.sheet_pair_id) }),
-          onClose,
+          ...(index < 0 ? {} : { position: { index: index + 1, total: list.length } }),
+          ...(all.length < 2 ? {} : { onlyChanged: { checked: onlyChanged, onChange: onFilter } }),
         },
       })}
+      {onlyChanged && list.length === 0 ? <p className="am-note">Изменённых листов нет.</p> : null}
     </>
   );
 }
@@ -379,6 +444,8 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
   const [clickNote, setClickNote] = useState<string | null>(null);
   const [restartAsked, setRestartAsked] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  // The caret of the header folds the pair choice and the blocks above the matrix, as the original's `topHidden` does.
+  const [topHidden, setTopHidden] = useState(false);
 
   const matrixData = matrix.data;
   const columns = matrixData?.columns ?? [];
@@ -551,10 +618,12 @@ export function SheetsTab({ projectUid, documentUid, heading, mayEdit, renderVie
             siblings={pairs.data ?? []}
             renderViewer={renderViewer}
             onOpen={setOpenPairId}
-            onClose={() => setOpenPairId(null)}
           />
         )
       }
+      onCloseViewer={() => setOpenPairId(null)}
+      topHidden={topHidden}
+      onToggleTop={() => setTopHidden((hidden) => !hidden)}
       clickNote={clickNote}
       hints={hints.data ?? []}
       aiBlocks={

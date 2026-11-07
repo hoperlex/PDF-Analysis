@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import type { HTMLAttributes, PointerEvent as ReactPointerEvent } from 'react';
+import type { HTMLAttributes, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 
 import type { ComparisonSheetPair } from '@/shared/api';
 import { stepIndex } from '@/entities/version-series';
@@ -166,11 +166,25 @@ export function ComparisonViewer({ pair, rasterSize, navigation, changes }: Comp
       setDragging(false);
     },
     onDoubleClick: () => dispatch({ type: 'fit' }),
-    onKeyDown: (event) => {
-      if (event.key === 'ArrowLeft') dispatch({ type: 'step', direction: -1 });
-      if (event.key === 'ArrowRight') dispatch({ type: 'step', direction: 1 });
-    },
   };
+
+  // ← and → walk the differences from anywhere in the viewer, as the original's `onKey` on its overlay does: the keys typed into a
+  // field (the consent line, a text box of the side panel) are the field's. The handler used to hang on the pane, which no focus
+  // ever reaches, so the keys did nothing.
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.target instanceof HTMLElement && /^(input|select|textarea)$/i.test(event.target.tagName)) return;
+    if (event.key === 'ArrowLeft') dispatch({ type: 'step', direction: -1 });
+    else if (event.key === 'ArrowRight') dispatch({ type: 'step', direction: 1 });
+    else return;
+    event.preventDefault();
+  };
+
+  // A viewer that is walked sheet by sheet takes the focus when it opens, so that the arrows work without a click first.
+  const root = useRef<HTMLDivElement | null>(null);
+  const walked = navigation !== undefined;
+  useEffect(() => {
+    if (walked) root.current?.focus({ preventScroll: true });
+  }, [walked, pair.sheet_pair_id]);
 
   latest.current.view = state.view;
   const pane = paneOf(state, context);
@@ -190,6 +204,8 @@ export function ComparisonViewer({ pair, rasterSize, navigation, changes }: Comp
       tiles={tiles}
       dispatch={dispatch}
       stageRef={stage}
+      rootRef={root}
+      onKeyDown={onKeyDown}
       paneHandlers={paneHandlers}
       dragging={dragging}
       evidence={evidence}
