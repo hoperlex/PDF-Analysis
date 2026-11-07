@@ -1049,7 +1049,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.37.0"]
+    contract_version: Literal["1.38.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1658,6 +1658,10 @@ class ArV3BetaPackStatus(_Object):
     review: ArV3BetaPackReview = Field(
         default=None, json_schema_extra=optional_property
     )  # type: ignore[assignment]
+    #: `AR-V3-OPT-IN` (contract 1.38.0). Present exactly when `state` is `installed`: whether this deployment allows a
+    #: start of an AR v3 group now (`AR_V3_BETA_START_ALLOWED`). Installed is the capability, this is the permission;
+    #: a pack that is installed with `start_allowed` false still executes, shows and reviews what was accepted.
+    start_allowed: bool = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class StageState(_Object):
@@ -1774,6 +1778,15 @@ class RunStatus(_Object):
     #: created before migration 0051.
     started_by_user_uid: UserUid = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     started_by_label: Annotated[str, Field(min_length=1, max_length=254)] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: `AR-V3-OPT-IN` (contract 1.38.0). Which analysis produced the run: `standard` (the text profile the section table
+    #: routes to) or `ar_v3_beta` (one run of a six-run AR v3 group). Derived from the pinned profile and bundle pair,
+    #: nothing else. A run holds exactly one analysis; no field of a run mixes the results of the two.
+    analysis_kind: Literal["standard", "ar_v3_beta"] = Field(  # type: ignore[assignment]
+        default=None, json_schema_extra=optional_property)
+    #: Members of an AR v3 group only: the group and the scope (`F1` .. `S2`) the run is one of.
+    ar_v3_group_id: ArV3RunGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    ar_v3_scope_id: Literal["F1", "F2", "A1", "A2", "S1", "S2"] = Field(  # type: ignore[assignment]
         default=None, json_schema_extra=optional_property)
 
 
@@ -3286,6 +3299,7 @@ class ComparisonRefusal(_Object):
         "analysis_missing",
         "run_not_of_version",
         "run_not_published",
+        "analysis_not_comparable",
         "text_unavailable",
         "text_too_large",
     ]

@@ -433,6 +433,11 @@ class RunCostPreflight:
         from .repository import RunRepository
         runs = RunRepository()
         source_run = runs.get(session, run_id)
+        # `AR-V3-OPT-IN` (Q4): the estimate of a repeat that the start would refuse is the same refusal, not a price.
+        from .analysis_kind import ANALYSIS_AR_V3_BETA, analysis_kind
+        from .v3_start_switch import refuse_member_repeat
+        if analysis_kind(source_run.analysis_profile_id, source_run.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
+            raise refuse_member_repeat()
         executor = runs.chosen_executor_connection(session, run_id)
         from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
         # `EXEC2-GROUP-RUN-01`: a re-audit keeps the kind of selector the original start used. A named connection stays

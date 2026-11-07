@@ -14,18 +14,22 @@ The rules, as the owner ruled them:
   ``document`` whose ``current_version_uid`` points at a version -- the join ``listProjects`` counts
   ``document_count`` through -- and an older version never counts: uploading V2 moves a fully checked V1
   document to ``not_run`` until V2 is run.
-* **The result run of a version** is the latest of its runs in state ``published`` or ``partial``, ordered by
-  ``(created_at, run_id)`` -- the order ``listRuns`` returns them in. A newer run still in flight does not
-  displace it; ``failed`` and ``cancelled`` runs are not results (`R-150r`); ``partial`` is a result (`R-150s`).
+* **The result run of a version** is the latest of its runs **of the standard analysis** in state ``published`` or
+  ``partial``, ordered by ``(created_at, run_id)`` -- the order ``listRuns`` returns them in. A newer run still in
+  flight does not displace it; ``failed`` and ``cancelled`` runs are not results (`R-150r`); ``partial`` is a result
+  (`R-150s`). A run of the AR v3 beta analysis is never the result (`AR-V3-OPT-IN`, `Q3`): ``STANDARD_RUN_SQL`` is the
+  one condition, shared with the schedule, the comparison and the optimisation readers.
 * **The document audit state** is one of four words: ``not_run`` (no result run), ``clean`` (a result run with
   no published finding -- a state of its own, neither "checked" nor "awaiting", `R-150n`),
   ``awaiting_decision`` (a result run with at least one finding whose current verdict is undecided) and
   ``checked`` (a result run, every finding decided). ``partial`` is a flag beside the state, set when the
   result run is ``partial``.
 * **Optimisation is not part of it** (`R-150u`): the state is computed on findings only.
-* **AR v3 six-run groups** use the general per-run rule for now (`R-150t`): each run of a group is a run of
-  its version, and the latest published or partial one is the result. The rule for a group as a whole is
-  decided when AR v3 is switched on (`Q-MD-9`, a debt) and is deliberately not guessed here.
+* **AR v3 six-run groups** (`R-150t`, `Q-MD-9`, `D-303`): each run of a group is a run of its version, listed with the
+  others, but none of them is the version's result while the standard analysis exists to be it. The owner's answer of
+  2026-11-07 (`AR-V3-OPT-IN`, `Q3`) is that these counters count the standard analysis only; a document whose only
+  published result is a v3 group therefore reads ``not_run`` here. A rule that counts a group as one unit is a design of
+  its own and is not guessed.
 
 A finding is *undecided* when its current verdict, read from ``finding_current_verdict`` (the projection
 ``decisions.projection`` and the verdict panel already read), is ``pending`` -- no verdict was ever recorded --
@@ -45,6 +49,8 @@ from typing import Final
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
+
+from auditmanager.runs.public import STANDARD_RUN_SQL
 
 __all__ = [
     "AUDIT_STATES",
@@ -120,11 +126,12 @@ _CURRENT_DOCS_OF_VERSIONS = """
 #: run_id DESC)`` -- ``listRuns``' order, so the result run is the newest run ``listRuns`` would show among
 #: those. ``run_finding`` is the set of ``finding_uid`` the result run published; ``GROUP BY`` makes it a set,
 #: so a finding observed twice by one run counts once. ``version_findings`` counts them and the undecided ones.
-_RESULT_RUN_RULES = """,
+_RESULT_RUN_RULES = f""",
     result_run AS (
         SELECT DISTINCT ON (r.version_uid) r.version_uid, r.run_id, r.state
         FROM audit_run r
         WHERE r.state IN ('published', 'partial')
+          AND {STANDARD_RUN_SQL}
           AND r.version_uid IN (SELECT version_uid FROM current_docs)
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     ),

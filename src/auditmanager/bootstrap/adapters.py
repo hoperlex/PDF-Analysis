@@ -1179,8 +1179,16 @@ class RunAdapter(_SessionHolder):
         cost_preflight: Any = None,
         require_cost_consent: bool = False,
         group_admitter: Any = None,
+        ar_v3_start_allowed: bool = False,
     ) -> None:
         super().__init__(session_factory)
+        # `AR-V3-OPT-IN` (design 4.2). The deployment's allowance to **start** an AR v3 group or to ask what one costs
+        # (``AR_V3_BETA_START_ALLOWED``, read once by the composition root, ``False`` by default and for every bare
+        # adapter a test builds). The pack alone no longer allows a start; execution, reading and review need only the
+        # pack. ``test_composition_pins_the_v3_start_allowance`` pins what the root passes.
+        if type(ar_v3_start_allowed) is not bool:
+            raise ValueError("ar_v3_start_allowed must be a boolean")
+        self._ar_v3_start_allowed = ar_v3_start_allowed
         # `EXEC2-GROUP-RUN-01` (ADR-0026 decisions 12 and 13). Admits a start on an executor group, or by the routing rules
         # while the mode is `rules`, in the start's own transaction; ``None`` is the `environment` source (and the many
         # tests that build a bare adapter): a start that names a group is then refused, and one that names nothing is
@@ -1264,9 +1272,22 @@ class RunAdapter(_SessionHolder):
         value = self._read(estimate)
         return models.RunCostEstimate.model_validate(value.as_dict())
 
+    def _ar_v3_installed_pack_state(self) -> bool:
+        """Whether a reviewed pack is installed, as group start decides it (the registry, not the manifest record)."""
+        registry = self._ar_v3_pack_registry
+        return registry is not None and registry.select_beta() is not None
+
     def estimate_ar_v3_group_cost(self, *, version_uid: str, relaxed_limits: bool = False) -> models.RunCostEstimate:
         if self._cost_preflight is None:
             raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="analysis_cost_preflight")
+        # `AR-V3-OPT-IN`: asked for a price the start would refuse, the answer is the start's refusal, not a figure. With no
+        # pack installed this passes and the estimate gives the answer it always gave (`dependency_unavailable`).
+        from auditmanager.runs.public import require_start_allowed
+
+        require_start_allowed(
+            pack_installed=self._ar_v3_installed_pack_state(),
+            start_allowed=self._ar_v3_start_allowed,
+        )
         value = self._read(lambda session: self._cost_preflight.estimate_group(session,
             version_uid=version_uid, relaxed_limits=relaxed_limits))
         return models.RunCostEstimate.model_validate(value.as_dict())
@@ -1275,6 +1296,7 @@ class RunAdapter(_SessionHolder):
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        started_by_user_uid: str | None = None,
     ) -> models.ArV3BetaGroup:
         """Create the six pinned Runs, queue them, and hand them to the carrier (`PROD-11D`).
 
@@ -1306,6 +1328,10 @@ class RunAdapter(_SessionHolder):
                 cost_preflight=self._cost_preflight if self._require_cost_consent or cost_consent is not None else None,
                 cost_consent=cost_consent,
                 cost_actor_uid=cost_actor_uid,
+                # `AR-V3-OPT-IN`: the allowance is checked inside the command, after the replay branches; the starter is
+                # recorded on each member as the ordinary start records it (`R-151v`).
+                start_allowed=self._ar_v3_start_allowed,
+                started_by_user_uid=started_by_user_uid,
             )
             if started.replayed:
                 return started
@@ -1353,6 +1379,8 @@ class RunAdapter(_SessionHolder):
         pack = installed.pack
         return models.ArV3BetaPackStatus(
             state="installed",
+            # `AR-V3-OPT-IN`: whether this deployment allows a start now (installed is capability; this is permission).
+            start_allowed=self._ar_v3_start_allowed,
             analysis_profile_id=pack.analysis_profile_id,
             prompt_bundle_id=pack.prompt_bundle_id,
             pack_sha256=pack.sha256,
@@ -1778,7 +1806,16 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
     # `stage_result.metrics` -- `D-15` measures that pair as a sum over attempts wearing
     # one attempt's provenance, and that ambiguity is not being inherited into a contract.
     cost = repository.cost(session, run_id)
+    # `AR-V3-OPT-IN` (design 4.4): which analysis produced the run, derived from its pinned pair (one definition,
+    # ``runs.analysis_kind``); a member of an AR v3 group also names its group and scope, read from the membership row.
+    from auditmanager.runs.public import ANALYSIS_AR_V3_BETA, analysis_kind, ar_v3_membership
+
+    kind = analysis_kind(run.analysis_profile_id, run.prompt_bundle_id)
+    membership = ar_v3_membership(session, run_id) if kind == ANALYSIS_AR_V3_BETA else None
     return RunStatusView(
+        analysis_kind=kind,
+        ar_v3_group_id=None if membership is None else membership[0],
+        ar_v3_scope_id=None if membership is None else membership[1],
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
@@ -4263,8 +4300,16 @@ class _AnalysisReader:
         from auditmanager.comparison.public import RunCandidate
         from auditmanager.runs import RunRepository
 
+        from auditmanager.runs.public import ANALYSIS_STANDARD, analysis_kind
+
+        # `AR-V3-OPT-IN` (design 4.4): every run is listed, each saying whether it is of the standard analysis. The
+        # consumers choose «the result of a version» among the standard ones; a run the caller names that is not one is
+        # refused by the comparison, not silently replaced.
         return tuple(
-            RunCandidate(str(run.run_id), run.state)
+            RunCandidate(
+                str(run.run_id), run.state,
+                analysis_kind(run.analysis_profile_id, run.prompt_bundle_id) == ANALYSIS_STANDARD,
+            )
             for run in RunRepository().list_for_version(session, version_uid)
         )
 
@@ -4439,7 +4484,7 @@ class _SpecificationTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state)
+            RunCandidate(run.run_id, run.state, run.standard_analysis)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 
@@ -5799,7 +5844,7 @@ class _ProposalTextReader:
         from auditmanager.optimisation.public import RunCandidate
 
         return tuple(
-            RunCandidate(run.run_id, run.state)
+            RunCandidate(run.run_id, run.state, run.standard_analysis)
             for run in self._analyses.runs_newest_first(session, version_uid=version_uid)
         )
 

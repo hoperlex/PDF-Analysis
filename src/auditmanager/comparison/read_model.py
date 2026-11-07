@@ -51,6 +51,7 @@ REFUSAL_REASONS: Final[tuple[str, ...]] = (
     "analysis_missing",
     "run_not_of_version",
     "run_not_published",
+    "analysis_not_comparable",
     "text_unavailable",
     "text_too_large",
 )

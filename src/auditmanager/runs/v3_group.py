@@ -33,6 +33,7 @@ from auditmanager.runs.commands import (
 )
 from auditmanager.runs.provider import RouteFreezer
 from auditmanager.runs.repository import RunRepository
+from auditmanager.runs.v3_start_switch import require_start_allowed
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import (
     ArV3RunGroupId,
@@ -211,6 +212,18 @@ def get_ar_v3_group(session: Session, group_id: str) -> GroupView:
     )
 
 
+def ar_v3_membership(session: Session, run_id: str) -> tuple[str, str] | None:
+    """``(group_id, scope_id)`` when the run is a member of an AR v3 group, else ``None`` (`AR-V3-OPT-IN`).
+
+    The membership row, not the pinned pair, says which group and scope; a run holds one only if the database admitted it
+    as a member (migration 0032 checks the pair against the group's).
+    """
+    row = session.execute(text("""
+        SELECT group_id, scope_id FROM ar_v3_run_group_member WHERE run_id = :run_id
+    """), {"run_id": run_id}).one_or_none()
+    return None if row is None else (str(row[0]), str(row[1]))
+
+
 def start_ar_v3_group(
     session: Session,
     *,
@@ -224,9 +237,20 @@ def start_ar_v3_group(
     cost_preflight: Any = None,
     cost_consent: Mapping[str, Any] | None = None,
     cost_actor_uid: str | None = None,
+    started_by_user_uid: str | None = None,
+    start_allowed: bool = False,
 ) -> StartedGroup:
+    """Create the six pinned runs of a group, or replay the group an accepted key created.
+
+    ``start_allowed`` is the deployment's allowance (`AR-V3-OPT-IN`, ``v3_start_switch``). It is **closed by default**: a
+    caller that forgets it cannot start a group. It is checked after the replay branches, so an accepted key still
+    replays when the allowance is later withdrawn, and before any row is written. ``started_by_user_uid`` is the account
+    whose request this is, recorded on each member as the ordinary start records it (`R-151v`).
+    """
     if type(relaxed_limits) is not bool:
         raise ValueError("relaxed_limits must be a boolean")
+    if type(start_allowed) is not bool:
+        raise ValueError("start_allowed must be a boolean")
     version_id = str(VersionUid.parse(version_uid))
     key = IdempotencyKey(idempotency_key)
     commands = CommandRepository()
@@ -256,6 +280,9 @@ def start_ar_v3_group(
         if not isinstance(previous_id, str):
             raise DomainError(ErrorCode.IDEMPOTENCY_KEY_STALE, command_type=COMMAND_TYPE)
         return StartedGroup(get_ar_v3_group(session, previous_id), True)
+    # After both replay branches and before the first write: a retry of an accepted key replays whatever the allowance
+    # now says, and a refused start leaves no command, run, group or job behind.
+    require_start_allowed(pack_installed=True, start_allowed=start_allowed)
 
     version = DocumentRepository().get_version(session, VersionUid.parse(version_id))
     # `CMP-C0-FIX-01`. By kind, first: a version admitted for comparison only is refused with
@@ -370,6 +397,7 @@ def start_ar_v3_group(
             frozen_input_digest=digest, command_id=str(claimed.command_id),
             norms_snapshot_id=profile.snapshot_id, norm_retrieval_set_id=ref.set_id,
             connection_revision_id=None if frozen_route is None else frozen_route.revision_id,
+            started_by_user_uid=started_by_user_uid,  # `R-151v`, as the ordinary start records it
         )
         session.execute(text("""
             INSERT INTO ar_v3_run_group_member

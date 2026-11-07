@@ -155,6 +155,12 @@ class RunStatusView:
     #: ``None`` for a run created before 0051, rendered only when present.
     started_by_user_uid: str | None = None
     started_by_label: str | None = None
+    #: `AR-V3-OPT-IN` (contract 1.38.0): which analysis produced the run -- ``standard`` or ``ar_v3_beta`` -- derived from the
+    #: pinned profile and bundle pair; and, for a member of an AR v3 group only, its group and scope. Each is rendered
+    #: only when set. A producer that does not know sets none (a stand-in older suites hand a port).
+    analysis_kind: str | None = None
+    ar_v3_group_id: str | None = None
+    ar_v3_scope_id: str | None = None
 
 
 def stage_state_body(view: StageStateView) -> dict[str, Any]:
@@ -186,6 +192,12 @@ def run_status_body(view: RunStatusView) -> dict[str, Any]:
     }
     if view.reaudit_of_run_id is not None:
         body["reaudit_of_run_id"] = view.reaudit_of_run_id
+    if view.analysis_kind is not None:
+        body["analysis_kind"] = view.analysis_kind
+        if view.ar_v3_group_id is not None:
+            body["ar_v3_group_id"] = view.ar_v3_group_id
+        if view.ar_v3_scope_id is not None:
+            body["ar_v3_scope_id"] = view.ar_v3_scope_id
     if view.analysis_profile_id is not None:
         body["analysis_profile_id"] = view.analysis_profile_id
     if view.prompt_bundle_id is not None:

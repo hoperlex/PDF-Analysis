@@ -664,8 +664,12 @@ class ArV3GroupPort(Protocol):
         self, *, version_uid: str, idempotency_key: str, relaxed_limits: bool = False,
         cost_consent: Mapping[str, Any] | None = None,
         cost_actor_uid: str | None = None,
+        started_by_user_uid: str | None = None,  # `R-151v`: the account whose request this is
     ) -> models.ArV3BetaGroup:
-        """Create six pinned runs, or replay the same group."""
+        """Create six pinned runs, or replay the same group.
+
+        `AR-V3-OPT-IN`: refused with ``409 conflict`` / ``ar_v3_start_not_enabled`` (nothing written) while a pack is
+        installed and the deployment has not allowed starts; an accepted key still replays."""
 
     def get_ar_v3_group(self, *, group_id: str) -> models.ArV3BetaGroup:
         """Read the six current child states without reselecting normative inputs."""

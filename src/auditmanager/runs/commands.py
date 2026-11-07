@@ -142,6 +142,8 @@ from auditmanager.ingest.public import (
     CommandStarted,
     payload_fingerprint,
 )
+from auditmanager.runs.analysis_kind import ANALYSIS_AR_V3_BETA, analysis_kind
+from auditmanager.runs.v3_start_switch import refuse_member_repeat
 from auditmanager.runs.provider import (
     AdmittedGroup,
     ChosenPreset,
@@ -1118,6 +1120,11 @@ def reaudit_run(
         "SELECT run_id FROM audit_run WHERE run_id = :run_id FOR UPDATE"
     ), {"run_id": source_run_id}).scalar_one_or_none()
     source = repository.get(session, source_run_id)
+    # `AR-V3-OPT-IN` (Q4). This repeat routes by the section **now**, so on a member of an AR v3 group it would start the
+    # standard analysis and call it a repeat. It is refused before the key is claimed and before anything is written; the
+    # repeat of v3 is a new group start from the form. An accepted key never has a member as its source, so no replay is lost.
+    if analysis_kind(source.analysis_profile_id, source.prompt_bundle_id) == ANALYSIS_AR_V3_BETA:
+        raise refuse_member_repeat()
     source_version = document_repo.get_version(session, VersionUid.parse(source.version_uid))
     frozen: FrozenRoute | None = None
     admitted: AdmittedGroup | None = None
