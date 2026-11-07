@@ -100,6 +100,16 @@ describe('the search: help folded, the way into the PDF on the first line of a r
     expect(hit.indexOf('>Открыть<')).toBeLessThan(hit.indexOf('<blockquote'));
   });
 
+  it('an empty first page says nothing was found and offers to clear the search; a page with results offers no such thing', () => {
+    const none = renderScreen(newClient(), createElement(NormSearchResults, { items: [], onFirst: null, onNext: null }));
+    expect(none).toContain('Ничего не найдено');
+    const tag = /<a[^>]*data-norm-search-reset=""[^>]*>/.exec(none)?.[0] ?? '';
+    expect(tag).toContain('href="/norms"');
+    expect(none).toContain('>Сбросить поиск</a>');
+    const found = renderScreen(newClient(), createElement(NormSearchResults, { items: NORM_HITS, onFirst: null, onNext: null }));
+    expect(found).not.toContain('data-norm-search-reset');
+  });
+
   it('an empty later page names the way back inside the state, once', () => {
     const markup = renderScreen(newClient(), createElement(NormSearchResults, { items: [], onFirst: () => {}, onNext: null }));
     expect(markup).toContain('На этой странице результатов нет');
