@@ -211,6 +211,16 @@ describe('the account list beside its card (`UI-A-92`, `UI-A-93`)', () => {
     expect(userCommandDone('end-sessions')).toContain('Сеансы завершены');
   });
 
+  it('flags in the list an account that still has a temporary password or an unfilled profile', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.users.list({ includeArchived: false, limit: 50 }), {
+      items: [ACCOUNT, { ...ACCOUNT, user_uid: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8E', is_default_credential: true, profile_complete: false }], page: { next_cursor: null },
+    });
+    const markup = renderScreen(client, createElement(UserList));
+    expect(markup.match(/data-user-default-credential=""/g)).toHaveLength(1);
+    expect(markup.match(/data-user-profile-incomplete=""/g)).toHaveLength(1);
+  });
+
   it('says that the account is still on its temporary password, and that the profile is not filled', () => {
     const client = newClient();
     client.setQueryData(queryKeys.users.detail(ACCOUNT.user_uid), { ...ACCOUNT, is_default_credential: true, profile_complete: false });

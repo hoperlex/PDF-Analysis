@@ -150,7 +150,12 @@ export function UserList({ selectedUid = null, onSelect }: UserListProps = {}) {
                         >{account.display_label}</Link><br /><small>{account.login}</small>
                       </td>
                       <td>{roleLabels(account.roles).join(', ') || 'Не назначены'}</td>
-                      <td>{isArchived(account) ? <span className="am-badge am-badge--inert">В архиве</span> : <span className="am-badge am-badge--ok">Действует</span>}</td>
+                      <td>
+                        {isArchived(account) ? <span className="am-badge am-badge--inert">В архиве</span> : <span className="am-badge am-badge--ok">Действует</span>}
+                        {/* What an administrator has to chase: a temporary password nobody has replaced, a profile nobody has filled. */}
+                        {account.is_default_credential ? <><br /><span className="am-note" data-user-default-credential="">Пароль временный</span></> : null}
+                        {account.profile_complete ? null : <><br /><span className="am-note" data-user-profile-incomplete="">Профиль не заполнен</span></>}
+                      </td>
                       <td data-user-last-sign-in={account.last_sign_in_at === null ? 'never' : 'at'}>{lastSignInText(account.last_sign_in_at)}</td>
                     </tr>
                   );
