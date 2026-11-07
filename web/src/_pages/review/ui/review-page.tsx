@@ -292,6 +292,9 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
 
           {mayAct ? <DecisionPanel
             currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
+            // D-343 (lane C4): the carried origin of the verdict the finding holds; a verdict the expert has just given
+            // here is direct, so the mark goes with it.
+            carriedFrom={verdict.result == null ? detail.current_verdict_carried_from : undefined}
             observationId={detail.observation.finding_observation_id as FindingObservationId}
             proposedSeverity={detail.observation.proposed_severity}
             decidedSeverity={detail.decided_severity}
