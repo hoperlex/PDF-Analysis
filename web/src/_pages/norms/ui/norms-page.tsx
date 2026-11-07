@@ -31,7 +31,7 @@ import {
 import { useSetCurrentSnapshot } from '@/features/set-current-snapshot';
 import { NormCatalogueForm, NormCatalogueTable, NormViews } from '@/widgets/norm-catalogue';
 import { NoCurrentSnapshot, NormSearchForm, NormSearchResults } from '@/widgets/norm-search';
-import { NormSnapshotHistory, NormSnapshotList } from '@/widgets/norm-snapshots';
+import { NormSnapshotHistory, NormSnapshotList, shortSnapshotKey } from '@/widgets/norm-snapshots';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import styles from './norms-page.module.css';
 
@@ -71,11 +71,6 @@ const REFUSALS: ReadonlySet<string> = new Set([
   'permission_denied', 'authentication_required', 'validation_failed', 'required_norm_unavailable',
   'unrecognized',
 ]);
-
-/** The first twelve characters of a snapshot's content key, for a line; the whole key stays in the title. */
-export function shortSnapshotKey(key: string): string {
-  return key.length > 12 ? `${key.slice(0, 12)}…` : key;
-}
 
 function CurrentSnapshotStatus({ reading }: { readonly reading: CurrentSnapshotReading }) {
   if (reading.kind === 'none') return <NoCurrentSnapshot />;

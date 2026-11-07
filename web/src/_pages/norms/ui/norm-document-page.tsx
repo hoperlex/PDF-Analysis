@@ -21,6 +21,7 @@ import { routes } from '@/shared/lib';
 import {
   normFailure, useNormContent, useNormDocument, useNormParagraphs, wantsNormPdf,
 } from '@/entities/norms';
+import { catalogueAddress } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
 import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import styles from './norms-page.module.css';
@@ -33,7 +34,12 @@ export interface NormDocumentPageProps {
 }
 
 function BackToSearch() {
-  return <Link className="am-button am-button--quiet" href={routes.norms()}>К поиску по нормам</Link>;
+  return (
+    <>
+      <Link className="am-button am-button--quiet" href={routes.norms()}>К поиску по нормам</Link>
+      <Link className="am-button am-button--quiet" href={catalogueAddress()}>К каталогу норм</Link>
+    </>
+  );
 }
 
 function Paragraphs({ normDocumentId }: { readonly normDocumentId: NormDocumentId }) {
@@ -109,12 +115,20 @@ function DocumentView({ normDocumentId, page }: { readonly normDocumentId: NormD
         <>
           <div className={styles.panel}>
             <NormDocumentFacts document={document.data} />
+            {/* Until a page is asked for the PDF is one line under the facts; an opened page gets a panel of its own. */}
+            {page === null ? (
+              <section aria-label="PDF документа">
+                <NormPdf document={document.data} page={page} documentUrl={null} isLoading={false} error={null} />
+              </section>
+            ) : null}
           </div>
-          <section className={styles.panel} aria-label="PDF документа" data-norm-pdf-page={page ?? undefined}>
-            {wantsNormPdf(document.data, page)
-              ? <OpenPdf document={document.data} page={page} />
-              : <NormPdf document={document.data} page={page} documentUrl={null} isLoading={false} error={null} />}
-          </section>
+          {page === null ? null : (
+            <section className={styles.panel} aria-label="PDF документа" data-norm-pdf-page={page}>
+              {wantsNormPdf(document.data, page)
+                ? <OpenPdf document={document.data} page={page} />
+                : <NormPdf document={document.data} page={page} documentUrl={null} isLoading={false} error={null} />}
+            </section>
+          )}
         </>
       ) : null}
       <div className={styles.panel}>

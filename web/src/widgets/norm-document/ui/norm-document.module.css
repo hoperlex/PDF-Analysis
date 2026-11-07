@@ -3,26 +3,47 @@
   max-width: 100%;
 }
 
+/* How many paragraphs the page holds; the list under it is one framed block of hairline rows, not a card each. */
+.count {
+  margin: 0 0 var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .paragraphs ol {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: var(--am-gap-sm);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-paper);
+  overflow: hidden;
 }
 
+/* The text and the way to its PDF page side by side; a warning about the text spans both. */
 .paragraph {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--am-gap-xs) var(--am-gap-sm);
   min-width: 0;
   max-width: 100%;
+  margin: 0;
   padding: var(--am-gap-xs) var(--am-gap-sm);
-  border: 1px solid var(--am-line-soft);
-  border-radius: var(--am-radius);
-  background: var(--am-paper);
+  border-bottom: 1px solid var(--am-grid-line);
   overflow-wrap: anywhere;
 }
 
+.paragraph:last-child {
+  border-bottom: 0;
+}
+
 .paragraph p {
-  margin: 0 0 var(--am-gap-xs);
+  margin: 0;
+}
+
+.paragraph > p:first-child:not(.text) {
+  grid-column: 1 / -1;
 }
 
 .unreliable {
@@ -41,4 +62,21 @@
 
 .facts p {
   margin: 0 0 var(--am-gap-xs);
+}
+
+.facts p:last-child {
+  margin-bottom: 0;
+}
+
+.title {
+  font-weight: 600;
+}
+
+/* Kind, edition, pages and paragraphs: four short facts that share one wrapping line. */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-2xs) var(--am-gap);
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }

@@ -8,14 +8,18 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { queryKeys } from '@/shared/api';
-import { NormsPage } from '@/_pages/norms';
-import { shortSnapshotKey } from '@/_pages/norms/ui/norms-page';
+import { NormDocumentPage, NormsPage } from '@/_pages/norms';
 import { NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT } from '@/entities/norms';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
+import { NormDocumentFacts, NormParagraphList } from '@/widgets/norm-document';
 import { NormSearchResults } from '@/widgets/norm-search';
+import { NormSnapshotHistory, NormSnapshotList, shortSnapshotKey } from '@/widgets/norm-snapshots';
 
 import { newClient, renderScreen } from '../screens/harness';
-import { NORM_CATALOGUE_ITEMS, NORM_CATALOGUE_PAGE, NORM_HITS, NORM_SNAPSHOTS } from './fixtures';
+import {
+  NORM_CATALOGUE_ITEMS, NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
+  normDocument,
+} from './fixtures';
 
 const SNAPSHOTS = queryKeys.norms.snapshots(undefined, NORM_SNAPSHOT_LIMIT);
 const EVENTS = queryKeys.norms.events(undefined, NORM_EVENT_PAGE_LIMIT);
@@ -140,5 +144,96 @@ describe('the catalogue: filters that can be reset, a table Tab reaches', () => 
     }));
     expect(whole).toContain('Документов в текущем снимке: 2.');
     expect(whole).not.toContain('На странице:');
+  });
+});
+
+describe('the snapshots and their history: a row is a line or two, not six paragraphs', () => {
+  const list = () => renderScreen(newClient(), createElement(NormSnapshotList, {
+    items: NORM_SNAPSHOTS, current: { kind: 'current', snapshot: NORM_SNAPSHOTS[0]! }, canDesignate: true, busy: false, onDesignate: () => {},
+  }));
+  const rows = (markup: string) => markup.split('<li ').slice(1).map((row) => `<li ${row.slice(0, row.indexOf('</li>'))}`);
+
+  it('keeps the attributes the journey addresses and puts the control on the first line, before the counts', () => {
+    const [current = '', qualified = '', incomplete = ''] = rows(list());
+    expect(current).toContain('data-norm-snapshot-current="true"');
+    expect(current).not.toContain('<button');
+    expect(qualified).toContain('data-norm-snapshot-qualified="true"');
+    expect(qualified.indexOf('>Сделать текущим<')).toBeGreaterThan(-1);
+    expect(qualified.indexOf('>Сделать текущим<')).toBeLessThan(qualified.indexOf('Документов:'));
+    expect(qualified).toContain('Может стать текущим.');
+    expect(incomplete).toContain('data-norm-snapshot-qualified="false"');
+    expect(incomplete).toContain('Нельзя сделать текущим: поисковый индекс построен не полностью.');
+    expect(incomplete).not.toContain('<button');
+  });
+
+  it('counts the paragraphs, names the index and shortens the content key, keeping the whole key in the title', () => {
+    const [current = ''] = rows(list());
+    const key = NORM_SNAPSHOTS[0]?.content_key ?? '';
+    expect(current).toContain('Документов: 674. Абзацев: 191204, из них с ненадёжно распознанным текстом: 312.');
+    expect(current).toContain('Поисковый индекс:');
+    expect(current).toContain(`title="${key}"`);
+    expect(current).not.toContain(`>${key}<`);
+    // Six paragraphs became two.
+    expect(current.match(/<p[ >]/g)).toHaveLength(2);
+  });
+
+  it('draws a designation on one line: when, what changed, who did it', () => {
+    const markup = renderScreen(newClient(), createElement(NormSnapshotHistory, { items: NORM_EVENTS, onFirst: null, onNext: null }));
+    const [first = '', second = ''] = rows(markup);
+    expect(first).toContain('Вместо <code>');
+    expect(first).toContain('Назначил <code>');
+    expect(second).toContain('Назначен первый текущий снимок ');
+    expect(first).not.toContain('<p');
+    expect(markup.match(/data-norm-event=/g)).toHaveLength(2);
+  });
+});
+
+describe('one norm document: facts on a line, paragraphs with their page beside them', () => {
+  it('prints the facts of the document in one paragraph and keeps what the journey reads', () => {
+    const markup = renderScreen(newClient(), createElement(NormDocumentFacts, { document: normDocument() }));
+    expect(markup).toContain(`data-norm-document="${NORM_DOCUMENT_ID}"`);
+    expect(markup).toContain('Страниц в PDF: 48. Абзацев: 412.');
+    expect(markup).toContain('Вид документа: СП');
+    expect(markup).toContain('Редакция от <time datetime="2022-05-13">2022-05-13</time>');
+    expect(markup.match(/<p[ >]/g)).toHaveLength(4);
+    const undated = renderScreen(newClient(), createElement(NormDocumentFacts, { document: normDocument({ drawn_on: null, unreliable_paragraph_count: 0 }) }));
+    expect(undated).not.toContain('Редакция от');
+    expect(undated).not.toContain('data-norm-unreliable-count');
+  });
+
+  it('counts the paragraphs of the page, and stands the pager over a long list as well as under it', () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({ ...NORM_PARAGRAPHS[1]!, norm_paragraph_id: `npar_01J9ZQ8K7NHVXW3T2R5M6P4Q${String(index).padStart(2, '0')}` }));
+    const long = renderScreen(newClient(), createElement(NormParagraphList, { normDocumentId: NORM_DOCUMENT_ID, items: many, onFirst: () => {}, onNext: () => {} }));
+    expect(long).toContain('Абзацев на этой странице: 12; дальше — по кнопке «Дальше».');
+    expect(long.match(/>Дальше</g)).toHaveLength(2);
+    const short = renderScreen(newClient(), createElement(NormParagraphList, { normDocumentId: NORM_DOCUMENT_ID, items: NORM_PARAGRAPHS, onFirst: null, onNext: () => {} }));
+    expect(short).toContain('Абзацев на этой странице: 3; дальше');
+    expect(short.match(/>Дальше</g)).toHaveLength(1);
+  });
+
+  it('an empty later page carries the way back inside its state', () => {
+    const markup = renderScreen(newClient(), createElement(NormParagraphList, { normDocumentId: NORM_DOCUMENT_ID, items: [], onFirst: () => {}, onNext: null }));
+    expect(markup).toContain('На этой странице абзацев нет');
+    expect(markup.match(/В начало/g)).toHaveLength(1);
+    expect(markup).not.toContain('data-norm-paragraphs-count');
+  });
+
+  it('draws the closed PDF as one line under the facts, and an opened page as a panel of its own', () => {
+    const seeded = newClient();
+    seeded.setQueryData(queryKeys.norms.document(NORM_DOCUMENT_ID), normDocument());
+    seeded.setQueryData(queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, 200), {
+      items: NORM_PARAGRAPHS, page: LAST, source_attribution: 'consultant_plus',
+    });
+    const closed = renderScreen(seeded, createElement(NormDocumentPage, { normDocumentId: NORM_DOCUMENT_ID, page: null }));
+    expect(closed).toContain('data-norm-pdf="closed"');
+    expect(closed).not.toContain('data-norm-pdf-page');
+    expect(closed.match(/aria-label="PDF документа"/g)).toHaveLength(1);
+    const opened = renderScreen(seeded, createElement(NormDocumentPage, { normDocumentId: NORM_DOCUMENT_ID, page: 49 }));
+    expect(opened).toContain('data-norm-pdf-page="49"');
+    expect(opened.match(/aria-label="PDF документа"/g)).toHaveLength(1);
+    expect(opened).toContain('Такой страницы в документе нет');
+    // Both addresses back are on the page.
+    expect(closed).toContain('К поиску по нормам');
+    expect(closed).toContain('К каталогу норм');
   });
 });

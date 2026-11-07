@@ -19,6 +19,11 @@ import { buildStateLabel } from '@/entities/norms';
 
 import styles from './norm-snapshots.module.css';
 
+/** The first twelve characters of a snapshot's content key, for a line; the whole key stays in the title. */
+export function shortSnapshotKey(key: string): string {
+  return key.length > 12 ? `${key.slice(0, 12)}…` : key;
+}
+
 /** Why a snapshot that is not current cannot become current, from the server's own facts. */
 function unqualifiedReason(snapshot: NormSnapshot): string {
   return snapshot.build_state === 'complete'
@@ -47,24 +52,28 @@ function SnapshotRow({
       data-norm-snapshot-qualified={snapshot.qualified ? 'true' : 'false'}
       data-norm-build-state={snapshot.build_state}
     >
-      <p>
-        <strong>{snapshot.current ? 'Текущий снимок' : 'Снимок'}</strong> <code>{snapshot.content_key}</code>
-      </p>
-      <p>Загружен: <time dateTime={snapshot.created_at}>{formatInstant(snapshot.created_at)}</time></p>
+      {/* The snapshot, when it was loaded and the one control on the first line; the counts and the verdict under it. */}
+      <div className={styles.head}>
+        <span className={styles.title}>
+          <strong>{snapshot.current ? 'Текущий снимок' : 'Снимок'}</strong>{' '}
+          <code title={snapshot.content_key}>{shortSnapshotKey(snapshot.content_key)}</code>
+        </span>
+        <span className={styles.when}>
+          Загружен: <time dateTime={snapshot.created_at}>{formatInstant(snapshot.created_at)}</time>
+        </span>
+        {offered ? (
+          <button type="button" className="am-button am-button--quiet am-button--small" disabled={busy} onClick={() => onDesignate(snapshot)}>
+            Сделать текущим
+          </button>
+        ) : null}
+      </div>
       <p>
         Документов: {snapshot.document_count}. Абзацев: {snapshot.paragraph_count}, из них с
-        ненадёжно распознанным текстом: {snapshot.unreliable_count}.
+        ненадёжно распознанным текстом: {snapshot.unreliable_count}. Поисковый индекс:{' '}
+        {buildStateLabel(snapshot.build_state)}.
+        {snapshot.current ? '' : ` ${snapshot.qualified ? 'Может стать текущим.' : unqualifiedReason(snapshot)}`}
       </p>
-      <p>Поисковый индекс: {buildStateLabel(snapshot.build_state)}.</p>
-      {snapshot.current ? null : (
-        <p>{snapshot.qualified ? 'Может стать текущим.' : unqualifiedReason(snapshot)}</p>
-      )}
       <p className="am-form__hint">Идентификатор <code>{snapshot.norms_snapshot_id}</code></p>
-      {offered ? (
-        <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={() => onDesignate(snapshot)}>
-          Сделать текущим
-        </button>
-      ) : null}
     </li>
   );
 }
@@ -120,15 +129,15 @@ export function NormSnapshotHistory({ items, onFirst, onNext }: NormSnapshotHist
       ) : (
         <ol>
           {items.map((event) => (
-            <li key={event.event_id} className={styles.row} data-norm-event={event.event_id}>
-              <p><time dateTime={event.changed_at}>{formatInstant(event.changed_at)}</time></p>
-              <p>
+            <li key={event.event_id} className={styles.event} data-norm-event={event.event_id}>
+              <time dateTime={event.changed_at}>{formatInstant(event.changed_at)}</time>
+              <span className={styles.change}>
                 {event.from_norms_snapshot_id === null
                   ? 'Назначен первый текущий снимок '
                   : <>Вместо <code>{event.from_norms_snapshot_id}</code> текущим стал </>}
                 <code>{event.to_norms_snapshot_id}</code>
-              </p>
-              <p className="am-form__hint">Назначил <code>{event.actor_user_uid}</code></p>
+              </span>
+              <span className="am-form__hint">Назначил <code>{event.actor_user_uid}</code></span>
             </li>
           ))}
         </ol>
