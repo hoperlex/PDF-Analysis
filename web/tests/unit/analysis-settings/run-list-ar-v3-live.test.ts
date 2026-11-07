@@ -4,12 +4,13 @@
  *
  * The run list used to mount the control, hold its idempotency key and its mutation observer, and keep it
  * drawn while a start was in flight although the pack status stopped being readable or the list itself
- * stopped showing. That owner decision removed the control from the run list: the ordinary start is the
- * only start there. The control, `useArV3GroupStartIntent` and the start's mutation remain, for a caller
- * that mounts them, so the file now pins two things:
- *
- *   - the run list mounts NO six-check control, whatever the pack status or the list does, and does not
- *     read the pack (`the run list ...`);
+ * stopped showing. The owner decision of 2026-10-30 removed the control from the run list: the ordinary start
+ * was the only start there. `AR-V3-OPT-IN` (2026-11-07) brought v3 back as an opt-in choice on the start form of an
+ * АР version, offered on one answer only (`run-list-analysis-choice*.test.ts` pin that, rendered and live, with the
+ * radio, the key and the observer the run list now holds). This file keeps the half of the old pin that stays true:
+ * the run list mounts NO six-check control for a version that cannot take the choice, whatever the pack status or
+ * the list does, and does not read the pack (`the run list ...`); and it pins what a caller that mounts the control
+ * relies on:
  *   - what a caller that DOES mount the control relies on, which the run list's tests used to prove through
  *     it: the key is the same on a retry and after the control was taken off the page, the observer opens
  *     the started group although no control is mounted, a pending start leaves its button disabled and a
@@ -193,7 +194,7 @@ function pagedClient(): QueryClient {
   return client;
 }
 
-describe('the run list mounts no six-check control, whatever the pack and the list do', () => {
+describe('the run list mounts no six-check control for a version that cannot take the choice, whatever the pack and the list do', () => {
   it('draws the ordinary start on an installed pack, no control, and does not observe the pack status', async () => {
     const client = newClient();
     live = await mountLive(listTree(client));

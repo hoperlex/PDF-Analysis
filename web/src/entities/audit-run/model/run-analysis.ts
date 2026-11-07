@@ -15,7 +15,7 @@
  *     (`start_allowed`): naming the default on every row of a deployment that has no other would be noise.
  *
  * No wording here says the standard analysis is replaced, superseded or discouraged, and none says anything about review
- * by a human, so the label cannot collide with `SHOW_REVIEW_INDICATION` (`R-146ba`).
+ * by a human, so the label cannot collide with the review-indication switch (`R-146ba`).
  */
 
 import type { RunStatus } from '@/shared/api';

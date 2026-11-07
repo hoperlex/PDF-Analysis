@@ -48,7 +48,7 @@ export interface AnalysisStartProps {
 export function AnalysisStart({ projectUid, versionUid, onRunStarted }: AnalysisStartProps) {
   const router = useRouter();
   const mayAct = useMayActAsExpert();
-  const allowed = useArV3StartAllowed(true);
+  const allowed = useArV3StartAllowed();
   // Held here, for as long as the list is: see the header. Called whether or not the radio is drawn.
   const intent = useArV3GroupStartIntent(versionUid);
   const [analysis, setAnalysis] = useState<AnalysisChoiceValue>('standard');

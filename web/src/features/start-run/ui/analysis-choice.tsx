@@ -14,7 +14,7 @@
  *     with a flag: the form below the radio is the other analysis's own form.
  *
  * No option is described as better, newer or a replacement of the other, and none says anything about review by a
- * human (`SHOW_REVIEW_INDICATION`, `R-146ba`).
+ * human (the review-indication switch, `R-146ba`).
  */
 
 import { useId } from 'react';

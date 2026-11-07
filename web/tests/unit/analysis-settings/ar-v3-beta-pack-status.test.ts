@@ -88,6 +88,17 @@ describe('the pack status classification has exactly three outcomes', () => {
     expect(reading.promptBundleId).toBe(BUNDLE_ID);
   });
 
+  it('reads the allowance to start (`AR-V3-OPT-IN`): true and false as they are, absent as not allowed', () => {
+    const allowed = readArV3PackStatus(installedPackFixture({ start_allowed: true }));
+    const refused = readArV3PackStatus(installedPackFixture({ start_allowed: false }));
+    const silent = readArV3PackStatus(installedPackFixture());
+    expect([allowed.kind, refused.kind, silent.kind]).toEqual(['installed', 'installed', 'installed']);
+    expect(allowed.kind === 'installed' && allowed.startAllowed).toBe(true);
+    expect(refused.kind === 'installed' && refused.startAllowed).toBe(false);
+    // A server that does not say (or an older one) never has a screen offer the choice of v3.
+    expect(silent.kind === 'installed' && silent.startAllowed).toBe(false);
+  });
+
   it('reads not_installed only when it carries nothing else', () => {
     expect(readArV3PackStatus(NOT_INSTALLED_PACK)).toEqual({ kind: 'not_installed' });
     expect(faultOf({ state: 'not_installed', pack_sha256: REAL_DIGEST })).toBe('members_beside_not_installed');
@@ -118,6 +129,9 @@ describe('the pack status classification has exactly three outcomes', () => {
       ['scopes out of order', { ...installed, scope_ids: ['F2', 'F1', 'A1', 'A2', 'S1', 'S2'] }, 'bad_scope_list'],
       ['a repeated scope', { ...installed, scope_ids: ['F1', 'F1', 'A1', 'A2', 'S1', 'S2'] }, 'bad_scope_list'],
       ['scopes that are not an array', { ...installed, scope_ids: 'F1,F2,A1,A2,S1,S2' }, 'bad_scope_list'],
+      ['an allowance that is a word', { ...installed, start_allowed: 'true' }, 'bad_start_allowed'],
+      ['an allowance that is a number', { ...installed, start_allowed: 1 }, 'bad_start_allowed'],
+      ['an allowance that is null', { ...installed, start_allowed: null }, 'bad_start_allowed'],
       ['a null review', { ...installed, review: null }, 'bad_attestation'],
       [
         'a blank reviewer',
@@ -311,6 +325,30 @@ describe('the pack panel in each of its five states', () => {
       'Запись рецензента приложена при установке пакета; система её не проверяет, цитаты остаются ' +
         'предварительными и требуют проверки эксперта.',
     );
+  });
+
+  it('installed: says whether this server allows a start of AR v3, for every role, read-only (`AR-V3-OPT-IN`)', () => {
+    const read = (over: Record<string, unknown>) => {
+      const client = newClient();
+      client.setQueryData(queryKeys.runs.arV3PackStatus(), { ...installedPackFixture(), ...over });
+      return panel(client);
+    };
+    const allowed = read({ start_allowed: true });
+    expect(allowed).toContain('data-ar-v3-start-allowed="allowed"');
+    expect(allowed).toContain('<dt>Запуск АР v3</dt>');
+    expect(allowed).toContain('разрешён на этом сервере');
+    expect(allowed).not.toContain('не разрешён');
+    for (const markup of [read({ start_allowed: false }), read({})]) {
+      expect(markup).toContain('data-ar-v3-start-allowed="not_allowed"');
+      expect(markup).toContain('не разрешён на этом сервере');
+      expect(markup).toContain('Версии АР запускаются стандартным анализом');
+    }
+    // A line, not a control: nothing here starts, allows or withdraws anything.
+    expect(allowed).not.toContain('<button');
+    // No wording says the standard analysis is replaced or that anything was reviewed by a human.
+    for (const markup of [allowed, read({})]) {
+      expect(markup).not.toMatch(/замен[а-я]* стандартн|устарел|лучше/);
+    }
   });
 
   it('installed: the 64-character digest is nowhere in the markup, only its first twelve characters', () => {

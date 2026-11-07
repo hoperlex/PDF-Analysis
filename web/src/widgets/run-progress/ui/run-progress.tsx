@@ -191,10 +191,16 @@ function V3PublishedSentence({ findingCount }: { readonly findingCount: number |
  * the server whether v3 is allowed; a v3 run needs no answer.
  */
 function AnalysisFact({ status }: { readonly status: RunStatus }) {
-  const standard = runAnalysisKind(status) === 'standard';
-  const bothOffered = useArV3StartAllowed(standard);
+  return runAnalysisKind(status) === 'standard' ? <StandardAnalysisFact status={status} /> : <AnalysisLine status={status} />;
+}
+
+/** The only run page that asks the server: a standard run, to learn whether there is another analysis to tell it from. */
+function StandardAnalysisFact({ status }: { readonly status: RunStatus }) {
+  return useArV3StartAllowed() ? <AnalysisLine status={status} /> : null;
+}
+
+function AnalysisLine({ status }: { readonly status: RunStatus }) {
   const analysis = runAnalysis(status);
-  if (standard && !bothOffered) return null;
   return (
     <>
       <dt>Анализ</dt>
