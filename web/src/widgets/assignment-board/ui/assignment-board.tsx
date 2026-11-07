@@ -35,6 +35,7 @@ import {
 import type { ExpertOption } from '@/features/transition-assignment';
 import { AssignmentActions } from '@/features/transition-assignment';
 
+import { filterAssignments } from '../model/filter-assignments';
 import { AssignmentHistory } from './assignment-history';
 import styles from './assignment-board.module.css';
 
@@ -165,6 +166,7 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
   const admin = roles.includes('admin');
   const [status, setStatus] = useState<AssignmentStatus | ''>('');
   const [mine, setMine] = useState(false);
+  const [text, setText] = useState('');
   const [cursor, setCursor] = useState<string | undefined>();
   const query = useAssignments({
     limit: ASSIGNMENT_PAGE_LIMIT,
@@ -188,8 +190,8 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
   return (
     <div>
       {overview === null ? null : <AssignmentStatusChips overview={overview} selected={status} onSelect={choose} />}
-      {admin ? (
-        <div className={styles.filters}>
+      <div className={styles.filters} role="group" aria-label="Фильтры списка">
+        {admin ? (
           <label className={styles.filter}>
             <input
               type="checkbox"
@@ -201,8 +203,20 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
             />{' '}
             Только мои
           </label>
-        </div>
-      ) : null}
+        ) : null}
+        <label className={styles.filter}>
+          Найти на странице{' '}
+          <input
+            type="search"
+            value={text}
+            placeholder="Проект, документ, эксперт"
+            maxLength={120}
+            autoComplete="off"
+            data-assignment-search=""
+            onChange={(event) => setText(event.target.value)}
+          />
+        </label>
+      </div>
       {query.isPending ? <LoadingState what="назначения" /> : null}
       {query.isError ? (() => {
         const failure = assignmentFailure(query.error);
@@ -230,7 +244,25 @@ export function AssignmentBoard({ roles, viewerUid, experts, projectUid = null }
           />
         ) : (
           <>
-            <AssignmentRows items={query.data.items} roles={roles} viewerUid={viewerUid} experts={experts} />
+            {(() => {
+              const visible = filterAssignments(query.data.items, text);
+              return visible.length === 0 ? (
+                <EmptyState
+                  title="На этой странице ничего не нашлось."
+                  detail="Измените слова поиска или перейдите к следующей странице."
+                  action={<button type="button" className="am-button am-button--quiet am-button--small" onClick={() => setText('')}>Сбросить поиск</button>}
+                />
+              ) : (
+                <>
+                  {text.trim() === '' ? null : (
+                    <p className="am-note" aria-live="polite" data-assignment-shown={visible.length}>
+                      Показано {visible.length} из {query.data.items.length} на этой странице.
+                    </p>
+                  )}
+                  <AssignmentRows items={visible} roles={roles} viewerUid={viewerUid} experts={experts} />
+                </>
+              );
+            })()}
             <div className="am-pager">
               <span className="am-note" aria-live="polite" data-assignment-total={query.data.total}>Найдено: {query.data.total}</span>
               {cursor === undefined ? null : (
