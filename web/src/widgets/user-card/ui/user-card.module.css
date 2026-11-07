@@ -1,0 +1,58 @@
+/* One account's card (`UI-A-92`): the bar, the identity line and the facts. Token reads only. */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-sm);
+  margin-bottom: var(--am-gap);
+}
+
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-md);
+  margin-bottom: var(--am-gap);
+}
+
+.name {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap-md);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+.facts dt {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.login {
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
+}
+
+@media (max-width: 520px) {
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
