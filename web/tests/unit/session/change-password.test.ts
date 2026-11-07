@@ -460,7 +460,7 @@ describe('the screen this seam redirects to can render every outcome it produces
   it('starts on the current password and offers the way out the original has: «Выйти» for a forced change, the profile otherwise', () => {
     const forced = render(createElement(ChangePasswordPage, { mustChange: true }));
     expect(forced).toMatch(/<input[^>]*id="change-password-current"[^>]*autofocus=""/);
-    expect(forced).toMatch(/<form[^>]*method="post"[^>]*action="\/bff\/v1\/session\/end"[^>]*>[\s\S]*?Выйти[\s\S]*?<\/form>/);
+    expect(forced).toMatch(/<form[^>]*action="\/bff\/v1\/session\/end"[^>]*method="post"[^>]*>[\s\S]*?Выйти[\s\S]*?<\/form>/);
     expect(forced).not.toContain('data-change-password-back');
     const free = render(createElement(ChangePasswordPage, {}));
     expect(free).toContain('data-change-password-back=""');
