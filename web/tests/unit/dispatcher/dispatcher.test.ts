@@ -16,14 +16,16 @@ import { ASSIGNMENT_STATUS_VALUES, ApiError, queryKeys } from '@/shared/api';
 import {
   ASSIGNMENT_PAGE_LIMIT,
   ASSIGNMENT_STATUS_LABELS,
+  ASSIGNMENT_STATUS_TONES,
   assignmentFailure,
   assignmentScope,
   canAssignWork,
+  emptyAssignmentsTitle,
   isOpenAssignment,
   movesFor,
 } from '@/entities/assignment';
 import { USER_PAGE_LIMIT } from '@/entities/user';
-import { AssignmentRows, AssignmentStatusChips } from '@/widgets/assignment-board';
+import { AssignmentRows, AssignmentStatusChips, filterAssignments } from '@/widgets/assignment-board';
 
 import { newClient, renderScreen } from '../screens/harness';
 
@@ -245,3 +247,57 @@ describe('the dispatcher screen', () => {
     expect(markup).toContain('data-assignment-move="completed"');
   });
 });
+
+describe('the dispatcher\'s polish (`UI-PARITY` P5)', () => {
+  it('gives every status a tone and draws the badge in it', () => {
+    expect(Object.keys(ASSIGNMENT_STATUS_TONES).sort()).toEqual([...ASSIGNMENT_STATUS_VALUES].sort());
+    const markup = renderScreen(newClient(), createElement(AssignmentRows, {
+      items: [assignment('returned'), assignment('in_progress'), assignment('done')], roles: ['admin'], viewerUid: ME, experts: [],
+    }));
+    expect(markup).toContain('am-badge--degraded');
+    expect(markup).toContain('am-badge--active');
+    expect(markup).toContain('am-badge--ok');
+  });
+
+  it('marks the viewer\'s own rows, and only those', () => {
+    const markup = renderScreen(newClient(), createElement(AssignmentRows, {
+      items: [assignment('assigned'), assignment('returned', { assignee_user_uid: OTHER, assignee_label: 'Экспертова Д. Д.' })],
+      roles: ['admin'], viewerUid: ME, experts: [],
+    }));
+    expect(markup.match(/ \(вы\)/g)).toHaveLength(1);
+    expect(markup).toContain('aria-expanded="false"');
+  });
+
+  it('names the filter that made the list empty, and never calls an empty filter an empty system', () => {
+    expect(emptyAssignmentsTitle('returned', false)).toBe('Назначений в состоянии «Возвращено» нет.');
+    expect(emptyAssignmentsTitle('', true)).toBe('Вам не назначено ничего.');
+    expect(emptyAssignmentsTitle('', false)).toBe('Назначений нет.');
+  });
+
+  it('narrows a page by the words of the project, document, expert, assigning administrator, note or reason', () => {
+    const items = [
+      assignment('assigned', { project_name: 'Школа', note: 'срочно' }),
+      assignment('returned', { project_name: 'Больница', document_title: 'КЖ-1', assignee_label: 'Экспертова Д. Д.', status_reason: 'Не мой раздел' }),
+    ];
+    expect(filterAssignments(items, '')).toEqual(items);
+    expect(filterAssignments(items, '   ')).toEqual(items);
+    expect(filterAssignments(items, 'ШКОЛА срочно')).toEqual([items[0]]);
+    expect(filterAssignments(items, 'экспертова кж')).toEqual([items[1]]);
+    expect(filterAssignments(items, 'раздел')).toEqual([items[1]]);
+    expect(filterAssignments(items, 'иванов')).toEqual(items);
+    expect(filterAssignments(items, 'нет такого')).toEqual([]);
+  });
+
+  it('draws the search beside «Только мои» for an administrator and alone for an expert', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.assignments.list({ limit: ASSIGNMENT_PAGE_LIMIT }), { items: [assignment('assigned')], page: { next_cursor: null }, total: 1, overview: [] });
+    client.setQueryData(queryKeys.account.me(), account(['expert'], { user_uid: ME }));
+    const expert = renderScreen(client, createElement(DispatcherPage, { roles: ['expert'] }));
+    expect(expert).toContain('data-assignment-search=""');
+    expect(expert).not.toContain('Только мои');
+    const admin = renderScreen(client, createElement(DispatcherPage, { roles: ['admin'] }));
+    expect(admin).toContain('data-assignment-search=""');
+    expect(admin).toContain('Только мои');
+  });
+});
+

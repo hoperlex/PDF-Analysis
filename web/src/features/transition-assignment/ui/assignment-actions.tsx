@@ -77,6 +77,7 @@ export function AssignmentActions({ assignment, moves, experts = [] }: Assignmen
         <form
           className={styles.draft}
           data-assignment-draft={draft.kind}
+          onKeyDown={(event) => { if (event.key === 'Escape' && !move.isPending) setDraft(null); }}
           onSubmit={(event) => {
             event.preventDefault();
             if (draft.kind === 'reassigned') {
@@ -94,6 +95,7 @@ export function AssignmentActions({ assignment, moves, experts = [] }: Assignmen
               <select
                 value={draft.assignee}
                 required
+                autoFocus
                 onChange={(event) => setDraft({ ...draft, assignee: event.target.value })}
               >
                 <option value="">Выберите эксперта</option>
@@ -112,9 +114,11 @@ export function AssignmentActions({ assignment, moves, experts = [] }: Assignmen
               maxLength={2000}
               rows={2}
               required={draft.kind === 'returned'}
+              autoFocus={draft.kind !== 'reassigned'}
               onChange={(event) => setDraft({ ...draft, reason: event.target.value })}
             />
           </label>
+          {draft.kind === 'reassigned' ? <p className="am-form__hint">Сейчас ответственный: {assignment.assignee_label}.</p> : null}
           <div className={styles.buttons}>
             <button type="submit" className="am-button am-button--small" disabled={move.isPending}>
               {ASSIGNMENT_MOVE_LABELS[draft.kind]}

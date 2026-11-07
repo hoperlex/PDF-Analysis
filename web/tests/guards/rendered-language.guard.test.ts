@@ -5703,6 +5703,20 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       'project turns out to have published nothing. Same mechanism: the component that ' +
       'would render it is never mounted by a single static pass.',
   },
+  {
+    label: 'На этой странице ничего не нашлось.',
+    why:
+      "«Диспетчер»'s answer when the typed search leaves nothing of the page already read " +
+      '(`UI-PARITY` P5). The search text is a `useState` the administrator fills, so one static pass starts ' +
+      'with it empty and the page whole; the pure narrowing is held by `filterAssignments` in `tests/unit/dispatcher`.',
+  },
+  {
+    label: 'Под фильтр ничего не подошло.',
+    why:
+      "«Журнал входов»'s answer when the kind, name or day filters leave nothing of the events " +
+      'already read (`UI-A-94`). The filters are a `useState` the administrator sets, so one static pass starts with ' +
+      'them empty and every event shown; the pure narrowing is held by `filterAuthEvents` in `tests/unit/auth-events`.',
+  },
 ];
 
 /**

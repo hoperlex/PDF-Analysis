@@ -68,7 +68,7 @@ function AdministratorTools({ roles, viewerUid, projectUid }: { readonly roles: 
             Список экспертов не загружен — назначить работу сейчас нельзя.
           </p>
         ) : null}
-        <CreateAssignmentForm experts={experts} />
+        <CreateAssignmentForm key={projectUid ?? 'all'} experts={experts} defaultProjectUid={projectUid} />
       </section>
       <section className={`am-section ${styles.panel}`} data-dispatcher-list="">
         <h2>Назначения</h2>

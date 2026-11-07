@@ -1,7 +1,7 @@
 .hero {
   flex-direction: column;
   gap: var(--am-gap-sm);
-  padding: 18px;
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: radial-gradient(circle at 95% 0%, var(--am-accent-light), transparent 44%),
@@ -11,7 +11,7 @@
 
 .layout {
   display: grid;
-  gap: 16px;
+  gap: var(--am-gap);
   min-width: 0;
 }
 
@@ -22,7 +22,7 @@
 .panel {
   min-width: 0;
   margin-top: 0;
-  padding: 18px;
+  padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-paper);
