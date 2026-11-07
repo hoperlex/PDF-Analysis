@@ -740,6 +740,12 @@ dd > p:last-child {
 }
 
 table {
+  /*
+   * The containing block of whatever is absolutely positioned inside it. A visually hidden label in a header cell (1 px, clipped,
+   * `position: absolute`) otherwise had the page as its containing block, so the scrolling wrapper around a wide table did not
+   * clip it and it stretched the page to 807 px on 23 comparison screens at 390 and 768 px.
+   */
+  position: relative;
   border-collapse: collapse;
   width: 100%;
   font-size: var(--am-text-sm);
