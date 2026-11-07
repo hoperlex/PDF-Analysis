@@ -576,6 +576,17 @@ body {
   padding: 0;
 }
 
+/*
+ * Focus and anchor jumps clear the pinned furniture: the top strip at a desktop width (44 px) and the bar at a narrow one
+ * (about 48 px) are both sticky, and without this a control reached with Tab, or a `#fragment`, scrolled in under them.
+ */
+html {
+  scroll-padding-top: calc(var(--am-strip-height) + var(--am-gap-sm));
+  /* A phone turned sideways keeps the type size the stylesheet gave it. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--am-font);
   font-size: var(--am-text-base);
