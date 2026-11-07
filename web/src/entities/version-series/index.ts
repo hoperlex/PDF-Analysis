@@ -60,6 +60,7 @@ export {
   OVERVIEW_FILTERS,
   READY_SENTENCE,
   SORT_PRESETS,
+  STORED_VIEW_KEY,
   anythingRunning,
   codeOf,
   countsOf,
@@ -70,7 +71,9 @@ export {
   nextSort,
   nextStepSentence,
   parseSort,
+  parseStoredView,
   sortValue,
+  storedViewOf,
   visibleSets,
 } from './model/overview-view';
 export type { VerdictPart } from './model/verdict';

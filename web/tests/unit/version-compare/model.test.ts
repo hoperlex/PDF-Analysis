@@ -18,6 +18,7 @@ import {
   COMPARISON_CONSTRAINT_SENTENCES,
   COMPARISON_DEPENDENCY_SENTENCES,
   EMPTY_DRAFT,
+  INITIAL_VIEW,
   NO_REFERENCE_SHEET,
   SOLE_SHEET,
   WRONG_COLUMN,
@@ -48,12 +49,14 @@ import {
   pairOfRow,
   pairTally,
   parseDragged,
+  parseStoredView,
   rebase,
   referencePage,
   removeAt,
   removeLast,
   requestOf,
   splitDirection,
+  storedViewOf,
   canRestart,
   continueOf,
   hasLeftovers,
@@ -405,6 +408,26 @@ describe('the search, the mark and the sorts of the overview', () => {
     expect(nextSort({ key: 'code', direction: 'asc' }, 'versions')).toEqual({ key: 'versions', direction: 'desc' });
     const byAction = visibleSets(sets, { query: '', mark: '', filter: 'all', sort: { key: 'step', direction: 'asc' } });
     expect(groupOf(byAction[0] as never)).toBe('failed');
+  });
+});
+
+describe('what the table keeps between visits (UI-B-97: vc-projects:filter|mark|sort|dir)', () => {
+  it('keeps the tile, the mark and the order, and not the search', () => {
+    const view: OverviewView = { query: 'ЭМ', mark: 'ЭМ', filter: 'waiting', sort: { key: 'series', direction: 'desc' } };
+    expect(parseStoredView(storedViewOf(view))).toEqual({ query: '', mark: 'ЭМ', filter: 'waiting', sort: { key: 'series', direction: 'desc' } });
+    expect(storedViewOf(view)).not.toContain('query');
+    expect(parseStoredView(null)).toEqual(INITIAL_VIEW);
+  });
+
+  it('starts from the initial view on anything it does not say rightly', () => {
+    for (const raw of ['', 'not json', 'null', '42', '"waiting"', '[]', '{}']) {
+      expect(parseStoredView(raw), raw).toEqual(INITIAL_VIEW);
+    }
+    // an unknown tile or an unknown sort key is dropped, the rest is kept
+    expect(parseStoredView('{"mark":"ТХ","filter":"nonsense","sort":{"key":"code","direction":"asc"}}')).toEqual({ ...INITIAL_VIEW, mark: 'ТХ' });
+    expect(parseStoredView('{"filter":"failed","sort":{"key":"nonsense","direction":"asc"}}')).toEqual({ ...INITIAL_VIEW, filter: 'failed' });
+    expect(parseStoredView('{"filter":"failed","sort":{"key":"code","direction":"sideways"}}')).toEqual({ ...INITIAL_VIEW, filter: 'failed' });
+    expect(parseStoredView('{"mark":7,"filter":"ready"}')).toEqual({ ...INITIAL_VIEW, filter: 'ready' });
   });
 });
 

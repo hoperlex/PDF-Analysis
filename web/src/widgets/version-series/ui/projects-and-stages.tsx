@@ -43,7 +43,7 @@ import {
   RESTART_CONFIRM_LABELS,
   useReportCommand,
   COLUMN_SELECT_TITLE,
-  INITIAL_VIEW,
+  STORED_VIEW_KEY,
   OVERVIEW_FILTERS,
   SELECTABLE_STEPS,
   SELECTION_CLEAR_LABEL,
@@ -75,10 +75,12 @@ import {
   inScope,
   marksOf,
   nextSort,
+  parseStoredView,
   nextStepSentence,
   parseSort,
   sortValue,
   stepActions,
+  storedViewOf,
   stepView,
   useComparisonOverview,
   usePrepareMatrix,
@@ -309,12 +311,14 @@ function SetRow(props: ProjectsAndStagesViewProps & { readonly set: ComparisonOv
             Сводка изменений (MD)
           </button>
         ) : null}
-        {row.seriesId === null ? null : <div onClick={(event) => event.stopPropagation()} data-technical-downloads="">
+        {/* The original has no such exports (its reports are backend only); here they are folded under one line so that the row stays the original's height. */}
+        {row.seriesId === null ? null : <details className={styles.history} onClick={(event) => event.stopPropagation()} data-technical-downloads="">
+          <summary title="Полные сохранённые данные сравнения для проверки: XLSX и HTML с изображениями.">Технические выгрузки</summary>
           <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'xlsx', fileName: 'comparison-technical.xlsx' })}>Технический XLSX</button>
           <button type="button" className="am-button am-button--small am-button--quiet" disabled={technical.isPending} onClick={() => technical.mutate({ kind: 'technical', seriesId: row.seriesId as ComparisonSeriesId, format: 'html', fileName: 'comparison-technical-html.zip' })}>HTML с изображениями (ZIP)</button>
           <p className={styles.note}>Выгрузки включают полные сохранённые позиции СО, в том числе неизменённые, и покрытие извлечения. В XLSX полные данные — на листе RawJSON; в ZIP — JSON/CSV и манифест. Неполное или отсутствующее извлечение остаётся явно отмеченным. Новые обращения к модели не выполняются.</p>
           {technical.error === null ? null : <p role="alert">{comparisonFailure(technical.error).detail}</p>}
-        </div>}
+        </details>}
       </th>
       <td>
         <span>{set.version_count}</span>
@@ -633,11 +637,33 @@ type OpenDialog =
 const QUEUE_STOPPED_NOTE = 'Очередь запуска сейчас остановлена — выбранное встанет в неё и начнётся после «Продолжить очередь».';
 const QUEUE_BUSY_NOTE = 'В очереди запуска уже идут другие шаги — выбранное начнётся после них.';
 
+function readStoredView(): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(STORED_VIEW_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredView(value: string): void {
+  try {
+    window.localStorage.setItem(STORED_VIEW_KEY, value);
+  } catch {
+    // Storage is blocked or full: the choice holds for this visit only.
+  }
+}
+
 export function ProjectsAndStages({ projectUid, mayAct, onOpen, queueOnPage = false }: ProjectsAndStagesProps) {
   const overview = useComparisonOverview(projectUid);
   const launch = useLaunchQueue(projectUid);
   const aiQueue = useAiQueue();
-  const [view, setView] = useState<OverviewView>(INITIAL_VIEW);
+  // The tile, the mark and the order are kept between visits as the original keeps them; the page is not rendered on a server,
+  // and a browser without storage (or a refusing one) starts from the initial view.
+  const [view, setViewState] = useState<OverviewView>(() => parseStoredView(readStoredView()));
+  const setView = (next: OverviewView): void => {
+    setViewState(next);
+    writeStoredView(storedViewOf(next));
+  };
   const [confirming, setConfirming] = useState<ComparisonOverviewSet | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [selectableAi, setSelectableAi] = useState<ReadonlySet<string>>(new Set());
