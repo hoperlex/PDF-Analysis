@@ -44,7 +44,13 @@
   white-space: nowrap;
 }
 
+/*
+ * `position: relative` makes the scroller the containing block of the table's hidden labels (`.visuallyHidden`, absolute), so the
+ * scroller clips them: with no positioned ancestor their containing block was the page, and a label at x = 807 widened it.
+ * The shared `table { position: relative }` does the same for any table; this is the narrower form, kept in the widget.
+ */
 .scroller {
+  position: relative;
   overflow-x: auto;
   max-width: 100%;
 }
