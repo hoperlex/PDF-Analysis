@@ -33,9 +33,13 @@
  * by the server, never answered with an empty file.
  *
  * «Загрузить решения из Excel» (`R-151d`) is the way back: the same workbook, edited, for an expert.
+ *
+ * «Скачать пакет аудита» (UI-A-76) is the original's archive of one run: the CSV, the extended review's reports when the run
+ * has them, the version's PDF and a manifest of digests, built in the browser by the evidence-package builder. It is offered
+ * where the page names the run's version and says the session may export (`auditPackage`).
  */
 
-import type { ProviderMode, RunId, RunState } from '@/shared/api';
+import type { ProviderMode, RunId, RunState, VersionUid } from '@/shared/api';
 import {
   ApiError,
   CSV_COLUMNS,
@@ -50,6 +54,7 @@ import { ImportDecisions } from '@/features/import-decisions';
 import type { ErrorStateProps } from '@/shared/ui';
 import { ErrorState, NotApplicableState, RunStateBadge, STATE_LABELS } from '@/shared/ui';
 
+import { AuditPackageDownload } from './audit-package-download';
 import styles from './export-panel.module.css';
 
 export interface ExportPanelProps {
@@ -62,6 +67,8 @@ export interface ExportPanelProps {
   readonly lastFileName?: string | null | undefined;
   /** `R-151d`: offer «Загрузить решения из Excel» — an expert's act, so the page says whether the caller is one. */
   readonly mayImportDecisions?: boolean | undefined;
+  /** `UI-A-76`: offer «Скачать пакет аудита» for the run's version; absent for a session that may not export. */
+  readonly auditPackage?: { readonly versionUid: VersionUid } | undefined;
   /**
    * `card` (the default) is the panel as it always was. `bar` is the original's toolbar: the title, the state and
    * the three file actions in one row over the findings, the file description beside them.
@@ -125,6 +132,7 @@ export function ExportPanel({
   error,
   lastFileName,
   mayImportDecisions,
+  auditPackage,
   layout,
 }: ExportPanelProps) {
   const bar = layout === 'bar';
@@ -167,6 +175,7 @@ export function ExportPanel({
             </button>
             <XlsxDownload runId={runId} />
             {mayImportDecisions === true ? <ImportDecisions runId={runId} /> : null}
+            {auditPackage === undefined ? null : <AuditPackageDownload runId={runId} versionUid={auditPackage.versionUid} />}
           </div>
           {/*
             `R-18` names the column names printed as a list — "documentation
