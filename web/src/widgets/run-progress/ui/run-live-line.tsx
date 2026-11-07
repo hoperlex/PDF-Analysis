@@ -36,7 +36,7 @@ export interface RunLiveLineViewProps {
   /** The time since the run was created, already formatted; «—» before the clock is read. */
   readonly elapsed: string;
   /** The server's estimate, worded; `null` or absent when the run has none or the clock is not yet read. */
-  readonly finish?: RunFinishEstimate | null;
+  readonly finish?: RunFinishEstimate | null | undefined;
 }
 
 export function RunLiveLineView({ stage, elapsed, finish = null }: RunLiveLineViewProps) {
