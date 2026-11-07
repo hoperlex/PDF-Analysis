@@ -51,7 +51,7 @@ import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widg
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
 import { WorkersPage } from '@/_pages/workers';
-import { SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
+import { SectionFilterBar, SectionOptimisationPage, readSectionOptimisationAddress } from '@/_pages/section-optimisation';
 import { ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { SetExecutorSecretForm } from '@/features/set-executor-secret';
 import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
@@ -63,7 +63,7 @@ import { OptimisationByDocument, ProposalSetChooser } from '@/widgets/optimisati
 import { VersionComparison } from '@/widgets/version-comparison';
 import { NormReferencesAnswer } from '@/widgets/norm-references';
 import { SectionSpecificationAnswer } from '@/widgets/section-specification';
-import { SectionAcceptedFilters, SectionAcceptedList } from '@/widgets/section-accepted-optimisations';
+import { SectionAcceptedList } from '@/widgets/section-accepted-optimisations';
 import { NormSearchResults } from '@/widgets/norm-search';
 import { NormCatalogueTable } from '@/widgets/norm-catalogue';
 import { NormDocumentFacts, NormParagraphList, NormPdf } from '@/widgets/norm-document';
@@ -964,6 +964,20 @@ export function screens(): Screen[] {
     busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
     onPriority: noop, onNext: null, onPrevious: null,
   })));
+  // `UI-B-52`: two waiting jobs, each with the drag handle, the hint that names the keys and the note under the list.
+  add('ExecutionQueue, waiting jobs with a handle to move each', withRouter(createElement(ExecutionQueue, {
+    items: ['A', 'B'].map((suffix, index) => ({
+      job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`,
+      run_id: RUN_ID, state: 'queued', priority: 2 - index,
+      created_at: '2026-10-09T10:00:00Z',
+      available_at: '2026-10-09T10:00:00Z',
+      ...QUEUE_WORK,
+    })),
+    roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+    busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: noop, onReaudit: noop,
+    onPriority: noop, onReorder: noop, reorderNote: 'Задача перемещена на место 1: приоритет 3. Порядок определил сервер.',
+    onNext: null, onPrevious: null,
+  })));
   // `UI-PARITY-QUEUE-A`, the queue as a line per job: a finished job with its timing, its reason and its muted facts.
   add('ExecutionQueue finished, its timing and its reason', withRouter(createElement(ExecutionQueue, {
     items: [{
@@ -1114,6 +1128,17 @@ export function screens(): Screen[] {
   add('SectionSpecificationAnswer ready', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer(), onPage: noop, onSelectProject: noop,
   })));
+  add('SectionSpecificationAnswer ready, with the price match', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer(), onPage: noop, onSelectProject: noop, columns: 'priced',
+  })));
+  // `UI-B-23`: a project with no specification keeps its group, said in the red of the original's «Спецификация отсутствует».
+  add('SectionSpecificationAnswer, a project without a specification', render(createElement(SectionSpecificationAnswer, {
+    answer: sectionAnswer({
+      projects: sectionAnswer().projects.map((item, index) => (index === 1 ? { ...item, row_count: 0 } : item)),
+      rows: { ...sectionAnswer().rows!, items: sectionAnswer().rows!.items.slice(0, 4), total: 4 },
+    }),
+    onPage: noop, onSelectProject: noop,
+  })));
   add('SectionSpecificationAnswer too large', render(createElement(SectionSpecificationAnswer, {
     answer: sectionAnswer({
       ...SECTION_NO_ROWS, state: 'section_too_large', limit_reason: 'sources',
@@ -1136,9 +1161,9 @@ export function screens(): Screen[] {
   add('SectionOptimisationPage accepted tab, an address it could not read', withRouter(createElement(SectionOptimisationPage, {
     initial: readSectionOptimisationAddress({ section: 'ZZ', tab: 'accepted' }),
   })));
-  add('SectionAcceptedFilters', render(createElement(SectionAcceptedFilters, {
+  add('SectionFilterBar', render(createElement(SectionFilterBar, {
     sectionCode: 'AR', projectUid: ACCEPTED_PROJECT_A as never,
-    projects: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
+    options: [{ projectUid: ACCEPTED_PROJECT_A as never, name: 'Школа на пятьсот мест' }], onSection: noop, onProject: noop,
   })));
   add('SectionAcceptedList ready', render(createElement(SectionAcceptedList, {
     page: acceptedPage(), hasPrevious: false, onPrevious: noop, onNext: noop,

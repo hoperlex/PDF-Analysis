@@ -90,6 +90,29 @@ describe('opening on the address', () => {
   });
 });
 
+describe('the choice of section and project, in the row of the tabs (`UI-B-24`)', () => {
+  it('sits beside the tabs, once, and neither tab carries a select of its own', () => {
+    for (const tab of ['specification', 'accepted'] as const) {
+      const { markup } = page({ tab });
+      const bar = markup.indexOf('data-section-filter-bar');
+      expect(bar).toBeGreaterThan(markup.indexOf('role="tablist"'));
+      expect(bar).toBeLessThan(markup.indexOf('role="tabpanel"'));
+      expect((markup.match(/data-section-filter-bar/g) ?? []).length).toBe(1);
+      expect((markup.match(/data-section-picker=/g) ?? []).length).toBe(1);
+      expect((markup.match(/data-section-project-filter=/g) ?? []).length).toBe(1);
+      expect(markup.slice(markup.indexOf('role="tabpanel"'))).not.toContain('<select');
+    }
+  });
+
+  it('is the same choice for both tabs: the project of the address is selected on either', () => {
+    for (const tab of ['specification', 'accepted'] as const) {
+      const { markup } = page({ section: 'KJ', project: ACCEPTED_PROJECT_B, tab });
+      expect(selected(markup, 'KJ')).toBe(true);
+      expect(selected(markup, ACCEPTED_PROJECT_B)).toBe(true);
+    }
+  });
+});
+
 describe('the tabs', () => {
   it('opens «Спецификация» by default and mounts nothing of «Принято», whose number is the only thing read for it', () => {
     const { markup, client } = page({});

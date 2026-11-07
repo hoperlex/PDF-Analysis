@@ -20,6 +20,7 @@
  */
 
 import Link from 'next/link';
+import { Fragment, useState } from 'react';
 
 import type {
   SectionSpecification,
@@ -29,6 +30,7 @@ import type {
 } from '@/shared/api';
 import { routes } from '@/shared/lib';
 import { EmptyState } from '@/shared/ui';
+import { pluralRu } from '@/entities/document-version';
 import {
   sectionExclusionLabel,
   sectionLimitMessage,
@@ -55,7 +57,32 @@ export interface SectionSpecificationAnswerProps {
   readonly onPage: ((offset: number) => void) | null;
   /** Narrow the section to one project; `null` when the project is already the filter. */
   readonly onSelectProject: ((projectUid: string) => void) | null;
+  /**
+   * `form7` (the default) is the original's table: the nine columns of the GOST form, the rows grouped under their project.
+   * `priced` adds the four columns the original lacks — the match against the project's price list, the position, the price and
+   * the amount — to the same grouped table. The choice is the reader's (`UI-B-23`).
+   */
+  readonly columns?: SectionSpecificationColumns | undefined;
 }
+
+export type SectionSpecificationColumns = 'form7' | 'priced';
+
+const SET_WORD = ['комплект', 'комплекта', 'комплектов'] as const;
+const ROW_WORD = ['строка', 'строки', 'строк'] as const;
+
+/** The nine columns of Form 7, as the original numbers them (`GOST`, graph 1–9). */
+const FORM7_HEADINGS = [
+  'Позиция',
+  'Наименование и техническая характеристика',
+  'Тип, марка, обозначение документа, опросного листа',
+  'Код оборудования, изделия, материала',
+  'Завод-изготовитель',
+  'Единица измерения',
+  'Количество',
+  'Масса единицы, кг',
+  'Примечание',
+] as const;
+const PRICED_HEADINGS = ['Сопоставление', 'Позиция прайс-листа проекта', 'Цена', 'Сумма'] as const;
 
 const STATUS_TONES: Readonly<Record<string, string>> = {
   matched: 'am-badge--ok',
@@ -251,9 +278,8 @@ function PricePosition({ row }: { readonly row: SectionSpecificationRow }) {
   );
 }
 
-function Row({ row, addresses }: { readonly row: SectionSpecificationRow; readonly addresses: Addresses }) {
+function Row({ row, addresses, columns }: { readonly row: SectionSpecificationRow; readonly addresses: Addresses; readonly columns: SectionSpecificationColumns }) {
   const counted = row.amount !== null && row.price_position !== null;
-  const project = addresses.project.get(row.project_uid);
   const source = addresses.source.get(row.version_uid);
   const place = row.sheet_label === null ? `с. ${row.page_number}` : `л. ${row.sheet_label} / с. ${row.page_number}`;
   return (
@@ -263,38 +289,39 @@ function Row({ row, addresses }: { readonly row: SectionSpecificationRow; readon
       data-section-status={row.price_status}
       data-section-counted={counted ? 'yes' : 'no'}
     >
+      <td className={`${styles.cell} ${styles.center}`} title={`строки ${row.line_start}–${row.line_end}`}>{row.position ?? '—'}</td>
       <td className={styles.cell}>
-        <Link href={routes.project(row.project_uid)}>{project?.name ?? 'Проект'}</Link>
-      </td>
-      <td className={styles.cell}>
-        <Link href={routes.document(row.project_uid, row.document_uid)}>{source?.display_title ?? 'Комплект'}</Link>
-        <span className={styles.hint}> — версия {source?.version_ordinal ?? '—'}</span>
-        {' '}
-        <span className={styles.hint}>
-          (<Link href={routes.documentOptimisation(row.project_uid, row.document_uid)}>оптимизация</Link>)
+        {row.name}
+        {/* The address every row keeps (`W63-SECTION-FORM7-01`): the set, its version, the sheet and the page, one muted line under the name. */}
+        <span className={styles.address} data-section-row-address="">
+          <Link href={routes.document(row.project_uid, row.document_uid)}>{source?.display_title ?? 'Комплект'}</Link>
+          {' '}— версия {source?.version_ordinal ?? '—'}, {place}
+          {' '}(<Link href={routes.documentOptimisation(row.project_uid, row.document_uid)}>оптимизация</Link>)
         </span>
       </td>
-      <td className={styles.cell} title={`строки ${row.line_start}–${row.line_end}`}>{place}</td>
-      <td className={styles.cell}>{row.position ?? '—'}</td>
-      <td className={styles.cell}>
-        {row.group === null ? null : <span className={styles.group}>{row.group}: </span>}
-        {row.name}
-      </td>
-      <td className={styles.cell}>{row.unit !== null ? specificationUnitLabel(row.unit) : (row.unit_text ?? '—')}</td>
-      <td className={`${styles.cell} ${styles.number}`}><Quantity row={row} /></td>
-      <td className={`${styles.cell} ${styles.number}`}>{row.mass_text ?? '—'}</td>
+      {/* Graphs 3–5 are not separated from the name in the saved text; the form's columns stay, and say so below the table. */}
+      <td className={styles.cell}>—</td>
+      <td className={styles.cell}>—</td>
+      <td className={styles.cell}>—</td>
+      <td className={`${styles.cell} ${styles.center}`}>{row.unit !== null ? specificationUnitLabel(row.unit) : (row.unit_text ?? '—')}</td>
+      <td className={`${styles.cell} ${styles.center}`}><Quantity row={row} /></td>
+      <td className={`${styles.cell} ${styles.center}`}>{row.mass_text ?? '—'}</td>
       <td className={styles.cell}>{row.note ?? '—'}</td>
-      <td className={styles.cell}><Match row={row} /></td>
-      <td className={styles.cell}><PricePosition row={row} /></td>
-      <td className={`${styles.cell} ${styles.number}`} data-section-price={counted ? row.price_position?.unit_price : 'none'}>
-        {counted ? formatMoney(row.price_position?.unit_price ?? null, row.price_position?.currency ?? null) : '—'}
-      </td>
-      <td className={`${styles.cell} ${styles.number}`} data-section-amount={row.amount ?? 'none'}>
-        {counted ? formatMoney(row.amount, row.price_position?.currency ?? null) : '—'}
-        {!counted && row.excluded_reason !== null ? (
-          <span className={styles.hint}> ({specificationExclusionLabel(row.excluded_reason)})</span>
-        ) : null}
-      </td>
+      {columns === 'priced' ? (
+        <>
+          <td className={styles.cell}><Match row={row} /></td>
+          <td className={styles.cell}><PricePosition row={row} /></td>
+          <td className={`${styles.cell} ${styles.number}`} data-section-price={counted ? row.price_position?.unit_price : 'none'}>
+            {counted ? formatMoney(row.price_position?.unit_price ?? null, row.price_position?.currency ?? null) : '—'}
+          </td>
+          <td className={`${styles.cell} ${styles.number}`} data-section-amount={row.amount ?? 'none'}>
+            {counted ? formatMoney(row.amount, row.price_position?.currency ?? null) : '—'}
+            {!counted && row.excluded_reason !== null ? (
+              <span className={styles.hint}> ({specificationExclusionLabel(row.excluded_reason)})</span>
+            ) : null}
+          </td>
+        </>
+      ) : null}
     </tr>
   );
 }
@@ -326,7 +353,121 @@ function Pager({ answer, onPage }: Pick<SectionSpecificationAnswerProps, 'answer
   );
 }
 
-function RowsTable({ answer, onPage }: Pick<SectionSpecificationAnswerProps, 'answer' | 'onPage'>) {
+/** One project's rows of this page, in the order the server sent them; a project of the answer with none still has its group. */
+interface RowGroup {
+  readonly projectUid: string;
+  readonly project: SectionSpecificationProject | undefined;
+  readonly rows: readonly SectionSpecificationRow[];
+}
+
+/**
+ * The rows of the page grouped under their project, the projects in the answer's order (`UI-B-23`). A row whose project the
+ * answer does not list is kept under its own group and never dropped.
+ */
+export function groupRowsByProject(answer: SectionSpecification): readonly RowGroup[] {
+  const byProject = new Map<string, SectionSpecificationRow[]>();
+  for (const row of answer.rows?.items ?? []) {
+    const held = byProject.get(row.project_uid);
+    if (held === undefined) byProject.set(row.project_uid, [row]);
+    else held.push(row);
+  }
+  const groups: RowGroup[] = answer.projects.map((project) => ({
+    projectUid: project.project_uid,
+    project,
+    rows: byProject.get(project.project_uid) ?? [],
+  }));
+  const listed = new Set(answer.projects.map((project) => project.project_uid as string));
+  for (const [projectUid, rows] of byProject) {
+    if (!listed.has(projectUid)) groups.push({ projectUid, project: undefined, rows });
+  }
+  return groups;
+}
+
+function GroupHeader({
+  group, span, collapsed, onToggle,
+}: {
+  readonly group: RowGroup;
+  readonly span: number;
+  readonly collapsed: boolean;
+  readonly onToggle: () => void;
+}) {
+  const project = group.project;
+  const missing = project !== undefined && project.row_count === 0;
+  const sets = project?.sources.length ?? 0;
+  return (
+    <tr className={styles.groupRow} data-section-group-row={group.projectUid} data-section-group-collapsed={collapsed ? 'yes' : 'no'}>
+      <td colSpan={span} className={styles.groupCell}>
+        <button type="button" className={styles.groupToggle} aria-expanded={!collapsed} onClick={onToggle}>
+          <span className={styles.caret} aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
+          <span className={missing ? styles.missing : styles.groupName}>{project?.name ?? 'Проект'}</span>
+          {project === undefined ? null : (
+            <span className={styles.hint}>
+              {' '}· {sets} {pluralRu(sets, SET_WORD)}
+              {missing ? '' : ` · ${project.row_count} ${pluralRu(project.row_count, ROW_WORD)}`}
+            </span>
+          )}
+        </button>
+        {' '}
+        <span className={styles.hint}>
+          (<Link href={routes.project(group.projectUid)}>проект</Link>,{' '}
+          <Link href={routes.projectOptimisation(group.projectUid)}>вкладка «Оптимизация» проекта</Link>)
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function GroupBody({
+  group, span, addresses, columns, searched, otherRows,
+}: {
+  readonly group: RowGroup;
+  readonly span: number;
+  readonly addresses: Addresses;
+  readonly columns: SectionSpecificationColumns;
+  readonly searched: boolean;
+  /** True when the page holds rows of another project: this one's rows may be on a page before or after it. */
+  readonly otherRows: boolean;
+}) {
+  const project = group.project;
+  if (group.rows.length === 0) {
+    const none = project !== undefined && project.row_count === 0;
+    return (
+      <tr className={styles.noteRow} data-section-group-empty={none ? 'missing' : 'page'}>
+        <td />
+        <td colSpan={span - 1}>
+          {none
+            ? 'Спецификация отсутствует'
+            : searched
+              ? 'По текущему поиску строки спецификации этого проекта на этой странице не найдены.'
+              : otherRows
+                ? 'Строки этого проекта — на другой странице списка.'
+                : 'Строк спецификации этого проекта нет.'}
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <>
+      {group.rows.map((row, index) => (
+        <Fragment key={row.row_id}>
+          {/* The original's category row: where the form's heading changes inside a project. */}
+          {row.group !== null && row.group !== group.rows[index - 1]?.group ? (
+            <tr className={styles.categoryRow} data-section-category={row.group}>
+              <td />
+              <td colSpan={span - 1}><span>{row.group}</span></td>
+            </tr>
+          ) : null}
+          <Row row={row} addresses={addresses} columns={columns} />
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+function RowsTable({ answer, onPage, columns }: Pick<SectionSpecificationAnswerProps, 'answer' | 'onPage'> & { readonly columns: SectionSpecificationColumns }) {
+  // The projects the reader folded; held by identity so a fold survives another page, and forgotten with the section (the
+  // container keys this table by it). Expanded by default, as the original.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   const rows = answer.rows;
   if (rows === null) return null;
   const searched = answer.query !== null;
@@ -345,30 +486,65 @@ function RowsTable({ answer, onPage }: Pick<SectionSpecificationAnswerProps, 'an
     );
   }
   const addresses = addressesOf(answer);
+  const groups = groupRowsByProject(answer);
+  const span = FORM7_HEADINGS.length + (columns === 'priced' ? PRICED_HEADINGS.length : 0);
+  const toggle = (projectUid: string) =>
+    setFolded((held) => {
+      const next = new Set(held);
+      if (next.has(projectUid)) next.delete(projectUid);
+      else next.add(projectUid);
+      return next;
+    });
   return (
     <>
       <div className={styles.frame}>
-        <table className={styles.table} aria-label="Сводная спецификация раздела: строки и цены">
+        <table className={styles.table} aria-label="Сводная спецификация раздела: форма 7" data-section-columns={columns}>
           <thead>
             <tr>
-              <th className={styles.cell} scope="col">Проект</th>
-              <th className={styles.cell} scope="col">Комплект</th>
-              <th className={styles.cell} scope="col">Лист / стр.</th>
-              <th className={styles.cell} scope="col">Поз.</th>
-              <th className={styles.cell} scope="col">Наименование и техническая характеристика</th>
-              <th className={styles.cell} scope="col">Ед. изм.</th>
-              <th className={styles.cell} scope="col">Кол.</th>
-              <th className={styles.cell} scope="col">Масса ед.</th>
-              <th className={styles.cell} scope="col">Примечание</th>
-              <th className={styles.cell} scope="col">Сопоставление</th>
-              <th className={styles.cell} scope="col">Позиция прайс-листа проекта</th>
-              <th className={styles.cell} scope="col">Цена</th>
-              <th className={styles.cell} scope="col">Сумма</th>
+              <th className={styles.cell} scope="col">
+                <span className={styles.positionHeading}>
+                  <span>{FORM7_HEADINGS[0]}</span>
+                  <span className={styles.allToggle} role="group" aria-label="Управление всеми проектами">
+                    <button type="button" title="Развернуть все проекты" aria-label="Развернуть все проекты" data-section-expand-all="" onClick={() => setFolded(new Set())}>+</button>
+                    <button
+                      type="button"
+                      title="Свернуть все проекты"
+                      aria-label="Свернуть все проекты"
+                      data-section-collapse-all=""
+                      onClick={() => setFolded(new Set(groups.map((group) => group.projectUid)))}
+                    >
+                      −
+                    </button>
+                  </span>
+                </span>
+              </th>
+              {FORM7_HEADINGS.slice(1).map((heading) => <th key={heading} className={styles.cell} scope="col">{heading}</th>)}
+              {columns === 'priced' ? PRICED_HEADINGS.map((heading) => <th key={heading} className={styles.cell} scope="col">{heading}</th>) : null}
+            </tr>
+            {/* The form's own row of graph numbers; decoration, not a header. */}
+            <tr className={styles.columnNumbers} aria-hidden="true">
+              {FORM7_HEADINGS.map((heading, index) => <th key={heading} className={styles.cell}>{index + 1}</th>)}
+              {columns === 'priced' ? <th className={styles.cell} colSpan={PRICED_HEADINGS.length} /> : null}
             </tr>
           </thead>
-          <tbody>
-            {rows.items.map((row) => <Row key={row.row_id} row={row} addresses={addresses} />)}
-          </tbody>
+          {groups.map((group) => {
+            const collapsed = folded.has(group.projectUid);
+            return (
+              <tbody key={group.projectUid} data-section-group={group.projectUid}>
+                <GroupHeader group={group} span={span} collapsed={collapsed} onToggle={() => toggle(group.projectUid)} />
+                {collapsed ? null : (
+                  <GroupBody
+                    group={group}
+                    span={span}
+                    addresses={addresses}
+                    columns={columns}
+                    searched={searched}
+                    otherRows={groups.some((other) => other !== group && other.rows.length > 0)}
+                  />
+                )}
+              </tbody>
+            );
+          })}
         </table>
       </div>
       <p className="am-note">
@@ -380,7 +556,7 @@ function RowsTable({ answer, onPage }: Pick<SectionSpecificationAnswerProps, 'an
   );
 }
 
-export function SectionSpecificationAnswer({ answer, onPage, onSelectProject }: SectionSpecificationAnswerProps) {
+export function SectionSpecificationAnswer({ answer, onPage, onSelectProject, columns = 'form7' }: SectionSpecificationAnswerProps) {
   const tooLarge = answer.state === 'section_too_large';
   return (
     <div data-section-state={answer.state} data-section-code={answer.section_code}>
@@ -417,7 +593,7 @@ export function SectionSpecificationAnswer({ answer, onPage, onSelectProject }: 
         </>
       )}
       <Excluded answer={answer} />
-      <RowsTable answer={answer} onPage={onPage} />
+      <RowsTable key={answer.section_code} answer={answer} onPage={onPage} columns={columns} />
     </div>
   );
 }

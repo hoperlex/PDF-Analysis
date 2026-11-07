@@ -88,6 +88,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
   const [completed, setCompleted] = useState(false);
+  // `UI-B-52`: what the last drag or Alt+arrow move of a waiting job came to; read out by the list's polite live region.
+  const [reorderNote, setReorderNote] = useState<string | null>(null);
   const sequence = useRef(0);
   const cursor = cursors.at(-1);
   const filter: ExecutionQueueFilter = {
@@ -123,6 +125,31 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   function choosePeriod(chosen: string) {
     const value: QueuePeriod = isQueuePeriod(chosen) ? chosen : 'all';
     setAddress({ state: address.state, period: value }, 'replace');
+  }
+
+  /**
+   * `UI-B-52`: one move of a waiting job is one priority command, sent at once (a priority is a reversible setting, and the
+   * original applies a drop as it is made). Nothing is moved on the screen first: the list is read again after the server
+   * answers and shows where the job stands, so a refused or unknown move leaves the row where it was and says so.
+   */
+  async function reorder(item: ExecutionQueueItem, value: number, place: number | null) {
+    const what = `${item.document_name}, версия ${item.version_ordinal}`;
+    setReorderNote(`Перемещаю задачу «${what}»: приоритет ${item.priority} → ${value}.`);
+    setCompleted(false);
+    try {
+      await priority.mutateAsync({ jobId: item.job_id, priority: value, idempotencyKey: newIdempotencyKey() });
+      setReorderNote(
+        `Задача «${what}» перемещена${place === null ? '' : ` на место ${place}`}: приоритет ${value}. Порядок определил сервер.`,
+      );
+    } catch (error) {
+      const failure = executionFailure(error, true);
+      setReorderNote(
+        failure.kind === 'unknown_outcome'
+          ? `Исход перемещения задачи «${what}» неизвестен. Очередь прочитана заново: посмотрите её порядок и повторите перемещение, если задача не сдвинулась.`
+          : `Сервер не принял перемещение задачи «${what}»: ${failure.detail} Задача осталась на прежнем месте.`,
+      );
+      void queue.refetch();
+    }
   }
 
   function select(nextIntent: NewIntent) {
@@ -252,6 +279,8 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
             onCancel={(item) => select({ kind: 'cancel', item })}
             onReaudit={(item) => select({ kind: 'reaudit', item })}
             onPriority={(item, value) => select({ kind: 'priority', item, priority: value })}
+            onReorder={(item, value, place) => void reorder(item, value, place)}
+            reorderNote={reorderNote}
             onPrevious={cursors.length === 0 ? null : () => setCursors((current) => current.slice(0, -1))}
             onNext={next === null ? null : () => setCursors((current) => [...current, next])}
           />

@@ -103,11 +103,8 @@ export interface AcceptedShape {
   readonly seedClient?: (client: QueryClient) => void;
 }
 
-const noop = (): void => undefined;
 const accepted = (): ReactElement =>
-  createElement(SectionAcceptedOptimisations, {
-    sectionCode: 'AR', projectUid: null as ProjectUid | null, onSection: noop, onProject: noop,
-  });
+  createElement(SectionAcceptedOptimisations, { sectionCode: 'AR', projectUid: null as ProjectUid | null });
 
 /** «Принято» in every branch the container has: its read pending, refused, empty and answered. */
 export function acceptedShapes(): readonly AcceptedShape[] {

@@ -5,14 +5,44 @@
   min-width: 0;
 }
 
-.tablist {
+.toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--am-gap-xs);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
   padding: var(--am-gap-xs);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius);
   background: var(--am-surface);
+}
+
+.tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+}
+
+/* `UI-B-24`: the section and the project, chosen beside the tabs as the original chooses its project there. */
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+}
+
+.filterField {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  font-size: var(--am-text-md);
+}
+
+.filterField select {
+  max-width: 100%;
+  margin: 0;
 }
 
 .tab {

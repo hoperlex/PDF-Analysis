@@ -10,3 +10,5 @@ export type { SectionOptimisationTab, SectionOptimisationTabCounts } from './mod
 export { SECTION_OPTIMISATION_TABS, SECTION_OPTIMISATION_TAB_LABELS, sectionOptimisationTabText } from './model/tabs';
 export type { SectionOptimisationPageProps } from './ui/section-optimisation-page';
 export { SectionOptimisationPage } from './ui/section-optimisation-page';
+export type { ProjectFilterOption, SectionFilterBarProps, SectionMember } from './ui/section-filter-bar';
+export { ProjectOptionName, SectionFilterBar, projectFilterOptions } from './ui/section-filter-bar';

@@ -106,6 +106,7 @@ import { SpecificationPricesAnswer, SpecificationPricesSection } from '@/widgets
 import { NormReferencesAnswer, NormReferencesSection } from '@/widgets/norm-references';
 import { SPECIFICATION_ROW_LIMIT } from '@/entities/specification-price';
 import { SectionSpecificationAnswer, SectionSpecificationSection } from '@/widgets/section-specification';
+import { SectionBatchBar } from '@/_pages/section-detail';
 import { SECTION_ROW_LIMIT } from '@/entities/section-specification';
 import { SECTION_NO_ROWS, sectionAnswer, sectionKey, sectionPagedAnswer } from '../unit/section-specification/fixtures';
 import { AppFrame } from '@/_app';
@@ -373,6 +374,13 @@ function projectSectionCodes(): readonly string[] {
  * on a screen" is an offence being laundered, and the next reader should delete it.
  */
 const NOT_DERIVABLE: readonly { readonly word: string; readonly why: string }[] = [
+  {
+    word: 'Alt',
+    why:
+      'The legend printed on a keyboard key, said in the queue\'s hint for moving a waiting job by keyboard (`UI-B-52`, ' +
+      '«Alt+↑», «Alt+↓»). A key is named as it is engraved, on a Russian keyboard too; no contract declares a key name ' +
+      'and the hint would name no key without it.',
+  },
   {
     word: 'AuditManager',
     why:
@@ -2732,6 +2740,25 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     }),
   },
   {
+    // `UI-B-52`: two waiting jobs and a handle to move each, the hint that names the keys and the polite note under the list.
+    name: 'execution-queue-admin-reorder',
+    make: () => createElement(ExecutionQueue, {
+      items: (['A', 'B'] as const).map((suffix, index) => ({
+        job_id: `job_01J9ZQ8K7NHVXW3T2R5M6P4Q8${suffix}`,
+        run_id: RUN_ID,
+        state: 'queued',
+        priority: 2 - index,
+        created_at: '2026-10-09T10:00:00Z',
+        available_at: '2026-10-09T10:00:00Z',
+        ...QUEUE_WORK,
+      })),
+      roles: ['admin'], asOf: Date.parse('2026-10-09T10:05:00Z'),
+      busy: false, workerOf: () => ({ kind: 'pending' as const }), onCancel: () => {}, onReaudit: () => {},
+      onPriority: () => {}, onReorder: () => {}, reorderNote: 'Задача перемещена на место 1: приоритет 3. Порядок определил сервер.',
+      onNext: null, onPrevious: null,
+    }),
+  },
+  {
     // `UI-PARITY-QUEUE-A`: the queue's one-line job with its timing and its reason.
     name: 'execution-queue-finished-with-timing',
     make: () => createElement(ExecutionQueue, {
@@ -3778,6 +3805,24 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'section-specification-ready',
     make: () => createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
   },
+  // `UI-A-35`: the row that chooses documents across a whole section, while the pages are read and when one could not be.
+  ...(['pending', 'failed'] as const).map((status) => ({
+    name: `section-batch-bar-${status}`,
+    make: () => createElement(SectionBatchBar, {
+      projectUid: PROJECT_UID as never,
+      selection: {
+        selection: { selected: new Set<string>(), onToggle: () => undefined },
+        chosenCount: 0, batch: null, choose: () => undefined, clear: () => undefined, openBatch: () => undefined, closeBatch: () => undefined,
+      },
+      pageDocuments: [],
+      walk: status === 'pending' ? { status } : { status, retry: () => undefined },
+    }),
+  })),
+  {
+    // `UI-B-23`: the same answer with the price match asked for — the form's nine graphs and the four columns beside them.
+    name: 'section-specification-ready-priced',
+    make: () => createElement(SectionSpecificationAnswer, { answer: sectionAnswer(), columns: 'priced', onPage: () => undefined, onSelectProject: () => undefined }),
+  },
   {
     name: 'section-specification-paged',
     make: () => createElement(SectionSpecificationAnswer, { answer: sectionPagedAnswer(), onPage: () => undefined, onSelectProject: () => undefined }),
@@ -4363,7 +4408,8 @@ describe('the guard reads a contract rather than a list of words', () => {
   it('keeps the hand-written residue small, and every entry reasoned', () => {
     // 25 since `D-292`: four format and sheet names of the comparison exports (`XLSX`, `JSON`, `HTML`, `RawJSON`), each
     // with its reason. It was 21.
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(25);
+    // 26 since `UI-B-52`: `Alt`, the legend engraved on a keyboard key, said in the queue's hint for moving a waiting job.
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(26);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
