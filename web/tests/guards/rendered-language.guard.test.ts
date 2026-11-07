@@ -4408,7 +4408,8 @@ describe('the guard reads a contract rather than a list of words', () => {
   it('keeps the hand-written residue small, and every entry reasoned', () => {
     // 25 since `D-292`: four format and sheet names of the comparison exports (`XLSX`, `JSON`, `HTML`, `RawJSON`), each
     // with its reason. It was 21.
-    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(25);
+    // 26 since `UI-B-52`: `Alt`, the legend engraved on a keyboard key, said in the queue's hint for moving a waiting job.
+    expect(NOT_DERIVABLE.length).toBeLessThanOrEqual(26);
     for (const { word, why } of NOT_DERIVABLE) {
       expect(why.length, `${word} has no reason`).toBeGreaterThan(60);
     }
