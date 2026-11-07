@@ -497,7 +497,9 @@ describe('the root layout wires the providers outside the frame', () => {
     expect(html.type).toBe('html');
     expect(html.props.lang).toBe('ru');
 
-    const body = html.props.children as { type: unknown; props: { children: unknown } };
+    // `P7-1`: `<head>` carries the one inline script (`theme-boot-script.test.ts` reads it);
+    // the body is still the nesting this test is about.
+    const [, body] = html.props.children as [unknown, { type: unknown; props: { children: unknown } }];
     expect(body.type).toBe('body');
 
     const providers = body.props.children as { type: unknown; props: { children: unknown } };

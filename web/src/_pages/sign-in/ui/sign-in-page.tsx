@@ -17,8 +17,8 @@ import Link from 'next/link';
 
 import { REGISTER_SCREEN } from '@/shared/config/screen-registry';
 import { ErrorState } from '@/shared/ui';
-import type { SignInRefusal } from '@/features/sign-in';
-import { SignInForm } from '@/features/sign-in';
+import type { SessionEndReason, SignInRefusal } from '@/features/sign-in';
+import { SignInForm, signInReasonMessage } from '@/features/sign-in';
 
 import styles from './sign-in-page.module.css';
 
@@ -33,9 +33,14 @@ export interface SignInPageProps {
   /** The validated address to return to once signed in (`W50-PLAN.md` §3.2), if any. */
   readonly next?: string | null | undefined;
   readonly unknownRefusal?: boolean | undefined;
+  /**
+   * Why there is no session, when the server knows (`expired`, `ended` or `invalid`): said above
+   * the form in one sentence. Absent when it does not — a first visit says nothing.
+   */
+  readonly reason?: SessionEndReason | null | undefined;
 }
 
-export function SignInPage({ refusal, next, unknownRefusal = false }: SignInPageProps) {
+export function SignInPage({ refusal, next, unknownRefusal = false, reason = null }: SignInPageProps) {
   return (
     <section className={styles.screen}>
       <div className={styles.copy}>
@@ -52,6 +57,9 @@ export function SignInPage({ refusal, next, unknownRefusal = false }: SignInPage
               <h2 className={styles.cardTitle}>Продолжить работу</h2>
             </div>
           </header>
+          {reason === null ? null : (
+            <p className={styles.reason} role="status" data-sign-in-reason={reason}>{signInReasonMessage(reason)}</p>
+          )}
           <p className={styles.formLead}>Используйте почту или прежний логин для входа.</p>
           {unknownRefusal ? <div data-sign-in-refusal="unknown"><ErrorState title="Неизвестный ответ входа" detail="Сервер вернул состояние, которое эта версия страницы не понимает." /></div> : null}
           <SignInForm refusal={refusal} next={next} />

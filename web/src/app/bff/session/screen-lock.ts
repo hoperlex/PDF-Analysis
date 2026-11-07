@@ -24,7 +24,9 @@
  *
  * Each is a redirect or a normal return, never a thrown framework error:
  *
- *   1. no session, and the screen is not `public` → `/login?next=<the address asked for>`;
+ *   1. no session, and the screen is not `public` → `/login?next=<the address asked for>`,
+ *      with `&reason=expired|ended|invalid` after it when the browser's cookies say why there
+ *      is no session (`end-note.ts`; a first visit carries none);
  *   2. a session on a default credential, on a `session` screen → `/account/password`;
  *   3. a session whose profile is incomplete, on a `session` screen → `/account`;
  *   4. a session holding none of the screen's roles → `/403?from=<the address asked for>`;
@@ -64,7 +66,9 @@ import {
   screenAt,
   screenDecision,
 } from '@/shared/config';
+import { SESSION_END_REASON_PARAM } from '@/shared/lib/session-end-reason';
 
+import { guestSessionReasonFromJar } from './end-note';
 import type { SessionAccount } from './store';
 import { SESSION_COOKIE, subjectOf } from './store';
 
@@ -122,7 +126,15 @@ export async function enforceScreen(
   // 1. A guest, on anything but a public screen.
   if (decision === 'sign-in') {
     const next = await askedFor(screen, props);
-    redirect(next === null ? SIGN_IN_SCREEN : `${SIGN_IN_SCREEN}?${NEXT_PARAM}=${encodeURIComponent(next)}`);
+    // The reason follows `next` and never replaces it: `/login?next=…&reason=…`. It is added
+    // only where the cookies say why there is no session (`guestSessionReasonFromJar`), and a
+    // first visit stays `/login?next=…` exactly.
+    const reason = guestSessionReasonFromJar(jar);
+    const query = [
+      ...(next === null ? [] : [`${NEXT_PARAM}=${encodeURIComponent(next)}`]),
+      ...(reason === null ? [] : [`${SESSION_END_REASON_PARAM}=${reason}`]),
+    ].join('&');
+    redirect(query.length === 0 ? SIGN_IN_SCREEN : `${SIGN_IN_SCREEN}?${query}`);
   }
   // 2. `R-50`: a default credential opens nothing but the screens that change it.
   if (decision === 'change-password') redirect(CHANGE_PASSWORD_SCREEN);
