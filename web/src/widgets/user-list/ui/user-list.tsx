@@ -48,7 +48,7 @@ function walkRows(event: KeyboardEvent<HTMLTableSectionElement>): void {
   next.focus();
 }
 
-export function UserList({ selectedUid = null, onSelect }: UserListProps = {}) {
+export function UserList({ selectedUid = null, onSelect }: UserListProps) {
   const [scope, setScope] = useState<UserScope>('active');
   const [role, setRole] = useState<Role | ''>('');
   const [text, setText] = useState('');
@@ -142,11 +142,13 @@ export function UserList({ selectedUid = null, onSelect }: UserListProps = {}) {
                           href={routes.user(account.user_uid)}
                           aria-current={selected ? 'true' : undefined}
                           data-user-link=""
-                          onClick={onSelect === undefined ? undefined : (event) => {
-                            if (!isPlainClick(event)) return;
-                            event.preventDefault();
-                            onSelect(account.user_uid);
-                          }}
+                          {...(onSelect === undefined ? {} : {
+                            onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+                              if (!isPlainClick(event)) return;
+                              event.preventDefault();
+                              onSelect(account.user_uid);
+                            },
+                          })}
                         >{account.display_label}</Link><br /><small>{account.login}</small>
                       </td>
                       <td>{roleLabels(account.roles).join(', ') || 'Не назначены'}</td>
