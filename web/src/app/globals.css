@@ -667,6 +667,13 @@ a:hover {
   text-decoration-color: currentColor;
 }
 
+/* A disclosure's handle is a target: 24 px tall at the least (WCAG 2.5.8); they were 18.5 to 20.7 px. */
+summary {
+  min-height: 24px;
+  padding-block: var(--am-gap-2xs);
+  cursor: pointer;
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
