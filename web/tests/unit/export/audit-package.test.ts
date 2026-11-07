@@ -70,7 +70,7 @@ describe('what the package of a run is made of', () => {
     expect(options.fileName).toBe(`audit-package-${RUN}.zip`);
     expect(options.sources).toEqual([{ versionUid: VERSION, side: 'SOURCE' }]);
     expect(options.reports.map((report) => report.name)).toEqual([
-      csvFileName(RUN), `analysis-${RUN}.md`, `analysis-${RUN}.html`, `analysis-${RUN}.json`, `analysis-${RUN}.xlsx`,
+      csvFileName(RUN), `analysis-${RUN}.md`, `analysis-${RUN}.html`, `analysis-${RUN}.json`, `analysis-${RUN}-technical.xlsx`,
     ]);
     expect(built.summary).toMatchObject({ extended: 'included', extendedStatus: 'completed', fileName: options.fileName });
   });

@@ -18,7 +18,8 @@ import { PROJECT_UID, RUN_ID, VERSION_UID } from '../review/fixtures';
 
 const DOCUMENT_UID = 'doc_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 
-function job(n: number, overrides: Partial<ExecutionQueueItem> = {}): ExecutionQueueItem {
+/** A queued job at place `n` (the place is the dispatcher's `queue_position`); `queued: false` leaves it without one. */
+function job(n: number, overrides: Partial<ExecutionQueueItem> = {}, queued = true): ExecutionQueueItem {
   return {
     available_at: '2026-11-08T10:00:00Z',
     created_at: `2026-11-08T10:0${n}:00Z`,
@@ -32,9 +33,14 @@ function job(n: number, overrides: Partial<ExecutionQueueItem> = {}): ExecutionQ
     state: 'queued',
     version_ordinal: n,
     version_uid: VERSION_UID,
-    queue_position: n,
+    ...(queued ? { queue_position: n } : {}),
     ...overrides,
   } as ExecutionQueueItem;
+}
+
+/** A job in work: it has no place in the queue, and may carry an estimated finish. */
+function runningJob(n: number, overrides: Partial<ExecutionQueueItem> = {}): ExecutionQueueItem {
+  return job(n, { state: 'running', ...overrides }, false);
 }
 
 function pageOf(items: ExecutionQueueItem[], overrides: Partial<ExecutionQueuePage> = {}): ExecutionQueuePage {
@@ -52,7 +58,7 @@ const MINE = job(3, { run_id: RUN_ID });
 
 describe('the run’s place and the job that goes first', () => {
   it('reads the place from the dispatcher’s own position and names the first job when it is another run’s', () => {
-    const task = runNextTask(RUN, pageOf([job(1), job(2), MINE, job(4, { state: 'running', queue_position: undefined })]));
+    const task = runNextTask(RUN, pageOf([job(1), job(2), MINE, runningJob(4)]));
     expect(task).toMatchObject({ position: 3, ahead: 2, isNext: false, read: 'whole' });
     expect(task.next?.run_id).toBe('run_other_1');
     expect(nextTaskPlace(task)).toBe('№ 3 в очереди. Впереди в очереди: 2.');
@@ -108,9 +114,9 @@ describe('what is in work', () => {
   it('counts the jobs leased and running from the overview and takes the nearest estimate from the running jobs only', () => {
     const items = [
       job(1), MINE,
-      job(5, { state: 'running', queue_position: undefined, estimated_finish_at: '2026-11-08T12:30:00Z' }),
-      job(6, { state: 'running', queue_position: undefined, estimated_finish_at: '2026-11-08T11:15:00Z' }),
-      job(7, { state: 'running', queue_position: undefined }),
+      runningJob(5, { estimated_finish_at: '2026-11-08T12:30:00Z' }),
+      runningJob(6, { estimated_finish_at: '2026-11-08T11:15:00Z' }),
+      runningJob(7),
     ];
     const task = runNextTask(RUN, pageOf(items));
     expect(task.inWork).toBe(1);
@@ -137,9 +143,9 @@ describe('the card', () => {
   }
 
   it('shows the place, the first job with a link to its run, the reason and the figures for an expert', () => {
-    const markup = card(['expert'], pageOf([job(1), MINE]), { queue_reason: 'executor_at_capacity' });
+    const markup = card(['expert'], pageOf([job(1), job(2), MINE]), { queue_reason: 'executor_at_capacity' });
     expect(markup).toContain('data-run-next-task="whole"');
-    expect(markup).toContain('№ 2 в очереди. Впереди в очереди: 1.');
+    expect(markup).toContain('№ 3 в очереди. Впереди в очереди: 2.');
     expect(markup).toContain('Проект 1 · Раздел 1 · версия 1');
     expect(markup).toContain(`/projects/${PROJECT_UID}/runs/run_other_1`);
     expect(markup).toContain('В очереди: исполнитель занят.');
