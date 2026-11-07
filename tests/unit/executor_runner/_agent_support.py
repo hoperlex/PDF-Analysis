@@ -43,7 +43,7 @@ def load_module(name: str, path: Path) -> Any:
 
 
 def envelope(code: str, message: str) -> dict:
-    return {"contract_version": "1.38.0", "error_code": code, "message": message, "correlation_id": "corr-1",
+    return {"contract_version": "1.39.0", "error_code": code, "message": message, "correlation_id": "corr-1",
             "retryable": False}
 
 

@@ -11,7 +11,40 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.38.0` (`AR-V3-OPT-IN`)
+## Current contract `1.39.0` (`UI-PARITY-FINDING-ORIGIN`)
+
+Slice for register row `UI-A-73` (the original's «↩ Перенесено из V1» on a finding whose verdict an expert carried over from an
+earlier version) and `D-335`, migration `0058_finding_decision_origin`. **No operation, no error code.** One new schema,
+`DecisionCarriedFrom`.
+
+- **A carried finding decision names its source.** `carryOverDecision` (`W59-DECISION-CARRYOVER-01`) already appended the
+  confirming expert's verdict to the target finding as an ordinary event, and kept where it came from only in the event's
+  rendered `comment`. The new nullable `expert_decision_event.carried_from_decision_id` (migration `0058`: foreign key to the
+  table itself, `dec_` shape, not its own source, only an `accept` or a `reject`, a partial index) is written by the same
+  statement as the event. `DecisionCarriedFrom` (`decision_id`, `finding_uid`, `version_uid`, `version_ordinal`) is that link as
+  the wire shows it: the source decision, its finding and version, and the version's display order («V2», never an identity).
+- **The decision history and the journal.** `DecisionEvent.carried_from` (`listDecisionHistory`, `appendDecision`) and
+  `DecisionRecord.carried_from` (`listDecisions`, and the finding half of `listKnowledgeBaseEntries`) are **optional**: absent
+  for an event an expert made directly, and for every event written before the migration. They are not required-nullable like
+  `ProposalDecision.carried_from`, because the finding ledger's shapes predate the field, `appendDecision` answers a direct event
+  by construction, and the ledger's attributes (`severity`, `section`, `decided_severity`) are omitted when empty.
+- **The origin of a finding's current verdict.** `Finding.current_verdict_carried_from` and
+  `FindingDetail.current_verdict_carried_from` (`listRunFindings`, `getFinding`) carry the same object for the decision that
+  carries `current_verdict` -- the latest verdict-bearing event, as the projection reads it: a comment appended after a carried
+  acceptance leaves it standing, an expert's own verdict after it replaces it, and a withdrawal leaves none. Optional, absent
+  unless carried. A small object and not a bare ordinal, so the same shape names the source on all four reads and a screen that
+  wants the source finding does not read the whole history.
+- **`D-335` (part).** `AcceptedOptimisationProposal.carried_from` (required, nullable `ProposalDecisionCarriedFrom`, as on
+  `ProposalDecision`) lets «Принято» show the mark of an acceptance carried over from an earlier version's pass. The proposals'
+  CSV and workbook, the proposal-decision journal (`ProposalDecisionRecord`) and the knowledge base's «Предложения» still show
+  a carried decision as an ordinary one (`D-335`, narrowed).
+- **Not changed.** An event carried before `0058` has the comment and no link (the ledger is append-only); it reads as made
+  directly (`D-342`). The downgrade of `0058` refuses while a carried event exists.
+
+The API now has 273 paths, 301 operations and 726 schemas (the new schema is `DecisionCarriedFrom`); migration head `0058`. The
+domain catalogs are at candidate revision 56.
+
+## Contract `1.38.0` (`AR-V3-OPT-IN`, historical)
 
 AR v3 as an **opt-in mode** (`docs/program/AR-V3-OPT-IN-01.md`; owner words of 2026-11-07: «реализуй как переключаемую
 функцию -- по умолчанию используется импортированный вариант»). **No operation, no schema, no error code, no migration.**

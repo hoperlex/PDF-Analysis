@@ -1090,6 +1090,17 @@ The migration's downgrade refuses while a carried decision exists. No counts wer
 `SectionSpecification.row_count` and `AcceptedOptimisationProposalPage.total` already are the server's figures for «Форма 7 · N»
 and «Принято N».
 
+`UI-PARITY-FINDING-ORIGIN` (contract `1.39.0`, migration `0058_finding_decision_origin`, no new operation) gives a carried finding
+decision a structured source (`UI-A-73`, the original's «↩ Перенесено из V1»). The new nullable
+`expert_decision_event.carried_from_decision_id` (foreign key to the table itself, `dec_` shape, not itself, only an `accept` or a
+`reject`, a partial index) is written by `carryOverDecision` in the same statement as the carried event; before it the source
+was only in the event's rendered comment, which stays and is never parsed back (events carried before the migration read as made
+directly, `D-342`). The one new schema `DecisionCarriedFrom` (the source decision, its finding, its version and the version's
+display ordinal) is the optional `carried_from` of `DecisionEvent` and `DecisionRecord` and the optional
+`current_verdict_carried_from` of `Finding` and `FindingDetail` -- the origin of the decision that carries the current verdict,
+which a later verdict of the expert replaces. `AcceptedOptimisationProposal.carried_from` (`D-335`, part) is the optimisation
+side's twin on the accepted list. The downgrade of `0058` refuses while a carried event exists.
+
 `UI-PARITY-ADMIN-C2` (contract `1.36.0`, no migration) brings the administrator's side of the original's «Пользователи»
 and the «Диспетчер» counts. `Account.last_sign_in_at` (`UI-A-92`, «Последний вход») is the instant of the account's latest
 `access.sign_in_succeeded` event, read from the access journal for the accounts an answer names and never by the seam's

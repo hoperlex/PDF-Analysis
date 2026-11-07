@@ -161,10 +161,12 @@ _INSERT_EVENT = text(
     """
     INSERT INTO expert_decision_event (
         decision_id, finding_uid, finding_observation_id, event_type,
-        verdict, severity, comment, author_label, author_user_uid, command_id, correlation_id
+        verdict, severity, comment, author_label, author_user_uid, command_id, correlation_id,
+        carried_from_decision_id
     ) VALUES (
         :decision_id, :finding_uid, :finding_observation_id, :event_type,
-        :verdict, :severity, :comment, :author_label, :author_user_uid, :command_id, :correlation_id
+        :verdict, :severity, :comment, :author_label, :author_user_uid, :command_id, :correlation_id,
+        :carried_from_decision_id
     )
     RETURNING decision_id, recorded_at
     """
@@ -173,7 +175,8 @@ _INSERT_EVENT = text(
 _EVENT_BY_COMMAND = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at
+           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at,
+           carried_from_decision_id
     FROM expert_decision_event
     WHERE command_id = :command_id
     """
@@ -182,7 +185,8 @@ _EVENT_BY_COMMAND = text(
 _EVENTS_FOR_FINDING = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at
+           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at,
+           carried_from_decision_id
     FROM expert_decision_event
     WHERE finding_uid = :finding_uid
     ORDER BY sequence_no
@@ -216,6 +220,9 @@ class DecisionEvent:
     command_id: str | None
     recorded_at: object | None = None
     severity: str | None = None
+    #: `UI-A-73` (migration ``0058``): the decision of an earlier version's finding this event carries over, by its
+    #: identity; ``None`` for an event an expert made directly, which is every event written before the migration.
+    carried_from_decision_id: str | None = None
 
 
 def _translate(exc: DBAPIError) -> DomainError:
@@ -270,6 +277,7 @@ def _row_to_event(row) -> DecisionEvent:  # noqa: ANN001 - a SQLAlchemy RowMappi
         author_user_uid=row["author_user_uid"],
         command_id=row["command_id"],
         recorded_at=row["recorded_at"],
+        carried_from_decision_id=row["carried_from_decision_id"],
     )
 
 
@@ -285,6 +293,7 @@ def record_decision(
     correlation_id: str | None = None,
     author_label: str,
     author_user_uid: str | None,
+    carried_from_decision_id: str | None = None,
 ) -> DecisionEvent:
     """Append one expert decision event. Never updates and never deletes.
 
@@ -302,6 +311,12 @@ def record_decision(
     Replaying the same command under one idempotency key appends exactly one event: the
     unique index on ``command_id`` is the enforcement, and a second attempt returns the
     event that already exists rather than a conflict the caller must interpret.
+
+    ``carried_from_decision_id`` (`UI-A-73`) is written only by the confirmed carryover
+    (:func:`auditmanager.decisions.carryover.carry_over_decision`), in the same statement as the
+    event: the source decision it names. Its default is ``None`` -- a decision made directly --
+    and the database holds the shape (``dec_<ULID>``, an existing event, not the event itself,
+    an ``accept`` or a ``reject``).
     """
     if event_type == "revoke":
         raise DomainError(
@@ -367,6 +382,7 @@ def record_decision(
         "author_user_uid": author_user_uid,
         "command_id": command_id,
         "correlation_id": correlation_id,
+        "carried_from_decision_id": carried_from_decision_id,
     }
 
     try:
@@ -405,6 +421,7 @@ def record_decision(
         author_user_uid=author_user_uid,
         command_id=command_id,
         recorded_at=row["recorded_at"],
+        carried_from_decision_id=carried_from_decision_id,
     )
 
 
@@ -422,7 +439,8 @@ def decision_history(session: Session, finding_uid: str) -> tuple[DecisionEvent,
 _EVENTS_BY_ID = text(
     """
     SELECT decision_id, finding_uid, finding_observation_id, event_type,
-           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at
+           verdict, severity, comment, author_label, author_user_uid, command_id, recorded_at,
+           carried_from_decision_id
     FROM expert_decision_event
     WHERE decision_id IN :decision_ids
     """

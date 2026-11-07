@@ -145,7 +145,7 @@ describe('a connection whose settings were not read is not offered', () => {
     client.setQueryData(queryKeys.execution.connections(), { items: [READY.connection], pinned_models: [] });
     // Its detail read failed: the list is known, the settings are not.
     seedError(client, queryKeys.execution.connection(READY.connection.connection_id),
-      new ApiError(503, { contract_version: '1.38.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'c', retryable: true } satisfies ErrorEnvelope, 'c'));
+      new ApiError(503, { contract_version: '1.39.0', error_code: 'dependency_unavailable', message: 'm', correlation_id: 'c', retryable: true } satisfies ErrorEnvelope, 'c'));
     const markup = control(client);
     const option = optionFor(markup, READY.connection.connection_id);
     expect(option?.[0]).toContain('disabled');
@@ -165,7 +165,7 @@ describe('while the list loads or fails, the default route can still be estimate
   it('says the list is not read and keeps default-route estimation available', () => {
     const client = newClient();
     seedError(client, queryKeys.execution.connections(), new ApiError(503, {
-      contract_version: '1.38.0', error_code: 'dependency_unavailable', message: 'm',
+      contract_version: '1.39.0', error_code: 'dependency_unavailable', message: 'm',
       correlation_id: 'cid-list', retryable: true,
     }, 'cid-list'));
     const markup = control(client);

@@ -25,6 +25,7 @@ from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdentityError, ProjectUid
 
 from .policy import AGGREGATE_OPTIMISATION_PROPOSAL, VERDICT_ACCEPT, require_reader
+from .repository import CarriedFromRecord
 
 __all__ = ["AcceptedProposal", "list_accepted_proposals"]
 
@@ -35,15 +36,21 @@ _ACCEPTED = text(
         q.proposed_vendor, q.unit, q.quantity, q.current_unit_price, q.proposed_unit_price, q.currency, q.saving,
         m.name AS matched_name, p.name AS proposed_name,
         cur.proposal_decision_id, cur.comment, cur.actor_user_uid, cur.decided_at,
+        cd.proposal_decision_id AS carried_decision_id, cq.optimisation_pass_id AS carried_pass_id,
+        cp.version_uid AS carried_version_uid, cv.version_ordinal AS carried_version_ordinal,
         s.project_uid, pr.name AS project_name, s.document_uid, doc.display_title AS document_name, s.version_uid,
         c.section_code
     FROM optimisation_proposal q
     JOIN LATERAL (
-        SELECT d.proposal_decision_id, d.verdict, d.comment, d.actor_user_uid, d.decided_at
+        SELECT d.proposal_decision_id, d.verdict, d.comment, d.actor_user_uid, d.decided_at, d.carried_from_decision_id
         FROM optimisation_proposal_decision d
         WHERE d.optimisation_proposal_id = q.optimisation_proposal_id
         ORDER BY d.seq DESC LIMIT 1
     ) cur ON cur.verdict = :accept
+    LEFT JOIN optimisation_proposal_decision cd ON cd.proposal_decision_id = cur.carried_from_decision_id
+    LEFT JOIN optimisation_proposal cq ON cq.optimisation_proposal_id = cd.optimisation_proposal_id
+    LEFT JOIN optimisation_pass cp ON cp.optimisation_pass_id = cq.optimisation_pass_id
+    LEFT JOIN document_version cv ON cv.version_uid = cp.version_uid
     JOIN optimisation_pass s ON s.optimisation_pass_id = q.optimisation_pass_id
     JOIN price_list_position m ON m.price_list_position_id = q.matched_position_id
     JOIN price_list_position p ON p.price_list_position_id = q.proposed_position_id
@@ -84,6 +91,8 @@ class AcceptedProposal:
     comment: str | None
     actor_user_uid: str
     decided_at: datetime
+    #: `D-335`: where an acceptance carried over from an earlier version's pass came from; ``None`` for one made directly.
+    carried_from: CarriedFromRecord | None = None
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -140,6 +149,12 @@ def list_accepted_proposals(
             comment=row["comment"],
             actor_user_uid=row["actor_user_uid"],
             decided_at=row["decided_at"],
+            carried_from=(
+                None if row["carried_decision_id"] is None else CarriedFromRecord(
+                    proposal_decision_id=row["carried_decision_id"], optimisation_pass_id=row["carried_pass_id"],
+                    version_uid=row["carried_version_uid"], version_ordinal=int(row["carried_version_ordinal"]),
+                )
+            ),
         )
         for row in rows
     )

@@ -46,6 +46,7 @@ from auditmanager.api.schemas.dashboard import (
     VerdictCountView,
 )
 from auditmanager.api.schemas.decisions import (
+    DecisionCarriedFromView,
     DecisionEventView,
     DecisionRecordView,
     decision_event_body,
@@ -191,6 +192,33 @@ def _with_execution_status(session: Session, views: Sequence[Any]) -> list[Any]:
     return [
         replace(view, execution_status=known[view.finding_uid][0], execution_status_at=known[view.finding_uid][1])
         if view.finding_uid in known else view
+        for view in views
+    ]
+
+
+def _carried_from_view(origin: Any) -> DecisionCarriedFromView | None:
+    """`UI-A-73`: the wire view of a carried decision's origin; ``None`` for a decision made directly."""
+    if origin is None:
+        return None
+    return DecisionCarriedFromView(
+        decision_id=origin.decision_id, finding_uid=origin.finding_uid,
+        version_uid=origin.version_uid, version_ordinal=origin.version_ordinal,
+    )
+
+
+def _with_carried_origin(session: Session, views: Sequence[Any]) -> list[Any]:
+    """`UI-A-73`: each finding whose current verdict was carried over from an earlier version, with its origin.
+
+    One read for the whole list; a finding decided directly (or not at all) is returned unchanged.
+    """
+    from dataclasses import replace
+
+    from auditmanager.decisions.public import current_verdict_origins
+
+    origins = current_verdict_origins(session, [view.finding_uid for view in views])
+    return [
+        replace(view, current_verdict_carried_from=_carried_from_view(origins[view.finding_uid]))
+        if view.finding_uid in origins else view
         for view in views
     ]
 
@@ -2470,7 +2498,7 @@ class FindingAdapter(_SessionHolder):
                 views = [v for v in views if v.category == category]
             if verdict is not None:
                 views = [v for v in views if v.current_verdict == verdict]
-            return tuple(_with_execution_status(session, views))
+            return tuple(_with_carried_origin(session, _with_execution_status(session, views)))
 
         return self._read(work)
 
@@ -2500,10 +2528,10 @@ class FindingAdapter(_SessionHolder):
             history = decision_history(session, finding_uid)
             comments = [e.comment for e in history if e.comment]
             return FindingDetailView(
-                finding=_with_execution_status(session, [_finding_view(
+                finding=_with_carried_origin(session, _with_execution_status(session, [_finding_view(
                     row, evidence, verdict, matches[0].merged,
                     _v3_beta_citations(session, members),
-                )])[0],
+                )]))[0],
                 latest_comment=comments[-1] if comments else None,
                 decision_event_count=len(history),
             )
@@ -2583,7 +2611,15 @@ class DecisionAdapter(_SessionHolder):
     def decision_history(self, *, finding_uid: str) -> Sequence[DecisionEventView]:
         from auditmanager.decisions import decision_history as history
 
-        return self._read(lambda s: tuple(_event_view(e) for e in history(s, finding_uid)))
+        from auditmanager.decisions.public import carried_origins
+
+        def work(session: Session) -> Sequence[DecisionEventView]:
+            events = history(session, finding_uid)
+            # `UI-A-73`: the source of each carried event, read once for the whole history.
+            origins = carried_origins(session, [e.decision_id for e in events if e.carried_from_decision_id])
+            return tuple(_event_view(e, origins.get(e.decision_id)) for e in events)
+
+        return self._read(work)
 
     def proposal_decision_journal(self, *, project_uid: str | None = None) -> Sequence[models.ProposalDecisionRecord]:
         """`R-151h`: the proposal decision journal, each actor named by the account's display label."""
@@ -2672,10 +2708,11 @@ def _record_view(entry: Any) -> DecisionRecordView:
         severity=entry.severity,
         comment=entry.comment,
         section=entry.section,
+        carried_from=_carried_from_view(entry.carried_from),
     )
 
 
-def _event_view(event: Any) -> DecisionEventView:
+def _event_view(event: Any, origin: Any = None) -> DecisionEventView:
     return DecisionEventView(
         decision_id=event.decision_id,
         finding_uid=event.finding_uid,
@@ -2686,6 +2723,7 @@ def _event_view(event: Any) -> DecisionEventView:
         verdict=event.verdict,
         severity=event.severity,
         comment=event.comment,
+        carried_from=_carried_from_view(origin),
     )
 
 
@@ -5827,6 +5865,12 @@ class OptimisationProposalAdapter(_SessionHolder):
                     comment=row.comment,
                     actor_label=labels.of(row.actor_user_uid),
                     decided_at=row.decided_at,
+                    carried_from=None if row.carried_from is None else models.ProposalDecisionCarriedFrom(
+                        proposal_decision_id=row.carried_from.proposal_decision_id,
+                        optimisation_pass_id=row.carried_from.optimisation_pass_id,
+                        version_uid=row.carried_from.version_uid,
+                        version_ordinal=row.carried_from.version_ordinal,
+                    ),
                 )
                 for row in rows
             )

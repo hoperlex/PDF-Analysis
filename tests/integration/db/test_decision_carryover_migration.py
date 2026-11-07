@@ -27,7 +27,7 @@ from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.engine import create_database_engine
 
-HEAD = "0057_decision_carryover"
+HEAD = "0058_finding_decision_origin"  # the head the fixture migrates to; 0057 is a step below it
 PREVIOUS = "0056_optimisation_decisions"
 TABLE = "optimisation_proposal_decision"
 FORMAT = "ck_optimisation_proposal_decision_carried_from_format"
@@ -177,7 +177,7 @@ def test_the_downgrade_refuses_over_a_carried_decision_and_removes_the_column_wi
     refused = foundation_command(_alembic("downgrade", PREVIOUS), url)
     assert refused.returncode != 0, refused.describe()
     assert "carried-over" in (refused.stdout + refused.stderr), refused.describe()
-    assert _head(engine) == HEAD  # the refusal left the schema at 0057, with the carried decision in it
+    assert _head(engine) == HEAD  # the refusal rolled the whole downgrade back (0058 included), with the carried decision in it
     with engine.connect() as connection:
         assert connection.execute(
             text(f"SELECT count(*) FROM {TABLE} WHERE carried_from_decision_id IS NOT NULL")

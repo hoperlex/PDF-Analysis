@@ -48,11 +48,15 @@ from auditmanager.comparison.public import (
 )
 from auditmanager.decisions.public import (
     CARRYOVER_COMMAND_TYPE,
+    CarriedOrigin,
     CarryoverProvenance,
     append_decision_under_key,
+    carried_origins,
     carryover_comment,
     current_verdict,
+    current_verdict_origins,
     decision_history,
+    decision_journal,
 )
 from auditmanager.findings.queries import published_finding_evidence, published_findings
 from auditmanager.shared.errors import DomainError, ErrorCode
@@ -406,6 +410,23 @@ def test_a_confirmed_carryover_appends_one_attributed_event_with_its_provenance(
     assert (outcome.source_decision.decision_id, outcome.source_version_ordinal) == (
         seeded.decisions["A"], 1,
     )
+    # `UI-A-73`: the structured source is written with the event, and read back through it.
+    origin = CarriedOrigin(seeded.decisions["A"], seeded.source["A"][0], seeded.v1, 1)
+    assert event.carried_from_decision_id == seeded.decisions["A"]
+    assert decision_history(comparison_session, seeded.target["A"][0])[0].carried_from_decision_id == (
+        seeded.decisions["A"]
+    )
+    assert carried_origins(comparison_session, [event.decision_id, seeded.decisions["A"]]) == {
+        event.decision_id: origin,  # the source decision was made directly and has no origin
+    }
+    assert current_verdict_origins(
+        comparison_session, [seeded.target["A"][0], seeded.source["A"][0], seeded.target["F"][0]],
+    ) == {seeded.target["A"][0]: origin}
+    entry = next(e for e in decision_journal(comparison_session) if e.decision_id == event.decision_id)
+    assert entry.carried_from == origin
+    assert all(
+        e.carried_from is None for e in decision_journal(comparison_session) if e.decision_id != event.decision_id
+    )
     # The source and its ledger are only read.
     assert decision_history(comparison_session, seeded.source["A"][0]) == source_before
     # The command record repeats the provenance, under the carryover's own command type.
@@ -427,6 +448,26 @@ def test_a_confirmed_carryover_appends_one_attributed_event_with_its_provenance(
     remaining = {c.target_finding.finding_uid for c in carryover_candidates(
         comparison_session, comparison)}
     assert seeded.target["A"][0] not in remaining and seeded.target["F"][0] in remaining
+
+
+def test_the_origin_of_a_current_verdict_follows_the_verdict_not_the_latest_event(
+    comparison_session: Session, seeded: Seeded,
+) -> None:
+    """`UI-A-73`: a comment leaves the carried verdict standing with its origin; the expert's own verdict replaces it."""
+    carried = _carry(comparison_session, seeded, _request(seeded, "A")).event
+    target = seeded.target["A"]
+    origin = CarriedOrigin(seeded.decisions["A"], seeded.source["A"][0], seeded.v1, 1)
+
+    _decide(comparison_session, target, "comment", comment="Согласовано с проектировщиком.")
+    assert current_verdict(comparison_session, target[0]).latest_verdict_decision_id == carried.decision_id
+    assert current_verdict_origins(comparison_session, [target[0]]) == {target[0]: origin}
+
+    # The expert decides afresh: the verdict now stands on a direct event, so nothing says "carried" any more --
+    # while the carried event itself keeps its link in the history.
+    own = _decide(comparison_session, target, "reject", author=seeded.second_expert)
+    assert current_verdict(comparison_session, target[0]).latest_verdict_decision_id == own
+    assert current_verdict_origins(comparison_session, [target[0]]) == {}
+    assert carried_origins(comparison_session, [carried.decision_id, own]) == {carried.decision_id: origin}
 
 
 def test_a_rejection_is_carried_as_a_rejection(comparison_session, seeded) -> None:

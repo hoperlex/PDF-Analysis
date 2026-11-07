@@ -6,14 +6,19 @@ else is written to the ledger: the source finding, its events and every other ro
 they were, and a later verdict on the target supersedes the carried one exactly as it would
 supersede any other event.
 
-**Provenance lives in the event itself.** The schema has no provenance column, and none is
-needed: the carried event's ``comment`` is a deterministic rendering
-(:func:`carryover_comment`) of the carried-from finding, the carried decision event, both
-versions and the comparison mode, with the source version's ordinal as the human-readable
-«из версии N». The identities in it are opaque UIDs; the ordinal is display only and is
-never read back as an identity. The confirming expert is the event's ``author_user_uid``
-and ``author_label``, the time its ``recorded_at``. The command record claimed for the
-idempotency key repeats the same provenance in its outcome.
+**Provenance lives in the event itself, and is structured since migration ``0058`` (`UI-A-73`).**
+The carried event's ``carried_from_decision_id`` names the source decision by its identity,
+written in the same statement as the event; the source finding, its version and the version's
+display ordinal are read back through it (:func:`carried_origins`, never stored twice). The
+event's ``comment`` is still a deterministic rendering (:func:`carryover_comment`) of the
+carried-from finding, the carried decision event, both versions and the comparison mode, with
+the source version's ordinal as the human-readable «из версии N»; it is what the exact-repeat
+check compares and it is never parsed back. An event carried before ``0058`` has the comment and
+no link (the ledger is append-only, so nothing can add it): it reads as made directly, and
+``D-342`` records that. The identities are opaque UIDs; the ordinal is display only and is never
+read back as an identity. The confirming expert is the event's ``author_user_uid`` and
+``author_label``, the time its ``recorded_at``. The command record claimed for the idempotency
+key repeats the same provenance in its outcome.
 
 Rules, under one transaction that holds both finding rows ``FOR UPDATE`` (an ordinary
 ``appendDecision`` on either finding takes a key-share lock through the event's foreign key,
@@ -37,6 +42,7 @@ the recomputed comparison still proposes the pair before it calls :func:`carry_o
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -71,9 +77,12 @@ __all__ = [
     "CONFLICT_CARRYOVER_SOURCE_DECISION_NOT_CURRENT",
     "CONFLICT_CARRYOVER_TARGET_ALREADY_DECIDED",
     "CarriedDecision",
+    "CarriedOrigin",
     "CarryoverProvenance",
+    "carried_origins",
     "carry_over_decision",
     "carryover_comment",
+    "current_verdict_origins",
 ]
 
 CARRYOVER_COMMAND_TYPE: Final[str] = "carry_over_decision"
@@ -319,6 +328,7 @@ def carry_over_decision(
         command_id=str(claimed.command_id),
         author_label=author_label,
         author_user_uid=author_user_uid,
+        carried_from_decision_id=provenance.source_decision_id,
     )
     commands.succeed(
         session,
@@ -333,3 +343,86 @@ def carry_over_decision(
         },
     )
     return CarriedDecision(event, False, source_event, provenance)
+
+
+@dataclass(frozen=True, slots=True)
+class CarriedOrigin:
+    """Where one carried event came from (`UI-A-73`): the source decision, its finding and version.
+
+    The first three are identities; ``version_ordinal`` is the source version's display order («V2»)
+    and is never compared as an identity.
+    """
+
+    decision_id: str
+    finding_uid: str
+    version_uid: str
+    version_ordinal: int
+
+
+#: The source of each named carried event: through ``carried_from_decision_id`` to the source event, its finding, that
+#: finding's version and the version's ordinal. Inner joins, because the foreign keys make every link exist.
+_ORIGINS_OF_EVENTS = text(
+    """
+    SELECT e.decision_id AS carrier_id, s.decision_id AS source_decision_id, s.finding_uid AS source_finding_uid,
+           f.version_uid AS source_version_uid, v.version_ordinal AS source_version_ordinal
+    FROM expert_decision_event e
+    JOIN expert_decision_event s ON s.decision_id = e.carried_from_decision_id
+    JOIN finding f ON f.finding_uid = s.finding_uid
+    JOIN document_version v ON v.version_uid = f.version_uid
+    WHERE e.decision_id IN :decision_ids
+    """
+).bindparams(bindparam("decision_ids", expanding=True))
+
+#: The same, for the event that carries each finding's current verdict (``finding_current_verdict``'s
+#: ``latest_verdict_decision_id``): a finding whose verdict was later decided directly, or withdrawn, has no origin.
+_ORIGINS_OF_CURRENT_VERDICTS = text(
+    """
+    SELECT cv.finding_uid AS carrier_finding_uid, s.decision_id AS source_decision_id, s.finding_uid AS source_finding_uid,
+           f.version_uid AS source_version_uid, v.version_ordinal AS source_version_ordinal
+    FROM finding_current_verdict cv
+    JOIN expert_decision_event e ON e.decision_id = cv.latest_verdict_decision_id
+    JOIN expert_decision_event s ON s.decision_id = e.carried_from_decision_id
+    JOIN finding f ON f.finding_uid = s.finding_uid
+    JOIN document_version v ON v.version_uid = f.version_uid
+    WHERE cv.finding_uid IN :finding_uids
+    """
+).bindparams(bindparam("finding_uids", expanding=True))
+
+
+def carried_origins(session: Session, decision_ids: Sequence[str]) -> dict[str, CarriedOrigin]:
+    """The origin of each named event that was carried, keyed by the carried event's ``decision_id``.
+
+    An event made directly, an unknown identity and an event carried before migration ``0058`` are absent. One read
+    for the batch; an empty request reads nothing.
+    """
+    wanted = sorted({value for value in decision_ids if isinstance(value, str)})
+    if not wanted:
+        return {}
+    rows = session.execute(_ORIGINS_OF_EVENTS, {"decision_ids": wanted}).mappings().all()
+    return {
+        row["carrier_id"]: CarriedOrigin(
+            decision_id=row["source_decision_id"], finding_uid=row["source_finding_uid"],
+            version_uid=row["source_version_uid"], version_ordinal=int(row["source_version_ordinal"]),
+        )
+        for row in rows
+    }
+
+
+def current_verdict_origins(session: Session, finding_uids: Sequence[str]) -> dict[str, CarriedOrigin]:
+    """The origin of each finding's current verdict, keyed by ``finding_uid``, for those carried over.
+
+    The verdict stands on the latest verdict-bearing event (the projection's ``latest_verdict_decision_id``): a
+    comment appended after a carried acceptance leaves it standing, and an expert's own verdict after it replaces it
+    -- that finding then has no origin. A finding with no carried verdict is absent, never ``None``.
+    """
+    wanted = sorted({value for value in finding_uids if isinstance(value, str)})
+    if not wanted:
+        return {}
+    rows = session.execute(_ORIGINS_OF_CURRENT_VERDICTS, {"finding_uids": wanted}).mappings().all()
+    return {
+        row["carrier_finding_uid"]: CarriedOrigin(
+            decision_id=row["source_decision_id"], finding_uid=row["source_finding_uid"],
+            version_uid=row["source_version_uid"], version_ordinal=int(row["source_version_ordinal"]),
+        )
+        for row in rows
+    }
