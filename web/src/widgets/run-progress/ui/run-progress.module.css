@@ -157,6 +157,11 @@
   margin: 0 0 var(--am-gap-sm);
 }
 
+/* `UI-B-70`: the waiting run's card «Следующая задача», a panel of its own over the columns. */
+.nextTask {
+  margin: var(--am-gap-sm) 0;
+}
+
 .caption {
   margin: 0 0 var(--am-gap-sm);
   color: var(--am-ink-muted);
