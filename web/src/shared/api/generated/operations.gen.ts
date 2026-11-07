@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.40.0 (OpenAPI 3.1.0)
- *   sha256 86aa35c0623ccc61e1cb678c34f21a811051bb02b1fcea7fe91070876d101895
+ *   sha256 4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1941,7 +1941,7 @@ export type CreateStageUploadResult = StageUpload;
 /**
  * Decide Optimisation Proposal
  *
- * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters), or `revoke` -- the withdrawal of the decision in force («Снять решение»), an event like any other that takes the proposal back to `pending`, with an optional comment, refused with `409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has no decision in force. Decisions are only appended, never changed; the latest one is current (unless it is a `revoke`), and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
+ * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters), or `revoke` -- the withdrawal of the decision in force («Снять решение»), an event like any other that takes the proposal back to `pending`, with an optional comment, refused with `409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has no decision in force. Decisions are only appended, never changed; the latest one is current (unless it is a `revoke`), and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed. A decision that is ordered after a carried decision on the same proposal (`carryOverProposalDecisions`) simply takes the next place; the one case in which its place was taken meanwhile by a writer that held no lock is `409 conflict` with `conflict_reason` `proposal_decision_raced`, nothing is written and the same request can be repeated (contract 1.40.0).
  */
 export type DecideOptimisationProposalInput = {
   /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */

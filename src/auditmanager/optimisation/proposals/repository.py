@@ -1,10 +1,13 @@
 """Statements over the three tables of migration ``0027_optimisation_proposals``. No rule here.
 
 Writers serialise on transaction advisory locks -- one per document version for passes, one
-per proposal for decisions -- so two concurrent starts of the same inputs never both insert
-(the natural-key unique constraint is the backstop) and two concurrent decisions never take
-the same ``seq`` (the unique pair is the backstop). The locks are released at commit or
-rollback.
+per proposal for decisions, one per pass for everything that appends decisions to its proposals --
+so two concurrent starts of the same inputs never both insert (the natural-key unique constraint
+is the backstop) and two concurrent decisions never take the same ``seq`` (the unique pair is the
+backstop). An ordinary decision takes the pass's lock and then its proposal's; a carry-over takes
+the target pass's lock once for its whole request, so a carried event and an expert's own decision
+on the same proposal are ordered and neither fails the other (`D-348`). The locks are released at
+commit or rollback.
 
 Proposals are written with one statement per chunk: the rows travel as one JSON array and
 ``jsonb_to_recordset`` expands them; every price, quantity and saving reaches ``numeric`` from
@@ -165,6 +168,12 @@ _PROPOSAL_TOTAL = text(f"SELECT count(*) {_PROPOSAL_FROM} {_PROPOSAL_FILTER}")
 _SELECT_PROPOSAL = text(
     f"SELECT {_PROPOSAL_COLUMNS} {_PROPOSAL_FROM} WHERE q.optimisation_proposal_id = :id"
 )
+#: One entry in the lock table per request, however many proposals a carry-over writes (a lock per carried decision would
+#: hold one per proposal -- up to 30 000 -- until the commit). Always taken before ``_LOCK_PROPOSAL``, never after it.
+_LOCK_PASS_DECISIONS = text(
+    "SELECT pg_advisory_xact_lock(hashtextextended("
+    "'auditmanager.optimisation_pass_decisions|' || :pass_id, 0))"
+)
 _LOCK_PROPOSAL = text(
     "SELECT pg_advisory_xact_lock(hashtextextended("
     "'auditmanager.optimisation_proposal|' || :proposal, 0))"
@@ -199,7 +208,8 @@ _DECISION_HISTORY = text(
     "WHERE d.optimisation_proposal_id = :proposal ORDER BY d.seq"
 )
 #: A carried decision goes to a proposal that has no event, so its ``seq`` is 1. ``ON CONFLICT`` on the
-#: ``(proposal, seq)`` key leaves it unwritten when an ordinary decision got there first, with no lock held per proposal.
+#: ``(proposal, seq)`` key leaves it unwritten when an ordinary decision got there first -- the backstop behind the pass
+#: lock the request holds (`D-348`), with no lock held per proposal.
 _INSERT_CARRIED = text(
     "INSERT INTO optimisation_proposal_decision (proposal_decision_id, "
     "optimisation_proposal_id, seq, verdict, comment, actor_user_uid, command_id, "
@@ -625,6 +635,11 @@ class ProposalRepository:
         return stored
 
     # -- decisions -----------------------------------------------------------
+
+    def lock_pass_decisions(self, session: Session, pass_id: str) -> None:
+        """Serialise the writers of this pass's decisions until the transaction ends (`D-348`): a carry-over holds it for its
+        whole request, an ordinary decision takes it before :meth:`lock_proposal`."""
+        session.execute(_LOCK_PASS_DECISIONS, {"pass_id": pass_id})
 
     def lock_proposal(self, session: Session, proposal_id: str) -> None:
         session.execute(_LOCK_PROPOSAL, {"proposal": proposal_id})

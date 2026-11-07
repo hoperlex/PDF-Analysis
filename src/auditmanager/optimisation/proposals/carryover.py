@@ -28,10 +28,15 @@ force there are carried into the new pass. This is the proposals' counterpart of
 **The source** must be a pass of the *same document set* started over an *earlier version* than the target's; otherwise
 ``conflict`` with one of :data:`~auditmanager.optimisation.proposals.policy.CARRYOVER_REFUSAL_REASONS`.
 
-**Concurrency.** A carried decision always goes to a proposal that has no event, so its ``seq`` is ``1``; it is inserted
-``ON CONFLICT DO NOTHING`` on the ``(proposal, seq)`` key. A concurrent ordinary decision that won the race leaves the
-carried one unwritten and counted as ``target_decided`` -- an expert's act is never overwritten -- and no advisory lock per
-proposal is held (a long request would otherwise hold one lock-table entry per carried decision).
+**Concurrency.** The request takes the target pass's decision lock (:meth:`ProposalRepository.lock_pass_decisions`) once,
+before it reads the two passes, and holds it to the commit; an ordinary decision on a proposal of that pass takes the same
+lock before its own, so the two are ordered (`D-348`): a decision that comes first is read by the plan (``target_decided``),
+one that comes later waits for the commit and takes ``seq`` 2 after the carried event. Before this lock a decision could read
+``seq`` 1, lose the slot to a carried event that committed in between, and fail on the unique pair -- a ``500`` and a lost
+decision. One lock per request, not one per carried decision: the lock table would otherwise hold an entry per proposal
+(up to 30 000) until the commit. A carried decision always goes to a proposal that has no event, so its ``seq`` is ``1``;
+it is still inserted ``ON CONFLICT DO NOTHING`` on the ``(proposal, seq)`` key, the backstop for a writer that holds no lock:
+an expert's act is never overwritten, and the carried one is counted as ``target_decided``.
 
 **Idempotency.** The request is one keyed command; each decision it appends is claimed under a key derived from the
 request's key, the two passes and the two proposals, so a decision is carried once however the request is retried. An
@@ -292,6 +297,8 @@ def carry_over_proposal_decisions(
     if source_ordinal >= target_pass.version_ordinal:
         raise _refused(REFUSAL_CARRYOVER_SOURCE_NOT_EARLIER)
 
+    # `D-348`: ordered against the ordinary decisions of this pass for the whole request, before anything is read.
+    repository.lock_pass_decisions(session, target_id)
     plan = plan_carryover(
         repository.every_proposal(session, source_id), repository.every_proposal(session, target_id)
     )
