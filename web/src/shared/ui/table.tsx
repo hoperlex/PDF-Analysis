@@ -26,7 +26,7 @@ export interface TableProps<Row> {
 
 export function Table<Row>({ columns, rows, rowKey, caption, currentKey }: TableProps<Row>) {
   return (
-    <div className={styles.scroll}>
+    <div className={styles.scroll} role="region" aria-label={caption ?? 'Таблица'} tabIndex={0}>
       <table className={styles.table}>
         {caption === undefined ? null : <caption className={styles.caption}>{caption}</caption>}
         <thead>
