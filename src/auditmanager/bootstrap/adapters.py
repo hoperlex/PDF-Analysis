@@ -4064,9 +4064,15 @@ class ComparisonAdapter(_SessionHolder):
                 ErrorCode.INTERNAL_ERROR,
                 message="the stored comparison inputs contradict their own constraints",
             ) from exc
+        # `UI-A-73`: the carried event names its source as the history will -- from the link the ledger holds, so an event
+        # carried before migration 0058 (no link; an exact repeat answers it) is answered as the history shows it.
+        origin = None if outcome.event.carried_from_decision_id is None else DecisionCarriedFromView(
+            decision_id=outcome.source_decision.decision_id, finding_uid=outcome.source_finding_uid,
+            version_uid=outcome.source_version_uid, version_ordinal=outcome.source_version_ordinal,
+        )
         return models.CarryOverDecisionResponse(
             event=models.DecisionEvent.model_validate(
-                decision_event_body(_event_view(outcome.event))
+                decision_event_body(_event_view(outcome.event, origin))
             ),
             current_verdict=models.Verdict(outcome.target_current_verdict),
             replayed=outcome.replayed,

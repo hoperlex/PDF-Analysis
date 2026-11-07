@@ -168,6 +168,41 @@ def test_the_three_checks_hold_the_column_and_each_can_fail(at_head: tuple[Engin
         assert not _breaks(engine, VERDICT, decision=CARRIED, finding=OTHER_FINDING, event_type=event_type, carried_from=SOURCE)
 
 
+def _delete_with_the_append_only_trigger_off(engine: Engine, where: str) -> int:
+    """What ``scripts/recovery/project_erase.py`` does: the one named trigger off, a DELETE, the trigger on again."""
+    trigger = "trg_expert_decision_event_append_only"
+    with engine.begin() as connection:
+        connection.execute(text(f"ALTER TABLE {TABLE} DISABLE TRIGGER {trigger}"))
+        deleted = connection.execute(text(f"DELETE FROM {TABLE} WHERE {where}")).rowcount
+        connection.execute(text(f"ALTER TABLE {TABLE} ENABLE TRIGGER {trigger}"))
+    return int(deleted)
+
+
+def test_the_foreign_key_restricts_a_delete_of_a_cited_source_but_one_statement_may_remove_both(
+    at_head: tuple[Engine, str],
+) -> None:
+    engine, _ = at_head
+    with _planting(engine) as connection:
+        _insert(connection, decision=SOURCE)
+        _insert(connection, decision=CARRIED, finding=OTHER_FINDING, carried_from=SOURCE)
+    # The source alone is held by the carried event that cites it (RESTRICT) -- with the append-only trigger off, the
+    # foreign key is the only thing in the way, so this proves it can refuse.
+    with pytest.raises(DBAPIError) as refused:
+        _delete_with_the_append_only_trigger_off(engine, f"decision_id = '{SOURCE}'")
+    assert FOREIGN_KEY in str(refused.value.orig)
+    with engine.connect() as connection:
+        assert connection.execute(text(f"SELECT count(*) FROM {TABLE}")).scalar_one() == 2
+    # The project erase deletes a whole project's ledger in one statement; a carried event and its source in that
+    # statement go together, so a carried event does not make a project impossible to erase.
+    assert _delete_with_the_append_only_trigger_off(engine, f"decision_id IN ('{SOURCE}', '{CARRIED}')") == 2
+    with engine.connect() as connection:
+        assert connection.execute(text(f"SELECT count(*) FROM {TABLE}")).scalar_one() == 0
+        trigger = connection.execute(
+            text("SELECT tgenabled FROM pg_trigger WHERE tgname = 'trg_expert_decision_event_append_only'")
+        ).scalar_one()
+        assert trigger == "O"  # enabled again: the erase tool compares the whole trigger state afterwards
+
+
 def test_the_downgrade_refuses_over_a_carried_event_and_removes_the_column_without_one(
     at_head: tuple[Engine, str], foundation_command: Any
 ) -> None:
