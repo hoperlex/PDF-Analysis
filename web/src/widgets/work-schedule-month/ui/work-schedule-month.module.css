@@ -138,9 +138,14 @@
   background: var(--am-paper);
 }
 
+/*
+ * `min-width`: the engineer column (168 px) and the 31 days of the longest month at 26 px each, so that a day's header toggle and
+ * its absence toggle, both as wide as their column, are 24 px targets at the least (WCAG 2.5.8). It was 860: the narrow days off
+ * were 20 px and the others 23, and every toggle in a day column was 15 to 19 px wide. The month's own box scrolls, as before.
+ */
 .grid {
   width: 100%;
-  min-width: 860px;
+  min-width: 984px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -180,8 +185,13 @@
   text-transform: uppercase;
 }
 
+/* A header cell hands its whole width to the toggle in it (no padding), so the toggle is as wide as the column less a border. */
+.grid thead th.dayColumn {
+  padding-inline: 0;
+}
+
 .dayColumn[data-day-off] {
-  width: 20px;
+  width: calc(var(--am-gap-lg) + var(--am-gap-2xs));
   background: var(--am-surface-sunken);
 }
 
@@ -216,6 +226,7 @@
 
 .dayToggle {
   width: 100%;
+  min-height: var(--am-gap-lg);
   margin: 0;
   padding: 0;
   border: 1px dashed var(--am-line-strong);
@@ -316,7 +327,10 @@
   background: var(--am-accent-light);
 }
 
+/* «+N»: a 24 x 24 px target at the least (it was 20 x 17). */
 .more {
+  min-width: var(--am-gap-lg);
+  min-height: var(--am-gap-lg);
   margin: 0;
   padding: 0 var(--am-gap-xs);
   border: 0;
