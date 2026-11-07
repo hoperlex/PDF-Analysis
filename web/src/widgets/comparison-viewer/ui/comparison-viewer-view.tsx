@@ -6,7 +6,7 @@
  * markup the reader gets (the shape of `PortalBlockListView`).
  */
 
-import type { HTMLAttributes, ReactNode, Ref } from 'react';
+import type { HTMLAttributes, KeyboardEventHandler, ReactNode, Ref } from 'react';
 
 import type { ComparisonLayer, ComparisonPageRef, ComparisonSheetPair } from '@/shared/api';
 import { pairReasonWords } from '@/entities/version-series';
@@ -30,6 +30,10 @@ export interface ViewerNavigation {
   readonly onPrevious?: () => void;
   readonly onNext?: () => void;
   readonly onClose?: () => void;
+  /** Where this sheet is among those the arrows walk, from 1: «3 / 12» (`vcv-nav`). Absent: the place is not said. */
+  readonly position?: { readonly index: number; readonly total: number };
+  /** «Только изменённые листы»: the arrows skip the sheets that are the same. Absent: no such choice. */
+  readonly onlyChanged?: { readonly checked: boolean; readonly onChange: (on: boolean) => void };
 }
 
 export interface TileStatus {
@@ -44,6 +48,8 @@ export type ComparisonViewerData = Omit<ComparisonSheetPair, 'sheet_pair_id' | '
 export interface ComparisonViewerViewProps {
   readonly pair: ComparisonViewerData;
   readonly showEvidencePanels?: boolean;
+  /** The versions the two sheets belong to, as the screen names them («Версия №2 · ЭМ-изм1.pdf»); absent: the sheets are named alone. */
+  readonly versionLabels?: { readonly a?: string; readonly b?: string };
   /** `null`: the pair has no sheet the viewer can draw (no canvas, no resolution, no size passed). */
   readonly geometry: ViewerGeometry | null;
   readonly context: ViewerContext;
@@ -52,6 +58,10 @@ export interface ComparisonViewerViewProps {
   readonly dispatch: (action: ViewerAction) => void;
   readonly navigation?: ViewerNavigation;
   readonly stageRef?: Ref<HTMLDivElement>;
+  /** The root of the viewer: the island focuses it so that ← and → walk the differences at once (the original's overlay does). */
+  readonly rootRef?: Ref<HTMLDivElement>;
+  /** ← and → on the whole viewer, not on the sheet only; the island ignores the keys typed into a field. */
+  readonly onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
   readonly paneHandlers?: HTMLAttributes<HTMLDivElement>;
   readonly dragging?: boolean;
   /** `CMP-VC-UI-02`: the side panel «Изменения в листе» (a node handed in by the island) and the evidence it focused. */
@@ -71,10 +81,12 @@ const BADGE_TONE: Readonly<Record<string, string>> = {
 };
 
 /** «Было: л. 5 · План освещения» and «Стало: нет в этой версии»: the sheet of one side, by its place in the pair. */
-function sheetName(side: Side, page: ComparisonPairPageLike | undefined): string {
+function sheetName(side: Side, page: ComparisonPairPageLike | undefined, version?: string): string {
   if (page === undefined) return `${SIDE_WORDS[side]}: нет в этой версии`;
   const number = page.sheet_number === undefined ? `стр. ${(page.page as ComparisonPageRef).page_number}` : `л. ${page.sheet_number}`;
-  return `${SIDE_WORDS[side]}: ${number}${page.title === undefined ? '' : ` · ${page.title}`}`;
+  // The version first, as the original's header says «A <label> · стр. N · лист S»: the window covers the matrix, so it must say which versions it holds.
+  const where = version === undefined || version === '' ? number : `${version} · ${number}`;
+  return `${SIDE_WORDS[side]}: ${where}${page.title === undefined ? '' : ` · ${page.title}`}`;
 }
 
 type ComparisonPairPageLike = NonNullable<ComparisonSheetPair['page_a']>;
@@ -93,7 +105,7 @@ function Choice({ checked, disabled, title, layer, onChange, children }: { check
 }
 
 export function ComparisonViewerView({
-  pair, geometry, context, state, tiles, dispatch, navigation, stageRef, paneHandlers, dragging, sidePanel, evidence, onEvidence,
+  pair, geometry, context, state, tiles, dispatch, navigation, stageRef, rootRef, onKeyDown, paneHandlers, dragging, sidePanel, evidence, onEvidence, versionLabels,
   showEvidencePanels = true,
 }: ComparisonViewerViewProps) {
   const differences = pair.differences ?? [];
@@ -210,8 +222,18 @@ export function ComparisonViewerView({
           {navigation === undefined ? null : (
             <fieldset className={styles.group}>
               <legend className={styles.groupTitle}>Листы</legend>
-              <button type="button" className="am-button am-button--quiet am-button--small" disabled={navigation.onPrevious === undefined} onClick={navigation.onPrevious}>‹ лист</button>
-              <button type="button" className="am-button am-button--quiet am-button--small" disabled={navigation.onNext === undefined} onClick={navigation.onNext}>лист ›</button>
+              <button type="button" className="am-button am-button--quiet am-button--small" disabled={navigation.onPrevious === undefined} title="Открыть предыдущую пару листов. Недоступно на первом листе." onClick={navigation.onPrevious}>‹ лист</button>
+              {navigation.position === undefined ? null : (
+                <span className={styles.zoom} data-sheet-position={navigation.position.index}>
+                  {navigation.position.index} / {navigation.position.total}
+                </span>
+              )}
+              <button type="button" className="am-button am-button--quiet am-button--small" disabled={navigation.onNext === undefined} title="Открыть следующую пару листов. Недоступно на последнем листе." onClick={navigation.onNext}>лист ›</button>
+              {navigation.onlyChanged === undefined ? null : (
+                <Choice checked={navigation.onlyChanged.checked} title="Листать только листы с изменениями: совпадающие пропускаются." onChange={navigation.onlyChanged.onChange}>
+                  Только изменённые листы
+                </Choice>
+              )}
               {navigation.onClose === undefined ? null : <button type="button" className="am-button am-button--quiet am-button--small" onClick={navigation.onClose}>✕ Закрыть</button>}
             </fieldset>
           )}
@@ -239,10 +261,16 @@ export function ComparisonViewerView({
   }
 
   return (
-    <div className={styles.viewer} data-comparison-viewer="" data-mode={state.mode}>
+    <div
+      ref={rootRef}
+      className={styles.viewer}
+      data-comparison-viewer=""
+      data-mode={state.mode}
+      {...(onKeyDown === undefined ? {} : { tabIndex: -1, onKeyDown })}
+    >
       <header className={styles.header}>
-        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('a', pair.page_a)}</span></h2>
-        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('b', pair.page_b)}</span></h2>
+        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('a', pair.page_a, versionLabels?.a)}</span></h2>
+        <h2 className={styles.sheetName}><span className={styles.sheetSide}>{sheetName('b', pair.page_b, versionLabels?.b)}</span></h2>
         <div className={styles.facts}>
           {status === undefined ? null : <span className={`am-badge am-badge--${BADGE_TONE[status] ?? 'inert'}`}>{STATUS_LABELS[status]}</span>}
           {pair.ai_dependent === true ? <span className="am-badge am-badge--inert">пара связана с участием ИИ</span> : null}

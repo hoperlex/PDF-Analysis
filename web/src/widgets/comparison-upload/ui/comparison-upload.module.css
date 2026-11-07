@@ -17,6 +17,23 @@
   background: var(--am-surface);
 }
 
+/*
+ * The window around the dialog (`upload-window.tsx`): a native modal `<dialog>`, which the browser lifts over the page and centres.
+ * The dialog inside keeps its own layout; the window only gives it a width and a height to scroll in.
+ */
+.window {
+  width: min(60rem, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  max-height: 94vh;
+  padding: 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: auto;
+}
+
 .header {
   display: flex;
   flex-wrap: wrap;

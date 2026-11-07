@@ -109,6 +109,34 @@ export function pairOfRow(
 
 const UNCHANGED: readonly ComparisonSheetStatus[] = ['same', 'same_zones_changed'];
 
+/** A pair that is neither the same nor the same but for service zones: «Только изменённые листы» keeps it. */
+export function isChangedPair(pair: ComparisonSheetPair): boolean {
+  return pair.status !== undefined && !UNCHANGED.includes(pair.status);
+}
+
+/**
+ * What the pairs of the chosen transition say in numbers, with the sheets that stand in one version only: «только в №1»
+ * (removed in the newer one) and «только в №2» (added in it). Arithmetic over the statuses the server gave, never a new verdict.
+ */
+export interface PairTally {
+  readonly sheets: number;
+  readonly onlyOld: number;
+  readonly onlyNew: number;
+  readonly changed: number;
+  readonly needsReview: number;
+}
+
+export function pairTally(pairs: readonly ComparisonSheetPair[]): PairTally {
+  const count = (status: ComparisonSheetStatus): number => pairs.filter((pair) => pair.status === status).length;
+  return {
+    sheets: pairs.length,
+    onlyOld: count('removed'),
+    onlyNew: count('added'),
+    changed: pairs.filter(isChangedPair).length,
+    needsReview: count('needs_review'),
+  };
+}
+
 /** «только изменения»: the rows whose pair is neither the same nor the same but for service zones (`:349`). */
 export function changedRows(
   rows: readonly ComparisonMatrixRow[],
@@ -116,8 +144,8 @@ export function changedRows(
   pairs: readonly ComparisonSheetPair[],
 ): ComparisonMatrixRow[] {
   return rows.filter((row) => {
-    const status = pairOfRow(row, sides, pairs)?.status;
-    return status !== undefined && !UNCHANGED.includes(status);
+    const pair = pairOfRow(row, sides, pairs);
+    return pair !== null && isChangedPair(pair);
   });
 }
 

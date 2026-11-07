@@ -12,7 +12,7 @@
 
 import type { ComparisonOverviewCounters, ComparisonOverviewSet, ComparisonStepId, ComparisonStepState } from '@/shared/api';
 
-import { isRunningState, stepRank } from './steps';
+import { SHOWN_STEPS, isRunningState, stepRank } from './steps';
 
 export type OverviewGroup = 'waiting' | 'running' | 'failed' | 'ready';
 export type OverviewFilter = 'all' | OverviewGroup;
@@ -109,6 +109,39 @@ export interface OverviewView {
 }
 
 export const INITIAL_VIEW: OverviewView = { query: '', mark: '', filter: 'all', sort: { key: 'code', direction: 'asc' } };
+
+/**
+ * What the table keeps between visits (`vc-projects:filter|mark|sort|dir`, `:253-262`): the group tile, the mark and the order. The
+ * search is not kept, as the original's is not. Without it the filter «Ждут действия» is gone each time the reader opens a set and
+ * comes back to the table.
+ */
+export const STORED_VIEW_KEY = 'am.version-compare.overview-view';
+
+const FILTER_KEYS: readonly string[] = OVERVIEW_FILTERS.map((filter) => filter.key);
+const SORT_KEYS: readonly string[] = ['code', 'step', 'updated', 'versions', ...SHOWN_STEPS];
+
+export function storedViewOf(view: OverviewView): string {
+  return JSON.stringify({ mark: view.mark, filter: view.filter, sort: view.sort });
+}
+
+/** The view a stored string says; anything it does not say rightly (unknown filter, sort key, malformed text) is the initial one. */
+export function parseStoredView(raw: string | null): OverviewView {
+  if (raw === null) return INITIAL_VIEW;
+  try {
+    const value = JSON.parse(raw) as { mark?: unknown; filter?: unknown; sort?: { key?: unknown; direction?: unknown } } | null;
+    if (value === null || typeof value !== 'object') return INITIAL_VIEW;
+    const filter = FILTER_KEYS.includes(value.filter as string) ? (value.filter as OverviewFilter) : INITIAL_VIEW.filter;
+    const key = value.sort?.key;
+    const direction = value.sort?.direction;
+    const sort: Sort =
+      typeof key === 'string' && SORT_KEYS.includes(key) && (direction === 'asc' || direction === 'desc')
+        ? { key: key as SortKey, direction }
+        : INITIAL_VIEW.sort;
+    return { query: '', mark: typeof value.mark === 'string' ? value.mark : '', filter, sort };
+  } catch {
+    return INITIAL_VIEW;
+  }
+}
 
 /** The sets the search and the mark let through: what the five counters count (`:318`). */
 export function inScope(sets: readonly ComparisonOverviewSet[], view: Pick<OverviewView, 'query' | 'mark'>): ComparisonOverviewSet[] {
