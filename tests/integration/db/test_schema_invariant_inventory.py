@@ -358,6 +358,19 @@ from sqlalchemy import Engine, text
 #: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
 #: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
 #: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
+#: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), chained after ``0059``, measured on a
+#: throwaway PostgreSQL (the project image, stand ``am-lane-s2-pg``) upgraded ONCE to ``0060`` (a down/up cycle leaves a gap in the
+#: ordinal positions of ``audit_run`` and so another columns digest; this seal is the fresh one): ``audit_run.started_from_run_id`` and
+#: ``start_stage_id`` (columns +2, to 1681), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
+#: itself, the start stage, both-or-neither; constraints +5, to 2057), the partial index on the pair (indexes +1, to 483), and the
+#: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 254 with a new digest). Relations,
+#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0059`` seal below.
+#: Resealed 2026-11-09 for ``0059_decision_memory`` (`ADR-0027`, `DECISION-MEMORY-01` phase M1), measured on a throwaway PostgreSQL (the
+#: project image, stand ``am-lane-mem-m1-pg``) by this test's own observed output on a fresh database at ``0059``: relations +8 (the
+#: eight tables of the decision memory, to 156), columns +90 (14 + 10 + 2 + 8 + 11 + 14 + 11 + 20, to 1679), constraints +99 (eight
+#: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
+#: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
+#: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
 #: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), measured on a throwaway PostgreSQL (the
 #: project image, stand ``am-lane-s2-pg``): the constraint/index/trigger digests on the lane database upgraded to ``0060``, down to
 #: ``0058`` and up again, the **columns** digest on a fresh database upgraded once (a down/up cycle leaves a gap in the ordinal
