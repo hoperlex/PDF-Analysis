@@ -31,7 +31,6 @@ import { useCommandKey } from '../model/use-command-key';
 import { useReviseExecutorConnection } from '../model/use-manage-executor-connection';
 import { CommandFailure } from './command-failure';
 import { SettingsFields } from './settings-fields';
-import styles from './connection-form.module.css';
 
 export interface ReviseConnectionFormProps {
   readonly connection: ExecutorConnection;
@@ -101,7 +100,7 @@ export function ReviseConnectionForm({
   }
 
   return (
-    <form className={`am-form ${styles.form}`} onSubmit={(event) => void submit(event)} onChange={watch} data-executor-revise-form={connection.connection_id}>
+    <form className="am-form am-form--two" onSubmit={(event) => void submit(event)} onChange={watch} data-executor-revise-form={connection.connection_id}>
       <h3>Изменить настройки: «{connection.display_name}»</h3>
       <SettingsFields
         kind={connection.kind}

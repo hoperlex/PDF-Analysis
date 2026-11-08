@@ -2672,6 +2672,31 @@ button.am-badge {
   gap: var(--am-gap-xs);
 }
 
+/*
+ * `am-form--two`: a form that opts into two columns. The short fields (a select, a port, a number of seconds) stand two to a
+ * row; what is long (a field marked `am-form__field--wide`, a heading, a hint, a note, the buttons) takes the whole row. The
+ * tracks are as many as fit at 17 rem each, so the form is one column wherever two would be squeezed, whatever the screen: a
+ * form in a narrow card falls back by itself, with no breakpoint to keep in step with the frame.
+ */
+.am-form--two {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: start;
+  column-gap: var(--am-gap);
+  max-width: 52rem;
+}
+
+.am-form--two > * {
+  grid-column: 1 / -1;
+}
+
+.am-form--two > .am-form__field {
+  grid-column: auto;
+}
+
+.am-form--two > .am-form__field--wide {
+  grid-column: 1 / -1;
+}
+
 .am-form__hint {
   margin: 0;
   color: var(--am-ink-soft);
