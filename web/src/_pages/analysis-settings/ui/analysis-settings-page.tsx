@@ -60,7 +60,7 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
         </div>
       ) : null}
       {profiles.data !== undefined && failure === null ? (
-        {/* The table keeps its own region Tab reaches, so this box does not scroll a second time. */}
+        // The table keeps its own region Tab reaches, so this box does not scroll a second time.
         <div className={`${styles.panel} ${styles.flush}`}>
           <AnalysisProfileTable items={profiles.data.items} />
         </div>
