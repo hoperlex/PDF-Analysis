@@ -70,9 +70,11 @@
 
 .revise {
   flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* Opened, the form takes the whole row, so it is never squeezed to the width of its handle; the archive button wraps under it. */
 .revise[open] {
   flex: 1 1 100%;
+  min-width: 0;
 }
