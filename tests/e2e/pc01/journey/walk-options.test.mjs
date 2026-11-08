@@ -5,6 +5,8 @@ import { runInNewContext } from 'node:vm';
 import {
   MAX_DIMENSION,
   MIN_DIMENSION,
+  declaredRefusals,
+  isDeclaredRefusal,
   parseDimension,
   pausedFindings,
   pickFollowed,
@@ -131,4 +133,20 @@ test('D-380: the walk prefers the identity its own write half made to the first 
   const missing = pickFollowed(['doc_A', 'doc_C'], 'doc_B');
   assert.equal(missing.value, 'doc_A', 'the walk goes on with the first so the rest of the routes are read');
   assert.match(missing.note, /offers 2 link\(s\) for it and none is the journey's own doc_B/, 'but never silently');
+});
+
+test('D-380: a refusal a read route declares is the state under test, and only that call with only that status', () => {
+  const route = {
+    optional_api: [
+      { method: 'GET', path: '/stage-pairs/{stage_pair_id}/sheet-map', operationId: 'getStageSheetMap', refusal: true, expect_status: 404 },
+      { method: 'GET', path: '/stage-pairs/{stage_pair_id}/chain-runs', operationId: 'listStageChainRuns' },
+    ],
+  };
+  const refusals = declaredRefusals(route, '/bff/v1');
+  assert.deepEqual(refusals, [{ shape: 'GET /bff/v1/stage-pairs/{id}/sheet-map', status: 404 }]);
+  assert.equal(isDeclaredRefusal(refusals, 'GET /bff/v1/stage-pairs/{id}/sheet-map', 404), true);
+  assert.equal(isDeclaredRefusal(refusals, 'GET /bff/v1/stage-pairs/{id}/sheet-map', 500), false, 'the same call failing otherwise is a finding');
+  assert.equal(isDeclaredRefusal(refusals, 'GET /bff/v1/stage-pairs/{id}/chain-runs', 404), false, 'an optional call is not a declared refusal');
+  assert.equal(isDeclaredRefusal(refusals, 'POST /bff/v1/stage-pairs/{id}/sheet-map', 404), false, 'another method is another call');
+  assert.deepEqual(declaredRefusals({}, '/bff/v1'), []);
 });

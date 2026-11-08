@@ -63,6 +63,8 @@ import { provisionAccounts } from './accounts.mjs';
 import { measureWidth, widthFindings } from './width.mjs';
 import {
   parseDimension,
+  declaredRefusals,
+  isDeclaredRefusal,
   pausedFindings,
   pickFollowed,
   queryString,
@@ -586,6 +588,7 @@ try {
     // `W22-E2E`; the read walk never did, which is half of why `D-92` looked like a link
     // that was missing rather than like fifteen screens with no session. It is also what
     // makes a session that expires mid-walk loud instead of invisible.
+    const refusals = declaredRefusals(route, API_PREFIX);
     for (const exchange of record.exchanges) {
       let path;
       try {
@@ -595,6 +598,11 @@ try {
       }
       if (!path.startsWith(API_PREFIX)) continue;
       if (typeof exchange.status !== 'number' || exchange.status < 400) continue;
+      // `D-380`: a refusal this route DECLARES (same call, same status) is the state under test, not a finding.
+      if (isDeclaredRefusal(refusals, shapeOf(`${exchange.method} ${path}`), exchange.status)) {
+        (record.declaredRefusals ??= []).push(`${exchange.method} ${path} -> ${exchange.status}`);
+        continue;
+      }
       fail(
         route.name,
         `${exchange.method} ${path} answered ${exchange.status}. ` +

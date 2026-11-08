@@ -2112,6 +2112,47 @@ def read_state_findings(routes: Sequence[dict], source: str) -> list[str]:
     return findings
 
 
+def route_refusal_findings(routes: Sequence[dict], openapi: dict) -> list[str]:
+    """A read route's declared refusal names a status the contract publishes for that operation, and an error status."""
+    findings: list[str] = []
+    for route in routes:
+        for entry in route.get("optional_api") or []:
+            if entry.get("refusal") is not True:
+                if "expect_status" in entry:
+                    findings.append(f"route '{route['name']}': {entry['operationId']} has expect_status without refusal: true")
+                continue
+            status = entry.get("expect_status")
+            if not isinstance(status, int) or isinstance(status, bool) or status < 400:
+                findings.append(f"route '{route['name']}': {entry['operationId']} declares a refusal with expect_status {status!r}")
+                continue
+            if status not in responses_published_for(openapi, entry["method"], entry["path"]):
+                findings.append(
+                    f"route '{route['name']}': {entry['operationId']} declares the refusal {status}, which the contract does not publish for it"
+                )
+    return findings
+
+
+def test_a_read_routes_declared_refusals_are_statuses_the_contract_publishes(manifest: dict, openapi: dict) -> None:
+    assert route_refusal_findings(manifest["routes"], openapi) == []
+    stage = next(route for route in manifest["routes"] if route["name"] == "stage-compare")
+    declared = [e for e in stage["optional_api"] if e.get("refusal") is True]
+    assert [(e["operationId"], e["expect_status"]) for e in declared] == [("getStageSheetMap", 404)], (
+        "D-380: the confirmed-pair state asks for a sheet map before one exists; that 404 is the state, nothing else is declared"
+    )
+
+
+def test_control_a_declared_refusal_the_contract_does_not_publish_is_detected() -> None:
+    contract = {"paths": {"/x/{id}": {"get": {"responses": {"200": {}, "404": {}}}}}}
+    ok = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "refusal": True, "expect_status": 404}]}
+    assert route_refusal_findings([ok], contract) == []
+    wrong = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "refusal": True, "expect_status": 409}]}
+    assert any("does not publish" in f for f in route_refusal_findings([wrong], contract))
+    success = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "refusal": True, "expect_status": 200}]}
+    assert any("expect_status 200" in f for f in route_refusal_findings([success], contract))
+    stray = {"name": "r", "optional_api": [{"method": "GET", "path": "/x/{id}", "operationId": "getX", "expect_status": 404}]}
+    assert any("without refusal" in f for f in route_refusal_findings([stray], contract))
+
+
 def test_a_routes_query_names_only_what_an_earlier_route_captured(manifest: dict) -> None:
     assert route_query_findings(manifest["routes"]) == []
     stage = next(route for route in manifest["routes"] if route["name"] == "stage-compare")
@@ -2174,7 +2215,7 @@ def test_the_read_walk_is_wired_to_its_options() -> None:
     for needle in (
         "'--width'", "'--paused'", "'--state'", "readViewport(", "widthFindings(route.name, record.width, READ_VIEWPORT)",
         "routeQuery(", "queryString(", "stateExpression(", "stateFindings(", "pausedFindings(", "pauseDispatch(", "restoreDispatch(",
-        "pickFollowed(", "Object.assign(HINTS, write.captured)",
+        "pickFollowed(", "Object.assign(HINTS, write.captured)", "declaredRefusals(", "isDeclaredRefusal(",
     ):
         assert needle in journey, f"journey.mjs no longer contains {needle}: an option is parsed and does nothing"
     entered = journey.index("await pauseDispatch(")

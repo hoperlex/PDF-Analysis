@@ -157,3 +157,23 @@ export function pickFollowed(offered, wanted) {
       `the walk took ${offered[0]} instead, so what follows reads another document than the one the write half made`,
   };
 }
+
+/**
+ * A read route's DECLARED refusals (`D-380`, lane J2): an `optional_api` entry with `"refusal": true` and `"expect_status"` is a call
+ * the screen is known to make in a state the walk can be asked to hold and that the contract answers with an error that state
+ * means (the stage catalog with a confirmed pair asks for the pair's sheet map before any map exists: `404 not_found`). The write
+ * half has declared refusals since `BETA-LIVE-JOURNEY-01` (`expects_api[].refusal`); the read walk flagged every `>= 400`.
+ * Matching is by method, path shape (identifiers collapsed to `{id}`) AND status: the same call answering 500 is still a finding.
+ */
+export function declaredRefusals(route, apiPrefix) {
+  return (route.optional_api ?? [])
+    .filter((entry) => entry.refusal === true)
+    .map((entry) => ({
+      shape: `${entry.method} ${apiPrefix}${entry.path}`.replace(/\{[a-z_]+\}/g, '{id}'),
+      status: entry.expect_status,
+    }));
+}
+
+export function isDeclaredRefusal(refusals, shape, status) {
+  return refusals.some((refusal) => refusal.shape === shape && refusal.status === status);
+}
