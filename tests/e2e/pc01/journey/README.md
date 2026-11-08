@@ -388,6 +388,27 @@ sides** — `wrap`, then `nowrap` — which is what makes the scratch copy and t
 the same mutation rather than a claim that they are. It imports `width.mjs`, the
 journey's own assertion, rather than a second copy written to agree with it.
 
+**A phone width is walked with a copy of the manifest** (lane V3, 2026-11-08, `D-380`). The journey declares one
+width, and a layout fault that needs a particular state to show is outside it: the frame's end group ended at 471 px
+only while dispatch was paused; the stage comparison's controls ended at 399 px only while the list held exactly one
+project (with two, the screen asks for a choice first); and its pair catalog ended at 839 px (843 px at the declared
+780) only once a pair was confirmed, which the ordinary `--phase all` never does. The read phase takes `--manifest`, so a
+copy whose `viewport` says 390 × 844 walks every route at a phone width and asserts the same
+`scrollWidth <= innerWidth`:
+
+```
+python3 -c "import json; m = json.load(open('tests/e2e/pc01/journey/manifest.json')); \
+  m['viewport'].update(width=390, height=844); json.dump(m, open('<scratch>/manifest-390.json', 'w'), ensure_ascii=False)"
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --manifest <scratch>/manifest-390.json --out <dir>
+```
+
+Run it after a write phase has left a project, a document and a run on the stand. The paused state is entered by the
+steps `queue-pause-dispatch` and `queue-start-a-run-while-paused` (and left by `queue-resume-dispatch`); the read walk
+runs with dispatch open, so it does not see it. Measured on the 0.17.1 tree: 35 of 35 routes at 390 px with one finding (the stage controls' select) and, with dispatch
+paused, the frame's end group on every route; after the CSS fixes 35 of 35 clean and the paused probe at 375 of 390 on
+six screens. The stage catalog with a confirmed pair needs the `LANE_C4=1` stand (`cmp-stage-upload`, `cmp-stage-assembly`)
+and a probe of `/stage-comparison` after them.
+
 ## No dependency
 
 `cdp.mjs` speaks the Chrome DevTools Protocol over Node's built-in global `WebSocket`
