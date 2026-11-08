@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-302 operations, sealed. `A5` generates the typed client from this document; `B6`
+303 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1131,6 +1131,9 @@ context `schedule`: the month read (plan and fact per active expert, fact from t
 reserve read over `work_assignment_current`, and five keyed administrator commands. Every table is an append-only journal;
 moving an assignment to another expert goes through `dispatch`'s `transition_assignment`.
 
+`UI-PARITY-S2` (contract `1.42.0`, migration `0060`) adds `startRunFromStage`: a new run that reuses the completed stage outputs of an
+earlier run before the chosen stage (`docs/program/RUN-FROM-STAGE-01.md`); the earlier run is unchanged.
+
 `UI-PARITY-C6` (contract `1.41.0`, no migration) adds `listRunFindingBlocks`: the portal blocks that hold each published
 finding's evidence, derived on read from the run's text-layer block index and page inventory and the version's portal blocks
 (`analysis/geometry/finding_blocks.py`), so a finding can show the blocks it sits in and a block the findings in it.
@@ -1216,6 +1219,7 @@ could.
 | `getProject` | `GET /projects/{project_uid}` |
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
 | `listRunFindingBlocks` | `GET /runs/{run_id}/finding-blocks` |
+| `startRunFromStage` | `POST /runs/{run_id}/start-from-stage` |
 | `getWorkSchedule` | `GET /work-schedule` |
 | `getWorkScheduleReserve` | `GET /work-schedule/reserve` |
 | `setWorkScheduleSettings` | `PUT /work-schedule/settings` |

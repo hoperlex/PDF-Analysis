@@ -86,7 +86,7 @@ function serverError(): ApiError {
   return new ApiError(
     503,
     {
-      contract_version: '1.41.0',
+      contract_version: '1.42.0',
       error_code: 'dependency_unavailable' as ErrorCode,
       message: 'A caller-safe sentence.',
       correlation_id: 'cid-page-2',

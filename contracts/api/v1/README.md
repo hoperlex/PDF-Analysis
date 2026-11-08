@@ -11,7 +11,37 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.41.0` (`UI-PARITY-C6`)
+## Current contract `1.42.0` (`UI-PARITY-S2`)
+
+Slice for register row `UI-A-60` (ruling `R-151i`, debt `D-301`): «Запустить с этапа». **One operation, one migration (`0060_run_from_stage`),
+no error code.** One new schema, `StartRunFromStageRequest`; optional properties on `RunStatus`, `RunCostEstimateRequest` and
+`RunCostEstimate`. The design, with the reuse rule and the idempotency key, is `docs/program/RUN-FROM-STAGE-01.md`.
+
+- **`startRunFromStage`** (`POST /runs/{run_id}/start-from-stage`, `expert` or `admin`, keyed, `202`): a **new** run of the earlier
+  run's document version that reuses the earlier run's completed outputs of every PC-01 stage before `stage_id` and computes
+  `stage_id` and the stages after it. The earlier run is immutable history and is not changed. `stage_id` is one of
+  `page_geometry_extraction`, `document_context_build`, `text_analysis` (the first stage reuses nothing: `422 validation_failed`,
+  `constraint` `nothing_to_reuse`, use `reauditRun`; any other is `stage_not_startable`). The new run records today's configuration
+  exactly as a re-audit does (`R-82`).
+- **A stage output that cannot be taken** is `422 analysis_input_invalid` with `details.stage_id` (the first stage that cannot) and
+  `details.reason`: `source_stage_not_completed`, `source_stage_version_changed`, `source_stage_output_incomplete`,
+  `source_artifact_unavailable`, `source_artifact_changed`, `source_stage_inputs_changed`. Nothing is recomputed in its place and
+  nothing is written. The earlier run must have ended (`409 state_transition_not_allowed`) and be a standard run (an AR v3 member:
+  `409 conflict`, `ar_v3_member_not_repeatable`).
+- **`RunStatus`** gains the optional `started_from_run_id` and `start_stage_id` (both or neither; absent for a run started from a
+  version or as a re-audit, which keeps `reaudit_of_run_id`). **`estimateRunCost`** takes the optional `start_from_run_id` and
+  `start_stage_id` (both, and nothing that chooses a route) and **`RunCostEstimate`** answers `start_from_run_id`, `start_stage_id`,
+  `reused_stage_ids` and `computed_stage_ids`: the price is for the computed stages, and the digest is bound to the earlier run and
+  stage, so a digest of a re-audit or of another stage is `run_cost_estimate_stale`.
+- **Idempotency.** The caller's `Idempotency-Key`; the fingerprint is the earlier run, the stage, the earlier run's stored digest and
+  the consent. The same key with the same request replays the run; with another stage it is `idempotency_key_reuse`. While a run
+  from the same earlier run and stage has not ended, a second is `409 conflict`.
+- **Not changed.** `reauditRun`, `startRun`, the stage vocabulary, the error catalogue and every other operation.
+
+The API now has 275 paths, 303 operations and 730 schemas (the new schema is `StartRunFromStageRequest`); migration head `0060`
+(chained after `0058` by this slice; the integrator chains it with the other `0059`). The domain catalogs are at candidate revision 59.
+
+## Contract `1.41.0` (`UI-PARITY-C6`, historical)
 
 Slice for register rows `UI-A-74`, `UI-A-82` and `UI-A-84` (the portal blocks that hold a finding's evidence: the thumbnails under an
 opened finding, the number of findings on a block tile, «Без сущностей»). **One operation, no migration, no error code** (head stays
@@ -32,8 +62,8 @@ opened finding, the number of findings on a block tile, «Без сущност�
 - **Not changed.** `Finding`, `Evidence`, `PortalBlock` and `listRunFindings` are as they were; the link is a separate read so that a
   link that cannot be derived never takes the findings list down with it.
 
-The API now has 274 paths, 302 operations and 729 schemas (the new schemas are `FindingBlockLink` and `RunFindingBlockLinks`);
-migration head `0058`. The domain catalogs are at candidate revision 58.
+The API then had 274 paths, 302 operations and 729 schemas (the new schemas were `FindingBlockLink` and `RunFindingBlockLinks`);
+migration head `0058`. The domain catalogs were at candidate revision 58.
 
 ## Contract `1.40.0` (`UI-PARITY-AUDIT-STATE`, historical)
 

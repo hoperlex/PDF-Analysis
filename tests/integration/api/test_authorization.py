@@ -163,6 +163,7 @@ GUARDED = (
     ("listExecutionJournal", "GET", "/execution/journal"),
     ("cancelRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/cancel"),
     ("reauditRun", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/reaudit"),
+    ("startRunFromStage", "POST", "/runs/run_01M2545JSD15ETSNNV904X991K/start-from-stage"),
     (
         "setJobPriority", "PUT",
         "/execution/queue/job_01M2545JSD15ETSNNV904X991K/priority",

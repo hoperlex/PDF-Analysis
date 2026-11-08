@@ -598,7 +598,8 @@ class TestN1ComponentReferenceResolution:
         # `UI-PARITY-ADMIN-C2` adds one: `endUserSessions` addresses an account by identity. (`listAuthEvents` names no parent.)
         # `UI-PARITY-OPT-CARRYOVER` adds one: `carryOverProposalDecisions` addresses the target pass by identity.
         # `UI-PARITY-C6` adds one: `listRunFindingBlocks` addresses a run.
-        assert len(report) == 223, report
+        # `UI-PARITY-S2` adds one: `startRunFromStage` addresses a run.
+        assert len(report) == 224, report
 
     def test_a_dangling_reference_is_refused_rather_than_ignored(
         self, contract: dict[str, Any]

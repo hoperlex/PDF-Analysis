@@ -22,7 +22,7 @@
     "dispatch_named_commit": "9f7e76eb0c5ee65fc43f6fbbb45c23f9577a57d5",
     "commit_note": "Resealed by UI-PARITY-C6: contract 1.41.0 (listRunFindingBlocks: the portal blocks that hold each finding's evidence).",
     "openapi_version": "3.1.0",
-    "info_version": "1.41.0",
+    "info_version": "1.42.0",
     "paths": 274,
     "operations": 302,
     "component_schemas": 729,
