@@ -13,7 +13,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +29,7 @@ import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 
 import { mountLive } from '../analysis-settings/live-render';
+import { RoutedAddress } from './routed-address';
 import type { LiveRender } from '../analysis-settings/live-render';
 import '../review/fixtures';
 
@@ -121,11 +121,7 @@ function page(client: QueryClient, query: string): ReactElement {
     createElement(
       KnowledgeBaseEagerSeam.Provider,
       { value: KnowledgeBase },
-      createElement(
-        PathnameContext.Provider,
-        { value: '/knowledge-base' },
-        createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(KnowledgeBasePage)),
-      ),
+      createElement(RoutedAddress, { query }, createElement(KnowledgeBasePage)),
     ),
   );
 }
@@ -389,7 +385,8 @@ describe('an empty page under a selection is about the selection, and the way ba
     expect(text).toContain('По выбранному отбору решений нет');
     expect(text).toContain('Сбросить категорию и вердикт');
     expect(text.match(/Все проекты/g)).toHaveLength(1);
-    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar"[^>]*>Все проекты<\/a>/);
+    // The verdict is a parameter of the address now (`D-372`), so it stays with `foo`, as every parameter that is not the project's does.
+    expect(view.markup()).toMatch(/<a [^>]*href="\/knowledge-base\?foo=bar&(?:amp;)?verdict=rejected"[^>]*>Все проекты<\/a>/);
     // The scope line still states the project the reader is in. An empty page carries no record to name it, and the project list
     // does not hold it, so the line shows the uid it was given, as it does for any project the page cannot name.
     expect(view.markup()).toContain('data-journal-scope="project"');

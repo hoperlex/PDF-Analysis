@@ -27,6 +27,7 @@ import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 
 import { mountLive } from '../analysis-settings/live-render';
+import { RoutedAddress } from './routed-address';
 import type { LiveRender } from '../analysis-settings/live-render';
 import '../review/fixtures';
 
@@ -128,7 +129,7 @@ describe('«Далее» and «Назад» walk the journal by cursor', () => {
         createElement(
           KnowledgeBaseEagerSeam.Provider,
           { value: KnowledgeBase },
-          createElement(KnowledgeBasePage),
+          createElement(RoutedAddress, { query: '' }, createElement(KnowledgeBasePage)),
         ),
       ),
     );
@@ -211,7 +212,7 @@ describe('a filter change returns to the first page', () => {
         createElement(
           KnowledgeBaseEagerSeam.Provider,
           { value: KnowledgeBase },
-          createElement(KnowledgeBasePage),
+          createElement(RoutedAddress, { query: '' }, createElement(KnowledgeBasePage)),
         ),
       ),
     );

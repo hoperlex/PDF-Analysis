@@ -11,7 +11,6 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PathnameContext, SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { createElement } from 'react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,6 +27,7 @@ import { JOURNAL_PAGE_LIMIT } from '@/entities/expert-decision';
 import { KnowledgeBase } from '@/widgets/knowledge-base';
 
 import { mountLive } from '../analysis-settings/live-render';
+import { RoutedAddress } from './routed-address';
 import type { LiveRender } from '../analysis-settings/live-render';
 import '../review/fixtures';
 
@@ -107,11 +107,7 @@ function page(client: QueryClient, query: string): ReactElement {
     createElement(
       KnowledgeBaseEagerSeam.Provider,
       { value: KnowledgeBase },
-      createElement(
-        PathnameContext.Provider,
-        { value: '/knowledge-base' },
-        createElement(SearchParamsContext.Provider, { value: new URLSearchParams(query) }, createElement(KnowledgeBasePage)),
-      ),
+      createElement(RoutedAddress, { query }, createElement(KnowledgeBasePage)),
     ),
   );
 }
