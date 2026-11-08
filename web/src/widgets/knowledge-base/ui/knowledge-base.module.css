@@ -150,3 +150,8 @@ ol.records {
 .event {
   margin-left: var(--am-gap-xs);
 }
+
+/* `D-344`: «↩ Перенесено из V#» after the event label, set off by the same gap; the mark's own colour and size are its entity's. */
+.carried {
+  margin-left: var(--am-gap-xs);
+}

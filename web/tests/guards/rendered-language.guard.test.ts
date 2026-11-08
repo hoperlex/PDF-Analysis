@@ -3495,6 +3495,37 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       }),
   },
   /*
+   * `D-344`, `UI-A-73`. The knowledge base beside a decision carried over from an earlier version: «↩ Перенесено из V2» and its
+   * tooltip, in the table (the page's default view, which no other entry of this matrix draws) and in the events. The page is
+   * read cold here, so the populated widget is a hand-written entry; the second record is a direct decision, so the matrix
+   * judges a row with the mark and a row without it.
+   */
+  ...(['table', 'events'] as const).map((view): ScreenCase => ({
+    name: `knowledge-base-${view}-carried-decision`,
+    make: () =>
+      createElement(KnowledgeBase, {
+        view,
+        records: [
+          record({
+            section: 'AR',
+            severity: 'critical',
+            carried_from: {
+              decision_id: `dec_${ULID.slice(0, -1)}C`,
+              finding_uid: `fnd_${ULID.slice(0, -1)}C`,
+              version_uid: `ver_${ULID.slice(0, -1)}C`,
+              version_ordinal: 2,
+            },
+          }),
+          record({
+            decision_id: `dec_${ULID.slice(0, -1)}D`,
+            event_type: 'reject',
+            verdict: 'rejected',
+            current_verdict: 'rejected',
+          }),
+        ],
+      }),
+  })),
+  /*
    * `D-313`. The knowledge base's empty page under a category, a verdict or a project: a branch the page chooses
    * from its own state (`filtered`, a project in the address), which a static pass over an address cannot select.
    * Both ways out are drawn, so the reset button and the «Все проекты» link are judged too.

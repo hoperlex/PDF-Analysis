@@ -2952,5 +2952,13 @@ export function screens(): Screen[] {
       view,
     })));
   }
+  // `D-344`: the knowledge base beside a decision carried over from an earlier version -- «↩ Перенесено из V2» after the event
+  // label in the table (the `.carried` margin) and in the heading of an event row. The first record carries it, the rest do not,
+  // so the census measures the mark on the table's cell and on a row without one. At the very end, for the reason above.
+  const carriedRecords = RECORDS.map((row, index) => ({
+    ...row, section: 'AR' as const, ...(index === 0 ? { carried_from: carriedFrom } : {}),
+  }));
+  add('KnowledgeBase table with a carried decision', render(createElement(KnowledgeBase, { view: 'table', records: carriedRecords })));
+  add('KnowledgeBase with a carried decision', render(createElement(KnowledgeBase, { records: carriedRecords })));
   return out;
 }

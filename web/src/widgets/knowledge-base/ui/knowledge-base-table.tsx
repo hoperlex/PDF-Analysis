@@ -13,13 +13,17 @@
  * row carries `data-finding-uid` and the link is built from the identities the record carries (`ADR-0010`), so the column
  * would print a number nothing resolves. A row is still one **event**: a finding the reviewer returned to carries two
  * rows, and the cell of the date says how many decisions the finding holds.
+ *
+ * **A carried decision says where it came from** (`D-344`): the cell of the decision carries «↩ Перенесено из V#» when the
+ * record names a source (`carried_from`), as «Разбор», the history and «Принято» do. An optimisation proposal's row carries no
+ * such mark: its record has no `carried_from` yet (`D-335`).
  */
 
 import Link from 'next/link';
 
 import type { DecisionRecord, KnowledgeBaseEntry, ProposalDecisionRecord } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
-import { CATEGORY_LABELS, VERDICT_LABELS } from '@/entities/expert-decision';
+import { CATEGORY_LABELS, CarriedMark, VERDICT_LABELS } from '@/entities/expert-decision';
 import { DECISION_EVENT_LABELS } from '@/entities/optimisation-proposal';
 import { SeverityBadge } from '@/entities/finding';
 import { findProjectSection, projectSectionTitle } from '@/entities/project';
@@ -82,6 +86,16 @@ function FindingRow({ record, kindLabel }: { readonly record: DecisionRecord; re
           {VERDICT_LABELS[record.current_verdict]}
         </span>
         <span className={`am-kb__event ${styles.event}`}>{EVENT_TYPE_LABELS[record.event_type]}</span>
+        {/*
+         * `D-344`, `UI-A-73`: a decision the expert carried over from an earlier version's finding says so, «↩ Перенесено из V2»,
+         * beside the verdict as «Разбор» draws it. `carried_from` is the record's own (the server's structured link); a decision
+         * made directly has none and draws nothing -- not an empty wrapper either.
+         */}
+        {record.carried_from === undefined ? null : (
+          <span className={styles.carried}>
+            <CarriedMark carriedFrom={record.carried_from} />
+          </span>
+        )}
       </td>
       <td>{record.finding_text}</td>
       <td className={record.comment === null || record.comment === undefined ? styles.cellMuted : undefined}>
