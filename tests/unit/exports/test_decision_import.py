@@ -189,6 +189,7 @@ class TestTheRowRules:
         assert appended == [{
             "finding_uid": F1, "finding_observation_id": "obs_F1", "event_type": "reject", "comment": "не по норме",
             "author_label": "Эксперт", "author_user_uid": "usr_01M5B0000000000000000000U1",
+            "origin_kind": "imported",
         }]
 
     def test_the_same_decision_and_comment_record_nothing(self, appended: list) -> None:
