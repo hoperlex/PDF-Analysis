@@ -1342,6 +1342,7 @@ def start_run_from_stage(
             session, source_run_id=source_run_id, start_stage_id=start_stage_id,
             visual_only_pages=visual_only_pages_allowed(
                 None if approved_cost is None else approved_cost.get("extended_review")),
+            runs=repository,
         )
         if budget is not None and approved_cost is None:
             _refuse_over_window_budget(source_version.text_character_count, budget)
