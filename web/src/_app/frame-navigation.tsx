@@ -38,7 +38,8 @@
  * ## Counters beside the items (`UI-A-05`, `UI-A-06`, `UI-A-91`)
  *
  * An item may carry a small number (`menu-badges.ts`): the unchecked documents of a section in red, the jobs of
- * «Очередь», the entries of «База знаний» (of the address's project when it names one), the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
+ * «Очередь» and, in red, those of the last day that ended in an error, the decisions on findings in «База знаний» (of the address's
+ * project when it names one), the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
  * data (`badges`, by item address; the sections carry theirs in `sections`), so every state is drawn without a query
  * client; `FrameNavigation` reads them (`use-menu-badges.ts`) only for the items the session's navigation holds, and only
  * where there is a query client. A group with a badged item hands the shared `Disclosure` its list as content

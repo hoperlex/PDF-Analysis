@@ -2577,6 +2577,7 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
         ),
         badges: menuBadgesOf({
           queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
+          queueRecentOverview: [{ state: 'failed', count: 2 }],
           knowledgeBaseTotal: 140,
           pendingRegistrations: 5,
         }),
