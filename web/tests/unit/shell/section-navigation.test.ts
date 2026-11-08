@@ -21,6 +21,8 @@ import {
   SECTIONS_LOADING_NOTE,
   sectionEntryLabel,
   sectionNavigationOf,
+  sectionsSummary,
+  sectionsSummaryLabel,
 } from '@/_app/section-navigation';
 import type { SectionNavigation } from '@/_app/section-navigation';
 import { RUN_STATE_VALUES, queryKeys } from '@/shared/api';
@@ -202,12 +204,16 @@ function draw(sections: SectionNavigation | undefined, pathname: string | null =
   );
 }
 
-/** The text of every button, in document order. */
-const buttons = (markup: string): string[] => [...markup.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map((m) => m[1] as string);
+/** The name text of every button, in document order: what stands before any counter the button carries (`D-360`). */
+const buttons = (markup: string): string[] => [...markup.matchAll(/<button\b[^>]*>([^<]*)/g)].map((m) => m[1] as string);
 
 /** The attributes of the «Разделы» group buttons. */
 const sectionButtons = (markup: string): string[] =>
-  [...markup.matchAll(/<button\b([^>]*)>Разделы<\/button>/g)].map((m) => m[1] as string);
+  [...markup.matchAll(/<button\b([^>]*)>Разделы(?=<|<\/button>)/g)].map((m) => m[1] as string);
+
+/** The inside of every «Разделы» group button, after its name (the counters of `D-360`), in document order. */
+const sectionButtonInsides = (markup: string): string[] =>
+  [...markup.matchAll(/<button\b[^>]*>Разделы(.*?)<\/button>/g)].map((m) => m[1] as string);
 
 /** The `href` of every section link carrying `aria-current="page"`, whatever the attribute order. */
 const currentSectionLinks = (markup: string): string[] =>
@@ -344,6 +350,74 @@ describe('the «Разделы» group in the menu', () => {
       ]);
       expect(links.map((m) => (m[2] as string).includes('data-menu-badge="alert"'))).toEqual([true, false, true]);
       expect(links.map((m) => /aria-hidden="true"><span[^>]*data-menu-badge="alert">([^<]*)</.exec(m[2] as string)?.[1] ?? null)).toEqual(['3', null, '99+']);
+    });
+  });
+
+  describe('D-360: the group\'s own counters, seen while it is folded', () => {
+    const WAITING: SectionNavigation = sectionNavigationOf(rowsAwaiting(COUNTS, { AR: 3, KJ: 2 }), PROJECT, null);
+    const pills = (inside: string): string[] => [...inside.matchAll(/data-menu-badge="(\w+)">([^<]*)</g)].map((m) => `${m[1]}:${m[2]}`);
+    const total = (inside: string): string | null => /data-section-nav-total="(\d+)"[^>]*>(\d+)</.exec(inside)?.slice(1).join('>') ?? null;
+
+    it('sums the sections\' red figures and their documents, and says so in words', () => {
+      const result = sectionNavigationOf(rowsAwaiting(COUNTS, { AR: 3, KJ: 2 }), PROJECT, null);
+      if (result.status !== 'ready') throw new Error('not ready');
+      expect(sectionsSummary(result.entries)).toEqual({ documents: 7, awaitingDecision: 5 });
+      expect(sectionsSummaryLabel(sectionsSummary(result.entries))).toBe('Не проверено экспертом: 5. Документов в разделах: 7');
+      // No red clause when nothing waits, and an unknown red figure is unknown, not zero.
+      expect(sectionsSummary([{ count: 4, awaitingDecision: null }, { count: 1, awaitingDecision: null }])).toEqual({ documents: 5, awaitingDecision: null });
+      expect(sectionsSummaryLabel({ documents: 5, awaitingDecision: null })).toBe('Документов в разделах: 5');
+      expect(sectionsSummaryLabel({ documents: 5, awaitingDecision: 0 })).toBe('Документов в разделах: 5');
+      expect(sectionsSummary([{ count: 4, awaitingDecision: null }, { count: 1, awaitingDecision: 2 }])).toEqual({ documents: 5, awaitingDecision: 2 });
+    });
+
+    it('stands on the button of the closed group, in the bar and in the stacked menu, red before grey, named in the button\'s name', () => {
+      const markup = draw(WAITING);
+      const insides = sectionButtonInsides(markup);
+      expect(insides).toHaveLength(2);
+      for (const inside of insides) {
+        expect(pills(inside)).toEqual(['alert:5']);
+        expect(total(inside)).toBe('7>7');
+        expect(inside.indexOf('data-menu-badge="alert"')).toBeLessThan(inside.indexOf('data-section-nav-total'));
+      }
+      for (const attributes of sectionButtons(markup)) {
+        expect(attributes).toContain('aria-expanded="false"');
+        expect(attributes).toContain('aria-label="Разделы. Не проверено экспертом: 5. Документов в разделах: 7"');
+      }
+      // The button is still found by its name's first words, and the group's links are as they were.
+      expect(buttons(markup)).toEqual(['Работа', 'Разделы', 'Знания', 'Система', 'Меню', 'Работа', 'Разделы', 'Знания', 'Система']);
+    });
+
+    it('draws only the grey figure when no section waits, and the red one stays out of the name', () => {
+      const markup = draw(READY);
+      for (const inside of sectionButtonInsides(markup)) {
+        expect(pills(inside)).toEqual([]);
+        expect(total(inside)).toBe('7>7');
+      }
+      for (const attributes of sectionButtons(markup)) expect(attributes).toContain('aria-label="Разделы. Документов в разделах: 7"');
+    });
+
+    it('draws nothing while the list is loading, failed or empty: a figure not read is no badge', () => {
+      for (const sections of [{ status: 'loading' } as const, { status: 'failed' } as const, { status: 'ready', entries: [] } as const, undefined]) {
+        const markup = draw(sections);
+        expect(sectionButtonInsides(markup).every((inside) => inside === ''), JSON.stringify(sections)).toBe(true);
+        for (const attributes of sectionButtons(markup)) expect(attributes, JSON.stringify(sections)).not.toContain('aria-label');
+        expect(markup, JSON.stringify(sections)).not.toContain('data-section-nav-total');
+      }
+    });
+
+    it('stays when the group is open, and leaves the other groups\' buttons as they were', () => {
+      const on = draw(sectionNavigationOf(rowsAwaiting(COUNTS, { KJ: 2 }), PROJECT, sectionPage('KJ')), sectionPage('KJ'));
+      const [bar] = sectionButtons(on);
+      expect(bar).toContain('aria-expanded="true"');
+      expect(sectionButtonInsides(on).map(pills)).toEqual([['alert:2'], ['alert:2']]);
+      const others = [...on.matchAll(/<button\b([^>]*)>(Работа|Знания|Система|Меню)/g)];
+      expect(others).toHaveLength(8);
+      for (const other of others) expect(other[1], String(other[2])).not.toContain('aria-label');
+    });
+
+    it('the rail has no group button: its links carry their own figures, as before', () => {
+      const rail = /<div class="[^"]*" data-nav-state="rail">(.*?)<div class="[^"]*" data-nav-state="stacked">/s.exec(draw(WAITING))?.[1] ?? '';
+      expect(rail).not.toContain('data-section-nav-total');
     });
   });
 
