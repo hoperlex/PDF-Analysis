@@ -11,11 +11,10 @@
  *                          were accepted); the other has `created_from` 24 hours back (the jobs accepted since, of which the
  *                          failed ones make the red badge). Keys of their own (`queryKeys.execution.queueCount`), not the queue
  *                          screen's page of 25 rows with their ETA, which a counter read on every screen does not need.
- *   «База знаний»          `listDecisions` with `limit: 1` (`D-362`): the answer carries `total` whatever the page, so one
- *                          record is the cheapest question, and the decisions on findings are what the screen opens on
- *                          (type «Замечания»). **The key is the knowledge base's own «Все» chip** (`findings.journal` with the
- *                          project and `limit: 1`), so the menu and the screen share one cache entry, and every decision
- *                          refreshes both (`decisionCacheKeys`).
+ *   «База знаний»          `listKnowledgeBaseEntries` with `limit: 1`: the answer carries `total` whatever the page, so
+ *                          one entry is the cheapest question. A key of its own (`knowledgeBase({ limit: 1 })`), which
+ *                          every decision still refreshes, because it invalidates the knowledge base by prefix. It counts
+ *                          both journals (the screen's «Все»); `menu-badges.ts` says why it keeps doing so (`D-362`).
  *                          The screen follows the header's project (`R-150c`, class `optional`), so the read does too:
  *                          the address's project is sent as `project_uid` and is in the key, as on the screen, and
  *                          the menu never shows another project's total while the new one loads. A project the address
@@ -37,15 +36,15 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import type { DecisionRecordPage, ExecutionQueuePage, RegistrationRequestPage } from '@/shared/api';
-import { listDecisions, listExecutionQueue, listRegistrations, queryKeys } from '@/shared/api';
+import type { ExecutionQueuePage, KnowledgeBaseEntryPage, RegistrationRequestPage } from '@/shared/api';
+import { listExecutionQueue, listKnowledgeBaseEntries, listRegistrations, queryKeys } from '@/shared/api';
 import { OPERATIONAL_LIST_POLL } from '@/entities/execution';
 import { looksLikeProjectUid } from '@/entities/project';
 
 import type { MenuBadgeSource, MenuBadges } from './menu-badges';
 import { QUEUE_ERROR_WINDOW_HOURS, menuBadgesOf } from './menu-badges';
 
-/** The one record that tells the decision journal's total (the knowledge base opens on the decisions on findings). */
+/** The one entry that tells the knowledge base's total. */
 const KNOWLEDGE_BASE_PROBE = { limit: 1 } as const;
 /** The one row that carries the queue's overview. */
 const QUEUE_PROBE = { limit: 1 } as const;
@@ -86,9 +85,9 @@ export function useMenuBadges(sources: ReadonlySet<MenuBadgeSource>, projectUid:
   // A uid that is not spelled as one names no project; asking the server about it would be asking for an error.
   const badProject = projectUid !== null && !looksLikeProjectUid(projectUid);
   const knowledgeBaseProbe = projectUid === null || badProject ? KNOWLEDGE_BASE_PROBE : { project_uid: projectUid, ...KNOWLEDGE_BASE_PROBE };
-  const knowledgeBase = useQuery<DecisionRecordPage>({
-    queryKey: queryKeys.findings.journal(knowledgeBaseProbe),
-    queryFn: async () => (await listDecisions({ query: knowledgeBaseProbe })).data,
+  const knowledgeBase = useQuery<KnowledgeBaseEntryPage>({
+    queryKey: queryKeys.findings.knowledgeBase(knowledgeBaseProbe),
+    queryFn: async () => (await listKnowledgeBaseEntries({ query: knowledgeBaseProbe })).data,
     ...OPERATIONAL_LIST_POLL,
     refetchOnWindowFocus: 'always',
     enabled: sources.has('knowledge-base') && !badProject,

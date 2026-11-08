@@ -18,12 +18,16 @@
  *         overview can give; a count over all history never returns to zero, and a badge that is always red says nothing.
  *         The window is the nearest figure that does return to zero: the overview takes `created_from`, so the count
  *         is of jobs *accepted* in the last day (a job accepted earlier that fails now is not in it).
- *   - «База знаний»: `DecisionRecordPage.total`, the decisions on findings (`D-362`). The screen behind the link opens on
- *     the type «Замечания» (`R-151h`), so this is the very number it opens on; the other journal, the decisions on
- *     optimisation proposals, is one click away («Тип») and is not in it, and the badge says «по замечаниям». The screen
- *     is `optional` (`R-150c`: it follows the header's project), so the number follows it too: with a project in the
- *     address it is that project's decisions, the very set the screen lists behind the link (which carries `?project=`),
- *     and the badge says so; without one it is the installation's. A project the address spells as no uid has no figure.
+ *   - «База знаний»: `KnowledgeBaseEntryPage.total`, the entries of both journals together -- the decisions on findings and
+ *     those on optimisation proposals (`D-362`). The screen behind the link opens on the type «Замечания» (`R-151h`), whose
+ *     own total is the findings alone, so the number is larger than the one the reader meets until they choose «Все» (which
+ *     shows exactly this figure). **It keeps counting both, as the original's does** (`kbStats.total` is the whole base,
+ *     while its screen opens on one tab, «Отклонённые»), and the badge SAYS so: «(замечания и предложения вместе)».
+ *     Counting the findings alone would read a different operation (`listDecisions`) on every screen, which is a change to
+ *     every route's declared calls in the PC-01 journey's manifest, outside this lane's paths. The screen is `optional`
+ *     (`R-150c`: it follows the header's project), so the number follows it too: with a project in the address it is
+ *     the entries of that project, the very set the screen lists behind the link (which carries `?project=`), and the
+ *     badge says so; without one it is the installation's. A project the address spells as no uid has no figure.
  *   - «Заявки на регистрацию»: `RegistrationRequestPage.pending_total`, the requests waiting for a decision, the
  *     figure of the home page's tile.
  *   - a section of «Разделы»: `SectionDocumentCount.audit_counts.awaiting_decision`, the documents of the section whose
@@ -93,7 +97,7 @@ export interface MenuBadgeReadings {
   /** `D-331`: the overview of the jobs accepted in the last 24 hours (`created_from`); its failed states make the red badge. */
   readonly queueRecentOverview?: readonly ExecutionQueueStateCount[] | undefined;
   readonly knowledgeBaseTotal?: number | undefined;
-  /** `R-150c`: `knowledgeBaseTotal` counts one project's decisions (the address names one), not the installation's. */
+  /** `R-150c`: `knowledgeBaseTotal` counts one project's entries (the address names one), not the installation's. */
   readonly knowledgeBaseOfProject?: boolean | undefined;
   readonly pendingRegistrations?: number | undefined;
 }
@@ -110,10 +114,10 @@ export const QUEUE_BADGE_LABEL = 'Задач в очереди и в работ�
 export const QUEUE_ERRORS_BADGE_LABEL = `Заданий с ошибкой за последние ${QUEUE_ERROR_WINDOW_HOURS} часа`;
 const QUEUE_ERRORS_BADGE_TITLE =
   'Задания, принятые за последние 24 часа и закончившиеся ошибкой или остановкой после повторов. Уходит из числа через сутки после постановки. Подробности — на экране «Очередь», в состояниях «Ошибка» и «Остановлена после повторов».';
-/** `D-362`: the decisions on findings, the journal the screen behind the item opens on. */
-export const KNOWLEDGE_BASE_BADGE_LABEL = 'Решений по замечаниям в базе знаний';
-/** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's decisions. */
-export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Решений по замечаниям в базе знаний выбранного проекта';
+/** `D-362`: both journals, said in the label: the screen opens on «Замечания» and shows this figure under «Все». */
+export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний (замечания и предложения вместе)';
+/** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's entries. */
+export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного проекта (замечания и предложения вместе)';
 export const REGISTRATIONS_BADGE_LABEL = 'Заявок на регистрацию, ожидающих решения';
 export const UNCHECKED_BADGE_LABEL = 'Не проверено экспертом';
 const UNCHECKED_BADGE_TITLE =

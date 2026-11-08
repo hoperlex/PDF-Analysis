@@ -411,7 +411,8 @@ describe('the «Разделы» group in the menu', () => {
       expect(bar).toContain('aria-expanded="true"');
       expect(sectionButtonInsides(on).map(pills)).toEqual([['alert:2'], ['alert:2']]);
       const others = [...on.matchAll(/<button\b([^>]*)>(Работа|Знания|Система|Меню)/g)];
-      expect(others).toHaveLength(8);
+      // Three groups in the bar, and «Меню» with the same three inside it.
+      expect(others).toHaveLength(7);
       for (const other of others) expect(other[1], String(other[2])).not.toContain('aria-label');
     });
 

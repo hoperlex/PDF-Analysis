@@ -23,7 +23,7 @@ import {
 import type { MenuBadges } from '@/_app/menu-badges';
 import { buildNavigation } from '@/_app/navigation';
 import { queryKeys } from '@/shared/api';
-import type { DecisionRecordPage, ExecutionQueuePage, ExecutionQueueStateCount, RegistrationRequestPage } from '@/shared/api';
+import type { ExecutionQueuePage, ExecutionQueueStateCount, KnowledgeBaseEntryPage, RegistrationRequestPage } from '@/shared/api';
 import { OPERATIONAL_LIST_POLL } from '@/entities/execution';
 import { initialsOf } from '@/entities/account';
 import { PendingRegistrationsTile } from '@/widgets/home-tiles';
@@ -66,7 +66,7 @@ const queuePage = (counts: Partial<Record<ExecutionQueueStateCount['state'], num
   ...(counts === null ? {} : { overview: overview(counts) }),
 });
 
-const knowledgePage = (total: number): DecisionRecordPage => ({ items: [], page: { next_cursor: null }, total });
+const knowledgePage = (total: number): KnowledgeBaseEntryPage => ({ items: [], page: { next_cursor: null }, total });
 const registrationPage = (pending: number): RegistrationRequestPage => ({ items: [], page: { next_cursor: null }, pending_total: pending });
 
 // ------------------------------------------------------------------------------------------- the model
@@ -162,7 +162,7 @@ describe('the figures of the other items, and the words that name them', () => {
     expect(menuBadgesOf({})).toEqual({});
     expect(menuBadgesOf({ knowledgeBaseTotal: 0, pendingRegistrations: 0, queueOverview: overview({}) })).toEqual({});
     expect(menuBadgesOf({ knowledgeBaseTotal: 12, pendingRegistrations: 4 })).toEqual({
-      [KNOWLEDGE_BASE]: [{ tone: 'count', count: 12, label: 'Решений по замечаниям в базе знаний: 12' }],
+      [KNOWLEDGE_BASE]: [{ tone: 'count', count: 12, label: 'Записей в базе знаний (замечания и предложения вместе): 12' }],
       [REGISTRATIONS]: [{ tone: 'count', count: 4, label: 'Заявок на регистрацию, ожидающих решения: 4' }],
     });
   });
@@ -236,9 +236,9 @@ describe('the badges in the menu, in all three of its states', () => {
       expect((queue?.inside ?? '').indexOf('Очередь')).toBeLessThan((queue?.inside ?? '').indexOf('data-menu-badge'));
 
       const base = linkAt(state(markup, name), KNOWLEDGE_BASE);
-      expect(base?.attributes).toContain('aria-label="База знаний. Решений по замечаниям в базе знаний: 140"');
+      expect(base?.attributes).toContain('aria-label="База знаний. Записей в базе знаний (замечания и предложения вместе): 140"');
       expect(pillsIn(base?.inside ?? '')).toEqual(['count:99+']);
-      expect(base?.inside).toContain('title="Решений по замечаниям в базе знаний: 140"');
+      expect(base?.inside).toContain('title="Записей в базе знаний (замечания и предложения вместе): 140"');
 
       const requests = linkAt(state(markup, name), REGISTRATIONS);
       expect(requests?.attributes).toContain('aria-label="Заявки на регистрацию. Заявок на регистрацию, ожидающих решения: 5"');
@@ -315,7 +315,7 @@ describe('the badges in the menu, in all three of its states', () => {
 
 // ------------------------------------------------------------------------------------------- the wiring
 
-const KB_KEY = queryKeys.findings.journal({ limit: 1 });
+const KB_KEY = queryKeys.findings.knowledgeBase({ limit: 1 });
 const PENDING_KEY = queryKeys.registrations.list({ status: 'pending', limit: 1 });
 const QUEUE_KEY = queryKeys.execution.queueCount('all');
 const RECENT_QUEUE_KEY = queryKeys.execution.queueCount('last-day');
@@ -470,14 +470,15 @@ describe('the frame reads the counters from the cache entries of the screens the
     expect(pillsIn(linkAt(state(frame(other, ADMIN_ONLY), 'row'), QUEUE)?.inside ?? '')).toEqual(['alert:2']);
   });
 
-  it('D-362: the base\'s counter is the decision journal\'s total, under the key of the screen\'s «Все» chip', () => {
+  it('D-362: the base\'s counter says it counts both journals, the figure the screen shows under «Все», not the one it opens on', () => {
+    expect(KNOWLEDGE_BASE_BADGE_LABEL).toContain('замечания и предложения вместе');
+    expect(KNOWLEDGE_BASE_PROJECT_BADGE_LABEL).toContain('замечания и предложения вместе');
     const client = newClient();
     frame(client, ADMIN_ONLY);
+    // It reads the merged listing (`listKnowledgeBaseEntries`), the screen's «Все», and not the findings journal alone.
     const probe = client.getQueryCache().find({ queryKey: [...KB_KEY] });
-    expect(probe).toBeDefined();
-    // The knowledge base screen reads its chips with `limit: 1` under `findings.journal`; the menu shares that entry.
-    expect(KB_KEY).toEqual(queryKeys.findings.journal({ limit: 1 }));
-    expect(client.getQueryCache().find({ queryKey: [...queryKeys.findings.knowledgeBase({ limit: 1 })] })).toBeUndefined();
+    expect(probe?.queryKey).toEqual(['findings', 'knowledge-base', { limit: 1 }]);
+    expect(client.getQueryCache().find({ queryKey: [...queryKeys.findings.journal({ limit: 1 })] })).toBeUndefined();
   });
 
   it('follows the operational-list cadence of polling.ts on every read, which the queue screen\'s own read already does', () => {
@@ -548,8 +549,8 @@ describe('the frame reads the counters from the cache entries of the screens the
 
 const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
 const OTHER_PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
-const PROJECT_KB_KEY = queryKeys.findings.journal({ project_uid: PROJECT, limit: 1 });
-const OTHER_KB_KEY = queryKeys.findings.journal({ project_uid: OTHER_PROJECT, limit: 1 });
+const PROJECT_KB_KEY = queryKeys.findings.knowledgeBase({ project_uid: PROJECT, limit: 1 });
+const OTHER_KB_KEY = queryKeys.findings.knowledgeBase({ project_uid: OTHER_PROJECT, limit: 1 });
 
 function frameAt(client: QueryClient, subject: AppFrameSession | null, pathname: string, search = ''): string {
   navigationState.pathname = pathname;
@@ -575,14 +576,14 @@ const linkTo = (markup: string, address: string) => {
 const kbPills = (markup: string, which: 'row' | 'rail' | 'stacked' = 'row'): string[] =>
   pillsIn(linkTo(state(markup, which), KNOWLEDGE_BASE).inside);
 
-describe('«База знаний» counts the decisions on findings of the project the address names, as the screen behind it opens on', () => {
-  it('says what it counts: the project\'s decisions when a project is chosen, the installation\'s otherwise', () => {
+describe('«База знаний» counts the entries of the project the address names, as the screen behind it does', () => {
+  it('says what it counts: the project\'s entries when a project is chosen, the installation\'s otherwise', () => {
     const all = menuBadgesOf({ knowledgeBaseTotal: 12 })[KNOWLEDGE_BASE]?.[0];
     expect(all?.label).toBe(`${KNOWLEDGE_BASE_BADGE_LABEL}: 12`);
-    expect(all?.label).toBe('Решений по замечаниям в базе знаний: 12');
+    expect(all?.label).toBe('Записей в базе знаний (замечания и предложения вместе): 12');
     const scoped = menuBadgesOf({ knowledgeBaseTotal: 12, knowledgeBaseOfProject: true })[KNOWLEDGE_BASE]?.[0];
     expect(scoped?.label).toBe(`${KNOWLEDGE_BASE_PROJECT_BADGE_LABEL}: 12`);
-    expect(scoped?.label).toBe('Решений по замечаниям в базе знаний выбранного проекта: 12');
+    expect(scoped?.label).toBe('Записей в базе знаний выбранного проекта (замечания и предложения вместе): 12');
     expect(scoped?.count).toBe(12);
     expect(menuBadgesOf({ knowledgeBaseTotal: 0, knowledgeBaseOfProject: true })).toEqual({});
   });
@@ -592,7 +593,7 @@ describe('«База знаний» counts the decisions on findings of the proj
     client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
     const markup = frameAt(client, ADMIN_ONLY, '/dashboard', `project=${PROJECT}`);
     for (const which of ['row', 'rail', 'stacked'] as const) expect(kbPills(markup, which), which).toEqual(['count:12']);
-    expect(state(markup, 'row')).toContain('Решений по замечаниям в базе знаний выбранного проекта: 12');
+    expect(state(markup, 'row')).toContain('Записей в базе знаний выбранного проекта (замечания и предложения вместе): 12');
     // The installation's 140 is not shown beside a project.
     expect(markup).not.toContain('99+');
   });
@@ -609,7 +610,7 @@ describe('«База знаний» counts the decisions on findings of the proj
     const client = seeded();
     client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
     expect(kbPills(frameAt(client, ADMIN_ONLY, '/dashboard'))).toEqual(['count:99+']);
-    expect(state(frameAt(client, ADMIN_ONLY, '/dashboard'), 'row')).toContain('Решений по замечаниям в базе знаний: 140');
+    expect(state(frameAt(client, ADMIN_ONLY, '/dashboard'), 'row')).toContain('Записей в базе знаний (замечания и предложения вместе): 140');
     // A global screen ignores ?project= for its own data, and the base is not the global screen's: it follows the address.
     expect(kbPills(frameAt(client, ADMIN_ONLY, '/queue', `project=${PROJECT}`))).toEqual(['count:12']);
     const bare = newClient();

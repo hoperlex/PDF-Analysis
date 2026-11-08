@@ -670,7 +670,7 @@ describe('this slice adds no second polling loop', () => {
     expect(text.match(/sources\.has\('queue'\)/g) ?? []).toHaveLength(2);
     // The reads are list operations and none of them is the run endpoint.
     expect(text).toMatch(/listExecutionQueue/);
-    expect(text).toMatch(/listDecisions/);
+    expect(text).toMatch(/listKnowledgeBaseEntries/);
     expect(text).toMatch(/listRegistrations/);
     expect(text).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
   });
