@@ -276,8 +276,6 @@ describe('this slice adds no second polling loop', () => {
     join('widgets', 'stage-changes', 'ui', 'stage-journal.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-batch-controls.tsx'),
     join('widgets', 'stage-run-controls', 'ui', 'stage-run-controls.tsx'),
-    // Lane D6 (2026-11-07) moved the pair-run summary read out of `stage-run-controls.tsx` into its own hook; same bound.
-    join('widgets', 'stage-run-controls', 'api', 'use-pair-run.ts'),
     // `CMP-SPEC` (`2510d5e3`): the whole-specification list of a series, re-read only while one of its
     // transitions is `running` or `paused` -- the source was `open ? 3000 : false`, a poll with no end
     // while the panel was open, and now names `SPECIFICATION_POLL_MS` (from config) and ends when nothing moves.
@@ -285,6 +283,15 @@ describe('this slice adds no second polling loop', () => {
   ];
   const isAllowedComparisonPoll = ({ path }: { path: string }) =>
     ALLOWED_COMPARISON_POLLS.some((allowed) => path.endsWith(allowed));
+
+  // The pair-run summary hook of the stage pairs catalog (`UI-B-85`; lane D6 moved it out of `stage-run-controls.tsx`, lane F1 gave
+  // it its own rule). Lane D6 had listed it above with the review-cadence polls, which let a row of the catalog poll its pair at
+  // 1.5 s: with a hundred pairs, a hundred rows. It is not a review poll. The one pair the expert has open is polled at the review
+  // cadence by `StageRunControls`; a row of the catalog reads its pair only while it is in view, polls only while a run of the pair
+  // moves, and at the operational cadence (`OPERATIONAL_LIST_POLLING`, ten seconds). The source is held to that below: by the shape
+  // of the hook, and by every place that calls it per row.
+  const PAIR_ROW_POLL_HOOK = join('widgets', 'stage-run-controls', 'api', 'use-pair-run.ts');
+  const isPairRowPollHook = ({ path }: { path: string }) => path.endsWith(PAIR_ROW_POLL_HOOK);
 
   // `D-307`: every interval lives in `shared/config/polling.ts`. The values as the config exports them, so the table below is
   // also a check that the barrel exports what the file declares.
@@ -378,6 +385,7 @@ describe('this slice adds no second polling loop', () => {
         /setInterval\s*\(|refetchInterval|refetchIntervalInBackground/.test(code(file)) &&
         !isAllowedProbePoll(file) &&
         !isAllowedComparisonPoll(file) &&
+        !isPairRowPollHook(file) &&
         !isAllowedExtendedReviewPoll(file) &&
         !isAllowedOperationalListPoll(file),
     );
@@ -410,6 +418,93 @@ describe('this slice adds no second polling loop', () => {
       // And it never reaches the run endpoint.
       expect(text, file.path).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
     }
+  });
+
+  /**
+   * What is wrong with the source of the pair-row hook, as sentences (empty: nothing). The run-list read must poll through one
+   * `refetchInterval` that ends (`: false`) when no run moves and otherwise waits `OPERATIONAL_LIST_POLLING.intervalMs`; the hook must
+   * not name the review cadence or a number of its own; and its caller must say which rows are in view (`enabled: read`, a required
+   * `inView` parameter), so a row cannot read or poll unseen.
+   */
+  function pairRowPollProblems(text: string): string[] {
+    const problems: string[] = [];
+    const uses = refetchIntervalValues(text);
+    if (uses.length !== 1) problems.push(`${uses.length} refetchInterval options, expected the one of the run list`);
+    for (const use of uses) {
+      if (!/runActive/.test(use)) problems.push(`polls whatever the run list holds: ${use}`);
+      if (!/OPERATIONAL_LIST_POLLING\.intervalMs/.test(use)) problems.push(`not the operational cadence: ${use}`);
+      if (!/:\s*false\b/.test(use)) problems.push(`never stops: ${use}`);
+      if (carriesNumberOfItsOwn(use)) problems.push(`a number of its own: ${use}`);
+    }
+    if (/STAGE_REVIEW_POLL_MS|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_POLL_MS\b/.test(text)) problems.push('names a *_POLL_MS cadence (the review cadence is the open pair\'s)');
+    if (/setInterval\s*\(|setTimeout\s*\(|refetchIntervalInBackground/.test(text)) problems.push('a timer of its own');
+    if (!/enabled:\s*read\b/.test(text)) problems.push('the run-list read is not gated by `read`');
+    if (!/export function useLatestPairRun\(\s*pairId: string,\s*inView: boolean\s*\)/.test(text)) problems.push('useLatestPairRun does not require `inView`');
+    return problems;
+  }
+
+  /** The calls of `useLatestPairRun` that do not say which rows are in view: no second argument, or a literal `true` (every row, as before). */
+  function ungatedPairRowReads(files: readonly { path: string; text: string }[]): string[] {
+    return files.filter((file) => !isPairRowPollHook(file)).flatMap((file) =>
+      [...code(file).matchAll(/\buseLatestPairRun\(([^)]*)\)/g)]
+        .map((call) => (call[1] ?? '').split(',').map((argument) => argument.trim()))
+        .filter((args) => args.length < 2 || args[1] === '' || args[1] === 'true')
+        .map((args) => `${file.path}: useLatestPairRun(${args.join(', ')})`));
+  }
+
+  /** The row components of the catalog that are rendered without `inView={rowsInView.has(…)}`: a row that reads whatever its neighbours do. */
+  function rowsWithoutGate(text: string): string[] {
+    return [...text.matchAll(/<(PairRunCell|OpenButton|ManageButton)\s[\s\S]*?\/>/g)]
+      .filter((element) => !/inView=\{rowsInView\.has\(/.test(element[0]))
+      .map((element) => element[1] ?? '');
+  }
+
+  it('lets a row of the pairs catalog poll only while a run of its pair moves, at the operational cadence, and only when in view', () => {
+    const hook = sources.filter(isPairRowPollHook);
+    // The allowlist must not rot into a path that no longer exists.
+    expect(hook.map((file) => file.path)).toHaveLength(1);
+    expect(pairRowPollProblems(code(hook[0]!))).toEqual([]);
+  });
+
+  it('calls useLatestPairRun with the rows in view at every place, the catalog included', () => {
+    expect(ungatedPairRowReads(sources)).toEqual([]);
+    const catalog = sources.filter(({ path }) => path.endsWith(join('widgets', 'stage-pair-catalog', 'ui', 'stage-pair-catalog.tsx')));
+    expect(catalog).toHaveLength(1);
+    const text = code(catalog[0]!);
+    // It calls the hook (through its row components), so the check above is not a walk of nothing, and it gates every row component.
+    expect(text.match(/\buseLatestPairRun\(/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(rowsWithoutGate(text)).toEqual([]);
+    expect(text.match(/<(?:PairRunCell|OpenButton|ManageButton)\s/g)?.length ?? 0).toBeGreaterThanOrEqual(7);
+  });
+
+  // The two guards above are not vacuous: each can fail, on the shapes lane D6 shipped and the ways a later change could return to them.
+  it('shows that the pair-row guards fail on a row polled at the review cadence, a row called per row, and a row left ungated', () => {
+    const gated = 'export function useLatestPairRun(pairId: string, inView: boolean) {}\n'
+      + 'const a = queryOptions({ enabled: read, refetchInterval: (query) => (query.state.data?.some(runActive) ? OPERATIONAL_LIST_POLLING.intervalMs : false) });';
+    expect(pairRowPollProblems(gated)).toEqual([]);
+    // The hook as lane D6 shipped it: the review cadence for every row, whatever the row's place on the screen.
+    const shipped = "import { STAGE_REVIEW_POLL_MS } from '@/shared/config';\n"
+      + 'export function useLatestPairRun(pairId: string) {\n'
+      + '  useQuery({ refetchInterval: (query) => (query.state.data?.some(runActive) ? STAGE_REVIEW_POLL_MS : false) });\n}';
+    const problems = pairRowPollProblems(shipped);
+    expect(problems.some((problem) => problem.startsWith('not the operational cadence'))).toBe(true);
+    expect(problems.some((problem) => problem.startsWith('names a *_POLL_MS cadence'))).toBe(true);
+    expect(problems).toContain('the run-list read is not gated by `read`');
+    expect(problems).toContain('useLatestPairRun does not require `inView`');
+    // A poll that never stops, one that polls anything, and one with a number of its own.
+    expect(pairRowPollProblems(gated.replace(': false)', ': 5000)')).some((problem) => problem.startsWith('never stops'))).toBe(true);
+    expect(pairRowPollProblems(gated.replace('(query.state.data?.some(runActive)', '(true')).some((problem) => problem.startsWith('polls whatever'))).toBe(true);
+    expect(pairRowPollProblems(gated.replace('OPERATIONAL_LIST_POLLING.intervalMs', '10_000')).some((problem) => problem.startsWith('a number of its own'))).toBe(true);
+    // Called per row: with no second argument, with a literal `true`, or with the rows in view.
+    const file = (text: string) => [{ path: join('widgets', 'stage-pair-catalog', 'ui', 'cell.tsx'), text }];
+    expect(ungatedPairRowReads(file('const { run } = useLatestPairRun(pairId);'))).toHaveLength(1);
+    expect(ungatedPairRowReads(file('const { run } = useLatestPairRun(pairId, true);'))).toHaveLength(1);
+    expect(ungatedPairRowReads(file('const { run } = useLatestPairRun(pair.pair_id , inView);'))).toEqual([]);
+    expect(ungatedPairRowReads(file('// useLatestPairRun(pairId)\nconst x = 1;'))).toEqual([]);
+    // A row component rendered without the gate.
+    expect(rowsWithoutGate('<PairRunCell pairId={pair.pair_id} cell="method" />')).toEqual(['PairRunCell']);
+    expect(rowsWithoutGate('<ManageButton pairId={id} open={a} onToggle={() => go(id)} />')).toEqual(['ManageButton']);
+    expect(rowsWithoutGate('<OpenButton pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} onRunChange={x} />')).toEqual([]);
   });
 
   // `D-307`: one source for every polling interval. Three halves, each with a case that shows it can fail (below).

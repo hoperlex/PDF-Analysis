@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { DocumentUid, ProjectUid, StageChainRun, StagePair, StagePairSuggestion } from '@/shared/api';
 import { failureMessage } from '@/shared/api';
@@ -14,6 +14,8 @@ import {
 import type { StageDocumentNames } from '@/entities/stage-pair';
 import { RUN_WORDS, StageBatchControls, StageRunControls, useLatestPairRun } from '@/widgets/stage-run-controls';
 
+import { withRowVisibility } from '../model/rows-in-view';
+import { RowInView } from './row-in-view';
 import { StageAssemblyCreator, StageAssemblyEditor } from './stage-assembly-editor';
 import styles from './stage-pair-catalog.module.css';
 
@@ -25,9 +27,12 @@ function DocumentLink({ projectUid, uid, names }: { readonly projectUid: Project
 
 type RunCell = 'method' | 'date' | 'changes' | 'review' | 'status';
 
-/** One cell of a pair's row that comes from its latest full run; the rows share the run reads with the controls under them. */
-function PairRunCell({ pairId, cell }: { readonly pairId: string; readonly cell: RunCell }) {
-  const { run, counts, runs } = useLatestPairRun(pairId);
+/**
+ * One cell of a pair's row that comes from its latest full run; the rows share the run reads with the controls under them.
+ * A row reads its run only while it is in view (`inView`), so the catalog does not walk the runs of every pair it lists.
+ */
+function PairRunCell({ pairId, cell, inView }: { readonly pairId: string; readonly cell: RunCell; readonly inView: boolean }) {
+  const { run, counts, runs } = useLatestPairRun(pairId, inView);
   if (runs.isPending) return <>…</>;
   if (run === undefined) {
     if (cell === 'status') return <span>Не запускалось</span>;
@@ -52,15 +57,15 @@ export interface StagePairCatalogProps {
 }
 
 /** What a row can open: the result of its latest run (`onRunChange` selects it and shows the changes). */
-function OpenButton({ pairId, onRunChange }: { readonly pairId: string; readonly onRunChange: ((run: StageChainRun) => void) | undefined }) {
-  const { run } = useLatestPairRun(pairId);
+function OpenButton({ pairId, inView, onRunChange }: { readonly pairId: string; readonly inView: boolean; readonly onRunChange: ((run: StageChainRun) => void) | undefined }) {
+  const { run } = useLatestPairRun(pairId, inView);
   if (run === undefined || onRunChange === undefined) return null;
   return <button type="button" className="am-button" data-pair-open={pairId} onClick={() => onRunChange(run)}>Открыть</button>;
 }
 
 /** The row's way into the expert's tools: «Запустить сравнение» for a pair that has no run yet (the original's button), «Управление» after it. */
-function ManageButton({ pairId, open, onToggle }: { readonly pairId: string; readonly open: boolean; readonly onToggle: () => void }) {
-  const { run } = useLatestPairRun(pairId);
+function ManageButton({ pairId, inView, open, onToggle }: { readonly pairId: string; readonly inView: boolean; readonly open: boolean; readonly onToggle: () => void }) {
+  const { run } = useLatestPairRun(pairId, inView);
   return <button type="button" className="am-button am-button--quiet" aria-expanded={open} data-pair-manage={pairId} onClick={onToggle}>
     {run === undefined ? 'Запустить сравнение' : 'Управление'}
   </button>;
@@ -87,6 +92,9 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
   const [batchId, setBatchId] = useState<string | undefined>();
   // `undefined`: not chosen yet (a single pair opens by itself); `null`: the reader closed the panel.
   const [managed, setManaged] = useState<string | null | undefined>(undefined);
+  // The rows on the screen: only they read and poll their run (`useLatestPairRun`); the open pair is polled by its controls.
+  const [rowsInView, setRowsInView] = useState<ReadonlySet<string>>(() => new Set());
+  const setRowInView = useCallback((pairId: string, visible: boolean) => setRowsInView((prior) => withRowVisibility(prior, pairId, visible)), []);
 
   const pairFailure = pairs.error === null ? null : failureMessage(pairs.error);
   const suggestionFailure = suggestions.error === null ? null : failureMessage(suggestions.error);
@@ -113,30 +121,30 @@ export function StagePairCatalog({ projectUid, mayAct, onRunChange, onOpenRun }:
     }] : []),
     {
       key: 'pair', header: 'Проект / раздел',
-      cell: (pair) => <div className={styles.documents}>
+      cell: (pair) => <RowInView pairId={pair.pair_id} onVisibility={setRowInView} className={styles.documents}>
         <span>П: <DocumentLink projectUid={projectUid} uid={pair.left_document_uid} names={names} /></span>
         <span>Р: {pair.right_document_uid === undefined
           ? <span title={pair.assembly_id}>сборка документов</span>
           : <DocumentLink projectUid={projectUid} uid={pair.right_document_uid} names={names} />}</span>
-      </div>,
+      </RowInView>,
     },
-    { key: 'method', header: 'Метод и модель', cell: (pair) => <PairRunCell pairId={pair.pair_id} cell="method" /> },
-    { key: 'date', header: 'Дата', cell: (pair) => <PairRunCell pairId={pair.pair_id} cell="date" /> },
-    { key: 'changes', header: 'Изменения', cell: (pair) => <PairRunCell pairId={pair.pair_id} cell="changes" /> },
-    { key: 'review', header: 'Требуют проверки', cell: (pair) => <PairRunCell pairId={pair.pair_id} cell="review" /> },
+    { key: 'method', header: 'Метод и модель', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="method" /> },
+    { key: 'date', header: 'Дата', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="date" /> },
+    { key: 'changes', header: 'Изменения', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="changes" /> },
+    { key: 'review', header: 'Требуют проверки', cell: (pair) => <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="review" /> },
     {
       key: 'status', header: 'Статус',
       cell: (pair) => <div className={styles.documents}>
-        <PairRunCell pairId={pair.pair_id} cell="status" />
+        <PairRunCell pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} cell="status" />
         <span>{completenessLabel(pair.completeness)}</span>
       </div>,
     },
     {
       key: 'actions', header: 'Действия',
       cell: (pair) => <div className={styles.actions}>
-        <OpenButton pairId={pair.pair_id} onRunChange={onRunChange} />
+        <OpenButton pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} onRunChange={onRunChange} />
         {mayAct && pair.state === 'confirmed'
-          ? <ManageButton pairId={pair.pair_id} open={managedId === pair.pair_id} onToggle={() => setManaged(managedId === pair.pair_id ? null : pair.pair_id)} /> : null}
+          ? <ManageButton pairId={pair.pair_id} inView={rowsInView.has(pair.pair_id)} open={managedId === pair.pair_id} onToggle={() => setManaged(managedId === pair.pair_id ? null : pair.pair_id)} /> : null}
       </div>,
     },
   ];
