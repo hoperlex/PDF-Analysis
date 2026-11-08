@@ -18,7 +18,7 @@ export {
 export type { ArchiveGroupControlProps } from './ui/archive-group-control';
 export { ArchiveGroupControl } from './ui/archive-group-control';
 export type { CutOverPanelProps } from './ui/cut-over-panel';
-export { CutOverPanel } from './ui/cut-over-panel';
+export { CutOverPanel, CutOverPreviewTable } from './ui/cut-over-panel';
 export { GroupCommandFailure } from './ui/group-command-failure';
 export type { GroupFormProps } from './ui/group-form';
 export { GroupForm } from './ui/group-form';
