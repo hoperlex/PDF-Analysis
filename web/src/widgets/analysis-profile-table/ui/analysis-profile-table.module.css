@@ -40,6 +40,15 @@
   font-weight: normal;
 }
 
+/*
+ * The badge says "черновик, требует экспертной проверки": on a phone the global badge wraps its words, and a row of one line
+ * became four. It stays on its line and the table scrolls in its region instead.
+ */
+.state :global(.am-badge) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 .details summary {
   cursor: pointer;
 }

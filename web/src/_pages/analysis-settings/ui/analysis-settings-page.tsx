@@ -35,16 +35,16 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
       actions={<button className="am-button am-button--quiet" type="button" onClick={() => void profiles.refetch()}>Обновить</button>}
     >
       <div className={styles.stack}>
-        <section className={styles.panel} aria-label="Состояние анализа АР v3">
+        <section className={styles.panel} role="region" aria-label="Состояние анализа АР v3" tabIndex={0}>
           <ArV3BetaStatus />
         </section>
-        <section className={styles.panel} aria-label="Пакет анализа АР v3">
+        <section className={styles.panel} role="region" aria-label="Пакет анализа АР v3" tabIndex={0}>
           <ArV3BetaPack />
         </section>
-        <section className={styles.panel} aria-label="Разбор анализа АР v3">
+        <section className={styles.panel} role="region" aria-label="Разбор анализа АР v3" tabIndex={0}>
           <ArV3BetaReview groupId={groupId} />
         </section>
-        <section className={styles.panel} aria-label="Пресеты запуска">
+        <section className={styles.panel} role="region" aria-label="Пресеты запуска" tabIndex={0}>
           <AnalysisPresets roles={me.data?.roles ?? []} />
         </section>
       </div>
@@ -60,7 +60,8 @@ export function AnalysisSettingsPage({ groupId = null }: { readonly groupId?: st
         </div>
       ) : null}
       {profiles.data !== undefined && failure === null ? (
-        <div className={styles.panel}>
+        {/* The table keeps its own region Tab reaches, so this box does not scroll a second time. */}
+        <div className={`${styles.panel} ${styles.flush}`}>
           <AnalysisProfileTable items={profiles.data.items} />
         </div>
       ) : null}

@@ -15,10 +15,14 @@ import { memberCandidates } from '@/entities/executor-group';
 import { CreateConnectionForm, ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { GroupForm } from '@/features/manage-executor-group';
 import { PresetForm } from '@/features/manage-analysis-preset';
+import { AnalysisSettingsPage } from '@/_pages/analysis-settings';
 import { WorkersPage } from '@/_pages/workers';
 import type { WorkersPageProps } from '@/_pages/workers';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
+import { queryKeys } from '@/shared/api';
+import { AnalysisProfileTable } from '@/widgets/analysis-profile-table';
+
 import { newClient, renderScreen } from '../screens/harness';
 import { CONNECTION_CASES, ROUTED_GROUP } from '../executor-groups/executor-groups-fixtures';
 import { PINNED, READY } from './executor-fixtures';
@@ -110,5 +114,58 @@ describe('item 2: «Исполнители» says its page in one sentence and k
     expect(ruleBody(tabs, '.tablist')).toContain('padding: var(--am-gap-xs)');
     expect(ruleBody(tabs, '.panel')).toContain('margin-top: var(--am-gap-sm)');
     expect(tabs).not.toMatch(/padding[^;]*\d+px/);
+  });
+});
+
+describe('item 3: «Настройки анализа» — boxes that scroll sideways are reached by Tab, and a badge keeps its line', () => {
+  const page = (): string => {
+    const client = newClient();
+    client.setQueryData(queryKeys.analysis.profiles(), {
+      items: [{
+        section_code: 'PB', section_name: 'Пожарная безопасность',
+        profile: {
+          analysis_profile_id: 'ap_01M5G4NZVKNZJYH722M0SXXP3X', prompt_bundle_id: 'pb_01M5G4NZVKHM9GP4EH22JACW2X',
+          profile_version: '1.0.0', status: 'draft', prompt_bundle_sha256: 'a'.repeat(64), content_sha256: 'b'.repeat(64), source: null,
+        },
+      }],
+    });
+    return renderScreen(client, createElement(AnalysisSettingsPage, {}));
+  };
+
+  it('makes each of the four sections a named region with a tab stop', () => {
+    const markup = page();
+    for (const label of ['Состояние анализа АР v3', 'Пакет анализа АР v3', 'Разбор анализа АР v3', 'Пресеты запуска']) {
+      expect(markup, label).toMatch(new RegExp(`<section class="[^"]*panel[^"]*" role="region" aria-label="${label}" tabindex="0"`));
+    }
+  });
+
+  it('keeps the profile table in the one region it already had, and does not scroll its frame a second time', () => {
+    const markup = page();
+    expect(markup.match(/role="region"[^>]*tabindex="0"/g)).toHaveLength(5);
+    expect(markup).toMatch(/<div class="[^"]*panel[^"]*flush[^"]*"><section[^>]*aria-labelledby="analysis-profiles-heading"/);
+    expect(markup).not.toMatch(/<div class="[^"]*flush[^"]*"[^>]*tabindex/);
+  });
+
+  it('shows where focus is on a box, and lets the framing box of the table stay put', () => {
+    const rules = css('_pages/analysis-settings/ui/analysis-settings-page.module.css');
+    expect(ruleBody(rules, '.panel:focus-visible')).toContain('outline: 2px solid var(--am-accent)');
+    expect(ruleBody(rules, '.flush')).toContain('overflow-x: visible');
+    expect(ruleBody(rules, '.panel')).toContain('overflow-x: auto');
+  });
+
+  it('puts the state in a cell of its own whose badge does not wrap, even where the global badge does', () => {
+    const items = [{
+      section_code: 'PB' as const, section_name: 'Пожарная безопасность',
+      profile: {
+        analysis_profile_id: 'ap_01M5G4NZVKNZJYH722M0SXXP3X', prompt_bundle_id: 'pb_01M5G4NZVKHM9GP4EH22JACW2X',
+        profile_version: '1.0.0', status: 'draft' as const, prompt_bundle_sha256: 'a'.repeat(64), content_sha256: 'b'.repeat(64), source: null,
+      },
+    }];
+    const markup = renderScreen(newClient(), createElement(AnalysisProfileTable, { items }));
+    expect(markup).toMatch(/<td class="[^"]*state[^"]*" data-profile-status="draft"><span class="am-badge /);
+    const rules = css('widgets/analysis-profile-table/ui/analysis-profile-table.module.css');
+    expect(ruleBody(rules, '.state :global(.am-badge)')).toContain('white-space: nowrap');
+    // The global rule that wraps it is the reason the module has one: at a phone width it lets the words break.
+    expect(GLOBALS).toMatch(/@media \(max-width: 590px\) \{\s*\.am-badge \{\s*white-space: normal/);
   });
 });
