@@ -12,9 +12,9 @@
  * sees nothing.
  */
 
-import { QueryClientProvider, QueryObserver } from '@tanstack/react-query';
+import { QueryClientProvider, QueryObserver, environmentManager } from '@tanstack/react-query';
 import { createElement } from 'react';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // React Query decides once, when it is loaded, whether it runs on a server (no `window`) and, if so, never schedules a refetch
 // interval. The polling cases below need the intervals, so a `window` exists before the library is imported; it has no document,
@@ -30,7 +30,17 @@ const leftBefore = vi.hoisted(() => {
   return before;
 });
 
+// React Query's own server check is a constant of the module, decided when the process first loaded it, and the battery's
+// fork loads it long before this file: the `window` above cannot change that answer. The library's switch for it
+// (`environmentManager.setIsServer`) can: this file runs as a browser would and puts back the answer it found.
+let serverBefore = false;
+beforeAll(() => {
+  serverBefore = environmentManager.isServer();
+  environmentManager.setIsServer(() => false);
+});
+
 afterAll(() => {
+  environmentManager.setIsServer(() => serverBefore);
   const holder = globalThis as { window?: unknown; document?: unknown };
   if (leftBefore.hadWindow) holder.window = leftBefore.window;
   else delete holder.window;
