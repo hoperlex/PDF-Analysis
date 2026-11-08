@@ -19,7 +19,7 @@ import type { ComponentType, ReactElement } from 'react';
 
 import { HomePage } from '@/_pages/home';
 import { ProjectsPage } from '@/_pages/projects';
-import { PageBlocksStrip, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
+import { FindingBlocksStrip, PageBlocksStrip, ReviewFindingBlocks, ReviewPage, ReviewPageBlocks, ReviewViewerAside, ReviewViewerDialog } from '@/_pages/review';
 import { VersionDetailPage } from '@/_pages/version-detail';
 import { StageComparisonPage } from '@/_pages/stage-comparison';
 import { AppFrame } from '@/_app';
@@ -98,13 +98,14 @@ import { RunProgress } from '@/widgets/run-progress';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
-import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByPage } from '@/widgets/portal-blocks';
+import { BlockImageFailure, CropFigureView, PortalBlockCard, PortalBlockListView, findingsByBlock, findingsByPage } from '@/widgets/portal-blocks';
+import type { PageFindingsReading } from '@/widgets/portal-blocks';
 import { DocumentChooser, VersionBlockViews } from '@/_pages/blocks';
 import { ClassifyVersionFormView } from '@/features/classify-version';
 import { CorrectVersionClassificationFormView } from '@/features/correct-version-classification';
 import { ProjectStructureView, sectionFigures } from '@/widgets/project-sections';
 import { VersionClassificationView } from '@/widgets/version-classification';
-import { portalBlocksQueryOptions } from '@/entities/block';
+import { findingBlockIndex, portalBlocksQueryOptions } from '@/entities/block';
 import type {
   DashboardSummary,
   DecisionEvent,
@@ -1455,6 +1456,24 @@ export function screens(): Screen[] {
       add('PortalBlockListView, one page chosen, no run', tiles({ initialPage: 2, pageFindings: { kind: 'none' } }));
       add('PortalBlockListView, the run published no findings', tiles({ pageFindings: { kind: 'no-result', runId: BLOCKS_RUN_ID } }));
       add('PortalBlockListView, the findings could not be read', tiles({ pageFindings: { kind: 'unreadable', runId: BLOCKS_RUN_ID } }));
+      // `UI-PARITY-C6`: the same list numbered by BLOCK (the server's block links), «Без сущностей» with its two lists, and the
+      // block view with the block's own findings. Page 3 is unlinked: its blocks carry no number and are in neither list.
+      const found = runFindings();
+      const heldBy = [[blockId(1)], [blockId(1), blockId(2), blockId(4)], [blockId(4)], [], []];
+      const linkIndex = findingBlockIndex({
+        run_id: BLOCKS_RUN_ID, version_uid: BLOCKS_VERSION_UID, status: 'produced', unlinked_pages: [3],
+        items: found.map((finding, at) => ({ finding_uid: finding.finding_uid, portal_block_ids: heldBy[at] ?? [] })),
+      });
+      if (linkIndex === null) throw new Error('the census links must be produced');
+      const byBlock: PageFindingsReading = {
+        kind: 'read', runId: BLOCKS_RUN_ID, byPage: findingsByPage(found),
+        blocks: { byBlock: findingsByBlock(found, linkIndex), unlinkedPages: linkIndex.unlinkedPages },
+      };
+      add('PortalBlockListView, tiles numbered by block', tiles({ pageFindings: byBlock }));
+      add('PortalBlockListView, «Без сущностей»', tiles({ pageFindings: byBlock, initialPage: 'empty' }));
+      add('Block view open on a block with its own findings', tiles({ pageFindings: byBlock, initialOpen: 0, staticOpen: true }));
+      add('Block view open on a block no finding holds', tiles({ pageFindings: byBlock, initialOpen: 8, staticOpen: true }));
+      add('Block view open on «Без сущностей»', tiles({ pageFindings: byBlock, initialPage: 'empty', initialOpen: 2, staticOpen: true }));
       add('Block view open on an image of a page with findings', tiles({ initialOpen: 1, staticOpen: true }));
       add('Block view open on a text with flags', tiles({ initialOpen: 0, staticOpen: true }));
       add('Block view open on a stamp', tiles({ initialOpen: 2, staticOpen: true }));
@@ -2474,6 +2493,30 @@ export function screens(): Screen[] {
           newClient(),
           createElement(PageBlocksStrip, {
             reading: { kind: 'blocks', page: 7, blocks: onPage7, complete: false }, versionUid: VERSION_UID,
+            onOpen: noop, onMore: noop, loadingMore: true, moreFailed: false,
+          }),
+        ),
+      );
+      // `UI-PARITY-C6`: the finding's own blocks, connected through the run's links and the version's blocks, with the block
+      // view open over them, and the strip with a block not yet loaded and the next portion on its way.
+      const withLinks = (more: boolean) => {
+        const client = withBlocks(more);
+        client.setQueryData(queryKeys.runs.findingBlocks(RUN_ID), {
+          run_id: RUN_ID, version_uid: VERSION_UID, status: 'produced', unlinked_pages: [],
+          items: [{ finding_uid: FINDING_UID, portal_block_ids: [blockId(61), blockId(62)] }],
+        });
+        return client;
+      };
+      const ownBlocks = (over: Partial<Parameters<typeof ReviewFindingBlocks>[0]> = {}) =>
+        createElement(ReviewFindingBlocks, { projectUid: PROJECT_UID, versionUid: VERSION_UID, runId: RUN_ID, findingUid: FINDING_UID, ...over });
+      add('ReviewFindingBlocks, the finding’s own blocks', renderScreen(withLinks(false), ownBlocks()));
+      add('Block view open from «Блоки замечания» on «Разбор»', renderScreen(withLinks(false), ownBlocks({ initialOpen: 1, staticOpen: true })));
+      add(
+        'FindingBlocksStrip, a block not yet loaded, the next portion on its way',
+        renderScreen(
+          newClient(),
+          createElement(FindingBlocksStrip, {
+            reading: { kind: 'blocks', blocks: onPage7, missing: 2, complete: false }, versionUid: VERSION_UID,
             onOpen: noop, onMore: noop, loadingMore: true, moreFailed: false,
           }),
         ),
