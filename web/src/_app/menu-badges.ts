@@ -11,7 +11,10 @@
  *     states that end (`succeeded`, `failed`, `cancelled`, `dead_letter`) only grow; they are not a "now" and make no
  *     badge. In particular there is no red error badge: a count of failed jobs since the beginning never returns to
  *     zero, and a badge that is always red says nothing.
- *   - «База знаний»: `KnowledgeBaseEntryPage.total`, the entries of both journals together.
+ *   - «База знаний»: `KnowledgeBaseEntryPage.total`, the entries of both journals together. The screen is `optional`
+ *     (`R-150c`: it follows the header's project), so the number follows it too: with a project in the address it is
+ *     the entries of that project, the very set the screen lists behind the link (which carries `?project=`), and the
+ *     badge says so; without one it is the installation's. A project the address spells as no uid has no figure.
  *   - «Заявки на регистрацию»: `RegistrationRequestPage.pending_total`, the requests waiting for a decision, the
  *     figure of the home page's tile.
  *   - a section of «Разделы»: `SectionDocumentCount.audit_counts.awaiting_decision`, the documents of the section whose
@@ -79,6 +82,8 @@ export function badgeSourcesOf(navigation: Navigation): ReadonlySet<MenuBadgeSou
 export interface MenuBadgeReadings {
   readonly queueOverview?: readonly ExecutionQueueStateCount[] | undefined;
   readonly knowledgeBaseTotal?: number | undefined;
+  /** `R-150c`: `knowledgeBaseTotal` counts one project's entries (the address names one), not the installation's. */
+  readonly knowledgeBaseOfProject?: boolean | undefined;
   readonly pendingRegistrations?: number | undefined;
 }
 
@@ -87,6 +92,8 @@ export const QUEUE_OPEN_STATES = ['queued', 'leased', 'running', 'retry_wait'] a
 
 export const QUEUE_BADGE_LABEL = 'Задач в очереди и в работе';
 export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний';
+/** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's entries. */
+export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного проекта';
 export const REGISTRATIONS_BADGE_LABEL = 'Заявок на регистрацию, ожидающих решения';
 export const UNCHECKED_BADGE_LABEL = 'Не проверено экспертом';
 const UNCHECKED_BADGE_TITLE =
@@ -132,7 +139,13 @@ export function menuBadgesOf(readings: MenuBadgeReadings): MenuBadges {
     if (badges.length > 0) found[address] = badges;
   };
   add(routes.queue(), queueBadges(readings.queueOverview));
-  add(KNOWLEDGE_BASE_SCREEN, countBadge(KNOWLEDGE_BASE_BADGE_LABEL, readings.knowledgeBaseTotal));
+  add(
+    KNOWLEDGE_BASE_SCREEN,
+    countBadge(
+      readings.knowledgeBaseOfProject === true ? KNOWLEDGE_BASE_PROJECT_BADGE_LABEL : KNOWLEDGE_BASE_BADGE_LABEL,
+      readings.knowledgeBaseTotal,
+    ),
+  );
   add(REGISTRATIONS_REQUESTS_SCREEN, countBadge(REGISTRATIONS_BADGE_LABEL, readings.pendingRegistrations));
   return found;
 }

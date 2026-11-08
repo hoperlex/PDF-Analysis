@@ -157,7 +157,9 @@ import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
 import { description as aiDescription } from '../version-compare/ai-fixtures';
 import { COMPARISON_SHAPES, panelProps } from '../version-compare/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
-import { ADMIN as HOME_ADMIN, EXPERT as HOME_EXPERT, LABEL as HOME_LABEL, loaded as loadedHome } from '../screens/home-fixtures';
+import {
+  ADMIN as HOME_ADMIN, EXPERT as HOME_EXPERT, LABEL as HOME_LABEL, PROJECTS as HOME_PROJECTS, loaded as loadedHome, projectPage as homeProjectPage,
+} from '../screens/home-fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
   NORM_CATALOGUE_ITEMS, NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
@@ -2181,6 +2183,22 @@ export function screens(): Screen[] {
     add('HomePage loaded, expert', renderScreen(loadedHome(), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_EXPERT })));
     add('HomePage loaded, administrator with requests waiting', renderScreen(loadedHome({ pending: 3 }), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_ADMIN })));
     add('HomePage loaded, administrator with none waiting', renderScreen(loadedHome({ pending: 0 }), createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_ADMIN })));
+    // `UI-A-10`: «Последние проекты» over items that carry `audit_counts` (the line of badges under a project's name), a project that
+    // waits for decisions, one that was checked and one with no documents, so the tile's figures are measured where they are drawn.
+    add(
+      'HomePage loaded, recent projects with their audit figures',
+      renderScreen(
+        loadedHome({
+          projects: homeProjectPage(HOME_PROJECTS.slice(0, 5).map((project, index) => ({
+            ...project,
+            audit_counts: index === 0
+              ? auditCounts(8, { not_run: 3, awaiting_decision: 2, checked: 2, clean: 1, no_expert_decision: 5 })
+              : index === 1 ? auditCounts(4, { not_run: 0, checked: 4, no_expert_decision: 0 }) : auditCounts(index === 2 ? 0 : 2),
+          }))),
+        }),
+        createElement(HomePage, { displayLabel: HOME_LABEL, roles: HOME_EXPERT }),
+      ),
+    );
     // `CMP-VERSION-MARK-01`: the same four screens over a version admitted for comparison only
     // (`upload_kind` `comparison_pdf`): the mark on a row and in the panel, and the run list with
     // its disabled start — over a list with a run and over an empty one — so the badge's tone, the

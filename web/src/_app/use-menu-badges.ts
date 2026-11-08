@@ -11,6 +11,10 @@
  *   «База знаний»          `listKnowledgeBaseEntries` with `limit: 1`: the answer carries `total` whatever the page, so
  *                          one entry is the cheapest question. A key of its own (`knowledgeBase({ limit: 1 })`), which
  *                          every decision still refreshes, because it invalidates the knowledge base by prefix.
+ *                          The screen follows the header's project (`R-150c`, class `optional`), so the read does too:
+ *                          the address's project is sent as `project_uid` and is in the key, as on the screen, and
+ *                          the menu never shows another project's total while the new one loads. A project the address
+ *                          spells as no uid is not asked about: it has no figure.
  *   «Заявки на регистрацию» `listRegistrations` with `{ status: 'pending', limit: 1 }`: **the key and the call of the
  *                          home page's `PendingRegistrationsTile`**, so the tile and the menu share one cache entry and
  *                          a decision on a request refreshes both.
@@ -31,6 +35,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ExecutionQueuePage, KnowledgeBaseEntryPage, RegistrationRequestPage } from '@/shared/api';
 import { listKnowledgeBaseEntries, listRegistrations, queryKeys } from '@/shared/api';
 import { OPERATIONAL_LIST_POLL, queueQueryOptions } from '@/entities/execution';
+import { looksLikeProjectUid } from '@/entities/project';
 
 import type { MenuBadgeSource, MenuBadges } from './menu-badges';
 import { menuBadgesOf } from './menu-badges';
@@ -40,14 +45,21 @@ const KNOWLEDGE_BASE_PROBE = { limit: 1 } as const;
 /** The page whose `pending_total` the administrator's tile and the menu both show. */
 const PENDING_REGISTRATIONS = { status: 'pending', limit: 1 } as const;
 
-export function useMenuBadges(sources: ReadonlySet<MenuBadgeSource>): MenuBadges {
+/**
+ * `projectUid` is the project the address names (`R-150c`), or `null`: the installation. The frame reads it from the address
+ * and keeps no copy, so a project change in the address is a new key here.
+ */
+export function useMenuBadges(sources: ReadonlySet<MenuBadgeSource>, projectUid: string | null = null): MenuBadges {
   const queue = useQuery<ExecutionQueuePage>({ ...queueQueryOptions(), enabled: sources.has('queue') });
+  // A uid that is not spelled as one names no project; asking the server about it would be asking for an error.
+  const badProject = projectUid !== null && !looksLikeProjectUid(projectUid);
+  const knowledgeBaseProbe = projectUid === null || badProject ? KNOWLEDGE_BASE_PROBE : { project_uid: projectUid, ...KNOWLEDGE_BASE_PROBE };
   const knowledgeBase = useQuery<KnowledgeBaseEntryPage>({
-    queryKey: queryKeys.findings.knowledgeBase(KNOWLEDGE_BASE_PROBE),
-    queryFn: async () => (await listKnowledgeBaseEntries({ query: KNOWLEDGE_BASE_PROBE })).data,
+    queryKey: queryKeys.findings.knowledgeBase(knowledgeBaseProbe),
+    queryFn: async () => (await listKnowledgeBaseEntries({ query: knowledgeBaseProbe })).data,
     ...OPERATIONAL_LIST_POLL,
     refetchOnWindowFocus: 'always',
-    enabled: sources.has('knowledge-base'),
+    enabled: sources.has('knowledge-base') && !badProject,
   });
   const registrations = useQuery<RegistrationRequestPage>({
     queryKey: queryKeys.registrations.list(PENDING_REGISTRATIONS),
@@ -60,7 +72,8 @@ export function useMenuBadges(sources: ReadonlySet<MenuBadgeSource>): MenuBadges
   const held = (source: MenuBadgeSource, failed: boolean): boolean => sources.has(source) && !failed;
   return menuBadgesOf({
     queueOverview: held('queue', queue.isError) ? queue.data?.overview : undefined,
-    knowledgeBaseTotal: held('knowledge-base', knowledgeBase.isError) ? knowledgeBase.data?.total : undefined,
+    knowledgeBaseTotal: held('knowledge-base', knowledgeBase.isError || badProject) ? knowledgeBase.data?.total : undefined,
+    knowledgeBaseOfProject: projectUid !== null && !badProject,
     pendingRegistrations: held('registrations', registrations.isError) ? registrations.data?.pending_total : undefined,
   });
 }

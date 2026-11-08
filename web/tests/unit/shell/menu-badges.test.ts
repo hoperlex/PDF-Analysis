@@ -398,3 +398,109 @@ describe('the frame reads the counters from the cache entries of the screens the
     expect(withClient).toContain('Очередь');
   });
 });
+
+// ------------------------------------------------------------------------------------------- the project of the address (R-150c)
+
+const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B';
+const OTHER_PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
+const PROJECT_KB_KEY = queryKeys.findings.knowledgeBase({ project_uid: PROJECT, limit: 1 });
+const OTHER_KB_KEY = queryKeys.findings.knowledgeBase({ project_uid: OTHER_PROJECT, limit: 1 });
+
+function frameAt(client: QueryClient, subject: AppFrameSession | null, pathname: string, search = ''): string {
+  navigationState.pathname = pathname;
+  navigationState.search = search;
+  try {
+    return renderWith(client, createElement(FrameNavigation, { navigation: buildNavigation(subject), offersSections: false }));
+  } finally {
+    navigationState.pathname = '/dashboard';
+    navigationState.search = '';
+  }
+}
+
+/**
+ * The link to `address`, with or without the `?project=` the frame carries onto it (`R-150c`), whatever the project is
+ * spelled as. A missing link is an error, not an empty answer: «no badge» must never pass because the link was not found.
+ */
+const linkTo = (markup: string, address: string) => {
+  const link = linksIn(markup).find((found) => found.href === address || found.href.startsWith(`${address}?project=`));
+  if (link === undefined) throw new Error(`no link to ${address} in the markup`);
+  return link;
+};
+
+const kbPills = (markup: string, which: 'row' | 'rail' | 'stacked' = 'row'): string[] =>
+  pillsIn(linkTo(state(markup, which), KNOWLEDGE_BASE).inside);
+
+describe('«База знаний» counts the entries of the project the address names, as the screen behind it does', () => {
+  it('says what it counts: the project\'s entries when a project is chosen, the installation\'s otherwise', () => {
+    const all = menuBadgesOf({ knowledgeBaseTotal: 12 })[KNOWLEDGE_BASE]?.[0];
+    expect(all?.label).toBe('Записей в базе знаний: 12');
+    const scoped = menuBadgesOf({ knowledgeBaseTotal: 12, knowledgeBaseOfProject: true })[KNOWLEDGE_BASE]?.[0];
+    expect(scoped?.label).toBe('Записей в базе знаний выбранного проекта: 12');
+    expect(scoped?.count).toBe(12);
+    expect(menuBadgesOf({ knowledgeBaseTotal: 0, knowledgeBaseOfProject: true })).toEqual({});
+  });
+
+  it('reads the project\'s own total on an optional screen with ?project=, in the bar, the rail and the stacked menu', () => {
+    const client = seeded();
+    client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
+    const markup = frameAt(client, ADMIN_ONLY, '/dashboard', `project=${PROJECT}`);
+    for (const which of ['row', 'rail', 'stacked'] as const) expect(kbPills(markup, which), which).toEqual(['count:12']);
+    expect(state(markup, 'row')).toContain('Записей в базе знаний выбранного проекта: 12');
+    // The installation's 140 is not shown beside a project.
+    expect(markup).not.toContain('99+');
+  });
+
+  it('reads the project of the path on a required screen, where the link to the base carries it', () => {
+    const client = seeded();
+    client.setQueryData(PROJECT_KB_KEY, knowledgePage(7));
+    const markup = frameAt(client, EXPERT, `/projects/${PROJECT}`);
+    expect(kbPills(markup)).toEqual(['count:7']);
+    expect(linkAt(state(markup, 'row'), `${KNOWLEDGE_BASE}?project=${PROJECT}`)).toBeDefined();
+  });
+
+  it('reads the installation\'s total with no project in the address, on a global screen too, and keeps the old key', () => {
+    const client = seeded();
+    client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
+    expect(kbPills(frameAt(client, ADMIN_ONLY, '/dashboard'))).toEqual(['count:99+']);
+    expect(state(frameAt(client, ADMIN_ONLY, '/dashboard'), 'row')).toContain('Записей в базе знаний: 140');
+    // A global screen ignores ?project= for its own data, and the base is not the global screen's: it follows the address.
+    expect(kbPills(frameAt(client, ADMIN_ONLY, '/queue', `project=${PROJECT}`))).toEqual(['count:12']);
+    const bare = newClient();
+    frameAt(bare, ADMIN_ONLY, '/dashboard');
+    expect(bare.getQueryCache().find({ queryKey: [...KB_KEY] })).toBeDefined();
+  });
+
+  it('never shows another project\'s total while this project\'s is loading: no figure, not the old one', () => {
+    const client = seeded();
+    client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
+    expect(kbPills(frameAt(client, ADMIN_ONLY, '/dashboard', `project=${OTHER_PROJECT}`))).toEqual([]);
+    // And it asked under the other project's key, once, enabled: the project is in the key.
+    const filed = client.getQueryCache().find({ queryKey: [...OTHER_KB_KEY] });
+    expect(filed).toBeDefined();
+    expect((filed?.options as { enabled?: unknown }).enabled).not.toBe(false);
+  });
+
+  it('draws nothing when the project\'s read failed, and leaves the other counters', () => {
+    const client = seeded();
+    client.setQueryData(PROJECT_KB_KEY, knowledgePage(12));
+    client.getQueryCache().find({ queryKey: [...PROJECT_KB_KEY] })?.setState({ status: 'error', error: new Error('нет связи'), errorUpdatedAt: Date.now() + 1, fetchStatus: 'idle' });
+    const markup = frameAt(client, ADMIN_ONLY, '/dashboard', `project=${PROJECT}`);
+    expect(kbPills(markup)).toEqual([]);
+    expect(pillsIn(linkTo(state(markup, 'row'), REGISTRATIONS).inside)).toEqual(['count:5']);
+  });
+
+  it('is not asked about a project the address spells as no uid, and draws no figure for it', () => {
+    const client = seeded();
+    const markup = frameAt(client, ADMIN_ONLY, '/dashboard', 'project=не-проект');
+    expect(kbPills(markup)).toEqual([]);
+    const probe = client.getQueryCache().find({ queryKey: [...KB_KEY] });
+    expect((probe?.options as { enabled?: unknown }).enabled).toBe(false);
+  });
+
+  it('does not ask for it at all for a session whose menu has no such item', () => {
+    const client = newClient();
+    const markup = frameAt(client, NO_ROLES, '/dashboard', `project=${PROJECT}`);
+    expect(markup).not.toContain('data-menu-badge');
+    expect(client.getQueryCache().getAll()).toHaveLength(0);
+  });
+});

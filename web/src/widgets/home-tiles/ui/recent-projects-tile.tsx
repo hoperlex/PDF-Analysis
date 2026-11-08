@@ -4,12 +4,18 @@
  * The home page's five most recent projects (`W50-PLAN.md` §3.6), in the contract's order
  * (`recentProjects`). Each project links through `routes` (`@/shared/lib`), the one place an
  * address is built.
+ *
+ * **Each row states the project's audit** (`UI-A-10`), as the project list does: the documents, those never run, those
+ * awaiting a decision, those checked, from the `audit_counts` the same `listProjects` answer carries on each item, so the
+ * home answers «where is work waiting» without a read of its own. A project whose item carries none (the contract makes
+ * it optional) shows no figures: an absent count is unknown, never zero.
  */
 
 import Link from 'next/link';
 
 import { formatInstant, routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
+import { AuditTallyLine, tallyOfCounts } from '@/entities/document-version';
 import { classifyProjectListFailure } from '@/entities/project';
 
 import { useRecentProjects } from '../api/home-reads';
@@ -47,6 +53,11 @@ function Body() {
         <li key={project.project_uid} className={styles.project}>
           <Link href={routes.project(project.project_uid)}>{project.name}</Link>
           <span className={styles.created}>создан {formatInstant(project.created_at)}</span>
+          {project.audit_counts === undefined ? null : (
+            <span className={styles.projectFigures} data-recent-project-figures="">
+              <AuditTallyLine tally={tallyOfCounts(project.audit_counts)} label={project.name} />
+            </span>
+          )}
         </li>
       ))}
     </ol>
