@@ -32,7 +32,7 @@ from auditmanager.shared.identity import (
     DecisionMemoryStatusEventId,
 )
 
-HEAD = "0059_decision_memory"
+HEAD = "0060_run_from_stage"  # the head the fixture migrates to; 0059 is the migration under test, one step below it
 PREVIOUS = "0058_finding_decision_origin"
 TABLES = (
     "decision_memory_case", "decision_memory_decision", "decision_memory_decision_text", "decision_memory_status_event",
