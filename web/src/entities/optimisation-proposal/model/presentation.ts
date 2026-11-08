@@ -95,6 +95,27 @@ export function describeSaving(proposal: OptimisationProposal): string {
   return `Экономия: ${formatAmount(proposal.saving, proposal.currency)}`;
 }
 
+/**
+ * `UI-B-07` (contract 1.40.0): the price difference the server computed, «−25 %». The text is the server's -- the share of
+ * the current unit price the proposed one saves, rounded to two decimals, a decimal point and no trailing zero -- and is
+ * only regrouped here (decimal comma). A percent that rounded to «0» has no sign: «−0 %» says nothing a «0 %» does not.
+ */
+export function formatSavingPercent(text: string): string {
+  const shown = formatDecimal(text);
+  return text === '0' ? `${shown} %` : `\u2212${shown} %`;
+}
+
+/**
+ * The percent as the card states it, «−25 % к цене в прайс-листе», or `null` when the proposal carries none (the field
+ * is absent when the current price is zero, and on a server that predates it). It is a difference of the two prices,
+ * not of the saving, so it stands where the saving is «не рассчитана» too. Never computed here: a client that divided
+ * two decimal strings would round them its own way.
+ */
+export function describeSavingPercent(proposal: Pick<OptimisationProposal, 'saving_percent'>): string | null {
+  const percent = proposal.saving_percent;
+  return percent === undefined ? null : `${formatSavingPercent(percent)} к цене в прайс-листе`;
+}
+
 /** Where in the drawings the specification row is: page, sheet, lines, position. */
 export function describeProvenance(proposal: OptimisationProposal): string {
   const parts = [`страница ${proposal.page_number}`];

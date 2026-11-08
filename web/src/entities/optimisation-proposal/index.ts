@@ -29,8 +29,10 @@ export {
   describeProvenance,
   describeQuantity,
   describeSaving,
+  describeSavingPercent,
   formatAmount,
   formatDecimal,
+  formatSavingPercent,
   proposalsCsvFileName,
   proposalsXlsxFileName,
 } from './model/presentation';

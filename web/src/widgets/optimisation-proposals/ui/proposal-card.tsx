@@ -25,6 +25,7 @@ import {
   describeProvenance,
   describeQuantity,
   describeSaving,
+  describeSavingPercent,
   formatAmount,
   formatDecimal,
 } from '@/entities/optimisation-proposal';
@@ -112,6 +113,10 @@ export function ProposalHistoryView({ items }: ProposalHistoryViewProps) {
   );
 }
 
+/** The tooltip of the percent: what it is a percent of. */
+const SAVING_PERCENT_TITLE =
+  'На сколько процентов цена аналога ниже цены в прайс-листе. Не зависит от количества, поэтому есть и там, где экономия в рублях не рассчитана.';
+
 export interface ProposalCardProps {
   readonly proposal: OptimisationProposal;
   /** The decision controls an expert is offered; `null` for anyone else. */
@@ -137,6 +142,7 @@ export function ProposalCard({ proposal, controls, history, documentUrl, blocks 
   const sheetUrl = documentUrl === undefined || documentUrl === null || page === null ? null : pdfPageUrl(documentUrl, page);
   const current = formatAmount(proposal.current_unit_price, proposal.currency);
   const proposed = formatAmount(proposal.proposed_unit_price, proposal.currency);
+  const percent = describeSavingPercent(proposal);
   return (
     <article
       className={styles.card}
@@ -190,6 +196,13 @@ export function ProposalCard({ proposal, controls, history, documentUrl, blocks 
       </div>
       <p className={styles.figures}>
         Количество: {describeQuantity(proposal)}. {describeSaving(proposal)}
+        {percent === null ? null : (
+          <>
+            {' · '}
+            {/* `UI-B-07`: the server's percent of the price, beside the amount and where the amount is not computed. */}
+            <span data-saving-percent={proposal.saving_percent} title={SAVING_PERCENT_TITLE}>{percent}</span>
+          </>
+        )}
       </p>
       <div className={styles.basis}>
         <p className={styles.hint}>
