@@ -23,6 +23,14 @@
  * eye. A project whose answer carries no `audit_counts` shows **no** figures: an absent count is
  * unknown, never zero.
  *
+ * ## The mark of the project that is open (`D-363`)
+ *
+ * The original's picker draws a ✓ at the current object and keeps the column on the other rows. Here the rows that are a
+ * choice — each project and «Все проекты» — carry `current`: `true` on the one the address names (a project's uid, or no
+ * project for «Все проекты»), `false` on the others, so `Menu` marks it and holds the column. «Остальные проекты» and
+ * «Новый проект» are not choices and carry none. A project the address names that is not in the first page marks no row,
+ * and says so in the button's value (`Проект вне первых N`), not by guessing.
+ *
  * ## What is not shown
  *
  * Only the first page of the list is read (`PROJECT_PAGE_LIMIT`, the page the home and the
@@ -79,7 +87,13 @@ export interface SwitcherNote {
 
 /** One entry of the menu. A retry is the only entry that is not an address. */
 export type SwitcherEntry =
-  | { readonly kind: 'link'; readonly label: string; readonly href: string }
+  | {
+      readonly kind: 'link';
+      readonly label: string;
+      readonly href: string;
+      /** `D-363`: the entry is a choice (a project, or «Все проекты»), and `true` marks the one made. Absent: not a choice. */
+      readonly current?: boolean;
+    }
   | { readonly kind: 'retry'; readonly label: string };
 
 export interface SwitcherModel {
@@ -245,10 +259,15 @@ export function buildSwitcherModel(address: SwitcherAddress, list: SwitcherList)
   if (list.kind === 'ready') {
     const labels = projectRowLabels(list.projects);
     list.projects.forEach((project, index) => {
-      entries.push({ kind: 'link', label: labels[index] as string, href: chooseProject(address, project.project_uid) });
+      entries.push({
+        kind: 'link',
+        label: labels[index] as string,
+        href: chooseProject(address, project.project_uid),
+        current: projectUid === project.project_uid,
+      });
     });
   }
-  entries.push({ kind: 'link', label: ALL_PROJECTS_LABEL, href: chooseProject(address, null) });
+  entries.push({ kind: 'link', label: ALL_PROJECTS_LABEL, href: chooseProject(address, null), current: projectUid === null });
   if (list.kind === 'ready' && list.more) entries.push({ kind: 'link', label: MORE_PROJECTS_LABEL, href: routes.projects() });
   // The creation form lives on the project list; the selector links to it rather than copying it.
   entries.push({ kind: 'link', label: NEW_PROJECT_LABEL, href: routes.projects() });

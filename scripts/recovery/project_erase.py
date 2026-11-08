@@ -883,6 +883,21 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
         )
     # <<< guard: scope-is-pure
 
+    # >>> guard: memory-captured
+    # G1 (`DECISION-MEMORY-01` section 4.4, `ADR-0027`): the decision memory is the only copy of the context of a decision once its
+    # project is erased, so no accept or reject of this project may be missing from it. The memory itself is not in the closure
+    # (it has no foreign key into the project) and is never touched by this tool.
+    uncaptured = int(connection.execute(text(
+        f"SELECT count(*) {purge.UNCAPTURED_DECISION_EVENTS_SQL} AND e.decision_id = ANY({_KEYS})"
+    ), {"keys": list(scope["expert_decision_event"])}).scalar_one())
+    if uncaptured:
+        raise EraseRefused(
+            f"{uncaptured} expert decision event(s) (accept or reject) of this project have no decision-memory case, so "
+            "erasing the project would lose the context of those decisions. The worker's sweep captures them within a minute or "
+            "so; run the erase again once the count is zero. Nothing was touched."
+        )
+    # <<< guard: memory-captured
+
     # >>> guard: quiescent
     running = _state_counts(connection, closure, scope)
     if running:

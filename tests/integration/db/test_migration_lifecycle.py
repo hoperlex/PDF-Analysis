@@ -131,6 +131,24 @@ EXPECTED_TABLES = {
     "stage_card_evidence", "stage_card_verdict", "stage_chain_batch", "stage_chain_batch_item",
     # `0019_execution_workers`: the worker registry.
     "worker",
+    # `0053_document_tags` and `0054_finding_execution_status` (this list lacked them).
+    "document_tag",
+    "finding_execution_status",
+    # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals of «График работ» (this list lacked them).
+    "engineer_absence_event",
+    "schedule_plan_event",
+    "schedule_setting_event",
+    "work_assignment_schedule_event",
+    "work_calendar_event",
+    # `0059_decision_memory` (`ADR-0027`): the eight tables of the decision memory.
+    "decision_memory_case",
+    "decision_memory_content",
+    "decision_memory_crop",
+    "decision_memory_decision",
+    "decision_memory_decision_text",
+    "decision_memory_evidence",
+    "decision_memory_norm_ref",
+    "decision_memory_status_event",
     # `0020_norms_search`: the one current norms snapshot and its append-only history.
     "norm_current_snapshot",
     "norm_current_snapshot_event",

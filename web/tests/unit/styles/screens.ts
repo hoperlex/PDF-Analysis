@@ -601,6 +601,11 @@ export function screens(): Screen[] {
         'AppFrame, the project selector open on an optional screen, the project named, rows and the first-page note',
         seeded('/dashboard', `project=${SWITCHER_UID}`, SWITCHER_PAGE, null),
       );
+      // `D-363`: the ✓ of the project that is open, on the row with the 200-character name (the cell keeps its column while the name wraps).
+      add(
+        'AppFrame, the project selector open, the project with the long name marked current',
+        seeded('/dashboard', 'project=prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8C', SWITCHER_PAGE, null),
+      );
       add('AppFrame, the project selector open on a global screen, muted, the list loading', seeded('/queue', '', undefined, null));
       add(
         'AppFrame, the project selector open, the read failed',
@@ -720,7 +725,7 @@ export function screens(): Screen[] {
 
     /*
      * `UI-A-05`, `UI-A-06`, `UI-A-91`: the counters beside the items -- the section's red number of documents no expert has
-     * checked next to its count, and the pills of «Очередь», «База знаний» and «Заявки на регистрацию» in the bar, on the
+     * checked next to its count (and the same sum on the «Разделы» group's own button, `D-360`), and the pills of «Очередь», «База знаний» and «Заявки на регистрацию» in the bar, on the
      * rail's glyphs and in the stacked menu (`.itemBadges`, `.badge`, `.badgeCount`, `.badgeAlert`, `.railBadges`). One
      * figure is past two digits, so the `99+` form is measured too.
      */
@@ -739,6 +744,8 @@ export function screens(): Screen[] {
           sections: sectionNavigationOf(waitingRows, PROJECT_UID, sectionPage),
           badges: menuBadgesOf({
             queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
+            // `D-331`: the red mark beside the count on «Очередь».
+            queueRecentOverview: [{ state: 'failed', count: 2 }],
             knowledgeBaseTotal: 140,
             pendingRegistrations: 5,
           }),
@@ -1714,6 +1721,8 @@ export function screens(): Screen[] {
         ]),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
+        // `UI-A-74`: the count of the portal blocks beside the number, for the one finding the run's links name.
+        blockCountOf: (findingUid: string) => (findingUid === FINDING_UID ? 3 : undefined),
         renderRowActions: (row: { readonly current_verdict: Verdict }) =>
           createElement(FindingRowActions, {
             verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,

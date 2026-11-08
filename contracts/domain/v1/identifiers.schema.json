@@ -206,7 +206,11 @@
         "stage_card_evidence_id",
         "stage_card_verdict_id",
         "stage_chain_batch_id",
-        "stage_chain_batch_item_id"
+        "stage_chain_batch_item_id",
+        "decision_memory_case_id",
+        "decision_memory_decision_id",
+        "decision_memory_status_event_id",
+        "decision_memory_crop_id"
       ],
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*(_uid|_id)$"
@@ -378,7 +382,11 @@
         "StageCardEvidence",
         "StageCardVerdict",
         "StageChainBatch",
-        "StageChainBatchItem"
+        "StageChainBatchItem",
+        "DecisionMemoryCase",
+        "DecisionMemoryDecision",
+        "DecisionMemoryStatusEvent",
+        "DecisionMemoryCrop"
       ],
       "propertyNames": {
         "pattern": "^[A-Z][A-Za-z0-9]*$"
@@ -491,7 +499,11 @@
           "stage_card_evidence_id",
           "stage_card_verdict_id",
           "stage_chain_batch_id",
-          "stage_chain_batch_item_id"
+          "stage_chain_batch_item_id",
+          "decision_memory_case_id",
+          "decision_memory_decision_id",
+          "decision_memory_status_event_id",
+          "decision_memory_crop_id"
         ]
       }
     },
@@ -625,7 +637,11 @@
                 "stage_card_evidence_id",
                 "stage_card_verdict_id",
                 "stage_chain_batch_id",
-                "stage_chain_batch_item_id"
+                "stage_chain_batch_item_id",
+                "decision_memory_case_id",
+                "decision_memory_decision_id",
+                "decision_memory_status_event_id",
+                "decision_memory_crop_id"
               ]
             }
           },

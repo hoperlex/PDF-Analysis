@@ -24,6 +24,11 @@
  * nobody has decided (`docs/program/UI-PARITY-METRICS.md` §2, `R-150o`). It is the server's figure, in the answer the
  * group already reads, so there is no second read; a row that carries no counts has no figure (`null`), which draws no
  * badge, and zero draws none either.
+ *
+ * **The group's own figures (`D-360`).** The original's parent row «Разделы» carries the summed red count and, in grey, how
+ * many projects the sub-menu holds, so both are seen while it is folded. The same here: {@link sectionsSummary} sums the
+ * entries' red figures and their documents (the original's "project" is our document), and the group's button draws
+ * them beside its name (`frame-navigation.tsx`). Nothing is read for it: the sums are over the entries the group lists.
  */
 
 import type { SectionDocumentCount } from '@/shared/api';
@@ -31,7 +36,7 @@ import type { ProjectSectionCode } from '@/entities/project';
 import { PROJECT_SECTIONS, findProjectSection, sectionsInStructureOrder } from '@/entities/project';
 import { routes } from '@/shared/lib';
 
-import { uncheckedClause } from './menu-badges';
+import { UNCHECKED_BADGE_LABEL, uncheckedClause } from './menu-badges';
 
 /** One sub-item: a section of the current project that holds documents. */
 export interface SectionNavigationEntry {
@@ -60,6 +65,9 @@ export type SectionNavigation =
 
 /** The group's name in the menu. */
 export const SECTIONS_GROUP_LABEL = 'Разделы';
+
+/** What the grey number on the group's button counts (the original's «Всего проектов (без ИРД)»). */
+export const SECTIONS_DOCUMENTS_LABEL = 'Документов в разделах';
 
 /** The words of a group that has no list to show. */
 export const SECTIONS_LOADING_NOTE = 'Разделы проекта загружаются…';
@@ -110,4 +118,35 @@ export function sectionNavigationOf(
     }];
   });
   return { status: 'ready', entries };
+}
+
+/** The figures of the whole group: the documents it lists and, of them, the red count (`null` when no entry had one). */
+export interface SectionsSummary {
+  readonly documents: number;
+  readonly awaitingDecision: number | null;
+}
+
+/**
+ * The group's figures from its entries. An entry with no red figure adds nothing to the red sum, and when none of them
+ * has one the sum is unknown (`null`), not zero.
+ */
+export function sectionsSummary(entries: readonly Pick<SectionNavigationEntry, 'count' | 'awaitingDecision'>[]): SectionsSummary {
+  let documents = 0;
+  let awaiting: number | null = null;
+  for (const entry of entries) {
+    documents += entry.count;
+    if (entry.awaitingDecision !== null) awaiting = (awaiting ?? 0) + entry.awaitingDecision;
+  }
+  return { documents, awaitingDecision: awaiting };
+}
+
+/**
+ * What the group's button counts, as a sentence: `Не проверено экспертом: 3. Документов в разделах: 7`; the first clause
+ * only when the red figure is above zero. It follows the group's name in the button's accessible name.
+ */
+export function sectionsSummaryLabel(summary: SectionsSummary): string {
+  const documents = `${SECTIONS_DOCUMENTS_LABEL}: ${summary.documents}`;
+  return summary.awaitingDecision !== null && summary.awaitingDecision > 0
+    ? `${UNCHECKED_BADGE_LABEL}: ${summary.awaitingDecision}. ${documents}`
+    : documents;
 }

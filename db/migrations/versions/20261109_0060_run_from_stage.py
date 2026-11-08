@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0060_run_from_stage"
-down_revision: str | None = "0058_finding_decision_origin"
+down_revision: str | None = "0059_decision_memory"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

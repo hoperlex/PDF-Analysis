@@ -352,6 +352,12 @@ from sqlalchemy import Engine, text
 #: ``finding_execution_status``), columns +11 (``audit_run.started_by_user_uid``; ``document.archived_at`` and
 #: ``archived_by_user_uid``; four in each new table), constraints +15 (their keys, references and checks), indexes +4,
 #: triggers the same 241 with a new digest (0051 re-created ``audit_run``'s frozen-column trigger with the starter).
+#: Resealed 2026-11-09 for ``0059_decision_memory`` (`ADR-0027`, `DECISION-MEMORY-01` phase M1), measured on a throwaway PostgreSQL (the
+#: project image, stand ``am-lane-mem-m1-pg``) by this test's own observed output on a fresh database at ``0059``: relations +8 (the
+#: eight tables of the decision memory, to 156), columns +90 (14 + 10 + 2 + 8 + 11 + 14 + 11 + 20, to 1679), constraints +99 (eight
+#: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
+#: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
+#: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
 #: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), measured on a throwaway PostgreSQL (the
 #: project image, stand ``am-lane-s2-pg``): the constraint/index/trigger digests on the lane database upgraded to ``0060``, down to
 #: ``0058`` and up again, the **columns** digest on a fresh database upgraded once (a down/up cycle leaves a gap in the ordinal
@@ -359,9 +365,7 @@ from sqlalchemy import Engine, text
 #: ``start_stage_id`` (columns +2, to 1591), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
 #: itself, the start stage, both-or-neither; constraints +5, to 1958), the partial index on the pair (indexes +1, to 466), and the
 #: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 246 with a new digest). Relations,
-#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0058`` seal. The chained
-#: head with lane M1's ``0059`` has to be measured again (`D-414`).
-#: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
+#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0058`` seal. #: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
 #: PostgreSQL (the project image, stand ``am-lane-c4-pg``) upgraded to ``0058``, down to ``0057`` and up again: the column
 #: ``expert_decision_event.carried_from_decision_id`` (columns +1, to 1589), its foreign key to the table itself and three
 #: checks (the ``dec_`` shape, not its own source, only an accept or a reject: constraints +4, to 1953) and its partial index
@@ -386,11 +390,11 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1591, "483e353ec5267daf715ef150f8f5dda804eec060b2ee2cd125b0ea02fa8f511f"),
-    "relations": (148, "2bef8303c7c1cc9481b938e72e8c241fd9b3e391f55d8c3a4fdde713d60e3384"),
-    "constraints": (1958, "1ef13a8635bdfff535639282d50b940cc5eed4a6c126e8dd1168e71188748396"),
-    "indexes": (466, "d7edaa45e2df7806748f8bd20d7b66e4d9754a7007fb50f56124a6583bf4a5c4"),
-    "triggers": (246, "cbe3f00b3cda2c06e2d7121a39a6a1ad697b3cc0d9a4d32201388bf21d305e55"),
+    "columns": (1679, "fe39903702ea4ac8bd5aa0984b7fdf997101df581f9282a6593ea0e87376237e"),
+    "relations": (156, "09ca737e44525a8f3d9f0d518e5586cb26a6ae833acbd07ab94fe5de8fa54cf3"),
+    "constraints": (2052, "55386ad4a5306e0df04948f5a3963e83664ff73e7197e7390d87a711566c7056"),
+    "indexes": (482, "bc3e23cd7599daf959c63b53644890e238071e5bd35e05c06079f8c2a6af9c73"),
+    "triggers": (254, "84c5d4d450c9e78d210e1f6b08b42c9f5272d7299d3f9b27ebd8fd247ba2f9eb"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

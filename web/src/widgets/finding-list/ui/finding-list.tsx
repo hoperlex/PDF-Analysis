@@ -31,12 +31,12 @@ import { EXECUTION_STATUS_LABELS, SEVERITY_LABELS, SeverityBadge, countGrouped }
 import { CATEGORY_LABELS, CarriedMark, VerdictBadge } from '@/entities/expert-decision';
 import { declaredPages } from '@/entities/finding-observation';
 
-import { findingNumbers, pagesLabel, verdictBucket } from '../model/presentation';
+import { findingNumbers, findingsAsShown, groupsInVerdictOrder, pagesLabel, verdictBucket } from '../model/presentation';
 import type { VerdictFilter } from '../model/presentation';
 import { FindingTable } from './finding-table';
 import styles from './finding-list.module.css';
 
-export { pagesLabel, verdictBucket } from '../model/presentation';
+export { findingsAsShown, groupsInVerdictOrder, inVerdictOrder, pagesLabel, verdictBucket } from '../model/presentation';
 export type { VerdictFilter } from '../model/presentation';
 
 /** A finding that was admitted and then found structurally impossible. */
@@ -63,6 +63,8 @@ export interface FindingListProps {
   readonly renderRowActions?: ((finding: Finding) => ReactNode) | undefined;
   /** `UI-PARITY-P0O`: the drawing sheet of a PDF page, when the version's portal geometry names one. */
   readonly sheetOf?: ((page: number) => number | undefined) | undefined;
+  /** `UI-A-74`: the table's count of the portal blocks that hold a finding's evidence; the page reads it from the run's block links. */
+  readonly blockCountOf?: ((findingUid: string) => number | undefined) | undefined;
   /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly severityFilter?: SeverityFilter | undefined;
   readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
@@ -316,6 +318,7 @@ export function FindingList({
   onViewChange,
   renderExpansion,
   toolbar,
+  blockCountOf,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
   const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
@@ -357,6 +360,8 @@ export function FindingList({
   }
 
   const shown = filterBySeverity(filterGroups(groups, filter), severity);
+  // `UI-A-71`: the original's order, pending → accepted → rejected. The numbers stay the run's (`findingNumbers`).
+  const shownByVerdict = groupsInVerdictOrder(shown);
 
   return (
     <div className={`am-finding-list ${styles.root}`} data-finding-count={total}>
@@ -392,17 +397,18 @@ export function FindingList({
 
       {view === 'table' && shown.length > 0 ? (
         <FindingTable
-          findings={shown.flatMap((group) => group.findings)}
+          findings={findingsAsShown(shown, 'table')}
           numberOf={findingNumbers(groups)}
           selectedFindingUid={selectedFindingUid}
           onSelect={onSelect}
           renderRowActions={renderRowActions}
           renderExpansion={renderExpansion}
           sheetOf={sheetOf}
+          blockCountOf={blockCountOf}
         />
       ) : null}
 
-      {view === 'table' ? null : shown.map((group) => (
+      {view === 'table' ? null : shownByVerdict.map((group) => (
         <section
           key={group.category}
           className="am-finding-group"

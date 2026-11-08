@@ -28,6 +28,7 @@
 | [ADR-0024-production-analysis-path-and-ai-execution](adr/ADR-0024-production-analysis-path-and-ai-execution.md) | accepted production (R-146) | АР is v3 only; АР v1/v2 removed; OpenRouter base connection; other sections to full versions first (`reviewed` without a human review, A-5 and A-7, `R-146ag`); AD-12/13/14/15 confirmed; open: the AD-18 choice after the PROD-20 measurement |
 | [ADR-0025-comparison-modules](adr/ADR-0025-comparison-modules.md) | accepted by the repository owner (Q-CMP-1…Q-CMP-11, 2026-10-27) | Comparison modules: comparison-local durable queue and spend journal (pre-call breadcrumb, `spend_unknown`); raw evidence then AI layers; child-process compute under `RLIMIT_AS`; refusal caps, no eviction; N images with server-side `max_images` gating; USD ceilings; CHANGED→SAME becomes UNCERTAIN; verdicts carried per evidence; `numpy` + `opencv-python-headless` + `reportlab`; marked defaults revisable by CMP-MEASURE-01 |
 | [ADR-0026-executor-capacity-enrollment-groups](adr/ADR-0026-executor-capacity-enrollment-groups.md) | accepted by the repository owner (design documents and polls of 2026-11-02, R-149a…R-149f) | Executor capacity counted per connection under the existing advisory lock; pull claims serialised per token; universal agent enrollment (one installer for SSH and copied-command paths); homogeneous executor groups and per-work-kind rules with dispatch-time write-once binding, consent re-check before model I/O and an explicit legacy→rules cut-over; client-document enforcement and test runs deferred (D-291, D-292) |
+| [ADR-0027-decision-memory](adr/ADR-0027-decision-memory.md) | accepted in the autonomous window 2026-11-09 by the recommendations of `DECISION-MEMORY-01`; revisable by the repository owner | Decision memory: the case content (decision fact, finding text, evidence quotes and geometry, normative references, crop references) is a primary record written in the decision's transaction that outlives its project and document; vectors and probes stay rebuildable; amends `ADR-0012` / `R-16` and, for what an erase leaves, `R-146o` for the content only; `training_use` off, v1 crops are existing portal image-block crops (at most 4), the author is an opaque `user_uid`, `accept`/`reject` captured with their `origin_kind`, no automatic retention, no hints yet |
 
 ## CP-00 disposition
 
@@ -48,6 +49,10 @@ ADR-0021 to ADR-0024 are post-CP-00 production decisions recorded under owner ru
 disposition. The `AD-` decisions inside them are the architect's implementation choices within
 `R-146`; the owner has confirmed all of them by `R-146o`…`R-146z` except `AD-04` (limits from a VPS measurement), which was not polled, and the choice `AD-18` leaves open after its measurement; the ACME mechanism of `AD-01` is confirmed by `R-146aa`. ADR-0014 keeps its CP-00 `defer`
 disposition and gains a dated addendum for the points `R-146` decided.
+
+ADR-0027 is a post-CP-00 decision of the decision-memory programme (`docs/program/DECISION-MEMORY-01.md`), recorded in the autonomous
+window of 2026-11-09 because the owner was unreachable: its answers are the design's own recommendations and are revisable. It adds an
+amendment to `ADR-0012` (and, for the case content, to `R-16` and `R-146o`); it rewrites neither text, which stay as written.
 
 State after the repository owner recorded `PD-01`–`PD-04` on 2026-09-01:
 

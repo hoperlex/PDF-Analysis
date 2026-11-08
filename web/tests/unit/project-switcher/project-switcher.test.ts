@@ -100,8 +100,23 @@ function itemsOf(markup: string): [string, string | null, string][] {
   return [...markup.matchAll(/<(a|button)\b([^>]*role="menuitem"[^>]*)>([\s\S]*?)<\/(?:a|button)>/g)].map((m) => [
     m[1] as string,
     /\bhref="([^"]*)"/.exec(m[2] as string)?.[1] ?? null,
-    (m[3] as string).replace(/&amp;/g, '&'),
+    // The ✓ cell of `D-363` is the row's mark, not its text.
+    (m[3] as string).replace(/<span class="am-menu__check"[^>]*>[^<]*<\/span>/, '').replace(/&amp;/g, '&'),
   ]);
+}
+
+/** The rows that carry the ✓ cell, `[first line of the label, the mark ('✓' or '')]`, and which of them is `aria-current`. */
+function marksOf(markup: string): { readonly marks: [string, string][]; readonly current: string[] } {
+  const rows = [...markup.matchAll(/<(a|button)\b([^>]*role="menuitem"[^>]*)>([\s\S]*?)<\/(?:a|button)>/g)];
+  const marks: [string, string][] = [];
+  const current: string[] = [];
+  for (const row of rows) {
+    const cell = /<span class="am-menu__check"[^>]*>([^<]*)<\/span>/.exec(row[3] as string);
+    const label = ((row[3] as string).replace(/<span class="am-menu__check"[^>]*>[^<]*<\/span>/, '').split('\n')[0] ?? '').replace(/&amp;/g, '&');
+    if (cell !== null) marks.push([label, cell[1] as string]);
+    if (/\baria-current="true"/.test(row[2] as string)) current.push(label);
+  }
+  return { marks, current };
 }
 
 // ----------------------------------------------------------------------------- what a choice does
@@ -414,5 +429,55 @@ describe('the island: a render with no query client makes no request; the list i
     expect(markup).toContain('Проекты не загрузились');
     expect(markup).toContain('Название недоступно');
     expect(itemsOf(markup)[0]).toEqual(['button', null, RETRY_LABEL]);
+  });
+});
+
+// ---------------------------------------------------------------------------- D-363: the mark of the open project
+
+describe('D-363: the list marks the project that is open, as the original\'s picker does', () => {
+  const SAME_NAME = project(C, 'Склад', { documents: 2 });
+
+  it('flags the project the address names, on an optional screen and on a required one, and keeps the column on the other choices', () => {
+    for (const address of [at('/dashboard', `project=${B}`), at(`/projects/${B}/versions/${VERSION}`)]) {
+      const { marks, current } = marksOf(markupOf(address, ready()));
+      expect(marks, address.pathname ?? '').toEqual([['Мост через Неву', ''], ['Школа №7', '\u2713'], [ALL_PROJECTS_LABEL, '']]);
+      expect(current, address.pathname ?? '').toEqual(['Школа №7']);
+    }
+  });
+
+  it('flags «Все проекты» when the address names no project, and no project', () => {
+    const { marks, current } = marksOf(markupOf(at('/dashboard'), ready()));
+    expect(marks).toEqual([['Мост через Неву', ''], ['Школа №7', ''], [ALL_PROJECTS_LABEL, '\u2713']]);
+    expect(current).toEqual([ALL_PROJECTS_LABEL]);
+  });
+
+  it('flags nothing for a project the first page does not hold, and the button says why', () => {
+    const markup = markupOf(at('/dashboard', `project=${C}`), ready(PROJECTS, { more: true }));
+    expect(marksOf(markup).current).toEqual([]);
+    expect(marksOf(markup).marks.every(([, mark]) => mark === '')).toBe(true);
+    expect(markup).toContain('Проект вне первых 2');
+  });
+
+  it('puts the flag on the project\'s uid and not on its name: two projects of one name are told apart', () => {
+    const other = project(A, 'Склад', { documents: 5 });
+    const model = buildSwitcherModel(at('/dashboard', `project=${C}`), ready([other, SAME_NAME]));
+    const links = model.entries.filter((entry) => entry.kind === 'link');
+    expect(links.map((entry) => (entry.kind === 'link' ? entry.current : null))).toEqual([false, true, false, undefined]);
+  });
+
+  it('leaves «Остальные проекты», «Новый проект» and the retry out of the choices', () => {
+    const { marks } = marksOf(markupOf(at('/dashboard', `project=${A}`), ready(PROJECTS, { more: true })));
+    expect(marks.map(([label]) => label)).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL]);
+    const model = buildSwitcherModel(at('/dashboard', `project=${A}`), ready(PROJECTS, { more: true }));
+    for (const entry of model.entries) {
+      if (entry.kind === 'link' && (entry.label === MORE_PROJECTS_LABEL || entry.label === NEW_PROJECT_LABEL)) expect(entry.current).toBeUndefined();
+    }
+  });
+
+  it('does not change a row\'s link or its words', () => {
+    const marked = itemsOf(markupOf(at('/dashboard', `project=${A}`), ready()));
+    const bare = itemsOf(markupOf(at('/dashboard'), ready()));
+    expect(marked.map(([tag, href, text]) => [tag, href, text])).toEqual(bare.map(([tag, , text], index) => [tag, marked[index]?.[1], text]));
+    expect(marked.map(([, , text]) => text.split('\n')[0])).toEqual(['Мост через Неву', 'Школа №7', ALL_PROJECTS_LABEL, NEW_PROJECT_LABEL]);
   });
 });

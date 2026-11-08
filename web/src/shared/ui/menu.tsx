@@ -21,6 +21,17 @@
  * form, that carries `role="menuitem"`. Every item has `tabindex="-1"`: focus reaches items
  * by the arrow keys, and Tab leaves the menu instead of walking it.
  *
+ * ## The current item (`D-363`)
+ *
+ * A link item may say whether it is the choice made: `current` is `true` for the one that is, `false` for the other choices
+ * of the same list, and absent for an item that is not a choice at all («Новый проект»). A flagged item carries
+ * `aria-current="true"` when it is the current one, and a trailing check cell (`am-menu__check`, `aria-hidden`: the
+ * attribute says it to assistive technology, the mark to the eye) that is drawn EMPTY on the other flagged items, so the
+ * column of marks keeps its place on every row, as the original's project picker keeps it. `aria-current` and not a
+ * `menuitemradio` role: the items are links that navigate, and a radio would hide the link; the page already uses
+ * `aria-current` for "the page you are on" on its links. Without a flag the markup is what it always was. Where the
+ * column sits, and how wide, is the caller's to style (the cell is a plain inline `<span>`).
+ *
  * ## The trigger
  *
  * Its content is the caller's — the avatar, for the account menu — and its accessible name is
@@ -37,7 +48,13 @@ import type { MenuEvent, MenuFocus, MenuState, MenuTransition } from './menu-sta
 import { MENU_CLOSED, menuTransition } from './menu-state';
 
 export type MenuItem =
-  | { readonly kind: 'link'; readonly label: string; readonly href: string }
+  | {
+      readonly kind: 'link';
+      readonly label: string;
+      readonly href: string;
+      /** `D-363`: this link is a choice, and `true` marks the choice made. Absent: the link is not a choice. */
+      readonly current?: boolean | undefined;
+    }
   /** A local client action, such as opening a panel. */
   | { readonly kind: 'action'; readonly label: string; readonly onChoose?: (() => void) | undefined }
   /** A POST to `action`, from a submit control of its own form. */
@@ -118,11 +135,15 @@ export function MenuView({
                   role="menuitem"
                   tabIndex={-1}
                   href={item.href}
+                  aria-current={item.current === true ? 'true' : undefined}
                   ref={bindings?.itemRef?.(index)}
                   onFocus={() => bindings?.onItemFocus?.(index)}
                   onClick={() => bindings?.onItemChosen?.()}
                 >
                   {item.label}
+                  {item.current === undefined ? null : (
+                    <span className="am-menu__check" aria-hidden="true">{item.current ? '\u2713' : ''}</span>
+                  )}
                 </Link>
               ) : item.kind === 'action' ? (
                 <button
