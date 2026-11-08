@@ -559,8 +559,11 @@ def test_a_dry_run_is_the_default_prints_exact_counts_and_changes_nothing(stand:
     assert "--dry-run: NOTHING ABOVE WAS CHANGED." in out
     assert re.fullmatch(r"[0-9a-f]{64}", _line(out, "plan-sha256"))
     exclusive = exclusive_blobs(stand, target)
-    assert int(_line(out, "blobs-exclusive")) == len(exclusive) == 17
-    assert int(_line(out, "blobs-shared")) == len(blob_ids_of(stand, target)) - len(exclusive) == 1
+    # 17 exclusive and 1 shared until `0059_decision_memory`: the portal crop the seed's recorded run published is referenced by the
+    # decision memory (a KEEP table), so an erase keeps its Blob with its object and it counts as shared -- 16 and 2.
+    assert int(_line(out, "blobs-exclusive")) == len(exclusive) == 16
+    assert int(_line(out, "blobs-shared")) == len(blob_ids_of(stand, target)) - len(exclusive) == 2
+    assert len(blob_ids_of(stand, target) & set(scalars(stand, "SELECT blob_id FROM decision_memory_crop"))) == 1
     # The seed drives the real pipeline, whose source-preparation stage journals `stage.pdf_precheck` for the run (`runs/executor.py`).
     # `D-327`: the seed holds the throttle's clock still (`precheck_clock`), so those are exactly three (`PRECHECK_EVENTS`): the run's
     # journal is the 24 + 3 = 27 events, whatever the host's speed.

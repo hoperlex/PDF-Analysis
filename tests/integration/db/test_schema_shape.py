@@ -582,6 +582,8 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "origin_version_uid": "ver",
         "origin_run_id": "run",
         "source_decision_id": "dec",
+        # `0052_document_archive` (`UI-PARITY-P0G`): who archived a document (this map lacked it).
+        "archived_by_user_uid": "usr",
         # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals are identified by an event identity and name accounts.
         "setting_event_id": "evt",
         "plan_event_id": "evt",
