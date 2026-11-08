@@ -6,12 +6,25 @@
  * this module only names it: nothing is computed that the server did not count, and a figure that is not known is no
  * badge (never a zero, never an error mark).
  *
- *   - «Очередь»: the jobs that are waiting or being run, from `ExecutionQueuePage.overview` (contract 1.28.0), the
- *     same page the queue screen reads. The overview counts every job in a state over the whole history, so the
- *     states that end (`succeeded`, `failed`, `cancelled`, `dead_letter`) only grow; they are not a "now" and make no
- *     badge. In particular there is no red error badge: a count of failed jobs since the beginning never returns to
- *     zero, and a badge that is always red says nothing.
- *   - «База знаний»: `KnowledgeBaseEntryPage.total`, the entries of both journals together. The screen is `optional`
+ *   - «Очередь»: two figures, both from the `overview` of `ExecutionQueuePage` (contract 1.28.0), read with `limit: 1`
+ *     (`D-350`): the figure is the overview, not the page's rows.
+ *       - The jobs that are waiting or being run, over the whole history. The overview counts every job in a state, so the
+ *         states that end (`succeeded`, `failed`, `cancelled`, `dead_letter`) only grow; they are not a "now" and make
+ *         no count badge.
+ *       - The red error badge (`D-331`): the jobs accepted in the **last 24 hours** that ended in `failed` or
+ *         `dead_letter`. The original's badge is `kpis.errors` of «Диспетчер»: the failed attempts that are still the
+ *         job's live attempt, not a retried or superseded one. A failed job here is final (`state-machines.json`: `failed`
+ *         and `dead_letter` have no way out) and a re-audit makes a new job, so "not yet retried" is not a figure the
+ *         overview can give; a count over all history never returns to zero, and a badge that is always red says nothing.
+ *         The window is the nearest figure that does return to zero: the overview takes `created_from`, so the count
+ *         is of jobs *accepted* in the last day (a job accepted earlier that fails now is not in it).
+ *   - «База знаний»: `KnowledgeBaseEntryPage.total`, the entries of both journals together -- the decisions on findings and
+ *     those on optimisation proposals (`D-362`). The screen behind the link opens on the type «Замечания» (`R-151h`), whose
+ *     own total is the findings alone, so the number is larger than the one the reader meets until they choose «Все» (which
+ *     shows exactly this figure). **It keeps counting both, as the original's does** (`kbStats.total` is the whole base,
+ *     while its screen opens on one tab, «Отклонённые»), and the badge SAYS so: «(замечания и предложения вместе)».
+ *     Counting the findings alone would read a different operation (`listDecisions`) on every screen, which is a change to
+ *     every route's declared calls in the PC-01 journey's manifest, outside this lane's paths. The screen is `optional`
  *     (`R-150c`: it follows the header's project), so the number follows it too: with a project in the address it is
  *     the entries of that project, the very set the screen lists behind the link (which carries `?project=`), and the
  *     badge says so; without one it is the installation's. A project the address spells as no uid has no figure.
@@ -81,6 +94,8 @@ export function badgeSourcesOf(navigation: Navigation): ReadonlySet<MenuBadgeSou
 /** What the reads hold. `undefined` is "no figure": still loading, refused, failed, or not asked for. */
 export interface MenuBadgeReadings {
   readonly queueOverview?: readonly ExecutionQueueStateCount[] | undefined;
+  /** `D-331`: the overview of the jobs accepted in the last 24 hours (`created_from`); its failed states make the red badge. */
+  readonly queueRecentOverview?: readonly ExecutionQueueStateCount[] | undefined;
   readonly knowledgeBaseTotal?: number | undefined;
   /** `R-150c`: `knowledgeBaseTotal` counts one project's entries (the address names one), not the installation's. */
   readonly knowledgeBaseOfProject?: boolean | undefined;
@@ -90,10 +105,19 @@ export interface MenuBadgeReadings {
 /** The job states that are not over: waiting for a worker, held by one, being run, or waiting to be run again. */
 export const QUEUE_OPEN_STATES = ['queued', 'leased', 'running', 'retry_wait'] as const satisfies readonly ExecutionQueueStateCount['state'][];
 
+/** `D-331`: the job states that are an error, and end the job: `failed`, and `dead_letter` (stopped after the retries). */
+export const QUEUE_ERROR_STATES = ['failed', 'dead_letter'] as const satisfies readonly ExecutionQueueStateCount['state'][];
+/** `D-331`: how far back the red badge looks, in hours; the words of the badge say it. */
+export const QUEUE_ERROR_WINDOW_HOURS = 24;
+
 export const QUEUE_BADGE_LABEL = 'Задач в очереди и в работе';
-export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний';
+export const QUEUE_ERRORS_BADGE_LABEL = `Заданий с ошибкой за последние ${QUEUE_ERROR_WINDOW_HOURS} часа`;
+const QUEUE_ERRORS_BADGE_TITLE =
+  'Задания, принятые за последние 24 часа и закончившиеся ошибкой или остановкой после повторов. Уходит из числа через сутки после постановки. Подробности — на экране «Очередь», в состояниях «Ошибка» и «Остановлена после повторов».';
+/** `D-362`: both journals, said in the label: the screen opens on «Замечания» and shows this figure under «Все». */
+export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний (замечания и предложения вместе)';
 /** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's entries. */
-export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного проекта';
+export const KNOWLEDGE_BASE_PROJECT_BADGE_LABEL = 'Записей в базе знаний выбранного проекта (замечания и предложения вместе)';
 export const REGISTRATIONS_BADGE_LABEL = 'Заявок на регистрацию, ожидающих решения';
 export const UNCHECKED_BADGE_LABEL = 'Не проверено экспертом';
 const UNCHECKED_BADGE_TITLE =
@@ -101,13 +125,33 @@ const UNCHECKED_BADGE_TITLE =
 
 const named = (label: string, count: number): string => `${label}: ${count}`;
 
-/** The jobs of the queue that are waiting or running, or no badge when the page carried no overview or none is open. */
-export function queueBadges(overview: readonly ExecutionQueueStateCount[] | undefined): readonly MenuBadge[] {
-  if (overview === undefined) return [];
-  const open = overview
-    .filter((entry) => (QUEUE_OPEN_STATES as readonly string[]).includes(entry.state))
-    .reduce((sum, entry) => sum + entry.count, 0);
-  return open > 0 ? [{ tone: 'count', count: open, label: named(QUEUE_BADGE_LABEL, open) }] : [];
+/** How many jobs of `overview` stand in one of `states`. */
+function jobsIn(overview: readonly ExecutionQueueStateCount[], states: readonly string[]): number {
+  return overview.filter((entry) => states.includes(entry.state)).reduce((sum, entry) => sum + entry.count, 0);
+}
+
+/**
+ * The queue's badges: the count of the jobs that are waiting or running, then the red mark of the jobs accepted in the last
+ * 24 hours that ended in an error (`D-331`). Each comes from its own overview and is absent when that overview is unknown or
+ * its figure is zero, so one read failing leaves the other badge.
+ */
+export function queueBadges(
+  overview: readonly ExecutionQueueStateCount[] | undefined,
+  recentOverview?: readonly ExecutionQueueStateCount[] | undefined,
+): readonly MenuBadge[] {
+  const badges: MenuBadge[] = [];
+  const open = overview === undefined ? 0 : jobsIn(overview, QUEUE_OPEN_STATES);
+  if (open > 0) badges.push({ tone: 'count', count: open, label: named(QUEUE_BADGE_LABEL, open) });
+  const failed = recentOverview === undefined ? 0 : jobsIn(recentOverview, QUEUE_ERROR_STATES);
+  if (failed > 0) {
+    badges.push({
+      tone: 'alert',
+      count: failed,
+      label: named(QUEUE_ERRORS_BADGE_LABEL, failed),
+      title: `${named(QUEUE_ERRORS_BADGE_LABEL, failed)}. ${QUEUE_ERRORS_BADGE_TITLE}`,
+    });
+  }
+  return badges;
 }
 
 /** A plain count of something the item leads to, or no badge for an unknown figure and for zero. */
@@ -138,7 +182,7 @@ export function menuBadgesOf(readings: MenuBadgeReadings): MenuBadges {
   const add = (address: string, badges: readonly MenuBadge[]): void => {
     if (badges.length > 0) found[address] = badges;
   };
-  add(routes.queue(), queueBadges(readings.queueOverview));
+  add(routes.queue(), queueBadges(readings.queueOverview, readings.queueRecentOverview));
   add(
     KNOWLEDGE_BASE_SCREEN,
     countBadge(

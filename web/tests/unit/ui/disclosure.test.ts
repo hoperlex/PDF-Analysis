@@ -225,3 +225,51 @@ describe('disclosureTransition: what each event does', () => {
     expect([press(), inner, outer]).toEqual([null, false, false]);
   });
 });
+
+// ===================================================================== D-360: the badge slot
+
+describe('D-360: the group\'s button may carry a counter, seen while the group is closed', () => {
+  const BADGE = { content: createElement('span', { className: 'x-count', 'data-x': 'count' }, '7'), label: 'Не проверено экспертом: 7' };
+  const badged: DisclosureProps = { ...PROPS, badge: BADGE };
+
+  it('draws the caller\'s content inside the button, after the name and before the chevron, closed and open', () => {
+    for (const markup of [island(badged), view(false, badged), view(true, badged)]) {
+      const elements = tree(markup);
+      const button = trigger(elements);
+      const inside = elements.filter((el) => el.attrs.get('data-x') === 'count');
+      expect(inside).toHaveLength(1);
+      expect(markup).toMatch(/<button\b[^>]*>Работа<span class="x-count" data-x="count">7<\/span><\/button>/);
+      expect(button.tag).toBe('button');
+    }
+  });
+
+  it('names the button with the group\'s name, then what the figure counts, so the number is not read bare', () => {
+    for (const markup of [island(badged), view(false, badged), view(true, badged)]) {
+      expect(trigger(tree(markup)).attrs.get('aria-label')).toBe('Работа. Не проверено экспертом: 7');
+    }
+  });
+
+  it('is the markup it always was without a badge: no extra attribute, no extra node', () => {
+    for (const markup of [island(), view(false), view(true)]) {
+      expect(trigger(tree(markup)).attrs.has('aria-label')).toBe(false);
+      expect(markup).toMatch(/<button\b[^>]*>Работа<\/button>/);
+    }
+    // An absent badge and an undefined one are the same markup.
+    expect(view(false, { ...PROPS, badge: undefined })).toBe(view(false));
+  });
+
+  it('keeps the panel, its links and the button\'s other attributes as they were', () => {
+    const plain = trigger(tree(view(true)));
+    const withBadge = trigger(tree(view(true, badged)));
+    for (const name of ['type', 'aria-expanded', 'aria-controls', 'class']) expect(withBadge.attrs.get(name)).toBe(plain.attrs.get(name));
+    const links = (markup: string): string[] => tree(markup).filter((el) => el.tag === 'a').map((el) => el.attrs.get('href') ?? '');
+    expect(links(view(true, badged))).toEqual(links(view(true)));
+  });
+
+  it('works on a group that holds content, which is how the stacked menu and «Разделы» use it', () => {
+    const group: DisclosureProps = { label: 'Разделы', badge: BADGE, children: createElement('p', null, 'содержимое') };
+    const markup = view(false, group);
+    expect(markup).toMatch(/<button\b[^>]*aria-label="Разделы\. Не проверено экспертом: 7"[^>]*>Разделы<span/);
+    expect(markup).toContain('<p>содержимое</p>');
+  });
+});

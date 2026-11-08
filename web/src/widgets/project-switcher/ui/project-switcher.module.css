@@ -100,9 +100,29 @@
 }
 
 .switcher :global(.am-menu__item) {
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
   overflow-wrap: anywhere;
   white-space: pre-line;
   line-height: 1.35;
+}
+
+/* The open project's row reads heavier (the original's picker sets its active row in bold). */
+.switcher :global(.am-menu__item[aria-current='true']) {
+  font-weight: 650;
+}
+
+/*
+ * `D-363`: the mark of the project that is open, as a column at the row's right end. The cell is drawn on every choice
+ * (empty on the others), as the original's picker does, so the column keeps its place and the names wrap the same.
+ */
+.switcher :global(.am-menu__check) {
+  flex: 0 0 1.2ch;
+  margin-left: auto;
+  color: var(--am-accent-strong);
+  font-weight: 650;
+  text-align: right;
 }
 
 .notes {

@@ -45,6 +45,12 @@ export interface FindingTableProps {
   /** What opens under the selected row: the finding itself. Absent, the table opens nothing. */
   readonly renderExpansion?: ((finding: Finding) => ReactNode) | undefined;
   readonly sheetOf?: ((page: number) => number | undefined) | undefined;
+  /**
+   * `UI-A-74`: how many portal blocks hold the finding's evidence, the original's small count beside the ID. Absent, or
+   * `undefined` for a finding, when the server did not produce the links for the run or named none for it; the table
+   * then draws nothing, never a «0».
+   */
+  readonly blockCountOf?: ((findingUid: string) => number | undefined) | undefined;
 }
 
 const COLUMNS = ['№', 'Важность', 'Лист / стр.', 'Замечание', 'Норма', 'Рекомендация', 'Решение'] as const;
@@ -95,6 +101,7 @@ export function FindingTable({
   renderRowActions,
   renderExpansion,
   sheetOf,
+  blockCountOf,
 }: FindingTableProps) {
   return (
     <div className={styles.scroll} data-finding-table="">
@@ -123,6 +130,7 @@ export function FindingTable({
             const pages = pagesParts(declaredPages(finding.observation), sheetOf);
             const merged = finding.merged_observations?.length ?? 0;
             const expansion = selected && renderExpansion !== undefined ? renderExpansion(finding) : null;
+            const blocks = blockCountOf?.(finding.finding_uid);
             return (
               <Fragment key={finding.finding_uid}>
                 <tr
@@ -148,6 +156,11 @@ export function FindingTable({
                         ×{merged}
                       </span>
                     ) : null}
+                    {blocks === undefined || blocks === 0 ? null : (
+                      <span className={styles.blocks} title={`Блоков замечания: ${blocks}`} data-finding-block-count={blocks}>
+                        {blocks} бл.
+                      </span>
+                    )}
                   </td>
                   <td className={styles.severity}>
                     <SeverityCell finding={finding} />

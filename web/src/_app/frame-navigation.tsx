@@ -29,7 +29,8 @@
  *
  * Under the current project only, a «Разделы» group follows «Работа»: one link per section of that project that
  * holds documents, with its mark and a count badge, leading to the section page (`section-navigation.ts`). It is
- * the same disclosure as the other groups, closed unless a section page is the one shown. With no project in the
+ * the same disclosure as the other groups, closed unless a section page is the one shown. Its button carries the group's own counters (`D-360`): the red sum of the sections' «не проверено экспертом» and, in grey,
+ * the documents it lists, through the `Disclosure`'s `badge` slot, so they are seen while it is folded. With no project in the
  * address the group is not drawn, and `FrameNavigation` makes no read; with one, `use-section-navigation.ts` reads
  * the dashboard's summary of that project. {@link FrameNavigationView} takes the group's content as data
  * (`sections`), so every state of it is drawn without a query client.
@@ -37,7 +38,8 @@
  * ## Counters beside the items (`UI-A-05`, `UI-A-06`, `UI-A-91`)
  *
  * An item may carry a small number (`menu-badges.ts`): the unchecked documents of a section in red, the jobs of
- * «Очередь», the entries of «База знаний» (of the address's project when it names one), the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
+ * «Очередь» and, in red, those of the last day that ended in an error, the decisions on findings in «База знаний» (of the address's
+ * project when it names one), the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
  * data (`badges`, by item address; the sections carry theirs in `sections`), so every state is drawn without a query
  * client; `FrameNavigation` reads them (`use-menu-badges.ts`) only for the items the session's navigation holds, and only
  * where there is a query client. A group with a badged item hands the shared `Disclosure` its list as content
@@ -61,7 +63,7 @@ import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { readProjectContext, withProjectParam } from '@/shared/lib';
-import type { DisclosureProps } from '@/shared/ui';
+import type { DisclosureBadge, DisclosureProps } from '@/shared/ui';
 import { Disclosure } from '@/shared/ui';
 import { looksLikeProjectUid } from '@/entities/project';
 
@@ -73,7 +75,8 @@ import { BadgedLinks, ItemBadges, RailBadges } from './navigation-badges';
 import { NavigationGlyph } from './navigation-glyph';
 import type { SectionNavigation } from './section-navigation';
 import {
-  SECTIONS_EMPTY_NOTE, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, sectionEntryLabel,
+  SECTIONS_DOCUMENTS_LABEL, SECTIONS_EMPTY_NOTE, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, sectionEntryLabel,
+  sectionsSummary, sectionsSummaryLabel,
 } from './section-navigation';
 import { useMenuBadges } from './use-menu-badges';
 import { useSectionNavigation } from './use-section-navigation';
@@ -237,6 +240,26 @@ function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
 }
 
 /**
+ * `D-360`: the group's own counters, drawn on its button so they are seen while it is folded (the original's parent row):
+ * the red «не проверено экспертом» sum and, in grey, the documents the group lists. None while the list is loading,
+ * failed or empty: a figure that was not read is no badge.
+ */
+function sectionsBadge(sections: SectionNavigation): DisclosureBadge | undefined {
+  if (sections.status !== 'ready' || sections.entries.length === 0) return undefined;
+  const summary = sectionsSummary(sections.entries);
+  return {
+    label: sectionsSummaryLabel(summary),
+    content: (
+      <ItemBadges badges={uncheckedBadges(summary.awaitingDecision)}>
+        <span className={styles.sectionCount} title={`${SECTIONS_DOCUMENTS_LABEL}: ${summary.documents}`} data-section-nav-total={summary.documents}>
+          {summary.documents}
+        </span>
+      </ItemBadges>
+    ),
+  };
+}
+
+/**
  * The «Разделы» disclosure. Keyed by the section page being shown, so arriving on one opens the group and leaving
  * it starts closed again; a reader's own toggling lasts until the next such change.
  */
@@ -246,6 +269,7 @@ function sectionsGroup(Group: ComponentType<DisclosureProps>, sections: SectionN
     <Group
       key={`sections-${active?.code ?? 'none'}`}
       label={SECTIONS_GROUP_LABEL}
+      badge={sectionsBadge(sections)}
       current={active !== undefined}
       layout="inline"
       defaultOpen={open && active !== undefined}

@@ -44,8 +44,8 @@ import { DecisionHistory } from '@/widgets/decision-history';
 import { DecisionPanel } from '@/widgets/decision-panel';
 import { useMayActAsExpert } from '@/entities/account';
 import { ExportPanel } from '@/widgets/export-panel';
-import { sheetOfPage, useSheetLabels } from '@/entities/block';
-import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
+import { blocksOfFinding, findingBlockIndex, sheetOfPage, useRunFindingBlocks, useSheetLabels } from '@/entities/block';
+import { FindingList, FindingToolbar, filterBySeverity, filterGroups, findingViewOf, findingsAsShown, pagesLabel, severityFilterOf, verdictFilterOf } from '@/widgets/finding-list';
 import type { FindingView, SeverityFilter, VerdictFilter } from '@/widgets/finding-list';
 import { ExtendedReviewSummary } from '@/widgets/extended-review';
 import { useAppendComment } from '@/features/append-comment';
@@ -159,11 +159,12 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     : resolveSelection(selection, findingUids);
   const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
 
-  // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters.
+  // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters (`UI-A-71`: pending,
+  // then accepted, then rejected; by category in the list, flat in the table).
   const [expanded, setExpanded] = useState(false);
   const shownFindings = useMemo(
-    () => filterBySeverity(filterGroups(groups, verdictFilter), severityFilter).flatMap((group) => group.findings),
-    [groups, verdictFilter, severityFilter],
+    () => findingsAsShown(filterBySeverity(filterGroups(groups, verdictFilter), severityFilter), view),
+    [groups, verdictFilter, severityFilter, view],
   );
   const shownAt = selectedUid === null ? -1 : shownFindings.findIndex((finding) => finding.finding_uid === selectedUid);
   const stepTo = (at: number) => {
@@ -195,6 +196,10 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
   // The line geometry the viewer frames quotations with. Read here because this page owns the
   // queries; without it (not produced, failed, in flight) the viewer searches the page text.
   const blockIndex = useVersionBlockIndex(versionUid);
+  // `UI-A-74`: the table's count of the blocks that hold each finding's evidence, from the run's block links (one read
+  // per run, shared with the open finding's «Блоки замечания»). Not produced, not read yet or failed: no count.
+  const runFindingBlocks = useRunFindingBlocks(runId);
+  const blockLinks = useMemo(() => findingBlockIndex(runFindingBlocks.data), [runFindingBlocks.data]);
 
   // These three hooks cannot be called conditionally, so they are bound to the empty
   // identity when nothing is selected. Every control that could fire one of them is
@@ -311,7 +316,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
             // D-343 (lane C4): the carried origin of the verdict the finding holds; a verdict the expert has just given
             // here is direct, so the mark goes with it.
-            carriedFrom={verdict.result == null ? detail.current_verdict_carried_from : undefined}
+            carriedFrom={verdict.result === null || verdict.result === undefined ? detail.current_verdict_carried_from : undefined}
             observationId={detail.observation.finding_observation_id as FindingObservationId}
             proposedSeverity={detail.observation.proposed_severity}
             decidedSeverity={detail.decided_severity}
@@ -453,6 +458,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             view={view}
             onViewChange={setView}
             toolbar="outside"
+            blockCountOf={blockLinks === null ? undefined : (findingUid) => blocksOfFinding(blockLinks, findingUid).length}
             selectedFindingUid={selectedUid}
             onSelect={(findingUid) => {
               // A second press on the open row of the table closes it, as the original's strip does.

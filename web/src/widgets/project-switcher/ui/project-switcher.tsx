@@ -5,7 +5,7 @@
  *
  * It replaces the «Проекты» item of the sidebar. The button shows the project the address names
  * (or «Все проекты»), and opens the APG menu button from `@/shared/ui` (`Menu`): one row per
- * project with its two figures, then «Все проекты» and «Новый проект». Every row is a link, so a
+ * project with its two figures, then «Все проекты» and «Новый проект». The project that is open carries a ✓ (`D-363`). Every row is a link, so a
  * choice is an ordinary navigation to an address and needs no router and no state of its own;
  * the address stays the only source of the project (`R-150c`).
  *
@@ -74,7 +74,7 @@ export function switcherMenuProps(model: SwitcherModel, onRetry: () => void): Me
   const items = model.entries.map(
     (entry: SwitcherEntry): MenuItem =>
       entry.kind === 'link'
-        ? { kind: 'link', label: entry.label, href: entry.href }
+        ? { kind: 'link', label: entry.label, href: entry.href, ...(entry.current === undefined ? {} : { current: entry.current }) }
         : { kind: 'action', label: entry.label, onChoose: onRetry },
   );
   const [first, ...rest] = items;

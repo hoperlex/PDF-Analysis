@@ -21,6 +21,32 @@ export function verdictBucket(verdict: Verdict): Exclude<VerdictFilter, 'all'> {
   return verdict === 'accepted' ? 'accepted' : 'rejected';
 }
 
+const BUCKET_RANK: Readonly<Record<Exclude<VerdictFilter, 'all'>, number>> = { waiting: 0, accepted: 1, rejected: 2 };
+
+/**
+ * `UI-A-71`: the original's order, pending → accepted → rejected, with the run's own order kept inside each of the three
+ * (a stable sort; `Array.prototype.sort` is stable since ES2019). The original sorts its flat table this way once the
+ * run holds any decision, which is the same thing as always sorting: a run without a decision is all pending.
+ */
+export function inVerdictOrder(findings: readonly Finding[]): readonly Finding[] {
+  return [...findings].sort((a, b) => BUCKET_RANK[verdictBucket(a.current_verdict)] - BUCKET_RANK[verdictBucket(b.current_verdict)]);
+}
+
+/** The list keeps its category headings and puts the verdicts in order inside each. */
+export function groupsInVerdictOrder(groups: readonly FindingGroup<Finding>[]): readonly FindingGroup<Finding>[] {
+  return groups.map((group) => ({ ...group, findings: inVerdictOrder(group.findings) }));
+}
+
+/**
+ * The findings in the order the screen shows them: by category in the list, as the original's flat table in the table.
+ * What walks the findings one by one («Во весь экран», ‹ ›) takes this order, so it never steps in a way the eye cannot follow.
+ */
+export function findingsAsShown(groups: readonly FindingGroup<Finding>[], view: 'list' | 'table'): readonly Finding[] {
+  return view === 'table'
+    ? inVerdictOrder(groups.flatMap((group) => group.findings))
+    : groupsInVerdictOrder(groups).flatMap((group) => group.findings);
+}
+
 /**
  * `UI-PARITY-P0O`: a finding's pages as the original states them, with the sheet first («Лист 3 · стр. 5») when the
  * portal geometry names a sheet for every page; otherwise the PDF pages alone, never a page number passed off as a sheet.
@@ -43,9 +69,11 @@ export function pagesParts(
 }
 
 /**
- * The number each finding of the run carries on screen, counted over the whole run in the order the list shows it.
- * It stays the same when a filter hides its neighbours, so «№ 7» is still «№ 7» under «Ожидают решения». It is a
- * label for reading aloud; the finding's identity is its `finding_uid`.
+ * The number each finding of the run carries on screen, counted over the whole run in the order the run lists them (by
+ * category), before any verdict order. It stays the same when a filter hides its neighbours and when a decision moves the
+ * row, so «№ 7» is still «№ 7» under «Ожидают решения» and after it is accepted; like the original's ID, the numbers read
+ * out of sequence down a table once the verdicts have set the order. It is a label for reading aloud; the finding's identity
+ * is its `finding_uid`.
  */
 export function findingNumbers(groups: readonly FindingGroup<Finding>[]): ReadonlyMap<string, number> {
   const numbers = new Map<string, number>();
