@@ -32,6 +32,7 @@ import { formatInstant } from '@/shared/lib';
 
 import { formatBytes } from '../model/upload-envelope';
 import { isComparisonOnly } from '../model/upload-kind';
+import { activeRunHref } from '../model/audit-state';
 import { AuditChip } from './audit-chip';
 import { ClassificationBadges } from './classification-badges';
 import { ComparisonOnlyMark } from './comparison-only-mark';
@@ -68,6 +69,7 @@ export function VersionRow({ version, href, secondary, reviewAddress }: VersionR
                 ? undefined
                 : reviewAddress(version.audit.result_run_id)
             }
+            runHref={activeRunHref(version)}
           />
         )}
         {isComparisonOnly(version) ? <ComparisonOnlyMark version={version} /> : null}

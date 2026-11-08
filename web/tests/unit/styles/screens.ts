@@ -1683,6 +1683,31 @@ export function screens(): Screen[] {
       projectUid: PROJECT_UID, sectionCode: 'AR', filter: 'not_run',
     })));
   }
+  // `UI-A-47`: the mark of a run in flight beside the audit chip, in each of the three states of such a run, so the pending
+  // badge on a card is reached by the census (a re-run over a result, a first run, a run being validated).
+  {
+    const runId = 'run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
+    const running = (
+      n: string,
+      state: 'queued' | 'running' | 'validating',
+      audit: { state: 'not_run' | 'awaiting_decision' | 'checked'; result_run_id?: string; finding_count?: number; undecided_finding_count?: number },
+    ) => ({
+      ...version(),
+      document_uid: `doc_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      version_uid: `ver_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}` as never,
+      display_title: `Документ ${n}`,
+      audit: { partial: false, finding_count: 0, undecided_finding_count: 0, ...audit, active_run: { run_id: `run_01J9ZQ8K7NHVXW3T2R5M6P4Q${n}`, state } },
+    });
+    add('DocumentCardGrid with a run in flight', render(createElement(DocumentCardGrid, {
+      documents: [
+        running('B1', 'queued', { state: 'checked', result_run_id: runId, finding_count: 3 }),
+        running('B2', 'running', { state: 'not_run' }),
+        running('B3', 'validating', { state: 'awaiting_decision', result_run_id: runId, finding_count: 3, undecided_finding_count: 2 }),
+      ],
+      addresses: () => ({ href: '/projects', documentHref: '/projects' }),
+      reviewAddress: (id) => `/projects/${PROJECT_UID}/runs/${id}/review`,
+    })));
+  }
   add('DocumentCardGrid with an archived document', render(createElement(DocumentCardGrid, {
     documents: [{ ...version(), archived_at: '2026-11-06T09:00:00Z', tags: ['Корпус 1'] }],
     addresses: () => ({ href: '/projects', documentHref: '/projects' }),

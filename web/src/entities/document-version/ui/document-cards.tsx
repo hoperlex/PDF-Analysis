@@ -15,7 +15,7 @@ import Link from 'next/link';
 
 import type { DocumentVersion } from '@/shared/api';
 
-import { pluralRu } from '../model/audit-state';
+import { activeRunHref, pluralRu } from '../model/audit-state';
 import { isComparisonOnly } from '../model/upload-kind';
 import { AuditChip } from './audit-chip';
 import { ClassificationBadges } from './classification-badges';
@@ -94,6 +94,7 @@ export function DocumentCardGrid({ documents, addresses, select, reviewAddress, 
                       ? undefined
                       : reviewAddress(version.audit.result_run_id)
                   }
+                  runHref={activeRunHref(version)}
                 />
               )}
               {/* The original's pill «Замечания N»: how many findings the result run published. */}
