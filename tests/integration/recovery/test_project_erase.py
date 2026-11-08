@@ -219,7 +219,9 @@ _BLOB_SOURCES = (
     "UNION SELECT mask_blob_id FROM comparison_sheet_pair_result WHERE project_uid = :p"
 )
 _KEEP_BLOBS = ("SELECT blob_id FROM norm_custody_binding UNION SELECT set_blob_id FROM norm_retrieval_set "
-               "UNION SELECT catalogue_blob_id FROM norm_retrieval_set")
+               "UNION SELECT catalogue_blob_id FROM norm_retrieval_set "
+               # `0059_decision_memory`: a crop the decision memory references stays with its object.
+               "UNION SELECT blob_id FROM decision_memory_crop")
 
 
 def slice_digest(engine: Engine, table: str, where: str, project: str) -> tuple[int, str]:
@@ -557,8 +559,11 @@ def test_a_dry_run_is_the_default_prints_exact_counts_and_changes_nothing(stand:
     assert "--dry-run: NOTHING ABOVE WAS CHANGED." in out
     assert re.fullmatch(r"[0-9a-f]{64}", _line(out, "plan-sha256"))
     exclusive = exclusive_blobs(stand, target)
-    assert int(_line(out, "blobs-exclusive")) == len(exclusive) == 17
-    assert int(_line(out, "blobs-shared")) == len(blob_ids_of(stand, target)) - len(exclusive) == 1
+    # 17 exclusive and 1 shared until `0059_decision_memory`: the portal crop the seed's recorded run published is referenced by the
+    # decision memory (a KEEP table), so an erase keeps its Blob with its object and it counts as shared -- 16 and 2.
+    assert int(_line(out, "blobs-exclusive")) == len(exclusive) == 16
+    assert int(_line(out, "blobs-shared")) == len(blob_ids_of(stand, target)) - len(exclusive) == 2
+    assert len(blob_ids_of(stand, target) & set(scalars(stand, "SELECT blob_id FROM decision_memory_crop"))) == 1
     # The seed drives the real pipeline, whose source-preparation stage journals `stage.pdf_precheck` for the run (`runs/executor.py`).
     # `D-327`: the seed holds the throttle's clock still (`precheck_clock`), so those are exactly three (`PRECHECK_EVENTS`): the run's
     # journal is the 24 + 3 = 27 events, whatever the host's speed.
@@ -729,6 +734,23 @@ def test_the_rich_project_leaves_the_second_project_and_the_shared_blob_readable
     assert erased.manifest is not None
     listed = {b["blob_id"] for b in json.loads(erased.manifest.read_text(encoding="utf-8"))["blobs"]}
     assert not listed & shared
+
+
+def test_an_erase_leaves_the_decision_memory_of_the_project_it_erased(stand: Stand, tmp_path: Path) -> None:
+    """`ADR-0027`: the cases of the erased project's decisions are the only copy of their context afterwards, and stay."""
+    target = project_like(stand, "Школа")
+    kept = sorted(purge.KEEP_MEMORY_TABLES)
+    before = {table: digest_of(stand.engine, table) for table in kept}
+    cases = scalars(stand, "SELECT case_id FROM decision_memory_case WHERE origin_project_uid = :p", p=target)
+    assert cases and before["decision_memory_decision"][0] > 0 and before["decision_memory_evidence"][0] > 0
+    erased = do_erase(stand, tmp_path, "Школа")
+    assert erased.target == target and count(stand, "project", "project_uid = :p", p=target) == 0
+    assert count(stand, "expert_decision_event", "finding_uid IN (SELECT finding_uid FROM finding WHERE project_uid = :p)", p=target) == 0
+    assert {table: digest_of(stand.engine, table) for table in kept} == before
+    # the case still names the project, which no longer resolves, and still holds what the expert saw and said
+    assert scalars(stand, "SELECT case_id FROM decision_memory_case WHERE origin_project_uid = :p", p=target) == cases
+    assert count(stand, "decision_memory_evidence", "case_id = ANY(:c)", c=cases) > 0
+    assert count(stand, "decision_memory_decision", "case_id = ANY(:c)", c=cases) > 0
 
 
 def test_a_second_apply_of_the_same_plan_finds_nothing_to_do_and_changes_nothing(stand: Stand, tmp_path: Path) -> None:
@@ -1444,6 +1466,17 @@ def _prepare_a_pending_blob(s: Stand, h: Harness) -> None:
         b=one_available_blob(s, blob_ids_of(s, h.target)))
 
 
+def _prepare_an_uncaptured_decision(s: Stand, h: Harness) -> None:
+    """One accept or reject of the target project has no decision-memory row any more (its guard is switched off to remove it)."""
+    decision = scalars(
+        s, "SELECT d.memory_decision_id FROM decision_memory_decision d "
+           "JOIN expert_decision_event e ON e.decision_id = d.source_decision_id "
+           "JOIN finding f ON f.finding_uid = e.finding_uid WHERE f.project_uid = :p", p=h.target)[0]
+    for table in ("decision_memory_decision_text", "decision_memory_decision"):
+        switched_off(s, table, f"trg_{table}_immutable", f'DELETE FROM public."{table}" WHERE memory_decision_id = :d',
+                     d=decision)
+
+
 def _prepare_delete_trigger(s: Stand, h: Harness) -> None:
     sql(s, "CREATE FUNCTION zz_noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$")
     sql(s, "CREATE TRIGGER zz_delete BEFORE DELETE ON document FOR EACH ROW EXECUTE FUNCTION zz_noop()")
@@ -1502,6 +1535,8 @@ SCENARIOS: tuple[Scenario, ...] = (
              effect=lambda s, h, c, o, e: c == 0),
     Scenario("no-pending-erasure", "erasure_pending", act_dry, prepare=_prepare_a_pending_blob,
              effect=lambda s, h, c, o, e: c == 0),
+    Scenario("memory-captured", "have no decision-memory case", act_dry, project="Школа",
+             prepare=_prepare_an_uncaptured_decision, effect=lambda s, h, c, o, e: c == 0),
     Scenario("receipts-are-product-commands", "not product commands", act_apply, prepare=_prepare_account_receipt,
              effect=lambda s, h, c, o, e: c == 0 and h.gone() and count(
                  s, "command_record", "command_id = 'cmd_01M5F21PBT7E8WRN3M61BDQFDD'") == 0),

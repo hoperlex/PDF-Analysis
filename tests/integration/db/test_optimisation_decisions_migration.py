@@ -25,7 +25,7 @@ from sqlalchemy.exc import DBAPIError
 
 from auditmanager.shared.db.engine import create_database_engine
 
-HEAD = "0058_finding_decision_origin"  # the head the fixture migrates to; 0056 is two steps below it
+HEAD = "0059_decision_memory"  # the head the fixture migrates to; 0056 is three steps below it
 PREVIOUS = "0055_work_schedule"
 CHECK = "ck_optimisation_proposal_decision_verdict"
 

@@ -371,7 +371,7 @@ def test_the_application_role_cannot_change_a_privilege(applied: Stand, statemen
 
 
 def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
-    """All 83, read-write ones included: ``TRUNCATE`` is the one privilege no class carries."""
+    """Every table (144 at ``0059``), read-write ones included: ``TRUNCATE`` is the one privilege no class carries."""
     refused: list[str] = []
     with applied.app(autocommit=True) as connection:
         for table in sorted(coverage.TABLES):
@@ -383,8 +383,9 @@ def test_the_application_role_cannot_truncate_any_table(applied: Stand) -> None:
     # (``executor_group``, ``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
     # ``executor_routing_mode_event``); 0043-0045 and 0048 add none: 110 + 12 + 2 + 5 = 129. 0053-0055 add seven (document
     # tags, the execution status of a finding, and the five «График работ» journals); 0049-0052 and 0056-0058 add none:
-    # 129 + 7 = 136, which is `len(coverage.TABLES)` (measured 2026-11-08; lane C4 saw this pin red at 136 on its stand).
-    assert refused == sorted(coverage.TABLES) and len(refused) == 136
+    # 129 + 7 = 136 (measured 2026-11-08; lane C4 saw this pin red at 136 on its stand); `0059_decision_memory` adds the eight
+    # tables of the decision memory: 136 + 8 = 144, which is `len(coverage.TABLES)`.
+    assert refused == sorted(coverage.TABLES) and len(refused) == 144
 
 
 # --- (c) append-only is refused twice ------------------------------------------------------------------
@@ -421,8 +422,8 @@ def test_append_only_tables_refuse_update_and_delete_by_privilege(applied: Stand
     # and 0047 four (``executor_group_revision``, ``executor_group_member``, ``executor_routing_rule_revision``,
     # ``executor_routing_mode_event``; ``executor_group`` is read-write: its rotation cursor advances and its archive is
     # write-once): 55 + 9 + 4 = 68; 0053-0055 add five append-only tables (`len(grants.APPEND_ONLY)` is 73, measured
-    # 2026-11-08): 68 + 5 = 73.
-    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 73
+    # 2026-11-08): 68 + 5 = 73; `0059_decision_memory` adds eight (all immutable): 73 + 8 = 81.
+    assert checked == sorted(grants.APPEND_ONLY) and len(checked) == len(grants.APPEND_ONLY) == 81
 
 
 def test_read_only_tables_refuse_every_write(applied: Stand) -> None:

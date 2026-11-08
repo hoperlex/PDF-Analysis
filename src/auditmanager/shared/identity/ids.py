@@ -647,6 +647,22 @@ class StageChainBatchId(OpaqueId, prefix="scb", entity="StageChainBatch"):
 class StageChainBatchItemId(OpaqueId, prefix="scbi", entity="StageChainBatchItem"):
     """Opaque C4 StageChainBatchItem identity."""
 
+
+class DecisionMemoryCaseId(OpaqueId, prefix="dmc", entity="DecisionMemoryCase"):
+    """Opaque decision-memory case identity (ADR-0027): one reviewed observation, captured once."""
+
+
+class DecisionMemoryDecisionId(OpaqueId, prefix="dmd", entity="DecisionMemoryDecision"):
+    """Opaque decision-memory decision identity: one ledger event's copy inside a case."""
+
+
+class DecisionMemoryStatusEventId(OpaqueId, prefix="dmw", entity="DecisionMemoryStatusEvent"):
+    """Opaque decision-memory status event identity (withdraw, restore, forget; written from M2 on)."""
+
+
+class DecisionMemoryCropId(OpaqueId, prefix="dmx", entity="DecisionMemoryCrop"):
+    """Opaque decision-memory crop identity: a reference to one crop image a case keeps."""
+
 #: Every concrete identity type, keyed by contract entity name.
 IDENTITY_TYPES_BY_ENTITY: Final[dict[str, type[OpaqueId]]] = {
     identity.entity: identity for identity in _REGISTRY.values()

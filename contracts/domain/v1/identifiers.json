@@ -134,7 +134,11 @@
     "stage_card_evidence_id": "sce",
     "stage_card_verdict_id": "cdv",
     "stage_chain_batch_id": "scb",
-    "stage_chain_batch_item_id": "scbi"
+    "stage_chain_batch_item_id": "scbi",
+    "decision_memory_case_id": "dmc",
+    "decision_memory_decision_id": "dmd",
+    "decision_memory_status_event_id": "dmw",
+    "decision_memory_crop_id": "dmx"
   },
   "external_identifiers": {
     "portal_block_id": {
@@ -256,7 +260,11 @@
     "StageCardEvidence": "stage_card_evidence_id",
     "StageCardVerdict": "stage_card_verdict_id",
     "StageChainBatch": "stage_chain_batch_id",
-    "StageChainBatchItem": "stage_chain_batch_item_id"
+    "StageChainBatchItem": "stage_chain_batch_item_id",
+    "DecisionMemoryCase": "decision_memory_case_id",
+    "DecisionMemoryDecision": "decision_memory_decision_id",
+    "DecisionMemoryStatusEvent": "decision_memory_status_event_id",
+    "DecisionMemoryCrop": "decision_memory_crop_id"
   },
   "distinct_identities": [
     {

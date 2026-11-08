@@ -117,9 +117,25 @@ KEEP_EXECUTOR_TABLES = frozenset((
 KEEP_SCHEDULE_TABLES = frozenset((
     "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_calendar_event",
 ))
+#: `0059_decision_memory` (`ADR-0027`): the expert decision memory. Its case content is a primary record that outlives the project and
+#: the document it came from, so a purge of product data keeps it: no table here has a foreign key into a PRODUCT table (`source_decision_id`,
+#: `origin_*` are bare identities), and a crop's Blob stays by the rule that a Blob any KEEP table references stays. Guard
+#: ``memory-captured`` (G1) refuses a purge while an `accept` or `reject` event has no memory decision, because the memory is the only
+#: copy of its context once the product tables are truncated.
+KEEP_MEMORY_TABLES = frozenset((
+    "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
+    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
+))
 KEEP_TABLES = (
     KEEP_ACCOUNT_TABLES | KEEP_RELEASE_TABLES | KEEP_LOOKUP_TABLES | KEEP_NORM_TABLES
-    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES
+    | KEEP_EXECUTOR_TABLES | KEEP_SCHEDULE_TABLES | KEEP_MEMORY_TABLES
+)
+
+#: The ledger events the decision memory keeps (`Q8`: a comment is not a decision) that have no memory decision yet. Selecting from it
+#: with `count(*)` is guard G1 of both the purge and the project erase; the project erase adds the scope.
+UNCAPTURED_DECISION_EVENTS_SQL = (
+    "FROM public.expert_decision_event e WHERE e.event_type IN ('accept', 'reject') "
+    "AND NOT EXISTS (SELECT 1 FROM public.decision_memory_decision d WHERE d.source_decision_id = e.decision_id)"
 )
 
 MIXED_TABLES = frozenset(("audit_event", "blob", "command_record"))
@@ -520,6 +536,20 @@ def check_row_classes(connection: Connection) -> None:
     # <<< guard: command-types-classified
 
 
+def check_memory_captured(connection: Connection) -> None:
+    """Guard G1 (`DECISION-MEMORY-01` section 4.4): every decision the memory keeps is in the memory before a purge deletes its source."""
+    # >>> guard: memory-captured
+    uncaptured = int(connection.execute(text(f"SELECT count(*) {UNCAPTURED_DECISION_EVENTS_SQL}")).scalar_one())
+    if uncaptured:
+        raise PurgeRefused(
+            f"{uncaptured} expert decision event(s) (accept or reject) have no decision-memory case. The purge truncates the "
+            "ledger, and the memory is the only copy of the context of those decisions afterwards. The worker's sweep captures "
+            "them within a minute or so (python -m auditmanager.workers serve); run the purge again once the count is zero. "
+            "Nothing was touched."
+        )
+    # <<< guard: memory-captured
+
+
 # --- digests ----------------------------------------------------------------------------------
 
 def _event_keep() -> str:
@@ -701,6 +731,7 @@ def build_plan(connection: Connection, client: Any | None, *, database: str, buc
         connection.execute(text(statement))
     head = check_schema(connection)
     check_row_classes(connection)
+    check_memory_captured(connection)
 
     running = {}
     for table, states in RUNNING_STATES.items():
@@ -785,7 +816,7 @@ def render_plan(plan: Plan, *, dry_run: bool) -> str:
     out.append(f"  product objects to delete, by exact key: {len(present)} objects, "
                f"{sum(o.size or 0 for o in present)} bytes "
                f"({len(plan.objects) - len(present)} more keys are named by rows but not in the bucket)")
-    out.append(f"  norm-owned objects (the custody ledger's, never touched): {plan.norm_owned_present}")
+    out.append(f"  norm-owned objects (the custody ledger's and the decision memory's crops; never touched): {plan.norm_owned_present}")
     stray = ", ".join(f"{prefix} {count}" for prefix, count in plan.unaccounted.items()) or "none"
     out.append(f"  other objects (named by no row; never touched): {plan.unaccounted_total} ({stray})")
     out.append(f"  objects in the bucket: {plan.bucket_objects}")

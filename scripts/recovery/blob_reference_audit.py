@@ -42,6 +42,9 @@ _SOURCES = frozenset({
     # `0041_comparison_stage_core`: the uploaded raw PDF/ZIP and each validated PDF candidate.
     ("public", "stage_upload_file", "source_blob_id"),
     ("public", "stage_upload_candidate", "pdf_blob_id"),
+    # `0059_decision_memory` (`ADR-0027`): a crop the decision memory references. The Blob is the portal's crop image, shared by
+    # content with the analysis artifact that first published it; the memory's reference is what keeps it when a project is erased.
+    ("public", "decision_memory_crop", "blob_id"),
 })
 _CATALOG_EXPECTED = _SOURCES | {("public", "blob", "blob_id")}
 
@@ -131,6 +134,10 @@ _STAGE_UPLOAD_FILES = text("""
     SELECT stage_upload_file_id AS owner_id, state, source_blob_id
       FROM public.stage_upload_file WHERE source_blob_id IS NOT NULL
      ORDER BY stage_upload_file_id COLLATE "C"
+""")
+_MEMORY_CROPS = text("""
+    SELECT crop_id AS owner_id, blob_id, sha256, size_bytes, media_type
+      FROM public.decision_memory_crop ORDER BY crop_id COLLATE "C"
 """)
 _STAGE_UPLOAD_CANDIDATES = text("""
     SELECT stage_upload_candidate_id AS owner_id, state, pdf_blob_id
@@ -344,6 +351,14 @@ def audit_blob_references(session: Session) -> BlobReferenceAudit:
     for row in stage_candidates:
         _require_available(blobs, row["pdf_blob_id"], "stage_upload_candidate")
     counts.append(("stage_upload_candidate", len(stage_candidates)))
+
+    memory_crops = _rows(session, _MEMORY_CROPS)
+    for row in memory_crops:
+        source = "decision_memory_crop"
+        actual = _require_available(blobs, row["blob_id"], source)
+        if _declared_fact(row, source=source) != actual:
+            raise BlobReferenceAuditRefused(f"{source} facts differ for {row['blob_id']}")
+    counts.append(("decision_memory_crop", len(memory_crops)))
 
     return BlobReferenceAudit(tuple(counts), tuple(sorted(available, key=lambda fact: fact.blob_id)))
 

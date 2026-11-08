@@ -182,7 +182,7 @@ def _import(
             continue
         record_decision(
             session, finding_uid=uid, finding_observation_id=str(finding["observation_id"]), event_type=event,
-            comment=comment, author_label=author_label, author_user_uid=author_user_uid,
+            comment=comment, author_label=author_label, author_user_uid=author_user_uid, origin_kind="imported",
         )
         report.append(ImportedRow(row.row, "recorded", finding_uid=uid))
     return report

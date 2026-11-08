@@ -2250,6 +2250,6 @@
     "api_codes": 27,
     "stored_vocabulary": 25
   },
-  "migration_head": "0058_finding_decision_origin",
+  "migration_head": "0059_decision_memory",
   "contract_version": "1.41.0"
 }

@@ -22,6 +22,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, BinaryIO, get_args
 
+from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session, sessionmaker
 
 from auditmanager.api.schemas.accounts import AccountView, PersonNamesView
@@ -2122,6 +2123,10 @@ class BlockAdapter(_SessionHolder):
         self._blob_store = blob_store
 
     def get_block_index(self, *, version_uid: str) -> VersionBlockIndexView:
+        return self._read(lambda session: self.block_index_in(session, version_uid))
+
+    def block_index_in(self, session: Session, version_uid: str) -> VersionBlockIndexView:
+        """``getVersionBlocks`` over a session the caller owns (`ADR-0027`: the decision memory reads it in the decision's transaction)."""
         from auditmanager.analysis.ports.artifacts import ROLE_BLOCK_INDEX
         from auditmanager.api.schemas.blocks import (
             STATUS_NOT_PRODUCED,
@@ -2132,64 +2137,61 @@ class BlockAdapter(_SessionHolder):
         from auditmanager.runs import RunRepository
         from auditmanager.shared.identity import VersionUid
 
-        def work(session: Session) -> VersionBlockIndexView:
-            # Proves the parent exists before anything else is read, the same rule
-            # `RunAdapter.list_runs` follows for the same reason `D-67` states: an
-            # unknown version must answer `404`, never the empty-but-present shape below.
-            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+        # Proves the parent exists before anything else is read, the same rule
+        # `RunAdapter.list_runs` follows for the same reason `D-67` states: an
+        # unknown version must answer `404`, never the empty-but-present shape below.
+        DocumentRepository().get_version(session, VersionUid.parse(version_uid))
 
-            repository = RunRepository()
-            for run in repository.list_for_version(session, version_uid):
-                stage = next(
-                    (
-                        s
-                        for s in repository.stage_results(session, str(run.run_id))
-                        if s.stage_id == "page_geometry_extraction"
-                    ),
-                    None,
-                )
-                if stage is None or stage.status != "succeeded":
-                    continue
-                artifact = next(
-                    (a for a in stage.artifacts if a.get("role") == ROLE_BLOCK_INDEX),
-                    None,
-                )
-                if artifact is None:
-                    continue
-                document = self._read_artifact(artifact)
-                return VersionBlockIndexView(
-                    version_uid=version_uid,
-                    status=STATUS_PRODUCED,
-                    produced_by_run_id=str(run.run_id),
-                    text_layer_sha256=document.get("text_layer_sha256"),
-                    block_count=len(document.get("blocks", ())),
-                    blocks=tuple(
-                        BlockGeometryView(
-                            block_id=b["block_id"],
-                            page_number=b["page_number"],
-                            block_ordinal=b["block_ordinal"],
-                            bbox=b["bbox"],
-                            bbox_unit=b["bbox_unit"],
-                            bbox_origin=b["bbox_origin"],
-                            char_start=b["char_start"],
-                            char_end=b["char_end"],
-                        )
-                        for b in document.get("blocks", ())
-                    ),
-                )
-            # No run of this version ever reached page_geometry_extraction
-            # successfully -- absent, never rendered as the same bytes a version with
-            # genuinely zero blocks would answer.
+        repository = RunRepository()
+        for run in repository.list_for_version(session, version_uid):
+            stage = next(
+                (
+                    s
+                    for s in repository.stage_results(session, str(run.run_id))
+                    if s.stage_id == "page_geometry_extraction"
+                ),
+                None,
+            )
+            if stage is None or stage.status != "succeeded":
+                continue
+            artifact = next(
+                (a for a in stage.artifacts if a.get("role") == ROLE_BLOCK_INDEX),
+                None,
+            )
+            if artifact is None:
+                continue
+            document = self._read_artifact(artifact)
             return VersionBlockIndexView(
                 version_uid=version_uid,
-                status=STATUS_NOT_PRODUCED,
-                produced_by_run_id=None,
-                text_layer_sha256=None,
-                block_count=0,
-                blocks=(),
+                status=STATUS_PRODUCED,
+                produced_by_run_id=str(run.run_id),
+                text_layer_sha256=document.get("text_layer_sha256"),
+                block_count=len(document.get("blocks", ())),
+                blocks=tuple(
+                    BlockGeometryView(
+                        block_id=b["block_id"],
+                        page_number=b["page_number"],
+                        block_ordinal=b["block_ordinal"],
+                        bbox=b["bbox"],
+                        bbox_unit=b["bbox_unit"],
+                        bbox_origin=b["bbox_origin"],
+                        char_start=b["char_start"],
+                        char_end=b["char_end"],
+                    )
+                    for b in document.get("blocks", ())
+                ),
             )
-
-        return self._read(work)
+        # No run of this version ever reached page_geometry_extraction
+        # successfully -- absent, never rendered as the same bytes a version with
+        # genuinely zero blocks would answer.
+        return VersionBlockIndexView(
+            version_uid=version_uid,
+            status=STATUS_NOT_PRODUCED,
+            produced_by_run_id=None,
+            text_layer_sha256=None,
+            block_count=0,
+            blocks=(),
+        )
 
     # `W55B-GEOMETRY-01`. The two portal-block reads, which `W55B-SEAL-01` sealed as
     # stubs answering `503 dependency_unavailable`.
@@ -2234,6 +2236,10 @@ class BlockAdapter(_SessionHolder):
         ``page_geometry_extraction`` succeeded **and** published ``geometry.portal_blocks``:
         a run over a version without a bundle succeeds without it and is not portal geometry.
         """
+        return self._read(lambda session: self.portal_source_in(session, version_uid))
+
+    def portal_source_in(self, session: Session, version_uid: str) -> "BlockAdapter._PortalSource | None":
+        """:meth:`_portal_source` over a session the caller owns."""
         from auditmanager.analysis.public import (
             ROLE_PAGE_CROPS,
             ROLE_PORTAL_BLOCKS,
@@ -2243,34 +2249,75 @@ class BlockAdapter(_SessionHolder):
         from auditmanager.runs import RunRepository
         from auditmanager.shared.identity import VersionUid
 
-        def work(session: Session) -> BlockAdapter._PortalSource | None:
-            DocumentRepository().get_version(session, VersionUid.parse(version_uid))
-            repository = RunRepository()
-            for run in repository.list_for_version(session, version_uid):
-                stages = {
-                    stage.stage_id: stage
-                    for stage in repository.stage_results(session, str(run.run_id))
-                }
-                geometry = stages.get("page_geometry_extraction")
-                if geometry is None or geometry.status != "succeeded":
-                    continue
-                portal_blocks = self._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
-                if portal_blocks is None:
-                    continue
-                preparation = stages.get("source_preparation")
-                return BlockAdapter._PortalSource(
-                    run_id=str(run.run_id),
-                    portal_blocks=portal_blocks,
-                    page_crops=self._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
-                    recognised_text=(
-                        None
-                        if preparation is None
-                        else self._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
-                    ),
-                )
-            return None
+        DocumentRepository().get_version(session, VersionUid.parse(version_uid))
+        repository = RunRepository()
+        for run in repository.list_for_version(session, version_uid):
+            stages = {
+                stage.stage_id: stage
+                for stage in repository.stage_results(session, str(run.run_id))
+            }
+            geometry = stages.get("page_geometry_extraction")
+            if geometry is None or geometry.status != "succeeded":
+                continue
+            portal_blocks = self._artifact_reference(geometry.artifacts, ROLE_PORTAL_BLOCKS)
+            if portal_blocks is None:
+                continue
+            preparation = stages.get("source_preparation")
+            return BlockAdapter._PortalSource(
+                run_id=str(run.run_id),
+                portal_blocks=portal_blocks,
+                page_crops=self._artifact_reference(geometry.artifacts, ROLE_PAGE_CROPS),
+                recognised_text=(
+                    None
+                    if preparation is None
+                    else self._artifact_reference(preparation.artifacts, ROLE_RECOGNISED_TEXT)
+                ),
+            )
+        return None
 
-        return self._read(work)
+    def evidence_boxes_in(
+        self, session: Session, version_uid: str
+    ) -> dict[str, tuple[tuple[float, float, float, float], str, str]]:
+        """The boxes of the version's text blocks by block reference (``b_NNNNNN``): ``(x0, y0, x1, y1), unit, origin``.
+
+        Empty when no run of the version produced a block index. For the decision memory (`ADR-0027`), over the caller's session.
+        """
+        index = self.block_index_in(session, version_uid)
+        return {
+            block.block_id: (
+                (block.bbox["x0"], block.bbox["y0"], block.bbox["x1"], block.bbox["y1"]),
+                block.bbox_unit,
+                block.bbox_origin,
+            )
+            for block in index.blocks
+        }
+
+    def portal_crops_in(self, session: Session, version_uid: str) -> tuple[Mapping[str, Any], ...]:
+        """The crop records of the version's portal geometry (``geometry.page_crops``), each with the portal's description of its
+        IMAGE block under ``portal_description`` when it has one; empty when no run produced portal geometry or crops.
+
+        Every artifact is read with the digest its ``stage_result`` recorded, as :meth:`list_portal_blocks` reads it: a blob that is
+        missing or differs is ``storage_integrity_error``, never a shorter answer. An absent reference is an absent crop manifest (a
+        run before the crop policy), which is an explicit empty answer and not an error. For the decision memory (`ADR-0027`).
+        """
+        from auditmanager.analysis.public import KIND_PORTAL_DESCRIPTION, ROLE_PAGE_CROPS, ROLE_RECOGNISED_TEXT
+
+        source = self.portal_source_in(session, version_uid)
+        if source is None or source.page_crops is None:
+            return ()
+        manifest = self._portal_document(source.page_crops, ROLE_PAGE_CROPS, version_uid)
+        records = tuple(manifest["crops"])
+        if not records:
+            return ()
+        descriptions: dict[str, str] = {}
+        if source.recognised_text is not None:
+            recognised = self._portal_document(source.recognised_text, ROLE_RECOGNISED_TEXT, version_uid)
+            descriptions = {
+                entry["portal_block_id"]: entry["text"]
+                for entry in recognised["entries"]
+                if entry.get("kind") == KIND_PORTAL_DESCRIPTION and entry.get("text")
+            }
+        return tuple({**record, "portal_description": descriptions.get(record["portal_block_id"])} for record in records)
 
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: one read of the portal blocks document (not the crops, not the recognised text) folded into
@@ -2843,6 +2890,261 @@ class _AppendedDecision:
     @property
     def current_verdict(self) -> str:
         return self._verdict
+
+
+#: `ADR-0027`: every case of the first phase is ``test`` -- the closed beta runs on test data, and ``test`` is the safe direction because
+#: an export defaults to ``real`` only. Phase M2 makes it an installation setting; that must land before real client data does (`D-390`).
+MEMORY_DATA_CLASS = "test"
+
+
+class MemoryCaptureAssembler:
+    """The decision memory's capture (`ADR-0027`, `DECISION-MEMORY-01` section 7): build one snapshot and hand it to the memory.
+
+    Registered as the :class:`~auditmanager.decisions.public.DecisionRecorded` port, so ``record_decision`` calls it after a new
+    event is inserted, in the caller's transaction; the sweep calls :meth:`capture` for events recorded before there was a memory.
+    It lives in the composition root because it reads five contexts (findings, documents, analysis geometry, decisions, the memory)
+    through their public modules, and none of them may import another.
+
+    ``geometry`` is anything with ``evidence_boxes_in(session, version_uid)`` and ``portal_crops_in(session, version_uid)`` --
+    :class:`BlockAdapter` in production. The artifacts they read are only read for an observation that has no case yet; a later
+    decision on a known observation reads nothing outside the database.
+
+    A failure propagates (the decision fails loudly): nothing here falls back to a case without its crops or its citations.
+    """
+
+    def __init__(self, *, geometry: Any, data_class: str = MEMORY_DATA_CLASS) -> None:
+        from auditmanager.decision_memory.public import DATA_CLASSES, MemoryRepository
+
+        if data_class not in DATA_CLASSES:
+            raise ValueError(f"{data_class!r} is not a decision-memory data class")
+        self._geometry = geometry
+        self._data_class = data_class
+        self._repository = MemoryRepository()
+
+    def __call__(self, session: Session, event: Any, origin_kind: str) -> None:
+        self.capture(session, event, origin_kind)
+
+    def capture(self, session: Session, event: Any, origin_kind: str) -> Any:
+        """Capture one ledger event; ``None`` for an event the memory does not keep (a ``comment``, `Q8`)."""
+        from auditmanager.decision_memory.public import CAPTURED_EVENT_TYPES
+
+        if event.event_type not in CAPTURED_EVENT_TYPES:
+            return None
+        return self._repository.capture(session, self.assemble(session, event, origin_kind))
+
+    def assemble(self, session: Session, event: Any, origin_kind: str) -> Any:
+        from auditmanager.analysis.public import AR_V3_BETA_PROFILE_ID
+        from auditmanager.decision_memory.public import (
+            CaptureSnapshot, CaseContent, CaseOrigin, DecisionFact, EvidenceItem, NormRef, select_page_image_crops,
+        )
+        from auditmanager.documents.public import DocumentRepository
+        from auditmanager.findings import finding_by_uid, published_finding_evidence, published_findings
+        from auditmanager.findings.public import CitationReadRefused, read_verified_citations
+        from auditmanager.shared.identity import VersionUid
+
+        head = finding_by_uid(session, event.finding_uid)
+        if head is None:
+            raise DomainError(ErrorCode.STORAGE_INTEGRITY_ERROR, message="the decided finding is not published")
+        row = next(
+            (
+                candidate for candidate in published_findings(session, head.run_id)
+                if candidate.finding_uid == event.finding_uid
+                and candidate.finding_observation_id == event.finding_observation_id
+            ),
+            None,
+        )
+        if row is None:
+            raise DomainError(
+                ErrorCode.STORAGE_INTEGRITY_ERROR,
+                message="the decided observation is not a published observation of its finding's run",
+            )
+        stored = sorted(
+            (item for item in published_finding_evidence(session, head.run_id)
+             if item.finding_observation_id == row.finding_observation_id),
+            key=lambda item: item.evidence_ordinal,
+        )
+
+        required_value = stated_value = None
+        references: list[Any] = []
+        if row.analysis_profile_id == str(AR_V3_BETA_PROFILE_ID):
+            # The same certified-partition reader the finding views use; it fails closed on an inconsistent partition.
+            try:
+                certified = read_verified_citations(
+                    session, run_id=head.run_id, version_uid=head.version_uid,
+                    profile_id=str(AR_V3_BETA_PROFILE_ID), cite_stage_id="ar_v3_citation_review",
+                )
+            except CitationReadRefused as error:
+                raise DomainError(
+                    ErrorCode.STORAGE_INTEGRITY_ERROR,
+                    message="the certified citation partitions of the run are inconsistent",
+                ) from error
+            partition = next(
+                (
+                    candidate
+                    for finding in certified.findings
+                    for candidate in (finding.canonical, *finding.merged_observations)
+                    if candidate.finding_observation_id == row.finding_observation_id
+                ),
+                None,
+            )
+            if partition is not None:
+                required_value, stated_value = partition.required_value, partition.stated_value
+                references = list(partition.citations)
+
+        # The version carries its current classification (the section as of now, which is the section as of capture).
+        version = DocumentRepository().get_version(session, VersionUid.parse(head.version_uid))
+        classification = version.classification
+
+        # What lives in published artifacts is read only for an observation that has no case yet.
+        known = self._repository.case_content_digest(session, row.finding_observation_id) is not None
+        boxes: Mapping[str, Any] = {}
+        if not known and any(item.block_id for item in stored):
+            boxes = self._geometry.evidence_boxes_in(session, head.version_uid)
+
+        def _item(item: Any) -> Any:
+            box = boxes.get(item.block_id) if item.block_id else None
+            return EvidenceItem(
+                ordinal=item.evidence_ordinal, page_number=item.page_number, quote=item.quote,
+                char_start=item.char_start, char_end=item.char_end, block_ref=item.block_id,
+                bbox=None if box is None else tuple(float(v) for v in box[0]),
+                bbox_unit=None if box is None else box[1],
+                bbox_origin=None if box is None else box[2],
+            )
+
+        evidence = tuple(_item(item) for item in stored)
+        crops = () if known else select_page_image_crops(evidence, self._geometry.portal_crops_in(session, head.version_uid))
+
+        content = CaseContent(
+            category=row.category, finding_text=row.finding_text, recommendation_text=row.recommendation_text,
+            proposed_severity=row.proposed_severity, required_value=required_value, stated_value=stated_value,
+            stage_id=row.stage_id, analysis_profile_id=row.analysis_profile_id, prompt_bundle_id=row.prompt_bundle_id,
+            provider_mode=row.provider_mode, evidence=evidence,
+            norm_refs=tuple(
+                NormRef(
+                    ordinal=number, norms_snapshot_id=ref.norms_snapshot_id, norm_document_id=ref.norm_document_id,
+                    norm_paragraph_id=ref.norm_paragraph_id, designation=ref.designation, clause_number=ref.clause_number,
+                    page_label=ref.page_label, quote=ref.quote, citation_state=ref.state,
+                )
+                for number, ref in enumerate(references, start=1)
+            ),
+        )
+        return CaptureSnapshot(
+            origin=CaseOrigin(
+                observation_id=row.finding_observation_id, finding_uid=row.finding_uid, project_uid=head.project_uid,
+                document_uid=str(version.document_uid), version_uid=head.version_uid, run_id=head.run_id,
+            ),
+            content=content,
+            section_code=None if classification is None else classification.section_code,
+            data_class=self._data_class,
+            crops=crops,
+            decision=DecisionFact(
+                source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
+                comment=event.comment, author_user_uid=event.author_user_uid, origin_kind=origin_kind,
+                decided_at=event.recorded_at,
+            ),
+        )
+
+
+_UNCAPTURED_EVENTS = sql_text(
+    """
+    SELECT e.sequence_no, e.decision_id, e.finding_uid, e.finding_observation_id, e.event_type, e.verdict, e.severity,
+           e.comment, e.author_label, e.author_user_uid, e.command_id, e.recorded_at, e.carried_from_decision_id
+      FROM expert_decision_event e
+     WHERE e.event_type IN ('accept', 'reject') AND e.sequence_no > :after
+       AND NOT EXISTS (SELECT 1 FROM decision_memory_decision d WHERE d.source_decision_id = e.decision_id)
+     ORDER BY e.sequence_no
+     LIMIT :batch
+    """
+)
+
+
+class MemorySweepReport:
+    """What one sweep pass did: events captured, events that failed (they stay uncaptured and are retried)."""
+
+    __slots__ = ("captured", "failed")
+
+    def __init__(self, captured: int, failed: int) -> None:
+        self.captured, self.failed = captured, failed
+
+    def __repr__(self) -> str:
+        return f"MemorySweepReport(captured={self.captured}, failed={self.failed})"
+
+
+class MemoryCaptureSweep:
+    """Capture the ledger events that have no memory decision (`DECISION-MEMORY-01` section 7.2 point 4).
+
+    It is the first backfill of every decision taken before the memory existed, and the repair of a gap (a process that decided
+    without the port registered). The anti-join against ``decision_memory_decision`` is the whole state: nothing is remembered between
+    passes except a cursor that lets a pass move beyond events that keep failing instead of starving the ones behind them.
+
+    Each event is captured in a transaction of its own, so one failure never rolls back another. A failure is logged with the event's
+    identity and the error's type, the event stays uncaptured -- and guard G1 keeps an erase or a purge from deleting its source -- and
+    the next pass tries it again. Called as one pass of the worker's housekeeping loop (``__call__`` returns what it captured), at
+    most once per ``interval_seconds``.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+        assembler: MemoryCaptureAssembler,
+        *,
+        batch: int = 50,
+        interval_seconds: float = 30.0,
+        clock: Any = None,
+    ) -> None:
+        import time
+
+        if batch < 1 or interval_seconds < 0:
+            raise ValueError("a sweep needs a positive batch and a non-negative interval")
+        self._sessions = session_factory
+        self._assembler = assembler
+        self._batch = batch
+        self._interval = interval_seconds
+        self._clock = clock or time.monotonic
+        self._next_at: float | None = None
+        self._after = 0
+
+    def __call__(self) -> int:
+        now = self._clock()
+        if self._next_at is not None and now < self._next_at:
+            return 0
+        self._next_at = now + self._interval
+        return self.run_once().captured
+
+    def run_once(self) -> MemorySweepReport:
+        from auditmanager.decisions.public import DecisionEvent
+
+        with self._sessions() as session:
+            rows = session.execute(_UNCAPTURED_EVENTS, {"after": self._after, "batch": self._batch}).mappings().all()
+        # A full batch means there may be more beyond the last one seen; a short one means the end was reached, so the next pass
+        # starts again from the beginning and retries what failed.
+        self._after = int(rows[-1]["sequence_no"]) if len(rows) == self._batch else 0
+        captured = failed = 0
+        for row in rows:
+            event = DecisionEvent(
+                decision_id=row["decision_id"], finding_uid=row["finding_uid"],
+                finding_observation_id=row["finding_observation_id"], event_type=row["event_type"], verdict=row["verdict"],
+                comment=row["comment"], author_label=row["author_label"], author_user_uid=row["author_user_uid"],
+                command_id=row["command_id"], recorded_at=row["recorded_at"], severity=row["severity"],
+                carried_from_decision_id=row["carried_from_decision_id"],
+            )
+            origin_kind = "carried" if event.carried_from_decision_id else "direct"
+            try:
+                with self._sessions() as session:
+                    result = self._assembler.capture(session, event, origin_kind)
+                    session.commit()
+            except Exception as error:  # noqa: BLE001 - one event's failure is reported and retried, never hidden
+                failed += 1
+                logging.getLogger(__name__).error(
+                    "decision memory: could not capture %s (%s); it stays uncaptured and is retried",
+                    event.decision_id, type(error).__name__,
+                )
+                continue
+            if result is not None and result.decision_created:
+                captured += 1
+        if captured:
+            logging.getLogger(__name__).info("decision memory: captured %d earlier decision(s)", captured)
+        return MemorySweepReport(captured, failed)
 
 
 class CsvExportAdapter(_SessionHolder):

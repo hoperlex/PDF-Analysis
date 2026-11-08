@@ -98,7 +98,11 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0053`..`0055`: a document's tags, a finding's execution status and an assignment's planned dates are product
     # data (PRODUCT 89 -> 92); «График работ»'s settings, plans, calendar and absences are the organisation's
     # planning and are kept (KEEP 37 -> 41).
-    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 41 and len(tool.MIXED_TABLES) == 3
+    # `0059_decision_memory` (`ADR-0027`): the eight tables of the decision memory are kept (KEEP 41 -> 49); none of them has a
+    # foreign key into a PRODUCT table, so the purge's TRUNCATE never needs them.
+    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 8
+    assert not tool.KEEP_MEMORY_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
+    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 49 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -151,7 +155,9 @@ def test_a_dry_run_prints_the_classification_with_exact_counts_and_changes_nothi
     # those are exactly three (`PRECHECK_EVENTS`); with the 24 other PRODUCT events that makes 24 + 3 = 27 rows to delete.
     assert "  audit_event  (delete 27 rows, keep 7 rows)" in out
     assert "  command_record  (delete 10 rows, keep 1 rows)" in out
-    assert "norm-owned objects (the custody ledger's, never touched): 2" in out
+    # Two objects of the custody ledger and, since `0059_decision_memory`, the Blob of the one crop the seed's recorded run published
+    # and the decision memory references (a Blob a KEEP table references stays with its object).
+    assert "norm-owned objects (the custody ledger's and the decision memory's crops; never touched): 3" in out
     assert "other objects (named by no row; never touched): 1 (blobs/ 1)" in out
     assert "--dry-run: NOTHING ABOVE WAS CHANGED." in out and "nothing-to-purge: no" in out
     stray = stand.client.head_object(Bucket=stand.bucket, Key=STRAY_KEY)
@@ -172,7 +178,10 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
     command_keep = digest_of(stand.engine, "command_record", "command_type = 'approve_registration'")
     blob_keep = digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM norm_custody_binding "
                           "UNION SELECT set_blob_id FROM norm_retrieval_set "
-                          "UNION SELECT catalogue_blob_id FROM norm_retrieval_set)")
+                          "UNION SELECT catalogue_blob_id FROM norm_retrieval_set "
+                          "UNION SELECT blob_id FROM decision_memory_crop)")
+    crop_blobs = digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM decision_memory_crop)")[0]
+    assert crop_blobs >= 1, "the seed's recorded run publishes portal crops, which its decisions' cases reference"
     with stand.engine.connect() as connection:
         triggers = connection.execute(text(
             "SELECT tgrelid::regclass::text, tgname, tgenabled::text FROM pg_trigger "
@@ -182,7 +191,8 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
                                                     "expert_decision_event", "price_list_revision",
                                                     "optimisation_pass", "work_assignment",
                                                     "document_version_classification_correction",
-                                                    "finding_observation_norm_citation"))
+                                                    "finding_observation_norm_citation",
+                                                    "decision_memory_case", "decision_memory_decision"))
     assert sum(1 for key in before["bucket"] if key.startswith("blobs/")) >= 5
 
     steps = full_purge(tool, stand, tmp_path / "dump")
@@ -202,11 +212,17 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')") == custody_keep
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')") == access_keep
     assert digest_of(stand.engine, "command_record") == command_keep and command_keep[0] == 1
-    assert digest_of(stand.engine, "blob") == blob_keep and blob_keep[0] == 2
+    assert digest_of(stand.engine, "blob") == blob_keep and blob_keep[0] == 2 + crop_blobs  # the custody ledger's two, and the crops'
+    assert digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM decision_memory_crop)")[0] == crop_blobs
     # objects: product gone, the custody ledger's and the stray untouched, byte for byte
     gone = set(before["bucket"]) - set(after["bucket"])
     assert len(gone) >= 14 and STRAY_KEY not in gone
-    assert set(after["bucket"]) == set(stand.summary["norm_keys"]) | {STRAY_KEY}
+    from auditmanager.storage.public import canonical_object_key_for_recovery
+
+    with stand.engine.connect() as connection:
+        crop_keys = {canonical_object_key_for_recovery(blob) for blob in connection.execute(
+            text("SELECT blob_id FROM decision_memory_crop")).scalars()}
+    assert set(after["bucket"]) == set(stand.summary["norm_keys"]) | {STRAY_KEY} | crop_keys
     assert all(after["bucket"][key] == before["bucket"][key] for key in after["bucket"])
     assert stand.summary["temporary_key"] in gone
     # triggers (a purge must leave the append-only guard enabled) and sequences (monotonic)
@@ -384,6 +400,17 @@ def _truncate_guard(s: Stand) -> None:
     sql(s, "CREATE TRIGGER zz_no_truncate BEFORE TRUNCATE ON project FOR EACH STATEMENT EXECUTE FUNCTION zz_refuse()")
 
 
+def _an_uncaptured_decision(s: Stand) -> None:
+    """One accept or reject has no decision-memory row any more: its memory decision is removed with its guard switched off."""
+    with s.engine.connect() as connection:
+        decision = connection.execute(text("SELECT memory_decision_id FROM decision_memory_decision ORDER BY 1 LIMIT 1")).scalar_one()
+    for table in ("decision_memory_decision_text", "decision_memory_decision"):
+        with s.engine.begin() as connection:
+            connection.execute(text(f'ALTER TABLE public."{table}" DISABLE TRIGGER trg_{table}_immutable'))
+            connection.execute(text(f'DELETE FROM public."{table}" WHERE memory_decision_id = :d'), {"d": decision})
+            connection.execute(text(f'ALTER TABLE public."{table}" ENABLE TRIGGER trg_{table}_immutable'))
+
+
 def act_plan(m: types.ModuleType, h: Harness) -> tuple[int, str, str]:
     return invoke(m, h.stand, "plan")
 
@@ -532,6 +559,8 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("event-types-classified", "event type(s) nobody classified", act_plan, prepare=_unclassified_event),
     Scenario("command-types-classified", "command type(s) nobody classified", act_plan,
              prepare=_unclassified_command),
+    Scenario("memory-captured", "have no decision-memory case", act_plan, prepare=_an_uncaptured_decision,
+             effect=lambda s, h, code: code == 0),
     Scenario("quiescent", "work is running right now", act_plan, prepare=_a_run_is_running,
              effect=lambda s, h, code: code == 0),
     Scenario("norm-key-not-in-product-list", "owned by the norm custody ledger", act_plan,
@@ -570,7 +599,7 @@ SCENARIOS: tuple[Scenario, ...] = (
 def test_every_guard_in_the_module_has_a_scenario() -> None:
     body = SOURCE.read_text(encoding="utf-8")
     markers = re.findall(r"^[ \t]*# >>> guard: ([a-z-]+)$", body, re.MULTILINE)
-    assert len(markers) == len(set(markers)) == len(SCENARIOS) == 26
+    assert len(markers) == len(set(markers)) == len(SCENARIOS) == 27
     assert sorted(markers) == sorted(s.guard for s in SCENARIOS)
     for name in markers:
         assert len(re.findall(rf"^[ \t]*# <<< guard: {re.escape(name)}$", body, re.MULTILINE)) == 1

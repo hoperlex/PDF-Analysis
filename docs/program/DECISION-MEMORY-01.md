@@ -1,6 +1,6 @@
 # DECISION-MEMORY-01 — expert decision memory, and normative material for external executors
 
-**Status: design only.** Written 2026-11-07 by design lane M (`agent/lane-decision-memory-01`), base
+**Status: design; phases M0 and M1 built 2026-11-09 (`ADR-0027`, migration `0059_decision_memory`; see the end of section 8).** Written 2026-11-07 by design lane M (`agent/lane-decision-memory-01`), base
 `origin/dev` `dcb0083b9` (API contract `1.35.0`, migration head `0056_optimisation_decisions`). This document
 changes no contract, migration, product code or test. Everything in sections 3 to 8 is a proposal until the owner
 has answered section 9, where the decisions only the owner can make are collected. Sources are cited as `path:line` at
@@ -536,6 +536,31 @@ Sizes are relative: **S** ≈ one lane, **M** ≈ two to three lanes, **L** ≈ 
 | M8 | Memory of optimisation proposal decisions (`case_kind`) | M | M1 | same guarantees for `opd_` |
 
 M7 can run in parallel with the memory phases; M3 and M4 can run in parallel after M1.
+
+### Built 2026-11-09 (phases M0 and M1)
+
+What exists, as built; where it differs from sections 3 and 7, this list is the fact:
+
+- **Migration `0059_decision_memory`** (not `0057`: `D-337`). Eight tables: `decision_memory_case`, `decision_memory_decision`,
+  `decision_memory_decision_text`, `decision_memory_status_event` (table only; no operation writes it before M2),
+  `decision_memory_content`, `decision_memory_evidence`, `decision_memory_norm_ref`, `decision_memory_crop` (references to existing
+  portal crop Blobs, state `ready` only). Every table is append-only (`am_immutable_row`): M2 replaces the guard of the content tables
+  with the forget guard of section 4.5, and M3 gives the crop table its state guard. No export, no embedding, no probe table, no
+  `decision_memory_case_current` view yet.
+- **Identities:** `dmc` (case), `dmd` (decision), `dmw` (status event), `dmx` (crop); `dme`, `dmi`, `nmd`, `ncr` are reserved for their
+  phases and are not in the catalog.
+- **`origin_kind`** is `carried` exactly when the ledger event has `carried_from_decision_id` (`D-337`: no second provenance column) and
+  `direct` otherwise. `imported` needs the workbook import to pass it (`D-391`); until then an imported decision is captured `direct`.
+- **Capture** is `decisions.public.register_decision_recorded` plus the call inside `record_decision` (section 7.2 point 1); the
+  assembler is `bootstrap/adapters.py` `MemoryCaptureAssembler`; the sweep is `MemoryCaptureSweep`, a pass of the worker's probe loop.
+  The case content is hashed over the observation's immutable fields only (`content_sha256`), so a later section correction or a
+  newer portal run cannot make a second decision on the same observation fail.
+- **Crop selection rule v1** is `page_images/1`: the portal image-block crops of the pages the evidence names, at most 4, no geometric
+  test against the evidence block (`D-392`). The rule name is stored on every crop.
+- **Guards G1** are in `product_purge.py` and `project_erase.py`; **G2** (pending crops) arrives with M3.
+- **Debts of this phase** (`DEBT_REGISTER.md`): `D-390` every case is `data_class = test` until M2 makes it a setting; `D-391` the
+  import's `imported`; `D-392` the crop rule and `model_identity`; `D-393` the status event's actor key and command types; `D-394`
+  the forget guard and the crop state guard; `D-397` the object-store reads inside a first decision and the sweep's scan.
 ### Risks
 
 | # | Risk | Mitigation |
@@ -555,10 +580,14 @@ M7 can run in parallel with the memory phases; M3 and M4 can run in parallel aft
 
 ## 9. Questions only the owner can decide
 
+Seven of the thirteen are **decided 2026-11-09 by the autonomous window, by the design's own recommendation; the owner may revise any of
+them** (the owner was unreachable; the answers are recorded in `ADR-0027`). Q2, Q4, Q5, Q9, Q10 and Q11 stay open.
+
 - **Q1. Amend `R-16`/`ADR-0012`.** `R-16` says the similar-case index is «never a source of truth». The 2026-11-07 goal
   needs the *case content* to be a primary record that outlives its source, with only vectors and probes rebuildable.
   Confirm this amendment (and the matching one to `R-146o`, which says an erase leaves only the record of the
   erasure). *Recommendation: confirm; record as `ADR-0027`.*
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): confirmed. Recorded as `ADR-0027`, which amends `R-16`/`ADR-0012` and, for what an erase leaves, `R-146o`, for the case content only.*
 - **Q2. Client erase.** When an operator erases a project on a client's request (`reason: client_request`), should the
   memory derived from it be forgotten in the same run, or stay unless asked? *Recommendation: stay by default,
   `--forget-memory` available, the closing message names it.*
@@ -566,6 +595,7 @@ M7 can run in parallel with the memory phases; M3 and M4 can run in parallel aft
   closed beta's test data? (b) May decisions on real client documents be exported for fine-tuning at all, to whom, and
   under what client-confidentiality terms? (c) Is `training_use` off until you switch it on? *Recommendation: (a) yes,
   by explicit flag; (b) your decision; (c) off by default.*
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise), part (c) only: `training_use` is off by default and no export is built in this phase. Parts (a) and (b) stay with the owner.*
 - **Q4. Cross-client examples.** May a decided case from client A's document appear as an example in a provider call
   about client B's document (`R-146d`: one organisation, but `A-2`: provider side)? *Recommendation: allowed only
   within one project until you decide otherwise.*
@@ -573,10 +603,13 @@ M7 can run in parallel with the memory phases; M3 and M4 can run in parallel aft
   or also an admin API request that an operator then executes?
 - **Q6. Crops for text evidence.** Only existing portal image-block crops in v1, or also rendered regions of text
   evidence (title blocks contain names)? Cap per case (proposed 4)?
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): v1 references existing portal image-block crops only, no rendered regions of text evidence; at most 4 per case.*
 - **Q7. Author in the memory.** An opaque `user_uid` without a foreign key (recommended: `purgeUser` stays possible),
   with a `RESTRICT` key (blocks purging any author, `R-61`), or no author?
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): an opaque `user_uid` without a foreign key.*
 - **Q8. Which decisions.** Only `accept`/`reject`, or also `comment`; are carried and imported decisions kept (proposed:
   kept, excluded from training, shown in hints with a label)?
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): `accept` and `reject` are captured (the ledger has no `revise`), `comment` is not; carried and imported decisions are kept with their `origin_kind`.*
 - **Q9. Normative material.** (a) May norm text and page crops leave the host to a configured executor at all
   (`NORM-Q04`: internal use only)? (b) Page crops as PNG renders (recommended) or as PDF (a contract change)?
   (c) Per-task caps (proposed 12 paragraphs, 24 000 characters)?
@@ -585,7 +618,9 @@ M7 can run in parallel with the memory phases; M3 and M4 can run in parallel aft
 - **Q11. Fine-tuning target.** Text-only model or vision-language model, and which provider's format? It decides whether
   crops are exported and the line format.
 - **Q12. Retention.** No automatic limit for the memory, consistent with `R-146c` — confirm.
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): no automatic retention limit.*
 - **Q13. Who sees hints.** Experts and admins (proposed), or viewers too?
+  *Decided 2026-11-09 (autonomous window, by recommendation; the owner may revise): hints are not built now; the question of who sees them is deferred with them.*
 
 ## 10. Not verified in this design
 

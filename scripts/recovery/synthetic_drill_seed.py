@@ -50,7 +50,9 @@ from auditmanager.analysis.text import (  # noqa: E402
     RecordedAdapter,
 )
 from auditmanager.analysis.text.profile import ANALYSIS_PROFILE_ID  # noqa: E402
+from auditmanager.bootstrap.adapters import BlockAdapter, MemoryCaptureAssembler  # noqa: E402
 from auditmanager.decisions import record_decision  # noqa: E402
+from auditmanager.decisions.public import register_decision_recorded  # noqa: E402
 from auditmanager.dispatch.public import assign_work, transition_assignment  # noqa: E402
 from auditmanager.findings import published_findings  # noqa: E402
 from auditmanager.ingest import IngestService  # noqa: E402
@@ -281,16 +283,23 @@ def seed_source_lane(values: Mapping[str, str]) -> dict[str, Any]:
         findings = published_findings(session, run_id)
         if state != "published" or len(findings) < 2:
             raise SeedRefused(f"the recorded run did not publish findings (state {state})")
-        for finding, event, comment in (
-            (findings[0], "accept", "подтверждено по странице"),
-            (findings[1], "reject", "другой объект"),
-            (findings[0], "comment", "проверено повторно"),
-        ):
-            record_decision(session, finding_uid=str(finding.finding_uid),
-                            finding_observation_id=str(finding.finding_observation_id),
-                            event_type=event, comment=comment, author_label="Петрова А.",
-                            author_user_uid=expert)
-        session.commit()
+        # `ADR-0027`: the decision memory copies each accept and reject in the transaction that records it, as the application
+        # does (its port is process-wide, so it is removed again); the comment is not a decision and is not captured. Without
+        # this the stand would hold decisions the memory has never seen, which guard G1 of the purge and the erase refuses.
+        register_decision_recorded(MemoryCaptureAssembler(geometry=BlockAdapter(factory, blob_store=store)))
+        try:
+            for finding, event, comment in (
+                (findings[0], "accept", "подтверждено по странице"),
+                (findings[1], "reject", "другой объект"),
+                (findings[0], "comment", "проверено повторно"),
+            ):
+                record_decision(session, finding_uid=str(finding.finding_uid),
+                                finding_observation_id=str(finding.finding_observation_id),
+                                event_type=event, comment=comment, author_label="Петрова А.",
+                                author_user_uid=expert)
+            session.commit()
+        finally:
+            register_decision_recorded(None)
     summary.update(run_id=run_id, run_state=state, findings=len(findings), decisions=3)
 
     # --- work assignments: an administrator hands work to experts; events are the history ---
