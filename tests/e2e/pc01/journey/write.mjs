@@ -395,22 +395,20 @@ export function describeCalls(exchanges, apiPrefix) {
  * and been refused 503. This wraps the callback so that whatever the browser had done is copied into the step's
  * record BEFORE the exception leaves it. The exception itself is rethrown unchanged.
  */
-export function keepingExchanges(record, fn) {
-  return async (page) => {
+export async function keepingExchanges(record, page, fn) {
+  try {
+    return await fn();
+  } catch (error) {
     try {
-      return await fn(page);
-    } catch (error) {
-      try {
-        record.exchanges = page.exchanges().map(redactedExchange);
-        record.consoleErrors = page.consoleErrors();
-        record.pageErrors = page.pageErrors();
-        record.finalLocation = await page.location();
-      } catch {
-        // The browser itself is gone: there is nothing more to keep, and the driving error is the finding.
-      }
-      throw error;
+      record.exchanges = page.exchanges().map(redactedExchange);
+      record.consoleErrors = page.consoleErrors();
+      record.pageErrors = page.pageErrors();
+      record.finalLocation = await page.location();
+    } catch {
+      // The browser itself is gone: there is nothing more to keep, and the driving error is the finding.
     }
-  };
+    throw error;
+  }
 }
 
 /**
@@ -583,7 +581,7 @@ export async function runWritePhase({
     let downloadDir = null;
     const downloaded = new Map();
     try {
-      await withColdBrowser(keepingExchanges(record, async (page) => {
+      await withColdBrowser(async (page) => keepingExchanges(record, page, async () => {
         // `D-92`: every step of the write half POSTs, and the BFF answers 401 without a
         // session. The cookie is the one `session.mjs` obtained by driving `/login`, and
         // each step receives the SAME value rather than a jar carried on from the step

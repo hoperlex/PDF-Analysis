@@ -132,7 +132,7 @@ test('D-382: a step that could not be driven keeps the calls its browser had mad
   };
   const record = { exchanges: [] };
   const control = new Error('click button [text="Запустить"]: no element matches it');
-  await assert.rejects(keepingExchanges(record, async () => { throw control; })(page), (error) => error === control);
+  await assert.rejects(keepingExchanges(record, page, async () => { throw control; }), (error) => error === control);
   assert.equal(record.exchanges.length, 4, 'every exchange the page recorded, not only the API ones');
   assert.deepEqual(describeCalls(record.exchanges, '/bff/v1'), [
     'GET /bff/v1/me -> 200',
@@ -146,12 +146,12 @@ test('D-382: a step that could not be driven keeps the calls its browser had mad
 
 test('D-382: a step that succeeds is left alone, and a browser that is gone does not hide the driving error', async () => {
   const untouched = { exchanges: ['not replaced'] };
-  assert.equal(await keepingExchanges(untouched, async () => 'value')({ exchanges: () => { throw new Error('gone'); } }), 'value');
+  assert.equal(await keepingExchanges(untouched, { exchanges: () => { throw new Error('gone'); } }, async () => 'value'), 'value');
   assert.deepEqual(untouched.exchanges, ['not replaced']);
   const dead = { exchanges: [] };
   const control = new Error('no element matches it');
   await assert.rejects(
-    keepingExchanges(dead, async () => { throw control; })({ exchanges: () => { throw new Error('the browser went away'); } }),
+    keepingExchanges(dead, { exchanges: () => { throw new Error('the browser went away'); } }, async () => { throw control; }),
     (error) => error === control,
   );
   assert.deepEqual(dead.exchanges, []);
