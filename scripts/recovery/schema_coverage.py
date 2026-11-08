@@ -38,7 +38,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-HEAD = "0058_finding_decision_origin"
+HEAD = "0060_run_from_stage"
 
 #: Every base table of the schema at ``HEAD`` (``relkind`` ``r``, schema ``public``).
 TABLES = frozenset((
@@ -442,8 +442,10 @@ SEQUENCES = {
 #: checks (the identity's shape, not itself, never a withdrawal) and one foreign key (the source decision): c 1304, f 371,
 #: measured on a throwaway database at ``0057`` on 2026-11-07. `0058_finding_decision_origin` (`UI-A-73`) adds the same
 #: three kinds to ``expert_decision_event`` (the identity's shape, not itself, only an accept or a reject) and one foreign
-#: key: c 1307, f 372 measured on a throwaway database at ``0058`` on 2026-11-08.
-CONSTRAINT_COUNTS = {"c": 1307, "f": 372, "p": 135, "t": 10, "u": 129}
+#: key: c 1307, f 372 measured on a throwaway database at ``0058`` on 2026-11-08. `0060_run_from_stage` (`UI-A-60`, `R-151i`)
+#: adds, on ``audit_run``, four checks (the source's identity shape, not itself, the start stage, both-or-neither) and one
+#: foreign key (the run whose outputs are reused): c 1311, f 373 (to be re-measured on the stand when `0059` is chained).
+CONSTRAINT_COUNTS = {"c": 1311, "f": 373, "p": 135, "t": 10, "u": 129}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -455,8 +457,8 @@ CONSTRAINT_COUNTS = {"c": 1307, "f": 372, "p": 135, "t": 10, "u": 129}
 #: `audit_run` and `comparison_ai_job`); 0049 and 0050 add none; 0051..0054 add four (the two new tables' keys and one
 #: lookup each) and 0055 nine (five keys, four lookups): 463, measured at ``0055`` on 2026-11-06; `0057` adds the partial
 #: index of the carried-from decision: 464, measured at ``0057`` on 2026-11-07; `0058` adds the same partial index on
-#: ``expert_decision_event``: 465.
-INDEX_COUNT = 465
+#: ``expert_decision_event``: 465; `0060` adds the partial index of the run a run was started from: 466.
+INDEX_COUNT = 466
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((
