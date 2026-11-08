@@ -319,6 +319,10 @@ PREFIX_BY_TABLE_COLUMN = {
     ("executor_group", "group_id"): "exg",
     ("executor_group_revision", "group_id"): "exg",
     ("stage_link_repair_event", "revision_id"): "slk",
+    # `0057_decision_carryover` and `0058_finding_decision_origin`: the decision a carried decision was carried from -- an optimisation
+    # proposal decision (`opd`) in the first, an expert decision event (`dec`) in the second (this map lacked both).
+    ("optimisation_proposal_decision", "carried_from_decision_id"): "opd",
+    ("expert_decision_event", "carried_from_decision_id"): "dec",
 }
 
 #: ``stage_ai_*.group_id`` is not an entity identity: it is the stage AI's own grouping label -- ``grp:`` plus the first 24 hex
