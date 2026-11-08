@@ -358,14 +358,14 @@ from sqlalchemy import Engine, text
 #: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
 #: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
 #: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
-#: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), measured on a throwaway PostgreSQL (the
-#: project image, stand ``am-lane-s2-pg``): the constraint/index/trigger digests on the lane database upgraded to ``0060``, down to
-#: ``0058`` and up again, the **columns** digest on a fresh database upgraded once (a down/up cycle leaves a gap in the ordinal
-#: positions of ``audit_run`` and so another digest -- this seal is the fresh one): ``audit_run.started_from_run_id`` and
-#: ``start_stage_id`` (columns +2, to 1591), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
-#: itself, the start stage, both-or-neither; constraints +5, to 1958), the partial index on the pair (indexes +1, to 466), and the
-#: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 246 with a new digest). Relations,
-#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0058`` seal. #: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
+#: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), chained after ``0059``, measured on a
+#: throwaway PostgreSQL (the project image, stand ``am-lane-s2-pg``) upgraded ONCE to ``0060`` (a down/up cycle leaves a gap in the
+#: ordinal positions of ``audit_run`` and so another columns digest; this seal is the fresh one): ``audit_run.started_from_run_id`` and
+#: ``start_stage_id`` (columns +2, to 1681), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
+#: itself, the start stage, both-or-neither; constraints +5, to 2057), the partial index on the pair (indexes +1, to 483), and the
+#: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 254 with a new digest). Relations,
+#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0059`` seal.
+#: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
 #: PostgreSQL (the project image, stand ``am-lane-c4-pg``) upgraded to ``0058``, down to ``0057`` and up again: the column
 #: ``expert_decision_event.carried_from_decision_id`` (columns +1, to 1589), its foreign key to the table itself and three
 #: checks (the ``dec_`` shape, not its own source, only an accept or a reject: constraints +4, to 1953) and its partial index
