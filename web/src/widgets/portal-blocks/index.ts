@@ -12,7 +12,9 @@ export { PageSelector } from './ui/page-selector';
 export type { PageSelectorProps } from './ui/page-selector';
 export {
   NO_PAGE_FINDINGS,
+  blockReading,
   completeFindingsOf,
+  findingsByBlock,
   findingsByPage,
   latestPublishedRunId,
   pageReading,
@@ -20,7 +22,9 @@ export {
   scopeRunId,
   worstDecided,
 } from './model/page-findings';
-export type { PageFindings, PageFindingsReading } from './model/page-findings';
+export type { BlockFindings, PageFindings, PageFindingsReading } from './model/page-findings';
+export { blocksWithoutFindings, noEntityWalk } from './model/no-entities';
+export type { NoEntityBlocks } from './model/no-entities';
 export { severityTone } from './model/severity-tone';
 export type { SeverityTone } from './model/severity-tone';
 export { BlockImageFailure } from './ui/block-image-stage';
