@@ -8,12 +8,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createElement } from 'react';
+import type { ComponentType } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { memberCandidates } from '@/entities/executor-group';
 import { CreateConnectionForm, ReviseConnectionForm } from '@/features/manage-executor-connection';
 import { GroupForm } from '@/features/manage-executor-group';
 import { PresetForm } from '@/features/manage-analysis-preset';
+import { WorkersPage } from '@/_pages/workers';
+import type { WorkersPageProps } from '@/_pages/workers';
 
 import { WEB_ROOT } from '../../guards/lib/repo';
 import { newClient, renderScreen } from '../screens/harness';
@@ -77,5 +80,35 @@ describe('item 1: one opt-in two-column form in the global layer', () => {
     expect(preset).toMatch(/<form class="am-form [^"]*form[^"]*" data-preset-form="create"/);
     expect(preset).not.toContain('am-form--two');
     expect(css('features/manage-analysis-preset/ui/preset-form.module.css')).toContain('minmax(min(100%, 16rem), 1fr)');
+  });
+});
+
+describe('item 2: «Исполнители» says its page in one sentence and keeps the rest one line away', () => {
+  const page = (): string => renderScreen(newClient(), createElement(WorkersPage as ComponentType<WorkersPageProps>, { initialTab: 'connections' }));
+
+  it('puts one sentence under the title and the long text in a closed disclosure', () => {
+    const markup = page();
+    const subtitle = /<p class="am-page__subtitle">([^<]*)<\/p>/.exec(markup)?.[1] ?? '';
+    expect(subtitle).toBe('Обзор и очередь, подключения к моделям, процессы, группы, правила и назначения.');
+    expect(subtitle.split(/[.!?]/).filter((part) => part.trim() !== '')).toHaveLength(1);
+    const detail = /<details[^>]*data-workers-about[^>]*>[\s\S]*?<\/details>/.exec(markup)?.[0] ?? '';
+    expect(detail).not.toMatch(/^<details[^>]*\sopen/);
+    expect(detail).toContain('<summary>Что на экране и как обновляются данные</summary>');
+    expect(detail).toContain('Обзор и список процессов обновляются автоматически, пока вкладка открыта');
+    expect(detail).toContain('остальные данные — при возврате на вкладку, после команды и по запросу');
+    expect(markup.indexOf('data-workers-about')).toBeLessThan(markup.indexOf('role="tablist"'));
+  });
+
+  it('can fail: the subtitle that was there held four sentences-worth of clauses, and a long one is not accepted', () => {
+    const longer = 'Обзор исполнителей и очереди, подключения к моделям, процессы, которые выполняют прогоны, группы исполнителей, правила и назначения. Обзор и список процессов обновляются автоматически.';
+    expect(longer.split(/[.!?]/).filter((part) => part.trim() !== '').length).toBeGreaterThan(1);
+  });
+
+  it('draws the tabs at the height of the strip’s controls, from tokens and not from pixels', () => {
+    const tabs = css('_pages/workers/ui/workers-page.module.css');
+    expect(ruleBody(tabs, '.tab')).toContain('padding: var(--am-gap-xs) var(--am-gap-md)');
+    expect(ruleBody(tabs, '.tablist')).toContain('padding: var(--am-gap-xs)');
+    expect(ruleBody(tabs, '.panel')).toContain('margin-top: var(--am-gap-sm)');
+    expect(tabs).not.toMatch(/padding[^;]*\d+px/);
   });
 });

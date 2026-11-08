@@ -6,16 +6,27 @@
  * import another page's stylesheet.
  */
 
+/* The detail the subtitle leaves out: one muted line, opened on request. */
+.about {
+  margin: 0 0 var(--am-gap-xs);
+}
+
+.about summary {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
 .tabs {
-  margin-top: var(--am-gap-sm);
+  margin-top: var(--am-gap-xs);
   min-width: 0;
 }
 
+/* The row is as tall as the strip's controls, 30 px, and the panel under it follows at a small step. */
 .tablist {
   display: flex;
   flex-wrap: wrap;
   gap: var(--am-gap-xs);
-  padding: var(--am-gap-sm);
+  padding: var(--am-gap-xs);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
   background: var(--am-surface);
@@ -23,7 +34,7 @@
 
 .tab {
   margin: 0;
-  padding: 8px 14px;
+  padding: var(--am-gap-xs) var(--am-gap-md);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius);
   background: transparent;
@@ -54,13 +65,13 @@
   .tab {
     flex: 1 1 auto;
     min-width: 0;
-    padding-inline: 8px;
+    padding-inline: var(--am-gap-sm);
     text-align: center;
   }
 }
 
 .panel {
-  margin-top: var(--am-gap);
+  margin-top: var(--am-gap-sm);
   padding: var(--am-gap);
   border: 1px solid var(--am-line);
   border-radius: var(--am-radius-lg);
@@ -71,10 +82,4 @@
 .panel:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: 2px;
-}
-
-@media (max-width: 780px) {
-  .panel {
-    padding: var(--am-gap);
-  }
 }
