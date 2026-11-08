@@ -1,4 +1,4 @@
-"""``getVersionBlocks``, ``listVersionPortalBlocks`` and ``streamVersionPortalBlockCrop``.
+"""``getVersionBlocks``, ``listVersionPortalBlocks``, ``listRunFindingBlocks`` and ``streamVersionPortalBlockCrop``.
 
 `W45-BLOCKS` and `W55B-SEAL-01`. Grouped with the ``documents`` tag, and addressed off
 ``/versions/{version_uid}``, for the reason ``BlockPort.get_block_index`` states: the
@@ -122,6 +122,32 @@ def build_block_routes(router: APIRouter, blocks: BlockPort) -> None:
     def list_version_sheet_labels(version_uid: Annotated[models.VersionUid, Path()]) -> WireResponse:
         labels = blocks.list_sheet_labels(version_uid=version_uid)
         return json_response(200, encode_json(labels.model_dump(mode="json", exclude_none=True)))
+
+    @router.get(
+        "/runs/{run_id}/finding-blocks",
+        operation_id="listRunFindingBlocks",
+        tags=["findings"],
+        status_code=200,
+        response_model=models.RunFindingBlockLinks,
+        responses={
+            **success(200, "Each published finding of the run with the portal blocks that hold its evidence, or the not-yet-produced status."),
+            **envelope_responses(401, 403, 404, 422, 500, 503),
+        },
+        description=(
+            "`UI-PARITY-C6` (contract 1.41.0): which portal blocks a finding's evidence sits in, for the original's block "
+            "thumbnails under a finding and the number of findings on a block tile. Derived on read, nothing stored: the "
+            "evidence's characters are located on their page by the run's text-layer block index (the line boxes) and the "
+            "page inventory (the page sizes), and a portal block holds the evidence when it covers at least half of the "
+            "evidence's box on that page. One item per published finding, `portal_block_ids` in the portal list's order and "
+            "empty when no block holds the evidence; `unlinked_pages` are the pages where the portal's raster does not "
+            "describe the PDF page and no link can be derived (their blocks are unknown, not free of findings). A run "
+            "without text-layer geometry, or a version without portal geometry, answers `status: \"not_produced\"` and no "
+            "items. An unknown run is `404`. Any one role (`R-80`)."
+        ),
+    )
+    def list_run_finding_blocks(run_id: Annotated[models.RunId, Path()]) -> WireResponse:
+        links = blocks.list_run_finding_blocks(run_id=run_id)
+        return json_response(200, encode_json(links.model_dump(mode="json", exclude_none=True)))
 
     @router.get(
         "/versions/{version_uid}/portal-blocks/{portal_block_id}/crop",

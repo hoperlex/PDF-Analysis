@@ -2,8 +2,8 @@
 
 /**
  * One portal block as a tile of the grid (`UI-PARITY`, «Блоки»): the crop at a fixed height with the
- * block's type and place beneath it, and a badge with the number of findings on its page when the
- * run's findings were read. A press opens the block view.
+ * block's type and place beneath it, and a badge with the number of findings when the run's findings were read.
+ * A press opens the block view.
  *
  * **What the tile shows is what the response carries.** An IMAGE block shows its crop (the address is
  * the seam's, built from the version and block identities); a TEXT block shows the beginning of the
@@ -11,10 +11,11 @@
  * flags, is in the block view; a STAMP shows that it has neither. A block the portal marked as failed or
  * unknown says so on the tile, because the tile is the only place a reader running down the grid sees it.
  *
- * **The badge is the page's number, not the block's.** See `model/page-findings.ts`: a finding cites
- * pages, so the tile's `title` says «замечаний на странице», and which run the count is from
- * («по прогону от <time>»). The outline is amber when the page has any;
- * a page with none carries no badge and no outline, and a tile with no reading carries neither.
+ * **The badge says which number it is.** See `model/page-findings.ts`: with the server's block links (`UI-PARITY-C6`)
+ * it is the findings whose evidence sits in this block and the `title` says «замечаний в блоке»; without them it is the
+ * page's number and the `title` says «замечаний на странице». Either way the `title` says which run the count is from
+ * («по прогону от <time>»). The outline is amber when there are any; none means no badge and no outline, and a tile
+ * with no reading carries neither.
  */
 
 import { useState } from 'react';
@@ -36,7 +37,7 @@ import styles from './portal-blocks.module.css';
 export interface PortalBlockTileProps {
   readonly block: PortalBlock;
   readonly versionUid: VersionUid;
-  /** The block's page in the run's findings, or `null` when no number may be shown. */
+  /** The block's findings (`scope: 'block'`) or its page's in the run's findings, or `null` when no number may be shown. */
   readonly pageFindings: PageFindings | null;
   /** When the run the number is from started (`created_at`); the badge's title says «по прогону от <time>». */
   readonly runAt?: string | undefined;
@@ -125,7 +126,9 @@ export function PortalBlockTile({ block, versionUid, pageFindings, runAt, onOpen
         <span
           className={`am-badge am-badge--${severityTone(pageFindings.worst)} ${styles.tileBadge}`}
           data-tile-badge={pageFindings.count}
-          title={`Замечаний на странице ${block.page_number}: ${pageFindings.count}${source === null ? '' : ` (${source})`}`}
+          title={`${
+            pageFindings.scope === 'block' ? 'Замечаний в блоке' : `Замечаний на странице ${block.page_number}`
+          }: ${pageFindings.count}${source === null ? '' : ` (${source})`}`}
         >
           {pageFindings.count}
         </span>

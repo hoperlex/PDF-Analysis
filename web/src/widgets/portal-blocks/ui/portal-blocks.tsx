@@ -20,11 +20,13 @@
  * far, so a reader always knows whether the list is complete.
  *
  * **Tiles, a page selector and a block view** (`UI-PARITY`, the original's «Блоки»). The loaded blocks are
- * a grid of tiles, one grouped heading per page, narrowed by the chips above it to «Все блоки» or one
- * page; a press on a tile opens the block view (`portal-block-viewer.tsx`), which walks the blocks of
- * the selection. The tile's number is the run's findings that cite its PAGE, never the block's: a
- * finding names pages, not portal blocks, and the sentence under the summary says so
- * (`model/page-findings.ts`). With no run in scope, or none that published findings, there is no number.
+ * a grid of tiles, one grouped heading per page, narrowed by the chips above it to «Все блоки», one
+ * page or «Без сущностей»; a press on a tile opens the block view (`portal-block-viewer.tsx`), which walks the
+ * blocks of the selection. The tile's number is the run's findings whose evidence sits in the BLOCK when the server's
+ * block links for the run were produced (`UI-PARITY-C6`), and otherwise the findings that cite its PAGE, and the
+ * sentence under the summary says which (`model/page-findings.ts`). With no run in scope, or none that published
+ * findings, there is no number. «Без сущностей» (`model/no-entities.ts`) is drawn only with the block links: the blocks
+ * no finding sits in, in the original's two lists.
  *
  * {@link PortalBlockListView} is the loaded list without the query, exported so the
  * instruments that render one static pass (the language guard, the contrast census) render
@@ -56,7 +58,8 @@ import {
 } from '@/entities/block';
 import type { PageSelection } from '@/entities/block';
 
-import { NO_PAGE_FINDINGS, pageReading, runSourcePhrase } from '../model/page-findings';
+import { blocksWithoutFindings, noEntityWalk } from '../model/no-entities';
+import { NO_PAGE_FINDINGS, blockReading, runSourcePhrase } from '../model/page-findings';
 import type { PageFindingsReading } from '../model/page-findings';
 import { usePageFindings } from '../model/use-page-findings';
 import { PageSelector } from './page-selector';
@@ -96,12 +99,24 @@ function FindingsNote({ reading }: { readonly reading: PageFindingsReading }) {
   if (reading.kind === 'none') return null;
   if (reading.kind === 'read') {
     const source = runSourcePhrase(reading.runAt);
+    const runAt = reading.runAt === undefined ? {} : { 'data-page-findings-run-at': reading.runAt };
+    if (reading.blocks !== undefined) {
+      return (
+        <p className="am-note" data-page-findings="read" data-findings-scope="block" {...runAt}>
+          Число на плитке — это число замечаний прогона <code>{reading.runId}</code>
+          {source === null ? null : <> ({source})</>}, цитата которых лежит в этом блоке: блок покрывает не менее
+          половины места цитаты на странице. Цитата, которую ни один блок не покрывает, в число плиток не входит, а
+          на страницах, где разметка портала не совпала со страницей PDF, чисел нет: там неизвестно, есть ли
+          замечания у блока.
+        </p>
+      );
+    }
     return (
-      <p className="am-note" data-page-findings="read" {...(reading.runAt === undefined ? {} : { 'data-page-findings-run-at': reading.runAt })}>
+      <p className="am-note" data-page-findings="read" {...runAt}>
         Число на плитке — это число замечаний прогона <code>{reading.runId}</code>
         {source === null ? null : <> ({source})</>}, у которых есть цитата с
         этой страницы PDF. Замечание указывает страницу, а не блок, поэтому у всех плиток одной страницы число
-        одно; у страниц без таких замечаний числа нет.
+        одно; у страниц без таких замечаний числа нет. Привязки замечаний к блокам для этого прогона нет.
       </p>
     );
   }
@@ -113,6 +128,37 @@ function FindingsNote({ reading }: { readonly reading: PageFindingsReading }) {
         ? ' не опубликовал замечаний, поэтому чисел замечаний на плитках нет.'
         : ' не удалось прочитать, поэтому чисел замечаний на плитках нет.'}
     </p>
+  );
+}
+
+/** One tile of a grid; the block view opens on its place in the selection's walk. */
+function Tile({
+  block,
+  at,
+  versionUid,
+  pageFindings,
+  runAt,
+  onOpen,
+}: {
+  readonly block: PortalBlock;
+  readonly at: number;
+  readonly versionUid: VersionUid;
+  readonly pageFindings: PageFindingsReading;
+  readonly runAt: string | undefined;
+  readonly onOpen: (at: number) => void;
+}) {
+  return (
+    <li>
+      <PortalBlockTile
+        block={block}
+        versionUid={versionUid}
+        pageFindings={blockReading(pageFindings, block)}
+        runAt={runAt}
+        onOpen={() => {
+          onOpen(at);
+        }}
+      />
+    </li>
   );
 }
 
@@ -135,12 +181,19 @@ export function PortalBlockListView({
   const [choice, setChoice] = useState<PageSelection>(initialPage);
   const [openAt, setOpenAt] = useState<number | null>(initialOpen ?? null);
   const sections = sectionsByPage(blocks);
-  const selection = effectiveSelection(sections, choice);
+  // «Без сущностей» exists only with the server's block links; chosen without them it is «Все блоки».
+  const noEntities = blocksWithoutFindings(blocks, pageFindings);
+  const noEntityTotal = noEntities === null ? 0 : noEntities.withoutFindings.length + noEntities.withoutContent.length;
+  const selection: PageSelection =
+    choice === 'empty' ? (noEntityTotal > 0 ? 'empty' : 'all') : effectiveSelection(sections, choice);
   const shown = sectionsOfSelection(sections, selection);
-  const walk = blocksOfSelection(sections, selection);
+  const walk = selection === 'empty' && noEntities !== null ? noEntityWalk(noEntities) : blocksOfSelection(sections, selection);
   let position = -1;
   const runId = pageFindings.kind === 'none' ? null : pageFindings.runId;
   const runAt = pageFindings.kind === 'read' ? pageFindings.runAt : undefined;
+  const open = (at: number) => {
+    setOpenAt(at);
+  };
 
   return (
     <div className={styles.portal} data-portal-blocks-loaded={blocks.length} data-portal-block-count={blockCount}>
@@ -173,6 +226,7 @@ export function PortalBlockListView({
         total={blocks.length}
         partial={hasMore}
         selection={selection}
+        noEntities={noEntityTotal}
         onSelect={(next) => {
           setChoice(next);
           setOpenAt(null);
@@ -189,27 +243,42 @@ export function PortalBlockListView({
           <ol className={styles.blocks}>
             {section.blocks.map((block) => {
               position += 1;
-              const at = position;
               // The portal's id is an external identifier: a key here and nothing else. The
               // position keeps two copies of one id (a server that repeated a block across a
               // cursor) from colliding, so the repetition is shown rather than swallowed.
               return (
-                <li key={`${at}:${block.portal_block_id}`}>
-                  <PortalBlockTile
-                    block={block}
-                    versionUid={versionUid}
-                    pageFindings={pageReading(pageFindings, block.page_number)}
-                    runAt={runAt}
-                    onOpen={() => {
-                      setOpenAt(at);
-                    }}
-                  />
-                </li>
+                <Tile key={`${position}:${block.portal_block_id}`} block={block} at={position} versionUid={versionUid} pageFindings={pageFindings} runAt={runAt} onOpen={open} />
               );
             })}
           </ol>
         </section>
       ))}
+
+      {selection === 'empty' && noEntities !== null ? (
+        <>
+          {(
+            [
+              ['withoutFindings', 'Замечаний не выявлено', 'Ни одно замечание прогона не лежит в этих блоках: в них есть что читать, а замечаний по ним нет.', noEntities.withoutFindings],
+              ['withoutContent', 'Без значимого содержимого', 'В этих блоках нечего читать: штампы и области, в которых портал ничего не распознал.', noEntities.withoutContent],
+            ] as const
+          ).map(([group, title, hint, list]) =>
+            list.length === 0 ? null : (
+              <section key={group} className={styles.page} data-portal-empty={group}>
+                <h3 className={styles.pageTitle}>{`${title} (${list.length})`}</h3>
+                <p className="am-note">{hint}</p>
+                <ol className={styles.blocks}>
+                  {list.map((block) => {
+                    position += 1;
+                    return (
+                      <Tile key={`${position}:${block.portal_block_id}`} block={block} at={position} versionUid={versionUid} pageFindings={pageFindings} runAt={runAt} onOpen={open} />
+                    );
+                  })}
+                </ol>
+              </section>
+            ),
+          )}
+        </>
+      ) : null}
 
       {openAt === null || walk[openAt] === undefined ? null : (
         <PortalBlockViewer
@@ -221,7 +290,7 @@ export function PortalBlockListView({
           onClose={() => {
             setOpenAt(null);
           }}
-          pageFindings={pageReading(pageFindings, (walk[openAt] as PortalBlock).page_number)}
+          pageFindings={blockReading(pageFindings, walk[openAt] as PortalBlock)}
           runId={runId}
           runAt={runAt}
           staticOpen={staticOpen}

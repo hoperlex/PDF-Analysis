@@ -65,6 +65,7 @@ import type { ReviewSelection } from '../model/selection';
 import { resolveSelection, selectFinding, selectPage } from '../model/selection';
 
 import { LazyEvidenceViewer } from './lazy-evidence-viewer';
+import { ReviewFindingBlocks } from './finding-blocks';
 import { OpenedFinding } from './opened-finding';
 import { ReviewPageBlocks } from './page-blocks';
 import { ReviewRowActions } from './review-row-actions';
@@ -254,6 +255,22 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
       page={stripPage}
     />
   );
+  // `UI-PARITY-C6`: above it, the portal blocks that hold the finding's own evidence, when the server named any.
+  const findingBlocks = detail === null ? null : (
+    <ReviewFindingBlocks
+      key={detail.finding_uid}
+      projectUid={projectUid}
+      versionUid={detail.version_uid as VersionUid}
+      runId={runId}
+      findingUid={detail.finding_uid}
+    />
+  );
+  const blocksUnderThePage = (
+    <>
+      {findingBlocks}
+      {pageBlocks}
+    </>
+  );
   const decidedOrProposed = detail === null ? null
     : detail.decided_severity !== undefined ? SEVERITY_LABELS[detail.decided_severity]
     : detail.observation.proposed_severity !== undefined
@@ -288,7 +305,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
             <LazyEvidenceViewer {...evidenceProps} onExpand={() => { setExpanded(true); }} />
           )}
 
-          {expanded ? null : pageBlocks}
+          {expanded ? null : blocksUnderThePage}
 
           {mayAct ? <DecisionPanel
             currentVerdict={verdict.result?.current_verdict ?? detail.current_verdict}
@@ -508,7 +525,7 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
                       }}
                     />
                   ) : null}
-                  blocks={pageBlocks}
+                  blocks={blocksUnderThePage}
                 />
               }
             />

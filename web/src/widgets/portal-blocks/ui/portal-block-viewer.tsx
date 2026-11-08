@@ -9,7 +9,8 @@
  * zoom, ‹ › with «i / n» within the page selection the reader came from, a 380px panel on the right,
  * closed by ×, Esc or a click outside. The panel carries what the API gives for the block (the
  * portal's status, the recognised text with its flags, the portal's description, each marked as what
- * it is) and, when the run's findings were read, the findings that cite the block's page.
+ * it is) and, when the run's findings were read, the findings whose evidence sits in the block (with the server's block
+ * links, `UI-PARITY-C6`) or, without them, the findings that cite the block's page.
  *
  * **«i / n» is within the selection**, the page chosen above the tiles or all of them; ‹ and › stop
  * at either end and do not wrap. The arrow keys do the same.
@@ -43,7 +44,7 @@ export interface PortalBlockViewerProps {
   readonly index: number;
   readonly onIndex: (index: number) => void;
   readonly onClose: () => void;
-  /** The open block's page in the run's findings, or `null` when no number may be said. */
+  /** The open block's findings (`scope: 'block'`) or its page's in the run's findings, or `null` when no number may be said. */
   readonly pageFindings: PageFindings | null;
   /** The run the findings belong to. */
   readonly runId: RunId | null;
@@ -53,7 +54,10 @@ export interface PortalBlockViewerProps {
   readonly staticOpen?: boolean | undefined;
 }
 
-/** «Замечания прогона на странице N»: the findings that cite the page, honestly not the block's. */
+/**
+ * «Замечания в блоке» (the findings whose evidence sits in the block) or «Замечания на странице N» (the findings that cite
+ * the page, honestly not the block's, when the run's block links are not known).
+ */
 function PageFindingsPanel({
   projectUid,
   runId,
@@ -68,15 +72,25 @@ function PageFindingsPanel({
   readonly reading: PageFindings;
 }) {
   const source = runSourcePhrase(runAt);
+  const block = reading.scope === 'block';
   return (
-    <section className={styles.findings} aria-label="Замечания на странице" data-page-findings-panel={reading.count}>
-      <h4 className={styles.findingsTitle}>{`Замечания на странице ${page} (${reading.count})`}</h4>
+    <section
+      className={styles.findings}
+      aria-label={block ? 'Замечания в блоке' : 'Замечания на странице'}
+      data-page-findings-panel={reading.count}
+      {...(block ? { 'data-findings-scope': 'block' } : {})}
+    >
+      <h4 className={styles.findingsTitle}>{block ? `Замечания в блоке (${reading.count})` : `Замечания на странице ${page} (${reading.count})`}</h4>
       <p className={styles.findingsNote}>
-        Замечание указывает страницу PDF, а не блок: прогон не называет блок портала, поэтому здесь все замечания,
-        в которых есть цитата с этой страницы{source === null ? null : <> ({source})</>}.
+        {block
+          ? 'Замечания прогона, цитата которых лежит в этом блоке'
+          : 'Замечание указывает страницу PDF, а не блок: прогон не называет блок портала, поэтому здесь все замечания, в которых есть цитата с этой страницы'}
+        {source === null ? null : <> ({source})</>}.
       </p>
       {reading.count === 0 ? (
-        <p className={styles.findingsNote}>Ни в одном замечании прогона нет цитаты с этой страницы.</p>
+        <p className={styles.findingsNote}>
+          {block ? 'Ни одно замечание прогона не лежит в этом блоке.' : 'Ни в одном замечании прогона нет цитаты с этой страницы.'}
+        </p>
       ) : (
         <ul className={styles.findingList}>
           {reading.findings.map((finding) => (

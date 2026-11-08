@@ -1,13 +1,15 @@
 /**
- * What a run's findings can honestly say about a page of blocks.
+ * What a run's findings can honestly say about a block or a page of blocks.
  *
- * **A finding points at pages, not at blocks.** Its evidence is a quotation with a PDF page number
- * and offsets into the text layer (`Evidence`); `Evidence.block_id` is a secondary anchor into the
- * text-line index, which is not the portal's block list, and the API names no portal block for
- * a finding. The original counted findings on a block; this product cannot, and a count on a tile
- * that pretended to be the block's would be a number nobody can check. So the number on a tile is
- * the number of the run's findings that cite the tile's PAGE, and every sentence around it says
- * «на странице».
+ * **Two scopes, and the tile says which.** A finding's evidence is a quotation with a PDF page number and offsets into the
+ * text layer; `Evidence.block_id` is a secondary anchor into the text-line index, not the portal's block list. Since
+ * contract 1.41.0 the server derives, on read, which portal blocks hold a finding's evidence (`listRunFindingBlocks`;
+ * the rule and its misses are `analysis/geometry/finding_blocks.py`'s), and then the number on a tile is the number of the
+ * run's findings that sit in THAT block (`findingsByBlock`; scope `block`). Where that relation is not known -- the run has
+ * no text-layer geometry, the version no portal geometry, or the read failed -- the number is what it was before: the
+ * run's findings that cite the tile's PAGE (`findingsByPage`; no scope member), and every sentence around it says
+ * «на странице». A block on a page where the server could not place evidence has no number in the block scope: its
+ * findings are unknown, and a zero there would read as «checked, nothing found».
  *
  * **The run is the version's latest that published a result** (`scopeRunId`): the geometry run
  * is a run that read the bundle, and a later run of the same version is the one whose findings the
@@ -20,19 +22,24 @@
  *
  * **The tone is the expert's.** A finding's canonical severity is `decided_severity` (`R-151j`);
  * the model's proposal is not an expert decision and does not colour anything here. The worst
- * DECIDED severity of the page's findings picks the tone; a page whose findings are all
- * undecided gets the neutral one.
+ * DECIDED severity of the findings picks the tone; one whose findings are all undecided gets the neutral one.
  */
 
-import type { Finding, RunId, RunStatus, Severity } from '@/shared/api';
+import type { Finding, PortalBlock, RunId, RunStatus, Severity } from '@/shared/api';
 import { SEVERITY_VALUES } from '@/shared/api';
 import { formatInstant } from '@/shared/lib';
 import { runHasPublishedResult } from '@/entities/audit-run';
+import type { FindingBlockIndex } from '@/entities/block';
 import { admitFindings } from '@/entities/finding';
 import { declaredPages } from '@/entities/finding-observation';
 
 export interface PageFindings {
-  /** Findings of the run that cite this page at least once; a finding citing it twice counts once. */
+  /**
+   * `block` when the findings are those whose evidence sits in the block (`UI-PARITY-C6`); absent when they are the
+   * findings that cite the block's page.
+   */
+  readonly scope?: 'block' | undefined;
+  /** Findings of the run that cite this page (or sit in this block) at least once; a finding doing so twice counts once. */
   readonly count: number;
   /** The worst severity an expert decided among them, or `null` when none is decided. */
   readonly worst: Severity | null;
@@ -72,12 +79,38 @@ export function findingsByPage(findings: readonly Finding[]): ReadonlyMap<number
   return byPage;
 }
 
+/**
+ * The run's admitted findings, by the portal blocks that hold their evidence (`UI-PARITY-C6`). A finding in two blocks is
+ * in both; a finding the index names no block for is in none. Only blocks that hold a finding have an entry.
+ */
+export function findingsByBlock(findings: readonly Finding[], index: FindingBlockIndex): ReadonlyMap<string, PageFindings> {
+  const grouped = new Map<string, Finding[]>();
+  for (const finding of admitFindings(findings).findings) {
+    for (const blockId of index.byFinding.get(finding.finding_uid) ?? []) {
+      const held = grouped.get(blockId);
+      if (held === undefined) grouped.set(blockId, [finding]);
+      else held.push(finding);
+    }
+  }
+  const byBlock = new Map<string, PageFindings>();
+  for (const [blockId, held] of grouped) {
+    byBlock.set(blockId, { scope: 'block', count: held.length, worst: worstDecided(held), findings: held });
+  }
+  return byBlock;
+}
+
 /** `SEVERITY_VALUES` runs from the worst to the mildest, so the first decided one is the worst. */
 export function worstDecided(findings: readonly Finding[]): Severity | null {
   for (const severity of SEVERITY_VALUES) {
     if (findings.some((finding) => finding.decided_severity === severity)) return severity;
   }
   return null;
+}
+
+/** What the block scope adds to a reading: the findings by block, and the pages whose blocks have no number. */
+export interface BlockFindings {
+  readonly byBlock: ReadonlyMap<string, PageFindings>;
+  readonly unlinkedPages: ReadonlySet<number>;
 }
 
 /**
@@ -87,7 +120,8 @@ export function worstDecided(findings: readonly Finding[]): Severity | null {
  *   `no-result`    the run published no findings (failed, cancelled, still going): a sentence;
  *   `unreadable`   the run or its findings could not be read: a sentence;
  *   `read`         the run's findings, by page, and the instant the run started (`created_at`) when
- *                  the run's status carried it.
+ *                  the run's status carried it; `blocks` is present only when the server's block links for the run
+ *                  were produced, and then the tiles speak of blocks, not pages.
  */
 export type PageFindingsReading =
   | { readonly kind: 'none' }
@@ -98,6 +132,7 @@ export type PageFindingsReading =
       readonly runId: RunId;
       readonly byPage: ReadonlyMap<number, PageFindings>;
       readonly runAt?: string | undefined;
+      readonly blocks?: BlockFindings | undefined;
     };
 
 export const NO_PAGE_FINDINGS: PageFindingsReading = { kind: 'none' };
@@ -106,6 +141,19 @@ export const NO_PAGE_FINDINGS: PageFindingsReading = { kind: 'none' };
 export function pageReading(reading: PageFindingsReading, page: number): PageFindings | null {
   if (reading.kind !== 'read') return null;
   return reading.byPage.get(page) ?? { count: 0, worst: null, findings: [] };
+}
+
+/**
+ * The reading for one block: what its tile and the block view say, or `null` when no number may be shown.
+ *
+ * With the server's block links, the findings that sit in the block (zero is a fact there: `scope: 'block'`), and `null`
+ * for a block on a page where the server could not place evidence. Without them, the block's page as `pageReading` says.
+ */
+export function blockReading(reading: PageFindingsReading, block: PortalBlock): PageFindings | null {
+  if (reading.kind !== 'read') return null;
+  if (reading.blocks === undefined) return pageReading(reading, block.page_number);
+  if (reading.blocks.unlinkedPages.has(block.page_number)) return null;
+  return reading.blocks.byBlock.get(block.portal_block_id) ?? { scope: 'block', count: 0, worst: null, findings: [] };
 }
 
 /**

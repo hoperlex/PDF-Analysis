@@ -64,12 +64,14 @@ export function nextPortalCursor(lastPage: PortalBlockPage): string | undefined 
 /**
  * `UI-PARITY` «Блоки»: the page selector above the tiles.
  *
- * The original's selector is «Все блоки (N)» and one button per page with its count. The counts
+ * The original's selector is «Все блоки (N)», one button per page with its count, and «Без сущностей» (`'empty'`:
+ * the blocks no finding of the run holds, `UI-PARITY-C6`; it is offered only when the run's links are known and
+ * the widget falls back to «Все блоки» when it is chosen without them). The counts
  * here are of the blocks LOADED so far (the API pages by cursor), so a page the cursor has cut
  * shows what has arrived; the view says so beside the selector while another page of blocks is
  * waiting. Nothing is fetched for a count.
  */
-export type PageSelection = 'all' | number;
+export type PageSelection = 'all' | 'empty' | number;
 
 export interface PageChip {
   readonly pageNumber: number;
@@ -88,32 +90,34 @@ export function pageChips(sections: readonly PortalPageSection[]): readonly Page
 }
 
 /**
- * The selection an address names: `?page=N` (a PDF page number, from 1) or `?page=all`. Anything else --
+ * The selection an address names: `?page=N` (a PDF page number, from 1), `?page=all` or `?page=empty`. Anything else --
  * no parameter, `0`, a negative or fractional number, text -- is the whole list rather than an error: a
  * link a person edited by hand opens «Все блоки».
  */
 export function pageSelectionOf(param: string | null | undefined): PageSelection {
+  if (param === 'empty') return 'empty';
   if (param === null || param === undefined || !/^[1-9][0-9]{0,6}$/.test(param)) return 'all';
   return Number(param);
 }
 
 /** The `page` value that names a selection in the address; the inverse of `pageSelectionOf`. */
 export function pageSelectionParam(selection: PageSelection): string {
-  return selection === 'all' ? 'all' : String(selection);
+  return typeof selection === 'number' ? String(selection) : selection;
 }
 
 /** A selection of a page that is no longer among the loaded sections is the whole list again. */
 export function effectiveSelection(sections: readonly PortalPageSection[], selection: PageSelection): PageSelection {
-  if (selection === 'all') return 'all';
+  if (selection === 'all' || selection === 'empty') return selection;
   return sections.some((section) => section.pageNumber === selection) ? selection : 'all';
 }
 
-/** The sections a selection shows: all of them, or the one page. */
+/** The sections a selection shows: all of them, the one page, or none for «Без сущностей» (its blocks are not a page's). */
 export function sectionsOfSelection(
   sections: readonly PortalPageSection[],
   selection: PageSelection,
 ): readonly PortalPageSection[] {
   const chosen = effectiveSelection(sections, selection);
+  if (chosen === 'empty') return [];
   return chosen === 'all' ? sections : sections.filter((section) => section.pageNumber === chosen);
 }
 

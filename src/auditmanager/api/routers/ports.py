@@ -532,6 +532,15 @@ class BlockPort(Protocol):
     def list_sheet_labels(self, *, version_uid: str) -> models.VersionSheetLabelList:
         """`UI-PARITY-P0O`: each page's sheet label from the version's portal geometry."""
 
+    def list_run_finding_blocks(self, *, run_id: str) -> models.RunFindingBlockLinks:
+        """`UI-PARITY-C6`: the portal blocks that hold each published finding's evidence, derived on read.
+
+        One item per published finding of the run, **absent is not empty**: ``portal_block_ids`` is empty only when the
+        evidence lies on a page where a link can be derived and no block holds it, and the pages where none can be derived
+        are ``unlinked_pages``. ``not_produced`` (no items) when the run has no text-layer geometry or the version no portal
+        geometry. An unknown run is ``not_found``.
+        """
+
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         """Every portal block of one version's bundle, or its not-yet-produced status.
         `W55B-SEAL-01`; the behaviour is `W55B-GEOMETRY-01`'s.

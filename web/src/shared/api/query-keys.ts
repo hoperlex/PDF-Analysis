@@ -486,6 +486,8 @@ export const queryKeys = {
       ['runs', 'list', versionUid, { cursor, limit }] as const,
     findings: (runId: RunId, filters: FindingListFilters = {}) =>
       ['runs', 'findings', runId, filters] as const,
+    /** `UI-PARITY-C6`: the portal blocks that hold each of the run's findings (`listRunFindingBlocks`). */
+    findingBlocks: (runId: RunId) => ['runs', 'finding-blocks', runId] as const,
     /**
      * `getRunNormReferences` (`NORM-REFS-RUN-01`): the norms one run's saved text cites,
      * checked against the snapshot that run pinned. Under `runs` so that

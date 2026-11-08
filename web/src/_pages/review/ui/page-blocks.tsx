@@ -23,7 +23,7 @@ import { useState } from 'react';
 import type { PortalBlock, ProjectUid, VersionUid } from '@/shared/api';
 import { portalBlockCropUrl } from '@/shared/api';
 import { routes } from '@/shared/lib';
-import { portalBlockTypeLabel, usePortalBlocks } from '@/entities/block';
+import { RECOGNISED_MARKER, portalBlockTypeLabel, textExcerpt, usePortalBlocks } from '@/entities/block';
 import { PortalBlockViewer } from '@/widgets/portal-blocks';
 
 import { readPageBlocks } from '../model/page-blocks';
@@ -49,14 +49,23 @@ export interface PageBlocksStripProps {
   readonly blocksHref?: string | undefined;
 }
 
-function Thumb({
+/** A recognised text's beginning on a thumbnail that has no picture: a thumbnail is 112 px wide. */
+const THUMB_EXCERPT_LIMIT = 60;
+
+/**
+ * One block as a thumbnail. `excerpt` (the finding's own blocks, `UI-PARITY-C6`) shows a TEXT block's recognised text
+ * where it has no picture, marked as recognised; the page strip leaves it off and says «Без изображения».
+ */
+export function BlockThumb({
   block,
   versionUid,
   onOpen,
+  excerpt = false,
 }: {
   readonly block: PortalBlock;
   readonly versionUid: VersionUid;
   readonly onOpen: () => void;
+  readonly excerpt?: boolean | undefined;
 }) {
   // Per thumbnail and per mount: a crop that fails to load says so instead of a broken-image icon.
   const [failed, setFailed] = useState(false);
@@ -86,7 +95,13 @@ function Thumb({
             }}
           />
         ) : (
-          <span className={styles.thumbNote}>{failed ? 'Не загрузилось' : 'Без изображения'}</span>
+          <span className={styles.thumbNote}>
+            {failed
+              ? 'Не загрузилось'
+              : excerpt && block.recognised_text !== undefined
+                ? `${RECOGNISED_MARKER}: ${textExcerpt(block.recognised_text.text, THUMB_EXCERPT_LIMIT)}`
+                : 'Без изображения'}
+          </span>
         )}
       </span>
       <span className={styles.thumbType}>{typeLabel}</span>
@@ -131,7 +146,7 @@ export function PageBlocksStrip({ reading, versionUid, onOpen, onMore, loadingMo
               // The portal's id is an external identifier: a key here and nothing else. The position keeps a
               // block a server repeated across a cursor from colliding.
               <li key={`${at}:${block.portal_block_id}`} className={styles.item}>
-                <Thumb
+                <BlockThumb
                   block={block}
                   versionUid={versionUid}
                   onOpen={() => {
