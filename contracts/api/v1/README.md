@@ -39,7 +39,7 @@ no error code.** One new schema, `StartRunFromStageRequest`; optional properties
 - **Not changed.** `reauditRun`, `startRun`, the stage vocabulary, the error catalogue and every other operation.
 
 The API now has 275 paths, 303 operations and 730 schemas (the new schema is `StartRunFromStageRequest`); migration head `0060`
-(chained after `0058` by this slice; the integrator chains it with the other `0059`). The domain catalogs are at candidate revision 59.
+(chained after `0059_decision_memory`). The domain catalogs are at candidate revision 59.
 
 ## Contract `1.41.0` (`UI-PARITY-C6`, historical)
 
