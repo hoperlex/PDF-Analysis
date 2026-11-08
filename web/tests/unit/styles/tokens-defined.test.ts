@@ -158,6 +158,23 @@ describe('a token a stylesheet or a component reads is a token globals.css defin
       expect(readingModules.size, 'no collocated module reads a token').toBeGreaterThan(10);
     });
 
+    it('defines the minimum target size as 24px, once, in the base block and not per theme', () => {
+      expect(defined.has('--am-target-min'), 'globals.css does not define --am-target-min').toBe(true);
+      const css = withoutBlockComments(readFileSync(GLOBALS, 'utf8'));
+      // A size is not a colour: it is declared once, so the two palettes cannot drift on it.
+      expect([...css.matchAll(/--am-target-min\s*:\s*([^;]+);/g)].map((match) => (match[1] as string).trim())).toEqual([
+        '24px',
+      ]);
+    });
+
+    it('can fail: a size token that is read and never defined is refused', () => {
+      const references = referencedTokens('.hit { min-height: var(--am-target-min); }', 'f.css', true);
+      expect(undefinedReferences(references, definedTokens(':root { --am-gap-lg: 24px; }')).map((r) => r.token)).toEqual([
+        '--am-target-min',
+      ]);
+      expect(undefinedReferences(references, definedTokens(readFileSync(GLOBALS, 'utf8')))).toEqual([]);
+    });
+
     it('reads no token that globals.css does not define, except the named, reasoned ones', () => {
       const known = new Set(KNOWN_UNDEFINED.map((entry) => `${entry.file}|${entry.token}`));
       const unexpected = undefinedNow.filter(
