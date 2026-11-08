@@ -48,7 +48,7 @@ import { PageViewerView } from '@/features/open-evidence';
 import type { PageViewerViewProps, Placement } from '@/features/open-evidence';
 import { fitView, focusView, makeStage } from '@/features/open-evidence/model/view-state';
 import { ExecutionJournal, JournalControls, RunPicker } from '@/widgets/execution-journal';
-import { ExecutionQueue } from '@/widgets/execution-queue';
+import { ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
 import { WorkerList, WorkersOverviewSections, WorkersOverviewView } from '@/widgets/worker-list';
 import { ExecutorConnections } from '@/widgets/executor-connections';
 import { ExecutorRoutes } from '@/widgets/executor-routes';
@@ -3100,5 +3100,15 @@ export function screens(): Screen[] {
   }));
   add('KnowledgeBase table with a carried decision', render(createElement(KnowledgeBase, { view: 'table', records: carriedRecords })));
   add('KnowledgeBase with a carried decision', render(createElement(KnowledgeBase, { records: carriedRecords })));
+  // `UI-B-51`, `UI-B-69`: the queue's strip of the original's three groups over the job states, one state pressed (the caption of each
+  // group is the muted ink the census measures). At the very end, for the reason above.
+  add('QueueStateStrip with counts', render(createElement(QueueStateStrip, {
+    overview: [
+      { state: 'queued', count: 3 }, { state: 'leased', count: 0 }, { state: 'running', count: 1 }, { state: 'retry_wait', count: 0 },
+      { state: 'succeeded', count: 12 }, { state: 'cancelled', count: 0 }, { state: 'failed', count: 2 }, { state: 'dead_letter', count: 0 },
+    ],
+    selected: 'failed',
+    onSelect: noop,
+  })));
   return out;
 }

@@ -39,7 +39,7 @@ import type {
 } from '@/shared/api';
 import type { FailureMessage } from '@/shared/api/failure-message';
 import { failureMessage } from '@/shared/api/failure-message';
-import { formatInstant, routes } from '@/shared/lib';
+import { formatInstant, routes, useAddressState } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import {
   COMPARISON_ONLY_MARK,
@@ -50,6 +50,7 @@ import {
 } from '@/entities/document-version';
 import { projectSectionOf } from '@/entities/project';
 import {
+  PROPOSAL_PAGE_LIMIT,
   describeCounts,
   useOptimisationPasses,
   useOptimisationProposals,
@@ -59,6 +60,7 @@ import { CarryOverProposalDecisions } from '@/features/carry-over-proposal-decis
 import { ImportProposalDecisions } from '@/features/import-proposal-decisions';
 import { StartOptimisationPass } from '@/features/start-optimisation-pass';
 
+import { pageLimitOf, readProposalLayout, writeProposalLayout } from '../model/layout';
 import { useExportProposalsCsv } from '../model/use-export-proposals-csv';
 import { useExportProposalsXlsx } from '../model/use-export-proposals-xlsx';
 import styles from './optimisation-proposals.module.css';
@@ -260,7 +262,9 @@ interface ActivePassProps {
 function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
   const [decision, setDecision] = useState<ProposalDecisionState | null>(null);
   const [offset, setOffset] = useState(0);
-  const proposals = useOptimisationProposals(passId, decision, offset);
+  // `UI-B-06`: the layout is in the address (`?layout=table`); the table pages by the original's fifty, the cards by their own page.
+  const [layout, setLayout] = useAddressState(readProposalLayout, writeProposalLayout);
+  const proposals = useOptimisationProposals(passId, decision, offset, pageLimitOf(layout, PROPOSAL_PAGE_LIMIT));
   const exporter = useExportProposalsCsv({ passId });
   const workbook = useExportProposalsXlsx({ passId });
   const failure = proposals.error === null ? null : failureMessage(proposals.error);
@@ -298,6 +302,12 @@ function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
               setOffset(0);
             }}
             onPage={proposals.isPlaceholderData ? null : setOffset}
+            layout={layout}
+            onLayout={(next) => {
+              // A view, not a place: it replaces the entry. A page of one size is not a page of the other, so it starts again.
+              setLayout(next, 'replace');
+              setOffset(0);
+            }}
             summary={
               <details className={styles.details} data-pass-summary="">
                 <summary>Сведения о проходе</summary>

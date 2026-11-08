@@ -55,6 +55,28 @@ export const QUEUE_STATE_OPTIONS: readonly { readonly value: ExecutionQueueState
   { value: 'dead_letter', label: JOB_STATE_LABELS.dead_letter },
 ];
 
+/** A group of the original's task sub-tabs («Активные», «Завершённые», «Ошибки») over this queue's states. */
+export interface QueueStateGroup {
+  readonly key: 'active' | 'completed' | 'errors';
+  readonly label: string;
+  readonly states: readonly ExecutionQueueState[];
+}
+
+/**
+ * `UI-B-51`, `UI-B-69`: the original's three sub-tabs of the dispatcher's task list, over this queue's eight job states. A job that
+ * waits for a worker, holds a lease, runs or waits to retry is **active**; one that ended without a failure (done, or cancelled by a
+ * person) is **completed**; one that ended in failure, or stopped after its retries, is an **error**. Every state is in exactly one
+ * group (a test holds it), so the group counts add up to the queue's total.
+ *
+ * The server filters by ONE state (`state` of `listExecutionQueue`), so a group is a heading over its states' counts and not a
+ * filter of its own; listing a whole group at once needs the server to accept a set of states (`D-370`).
+ */
+export const QUEUE_STATE_GROUPS: readonly QueueStateGroup[] = [
+  { key: 'active', label: 'Активные', states: ['queued', 'leased', 'running', 'retry_wait'] },
+  { key: 'completed', label: 'Завершённые', states: ['succeeded', 'cancelled'] },
+  { key: 'errors', label: 'Ошибки', states: ['failed', 'dead_letter'] },
+];
+
 /** Why a queue row ended badly: the run's reason as the sentence the run screen gives it, or the bare code. */
 export interface QueueItemError {
   /** The machine value, always shown beside the sentence so a person can quote it. */

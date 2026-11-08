@@ -8,7 +8,7 @@ import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { routes, useAddressState } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
-  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueOverviewLine, queueStateCount,
+  QUEUE_STATE_OPTIONS, UpdateTime, canExecute, executionFailure, jobHoldsLease, queueStateCount,
   runWorker, useExecutionQueue,
   useWorkerLookup,
 } from '@/entities/execution';
@@ -17,7 +17,7 @@ import { useCancelRun } from '@/features/cancel-run';
 import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
-import { ComparisonQueueBlock, ExecutionQueue } from '@/widgets/execution-queue';
+import { ComparisonQueueBlock, ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
 import { CostApproval, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
 import type { QueueAddress } from '../model/address';
@@ -233,8 +233,9 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
             {QUEUE_PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
-        {queueOverviewLine(queue.data?.overview) === null ? null : (
-          <span className="am-note" data-queue-overview>{queueOverviewLine(queue.data?.overview)}</span>
+        {/* `UI-B-51`, `UI-B-69`: the original's «Активные / Завершённые / Ошибки» with their counts; a press sets the state filter above. */}
+        {queue.data?.overview === undefined ? null : (
+          <QueueStateStrip overview={queue.data.overview} selected={stateFilter} onSelect={chooseState} />
         )}
         {account.data !== undefined && canExecute(roles, 'pause') && queue.data !== undefined ? (
           <button
