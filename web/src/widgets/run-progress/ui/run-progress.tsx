@@ -83,6 +83,7 @@ import { PdfPrecheckProgress } from './pdf-precheck-progress';
 import { RunLiveLine } from './run-live-line';
 import { RunNextTask } from './run-next-task';
 import { ExtendedReview } from '@/widgets/extended-review';
+import { startedFrom, type StartedFrom } from '../model/started-from';
 
 import {
   StageTable,
@@ -132,7 +133,7 @@ function RunHolder({ runId }: { readonly runId: string }) {
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
 
 /** The original-style rail displays only stages reported or scheduled for this Run. */
-function PipelineRail({ rows }: { readonly rows: readonly StageRow[] }) {
+function PipelineRail({ rows, reused }: { readonly rows: readonly StageRow[]; readonly reused?: ReadonlySet<string> }) {
   return (
     <div className={styles.pipeline} role="list" aria-label="Этапы этого прогона" data-run-pipeline="">
       {rows.map((row, index) => (
@@ -141,14 +142,15 @@ function PipelineRail({ rows }: { readonly rows: readonly StageRow[] }) {
             className={styles.pipelineStage}
             data-pipeline-stage={row.stageId}
             data-pipeline-status={row.status ?? 'not-reported'}
+            {...(reused?.has(row.stageId) ? { 'data-pipeline-reused': '' } : {})}
           >
             <span className={styles.pipelineOrdinal}>{row.ordinal === null ? '—' : String(row.ordinal).padStart(2, '0')}</span>
             <span className={styles.pipelineName}>{runStageLabel(row.stageId)}</span>
             <span className={styles.pipelineStatus}>
               {row.status === null ? 'Не начинался' : <StageStatusBadge status={row.status} errorCode={row.errorCode} />}
             </span>
-            {/* The time the stage took, as the original's status list states it; nothing when an end is missing. */}
-            {elapsedMs(row.startedAt, row.finishedAt) === null ? null : (
+            {/* `R-151i`: a stage taken from the earlier run took no time here; the rail says where it came from instead. */}
+            {reused?.has(row.stageId) ? <span className={styles.pipelineTook}>из прогона</span> : elapsedMs(row.startedAt, row.finishedAt) === null ? null : (
               <span className={styles.pipelineTook} data-pipeline-took={formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}>
                 {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
               </span>
@@ -191,6 +193,22 @@ function V3PublishedSentence({ findingCount }: { readonly findingCount: number |
  * start of v3 (`start_allowed`), so a deployment with one analysis shows no line about the other. Only a standard run asks
  * the server whether v3 is allowed; a v3 run needs no answer.
  */
+/**
+ * `R-151i` («Запущен с этапа N из прогона …»): the earlier run this one took its first stages from, linked. Nothing for a run
+ * that was not started from a stage.
+ */
+function StartedFromFact({ status, from }: { readonly status: RunStatus; readonly from: StartedFrom }) {
+  return (
+    <>
+      <dt>Запущен с этапа</dt>
+      <dd data-run-started-from={from.sourceRunId} data-run-start-stage={from.stageId}>
+        {from.ordinal}. {runStageLabel(from.stageId)} из прогона{' '}
+        <Link href={routes.run(status.project_uid, from.sourceRunId)}><code>{from.sourceRunId}</code></Link>
+      </dd>
+    </>
+  );
+}
+
 function AnalysisFact({ status }: { readonly status: RunStatus }) {
   return runAnalysisKind(status) === 'standard' ? <StandardAnalysisFact status={status} /> : <AnalysisLine status={status} />;
 }
@@ -493,6 +511,7 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
   const preset = runPresetLine(status);
   const waiting = executor === null ? null : runWaitingSentence(executor);
 
+  const from = startedFrom(status);
   const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
   const reviewable = !v3Beta && runHasPublishedResult(status.state, status.analysis_profile_id);
 
@@ -521,7 +540,7 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
         {/* `UI-A-65`: the open run's live line -- the stage it is on and how long it has been going. */}
         {animating ? <RunLiveLine status={status} rows={stageRows(status)} /> : null}
         <div className={styles.headBody}>
-          <PipelineRail rows={stageRows(status)} />
+          <PipelineRail rows={stageRows(status)} {...(from === null ? {} : { reused: from.reusedStageIds })} />
           {reviewable || actions !== undefined ? (
             <div className={styles.headActions}>
               {reviewable ? (
@@ -539,6 +558,15 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
           ) : null}
         </div>
       </section>
+
+      {/* `R-151i`: a run started from a stage says so under its head, with the way back to the run it took the first stages from. */}
+      {from === null ? null : (
+        <p className={styles.caption} data-run-started-from-note={from.stageId}>
+          Запущен с этапа {from.ordinal} «{runStageLabel(from.stageId)}» из прогона{' '}
+          <Link href={routes.run(status.project_uid, from.sourceRunId)}><code>{from.sourceRunId}</code></Link>:
+          результаты предыдущих этапов взяты из него, этот этап и следующие выполнены заново.
+        </p>
+      )}
 
       <Figures status={status} />
 
@@ -561,6 +589,7 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
               </Link>
             </dd>
             <AnalysisFact status={status} />
+            {from === null ? null : <StartedFromFact status={status} from={from} />}
             {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
             {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
             {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}
