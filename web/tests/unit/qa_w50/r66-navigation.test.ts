@@ -473,7 +473,8 @@ describe('R-150b: «Проекты» left the menu, and the selector in the top 
     expect(selector).toContain('data-project-switcher');
     // The frame renders with no router, so its address is unknown and behaves like a global screen:
     // both entries are the project list.
-    expect([...selector.matchAll(/<a [^>]*role="menuitem"[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)].map((m) => [m[1], m[2]])).toEqual([
+    // «Все проекты» is the choice the address makes (it names no project), so it carries the ✓ cell of `D-363` after its words.
+    expect([...selector.matchAll(/<a [^>]*role="menuitem"[^>]*href="([^"]+)"[^>]*>([^<]*)(?:<span class="am-menu__check"[^>]*>[^<]*<\/span>)?<\/a>/g)].map((m) => [m[1], m[2]])).toEqual([
       ['/projects', 'Все проекты'],
       ['/projects', 'Новый проект'],
     ]);

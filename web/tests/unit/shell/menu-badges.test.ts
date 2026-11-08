@@ -421,6 +421,8 @@ describe('the frame reads the counters from the cache entries of the screens the
     const client = newClient();
     frame(client, ADMIN_ONLY);
     const asked: URL[] = [];
+    // The transport refuses to guess a base address; both stubs are undone in the `finally` below.
+    vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', '/bff/v1');
     vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
       asked.push(new URL(String(input), 'http://web.test'));
       return new Response(JSON.stringify(queuePage({ failed: 1 })), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -433,6 +435,7 @@ describe('the frame reads the counters from the cache entries of the screens the
       }
     } finally {
       vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
     }
     const after = Date.now();
     expect(asked).toHaveLength(2);
