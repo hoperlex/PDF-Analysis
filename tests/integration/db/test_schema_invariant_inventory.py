@@ -377,11 +377,11 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1589, "6d99ac225f555b3ab62c914a1eeff7b911cb0ae66846872b0d26f46e1c10533b"),
+    "columns": (1591, "ee448d172f5fac40e5a13c6b8776e79acc8c65186c3307a0fa9effdcbdd695b8"),
     "relations": (148, "2bef8303c7c1cc9481b938e72e8c241fd9b3e391f55d8c3a4fdde713d60e3384"),
-    "constraints": (1953, "5029d0d1f8ed233ae2ca5cfc629a9393a7ca88fd7267a9c45ce546289d47d65d"),
-    "indexes": (465, "2f698084f43e23e76b955bd503b2b696ed5b2893fba57b1bc3bca48b7e1b0037"),
-    "triggers": (246, "d74c3af6c99e6d5fc8f5d06e6ec2f38918b5f8ea6fb5686d5533e5bb6cc1fc36"),
+    "constraints": (1958, "1ef13a8635bdfff535639282d50b940cc5eed4a6c126e8dd1168e71188748396"),
+    "indexes": (466, "d7edaa45e2df7806748f8bd20d7b66e4d9754a7007fb50f56124a6583bf4a5c4"),
+    "triggers": (246, "cbe3f00b3cda2c06e2d7121a39a6a1ad697b3cc0d9a4d32201388bf21d305e55"),
     "functions": (78, "7a6cb03293b17001ec025da83e5bd12aec678cdd9e6ed7b8fd1788bf12549c9b"),
     "views": (5, "c41ad974669882ee5d818591ee1d485b70455ddd4e51d236cc83892d18d11b93"),
     "extensions": (1, "81a067095db43b64056597402d99e045d6deba0c83f1a535889dda45ec7fefb1"),

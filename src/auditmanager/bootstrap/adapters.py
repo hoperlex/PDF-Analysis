@@ -1905,7 +1905,9 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         started_by_user_uid=started_by,
         started_by_label=started_by_label,
         reaudit_of_run_id=run.reaudit_of_run_id,
-        started_from_run_id=run.started_from_run_id, start_stage_id=run.start_stage_id,  # `R-151i`
+        # `R-151i`: both or neither (the database holds the pair). ``getattr`` as for the starter above: a stand-in older
+        # suites hand this reader has neither.
+        started_from_run_id=getattr(run, "started_from_run_id", None), start_stage_id=getattr(run, "start_stage_id", None),
         # `W55A-PIN-01` (R-113). The snapshot the run pinned at creation, from the row;
         # `run_status_body` renders it only when one was pinned.
         norms_snapshot_id=run.norms_snapshot_id,
