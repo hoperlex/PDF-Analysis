@@ -44,6 +44,12 @@
   color: var(--am-ink-muted);
 }
 
+/* `UI-A-10`: the audit figures of a project take a line under its name and date, the width of the row; their colours are the badges'. */
+.projectFigures {
+  flex: 1 0 100%;
+  min-width: 0;
+}
+
 /* The four figures as a label and its number on one line each (they were a label over a 32px number). */
 .figures {
   display: grid;
