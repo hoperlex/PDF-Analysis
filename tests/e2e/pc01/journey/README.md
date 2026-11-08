@@ -414,6 +414,19 @@ node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 3
 node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --state confirmed_pair --out <dir>
 ```
 
+A route may also DECLARE a refusal the screen is known to meet in a state the walk holds (`optional_api` entry with `"refusal": true` and
+`"expect_status"`): the stage catalog with a confirmed pair asks for the pair's sheet map before any map exists and is answered
+`404 not_found` (`D-420`). Only that call with only that status is let through; the same call answering 500 is still a finding.
+The walk prefers the identity its own write half (or `--seed`) made to the first link a page renders (`pickFollowed`), because after
+the stage steps the project holds four more documents and the first document link is a stage document that never had a run; a page
+that does not offer the journey's own identity is a finding. A run that used `--seed` is `PARTIAL` (exit 3).
+
+Measured 2026-11-09, lane J2, on the 0.18.2 tree, one `LANE_C4=1` stand (`local-stand.sh`), after `--phase write --steps create-project,
+upload-document,classify-version,start-run,cmp-stage-upload,cmp-stage-assembly` (6 of 6 green, 35 s) with `--seed` of its captured
+identities: 35 of 35 routes clean, with 0 findings, 0 console errors, 0 page errors and 0 React #418, at 1280, at 390 px, at 390 px
+with dispatch paused and at 1280 px with dispatch paused; `confirmed_pair` reached on `stage-compare`; each walk takes about 45 s
+(a cold browser per route). Before the fix of «Оптимизация разделов» the 390 px walk read 31 of 35 (409 px on that route).
+
 `walk-options.mjs` holds the pure rules (the dimension parser, the viewport, the address query, the state expression and the
 paused-strip verdict) and `dispatch.mjs` the pause; `walk-options.test.mjs` and `dispatch.test.mjs` (`node --test`) hold them without a
 browser, and `test_pc01_journey_conformance.py` runs both and reads the manifest's `query` and `read_state` against `web/src`.
