@@ -14,13 +14,28 @@
 
 import { QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { createElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // React Query decides once, when it is loaded, whether it runs on a server (no `window`) and, if so, never schedules a refetch
 // interval. The polling cases below need the intervals, so a `window` exists before the library is imported; it has no document,
 // so nothing that looks for a DOM finds one, and `mountLive` puts back what it finds.
-vi.hoisted(() => {
-  (globalThis as { window?: unknown }).window = { addEventListener: () => undefined, removeEventListener: () => undefined };
+// The whole battery runs in one fork (`vitest.config.ts`: `singleFork`), so `globalThis` is shared between test files: what
+// this file puts there it takes back after its last test (`afterAll` below), and what an earlier file left there (a `document`
+// whose `visibilityState` would make React Query treat the tab as hidden) is set aside for the duration of this file.
+const leftBefore = vi.hoisted(() => {
+  const holder = globalThis as { window?: unknown; document?: unknown };
+  const before = { window: holder.window, document: holder.document, hadWindow: 'window' in holder, hadDocument: 'document' in holder };
+  holder.window = { addEventListener: () => undefined, removeEventListener: () => undefined };
+  delete holder.document;
+  return before;
+});
+
+afterAll(() => {
+  const holder = globalThis as { window?: unknown; document?: unknown };
+  if (leftBefore.hadWindow) holder.window = leftBefore.window;
+  else delete holder.window;
+  if (leftBefore.hadDocument) holder.document = leftBefore.document;
+  else delete holder.document;
 });
 
 vi.mock('@/shared/api', async (importOriginal) => ({
