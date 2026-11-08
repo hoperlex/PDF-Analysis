@@ -1721,6 +1721,8 @@ export function screens(): Screen[] {
         ]),
         selectedFindingUid: FINDING_UID,
         onSelect: noop,
+        // `UI-A-74`: the count of the portal blocks beside the number, for the one finding the run's links name.
+        blockCountOf: (findingUid: string) => (findingUid === FINDING_UID ? 3 : undefined),
         renderRowActions: (row: { readonly current_verdict: Verdict }) =>
           createElement(FindingRowActions, {
             verdict: row.current_verdict, sending: null, note: null, onAccept: noop, onReject: noop,

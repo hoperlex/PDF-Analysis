@@ -106,6 +106,16 @@
   font-size: var(--am-text-xs);
 }
 
+/* The blocks that hold the finding's evidence: a count under the number, as the original's beside the ID. */
+.blocks {
+  display: block;
+  margin-top: var(--am-gap-xs);
+  color: var(--am-ink-muted);
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-xs);
+  white-space: nowrap;
+}
+
 .severity {
   text-align: center;
 }
