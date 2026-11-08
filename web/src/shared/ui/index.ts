@@ -43,7 +43,7 @@ export { FEATHER_SOURCE, ICON_NAMES, Icon } from './icon';
  * navigation groups, the stacked menu and the account menu. Each takes labels, links, items,
  * initials and a colour key — never a session, a query or a registry row.
  */
-export type { DisclosureLink, DisclosureProps } from './disclosure';
+export type { DisclosureBadge, DisclosureLink, DisclosureProps } from './disclosure';
 export { Disclosure } from './disclosure';
 export type { DisclosureEvent, DisclosureFocus, DisclosureTransition } from './disclosure-state';
 export { disclosureTransition } from './disclosure-state';

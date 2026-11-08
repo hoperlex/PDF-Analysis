@@ -656,14 +656,20 @@ describe('this slice adds no second polling loop', () => {
     const text = code(named[0]!);
     // No schedule of its own: React Query owns it and the policy function answers "how long?".
     expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchInterval|refetchIntervalInBackground/);
-    // Two queries spell the spread (the knowledge base's total and the pending registrations), each also re-reading on the tab's return.
-    expect(spreadsIn(text)).toBe(2);
-    expect(text.match(/refetchOnWindowFocus:\s*'always'/g) ?? []).toHaveLength(2);
-    // The third counter is the entity's own queue read, so the screen and the menu are one answer and one cadence.
-    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(\{\s*\.\.\.queueQueryOptions\(\),\s*enabled:\s*sources\.has\('queue'\)\s*\}\)/);
+    // Three places spell the spread: the knowledge base's total, the pending registrations and `queueCountOptions`, the one
+    // helper that both queue counters (the whole history, the last day) are built by; each also re-reads on the tab's return.
+    expect(spreadsIn(text)).toBe(3);
+    expect(text.match(/refetchOnWindowFocus:\s*'always'/g) ?? []).toHaveLength(3);
+    // The queue counters read one row each (`D-350`), through that helper, and are not the queue screen's own page of 25.
+    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\('all',\s*sources\.has\('queue'\)\)\)/);
+    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\('last-day',\s*sources\.has\('queue'\)\)\)/);
+    expect(text).toMatch(/QUEUE_PROBE\s*=\s*\{\s*limit:\s*1\s*\}/);
+    expect(text).not.toMatch(/queueQueryOptions/);
     // Every counter is read only for a session whose menu holds the item it feeds.
-    expect(text.match(/enabled:\s*sources\.has\('(?:queue|knowledge-base|registrations)'\)/g) ?? []).toHaveLength(3);
-    // The reads are the three list operations and none of them is the run endpoint.
+    expect(text.match(/enabled:\s*sources\.has\('(?:knowledge-base|registrations)'\)/g) ?? []).toHaveLength(2);
+    expect(text.match(/sources\.has\('queue'\)/g) ?? []).toHaveLength(2);
+    // The reads are list operations and none of them is the run endpoint.
+    expect(text).toMatch(/listExecutionQueue/);
     expect(text).toMatch(/listKnowledgeBaseEntries/);
     expect(text).toMatch(/listRegistrations/);
     expect(text).not.toMatch(/getRunStatus|pollRunStatus|listRuns/);
@@ -674,6 +680,8 @@ describe('this slice adds no second polling loop', () => {
     expect(/refetchInterval/.test(own)).toBe(true);
     const ungated = "useQuery({ queryKey, queryFn, ...OPERATIONAL_LIST_POLL })";
     expect(ungated.match(/enabled:\s*sources\.has\('(?:queue|knowledge-base|registrations)'\)/g) ?? []).toHaveLength(0);
+    // A queue counter built without the helper is not the shape this guard names.
+    expect(/useQuery<ExecutionQueuePage>\(queueCountOptions\('all',\s*sources\.has\('queue'\)\)\)/.test('useQuery<ExecutionQueuePage>({ ...queueQueryOptions(), enabled: true })')).toBe(false);
     expect(spreadsIn(ungated)).toBe(1);
   });
 

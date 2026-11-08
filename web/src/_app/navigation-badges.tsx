@@ -7,8 +7,8 @@
  *
  * `BadgedLinks` is the group's list when some of its items carry a badge. The shared `Disclosure` takes links as
  * `{ href, label, icon, current }` and has no place for a counter, so a group with one hands it this list as its
- * content instead, in the very markup `DisclosureView` draws for links. If `Disclosure` ever learns a badge slot, this
- * list is the thing to delete.
+ * content instead, in the very markup `DisclosureView` draws for links. (The `badge` slot `Disclosure` has since learnt is
+ * on a group's own button, `D-360`; a link in `links` still has no place for a counter, so this list stays.)
  */
 
 import Link from 'next/link';

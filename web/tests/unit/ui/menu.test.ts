@@ -314,3 +314,78 @@ describe('menuTransition: closing, and where focus goes', () => {
     ]);
   });
 });
+
+// ===================================================================== D-363: the current item
+
+describe('D-363: a link item can say it is the choice made', () => {
+  const CHOICES: readonly [MenuItem, ...MenuItem[]] = [
+    { kind: 'link', label: 'Мост через Неву', href: '/a', current: false },
+    { kind: 'link', label: 'Школа №7', href: '/b', current: true },
+    { kind: 'link', label: 'Все проекты', href: '/c', current: false },
+    { kind: 'link', label: 'Новый проект', href: '/n' },
+    { kind: 'action', label: 'Повторить загрузку' },
+  ];
+  const draw = (items: readonly [MenuItem, ...MenuItem[]]): string =>
+    renderToStaticMarkup(createElement(MenuView, { ...PROPS, items, state: OPEN, triggerId: 'sw-trigger', menuId: 'sw-menu' }));
+
+  const entries = (markup: string): Element[] => tree(markup).filter((el) => el.attrs.get('role') === 'menuitem');
+  const checkCells = (markup: string): Element[] => tree(markup).filter((el) => el.attrs.get('class') === 'am-menu__check');
+
+  it('marks the current link aria-current="true" and no other item', () => {
+    const marked = entries(draw(CHOICES)).filter((el) => el.attrs.has('aria-current'));
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.attrs.get('aria-current')).toBe('true');
+    expect(marked[0]?.attrs.get('href')).toBe('/b');
+    // It is still a menu item that navigates: the role and the roving tabindex are untouched.
+    for (const entry of entries(draw(CHOICES))) {
+      expect(entry.attrs.get('role')).toBe('menuitem');
+      expect(entry.attrs.get('tabindex')).toBe('-1');
+    }
+  });
+
+  it('draws the ✓ cell on every flagged link, empty on the choices not made, so the column keeps its place', () => {
+    const markup = draw(CHOICES);
+    const cells = checkCells(markup);
+    expect(cells).toHaveLength(3);
+    for (const cell of cells) expect(cell.attrs.get('aria-hidden')).toBe('true');
+    expect(markup.match(/<span class="am-menu__check" aria-hidden="true">([^<]*)<\/span>/g)).toEqual([
+      '<span class="am-menu__check" aria-hidden="true"></span>',
+      '<span class="am-menu__check" aria-hidden="true">\u2713</span>',
+      '<span class="am-menu__check" aria-hidden="true"></span>',
+    ]);
+  });
+
+  it('puts no cell and no attribute on a link that is not a choice, or on an action', () => {
+    const [, , , plain, action] = entries(draw(CHOICES));
+    expect(plain?.attrs.get('href')).toBe('/n');
+    expect(plain?.attrs.has('aria-current')).toBe(false);
+    expect(action?.tag).toBe('button');
+    expect(action?.attrs.has('aria-current')).toBe(false);
+    expect(draw(CHOICES).match(/am-menu__check/g)).toHaveLength(3);
+  });
+
+  it('leaves the label as the item\'s text: the mark is hidden from assistive technology and adds no word to the name', () => {
+    const markup = draw(CHOICES);
+    expect(markup).toContain('>Школа №7<span class="am-menu__check" aria-hidden="true">\u2713</span></a>');
+    expect(markup).toContain('>Мост через Неву<span class="am-menu__check"');
+  });
+
+  it('is the markup it always was for items that carry no flag, and an undefined flag is no flag', () => {
+    const plain = draw(ITEMS);
+    expect(plain).not.toContain('am-menu__check');
+    expect(plain).not.toContain('aria-current');
+    const undefinedFlag: readonly [MenuItem, ...MenuItem[]] = [
+      { kind: 'link', label: 'Профиль', href: '/account', current: undefined },
+      { kind: 'link', label: 'Сменить пароль', href: '/account/password', current: undefined },
+      { kind: 'action', label: 'История версий' },
+      { kind: 'submit', label: 'Выйти', action: '/bff/v1/session/end' },
+    ];
+    expect(draw(undefinedFlag)).toBe(plain);
+    expect(island()).not.toContain('am-menu__check');
+  });
+
+  it('can fail: a flag set to true on every link would mark them all, which the one-current check above would see', () => {
+    const everyone = CHOICES.map((item) => (item.kind === 'link' ? { ...item, current: true } : item)) as unknown as readonly [MenuItem, ...MenuItem[]];
+    expect(entries(draw(everyone)).filter((el) => el.attrs.has('aria-current'))).toHaveLength(4);
+  });
+});

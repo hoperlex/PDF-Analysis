@@ -18,6 +18,13 @@
  *
  * It takes labels and links, never a session or a registry row: which groups a role sees,
  * which item is current, and the addresses themselves are `W50-SHELL-FRAME`'s to decide.
+ *
+ * ## The badge slot (`D-360`)
+ *
+ * A group's own button may carry a counter beside its name, so the figure is seen while the group is closed. The caller
+ * hands over what is drawn (`content`, styled by the caller, which `Disclosure` never inspects) and, in words, what the
+ * figure counts (`label`): the button's accessible name becomes `label. badge.label`, since a number that stands in a
+ * button's content is read as part of its name. Without a `badge` the markup is exactly what it was.
  */
 
 import Link from 'next/link';
@@ -36,9 +43,19 @@ export interface DisclosureLink {
   readonly current?: boolean | undefined;
 }
 
+/** A counter on a group's button: what is drawn and what it counts. */
+export interface DisclosureBadge {
+  /** Drawn at the button's right end, between the name and the chevron. The caller styles it. */
+  readonly content: ReactNode;
+  /** What the figure counts, as a sentence; it follows the group's name in the button's accessible name. */
+  readonly label: string;
+}
+
 interface DisclosureCommonProps {
   /** The button's text: the group's name. */
   readonly label: string;
+  /** `D-360`: a counter beside the name, visible while the group is closed. Absent: none. */
+  readonly badge?: DisclosureBadge | undefined;
   /** The group holds the current page: the button carries `aria-current="true"`. */
   readonly current?: boolean | undefined;
   /**
@@ -83,7 +100,7 @@ export type DisclosureViewProps = DisclosureProps & {
 };
 
 export function DisclosureView(props: DisclosureViewProps) {
-  const { label, current, layout, align, open, panelId, bindings } = props;
+  const { label, badge, current, layout, align, open, panelId, bindings } = props;
   const rootClass = [
     'am-disclosure',
     layout === 'inline' ? 'am-disclosure--inline' : null,
@@ -101,9 +118,11 @@ export function DisclosureView(props: DisclosureViewProps) {
         aria-expanded={open}
         aria-controls={panelId}
         aria-current={current === true ? 'true' : undefined}
+        aria-label={badge === undefined ? undefined : `${label}. ${badge.label}`}
         onClick={bindings?.onToggle}
       >
         {label}
+        {badge?.content}
       </button>
       <div
         className="am-disclosure__panel"
