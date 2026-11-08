@@ -1344,8 +1344,14 @@ input[type='file']::file-selector-button:hover {
   margin: 0;
 }
 
+/*
+ * A row is a flex line so that an item may carry a trailing cell (`am-menu__check`, `D-363`); an item without one is a single
+ * run of text, which a flex line draws as a block does.
+ */
 .am-menu__item {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: var(--am-gap-sm);
   width: 100%;
   padding: var(--am-gap-xs) var(--am-gap-md);
   border: 0;
@@ -1367,6 +1373,18 @@ input[type='file']::file-selector-button:hover {
 .am-menu__item:focus-visible {
   outline: 2px solid var(--am-accent);
   outline-offset: -2px;
+}
+
+/*
+ * `D-363`, `D-396`: the mark of the choice made, as a column at the row's right end. The cell is drawn on every choice (empty on
+ * the others) so the column keeps its place and the labels wrap the same on every row.
+ */
+.am-menu__check {
+  flex: 0 0 1.2ch;
+  margin-left: auto;
+  color: var(--am-accent-strong);
+  font-weight: 650;
+  text-align: right;
 }
 
 .am-avatar {
