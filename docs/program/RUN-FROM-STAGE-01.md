@@ -66,9 +66,10 @@ key (source+stage) is derived on the server: the owner may legitimately want the
    with a link to the source, marks the reused stages «из прогона …», and offers «Запустить с этапа» beside «Повторить прогон»
    (dialog: choose a stage, see the reused and computed stages, the estimate for the computed ones, consent, start).
 
-## Not decided here (debt)
+## Not done here (debt)
 
-Whether a stage output may be taken from a source whose consent differs in more than the `extended-review-v3` flag is not
-needed (no other consent field reaches the early stages) and is guarded by `source_stage_version_changed`. Reuse for the
-original's later stages (blocks analysis, critic, corrector, norms verification, optimisation) waits for those stages to be
-scheduled by PC-01. A journal event for the reuse is not written (the run's frozen columns are the durable record).
+`D-410` the two decisions above are the lane's and stand until the owner rules; `D-411` only the PC-01 chain is startable (the
+original's later stages are not scheduled by PC-01); `D-412` no browser walk of the dialog, and the details table still reads
+«0 с» for a reused stage; `D-413` the reuse writes no journal line (the run's frozen columns and its reused rows are the record);
+`D-414` migration `0060` is written on `0058` beside lane M1's `0059` and is chained, with the pins that move with the head, by
+the integrator.
