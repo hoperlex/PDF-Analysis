@@ -224,7 +224,7 @@
 
 /* A project's code is the matrix's entrance: a 24 px target (it was 18.5). */
 .open {
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   padding: 0;
   border: 0;
   background: transparent;
@@ -244,7 +244,7 @@
 }
 
 .sortButton {
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   padding: 0;
   border: 0;
   background: transparent;
@@ -300,7 +300,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--am-gap-xs);
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   margin: 0;
   padding: 0;
   border: 0;
@@ -636,8 +636,8 @@
   position: absolute;
   top: 0;
   right: 0;
-  min-width: var(--am-gap-lg);
-  min-height: var(--am-gap-lg);
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
   padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);

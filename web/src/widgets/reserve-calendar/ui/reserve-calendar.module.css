@@ -36,7 +36,7 @@
 /* The date fields were 21.3 px tall: 24 px at the least (WCAG 2.5.8). */
 .start input,
 .selection input {
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
 }
 
 .selection {
@@ -172,7 +172,7 @@
 
 /* «Передать сюда» was 19 px tall: 24 px at the least. */
 .assign {
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   margin: calc(var(--am-gap-xs) * 0.75) 0 0 calc(var(--am-gap-lg) + var(--am-gap-xs));
   padding: 0 calc(var(--am-gap-sm) * 0.75);
   border: 1px dashed var(--am-accent);

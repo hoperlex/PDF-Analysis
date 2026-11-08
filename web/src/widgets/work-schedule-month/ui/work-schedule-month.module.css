@@ -226,7 +226,7 @@
 
 .dayToggle {
   width: 100%;
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   margin: 0;
   padding: 0;
   border: 1px dashed var(--am-line-strong);
@@ -329,8 +329,8 @@
 
 /* «+N»: a 24 x 24 px target at the least (it was 20 x 17). */
 .more {
-  min-width: var(--am-gap-lg);
-  min-height: var(--am-gap-lg);
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
   margin: 0;
   padding: 0 var(--am-gap-xs);
   border: 0;

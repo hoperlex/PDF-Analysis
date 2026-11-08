@@ -121,8 +121,8 @@
 }
 
 .allToggle button {
-  min-width: var(--am-gap-lg);
-  min-height: var(--am-gap-lg);
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
   padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius-sm);
@@ -161,7 +161,7 @@
   align-content: center;
   align-items: baseline;
   gap: var(--am-gap-xs);
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   margin: 0;
   padding: 0;
   border: 0;

@@ -66,8 +66,8 @@
 
 /* The × that removes a tag: a 24 x 24 px target (it was 7.8 x 15). */
 .tagRemove {
-  min-width: var(--am-gap-lg);
-  min-height: var(--am-gap-lg);
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
   padding: 0;
   border: 0;
   background: transparent;

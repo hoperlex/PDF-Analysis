@@ -68,7 +68,7 @@
 }
 
 .rowButton {
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
@@ -171,8 +171,8 @@ a.arrow:hover,
   position: relative;
   z-index: 1;
   /* A 24 x 24 px target centred on the arrow's 16 px (12 px on a phone) track; the row's padding holds the difference. */
-  min-width: var(--am-gap-lg);
-  min-height: var(--am-gap-lg);
+  min-width: var(--am-target-min);
+  min-height: var(--am-target-min);
   justify-self: center;
   padding: 0;
   border: 0;

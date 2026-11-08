@@ -33,11 +33,10 @@ function declarations(css: string, selector: string): ReadonlyMap<string, string
 }
 
 /**
- * The one minimum a row's control may declare: 24 px, the WCAG 2.5.8 target size (`--am-gap-lg` is the 24 px token; the
- * stylesheet has no target token of its own). Any other `min-height` is a row height fixed in CSS, which is what the
- * dense overview gave up.
+ * The one minimum a row's control may declare: 24 px, the WCAG 2.5.8 target size (`--am-target-min`). Any other
+ * `min-height` is a row height fixed in CSS, which is what the dense overview gave up.
  */
-const TARGET_FLOOR = 'var(--am-gap-lg)';
+const TARGET_FLOOR = 'var(--am-target-min)';
 
 /** The rules of a stylesheet that declare a `min-height` other than the target floor. */
 function fixedHeights(css: string) {
@@ -87,7 +86,7 @@ describe('the dashboard opens on its table', () => {
   });
 
   it('can fail: a fixed row height is reported, the 24 px target floor is not', () => {
-    const css = '.a { min-height: 44px; }\n.b { min-height: var(--am-gap-lg); }\n.c { padding: 0; }\n.d, .e { min-height: 3rem; }';
+    const css = '.a { min-height: 44px; }\n.b { min-height: var(--am-target-min); }\n.c { padding: 0; }\n.d, .e { min-height: 3rem; }';
     expect(fixedHeights(css).map((rule) => rule.selector)).toEqual(['.a', '.d, .e']);
   });
 

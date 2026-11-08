@@ -249,7 +249,7 @@
 .slider {
   flex: 1 1 12rem;
   min-width: 8rem;
-  min-height: var(--am-gap-lg);
+  min-height: var(--am-target-min);
   accent-color: var(--am-accent);
 }
 
