@@ -19,10 +19,15 @@ export const INCOMPLETE_SNAPSHOT_ID = 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8C';
 export const UNBOUND_SNAPSHOT_ID = 'ns_01J9ZQ8K7NHVXW3T2R5M6P4Q8E';
 export const ADMIN_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F';
 
+/*
+ * A content key is a 64-character digest whose first twelve characters are digits here: the screen shows that
+ * prefix alone (`shortSnapshotKey`), and the language guard masks a whole digest, not a prefix of one, so a prefix
+ * with letters would read as a Latin word.
+ */
 export function normSnapshot(over: Partial<NormSnapshot> = {}): NormSnapshot {
   return {
     norms_snapshot_id: CURRENT_SNAPSHOT_ID,
-    content_key: '6d53674f688f9eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f',
+    content_key: '6153674868819eecd9c7cf3a0eaa391ca2baa751008eeec23c65121ac94bd31f',
     document_count: 674,
     paragraph_count: 191204,
     unreliable_count: 312,
@@ -39,13 +44,13 @@ export const NORM_SNAPSHOTS: readonly NormSnapshot[] = [
   normSnapshot(),
   normSnapshot({
     norms_snapshot_id: QUALIFIED_SNAPSHOT_ID,
-    content_key: '1f0e9d8c7b6a5948b726150413021100aabbccddeeff00112233445566778899',
+    content_key: '1020938070605948b726150413021100aabbccddeeff00112233445566778899',
     current: false,
     created_at: '2026-10-11T08:00:00Z',
   }),
   normSnapshot({
     norms_snapshot_id: INCOMPLETE_SNAPSHOT_ID,
-    content_key: '2f0e9d8c7b6a5948b726150413021100aabbccddeeff00112233445566778899',
+    content_key: '2020938070605948b726150413021100aabbccddeeff00112233445566778899',
     current: false,
     qualified: false,
     build_state: 'incomplete',
@@ -53,7 +58,7 @@ export const NORM_SNAPSHOTS: readonly NormSnapshot[] = [
   }),
   normSnapshot({
     norms_snapshot_id: UNBOUND_SNAPSHOT_ID,
-    content_key: '3f0e9d8c7b6a5948b726150413021100aabbccddeeff00112233445566778899',
+    content_key: '3020938070605948b726150413021100aabbccddeeff00112233445566778899',
     current: false,
     qualified: false,
     created_at: '2026-10-12T09:00:00Z',

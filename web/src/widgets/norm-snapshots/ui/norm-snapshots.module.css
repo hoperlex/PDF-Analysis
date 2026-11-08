@@ -8,23 +8,58 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--am-gap-sm);
+  gap: var(--am-gap-xs);
 }
 
-.row {
+.row,
+.event {
   min-width: 0;
   max-width: 100%;
-  padding: var(--am-gap-sm);
+  margin: 0;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
   border: 1px solid var(--am-line-strong);
-  border-radius: var(--am-radius);
+  border-radius: var(--am-radius-sm);
   overflow-wrap: anywhere;
 }
 
 .row p {
-  margin: 0 0 var(--am-gap-xs);
+  margin: 0;
 }
 
-.row code {
+.row code,
+.event code {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* The snapshot and its date, with the one control pushed to the end of the line; they wrap on a phone. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin-bottom: var(--am-gap-2xs);
+}
+
+.title {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.when {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+/* One designation on one line: when, what changed, who did it; it wraps under itself when the line is short. */
+.event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-2xs) var(--am-gap);
+}
+
+.change {
+  flex: 1 1 20rem;
+  min-width: 0;
 }

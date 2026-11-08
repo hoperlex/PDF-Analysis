@@ -58,12 +58,12 @@ export function GroupCard({ group, connections, candidates, pinnedModels, canMan
   const total = capacity.data === undefined ? null : groupCapacitySentence(capacity.data);
 
   return (
-    <li className="am-state" data-group-state={archived ? 'archived' : 'active'}>
+    <li className={`am-state ${styles.card}`} data-group-state={archived ? 'archived' : 'active'}>
       <p className="am-state__title">
         <strong data-group-name>{group.display_name}</strong> · {archived ? 'в архиве' : 'действует'} · версия{' '}
         {revision.revision_no}
       </p>
-      <div className="am-state__detail">
+      <div className={`am-state__detail ${styles.detail}`}>
         <p data-group-model>
           Модель «{revision.pin_id}», имя на шлюзе «{revision.gateway_model}». {BILLING_LABELS[revision.billing]}
           {revision.billing === 'metered'
@@ -106,7 +106,7 @@ export function GroupCard({ group, connections, candidates, pinnedModels, canMan
           })}
         </ul>
 
-        <p>
+        <p className={`am-form__hint ${styles.created}`}>
           Создана <time dateTime={group.created_at}>{formatInstant(group.created_at)}</time>
           {archived && group.archived_at !== undefined
             ? <>, убрана в архив <time dateTime={group.archived_at}>{formatInstant(group.archived_at)}</time></>
@@ -115,13 +115,13 @@ export function GroupCard({ group, connections, candidates, pinnedModels, canMan
         </p>
 
         {canManage && !archived ? (
-          <>
-            <details data-group-revise>
+          <div className={styles.actions}>
+            <details data-group-revise className={styles.revise}>
               <summary>Новая версия</summary>
               <GroupForm group={group} candidates={candidates} pinnedModels={pinnedModels} />
             </details>
             <ArchiveGroupControl group={group} />
-          </>
+          </div>
         ) : null}
       </div>
     </li>

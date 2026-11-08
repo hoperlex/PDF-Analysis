@@ -50,11 +50,11 @@ export function ArchiveControl({ connectionId, name }: ArchiveControlProps) {
             Архивировать подключение «{name}»? Его нельзя будет проверить, назначить или дополнить
             ключом. Подключение, на которое ещё указывает назначение, архивировать нельзя.
           </p>
-          <button className="am-button" type="button" disabled={archive.isPending} onClick={() => void confirm()}>
+          <button className="am-button am-button--small" type="button" disabled={archive.isPending} onClick={() => void confirm()}>
             {failure?.kind === 'unknown_outcome' ? 'Повторить с тем же ключом' : 'Подтвердить архивирование'}
           </button>{' '}
           <button
-            className="am-button am-button--quiet"
+            className="am-button am-button--quiet am-button--small"
             type="button"
             disabled={archive.isPending}
             onClick={() => { setAsking(false); setFailure(null); keys.release(); }}
@@ -63,7 +63,7 @@ export function ArchiveControl({ connectionId, name }: ArchiveControlProps) {
           </button>
         </div>
       ) : (
-        <button className="am-button am-button--quiet" type="button" onClick={() => setAsking(true)}>
+        <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setAsking(true)}>
           Архивировать
         </button>
       )}

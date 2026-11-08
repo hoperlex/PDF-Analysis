@@ -43,7 +43,8 @@ function GroupCell({ row, mode }: { readonly row: RuleRow; readonly mode: Execut
 
 export function RulesTable({ rows, mode }: RulesTableProps) {
   return (
-    <div className={styles.tableWrap}>
+    // A table wider than its box scrolls inside it, and Tab reaches the box.
+    <div className={styles.tableWrap} role="region" aria-label="Правила по видам работы, таблица" tabIndex={0}>
       <table data-rules-table={rows.length}>
         <caption>Правила: какая группа принимает работу каждого вида</caption>
         <thead>

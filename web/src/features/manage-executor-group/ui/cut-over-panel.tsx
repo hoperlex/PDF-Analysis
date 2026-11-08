@@ -73,7 +73,8 @@ function PreviewTable({
 }: { readonly preview: ExecutorRoutingPreview; readonly connections: readonly ExecutorConnection[] }) {
   const items = previewItems(preview);
   return (
-    <div className={styles.previewWrap}>
+    // A table wider than its box scrolls inside it, and Tab reaches the box.
+    <div className={styles.previewWrap} role="region" aria-label="Предложение перехода, таблица" tabIndex={0}>
       <table data-cut-over-preview={items.length}>
         <caption>Предложение: что станет с назначением каждого вида работы</caption>
         <thead>

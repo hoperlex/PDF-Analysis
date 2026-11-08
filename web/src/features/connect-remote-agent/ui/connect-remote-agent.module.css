@@ -38,19 +38,36 @@
   margin: 0;
 }
 
+/* The path of an agent is seven short steps: each is one line, its badge and name, then its sentence. */
 .steps {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--am-gap);
+  gap: var(--am-gap-xs);
 }
 
 .step {
   min-width: 0;
-  display: grid;
-  gap: var(--am-gap-xs);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--am-gap-2xs) var(--am-gap-sm);
   overflow-wrap: anywhere;
+}
+
+/* The sentence shares the line of its badge while there is room; a list or guidance under a step takes its own row. */
+.step > p {
+  flex: 1 1 18rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.step > ul,
+.step > div,
+.step > section {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 .stepHead {

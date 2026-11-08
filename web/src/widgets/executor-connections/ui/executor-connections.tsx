@@ -54,6 +54,19 @@ export interface ExecutorConnectionsProps {
   readonly secretForm?: ReactNode | undefined;
 }
 
+/** The newest changes shown in the open; the rest of the ten are one click away. */
+const VISIBLE_CHANGES = 3;
+
+function ChangeLine({ change }: { readonly change: ReturnType<typeof recentChanges>[number] }) {
+  return (
+    <li>
+      <time dateTime={change.at}>{formatInstant(change.at)}</time>: {CHANGE_LABELS[change.kind]} «{change.subject}»
+      {change.revisionNo !== null ? `, версия ${change.revisionNo}` : ''}
+      {change.by !== null ? <>, автор <code>{change.by}</code></> : null}
+    </li>
+  );
+}
+
 function ChangesNotice({ changes }: { readonly changes: ReturnType<typeof recentChanges> }) {
   if (changes.length === 0) {
     return (
@@ -69,14 +82,18 @@ function ChangesNotice({ changes }: { readonly changes: ReturnType<typeof recent
         Проверьте, что это сделали вы или ваши коллеги: подмену адреса подключения проще всего заметить здесь.
       </p>
       <ul>
-        {changes.slice(0, 10).map((change, index) => (
-          <li key={`${change.kind}-${change.at}-${index}`}>
-            <time dateTime={change.at}>{formatInstant(change.at)}</time>: {CHANGE_LABELS[change.kind]} «{change.subject}»
-            {change.revisionNo !== null ? `, версия ${change.revisionNo}` : ''}
-            {change.by !== null ? <>, автор <code>{change.by}</code></> : null}
-          </li>
-        ))}
+        {changes.slice(0, VISIBLE_CHANGES).map((change, index) => <ChangeLine key={`${change.kind}-${change.at}-${index}`} change={change} />)}
       </ul>
+      {changes.length > VISIBLE_CHANGES ? (
+        <details className={styles.moreChanges} data-executor-changes-more={Math.min(changes.length, 10) - VISIBLE_CHANGES}>
+          <summary>Ещё изменений: {Math.min(changes.length, 10) - VISIBLE_CHANGES}</summary>
+          <ul>
+            {changes.slice(VISIBLE_CHANGES, 10).map((change, index) => (
+              <ChangeLine key={`${change.kind}-${change.at}-${index + VISIBLE_CHANGES}`} change={change} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {changes.length > 10 ? <p>Показаны десять последних.</p> : null}
     </section>
   );

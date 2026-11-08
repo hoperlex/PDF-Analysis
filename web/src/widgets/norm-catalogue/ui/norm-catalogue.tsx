@@ -66,6 +66,7 @@ export interface NormCatalogueFormProps {
 }
 
 export function NormCatalogueForm({ query, kind, kinds, disabled }: NormCatalogueFormProps) {
+  const filtered = query !== null || kind !== null;
   return (
     <form
       className={`am-form ${styles.filters}`}
@@ -75,8 +76,8 @@ export function NormCatalogueForm({ query, kind, kinds, disabled }: NormCatalogu
       aria-label="Отбор документов каталога"
     >
       <input type="hidden" name="view" value={CATALOGUE_VIEW} />
-      <div className="am-form__field">
-        <label htmlFor="norms-catalogue-query"><strong>Обозначение или название</strong></label>
+      <div className={styles.filter}>
+        <label htmlFor="norms-catalogue-query">Обозначение или название</label>
         <input
           id="norms-catalogue-query"
           name={CATALOGUE_QUERY_PARAM}
@@ -88,8 +89,8 @@ export function NormCatalogueForm({ query, kind, kinds, disabled }: NormCatalogu
           placeholder="СП 54.13330 или 24.04.2013"
         />
       </div>
-      <div className="am-form__field">
-        <label htmlFor="norms-catalogue-kind"><strong>Вид документа</strong></label>
+      <div className={styles.filter}>
+        <label htmlFor="norms-catalogue-kind">Вид документа</label>
         <select id="norms-catalogue-kind" name={CATALOGUE_KIND_PARAM} defaultValue={kind ?? ''} disabled={disabled}>
           <option value="">Все виды</option>
           {kinds.map((item) => (
@@ -101,6 +102,11 @@ export function NormCatalogueForm({ query, kind, kinds, disabled }: NormCatalogu
         </select>
       </div>
       <button type="submit" className="am-button" disabled={disabled}>Показать</button>
+      {filtered ? (
+        <Link className="am-button am-button--quiet" href={catalogueAddress()} data-norm-catalogue-reset="">
+          Сбросить фильтры
+        </Link>
+      ) : null}
     </form>
   );
 }
@@ -138,19 +144,34 @@ export function NormCatalogueTable({ items, total, filtered, onFirst, onNext }: 
       <EmptyState
         title={filtered ? 'Под этот отбор документов нет' : 'В текущем снимке нет документов'}
         detail={filtered ? 'Измените обозначение, название или вид документа.' : 'Каталог пуст.'}
+        action={filtered ? (
+          <Link className="am-button am-button--quiet am-button--small" href={catalogueAddress()} data-norm-catalogue-reset="">
+            Сбросить фильтры
+          </Link>
+        ) : undefined}
       />
     );
   }
   const attribution = items[0]?.source_attribution;
   return (
     <section aria-label="Каталог нормативных документов" data-norm-catalogue={items.length}>
-      <p role="status" className="am-note" data-norm-catalogue-total={total}>
+      <p role="status" className={styles.total} data-norm-catalogue-total={total}>
         Документов {filtered ? 'под отбор' : 'в текущем снимке'}: {total}.
+        {items.length > 0 && items.length < total ? ` На странице: ${items.length}.` : ''}
       </p>
       {items.length === 0 ? (
-        <EmptyState title="На этой странице документов нет" detail="Вернитесь к началу списка." />
+        <EmptyState
+          title="На этой странице документов нет"
+          detail="Вернитесь к началу списка."
+          action={onFirst === null ? undefined : (
+            <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
+              В начало
+            </button>
+          )}
+        />
       ) : (
-        <div className={styles.tableWrap}>
+        // A table wider than its box scrolls inside it, and Tab reaches the box (as the shared table's does).
+        <div className={styles.tableWrap} role="region" aria-label="Каталог нормативных документов, таблица" tabIndex={0}>
           <table className={styles.table}>
             <thead>
               <tr>
@@ -166,9 +187,9 @@ export function NormCatalogueTable({ items, total, filtered, onFirst, onNext }: 
           </table>
         </div>
       )}
-      {attribution === undefined ? null : <p className="am-form__hint">{attributionLabel(attribution)}</p>}
+      {attribution === undefined ? null : <p className={`am-form__hint ${styles.source}`}>{attributionLabel(attribution)}</p>}
       <div className="am-pager">
-        {onFirst === null ? null : (
+        {onFirst === null || items.length === 0 ? null : (
           <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
             В начало
           </button>

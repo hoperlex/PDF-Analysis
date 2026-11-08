@@ -159,7 +159,8 @@ export function NormReferencesAnswer({ answer }: NormReferencesAnswerProps) {
       {items.length === 0 ? (
         <p data-norm-references-empty="">В тексте проекта не найдено ссылок на нормативные документы.</p>
       ) : (
-        <div className={styles.frame}>
+        // A table wider than its box scrolls inside it, and Tab reaches the box.
+        <div className={styles.frame} role="region" aria-label="Нормативные ссылки, таблица" tabIndex={0}>
           <table className={styles.table}>
             <thead>
               <tr>

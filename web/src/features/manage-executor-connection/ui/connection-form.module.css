@@ -1,0 +1,27 @@
+/*
+ * The two forms of a connection's settings (create and revise) in two columns. The global form is one
+ * column of up to 44 rem, which made a connection's nine to twelve fields a page of their own; the short
+ * ones (a select, a port, a number of seconds) now stand two to a row, and what is long (an address, a
+ * fingerprint, a field with three hints, the notes and the buttons) takes the whole row. Colour is absent:
+ * hints, notes and buttons take theirs from `globals.css`.
+ */
+
+.form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: start;
+  column-gap: var(--am-gap);
+  max-width: 52rem;
+}
+
+/* A heading, a note, the buttons: the whole row. A field takes one column unless it is marked wide. */
+.form > * {
+  grid-column: 1 / -1;
+}
+
+.form > :global(.am-form__field) {
+  grid-column: auto;
+}
+
+.form > .wide {
+  grid-column: 1 / -1;
+}

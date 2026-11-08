@@ -960,7 +960,7 @@ describe('the register is held to the census in both directions, and in both pal
  */
 const PENDING_PAIR_ROWS = 62;
 /** Likewise for the colour rules no screen reaches. */
-const PENDING_UNREACHED_ROWS = 54; // 61 at the base; lane D5 removed one row, lane D1 three, lane P2 three (the home page at `/` joined the census loaded)
+const PENDING_UNREACHED_ROWS = 53; // 61 at the base; lane D5 removed one row, lane D1 three, lane P2 three (the home page at `/` joined the census loaded), lane N1 one (the catalogue's `.filters` lost its box: the form is a line, the layout carries no colour)
 
 describe('the pending list is a ratchet: it may only shrink, and nothing on it may get worse', () => {
   const rows = PENDING_PAIRS.flatMap((row) => row.themes.map((theme) => ({ row, theme })));

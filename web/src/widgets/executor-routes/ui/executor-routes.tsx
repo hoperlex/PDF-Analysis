@@ -94,7 +94,7 @@ function RouteSummary({
 }) {
   if (route === undefined) {
     return (
-      <p data-executor-route="none">
+      <p className={styles.none} data-executor-route="none">
         {history
           ? 'Назначения для этого вида работы не было.'
           : 'Подключение не назначено: прогон не начнётся и сообщит об этом.'}
@@ -102,7 +102,7 @@ function RouteSummary({
     );
   }
   return (
-    <dl data-executor-route={route.work_kind}>
+    <dl className={styles.summary} data-executor-route={route.work_kind}>
       <dt>Основное</dt>
       <dd>{nameOf(connections, route.primary_connection_id)}</dd>
       <dt>Резервное</dt>
@@ -267,27 +267,35 @@ export function ExecutorRoutes({ roles, history: forcedHistory }: ExecutorRoutes
           только после возврата к основному и резервному подключениям на вкладке «Правила».
         </p>
       ) : null}
+      {/* Said once for the whole tab, not once under each of the six kinds. */}
+      {history ? null : live.length === 0 ? (
+        <EmptyState
+          title="Нет подключений для назначения"
+          detail="Сначала добавьте подключение на вкладке «Подключения», введите ключ и проверьте его."
+        />
+      ) : !canManage ? (
+        <p className="am-note" data-executor-routes-readonly>Назначения меняет администратор.</p>
+      ) : null}
       {WORK_KINDS.map((workKind) => {
         const route = routes.data.items.find((item) => item.work_kind === workKind);
         return (
-          <section key={workKind} className="am-section" aria-label={WORK_KIND_LABELS[workKind]}>
-            <h2>{WORK_KIND_LABELS[workKind]}</h2>
-            <p>
-              {workKind === 'text_analysis'
-                ? `Кто отвечает на запросы к модели на этапе «${WORK_KIND_LABELS[workKind]}».`
-                : `Кто отвечает на запросы к модели в задаче «${WORK_KIND_LABELS[workKind]}».`}
-            </p>
+          <section key={workKind} className={`am-section ${styles.kind}`} aria-label={WORK_KIND_LABELS[workKind]}>
+            <div className={styles.kindHead}>
+              <h2 className={styles.kindTitle}>{WORK_KIND_LABELS[workKind]}</h2>
+              <p className={styles.kindNote}>
+                {workKind === 'text_analysis'
+                  ? `Кто отвечает на запросы к модели на этапе «${WORK_KIND_LABELS[workKind]}».`
+                  : `Кто отвечает на запросы к модели в задаче «${WORK_KIND_LABELS[workKind]}».`}
+              </p>
+            </div>
             <RouteSummary route={route} connections={items} history={history} />
-            {history ? null : live.length === 0 ? (
-              <EmptyState
-                title="Нет подключений для назначения"
-                detail="Сначала добавьте подключение на вкладке «Подключения», введите ключ и проверьте его."
-              />
-            ) : canManage ? (
-              <RouteEditor key={`${route?.set_at ?? 'none'}`} workKind={workKind} route={route} choices={live} />
-            ) : (
-              <p className="am-note" data-executor-routes-readonly>Назначения меняет администратор.</p>
-            )}
+            {!history && live.length > 0 && canManage ? (
+              // A kind that has a route keeps its editor folded; one without opens it, and it folds again once saved.
+              <details className={styles.edit} open={route === undefined} data-executor-route-edit={workKind}>
+                <summary>{route === undefined ? 'Назначить подключение' : 'Изменить назначение'}</summary>
+                <RouteEditor key={`${route?.set_at ?? 'none'}`} workKind={workKind} route={route} choices={live} />
+              </details>
+            ) : null}
           </section>
         );
       })}

@@ -42,8 +42,8 @@ export interface NormSearchFormProps {
 export function NormSearchForm({ query, disabled }: NormSearchFormProps) {
   return (
     <form className={`am-form ${styles.search}`} method="get" action={routes.norms()} role="search" aria-label="Поиск по нормам">
-      <div className="am-form__field">
-        <label htmlFor="norms-query"><strong>Что найти</strong></label>
+      <div className={styles.field}>
+        <label htmlFor="norms-query">Что найти</label>
         <input
           id="norms-query"
           name="q"
@@ -55,13 +55,16 @@ export function NormSearchForm({ query, disabled }: NormSearchFormProps) {
           disabled={disabled}
           placeholder="СП 54 п. 5.1 высота помещений"
         />
+      </div>
+      <button type="submit" className="am-button" disabled={disabled}>Найти</button>
+      <details className={styles.help}>
+        <summary>Что ищется</summary>
         <p className="am-form__hint">
           Обозначение документа, номер пункта и слова — по отдельности или вместе. Ищется
           текущий снимок нормативной базы; абзацы с ненадёжно распознанным текстом в поиск не
           попадают.
         </p>
-      </div>
-      <button type="submit" className="am-button" disabled={disabled}>Найти</button>
+      </details>
     </form>
   );
 }
@@ -70,32 +73,32 @@ function HitRow({ hit }: { readonly hit: NormSearchHit }) {
   const clause = clauseLabel(hit.clause_number);
   return (
     <li className={styles.hit} data-norm-hit={hit.norm_paragraph_id} data-norm-attribution={hit.source_attribution}>
-      {/* The document and where in it on one line; the fragment; the attribution and the way into the PDF on the last. */}
+      {/* The document, where in it and the way into its PDF on one line; the fragment; the attribution last. */}
       <p className={styles.head}>
-        <span>
+        <span className={styles.document}>
           <Link href={routes.normDocument(hit.norm_document_id)}><strong>{hit.designation}</strong></Link>
           {' — '}
           {hit.title}
         </span>
         <span className={styles.where}>
-          {clause === null ? null : <span data-norm-clause={hit.clause_number}>{clause} · </span>}
-          <span data-norm-page={hit.page_label}>стр. {hit.page_label}</span>
+          <span>
+            {clause === null ? null : <span data-norm-clause={hit.clause_number}>{clause} · </span>}
+            <span data-norm-page={hit.page_label}>стр. {hit.page_label}</span>
+          </span>
+          <Link
+            className="am-button am-button--quiet am-button--small"
+            href={routes.normDocument(hit.norm_document_id, hit.page_label)}
+            aria-label={`Открыть PDF документа ${hit.designation} на странице ${hit.page_label}`}
+          >
+            Открыть
+          </Link>
         </span>
       </p>
       <blockquote className={styles.fragment} data-norm-fragment={hit.fragment.text}>
         {fragmentParts(hit.fragment).map((part, index) =>
           part.hit ? <mark key={index} className={styles.match}>{part.text}</mark> : <span key={index}>{part.text}</span>)}
       </blockquote>
-      <p className={styles.foot}>
-        <span className="am-form__hint">{attributionLabel(hit.source_attribution)}</span>
-        <Link
-          className="am-button am-button--quiet am-button--small"
-          href={routes.normDocument(hit.norm_document_id, hit.page_label)}
-          aria-label={`Открыть PDF документа ${hit.designation} на странице ${hit.page_label}`}
-        >
-          Открыть
-        </Link>
-      </p>
+      <p className={`am-form__hint ${styles.source}`}>{attributionLabel(hit.source_attribution)}</p>
     </li>
   );
 }
@@ -114,18 +117,36 @@ export function NormSearchResults({ items, onFirst, onNext }: NormSearchResultsP
       <EmptyState
         title="Ничего не найдено"
         detail="В текущем снимке нет надёжно распознанного абзаца, подходящего под этот запрос. Попробуйте другое обозначение, пункт или слова."
+        action={
+          <Link className="am-button am-button--quiet am-button--small" href={routes.norms()} data-norm-search-reset="">
+            Сбросить поиск
+          </Link>
+        }
       />
     );
   }
   return (
     <section aria-label="Результаты поиска по нормам" className={styles.results} data-norm-hits={items.length}>
       {items.length === 0 ? (
-        <EmptyState title="На этой странице результатов нет" detail="Вернитесь к началу списка." />
+        <EmptyState
+          title="На этой странице результатов нет"
+          detail="Вернитесь к началу списка."
+          action={onFirst === null ? undefined : (
+            <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
+              В начало
+            </button>
+          )}
+        />
       ) : (
-        <ol>{items.map((hit) => <HitRow key={hit.norm_paragraph_id} hit={hit} />)}</ol>
+        <>
+          <p role="status" className={styles.count} data-norm-hits-count={items.length}>
+            Найдено на этой странице: {items.length}{onNext === null ? '' : '; следующие — по кнопке «Дальше»'}.
+          </p>
+          <ol>{items.map((hit) => <HitRow key={hit.norm_paragraph_id} hit={hit} />)}</ol>
+        </>
       )}
       <div className="am-pager">
-        {onFirst === null ? null : (
+        {onFirst === null || items.length === 0 ? null : (
           <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
             В начало
           </button>

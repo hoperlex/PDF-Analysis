@@ -30,6 +30,7 @@ import {
 } from '../model/use-manage-executor-connection';
 import { CommandFailure } from './command-failure';
 import { SettingsFields } from './settings-fields';
+import styles from './connection-form.module.css';
 
 export interface CreateConnectionFormProps {
   readonly pinnedModels: readonly ExecutorPinnedModel[];
@@ -99,7 +100,7 @@ export function CreateConnectionForm({ pinnedModels }: CreateConnectionFormProps
   }
 
   return (
-    <form className="am-form" key={generation} onSubmit={(event) => void submit(event)} data-executor-create-form>
+    <form className={`am-form ${styles.form}`} key={generation} onSubmit={(event) => void submit(event)} data-executor-create-form>
       <h2>Новое подключение</h2>
       {half !== null ? (
         <p className="am-note" role="status" data-executor-create-half>

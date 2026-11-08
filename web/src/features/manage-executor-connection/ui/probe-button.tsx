@@ -48,7 +48,7 @@ export function ProbeButton({ connectionId, revisionId, open }: ProbeButtonProps
   return (
     <>
       <button
-        className="am-button"
+        className="am-button am-button--small"
         type="button"
         data-executor-probe={connectionId}
         disabled={probe.isPending || open}

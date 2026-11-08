@@ -183,6 +183,43 @@ describe('the section «Пресеты запуска», as markup', () => {
   });
 });
 
+describe('lane N1: the section is a few lines', () => {
+  it('says what a preset is in one line and folds the longer explanation, whole', () => {
+    const markup = section(seeded([preset(1)]), ['expert']);
+    expect(markup).toContain('Пресет — сохранённый выбор исполнителя для прогона: название и исполнитель.');
+    expect(markup).toMatch(/<details[^>]*data-preset-about="[^"]*"[^>]*><summary>Что входит в пресет и что нет<\/summary>/);
+    expect(markup).toContain('Предел стоимости прогона задаётся на стенде один для всех прогонов и в пресет не входит.');
+  });
+
+  it('puts the refresh on the heading line, and the date of the change on the title line of its card', () => {
+    const markup = section(seeded([preset(1, { name: 'Быстрый черновик' })]), ['expert']);
+    expect(markup.indexOf('>Обновить пресеты<')).toBeGreaterThan(markup.indexOf('>Пресеты запуска</h2>'));
+    expect(markup.indexOf('>Обновить пресеты<')).toBeLessThan(markup.indexOf('data-preset-list'));
+    const card = markup.slice(markup.indexOf('data-preset-state="active"'), markup.indexOf('</li>', markup.indexOf('data-preset-state="active"')));
+    expect(card.indexOf('Изменён')).toBeLessThan(card.indexOf('data-preset-executor'));
+    expect(card).toContain('Изменён ');
+  });
+
+  it('puts «Изменить» and «В архив» of one preset in one row of actions, and none for an expert', () => {
+    const admin = section(seeded([preset(1)]), ['admin']);
+    const card = admin.slice(admin.indexOf('data-preset-state="active"'), admin.indexOf('</li>', admin.indexOf('data-preset-state="active"')));
+    expect(card).toMatch(/<div class="[^"]*actions[^"]*"><details[^>]*data-preset-revise/);
+    expect(card.indexOf('>Изменить<')).toBeLessThan(card.indexOf('>В архив<'));
+    expect(section(seeded([preset(1)]), ['expert'])).not.toMatch(/actions/);
+  });
+});
+
+describe('lane N1: the preset form is one grid of two fields', () => {
+  it('marks the create and the revise form for the two-column grid, and keeps both fields and the button', () => {
+    const markup = section(seeded([preset(1)]), ['admin']);
+    expect(markup).toMatch(/<form class="am-form [^"]*form[^"]*" data-preset-form="create"/);
+    expect(markup).toMatch(/<form class="am-form [^"]*form[^"]*" data-preset-form="revise"/);
+    expect(markup.match(/Название пресета/g)).toHaveLength(2);
+    expect(markup.match(/>Сохранить новую версию</g)).toHaveLength(1);
+    expect(markup.match(/>Сохранить пресет</g)?.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 // -- words ------------------------------------------------------------------------------------
 
 describe('the entity decides what can start a run', () => {

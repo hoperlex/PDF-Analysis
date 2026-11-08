@@ -23,18 +23,22 @@ import styles from './norm-document.module.css';
 export function NormDocumentFacts({ document }: { readonly document: NormDocument }) {
   return (
     <div className={styles.facts} data-norm-document={document.norm_document_id} data-norm-attribution={document.source_attribution}>
-      <p>{document.title}</p>
-      <p>Вид документа: {document.doc_type}</p>
-      {document.drawn_on === null ? null : <p>Редакция от <time dateTime={document.drawn_on}>{document.drawn_on}</time></p>}
-      <p>Страниц в PDF: {document.pdf_page_count}. Абзацев: {document.paragraph_count}.</p>
+      <p className={styles.title}>{document.title}</p>
+      {/* The facts of the document on one wrapping line, not one paragraph each. */}
+      <p className={styles.meta}>
+        <span>Вид документа: {document.doc_type}</span>
+        {document.drawn_on === null ? null : <span>Редакция от <time dateTime={document.drawn_on}>{document.drawn_on}</time></span>}
+        <span>Страниц в PDF: {document.pdf_page_count}. Абзацев: {document.paragraph_count}.</span>
+      </p>
       {document.unreliable_paragraph_count > 0 ? (
         <p role="note" className="am-note" data-norm-unreliable-count={document.unreliable_paragraph_count}>
           Абзацев с ненадёжно распознанным текстом: {document.unreliable_paragraph_count}. Они отмечены
           ниже; сверяйте их с PDF.
         </p>
       ) : null}
-      <p className="am-form__hint">{attributionLabel(document.source_attribution)}</p>
-      <p className="am-form__hint">Снимок <code>{document.norms_snapshot_id}</code></p>
+      <p className="am-form__hint">
+        {attributionLabel(document.source_attribution)} · Снимок <code>{document.norms_snapshot_id}</code>
+      </p>
     </div>
   );
 }
@@ -50,7 +54,7 @@ function ParagraphRow({ paragraph, normDocumentId }: { readonly paragraph: NormP
       data-norm-kind={paragraph.kind}
     >
       {unreliable ? (
-        <p data-norm-unreliable>
+        <p className={styles.warning} data-norm-unreliable>
           <strong>Текст распознан ненадёжно</strong> — сверьте его с PDF на странице {paragraph.page_label}.
         </p>
       ) : null}
@@ -72,29 +76,53 @@ export interface NormParagraphListProps {
   readonly onNext: (() => void) | null;
 }
 
+function Pager({ onFirst, onNext }: { readonly onFirst: (() => void) | null; readonly onNext: (() => void) | null }) {
+  return (
+    <div className="am-pager">
+      {onFirst === null ? null : (
+        <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
+          В начало
+        </button>
+      )}
+      {onNext === null ? null : (
+        <button type="button" className="am-button am-button--quiet am-button--small" onClick={onNext}>
+          Дальше
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A page holds up to two hundred paragraphs: past this many the pager stands over the list as well as under it. */
+const PAGER_ABOVE_FROM = 10;
+
 export function NormParagraphList({ normDocumentId, items, onFirst, onNext }: NormParagraphListProps) {
   if (items.length === 0 && onFirst === null) {
     return <EmptyState title="В документе нет абзацев" detail="Снимок не содержит ни одного абзаца этого документа." />;
   }
+  if (items.length === 0) {
+    return (
+      <section aria-label="Абзацы документа" className={styles.paragraphs} data-norm-paragraphs={0}>
+        <EmptyState
+          title="На этой странице абзацев нет"
+          detail="Вернитесь к началу документа."
+          action={onFirst === null ? undefined : (
+            <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
+              В начало
+            </button>
+          )}
+        />
+      </section>
+    );
+  }
   return (
     <section aria-label="Абзацы документа" className={styles.paragraphs} data-norm-paragraphs={items.length}>
-      {items.length === 0 ? (
-        <EmptyState title="На этой странице абзацев нет" detail="Вернитесь к началу документа." />
-      ) : (
-        <ol>{items.map((paragraph) => <ParagraphRow key={paragraph.norm_paragraph_id} paragraph={paragraph} normDocumentId={normDocumentId} />)}</ol>
-      )}
-      <div className="am-pager">
-        {onFirst === null ? null : (
-          <button type="button" className="am-button am-button--quiet am-button--small" onClick={onFirst}>
-            В начало
-          </button>
-        )}
-        {onNext === null ? null : (
-          <button type="button" className="am-button am-button--quiet am-button--small" onClick={onNext}>
-            Дальше
-          </button>
-        )}
-      </div>
+      <p role="status" className={styles.count} data-norm-paragraphs-count={items.length}>
+        Абзацев на этой странице: {items.length}{onNext === null ? '' : '; дальше — по кнопке «Дальше»'}.
+      </p>
+      {items.length > PAGER_ABOVE_FROM ? <Pager onFirst={onFirst} onNext={onNext} /> : null}
+      <ol>{items.map((paragraph) => <ParagraphRow key={paragraph.norm_paragraph_id} paragraph={paragraph} normDocumentId={normDocumentId} />)}</ol>
+      <Pager onFirst={onFirst} onNext={onNext} />
     </section>
   );
 }

@@ -117,7 +117,7 @@ import type {
   RunStatus,
 } from '@/shared/api';
 import type { DocumentVersion, Project, SectionReview, Verdict } from '@/shared/api';
-import type { Account } from '@/shared/api';
+import type { Account, AnalysisPreset } from '@/shared/api';
 import type { RegistrationRequest } from '@/shared/api';
 import { ApiError, PROJECT_SECTION_VALUES, RUN_STATE_VALUES, queryKeys } from '@/shared/api';
 import { routes } from '@/shared/lib';
@@ -160,9 +160,20 @@ import { newClient, renderScreen, renderWith, seedError } from '../screens/harne
 import { ADMIN as HOME_ADMIN, EXPERT as HOME_EXPERT, LABEL as HOME_LABEL, loaded as loadedHome } from '../screens/home-fixtures';
 import { derivedScreens, malformedVariants, wellFormed } from '../screens/route-screens';
 import {
-  NORM_CATALOGUE_ITEMS, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
+  NORM_CATALOGUE_ITEMS, NORM_CATALOGUE_PAGE, NORM_DOCUMENT_ID, NORM_EVENTS, NORM_HITS, NORM_PARAGRAPHS, NORM_SNAPSHOTS,
   normDocument,
 } from '../norms/fixtures';
+import { NormsPage, NormDocumentPage } from '@/_pages/norms';
+import {
+  NORM_CATALOGUE_PAGE_LIMIT, NORM_EVENT_PAGE_LIMIT, NORM_PARAGRAPH_PAGE_LIMIT, NORM_SEARCH_PAGE_LIMIT, NORM_SNAPSHOT_LIMIT,
+} from '@/entities/norms';
+import { ExecutorGroups } from '@/widgets/executor-groups';
+import { ExecutorRules } from '@/widgets/executor-rules';
+import { AnalysisPresets } from '@/widgets/analysis-presets';
+import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
+import {
+  ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, ruleOf, seedGroups, seedRules,
+} from '../executor-groups/executor-groups-fixtures';
 
 import {
   BLOCKS_PROJECT_UID, BLOCKS_RUN_ID, BLOCKS_VERSION_UID, blockId, blocksOnFivePages, blocksVersion, everyKindOfBlock,
@@ -1511,6 +1522,92 @@ export function screens(): Screen[] {
   add('NormCatalogueTable loaded', withRouter(createElement(NormCatalogueTable, {
     items: NORM_CATALOGUE_ITEMS, total: 2, filtered: false, onFirst: null, onNext: noop,
   })));
+
+  /*
+   * Lane N1: the whole of «Нормы» and of one norm document, as the pages draw them over seeded caches: the snapshot
+   * strip, the two views, the search with its results, the catalogue, and an administrator's snapshots and history.
+   */
+  {
+    const snapshots = queryKeys.norms.snapshots(undefined, NORM_SNAPSHOT_LIMIT);
+    const events = queryKeys.norms.events(undefined, NORM_EVENT_PAGE_LIMIT);
+    const last = { next_cursor: null };
+    const seed = (): ReturnType<typeof newClient> => {
+      const client = newClient();
+      client.setQueryData(snapshots, { items: NORM_SNAPSHOTS, page: last });
+      client.setQueryData(events, { items: NORM_EVENTS, page: last });
+      return client;
+    };
+    const searched = seed();
+    searched.setQueryData(queryKeys.norms.search('высота помещений', undefined, NORM_SEARCH_PAGE_LIMIT), {
+      items: NORM_HITS, page: { next_cursor: 'c2VhcmNoLW5leHQ' },
+    });
+    add('NormsPage, search results, administrator', renderScreen(searched, createElement(NormsPage, {
+      roles: ['admin'], query: 'высота помещений',
+    })));
+    add('NormsPage, no search yet, expert', renderScreen(seed(), createElement(NormsPage, { roles: ['expert'] })));
+    const catalogued = seed();
+    catalogued.setQueryData(
+      queryKeys.norms.catalogue(undefined, undefined, undefined, NORM_CATALOGUE_PAGE_LIMIT), NORM_CATALOGUE_PAGE,
+    );
+    add('NormsPage, catalogue, expert', renderScreen(catalogued, createElement(NormsPage, {
+      roles: ['expert'], catalogue: { q: null, kind: null },
+    })));
+    const narrowed = seed();
+    narrowed.setQueryData(queryKeys.norms.catalogue('нет такого', 'СП', undefined, NORM_CATALOGUE_PAGE_LIMIT), {
+      ...NORM_CATALOGUE_PAGE, items: [], total: 0, page: { next_cursor: null },
+    });
+    add('NormsPage, catalogue narrowed to nothing', renderScreen(narrowed, createElement(NormsPage, {
+      roles: ['expert'], catalogue: { q: 'нет такого', kind: 'СП' },
+    })));
+    const bare = newClient();
+    bare.setQueryData(snapshots, { items: [], page: last });
+    add('NormsPage, no current snapshot', renderScreen(bare, createElement(NormsPage, { roles: ['expert'] })));
+    const opened = newClient();
+    opened.setQueryData(queryKeys.norms.document(NORM_DOCUMENT_ID), normDocument());
+    opened.setQueryData(queryKeys.norms.paragraphs(NORM_DOCUMENT_ID, undefined, NORM_PARAGRAPH_PAGE_LIMIT), {
+      items: NORM_PARAGRAPHS, page: { next_cursor: 'cGFyYWdyYXBocy1uZXh0' }, source_attribution: 'consultant_plus',
+    });
+    add('NormDocumentPage, a page of paragraphs', renderScreen(opened, createElement(NormDocumentPage, {
+      normDocumentId: NORM_DOCUMENT_ID, page: null,
+    })));
+  }
+
+  /*
+   * Lane N1: «Группы», «Правила» (both modes) and «Пресеты запуска», which no other census screen reaches: a group with its
+   * members and capacity, an archived one, the table of rules, and the presets with a version, a blocker and the archive.
+   */
+  {
+    const groups = newClient();
+    seedGroups(groups, [MAIN_GROUP, ROUTED_GROUP, ARCHIVED_GROUP]);
+    add('ExecutorGroups administrator', renderScreen(groups, createElement(ExecutorGroups, { roles: ['admin'] })));
+    const rulesLegacy = newClient();
+    seedGroups(rulesLegacy, [MAIN_GROUP, ROUTED_GROUP]);
+    seedRules(rulesLegacy, 'legacy', [ruleOf('text_analysis', ROUTED_GROUP, 1)]);
+    add('ExecutorRules legacy mode, administrator', renderScreen(rulesLegacy, createElement(ExecutorRules, { roles: ['admin'] })));
+    const rulesOn = newClient();
+    seedGroups(rulesOn, [MAIN_GROUP, ROUTED_GROUP]);
+    seedRules(rulesOn, 'rules', [ruleOf('text_analysis', ROUTED_GROUP, 1), ruleOf('comparison_spec', MAIN_GROUP, 2)]);
+    add('ExecutorRules rules mode, expert', renderScreen(rulesOn, createElement(ExecutorRules, { roles: ['expert'] })));
+
+    const preset = (n: number, over: Partial<AnalysisPreset> = {}): AnalysisPreset => ({
+      preset_id: `evt_01M2545JSD15ETSNNV904X${String(n).padStart(4, '0')}`,
+      revision_id: `evt_01M2545JSD15ETSNNV904X${String(n + 100).padStart(4, '0')}`,
+      revision_no: 1,
+      name: `Быстрый черновик ${n}`,
+      executor_connection_id: EXECUTOR_READY.connection.connection_id,
+      state: 'active',
+      created_at: '2026-10-27T10:00:00Z',
+      revised_at: '2026-10-27T11:00:00Z',
+      revised_by: 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8F',
+      ...over,
+    });
+    const presets = newClient();
+    seedExecutors(presets, EXECUTOR_CASES);
+    presets.setQueryData(ANALYSIS_PRESETS_KEY, {
+      items: [preset(1, { revision_no: 3 }), preset(2), preset(3, { state: 'archived' })],
+    });
+    add('AnalysisPresets administrator', renderScreen(presets, createElement(AnalysisPresets, { roles: ['admin'] })));
+  }
 
   // The finding list, with a row SELECTED — `aria-current='true'` is the only place
   // `ink-soft` meets `accent-light`.
