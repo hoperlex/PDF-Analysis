@@ -64,6 +64,7 @@ import { measureWidth, widthFindings } from './width.mjs';
 import {
   parseDimension,
   pausedFindings,
+  pickFollowed,
   queryString,
   readViewport,
   routeQuery,
@@ -217,6 +218,9 @@ const captured = {};
 const SEED = args.seed === null ? {} : JSON.parse(readFileSync(resolve(args.seed), 'utf8'));
 Object.assign(captured, SEED);
 const PARTIAL = args.steps !== null || args.routes !== null || args.seed !== null;
+// `D-380`: identities the walk prefers to "the first link a page renders": what --seed handed it, then what the write half of this
+// same run captured (set after that half). Only names a route's `follow` captures are looked at.
+const HINTS = { ...SEED };
 
 function fail(route, message) {
   failures.push(`${route}: ${message}`);
@@ -359,6 +363,7 @@ if (PHASE === 'read') {
     provision: (PHASE === 'all' || PHASE === 'write') && manifest.accounts !== undefined ? provisionOnDemand : null,
   });
   failures.push(...write.failures);
+  Object.assign(HINTS, write.captured);
   if (write.stopped !== null) {
     failures.push(
       `write: the write half stopped at '${write.stopped}'; ` +
@@ -636,11 +641,13 @@ try {
     // ---- follow the app's own link to the next identifier ----------------------------
     if (route.follow) {
       const pattern = new RegExp(route.follow.href_pattern.replaceAll('%ID%', ID));
-      const hit = (record.links ?? [])
+      const hits = (record.links ?? [])
         .filter((href) => typeof href === 'string')
         .map((href) => pattern.exec(href))
-        .find((m) => m !== null);
-      if (hit === undefined) {
+        .filter((m) => m !== null);
+      // `D-380`: prefer the identity the journey's own write half (or --seed) captured to the first link the page renders.
+      const picked = pickFollowed(hits.map((m) => m[1]), HINTS[route.follow.capture]);
+      if (picked.value === undefined) {
         fail(
           route.name,
           `rendered no link matching ${route.follow.href_pattern} so the journey cannot ` +
@@ -648,8 +655,9 @@ try {
         );
         record.captured = null;
       } else {
-        captured[route.follow.capture] = hit[1];
-        record.captured = { [route.follow.capture]: hit[1] };
+        if (picked.note !== null) fail(route.name, picked.note);
+        captured[route.follow.capture] = picked.value;
+        record.captured = { [route.follow.capture]: picked.value };
       }
     }
 

@@ -7,6 +7,7 @@ import {
   MIN_DIMENSION,
   parseDimension,
   pausedFindings,
+  pickFollowed,
   queryString,
   readViewport,
   routeQuery,
@@ -121,4 +122,13 @@ test('D-380: while dispatch is paused a screen that asked for the pause state mu
   assert.deepEqual(pausedFindings('sign-in', ['GET /bff/v1/releases'], null), []);
   // A different operation under the same prefix is not the pause read.
   assert.deepEqual(pausedFindings('x', ['GET /bff/v1/execution/dispatch-history'], null), []);
+});
+
+test('D-380: the walk prefers the identity its own write half made to the first link, and says so when the page does not offer it', () => {
+  assert.deepEqual(pickFollowed([], 'doc_B'), { value: undefined, note: null }, 'nothing offered: nothing to follow');
+  assert.deepEqual(pickFollowed(['doc_A', 'doc_B'], undefined), { value: 'doc_A', note: null }, 'nothing captured: the first link, as before');
+  assert.deepEqual(pickFollowed(['doc_A', 'doc_B'], 'doc_B'), { value: 'doc_B', note: null }, 'the journey\'s own, though it is not first');
+  const missing = pickFollowed(['doc_A', 'doc_C'], 'doc_B');
+  assert.equal(missing.value, 'doc_A', 'the walk goes on with the first so the rest of the routes are read');
+  assert.match(missing.note, /offers 2 link\(s\) for it and none is the journey's own doc_B/, 'but never silently');
 });

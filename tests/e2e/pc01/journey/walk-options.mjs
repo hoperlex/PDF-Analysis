@@ -133,3 +133,27 @@ export function pausedFindings(where, observedApi, marker) {
       '(`[data-pause-status]`), not "paused": the walk is not in the state it was asked to hold',
   ];
 }
+
+/**
+ * Which of the identities a page offers the read walk follows (`D-380`).
+ *
+ * The walk is handed no identifier and takes the first link a page renders. On a stand that holds more than the journey made
+ * (the stage steps upload four more documents into the journey's project; another project may be there too) the first
+ * link is not the journey's own, and the walk then follows a document that never had a run and reports a missing link.
+ * When the write half of the same run (or `--seed`) captured the identity, it is preferred to the first link. Preferring is
+ * not silent: a page that offers links but not the journey's own is a finding, and the walk then takes the first so that
+ * the rest of the routes are still read.
+ *
+ * `offered` is the identities (the pattern's captured group) in page order; `wanted` the captured identity or `undefined`.
+ */
+export function pickFollowed(offered, wanted) {
+  if (offered.length === 0) return { value: undefined, note: null };
+  if (wanted === undefined) return { value: offered[0], note: null };
+  if (offered.includes(wanted)) return { value: wanted, note: null };
+  return {
+    value: offered[0],
+    note:
+      `the page offers ${offered.length} link(s) for it and none is the journey's own ${wanted}; ` +
+      `the walk took ${offered[0]} instead, so what follows reads another document than the one the write half made`,
+  };
+}

@@ -2174,6 +2174,7 @@ def test_the_read_walk_is_wired_to_its_options() -> None:
     for needle in (
         "'--width'", "'--paused'", "'--state'", "readViewport(", "widthFindings(route.name, record.width, READ_VIEWPORT)",
         "routeQuery(", "queryString(", "stateExpression(", "stateFindings(", "pausedFindings(", "pauseDispatch(", "restoreDispatch(",
+        "pickFollowed(", "Object.assign(HINTS, write.captured)",
     ):
         assert needle in journey, f"journey.mjs no longer contains {needle}: an option is parsed and does nothing"
     entered = journey.index("await pauseDispatch(")

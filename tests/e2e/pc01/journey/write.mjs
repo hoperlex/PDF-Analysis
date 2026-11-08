@@ -581,7 +581,8 @@ export async function runWritePhase({
     let downloadDir = null;
     const downloaded = new Map();
     try {
-      await withColdBrowser(async (page) => keepingExchanges(record, page, async () => {
+      await withColdBrowser(async (page) => {
+        return keepingExchanges(record, page, async () => {
         // `D-92`: every step of the write half POSTs, and the BFF answers 401 without a
         // session. The cookie is the one `session.mjs` obtained by driving `/login`, and
         // each step receives the SAME value rather than a jar carried on from the step
@@ -998,7 +999,8 @@ export async function runWritePhase({
             );
           }
         }
-      }), { cookies: sessionCookies, viewport });
+      });
+      }, { cookies: sessionCookies, viewport });
     } catch (error) {
       // The browser could not be driven through this step. That is a finding about the
       // application or the origin, not a reason to report nothing.
