@@ -358,37 +358,13 @@ from sqlalchemy import Engine, text
 #: primary keys, four unique constraints, nine foreign keys and 78 checks, to 2052), indexes +17 (eight primary keys, four unique
 #: constraints and five lookups, to 482) and triggers +8 (``am_immutable_row`` on each, to 254). Functions, views, extensions,
 #: sequences, policies and the state topology are byte-identical to the ``0058`` seal.
-#: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), measured on a throwaway PostgreSQL (the
-#: project image, stand ``am-lane-s2-pg``): the constraint/index/trigger digests on the lane database upgraded to ``0060``, down to
-#: ``0058`` and up again, the **columns** digest on a fresh database upgraded once (a down/up cycle leaves a gap in the ordinal
-#: positions of ``audit_run`` and so another digest -- this seal is the fresh one): ``audit_run.started_from_run_id`` and
-#: ``start_stage_id`` (columns +2, to 1591), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
-#: itself, the start stage, both-or-neither; constraints +5, to 1958), the partial index on the pair (indexes +1, to 466), and the
-#: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 246 with a new digest). Relations,
-#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0058`` seal. #: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
-#: PostgreSQL (the project image, stand ``am-lane-c4-pg``) upgraded to ``0058``, down to ``0057`` and up again: the column
-#: ``expert_decision_event.carried_from_decision_id`` (columns +1, to 1589), its foreign key to the table itself and three
-#: checks (the ``dec_`` shape, not its own source, only an accept or a reject: constraints +4, to 1953) and its partial index
-#: (indexes +1, to 465). Relations, triggers, functions, views, extensions, sequences, policies and the state topology are
-#: byte-identical to the ``0057`` seal.
-#: Resealed 2026-11-07 for ``0057_decision_carryover`` (`UI-PARITY-OPT-CARRYOVER`, `UI-B-14`), measured on a throwaway
-#: PostgreSQL (the project image, stand ``am-lane-c3-pg``) upgraded to ``0057``, down to ``0056`` and up again: the column
-#: ``optimisation_proposal_decision.carried_from_decision_id`` (columns +1, to 1588), its foreign key to the table itself and
-#: three checks (the ``opd_`` shape, not its own source, never a ``revoke``: constraints +4, to 1949) and its partial index
-#: (indexes +1, to 464). Relations, triggers, functions, views, extensions, sequences, policies and the state topology are
-#: byte-identical to the ``0056`` seal.
-#: Resealed 2026-11-06 for ``0056_optimisation_decisions`` (`UI-PARITY-OPT-DECISIONS`, `UI-B-12`), measured on a throwaway
-#: PostgreSQL (the project image, stand ``am-lane-c1-pg``) upgraded to ``0056``, down to ``0055`` and up again: the table
-#: ``optimisation_proposal_decision`` keeps ``ck_optimisation_proposal_decision_verdict`` under its name and widens it by
-#: ``revoke``, so only the ``constraints`` family moves, and only its digest (the count stays 1945). Columns, relations,
-#: indexes, triggers, functions, views, extensions, sequences, policies and the state topology are byte-identical to the
-#: ``0055`` seal.
-#: Resealed 2026-11-06 for ``0055_work_schedule`` (`UI-PARITY-P0P`, `D-318`), measured on a throwaway PostgreSQL (the project
-#: image) upgraded to ``0055``, down to ``0054`` and up again: relations +5 (the five journals), columns +27 (5 + 6 + 5 + 6 + 5),
-#: constraints +30 (five primary keys, five event-id format checks, six account references with their six format checks,
-#: the assignment reference, and the plan's month and count, the setting's plan and time zone and the calendar's kind
-#: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
-#: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
+#: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), chained after ``0059``, measured on a
+#: throwaway PostgreSQL (the project image, stand ``am-lane-s2-pg``) upgraded ONCE to ``0060`` (a down/up cycle leaves a gap in the
+#: ordinal positions of ``audit_run`` and so another columns digest; this seal is the fresh one): ``audit_run.started_from_run_id`` and
+#: ``start_stage_id`` (columns +2, to 1681), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
+#: itself, the start stage, both-or-neither; constraints +5, to 2057), the partial index on the pair (indexes +1, to 483), and the
+#: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 254 with a new digest). Relations,
+#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0059`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
     "columns": (1681, "f3ed9758ca91f8a65124f7d8f5ed6dc1470f06b124dde4e53d8152f6f6b21dd2"),
     "relations": (156, "09ca737e44525a8f3d9f0d518e5586cb26a6ae833acbd07ab94fe5de8fa54cf3"),
