@@ -103,6 +103,17 @@
   gap: var(--am-gap-xs);
 }
 
+/*
+ * At a phone's width the `auto` column of ✓/✕ and its note (a refusal's reason runs long) took what the row's `1fr` could not
+ * give up: the row's button shrank to 22 px wide and 333 tall, its text starting at x = -7. The actions drop under the row
+ * instead, in a single track that may shrink.
+ */
+@media (max-width: 590px) {
+  .withActions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .rowAccept[aria-pressed='true'] {
   border-color: var(--am-ok);
   background: var(--am-ok-light);

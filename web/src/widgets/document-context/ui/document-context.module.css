@@ -51,6 +51,19 @@
   color: var(--am-ink-muted);
 }
 
+/*
+ * The breadcrumb is the most-used navigation of a document page and its links were 18.5 px tall (23 screens): a 24 px target
+ * (WCAG 2.5.8), the text centred in it. The same for «‹ Предыдущий» / «Следующий ›» below.
+ */
+.step > a,
+.neighbours > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--am-gap-lg);
+  min-height: var(--am-gap-lg);
+}
+
 .current {
   color: var(--am-ink);
   font-weight: 600;

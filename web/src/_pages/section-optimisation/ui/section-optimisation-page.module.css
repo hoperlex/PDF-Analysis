@@ -28,19 +28,32 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  /* The bar is a flex item of the toolbar and its automatic minimum is its content's (a select as wide as its longest option). */
+  min-width: 0;
+  max-width: 100%;
   gap: var(--am-gap-xs) var(--am-gap);
   margin: 0;
 }
 
+/*
+ * The label is inline-flex, so its width is its content's, and a select's content is its longest option (434 px for the section
+ * names): at 390 px the label stood 434 px wide and the page scrolled to 452. It is capped at the bar's width and may wrap its
+ * select under the caption; the select then takes the line (`flex: 1 1`) and shrinks below its option (`min-width: 0`).
+ */
 .filterField {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--am-gap-xs);
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   font-size: var(--am-text-md);
 }
 
 .filterField select {
+  flex: 1 1 10rem;
+  min-width: 0;
   max-width: 100%;
   margin: 0;
 }

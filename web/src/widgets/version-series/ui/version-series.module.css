@@ -44,7 +44,13 @@
   white-space: nowrap;
 }
 
+/*
+ * `position: relative` makes the scroller the containing block of the table's hidden labels (`.visuallyHidden`, absolute), so the
+ * scroller clips them: with no positioned ancestor their containing block was the page, and a label at x = 807 widened it.
+ * The shared `table { position: relative }` does the same for any table; this is the narrower form, kept in the widget.
+ */
 .scroller {
+  position: relative;
   overflow-x: auto;
   max-width: 100%;
 }
@@ -216,7 +222,9 @@
   min-width: 10rem;
 }
 
+/* A project's code is the matrix's entrance: a 24 px target (it was 18.5). */
 .open {
+  min-height: var(--am-gap-lg);
   padding: 0;
   border: 0;
   background: transparent;
@@ -236,6 +244,7 @@
 }
 
 .sortButton {
+  min-height: var(--am-gap-lg);
   padding: 0;
   border: 0;
   background: transparent;
@@ -286,10 +295,12 @@
 }
 
 /* The name of the set is the button of the caret (the original's whole header is): it folds the blocks above the matrix. */
+/* 24 px tall at the least (it was 20.8); centred, not baseline-aligned, so the text stays in the middle of the taller box. */
 .setToggle {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--am-gap-xs);
+  min-height: var(--am-gap-lg);
   margin: 0;
   padding: 0;
   border: 0;
@@ -620,10 +631,13 @@
   font-style: italic;
 }
 
+/* The handle of a cell's menu: 24 x 24 px at the least (it was 20 x 18). */
 .cellMenu {
   position: absolute;
   top: 0;
   right: 0;
+  min-width: var(--am-gap-lg);
+  min-height: var(--am-gap-lg);
   padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-line-strong);
   border-radius: var(--am-radius-sm);

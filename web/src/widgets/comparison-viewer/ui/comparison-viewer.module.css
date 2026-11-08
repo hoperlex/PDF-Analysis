@@ -245,9 +245,11 @@
   font-size: var(--am-text-sm);
 }
 
+/* The swipe's range is a 24 px target at the least (it was 16 tall). */
 .slider {
   flex: 1 1 12rem;
   min-width: 8rem;
+  min-height: var(--am-gap-lg);
   accent-color: var(--am-accent);
 }
 

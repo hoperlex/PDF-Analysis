@@ -122,6 +122,7 @@
 
 .allToggle button {
   min-width: var(--am-gap-lg);
+  min-height: var(--am-gap-lg);
   padding: 0 var(--am-gap-xs);
   border: 1px solid var(--am-line-soft);
   border-radius: var(--am-radius-sm);
@@ -153,11 +154,14 @@
   border-bottom: 1px solid var(--am-line-soft);
 }
 
+/* 24 px tall at the least (it was 18.5); `align-content` keeps the text in the middle of the taller box. */
 .groupToggle {
   display: inline-flex;
   flex-wrap: wrap;
+  align-content: center;
   align-items: baseline;
   gap: var(--am-gap-xs);
+  min-height: var(--am-gap-lg);
   margin: 0;
   padding: 0;
   border: 0;
