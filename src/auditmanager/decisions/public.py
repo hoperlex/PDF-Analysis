@@ -39,7 +39,13 @@ from auditmanager.decisions.carryover import (
     carryover_comment,
     current_verdict_origins,
 )
-from auditmanager.decisions.ledger import decision_events_by_id
+from auditmanager.decisions.ledger import (
+    ORIGIN_KINDS,
+    DecisionRecorded,
+    decision_events_by_id,
+    register_decision_recorded,
+    registered_decision_recorded,
+)
 from auditmanager.decisions.projection import current_verdicts
 
 __all__ = [
@@ -58,7 +64,9 @@ __all__ = [
     "CurrentVerdict",
     "DECLARED_EVENT_TYPES",
     "DecisionEvent",
+    "DecisionRecorded",
     "JournalEntry",
+    "ORIGIN_KINDS",
     "PC01_EVENT_TYPES",
     "VERDICT_FOR_EVENT",
     "append_decision_under_key",
@@ -73,4 +81,6 @@ __all__ = [
     "decision_journal",
     "rebuild_current_verdict",
     "record_decision",
+    "register_decision_recorded",
+    "registered_decision_recorded",
 ]

@@ -199,6 +199,10 @@ APPEND_ONLY = frozenset((
     # `0055_work_schedule` (`UI-PARITY-P0P`): the journals of «График работ» are `am_immutable_row` and only inserted into.
     "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
     "work_calendar_event",
+    # `0059_decision_memory` (`ADR-0027`): the decision memory is inserted into by `record_decision`'s port and by the worker's
+    # sweep, and nothing updates or deletes a row (`am_immutable_row` on all eight). The forget tool of phase M2 runs as the owner.
+    "decision_memory_case", "decision_memory_content", "decision_memory_crop", "decision_memory_decision",
+    "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_status_event",
 ))
 
 #: The ``append-only`` tables that no trigger protects, and the evidence that the code only inserts.

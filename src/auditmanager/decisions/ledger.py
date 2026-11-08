@@ -80,7 +80,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 from sqlalchemy import bindparam, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -106,6 +106,55 @@ VERDICT_FOR_EVENT: Final[dict[str, str | None]] = {
     "comment": None,
     "revoke": "pending",
 }
+
+
+#: Where an event came from, as the decision memory keeps it (`ADR-0027`). ``carried`` is exactly an event with
+#: ``carried_from_decision_id`` (`D-337`); ``imported`` is a decision read back from a run's workbook, which the import must say
+#: so itself (`D-391`).
+ORIGIN_KINDS: Final[tuple[str, ...]] = ("direct", "carried", "imported")
+
+
+def _origin_kind(requested: str | None, carried_from_decision_id: str | None) -> str:
+    """The origin of an event: derived from the carry-over link, or the caller's own word when it agrees with that link."""
+    carried = carried_from_decision_id is not None
+    if requested is None:
+        return "carried" if carried else "direct"
+    if requested not in ORIGIN_KINDS or (requested == "carried") != carried:
+        raise DomainError(
+            ErrorCode.VALIDATION_FAILED,
+            message="origin_kind is carried exactly when the event names the decision it carries over",
+        )
+    return requested
+
+
+class DecisionRecorded(Protocol):
+    """The port the decision memory is reached through (`ADR-0027` decision 4, `DECISION-MEMORY-01` section 7.2).
+
+    Called by :func:`record_decision` **after** the event is inserted, in the caller's transaction, for an event that is new (a replay
+    returns before the insert and calls nothing). It owns nothing and returns nothing: if it raises, the decision fails, because a
+    decision that the memory silently missed is exactly the loss the memory exists to prevent. The ledger imports nothing from the
+    memory; the composition root registers an implementation.
+    """
+
+    def __call__(self, session: Session, event: "DecisionEvent", origin_kind: str) -> None: ...
+
+
+_DECISION_RECORDED: DecisionRecorded | None = None
+
+
+def register_decision_recorded(port: DecisionRecorded | None) -> None:
+    """Install the process-wide port, replacing any earlier one; ``None`` removes it (a test's cleanup).
+
+    A process that decides without a registered port captures nothing, which the memory's sweep repairs and its guards make visible
+    (`DECISION-MEMORY-01` section 4.4); the composition roots register one at start.
+    """
+    global _DECISION_RECORDED
+    _DECISION_RECORDED = port
+
+
+def registered_decision_recorded() -> DecisionRecorded | None:
+    """The port installed by :func:`register_decision_recorded`, or ``None``."""
+    return _DECISION_RECORDED
 
 
 def _check_severity_event(*, event_type: str, severity: str | None) -> None:
@@ -294,6 +343,7 @@ def record_decision(
     author_label: str,
     author_user_uid: str | None,
     carried_from_decision_id: str | None = None,
+    origin_kind: str | None = None,
 ) -> DecisionEvent:
     """Append one expert decision event. Never updates and never deletes.
 
@@ -317,6 +367,11 @@ def record_decision(
     event: the source decision it names. Its default is ``None`` -- a decision made directly --
     and the database holds the shape (``dec_<ULID>``, an existing event, not the event itself,
     an ``accept`` or a ``reject``).
+
+    ``origin_kind`` (`ADR-0027`) is what the decision memory records as where the event came from. ``None`` derives it from
+    ``carried_from_decision_id`` (``carried`` or ``direct``); a caller that knows better -- the workbook import, which says
+    ``imported`` -- passes it. It is not stored in the ledger. After a new event is inserted the registered
+    :class:`DecisionRecorded` port is called in this transaction, and a failure of the port fails the decision.
     """
     if event_type == "revoke":
         raise DomainError(
@@ -343,6 +398,7 @@ def record_decision(
             ErrorCode.VALIDATION_FAILED, message="author_label must not be empty"
         )
 
+    kind = _origin_kind(origin_kind, carried_from_decision_id)
     _check_severity_target(
         session, finding_uid=finding_uid,
         finding_observation_id=finding_observation_id, severity=severity,
@@ -409,7 +465,7 @@ def record_decision(
     except DBAPIError as exc:
         raise _translate(exc) from exc
 
-    return DecisionEvent(
+    recorded = DecisionEvent(
         decision_id=row["decision_id"],
         finding_uid=finding_uid,
         finding_observation_id=finding_observation_id,
@@ -423,6 +479,12 @@ def record_decision(
         recorded_at=row["recorded_at"],
         carried_from_decision_id=carried_from_decision_id,
     )
+    # The decision memory (`ADR-0027`): after the insert and outside the savepoint above, in the caller's transaction. A failure
+    # propagates -- the decision fails loudly -- and rolls the caller's unit of work back with the event.
+    port = _DECISION_RECORDED
+    if port is not None:
+        port(session, recorded, kind)
+    return recorded
 
 
 def decision_history(session: Session, finding_uid: str) -> tuple[DecisionEvent, ...]:

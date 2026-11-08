@@ -562,6 +562,19 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "carried_from_verdict_id": "cdv",
         "stage_chain_batch_id": "scb",
         "stage_chain_batch_item_id": "scbi",
+        # `0059_decision_memory` (`ADR-0027`): the memory's four identities and the bare identities of where a case came from
+        # (no foreign key: they resolve nowhere once the project is erased). ``case_id`` is a foreign key between memory tables.
+        "case_id": "dmc",
+        "memory_decision_id": "dmd",
+        "status_event_id": "dmw",
+        "crop_id": "dmx",
+        "origin_observation_id": "fobs",
+        "origin_finding_uid": "fnd",
+        "origin_project_uid": "prj",
+        "origin_document_uid": "doc",
+        "origin_version_uid": "ver",
+        "origin_run_id": "run",
+        "source_decision_id": "dec",
     }
     assert (set(prefix_by_column.values()) | set(PREFIX_BY_TABLE_COLUMN.values())) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

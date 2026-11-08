@@ -1444,6 +1444,17 @@ def _prepare_a_pending_blob(s: Stand, h: Harness) -> None:
         b=one_available_blob(s, blob_ids_of(s, h.target)))
 
 
+def _prepare_an_uncaptured_decision(s: Stand, h: Harness) -> None:
+    """One accept or reject of the target project has no decision-memory row any more (its guard is switched off to remove it)."""
+    decision = scalars(
+        s, "SELECT d.memory_decision_id FROM decision_memory_decision d "
+           "JOIN expert_decision_event e ON e.decision_id = d.source_decision_id "
+           "JOIN finding f ON f.finding_uid = e.finding_uid WHERE f.project_uid = :p", p=h.target)[0]
+    for table in ("decision_memory_decision_text", "decision_memory_decision"):
+        switched_off(s, table, f"trg_{table}_immutable", f'DELETE FROM public."{table}" WHERE memory_decision_id = :d',
+                     d=decision)
+
+
 def _prepare_delete_trigger(s: Stand, h: Harness) -> None:
     sql(s, "CREATE FUNCTION zz_noop() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$")
     sql(s, "CREATE TRIGGER zz_delete BEFORE DELETE ON document FOR EACH ROW EXECUTE FUNCTION zz_noop()")
@@ -1502,6 +1513,8 @@ SCENARIOS: tuple[Scenario, ...] = (
              effect=lambda s, h, c, o, e: c == 0),
     Scenario("no-pending-erasure", "erasure_pending", act_dry, prepare=_prepare_a_pending_blob,
              effect=lambda s, h, c, o, e: c == 0),
+    Scenario("memory-captured", "have no decision-memory case", act_dry, project="Школа",
+             prepare=_prepare_an_uncaptured_decision, effect=lambda s, h, c, o, e: c == 0),
     Scenario("receipts-are-product-commands", "not product commands", act_apply, prepare=_prepare_account_receipt,
              effect=lambda s, h, c, o, e: c == 0 and h.gone() and count(
                  s, "command_record", "command_id = 'cmd_01M5F21PBT7E8WRN3M61BDQFDD'") == 0),

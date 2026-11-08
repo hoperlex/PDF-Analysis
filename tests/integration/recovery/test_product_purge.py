@@ -98,7 +98,11 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # `0053`..`0055`: a document's tags, a finding's execution status and an assignment's planned dates are product
     # data (PRODUCT 89 -> 92); «График работ»'s settings, plans, calendar and absences are the organisation's
     # planning and are kept (KEEP 37 -> 41).
-    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 41 and len(tool.MIXED_TABLES) == 3
+    # `0059_decision_memory` (`ADR-0027`): the eight tables of the decision memory are kept (KEEP 41 -> 49); none of them has a
+    # foreign key into a PRODUCT table, so the purge's TRUNCATE never needs them.
+    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 8
+    assert not tool.KEEP_MEMORY_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
+    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 49 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -182,7 +186,8 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
                                                     "expert_decision_event", "price_list_revision",
                                                     "optimisation_pass", "work_assignment",
                                                     "document_version_classification_correction",
-                                                    "finding_observation_norm_citation"))
+                                                    "finding_observation_norm_citation",
+                                                    "decision_memory_case", "decision_memory_decision"))
     assert sum(1 for key in before["bucket"] if key.startswith("blobs/")) >= 5
 
     steps = full_purge(tool, stand, tmp_path / "dump")
@@ -384,6 +389,17 @@ def _truncate_guard(s: Stand) -> None:
     sql(s, "CREATE TRIGGER zz_no_truncate BEFORE TRUNCATE ON project FOR EACH STATEMENT EXECUTE FUNCTION zz_refuse()")
 
 
+def _an_uncaptured_decision(s: Stand) -> None:
+    """One accept or reject has no decision-memory row any more: its memory decision is removed with its guard switched off."""
+    with s.engine.connect() as connection:
+        decision = connection.execute(text("SELECT memory_decision_id FROM decision_memory_decision ORDER BY 1 LIMIT 1")).scalar_one()
+    for table in ("decision_memory_decision_text", "decision_memory_decision"):
+        with s.engine.begin() as connection:
+            connection.execute(text(f'ALTER TABLE public."{table}" DISABLE TRIGGER trg_{table}_immutable'))
+            connection.execute(text(f'DELETE FROM public."{table}" WHERE memory_decision_id = :d'), {"d": decision})
+            connection.execute(text(f'ALTER TABLE public."{table}" ENABLE TRIGGER trg_{table}_immutable'))
+
+
 def act_plan(m: types.ModuleType, h: Harness) -> tuple[int, str, str]:
     return invoke(m, h.stand, "plan")
 
@@ -532,6 +548,8 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("event-types-classified", "event type(s) nobody classified", act_plan, prepare=_unclassified_event),
     Scenario("command-types-classified", "command type(s) nobody classified", act_plan,
              prepare=_unclassified_command),
+    Scenario("memory-captured", "have no decision-memory case", act_plan, prepare=_an_uncaptured_decision,
+             effect=lambda s, h, code: code == 0),
     Scenario("quiescent", "work is running right now", act_plan, prepare=_a_run_is_running,
              effect=lambda s, h, code: code == 0),
     Scenario("norm-key-not-in-product-list", "owned by the norm custody ledger", act_plan,
@@ -570,7 +588,7 @@ SCENARIOS: tuple[Scenario, ...] = (
 def test_every_guard_in_the_module_has_a_scenario() -> None:
     body = SOURCE.read_text(encoding="utf-8")
     markers = re.findall(r"^[ \t]*# >>> guard: ([a-z-]+)$", body, re.MULTILINE)
-    assert len(markers) == len(set(markers)) == len(SCENARIOS) == 26
+    assert len(markers) == len(set(markers)) == len(SCENARIOS) == 27
     assert sorted(markers) == sorted(s.guard for s in SCENARIOS)
     for name in markers:
         assert len(re.findall(rf"^[ \t]*# <<< guard: {re.escape(name)}$", body, re.MULTILINE)) == 1
