@@ -213,6 +213,7 @@ __all__ = [
     "ArV3GroupCostEstimateRequest",
     "RunCostEstimate",
     "ReauditRunRequest",
+    "StartRunFromStageRequest",
     "SubmitRegistrationRequest",
     "UpdateMyProfileRequest",
     "UpdateUserRequest",
@@ -1526,6 +1527,11 @@ class RunCostEstimateRequest(_Object):
     #: `EXEC2-SEAL-2`. Exclusive with ``executor_connection_id`` and ``preset_id``.
     executor_group_id: ExecutorGroupId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     relaxed_limits: bool = Field(default=None, strict=True, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151i` (contract 1.42.0). The price of a run started from ``start_stage_id`` of this earlier run; both or neither,
+    #: and exclusive with ``reaudit_of_run_id``, the connection, the preset, the group and ``relaxed_limits`` (the new run
+    #: follows today's route, as a re-audit does).
+    start_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class ArV3GroupCostEstimateRequest(_Object):
@@ -1557,6 +1563,12 @@ class RunCostEstimate(_Object):
     recommended_ceiling_micros: Annotated[int, Field(ge=0)]
     currency: Literal["USD"]
     relaxed_limits: bool
+    #: `R-151i` (contract 1.42.0). Present for the estimate of a run started from a stage: the earlier run, the first stage
+    #: the new run computes, the stages it takes from the earlier run and the stages it computes (the price is for those).
+    start_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    reused_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    computed_stage_ids: list[StageId] = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
 class StartRunRequest(_Object):
@@ -1582,6 +1594,13 @@ class StartRunRequest(_Object):
 
 
 class ReauditRunRequest(_Object):
+    cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+
+
+class StartRunFromStageRequest(_Object):
+    """`R-151i` (contract 1.42.0): the first stage the new run computes; the earlier stages are taken from the run in the path."""
+
+    stage_id: StageId
     cost_consent: RunCostConsent = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
 
 
@@ -1752,6 +1771,10 @@ class RunQueueReason(str, enum.Enum):
 class RunStatus(_Object):
     run_id: RunId
     reaudit_of_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    #: `R-151i` (contract 1.42.0): the earlier run whose stage outputs this run reuses and the first stage it computes
+    #: itself (every earlier PC-01 stage is the earlier run's). Absent for a run started from a version or as a re-audit.
+    started_from_run_id: RunId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
+    start_stage_id: StageId = Field(default=None, json_schema_extra=optional_property)  # type: ignore[assignment]
     project_uid: ProjectUid
     version_uid: VersionUid
     state: RunState
