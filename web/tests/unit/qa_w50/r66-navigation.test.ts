@@ -357,9 +357,13 @@ describe('R-66: the stubs have graduated, and each keeps its ruled row and place
     expect(markup).not.toContain('data-route="/section-optimisation"');
     // One read, under its own key: the analysed section, unfiltered, first page.
     const keys = client.getQueryCache().getAll().map((query) => query.queryKey);
-    expect(keys, `the reads the screen made: ${JSON.stringify(keys)}`).toHaveLength(1);
+    // Two reads, both of the AR section: the specification, and since contract 1.37.0 (lane C3, UI-PARITY-OPT-CARRYOVER)
+    // the «Принято» tab's first page, whose server `total` is the number the tab shows without being opened.
+    expect(keys, `the reads the screen made: ${JSON.stringify(keys)}`).toHaveLength(2);
     expect(keys[0]?.slice(0, 3)).toEqual(['optimisation', 'section-specification', 'AR']);
     expect(keys[0]?.[3]).toEqual({ projectUid: null, q: null, offset: 0, limit: 50 });
+    expect(keys[1]?.slice(0, 2)).toEqual(['optimisation', 'accepted']);
+    expect(keys[1]?.[2]).toMatchObject({ section_code: 'AR' });
   });
 
   it('/section-optimisation: a guest is sent to sign in, carrying it in next', async () => {
