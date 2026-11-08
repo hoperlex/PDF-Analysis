@@ -204,7 +204,7 @@ describe('one norm document: facts on a line, paragraphs with their page beside 
     expect(markup).toContain(`data-norm-document="${NORM_DOCUMENT_ID}"`);
     expect(markup).toContain('Страниц в PDF: 48. Абзацев: 412.');
     expect(markup).toContain('Вид документа: СП');
-    expect(markup).toContain('Редакция от <time datetime="2022-05-13">2022-05-13</time>');
+    expect(markup).toContain('Редакция от <time dateTime="2022-05-13">2022-05-13</time>');
     expect(markup.match(/<p[ >]/g)).toHaveLength(4);
     const undated = renderScreen(newClient(), createElement(NormDocumentFacts, { document: normDocument({ drawn_on: null, unreliable_paragraph_count: 0 }) }));
     expect(undated).not.toContain('Редакция от');

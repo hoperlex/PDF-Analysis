@@ -187,7 +187,7 @@ describe('lane N1: the section is a few lines', () => {
   it('says what a preset is in one line and folds the longer explanation, whole', () => {
     const markup = section(seeded([preset(1)]), ['expert']);
     expect(markup).toContain('Пресет — сохранённый выбор исполнителя для прогона: название и исполнитель.');
-    expect(markup).toMatch(/<details[^>]*data-preset-about=""[^>]*><summary>Что входит в пресет и что нет<\/summary>/);
+    expect(markup).toMatch(/<details[^>]*data-preset-about="[^"]*"[^>]*><summary>Что входит в пресет и что нет<\/summary>/);
     expect(markup).toContain('Предел стоимости прогона задаётся на стенде один для всех прогонов и в пресет не входит.');
   });
 

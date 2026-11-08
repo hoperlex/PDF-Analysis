@@ -76,8 +76,8 @@ const GATED: readonly Gated[] = [
   {
     id: 'presentation.ts:17 — the label of a reviewed profile',
     draw: () => profileTable('reviewed'),
-    on: 'data-profile-status="reviewed">рабочая версия, проверка человеком не проводилась</td>',
-    off: 'data-profile-status="reviewed">проверен</td>',
+    on: 'data-profile-status="reviewed"><span class="am-badge am-badge--ok">рабочая версия, проверка человеком не проводилась</span></td>',
+    off: 'data-profile-status="reviewed"><span class="am-badge am-badge--ok">проверен</span></td>',
     gone: ['проверка человеком не проводилась'],
   },
   {
