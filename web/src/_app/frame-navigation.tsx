@@ -37,7 +37,7 @@
  * ## Counters beside the items (`UI-A-05`, `UI-A-06`, `UI-A-91`)
  *
  * An item may carry a small number (`menu-badges.ts`): the unchecked documents of a section in red, the jobs of
- * «Очередь», the entries of «База знаний», the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
+ * «Очередь», the entries of «База знаний» (of the address's project when it names one), the pending «Заявки на регистрацию». {@link FrameNavigationView} takes them as
  * data (`badges`, by item address; the sections carry theirs in `sections`), so every state is drawn without a query
  * client; `FrameNavigation` reads them (`use-menu-badges.ts`) only for the items the session's navigation holds, and only
  * where there is a query client. A group with a badged item hands the shared `Disclosure` its list as content
@@ -354,7 +354,8 @@ interface ConnectedProps {
 
 /** The frame's navigation with its counters read: mounted only where there is a query client and an item that carries one. */
 function FrameNavigationWithBadges({ navigation, pathname, projectUid, sources, sections }: ConnectedProps) {
-  const badges = useMenuBadges(sources);
+  // `R-150c`: «База знаний» follows the header's project, which the address names; the other counters are global.
+  const badges = useMenuBadges(sources, projectUid);
   return <FrameNavigationView navigation={navigation} pathname={pathname} projectUid={projectUid} sections={sections} badges={badges} />;
 }
 
