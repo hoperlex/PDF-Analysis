@@ -155,7 +155,9 @@ def test_a_dry_run_prints_the_classification_with_exact_counts_and_changes_nothi
     # those are exactly three (`PRECHECK_EVENTS`); with the 24 other PRODUCT events that makes 24 + 3 = 27 rows to delete.
     assert "  audit_event  (delete 27 rows, keep 7 rows)" in out
     assert "  command_record  (delete 10 rows, keep 1 rows)" in out
-    assert "norm-owned objects (the custody ledger's, never touched): 2" in out
+    # Two objects of the custody ledger and, since `0059_decision_memory`, the Blob of the one crop the seed's recorded run published
+    # and the decision memory references (a Blob a KEEP table references stays with its object).
+    assert "norm-owned objects (the custody ledger's and the decision memory's crops; never touched): 3" in out
     assert "other objects (named by no row; never touched): 1 (blobs/ 1)" in out
     assert "--dry-run: NOTHING ABOVE WAS CHANGED." in out and "nothing-to-purge: no" in out
     stray = stand.client.head_object(Bucket=stand.bucket, Key=STRAY_KEY)
@@ -176,7 +178,10 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
     command_keep = digest_of(stand.engine, "command_record", "command_type = 'approve_registration'")
     blob_keep = digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM norm_custody_binding "
                           "UNION SELECT set_blob_id FROM norm_retrieval_set "
-                          "UNION SELECT catalogue_blob_id FROM norm_retrieval_set)")
+                          "UNION SELECT catalogue_blob_id FROM norm_retrieval_set "
+                          "UNION SELECT blob_id FROM decision_memory_crop)")
+    crop_blobs = digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM decision_memory_crop)")[0]
+    assert crop_blobs >= 1, "the seed's recorded run publishes portal crops, which its decisions' cases reference"
     with stand.engine.connect() as connection:
         triggers = connection.execute(text(
             "SELECT tgrelid::regclass::text, tgname, tgenabled::text FROM pg_trigger "
@@ -207,11 +212,17 @@ def test_the_purge_removes_every_product_row_and_object_and_keeps_the_rest_byte_
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'norm_custody.')") == custody_keep
     assert digest_of(stand.engine, "audit_event", "starts_with(event_type, 'access.')") == access_keep
     assert digest_of(stand.engine, "command_record") == command_keep and command_keep[0] == 1
-    assert digest_of(stand.engine, "blob") == blob_keep and blob_keep[0] == 2
+    assert digest_of(stand.engine, "blob") == blob_keep and blob_keep[0] == 2 + crop_blobs  # the custody ledger's two, and the crops'
+    assert digest_of(stand.engine, "blob", "blob_id IN (SELECT blob_id FROM decision_memory_crop)")[0] == crop_blobs
     # objects: product gone, the custody ledger's and the stray untouched, byte for byte
     gone = set(before["bucket"]) - set(after["bucket"])
     assert len(gone) >= 14 and STRAY_KEY not in gone
-    assert set(after["bucket"]) == set(stand.summary["norm_keys"]) | {STRAY_KEY}
+    from auditmanager.storage.public import canonical_object_key_for_recovery
+
+    with stand.engine.connect() as connection:
+        crop_keys = {canonical_object_key_for_recovery(blob) for blob in connection.execute(
+            text("SELECT blob_id FROM decision_memory_crop")).scalars()}
+    assert set(after["bucket"]) == set(stand.summary["norm_keys"]) | {STRAY_KEY} | crop_keys
     assert all(after["bucket"][key] == before["bucket"][key] for key in after["bucket"])
     assert stand.summary["temporary_key"] in gone
     # triggers (a purge must leave the append-only guard enabled) and sequences (monotonic)

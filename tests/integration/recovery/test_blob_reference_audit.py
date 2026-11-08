@@ -299,6 +299,7 @@ def test_a_comparison_blob_reference_must_name_an_available_blob(change: str, re
         data["report_artifacts"] = []
         data["stage_files"] = []
         data["stage_candidates"] = []
+        data["memory_crops"] = []
     with pytest.raises(BlobReferenceAuditRefused, match=reason):
         audit_blob_references(_Session(data))  # type: ignore[arg-type]
 
@@ -400,6 +401,7 @@ def test_pending_and_rejected_admissions_need_no_published_object() -> None:
     data["report_artifacts"].clear()
     data["stage_files"].clear()
     data["stage_candidates"].clear()
+    data["memory_crops"].clear()
     data["blob"].clear()
     result = audit_blob_references(_Session(data))  # type: ignore[arg-type]
     assert result.available_blobs == ()
@@ -421,6 +423,7 @@ def test_unsettled_artifact_can_hold_incomplete_temporary_blob() -> None:
     data["report_artifacts"].clear()
     data["stage_files"].clear()
     data["stage_candidates"].clear()
+    data["memory_crops"].clear()
     data["artifacts"][0]["state"] = "abandoned"
     data["blob"][0].update(state="temporary", sha256=None, size_bytes=None, media_type=None)
     assert audit_blob_references(_Session(data)).available_blobs == ()  # type: ignore[arg-type]

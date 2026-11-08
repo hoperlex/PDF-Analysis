@@ -816,7 +816,7 @@ def render_plan(plan: Plan, *, dry_run: bool) -> str:
     out.append(f"  product objects to delete, by exact key: {len(present)} objects, "
                f"{sum(o.size or 0 for o in present)} bytes "
                f"({len(plan.objects) - len(present)} more keys are named by rows but not in the bucket)")
-    out.append(f"  norm-owned objects (the custody ledger's, never touched): {plan.norm_owned_present}")
+    out.append(f"  norm-owned objects (the custody ledger's and the decision memory's crops; never touched): {plan.norm_owned_present}")
     stray = ", ".join(f"{prefix} {count}" for prefix, count in plan.unaccounted.items()) or "none"
     out.append(f"  other objects (named by no row; never touched): {plan.unaccounted_total} ({stray})")
     out.append(f"  objects in the bucket: {plan.bucket_objects}")

@@ -126,6 +126,13 @@ IMMUTABLE_TABLES = {
     # written once, and a changed group is a new revision. The group row itself is never deleted (``am_immutable_row``
     # guards DELETE only; its name and creation are frozen, its archive is write-once and its rotation cursor advances).
     "executor_group", "executor_group_revision", "executor_group_member",
+    # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals of «График работ» are `am_immutable_row` (this set lacked them).
+    "engineer_absence_event", "schedule_plan_event", "schedule_setting_event", "work_assignment_schedule_event",
+    "work_calendar_event",
+    # `0059_decision_memory` (`ADR-0027`): the case of a decision and everything it keeps are written once; a later decision on the
+    # same observation is a new `decision_memory_decision` row, and a withdrawal is a status event.
+    "decision_memory_case", "decision_memory_decision", "decision_memory_decision_text", "decision_memory_status_event",
+    "decision_memory_content", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop",
 }
 
 
@@ -575,6 +582,13 @@ def test_every_identity_column_carries_a_format_check(migrated_engine: Engine) -
         "origin_version_uid": "ver",
         "origin_run_id": "run",
         "source_decision_id": "dec",
+        # `0055_work_schedule` (`UI-PARITY-P0P`): the five journals are identified by an event identity and name accounts.
+        "setting_event_id": "evt",
+        "plan_event_id": "evt",
+        "calendar_event_id": "evt",
+        "absence_event_id": "evt",
+        "schedule_event_id": "evt",
+        "engineer_user_uid": "usr",
     }
     assert (set(prefix_by_column.values()) | set(PREFIX_BY_TABLE_COLUMN.values())) <= {
         identity.prefix for identity in IDENTITY_TYPES_BY_ENTITY.values()

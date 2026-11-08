@@ -558,6 +558,9 @@ What exists, as built; where it differs from sections 3 and 7, this list is the 
 - **Crop selection rule v1** is `page_images/1`: the portal image-block crops of the pages the evidence names, at most 4, no geometric
   test against the evidence block (`D-392`). The rule name is stored on every crop.
 - **Guards G1** are in `product_purge.py` and `project_erase.py`; **G2** (pending crops) arrives with M3.
+- **Debts of this phase** (`DEBT_REGISTER.md`): `D-390` every case is `data_class = test` until M2 makes it a setting; `D-391` the
+  import's `imported`; `D-392` the crop rule and `model_identity`; `D-393` the status event's actor key and command types; `D-394`
+  the forget guard and the crop state guard; `D-395` the object-store reads inside a first decision and the sweep's scan.
 ### Risks
 
 | # | Risk | Mitigation |

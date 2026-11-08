@@ -168,7 +168,7 @@ def test_a_case_and_its_decision_are_refused_an_update_and_a_delete(at_head: tup
         ):
             with pytest.raises(DBAPIError) as refused, engine.begin() as connection:
                 connection.execute(text(statement))
-            assert "append-only" in str(refused.value.orig) or "AM002" in str(refused.value.orig), refused.value
+            assert "immutable once written" in str(refused.value.orig), refused.value
     finally:
         with _unguarded(engine) as connection:
             connection.execute(text("DELETE FROM decision_memory_decision"))

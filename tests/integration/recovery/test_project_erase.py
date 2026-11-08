@@ -219,7 +219,9 @@ _BLOB_SOURCES = (
     "UNION SELECT mask_blob_id FROM comparison_sheet_pair_result WHERE project_uid = :p"
 )
 _KEEP_BLOBS = ("SELECT blob_id FROM norm_custody_binding UNION SELECT set_blob_id FROM norm_retrieval_set "
-               "UNION SELECT catalogue_blob_id FROM norm_retrieval_set")
+               "UNION SELECT catalogue_blob_id FROM norm_retrieval_set "
+               # `0059_decision_memory`: a crop the decision memory references stays with its object.
+               "UNION SELECT blob_id FROM decision_memory_crop")
 
 
 def slice_digest(engine: Engine, table: str, where: str, project: str) -> tuple[int, str]:
@@ -729,6 +731,23 @@ def test_the_rich_project_leaves_the_second_project_and_the_shared_blob_readable
     assert erased.manifest is not None
     listed = {b["blob_id"] for b in json.loads(erased.manifest.read_text(encoding="utf-8"))["blobs"]}
     assert not listed & shared
+
+
+def test_an_erase_leaves_the_decision_memory_of_the_project_it_erased(stand: Stand, tmp_path: Path) -> None:
+    """`ADR-0027`: the cases of the erased project's decisions are the only copy of their context afterwards, and stay."""
+    target = project_like(stand, "Школа")
+    kept = sorted(purge.KEEP_MEMORY_TABLES)
+    before = {table: digest_of(stand.engine, table) for table in kept}
+    cases = scalars(stand, "SELECT case_id FROM decision_memory_case WHERE origin_project_uid = :p", p=target)
+    assert cases and before["decision_memory_decision"][0] > 0 and before["decision_memory_evidence"][0] > 0
+    erased = do_erase(stand, tmp_path, "Школа")
+    assert erased.target == target and count(stand, "project", "project_uid = :p", p=target) == 0
+    assert count(stand, "expert_decision_event", "finding_uid IN (SELECT finding_uid FROM finding WHERE project_uid = :p)", p=target) == 0
+    assert {table: digest_of(stand.engine, table) for table in kept} == before
+    # the case still names the project, which no longer resolves, and still holds what the expert saw and said
+    assert scalars(stand, "SELECT case_id FROM decision_memory_case WHERE origin_project_uid = :p", p=target) == cases
+    assert count(stand, "decision_memory_evidence", "case_id = ANY(:c)", c=cases) > 0
+    assert count(stand, "decision_memory_decision", "case_id = ANY(:c)", c=cases) > 0
 
 
 def test_a_second_apply_of_the_same_plan_finds_nothing_to_do_and_changes_nothing(stand: Stand, tmp_path: Path) -> None:
