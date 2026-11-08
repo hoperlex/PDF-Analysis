@@ -442,6 +442,7 @@ WRITE_OPERATIONS = {
     "approveRegistration",
     "cancelRun",
     "reauditRun",
+    "startRunFromStage",
     "setJobPriority",
     "setExecutionPaused",
     "setWorkerIntake",

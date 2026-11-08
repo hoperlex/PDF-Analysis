@@ -352,6 +352,15 @@ from sqlalchemy import Engine, text
 #: ``finding_execution_status``), columns +11 (``audit_run.started_by_user_uid``; ``document.archived_at`` and
 #: ``archived_by_user_uid``; four in each new table), constraints +15 (their keys, references and checks), indexes +4,
 #: triggers the same 241 with a new digest (0051 re-created ``audit_run``'s frozen-column trigger with the starter).
+#: Resealed 2026-11-09 for ``0060_run_from_stage`` (`UI-PARITY-S2`, `UI-A-60`, `R-151i`), measured on a throwaway PostgreSQL (the
+#: project image, stand ``am-lane-s2-pg``): the constraint/index/trigger digests on the lane database upgraded to ``0060``, down to
+#: ``0058`` and up again, the **columns** digest on a fresh database upgraded once (a down/up cycle leaves a gap in the ordinal
+#: positions of ``audit_run`` and so another digest -- this seal is the fresh one): ``audit_run.started_from_run_id`` and
+#: ``start_stage_id`` (columns +2, to 1591), five constraints (the foreign key to ``audit_run`` and four checks: the ``run_`` shape, not
+#: itself, the start stage, both-or-neither; constraints +5, to 1958), the partial index on the pair (indexes +1, to 466), and the
+#: frozen-column trigger of ``audit_run`` re-created with the pair in its list (triggers the same 246 with a new digest). Relations,
+#: functions, views, extensions, sequences, policies and the state topology are byte-identical to the ``0058`` seal. The chained
+#: head with lane M1's ``0059`` has to be measured again (`D-414`).
 #: Resealed 2026-11-08 for ``0058_finding_decision_origin`` (`UI-PARITY-FINDING-ORIGIN`, `UI-A-73`), measured on a throwaway
 #: PostgreSQL (the project image, stand ``am-lane-c4-pg``) upgraded to ``0058``, down to ``0057`` and up again: the column
 #: ``expert_decision_event.carried_from_decision_id`` (columns +1, to 1589), its foreign key to the table itself and three
@@ -377,7 +386,7 @@ from sqlalchemy import Engine, text
 #: checks), indexes +9 (five primary keys and four lookups), triggers +5 (``am_immutable_row`` on each); functions, views,
 #: extensions, sequences, policies and the state topology are byte-identical to the ``0054`` seal.
 EXPECTED_INVENTORY: dict[str, tuple[int, str]] = {
-    "columns": (1591, "ee448d172f5fac40e5a13c6b8776e79acc8c65186c3307a0fa9effdcbdd695b8"),
+    "columns": (1591, "483e353ec5267daf715ef150f8f5dda804eec060b2ee2cd125b0ea02fa8f511f"),
     "relations": (148, "2bef8303c7c1cc9481b938e72e8c241fd9b3e391f55d8c3a4fdde713d60e3384"),
     "constraints": (1958, "1ef13a8635bdfff535639282d50b940cc5eed4a6c126e8dd1168e71188748396"),
     "indexes": (466, "d7edaa45e2df7806748f8bd20d7b66e4d9754a7007fb50f56124a6583bf4a5c4"),

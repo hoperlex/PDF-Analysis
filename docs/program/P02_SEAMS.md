@@ -1508,7 +1508,7 @@ Rules that hold across the whole surface:
 
 * the writes that take a required `Idempotency-Key` header are `createProject`,
   `uploadDocument`, `uploadDocumentVersion`, `startRun`, `startArV3BetaGroup`, `appendDecision`,
-  `approveRegistration`, `cancelRun`, `reauditRun`, `setJobPriority`,
+  `approveRegistration`, `cancelRun`, `reauditRun`, `startRunFromStage`, `setJobPriority`,
   `setExecutionPaused`, `setWorkerIntake`, `endUserSessions`, `carryOverDecision`, `setDocumentArchived`, `renameDocument`, `setDocumentTags`, `setFindingExecutionStatus`,
   `importRunDecisions`, `importOptimisationProposalDecisions`, `carryOverProposalDecisions`, `setWorkScheduleSettings`, `setWorkSchedulePlans`, `setWorkCalendarDays`, `setEngineerAbsences`,
   `scheduleAssignments`,
