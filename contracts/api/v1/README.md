@@ -11,7 +11,38 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.39.0` (`UI-PARITY-FINDING-ORIGIN`)
+## Current contract `1.40.0` (`UI-PARITY-AUDIT-STATE`)
+
+Slice for register rows `UI-A-47` (the original's «идёт аудит» strip on a document), `UI-A-65` / `UI-B-45` (the estimated finish
+on the run page) and `UI-B-07` (the percent beside a proposal's saving). **No operation, no error code, no migration** (head
+stays `0058`). One new schema, `DocumentActiveRun`; three optional properties, each absent when it has nothing to say.
+
+- **A document names the run in flight.** `DocumentAudit.active_run` (`listDocuments` only, read in the same statement as the
+  audit, one statement for the page) is `{run_id, state}` of the version's latest run of the standard analysis in state
+  `queued`, `running` or `validating`, ordered by `(created_at, run_id)` as the result run is; absent when none is. It is a fact
+  beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one
+  with a re-run in flight is still `checked`; the counters (`DocumentAuditCounts`, the dashboard) do not read it. A `created`
+  run is not active (not yet admitted); a run of an AR v3 group never is, as it is never a result (`AR-V3-OPT-IN`, `Q3`). **No
+  progress figure** («пакет n/m»): the run status reports stages and the server holds no plan of packages to count against
+  (`D-345`); the card says «идёт аудит» with the state and links to the run page, where the stages are.
+- **The run page has the estimate the queue has.** `RunStatus.estimated_finish_at` is the value of
+  `ExecutionQueueItem.estimated_finish_at` (`R-151u`) for the run's job, from **one function**
+  (`execution.eta.job_estimated_finish`, which the queue item calls too): the job's first attempt plus the median duration of at
+  least three similar recent completed runs. Present only while the run's job is leased or running and has started; absent for a
+  queued, waiting or finished run and without enough history; never invented. It can already lie in the past for a run that is
+  taking longer than the usual one; the screen says what the time is and not that it will be met.
+- **A proposal's percent.** `OptimisationProposal.saving_percent` is how much cheaper the proposed unit price is than the
+  current one, in percent of the current unit price: `(current - proposed) / current * 100`, exact rational arithmetic, rounded
+  half up to two decimals and written without a trailing zero (`25`, `33.33`; pattern `^(0|100|(0|[1-9][0-9]?)\.[0-9]?[1-9]|[1-9][0-9]?)$`).
+  It is the share the `saving` is of the cost at the current price, with the quantity cancelled, so it is present where `saving` is
+  `null` for want of a numeric quantity; absent only when the current unit price is zero. The one figure of a proposal that is
+  rounded; never computed by a client. The proposals' CSV and workbook and `AcceptedOptimisationProposal` do not carry it (`D-346`).
+- **Not changed.** The four audit states, `ExecutionQueueItem`, the counters, every operation's request.
+
+The API now has 273 paths, 301 operations and 727 schemas (the new schema is `DocumentActiveRun`); migration head `0058`. The
+domain catalogs are at candidate revision 57.
+
+## Contract `1.39.0` (`UI-PARITY-FINDING-ORIGIN`, historical)
 
 Slice for register row `UI-A-73` (the original's «↩ Перенесено из V1» on a finding whose verdict an expert carried over from an
 earlier version) and `D-335`, migration `0058_finding_decision_origin`. **No operation, no error code.** One new schema,

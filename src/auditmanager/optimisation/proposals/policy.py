@@ -72,6 +72,7 @@ __all__ = [
     "REFUSAL_CARRYOVER_SOURCE_NOT_EARLIER",
     "REFUSAL_CARRYOVER_SOURCE_OTHER_DOCUMENT",
     "REFUSAL_CARRYOVER_SOURCE_UNKNOWN",
+    "REFUSAL_DECISION_RACED",
     "REFUSAL_NOTHING_TO_REVOKE",
     "REFUSAL_VENDOR_LIST_MISSING",
     "STORED_VERDICTS",
@@ -139,6 +140,10 @@ CARRYOVER_REFUSAL_REASONS: Final[tuple[str, ...]] = (
 CARRYOVER_OUTCOMES: Final[tuple[str, ...]] = ("carried", "target_decided", "ambiguous", "unmatched")
 #: The ``conflict_reason`` of a ``revoke`` over a proposal with no standing decision.
 REFUSAL_NOTHING_TO_REVOKE: Final[str] = "no_decision_to_revoke"
+#: `D-348`: a decision whose ``seq`` was taken by another writer between its read and its insert (the unique pair refused it).
+#: Under the pass lock both writers hold (:meth:`ProposalRepository.lock_pass_decisions`) it cannot happen; it is the typed
+#: answer of the backstop, so that a writer which forgot the lock costs a retry and not a ``500``.
+REFUSAL_DECISION_RACED: Final[str] = "proposal_decision_raced"
 #: Every ``conflict_reason`` a refused pass can carry, in the order the preconditions are
 #: checked.
 PASS_REFUSAL_REASONS: Final[tuple[str, ...]] = (

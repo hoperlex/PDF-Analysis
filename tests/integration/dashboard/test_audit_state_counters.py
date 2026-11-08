@@ -65,6 +65,7 @@ _PATH = {
     "created": (),
     "queued": ("queued",),
     "running": ("queued", "running"),
+    "validating": ("queued", "running", "validating"),
     "published": ("queued", "running", "validating", "published"),
     "partial": ("queued", "running", "validating", "partial"),
     "failed": ("queued", "failed"),
@@ -657,3 +658,134 @@ def test_an_unknown_audit_state_or_order_is_refused_and_an_unknown_version_is_no
     assert adapter.document_audits(version_uids=[]) == {}, "no names, no statement"
     with pytest.raises(RuntimeError):
         DocumentAdapter(_Documents(factory)).list_documents(project_uid=world.school, audit_state="clean")
+
+
+# --- the run in flight (`UI-A-47`, contract 1.40.0) ------------------------------------------------------------------
+
+
+def test_only_a_run_in_flight_is_an_active_run_and_it_is_read_in_the_audit_statement(
+    factory: sessionmaker[Session], world: World
+) -> None:
+    """On the world above exactly one document has a run in flight (``d_await``: a newer run still running over its
+    result). Its state is the one counted by hand -- the active run is a fact beside it -- and no other record has one."""
+    adapter = _documents(factory)
+    views = adapter.list_documents(project_uid=world.school, order="audit")
+    assert len(views) == 11
+    active = {view.display_title: view.audit.active_run for view in views if view.audit is not None}
+    assert {title for title, run in active.items() if run is not None} == {"d_await"}
+    run = active["d_await"]
+    assert run is not None and run.state == "running" and run.run_id.startswith("run_")
+    by_title = {view.display_title: view.audit for view in views}
+    assert by_title["d_await"] is not None and by_title["d_await"].state == "awaiting_decision", (
+        "a run in flight over a result changes none of the four words"
+    )
+    body = document_audit_body(by_title["d_await"])
+    assert body["active_run"] == {"run_id": run.run_id, "state": "running"} and body["state"] == "awaiting_decision"
+    assert all("active_run" not in document_audit_body(audit) for title, audit in by_title.items() if title != "d_await" and audit)
+    # The counters never read it: the figures of the school are the hand count the tests above assert, with this run in
+    # flight over ``d_await``.
+
+
+def _active_cases() -> list[tuple[str, list[Spec], int, dict[int, str | None]]]:
+    """``(name, runs, versions, {version number: what its active run's state must be, None for none})``."""
+    low, high = _two_run_ids()
+    return [
+        ("never run", [], 1, {1: None}),
+        ("a queued run", [Spec("queued", 100)], 1, {1: "queued"}),
+        ("a running run", [Spec("running", 100)], 1, {1: "running"}),
+        ("a validating run", [Spec("validating", 100)], 1, {1: "validating"}),
+        ("a created run has not been admitted", [Spec("created", 100)], 1, {1: None}),
+        ("a failed run", [Spec("failed", 100)], 1, {1: None}),
+        ("a cancelled run", [Spec("cancelled", 100)], 1, {1: None}),
+        ("a published result alone", [Spec("published", 100, ("pending",))], 1, {1: None}),
+        ("a partial result alone", [Spec("partial", 100, ("accepted",))], 1, {1: None}),
+        ("a re-run in flight over a result", [Spec("published", 100, ("accepted",)), Spec("queued", 10)], 1, {1: "queued"}),
+        ("the newest of two in flight", [Spec("queued", 100), Spec("running", 10)], 1, {1: "running"}),
+        ("the newer in flight, the older terminal", [Spec("failed", 100), Spec("validating", 10)], 1, {1: "validating"}),
+        ("the older in flight, the newer terminal", [Spec("running", 100), Spec("failed", 10)], 1, {1: "running"}),
+        (
+            "two made in the same instant: the greater run_id is the latest, as the result run is chosen",
+            [Spec("queued", 50, run_id=low), Spec("running", 50, run_id=high)], 1, {1: "running"},
+        ),
+        (
+            "only the current version is read: a run in flight on version 1 is not version 2's",
+            [Spec("running", 100, version=1)], 2, {2: None},
+        ),
+        (
+            "and a run in flight on the current version is",
+            [Spec("running", 100, version=1), Spec("queued", 10, version=2)], 2, {2: "queued"},
+        ),
+    ]
+
+
+def test_each_situation_of_the_active_run_reads_as_ruled_and_leaves_the_audit_state_alone(session: Session) -> None:
+    seed = Seeder(session)
+    cases = _active_cases()
+    seeded: dict[str, tuple[str, list[str]]] = {}
+    for name, runs, versions, _ in cases:
+        project = seed.project(f"Активный прогон: {name}")
+        document = seed.document(project, "Документ")
+        uids = [seed.version(document, classified=("R", "AR")) for _ in range(versions)]
+        for spec in runs:
+            run_id = _run(session, project, uids[spec.version - 1], spec.state, age=spec.age, run_id=spec.run_id)
+            for kind in spec.findings:
+                _finding(session, project, uids[spec.version - 1], run_id, kind)
+        seeded[name] = (project, uids)
+    session.commit()
+
+    wrong: list[str] = []
+    for name, runs, _, wanted in cases:
+        project, uids = seeded[name]
+        current = uids[-1]
+        record = model.audits(session, version_uids=[current])[current]
+        (version_number, state), = wanted.items()
+        assert uids[version_number - 1] == current, name
+        if record.active_run_state != state:
+            wrong.append(f"{name}: expected {state!r}, read {record.active_run_state!r}")
+        assert (record.active_run_id is None) == (record.active_run_state is None), name
+        # The four words are what the result run alone makes them -- the same call as the counters'.
+        from auditmanager.dashboard.audit_state import audit_state
+
+        assert (record.state, record.partial) == (
+            audit_state(record.result_state, record.finding_count > 0, record.undecided_finding_count > 0).state,
+            record.result_state == "partial",
+        ), name
+        # Both reads agree on the state of the document: the counters' statement does not read the active run.
+        counted = tally(model.groups(session, project_uid=project))
+        assert getattr(counted, record.state) == 1 and counted.document_count == 1, name
+    assert not wrong, "\n".join(wrong)
+    assert {case[3][max(case[3])] for case in cases} == {None, "queued", "running", "validating"}, "not vacuous"
+
+
+def test_a_run_of_an_ar_v3_group_in_flight_is_not_an_active_run(session: Session) -> None:
+    """The sealed v3 pair is the one condition shared with the result run (``STANDARD_RUN_SQL``): a v3 member in flight
+    is a run of its version and listed with the others, but the document's card does not name it, as it never names a
+    v3 result."""
+    from auditmanager.analysis.public import AR_V3_BETA_BUNDLE_ID, AR_V3_BETA_PROFILE_ID
+
+    seed = Seeder(session)
+    project = seed.project("v3 в работе")
+    document = seed.document(project, "Документ")
+    version = seed.version(document, classified=("R", "AR"))
+    standard = _run(session, project, version, "queued", age=100)
+    v3 = str(RunId.new())
+    session.execute(
+        text(
+            "INSERT INTO audit_run (run_id, project_uid, version_uid, state, analysis_profile_id, prompt_bundle_id, "
+            "provider_mode, frozen_input_digest, created_at) VALUES (:r, :p, :v, 'created', :ap, :pb, 'recorded', :s, "
+            "now() - make_interval(secs => 5))"
+        ),
+        {"r": v3, "p": project, "v": version, "ap": str(AR_V3_BETA_PROFILE_ID), "pb": str(AR_V3_BETA_BUNDLE_ID),
+         "s": _digest(f"v3-{v3}")},
+    )
+    for step in ("queued", "running"):
+        session.execute(text("UPDATE audit_run SET state = :s WHERE run_id = :r"), {"s": step, "r": v3})
+    session.commit()
+    record = model.audits(session, version_uids=[version])[version]
+    assert (record.active_run_id, record.active_run_state) == (standard, "queued"), (
+        "the newer v3 run is not the active run; the older standard one is"
+    )
+    session.execute(text("UPDATE audit_run SET state = 'cancelled', terminal_at = now() WHERE run_id = :r"), {"r": standard})
+    session.commit()
+    record = model.audits(session, version_uids=[version])[version]
+    assert (record.active_run_id, record.active_run_state) == (None, None), "a v3 run alone names nothing"

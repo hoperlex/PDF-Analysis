@@ -453,3 +453,175 @@ def test_a_carried_decision_is_written_only_into_a_proposal_that_has_no_event(un
         with session_scope(factory) as session:
             attempt(session, new["Монтажная"].optimisation_proposal_id, "d", "opd_01M2545JSD15ETSNNV904XA001")
     assert "fk_optimisation_proposal_decision_carried_from" in str(refused.value)
+
+
+# --- a carry-over and an expert's own decision on one proposal (`D-348`) ------------------------------------------------
+
+
+class _Pausing:
+    """A ``ProposalRepository`` that stops its transaction open right after one chosen write, until it is released.
+
+    The test thread that owns the transaction sets ``paused`` once the write is in (and not yet committed) and waits on
+    ``release``; the other writer is started meanwhile on a second connection. A wait that times out fails the test rather
+    than hang it.
+    """
+
+    def __init__(self, after: str) -> None:
+        import threading
+
+        from auditmanager.optimisation.proposals.repository import ProposalRepository
+
+        self.paused = threading.Event()
+        self.release = threading.Event()
+
+        class Repository(ProposalRepository):
+            def __getattribute__(inner, name: str) -> Any:  # noqa: N805 - the repository under the hooks
+                member = super().__getattribute__(name)
+                if name != after:
+                    return member
+
+                def paused_after(*args: Any, **kwargs: Any) -> Any:
+                    result = member(*args, **kwargs)
+                    self.paused.set()
+                    assert self.release.wait(timeout=60), "the paused writer was never released"
+                    return result
+
+                return paused_after
+
+        self.repository = Repository()
+
+
+def _in_thread(call, **arguments: Any):
+    import threading
+
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["result"] = call(**arguments)
+        except BaseException as refused:  # noqa: BLE001 - reported to the test thread
+            box["error"] = refused
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return thread, box
+
+
+def _history(unit, proposal: str) -> list[tuple[int, str, bool]]:
+    entries = unit(list_proposal_decisions, optimisation_proposal_id=proposal, actor_roles=frozenset({"expert"}))
+    return [(entry.seq, entry.verdict, entry.carried_from is not None) for entry in entries]
+
+
+def test_a_decision_made_while_a_carry_over_is_in_flight_waits_for_it_and_follows_it(unit, cast, two_passes) -> None:
+    """The carried event is written and not yet committed when the expert decides the same proposal. Before the pass lock
+    the decision read ``seq`` 1, blocked on the carried row and failed on the unique pair when it committed: a ``500`` and a
+    lost decision. Now it waits for the commit and takes ``seq`` 2: both events stand and the expert's is the current one."""
+    old, new = _by_row(two_passes["old"]), _by_row(two_passes["new"])
+    _decide(unit, cast, old["Окно"].optimisation_proposal_id, "accept", "race-src")
+    target = new["Окно"].optimisation_proposal_id
+    carrier = _Pausing(after="insert_carried_decision")
+
+    carry, carried = _in_thread(
+        lambda **kw: _carry(unit, cast, two_passes["second"].optimisation_pass_id,
+                            two_passes["first"].optimisation_pass_id, "race-carry", repository=carrier.repository),
+    )
+    assert carrier.paused.wait(timeout=60), "the carry-over never reached its insert"
+    decide, decided = _in_thread(
+        lambda **kw: _decide(unit, cast, target, "reject", "race-decide", "не согласен"),
+    )
+    decide.join(timeout=2.0)
+    assert decide.is_alive(), "the decision must wait for the carry-over's lock, not run beside it"
+    carrier.release.set()
+    carry.join(timeout=60)
+    decide.join(timeout=60)
+    assert not carry.is_alive() and not decide.is_alive()
+
+    assert "error" not in carried, carried.get("error")
+    assert "error" not in decided, f"the expert's decision failed: {decided.get('error')!r}"
+    assert carried["result"].carried >= 1
+    assert decided["result"].decision.seq == 2 and decided["result"].decision.verdict == "reject"
+    assert _history(unit, target) == [(1, "accept", True), (2, "reject", False)], "no event lost, none out of order"
+    assert decided["result"].proposal.current_verdict == "reject", "the expert's own act is the decision in force"
+
+
+def test_a_carry_over_started_while_a_decision_is_in_flight_waits_for_it_and_leaves_it_alone(unit, cast, two_passes) -> None:
+    """The other order: the decision is written and not yet committed when the carry-over starts. The carry-over waits for
+    the pass lock, then plans on the committed decision: the proposal is ``target_decided`` and nothing is overwritten."""
+    old, new = _by_row(two_passes["old"]), _by_row(two_passes["new"])
+    _decide(unit, cast, old["Окно"].optimisation_proposal_id, "accept", "race2-src")
+    target = new["Окно"].optimisation_proposal_id
+    decider = _Pausing(after="insert_decision")
+
+    decide, decided = _in_thread(
+        lambda **kw: _decide(unit, cast, target, "reject", "race2-decide", "решил первым", repository=decider.repository),
+    )
+    assert decider.paused.wait(timeout=60), "the decision never reached its insert"
+    carry, carried = _in_thread(
+        lambda **kw: _carry(unit, cast, two_passes["second"].optimisation_pass_id,
+                            two_passes["first"].optimisation_pass_id, "race2-carry"),
+    )
+    carry.join(timeout=2.0)
+    assert carry.is_alive(), "the carry-over must wait for the pass lock, not plan on a decision it cannot see"
+    decider.release.set()
+    decide.join(timeout=60)
+    carry.join(timeout=60)
+    assert not carry.is_alive() and not decide.is_alive()
+
+    assert "error" not in decided, decided.get("error")
+    assert "error" not in carried, carried.get("error")
+    assert decided["result"].decision.seq == 1
+    assert _history(unit, target) == [(1, "reject", False)], "the expert's decision stands alone"
+    assert carried["result"].target_decided >= 1
+
+
+def test_a_decision_that_loses_its_place_to_a_writer_without_the_lock_is_a_typed_conflict_and_can_be_repeated(
+    unit, factory, cast, two_passes
+) -> None:
+    """The backstop behind the locks: ``seq`` taken by a carried event that committed between the read and the insert (a
+    writer that held no lock) is ``409 conflict`` / ``proposal_decision_raced``, never a ``500``. Nothing is written, the
+    key's claim is rolled back with the transaction, and the same request, repeated, lands after the carried event."""
+    from auditmanager.optimisation.proposals.identity import ProposalDecisionId
+    from auditmanager.optimisation.proposals.repository import ProposalRepository
+
+    old, new = _by_row(two_passes["old"]), _by_row(two_passes["new"])
+    source = _decide(unit, cast, old["Окно"].optimisation_proposal_id, "accept", "race3-src").decision
+    target = new["Окно"].optimisation_proposal_id
+
+    class Stale(ProposalRepository):
+        """Reads ``seq`` 1, then lets a carried event take it, exactly as the unlocked carry-over could."""
+
+        def next_seq(self, session: Session, proposal_id: str) -> int:
+            seq = super().next_seq(session, proposal_id)
+            with session_scope(factory) as other:
+                from auditmanager.ingest.public import CommandRepository, payload_fingerprint
+                from auditmanager.shared.identity import IdempotencyKey
+
+                claim = CommandRepository().begin(
+                    other,
+                    command_type="carry_over_proposal_decision",
+                    idempotency_key=IdempotencyKey("cry-race3-0123456789-0123456789"),
+                    fingerprint=payload_fingerprint({"command": "race3"}),
+                )
+                written = ProposalRepository().insert_carried_decision(
+                    other, decision_id=ProposalDecisionId.new(), proposal_id=proposal_id, verdict="accept",
+                    comment=None, actor_user_uid=cast.other_expert, command_id=str(claim.command_id),
+                    carried_from_decision_id=source.proposal_decision_id,
+                )
+                assert written is not None and written.seq == seq == 1
+            return seq
+
+    before = _counts(factory)
+    refused = _refused(
+        ErrorCode.CONFLICT, _decide, unit, cast, target, "reject", "race3-decide", "опоздал", repository=Stale(),
+    )
+    assert refused.detail_fields["conflict_reason"] == "proposal_decision_raced"
+    after = _counts(factory)
+    assert after["optimisation_proposal_decision"] == before["optimisation_proposal_decision"] + 1, (
+        "only the carried event of the other writer was written"
+    )
+    assert after["command_record"] == before["command_record"] + 1, "the refused decision's claim was rolled back"
+    assert _history(unit, target) == [(1, "accept", True)]
+
+    again = _decide(unit, cast, target, "reject", "race3-decide", "опоздал")
+    assert again.decision.seq == 2 and again.replayed is False
+    assert _history(unit, target) == [(1, "accept", True), (2, "reject", False)]

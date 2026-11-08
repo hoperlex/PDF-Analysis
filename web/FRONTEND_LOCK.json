@@ -16,18 +16,18 @@
   },
   "openapi": {
     "path": "contracts/api/v1/openapi.json",
-    "sha256": "79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116",
-    "content_commit": "e8f741a8",
-    "content_commit_subject": "feat(contract): 1.39.0 — a carried finding decision names its source (UI-PARITY-FINDING-ORIGIN)",
-    "dispatch_named_commit": "e8f741a88135bb86b2335ff9acc531318cdbb1de",
-    "commit_note": "Resealed by UI-PARITY-FINDING-ORIGIN: contract 1.39.0 (DecisionCarriedFrom on DecisionEvent, DecisionRecord, Finding and FindingDetail; AcceptedOptimisationProposal.carried_from).",
+    "sha256": "4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1",
+    "content_commit": "0b4045e7",
+    "content_commit_subject": "fix(optimisation): a carry-over and an expert's own decision on one proposal are ordered by the pass lock; the unique pair's refusal is a typed conflict (D-348, D-349)",
+    "dispatch_named_commit": "0b4045e7cc4ac52c9ec8741e9a1459791d2cbd70",
+    "commit_note": "Resealed by UI-PARITY-AUDIT-STATE: contract 1.40.0 (DocumentAudit.active_run, RunStatus.estimated_finish_at, OptimisationProposal.saving_percent, the typed conflict of decideOptimisationProposal; one new schema DocumentActiveRun).",
     "openapi_version": "3.1.0",
-    "info_version": "1.39.0",
+    "info_version": "1.40.0",
     "paths": 273,
     "operations": 301,
-    "component_schemas": 726,
+    "component_schemas": 727,
     "snapshot": "web/openapi/openapi.json",
-    "snapshot_sha256": "79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116",
+    "snapshot_sha256": "4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1",
     "read_only": "The generated client and mirror come from the authored C4 contract; verify exact bytes before integration."
   },
   "generator": {
@@ -42,10 +42,10 @@
   "generated": {
     "directory": "web/src/shared/api/generated",
     "files": {
-      "client.gen.ts": "ae2a31b0e7f155134b1e7ab9412dbf862b1c1b542924a12eee5fbc5a68d7ffb3",
-      "index.ts": "7db3d81dec042e2a8a053e532f2a0be4f6d0f5da1684e0f615e2964b2c65b29a",
-      "operations.gen.ts": "e665838d057c47d76c7cde50fd55dbbaf3dbc9fc61125398f3115a2a4bf85b91",
-      "types.gen.ts": "1177d1c277499b500703a1f5d94edff430a63b4a6675209fe4ce6ae816f49bb8"
+      "client.gen.ts": "3372d9b1c1523c8ac0a004127ec8dd86dd9ecb62bcdc656b18e6949b2b3ae3f5",
+      "index.ts": "696b59027b55fdfe50b54461a3908de76334e8d48596ba0c3df64c1e2aaae9e0",
+      "operations.gen.ts": "9f9ec2e4ba8a0ecbf6208ced344316b382fe81e52e90738e45c7bf751a407a6c",
+      "types.gen.ts": "d9ad9088926aac0af39805d9ef58fcf12be91130256a8ab1771600fd003e523f"
     },
     "hand_editing": "forbidden; every file carries a do-not-edit header and the drift guard compares bytes"
   },

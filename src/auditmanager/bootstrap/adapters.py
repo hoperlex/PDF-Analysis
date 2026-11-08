@@ -51,7 +51,12 @@ from auditmanager.api.schemas.decisions import (
     DecisionRecordView,
     decision_event_body,
 )
-from auditmanager.api.schemas.documents import DocumentAuditView, DocumentVersionView, ManifestEntryView
+from auditmanager.api.schemas.documents import (
+    DocumentActiveRunView,
+    DocumentAuditView,
+    DocumentVersionView,
+    ManifestEntryView,
+)
 from auditmanager.api.schemas.findings import (
     EvidenceView,
     FindingDetailView,
@@ -224,12 +229,11 @@ def _with_carried_origin(session: Session, views: Sequence[Any]) -> list[Any]:
 
 
 def _estimated_finish(row: Any, samples: Sequence[Any]) -> Any:
-    from auditmanager.execution.eta import estimated_finish
+    """`R-151u`: a queue item's estimate -- the one rule of ``execution.eta`` (the run status calls it too)."""
+    from auditmanager.execution.eta import job_estimated_finish
 
-    if getattr(row, "state", None) not in ("leased", "running") or not samples:
-        return None
-    return estimated_finish(
-        samples, started_at=getattr(row, "started_at", None),
+    return job_estimated_finish(
+        samples, job_state=getattr(row, "state", None), started_at=getattr(row, "started_at", None),
         analysis_profile_id=getattr(row, "analysis_profile_id", None), page_count=getattr(row, "page_count", None),
     )
 
@@ -1082,6 +1086,10 @@ class DocumentAdapter:
                 result_run_id=record.result_run_id,
                 finding_count=record.finding_count,
                 undecided_finding_count=record.undecided_finding_count,
+                # `UI-A-47`: the run in flight, read in the same statement as the audit; absent when none.
+                active_run=None if record.active_run_id is None else DocumentActiveRunView(
+                    run_id=record.active_run_id, state=record.active_run_state,
+                ),
             )
             for name, record in records.items()
         }
@@ -1804,6 +1812,7 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
         preset_of_revision,
         run_queue_reason,
     )
+    from auditmanager.execution.eta import run_estimated_finish
     from auditmanager.findings import diagnostics, published_finding_count
     from auditmanager.runs import RunRepository
 
@@ -1897,6 +1906,11 @@ def _run_status_view(session: Session, run_id: str) -> RunStatusView:
             else None
         ),
         **_group_status_fields(session, run, chosen),  # EXEC2-GROUP-RUN-01
+        # `UI-A-65` / `UI-B-45`: the estimate of the queue item of this run, by the same function; asked only of a run
+        # that has been admitted and is not terminal (a finished run costs no query), absent without enough history.
+        estimated_finish_at=(
+            run_estimated_finish(session, run_id) if run.state in ("queued", "running", "validating") else None
+        ),
         stages=tuple(
             StageStateView(
                 stage_id=stage.stage_id,
@@ -6011,6 +6025,8 @@ def _optimisation_proposal_view(record: Any, labels: "_Labels") -> models.Optimi
         proposed_unit_price=_plain_decimal(record.proposed_unit_price),
         currency=record.currency,
         saving=_optional_decimal(record.saving),
+        # `UI-B-07`: the percent is the server's arithmetic over the stored prices; absent when it has no base.
+        **_unset_none(saving_percent=_optional_decimal(record.saving_percent)),
         rationale=record.rationale,
         current_verdict=models.ProposalDecisionState(record.current_verdict),
         current_decision=None

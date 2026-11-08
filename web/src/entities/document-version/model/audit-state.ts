@@ -18,6 +18,8 @@
  */
 
 import type { DocumentAudit, DocumentVersion } from '@/shared/api';
+import { routes } from '@/shared/lib';
+import { STATE_LABELS } from '@/shared/ui';
 
 export type AuditStateCode = DocumentAudit['state'];
 
@@ -85,6 +87,41 @@ export function auditChip(audit: DocumentAudit | undefined): AuditChip | null {
     case 'checked':
       return { ...base, text: 'Проверен экспертом', tone: 'ok', detail: findingsDetail(audit) };
   }
+}
+
+// ---- the run in flight (`UI-A-47`, contract 1.40.0) -----------------------------------------------------------
+
+/** The three states of a run that is in flight: waiting for an executor, being worked on, being validated. */
+export type ActiveRunState = NonNullable<DocumentAudit['active_run']>['state'];
+
+export const ACTIVE_RUN_LABEL = 'Идёт аудит';
+
+export const ACTIVE_RUN_TITLE =
+  'Прогон этого документа ещё не закончен. Состояние аудита слева не меняется, пока прогон не опубликован; ход прогона — на его странице.';
+
+/** The mark of a document whose current version has a run in flight, beside its audit chip. */
+export interface ActiveRunMark {
+  readonly runId: string;
+  readonly state: ActiveRunState;
+  /** «Идёт аудит: в очереди» -- the run's state in the product's own words for it (`STATE_LABELS`). */
+  readonly text: string;
+}
+
+/**
+ * The mark, or `null` when the answer carried no audit or the server named no run in flight. It is a fact beside the four
+ * states: it never replaces the chip and never changes it. The server reads it in the statement that reads the audit, and
+ * only for the standard analysis; there is no progress figure to show (the run reports its stages, on its own page).
+ */
+export function activeRunMark(audit: DocumentAudit | undefined): ActiveRunMark | null {
+  const run = audit?.active_run;
+  if (run === undefined) return null;
+  return { runId: run.run_id, state: run.state, text: `${ACTIVE_RUN_LABEL}: ${STATE_LABELS[run.state]}` };
+}
+
+/** The run page of the run in flight, or `undefined` when there is none. The project is the version's own. */
+export function activeRunHref(version: Pick<DocumentVersion, 'project_uid' | 'audit'>): string | undefined {
+  const run = version.audit?.active_run;
+  return run === undefined ? undefined : routes.run(version.project_uid, run.run_id);
 }
 
 /** The audit state of a document, or `null` when its answer carried none. */

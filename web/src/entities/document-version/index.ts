@@ -125,13 +125,24 @@ export type { ClassificationHistoryProps } from './ui/classification-history';
 export { ClassificationHistory } from './ui/classification-history';
 
 // `UI-PARITY-DOC-AUDIT` (UI-A-46, UI-A-49, UI-A-38): the audit state of a document, its chip and the section filter.
-export type { AuditChip as AuditChipModel, AuditChipTone, AuditStateCode, SectionAuditFilter } from './model/audit-state';
+export type {
+  ActiveRunMark,
+  ActiveRunState,
+  AuditChip as AuditChipModel,
+  AuditChipTone,
+  AuditStateCode,
+  SectionAuditFilter,
+} from './model/audit-state';
 export {
+  ACTIVE_RUN_LABEL,
+  ACTIVE_RUN_TITLE,
   AUDIT_PARTIAL_MARK,
   AUDIT_STATE_CODES,
   NOT_RUN_EMPTY_TITLE,
   SECTION_FILTER_PARAM,
   SHOW_ALL_LABEL,
+  activeRunHref,
+  activeRunMark,
   auditChip,
   auditStateOf,
   notRunFilterSentence,

@@ -34,6 +34,7 @@ from auditmanager.optimisation.proposals.generator import (
     head_word,
     name_similarity,
     saving_for,
+    saving_percent_for,
     vendor_key,
 )
 from auditmanager.optimisation.repository import PriceListPositionRecord
@@ -333,3 +334,33 @@ def test_running_metre_analog_uses_factor_one_and_price_list_money() -> None:
     assert proposal.proposed is cheaper
     assert proposal.saving == Decimal('540')
     assert result.generator_version == 'cheaper-analog-v2'
+
+
+def test_the_saving_percent_is_exact_and_rounded_half_up_to_two_decimals() -> None:
+    """`UI-B-07` (contract 1.40.0): the one rounded figure of a proposal; the rest of this module's figures never are."""
+    def percent(current: str, proposed: str) -> Decimal | None:
+        return saving_percent_for(current_unit_price=Decimal(current), proposed_unit_price=Decimal(proposed))
+
+    assert percent("4", "3") == Decimal("25")
+    assert percent("3", "2") == Decimal("33.33"), "a third is not a decimal: rounded to the hundredth"
+    assert percent("3", "1") == Decimal("66.67"), "two thirds rounds up"
+    assert percent("1", "0") == Decimal("100")
+    assert percent("25000", "24999.999999") == Decimal("0"), "a saving of a millionth of a percent reads 0"
+    # Half up, not half to even: 0.125 is exactly a tie, and 0.12 would be the banker's answer.
+    assert percent("8", "7.99") == Decimal("0.13")
+    assert percent("200", "199.5") == Decimal("0.25")
+    # No float, no context precision: the digits past the 28th place of a Decimal context cannot move the tie.
+    assert percent("1000000000000", "999999999999.99999999999") == Decimal("0")
+    assert percent("0.00001", "0.000005") == Decimal("50")
+    # The quantity is not an input: the share of the cost is the share of the price.
+    saving = saving_for(current_unit_price=Decimal("3"), proposed_unit_price=Decimal("1"), quantity=Decimal("7"))
+    assert saving is not None
+    assert percent("3", "1") == (saving * 100 / (Decimal("3") * Decimal("7"))).quantize(Decimal("0.01"))
+
+
+def test_the_saving_percent_has_no_base_at_a_zero_price_and_refuses_a_dearer_one() -> None:
+    assert saving_percent_for(current_unit_price=Decimal("0"), proposed_unit_price=Decimal("0")) is None
+    with pytest.raises(ValueError):
+        saving_percent_for(current_unit_price=Decimal("1"), proposed_unit_price=Decimal("2"))
+    with pytest.raises(ValueError):
+        saving_percent_for(current_unit_price=Decimal("0"), proposed_unit_price=Decimal("1"))

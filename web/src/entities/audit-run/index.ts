@@ -34,6 +34,9 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export type { RunFinishEstimate } from './model/run-estimate';
+export { formatClockTime, runFinishEstimate } from './model/run-estimate';
+
 export type { ComparedFact, ComparedStage, Comparison, FactId, StageSide } from './model/run-comparison';
 export {
   comparableCostMicros,

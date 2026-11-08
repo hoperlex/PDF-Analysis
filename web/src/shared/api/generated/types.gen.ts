@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.39.0 (OpenAPI 3.1.0)
- *   sha256 79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116
+ *   AuditManager PC-01 API 1.40.0 (OpenAPI 3.1.0)
+ *   sha256 4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.39.0';
+export const CONTRACT_VERSION = '1.40.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116';
+export const CONTRACT_DIGEST = '4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -300,6 +300,7 @@ export const SCHEMA_NAMES = [
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
+  'DocumentActiveRun',
   'DocumentAudit',
   'DocumentAuditCounts',
   'DocumentTagCount',
@@ -3965,6 +3966,16 @@ export type DiffHunk = {
 };
 
 /**
+ * `UI-A-47` (contract 1.40.0): the run of a version that is in flight -- admitted and not yet terminal.
+ *
+ * `state` is `queued` (waiting for an executor), `running` or `validating`; a `created` run has not been admitted and a terminal run is not active. Only the standard analysis is named here: a run of an AR v3 group is not (as it is never the version's result). No progress figure is carried: the run reports its stages, and a figure of «пакет n/m» would need a plan of its own (`D-345`).
+ */
+export type DocumentActiveRun = {
+  run_id: RunId;
+  state: "queued" | "running" | "validating";
+};
+
+/**
  * The audit of one version, as `listDocuments` shows it on each document (`UI-PARITY-DOC-AUDIT`, `UI-A-46`).
  *
  * The per-document form of the counters of `DocumentAuditCounts`, read by the same rules (`R-150n`, `R-150p`,
@@ -3983,8 +3994,11 @@ export type DiffHunk = {
  * `finding_count` is the number of published findings of the result run and `undecided_finding_count` the number of
  * those still undecided; both are zero when there is no result run. Optimisation proposals are not part of any
  * figure (`R-150u`).
+ *
+ * `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one with a re-run in flight is still `checked`.
  */
 export type DocumentAudit = {
+  active_run?: DocumentActiveRun;
   finding_count: number;
   partial: boolean;
   result_run_id?: RunId;
@@ -4111,7 +4125,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.39.0";
+  contract_version: "1.40.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -5544,6 +5558,8 @@ export type OptimisationPassList = {
  * proposed_unit_price) × quantity`` and is ``null`` -- never ``0`` -- when ``quantity`` is
  * ``null`` because the row's quantity text is not a plain number. ``ordinal`` is a display
  * order inside the pass, never an identity.
+ *
+ * ``saving_percent`` (`UI-B-07`, contract 1.40.0) is the server's percent of the current unit price that the proposed price saves, to two decimals; optional and absent when the current unit price is zero.
  */
 export type OptimisationProposal = {
   analog_basis: ProposalAnalogBasis;
@@ -5570,6 +5586,8 @@ export type OptimisationProposal = {
   row_position: string | null;
   row_text: string;
   saving: string | null;
+  /** `UI-B-07` (contract 1.40.0): how much cheaper the proposed unit price is than the current one, in percent of the current unit price -- `(current_unit_price - proposed_unit_price) / current_unit_price * 100`, computed exactly and rounded half up to two decimals, written without a trailing zero (`25`, `33.33`). It is the share that `saving` is of the cost at the current price, in which the quantity cancels, so it is present where `saving` is `null` because the quantity is not a plain number; absent only when the current unit price is zero. The one figure of a proposal that is rounded. Never computed by a client. */
+  saving_percent?: string;
   sheet_label: string | null;
   spec_row_key: string;
   table_ordinal: number;
@@ -6517,6 +6535,8 @@ export type RunStatus = {
   degradation_set?: Array<(StageId | ArV3BetaStageId)>;
   /** Ungrounded model items rejected by the grounding gate. They are not findings and appear in no finding list. */
   diagnostic_observation_count?: number;
+  /** `UI-A-65` / `UI-B-45` (contract 1.40.0): the run's estimated finish, by the rule and the function of `ExecutionQueueItem.estimated_finish_at` (`R-151u`) -- its job's first attempt plus the median duration of at least three recent completed runs of the same analysis profile and a page count within a quarter of its own. Present only while the run's job is leased or running and has started; absent for a queued, waiting or finished run, and without enough similar history. Never invented; the estimate can already lie in the past for a run that is taking longer than the usual one. */
+  estimated_finish_at?: string;
   /** EXEC-PAR-START-01: the executor the run froze at start, read-only: the connection, the name an administrator gave it and the model its frozen revision pins. Null (and omitted) for a run that froze no connection. Nothing about the connection's kind, address, key or probe. */
   executor?: RunExecutor | null;
   /** OD-10: a run left `running` by a crash is reconciled to `failed` with an explicit interrupted reason. There is no `interrupted` state. */

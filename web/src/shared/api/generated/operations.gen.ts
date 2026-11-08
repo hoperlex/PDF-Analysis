@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.39.0 (OpenAPI 3.1.0)
- *   sha256 79600a8b1b6a0e74c28f315932ffc34093e06885f66739000310b4b2c7ab8116
+ *   AuditManager PC-01 API 1.40.0 (OpenAPI 3.1.0)
+ *   sha256 4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -1941,7 +1941,7 @@ export type CreateStageUploadResult = StageUpload;
 /**
  * Decide Optimisation Proposal
  *
- * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters), or `revoke` -- the withdrawal of the decision in force («Снять решение»), an event like any other that takes the proposal back to `pending`, with an optional comment, refused with `409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has no decision in force. Decisions are only appended, never changed; the latest one is current (unless it is a `revoke`), and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed.
+ * Append an expert's decision on a proposal: `accept`, `reject` or `revise` (the comment is required for `revise`, at most 2000 characters), or `revoke` -- the withdrawal of the decision in force («Снять решение»), an event like any other that takes the proposal back to `pending`, with an optional comment, refused with `409 conflict` and `conflict_reason` `no_decision_to_revoke` when the proposal has no decision in force. Decisions are only appended, never changed; the latest one is current (unless it is a `revoke`), and any number may follow. `expert` is required (`admin` alone is `permission_denied`); an unknown proposal is `404`. An exact repeat of the `Idempotency-Key` answers the stored decision; the same key with another verdict, comment, proposal or caller is `409 idempotency_key_reuse`. The decision belongs to the proposal alone: no finding is read or changed. A decision that is ordered after a carried decision on the same proposal (`carryOverProposalDecisions`) simply takes the next place; the one case in which its place was taken meanwhile by a writer that held no lock is `409 conflict` with `conflict_reason` `proposal_decision_raced`, nothing is written and the same request can be repeated (contract 1.40.0).
  */
 export type DecideOptimisationProposalInput = {
   /** Path parameters, substituted into `/optimisation-proposals/{optimisation_proposal_id}/decisions`. */
@@ -3335,7 +3335,7 @@ export type GetRunNormVerificationResult = NormVerificationReport;
 /**
  * Read run state and per-stage state.
  *
- * The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state.
+ * The polling target. `state` is the contract run state; `stages` carries one entry per stage the run scheduled, with the `StageResult` status vocabulary. A client stops polling on any terminal state. `estimated_finish_at` (`UI-A-65`, contract 1.40.0) is the same estimate the queue shows for the run's job, present only while the run is being worked on.
  */
 export type GetRunStatusInput = {
   /** Path parameters, substituted into `/runs/{run_id}`. */
@@ -4566,7 +4566,7 @@ export type ListDocumentTagsResult = DocumentTagList;
  *
  * An unknown project is `404`, never an empty page: "this project has nothing in it yet" is a different answer from "there is no such project".
  *
- * `UI-PARITY-DOC-AUDIT` (contract 1.34.0): each item carries `audit`, the audit state of the version it shows (`DocumentAudit`), read for the page in one statement and never one request per document. No other operation that returns a `DocumentVersion` carries it. The optional `audit_state` filter and the `order` parameter are applied by the server to the whole listing before it is paged.
+ * `UI-PARITY-DOC-AUDIT` (contract 1.34.0): each item carries `audit`, the audit state of the version it shows (`DocumentAudit`), read for the page in one statement and never one request per document. No other operation that returns a `DocumentVersion` carries it. The optional `audit_state` filter and the `order` parameter are applied by the server to the whole listing before it is paged. `UI-A-47` (contract 1.40.0): `audit.active_run` names the run of the version that is in flight, read in the same statement.
  */
 export type ListDocumentsInput = {
   /** Path parameters, substituted into `/projects/{project_uid}/documents`. */
@@ -4891,7 +4891,7 @@ export type ListOptimisationPassesResult = OptimisationPassList;
 /**
  * List Optimisation Proposals
  *
- * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * One page of a pass's proposals in ordinal order (`offset`, `limit`, `next_offset`), each with its provenance in the specification, the matched and the proposed position, both exact unit prices, the saving where it is computable and its current decision. `decision` narrows to the proposals in one decision state (`pending` for none yet); the pass's `decision_counts` always count every proposal. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`. `UI-B-07` (contract 1.40.0): each proposal carries `saving_percent`, the percent of the current unit price it saves.
  */
 export type ListOptimisationProposalsInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/proposals`. */

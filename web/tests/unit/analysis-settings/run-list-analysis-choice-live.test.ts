@@ -79,7 +79,7 @@ function deferred<T>() {
 
 function envelopeError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   return new ApiError(status, {
-    contract_version: '1.39.0', error_code: code, message: 'A caller-safe sentence.', correlation_id: 'cid-choice',
+    contract_version: '1.40.0', error_code: code, message: 'A caller-safe sentence.', correlation_id: 'cid-choice',
     retryable, details: { dependency: 'metadata_store' },
   }, 'cid-choice');
 }

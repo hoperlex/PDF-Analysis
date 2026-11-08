@@ -25,6 +25,13 @@ The rules, as the owner ruled them:
   ``checked`` (a result run, every finding decided). ``partial`` is a flag beside the state, set when the
   result run is ``partial``.
 * **Optimisation is not part of it** (`R-150u`): the state is computed on findings only.
+* **An active run is a fact beside the state, not a fifth state** (`UI-A-47`, contract 1.40.0). The version's *active
+  run* is its latest run of the standard analysis in state ``queued``, ``running`` or ``validating`` (``created`` has
+  not been admitted yet; the terminal states are not active), ordered by ``(created_at, run_id)`` as the result run is.
+  It is read by the per-document statement only, in the same statement as the audit, and changes none of the four
+  words: a document whose first run is in flight is still ``not_run`` and a checked one with a re-run in flight is
+  still ``checked``. The counters do not read it. AR v3 group runs are not an active run for the same reason they are
+  never a result (`AR-V3-OPT-IN`, `Q3`).
 * **AR v3 six-run groups** (`R-150t`, `Q-MD-9`, `D-303`): each run of a group is a run of its version, listed with the
   others, but none of them is the version's result while the standard analysis exists to be it. The owner's answer of
   2026-11-07 (`AR-V3-OPT-IN`, `Q3`) is that these counters count the standard analysis only; a document whose only
@@ -59,6 +66,7 @@ __all__ = [
     "DocumentAuditReadModel",
     "DocumentAuditRecord",
     "DocumentAuditState",
+    "IN_FLIGHT_RUN_STATES",
     "RESULT_RUN_STATES",
     "SectionAuditRecord",
     "UNDECIDED_VERDICTS",
@@ -79,6 +87,10 @@ AUDIT_STATES: Final[tuple[str, ...]] = ("not_run", "clean", "awaiting_decision",
 #: ``running``, ``validating`` (in flight), ``failed``, ``cancelled`` -- is not. The SQL below names the same
 #: two words; ``tests/unit/dashboard/test_audit_state.py`` asserts the statement mentions exactly these.
 RESULT_RUN_STATES: Final[tuple[str, ...]] = ("published", "partial")
+
+#: The run states of an *active* run (`UI-A-47`): admitted and not yet terminal. ``created`` is not among them -- a run
+#: that has not been queued is not yet an audit anyone waits for -- and the SQL names the same three words.
+IN_FLIGHT_RUN_STATES: Final[tuple[str, ...]] = ("queued", "running", "validating")
 
 #: The current verdicts that leave a finding waiting for the expert. ``pending`` is what a finding with no
 #: recorded verdict reads as; ``needs_manual_review`` has no producer today and is treated as undecided so that
@@ -153,6 +165,19 @@ _RESULT_RUN_RULES = f""",
         GROUP BY rf.version_uid
     )"""
 
+#: The active run of each version in scope (`UI-A-47`): the newest run of the standard analysis that is in flight, by the
+#: same ``(created_at DESC, run_id DESC)`` order as the result run. ``IN_FLIGHT_RUN_STATES`` is what this statement
+#: names; ``tests/unit/dashboard/test_audit_state.py`` asserts the two agree.
+_ACTIVE_RUN_RULE = f""",
+    active_run AS (
+        SELECT DISTINCT ON (r.version_uid) r.version_uid, r.run_id, r.state
+        FROM audit_run r
+        WHERE r.state IN ('queued', 'running', 'validating')
+          AND {STANDARD_RUN_SQL}
+          AND r.version_uid IN (SELECT version_uid FROM current_docs)
+        ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
+    )"""
+
 #: One row per *kind* of current document, grouped in the database: the project and the confirmed section of the
 #: document's current version, the state of its result run (``NULL`` when it has none), whether that run
 #: published any finding and whether any of them is undecided -- with the number of documents of that kind and the
@@ -182,19 +207,23 @@ _AUDIT_GROUPS = text(
 )
 
 #: One row per named version, in ONE statement however many versions are named (`UI-PARITY-DOC-AUDIT`, `UI-A-46`):
-#: the state of its result run (``NULL`` when it has none), that run's id, and the number of its published findings
-#: and of those still undecided. A named version that exists always has a row: ``current_docs`` is the driving
-#: side and everything after it is a ``LEFT JOIN``.
+#: the state of its result run (``NULL`` when it has none), that run's id, the number of its published findings
+#: and of those still undecided, and (`UI-A-47`) the id and state of its active run (``NULL`` when none is in flight).
+#: A named version that exists always has a row: ``current_docs`` is the driving side and everything after it is a
+#: ``LEFT JOIN``.
 _DOCUMENT_AUDITS = text(
     _CURRENT_DOCS_OF_VERSIONS
     + _RESULT_RUN_RULES
+    + _ACTIVE_RUN_RULE
     + """
     SELECT cd.version_uid, rr.state AS result_state, rr.run_id,
            coalesce(vf.findings, 0) AS findings,
-           coalesce(vf.undecided, 0) AS undecided
+           coalesce(vf.undecided, 0) AS undecided,
+           ar.run_id AS active_run_id, ar.state AS active_run_state
     FROM current_docs cd
     LEFT JOIN result_run rr ON rr.version_uid = cd.version_uid
     LEFT JOIN version_findings vf ON vf.version_uid = cd.version_uid
+    LEFT JOIN active_run ar ON ar.version_uid = cd.version_uid
     """
 ).bindparams(bindparam("version_uids", expanding=True))
 
@@ -299,7 +328,8 @@ class DocumentAuditRecord:
     :attr:`state` and :attr:`partial` are :func:`audit_state` over them, the same function the counters use.
     ``result_run_id`` is the result run the card links to, ``None`` exactly when the state is ``not_run``. A
     version whose only runs are ``failed`` or ``cancelled`` is ``not_run`` (`R-150r`); the record does not say
-    why, and the «отказ» chip is not decided here.
+    why, and the «отказ» chip is not decided here. ``active_run_id`` / ``active_run_state`` (`UI-A-47`) name the
+    run in flight, whatever the state is.
     """
 
     version_uid: str
@@ -307,6 +337,10 @@ class DocumentAuditRecord:
     result_run_id: str | None
     finding_count: int
     undecided_finding_count: int
+    #: `UI-A-47`: the version's active run (:data:`IN_FLIGHT_RUN_STATES`) and its state, both ``None`` when none is in
+    #: flight. A fact beside the audit state: it never changes :attr:`state`.
+    active_run_id: str | None = None
+    active_run_state: str | None = None
 
     @property
     def audit(self) -> DocumentAuditState:
@@ -475,6 +509,8 @@ class DocumentAuditReadModel:
                 result_run_id=None if row[2] is None else str(row[2]),
                 finding_count=int(row[3]),
                 undecided_finding_count=int(row[4]),
+                active_run_id=None if row[5] is None else str(row[5]),
+                active_run_state=None if row[6] is None else str(row[6]),
             )
             for row in (tuple(r) for r in rows)
         }
