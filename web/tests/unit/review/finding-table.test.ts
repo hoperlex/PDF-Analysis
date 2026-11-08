@@ -109,13 +109,15 @@ describe('the findings table', () => {
     const open = () => createElement('div', { 'data-opened': '' }, 'ОТКРЫТАЯ НАХОДКА');
     const none = table({ renderExpansion: open });
     expect(none).not.toContain('data-finding-expansion');
-    const selected = table({ selectedFindingUid: B, renderExpansion: open });
+    // The table stands in the original's order (`UI-A-71`): C waits, A is accepted, B is rejected. A is the middle row.
+    const selected = table({ selectedFindingUid: A, renderExpansion: open });
     expect((selected.match(/data-finding-expansion=/g) ?? []).length).toBe(1);
-    expect(selected).toContain(`data-finding-expansion="${B}"`);
+    expect(selected).toContain(`data-finding-expansion="${A}"`);
     expect(selected).toContain('ОТКРЫТАЯ НАХОДКА');
-    // The row says which state it is in; the open row follows its strip.
-    expect(selected.indexOf(`data-row-key="${B}"`)).toBeLessThan(selected.indexOf('data-finding-expansion'));
-    expect(selected.indexOf('data-finding-expansion')).toBeLessThan(selected.indexOf(`data-row-key="${C}"`));
+    // The row says which state it is in; the open row follows its strip, and the rows around it stay where they were.
+    expect(selected.indexOf(`data-row-key="${C}"`)).toBeLessThan(selected.indexOf(`data-row-key="${A}"`));
+    expect(selected.indexOf(`data-row-key="${A}"`)).toBeLessThan(selected.indexOf('data-finding-expansion'));
+    expect(selected.indexOf('data-finding-expansion')).toBeLessThan(selected.indexOf(`data-row-key="${B}"`));
   });
 
   it('puts the total in front of the verdict counts', () => {
