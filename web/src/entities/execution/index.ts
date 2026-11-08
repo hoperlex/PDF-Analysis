@@ -11,10 +11,10 @@ export type { JournalCopyScope } from './model/journal-copy';
 export { AR_V3_MEMBER_NOT_REPEATABLE_TEXT, AR_V3_START_NOT_ENABLED_TEXT, arV3ConflictSentence, executionFailure } from './model/failure';
 export type { ExecutionFailure, ExecutionFailureKind } from './model/failure';
 export {
-  QUEUE_STATE_OPTIONS, canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel, queueItemError,
+  QUEUE_STATE_GROUPS, QUEUE_STATE_OPTIONS, canCancel, canExecute, canReaudit, jobStateLabel, queueAgeLabel, queueItemError,
   queueOverviewLine, queueStateCount, visibleJournal,
 } from './model/presentation';
-export type { ExecutionAction, QueueItemError } from './model/presentation';
+export type { ExecutionAction, QueueItemError, QueueStateGroup } from './model/presentation';
 export {
   groupWorkers, hasUnknownWorkerState, jobHoldsLease, runHoldsLease, runWorker,
   workerIntakeLabel, workerStateLabel, workersOverview,

@@ -179,3 +179,27 @@ nav.actions {
   margin: 0;
   padding-left: var(--am-gap);
 }
+
+/*
+ * `UI-B-51`, `UI-B-69`: the strip of the original's sub-tabs over the queue's states. One line that wraps: the «Все» press, then each group's
+ * caption with its count and the presses of the states under it. Tokens only; the presses are the global buttons.
+ */
+.stateStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+}
+
+.stateGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs);
+}
+
+.stateGroupLabel {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+  font-weight: 600;
+}

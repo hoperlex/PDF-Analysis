@@ -72,9 +72,11 @@ export function useOptimisationProposals(
   passId: OptimisationPassId | null,
   decision: ProposalDecisionState | null,
   offset: number,
+  /** `UI-B-06`: the page size; the table layout asks for the original's fifty, the cards for {@link PROPOSAL_PAGE_LIMIT}. */
+  limit: number = PROPOSAL_PAGE_LIMIT,
 ) {
   return useQuery<OptimisationProposalPage>({
-    ...optimisationProposalsQueryOptions(passId ?? '', decision, offset),
+    ...optimisationProposalsQueryOptions(passId ?? '', decision, offset, limit),
     enabled: passId !== null,
     // Paging and filtering keep the page on screen until the next one arrives.
     placeholderData: keepPreviousData,

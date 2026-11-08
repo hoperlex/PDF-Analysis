@@ -270,3 +270,46 @@
   margin: var(--am-gap-sm) 0;
   padding-left: calc(var(--am-gap) + var(--am-gap-xs));
 }
+
+/*
+ * `UI-B-06`: the table layout, the original's `optimization-table`. Tokens only; the header, the cell padding and the hairlines are the
+ * global table's, and a row's verdict is the stripe at its left edge, as the knowledge base's table draws it. The frame scrolls sideways
+ * on a narrow screen rather than squeezing seven columns, and the decision column keeps the width its form needs.
+ */
+.tableFrame {
+  max-width: 100%;
+  margin: 0 0 var(--am-gap-sm);
+  overflow-x: auto;
+}
+
+.proposalTable td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposalTable tbody tr[data-decision='accept'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-ok);
+}
+
+.proposalTable tbody tr[data-decision='reject'] > :first-child {
+  box-shadow: inset 3px 0 0 var(--am-failed);
+}
+
+.proposalTable tbody tr:hover {
+  background: var(--am-surface);
+}
+
+/* The number over the state: the state is the quieter second line, as the original's decision cell has it. */
+.numberCell {
+  white-space: nowrap;
+}
+
+.numberCell > .state {
+  display: block;
+  margin-top: var(--am-gap-xs);
+  white-space: normal;
+}
+
+.proposalTable .judgement {
+  min-width: 14rem;
+}

@@ -394,6 +394,35 @@ export function carryOverShapes(): readonly ProposalShape[] {
         }),
       }),
     },
+    // `UI-B-06`: the table layout with the decision form and the history in the last column, the sheet's link, one decided row; and the
+    // switch over the cards. Appended here, with the carry-over shapes, for the same reason: the census samples every 25th screen.
+    {
+      name: 'proposals-table-layout',
+      make: () => createElement(ProposalListView, {
+        page: proposalPage({
+          items: [proposal({ current_verdict: 'revise', current_decision: decision() }), tapeProposal()],
+        }),
+        canDecide: true,
+        onDecision: noop,
+        onPage: noop,
+        layout: 'table',
+        onLayout: noop,
+        sheet: { url: SHEET_URL, isLoading: false, failure: null, onRetry: noop },
+        controlsFor: (item: OptimisationProposal) => createElement(ProposalDecisionFormView, {
+          proposalId: item.optimisation_proposal_id, current: item.current_decision, comment: '', pending: false,
+          failure: null, onComment: noop, onDecide: noop,
+        }),
+        historyFor: () => createElement(ProposalHistoryPanelView, {
+          open: true, pending: false, failure: null, items: [decision()], onToggle: noop, onRetry: noop,
+        }),
+      }),
+    },
+    {
+      name: 'proposals-layout-switch-cards',
+      make: () => createElement(ProposalListView, {
+        page: proposalPage(), canDecide: false, onDecision: noop, onPage: noop, layout: 'cards', onLayout: noop,
+      }),
+    },
   ];
 }
 
