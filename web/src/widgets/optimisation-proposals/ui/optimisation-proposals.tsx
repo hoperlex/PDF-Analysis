@@ -34,7 +34,6 @@ import type {
   OptimisationPass,
   OptimisationPassId,
   ProjectUid,
-  ProposalDecisionState,
   Role,
 } from '@/shared/api';
 import type { FailureMessage } from '@/shared/api/failure-message';
@@ -60,6 +59,7 @@ import { CarryOverProposalDecisions } from '@/features/carry-over-proposal-decis
 import { ImportProposalDecisions } from '@/features/import-proposal-decisions';
 import { StartOptimisationPass } from '@/features/start-optimisation-pass';
 
+import { readProposalDecision, writeProposalDecision } from '../model/decision-filter';
 import { pageLimitOf, readProposalLayout, writeProposalLayout } from '../model/layout';
 import { useExportProposalsCsv } from '../model/use-export-proposals-csv';
 import { useExportProposalsXlsx } from '../model/use-export-proposals-xlsx';
@@ -260,7 +260,9 @@ interface ActivePassProps {
 }
 
 function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
-  const [decision, setDecision] = useState<ProposalDecisionState | null>(null);
+  // `D-372`: the decision filter is in the address (`?decision=`; «Все» is the absent parameter), as the layout is, so a link, a
+  // reload and Back/Forward return to it. A filter is not a place to go Back to: choosing one replaces the entry.
+  const [decision, setDecision] = useAddressState(readProposalDecision, writeProposalDecision);
   const [offset, setOffset] = useState(0);
   // `UI-B-06`: the layout is in the address (`?layout=table`); the table pages by the original's fifty, the cards by their own page.
   const [layout, setLayout] = useAddressState(readProposalLayout, writeProposalLayout);
@@ -298,7 +300,7 @@ function ActivePass({ passId, canDecide, passes }: ActivePassProps) {
             page={proposals.data}
             canDecide={canDecide}
             onDecision={(state) => {
-              setDecision(state);
+              setDecision(state, 'replace');
               setOffset(0);
             }}
             onPage={proposals.isPlaceholderData ? null : setOffset}
