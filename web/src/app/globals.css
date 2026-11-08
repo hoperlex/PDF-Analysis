@@ -261,6 +261,9 @@
   --am-gap-lg: 24px;
   --am-gap-xl: 32px;
 
+  /* The smallest size a pointer or touch target may have (WCAG 2.2 SC 2.5.8, 24 by 24 CSS px): `min-width` / `min-height` of a control, not spacing. */
+  --am-target-min: 24px;
+
   /* The frame's sticky top strip (`.am-app__utility`); a pinned panel below it starts at this plus a gap. */
   --am-strip-height: 44px;
 }

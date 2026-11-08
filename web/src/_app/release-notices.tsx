@@ -5,7 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ReleaseList } from '@/shared/api';
 import { checkWebVersion, hasErrorCode, shouldShowUpdate, VersionCheckError } from '@/shared/api';
-import { getWebBuildId, MissingConfigurationError, SIGN_IN_SCREEN } from '@/shared/config';
+import { getWebBuildId, MissingConfigurationError, NEXT_PARAM, safeReturnPath, SIGN_IN_SCREEN } from '@/shared/config';
+import type { SessionEndReason } from '@/shared/lib';
+import { SESSION_END_REASON_PARAM } from '@/shared/lib';
 import { useReleases } from '@/entities/release';
 import { useMarkReleaseNotesRead } from '@/features/mark-release-notes-read';
 
@@ -141,6 +143,36 @@ export function listenForTabReturn(target: TabDocument, reads: NoticeReads): () 
   return () => target.removeEventListener('visibilitychange', onVisible);
 }
 
+/**
+ * Why this tier sends a browser to sign-in: the API answered an authenticated request with `401`.
+ * That is the closed list's `ended` (`@/shared/lib/session-end-reason`): the register still held the credential as
+ * live and the API no longer accepts it, and a `401` cannot say more. Typed against the list, so a word outside it
+ * does not compile.
+ */
+const REFUSED_BY_API: SessionEndReason = 'ended';
+
+/** The part of `window.location` the sign-in address is built from. */
+export interface HereOnTheScreen {
+  readonly pathname: string;
+  readonly search: string;
+}
+
+/**
+ * The address a `401` sends the browser to: `/login?next=<where it was>&reason=ended`.
+ *
+ * The same shape the server guard builds (`screen-lock.ts`, decision 1): `next` first, the reason after it and never
+ * instead of it. `next` is the page the browser is on, with its query and without its fragment, passed through the
+ * registry's one validator — a value it refuses is dropped, and the sign-in screen itself is never a `next`.
+ */
+export function signInAfterRefusal(here: HereOnTheScreen): string {
+  const next = here.pathname === SIGN_IN_SCREEN ? null : safeReturnPath(`${here.pathname}${here.search}`);
+  const query = [
+    ...(next === null ? [] : [`${NEXT_PARAM}=${encodeURIComponent(next)}`]),
+    `${SESSION_END_REASON_PARAM}=${REFUSED_BY_API}`,
+  ].join('&');
+  return `${SIGN_IN_SCREEN}?${query}`;
+}
+
 export function ReleaseNotices() {
   const buildId = bundleBuildId();
   const pathname = usePathname();
@@ -162,7 +194,7 @@ export function ReleaseNotices() {
     } catch (error) {
       setAvailable(null);
       if (error instanceof VersionCheckError && error.status === 401) {
-        window.location.assign(SIGN_IN_SCREEN);
+        window.location.assign(signInAfterRefusal(window.location));
       }
     }
   }, [buildId]);
@@ -182,7 +214,7 @@ export function ReleaseNotices() {
   // sign-in whichever trigger found it.
   useEffect(() => {
     if (hasErrorCode(releases.error, 'authentication_required')) {
-      window.location.assign(SIGN_IN_SCREEN);
+      window.location.assign(signInAfterRefusal(window.location));
     }
   }, [releases.error]);
 
