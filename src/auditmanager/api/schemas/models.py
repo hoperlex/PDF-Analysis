@@ -1049,7 +1049,7 @@ class PageInfo(_Object):
 class ErrorEnvelope(_Object):
     """The one failure shape. Rendered by ``envelope_response`` and by nothing else."""
 
-    contract_version: Literal["1.40.0"]
+    contract_version: Literal["1.41.0"]
     error_code: ErrorCode
     message: Annotated[str, Field(min_length=1, max_length=512)]
     correlation_id: CorrelationId
@@ -1466,6 +1466,31 @@ class VersionSheetLabelList(_Object):
     version_uid: VersionUid
     status: Literal["produced", "not_produced"]
     items: list[VersionSheetLabel]
+
+
+class FindingBlockLink(_Object):
+    """`UI-PARITY-C6` (contract 1.41.0): the portal blocks that hold one finding's evidence."""
+
+    finding_uid: FindingUid
+    #: The blocks whose box covers at least half of the box of some evidence item, in the portal list's order; empty
+    #: when the finding is on a page where a link can be derived and no block holds its evidence. Never a block the
+    #: evidence is not in.
+    portal_block_ids: list[PortalBlockId]
+
+
+class RunFindingBlockLinks(_Object):
+    """`UI-PARITY-C6`: a run's findings and the portal blocks their evidence sits in, derived on read from the run's text
+    layer geometry, its page inventory and the version's portal blocks (``docs/program/UI-PARITY-01.md``); nothing is
+    stored and the evidence is not changed. One item per published finding of the run, ``portal_block_ids`` empty where
+    no block holds the evidence. ``unlinked_pages`` are the pages of the portal geometry on which no link can be derived
+    (the portal's raster does not describe the PDF page): a block of such a page is **unknown**, never "no findings".
+    ``not_produced`` and no items while the run has no text-layer geometry or the version no portal geometry."""
+
+    run_id: RunId
+    version_uid: VersionUid
+    status: Literal["produced", "not_produced"]
+    unlinked_pages: list[Annotated[int, Field(ge=1)]]
+    items: list[FindingBlockLink]
 
 
 class PortalBlockPage(_Object):

@@ -390,6 +390,8 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "listVersionPortalBlocks": _PRODUCT_READ,
         # `UI-PARITY-P0O`: the sheet of each page, from the same geometry.
         "listVersionSheetLabels": _PRODUCT_READ,
+        # `UI-PARITY-C6`: which portal blocks hold a finding's evidence.
+        "listRunFindingBlocks": _PRODUCT_READ,
         "streamVersionPortalBlockCrop": _PRODUCT_READ,
         "listVersions": _PRODUCT_READ,
         "listRuns": _PRODUCT_READ,

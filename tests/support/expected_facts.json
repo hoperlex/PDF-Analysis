@@ -1,7 +1,7 @@
 {
   "facts_version": 1,
   "surface": {
-    "path_count": 273,
+    "path_count": 274,
     "operations": [
       [
         "DELETE",
@@ -537,6 +537,11 @@
         "GET",
         "/runs/{run_id}/extended-review",
         "getExtendedRunReview"
+      ],
+      [
+        "GET",
+        "/runs/{run_id}/finding-blocks",
+        "listRunFindingBlocks"
       ],
       [
         "GET",
@@ -1881,6 +1886,7 @@
       "ExtendedRunReview",
       "FailExecutorTaskRequest",
       "Finding",
+      "FindingBlockLink",
       "FindingCategory",
       "FindingComparison",
       "FindingDetail",
@@ -2031,6 +2037,7 @@
       "RunCostEstimate",
       "RunCostEstimateRequest",
       "RunExecutor",
+      "RunFindingBlockLinks",
       "RunId",
       "RunNormReferences",
       "RunPreset",
@@ -2244,5 +2251,5 @@
     "stored_vocabulary": 25
   },
   "migration_head": "0058_finding_decision_origin",
-  "contract_version": "1.40.0"
+  "contract_version": "1.41.0"
 }

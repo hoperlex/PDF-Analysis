@@ -841,7 +841,7 @@ repeat returns byte-identical bytes.
 
 ## 7. API seam — `contracts/api/v1/openapi.json`
 
-301 operations, sealed. `A5` generates the typed client from this document; `B6`
+302 operations, sealed. `A5` generates the typed client from this document; `B6`
 implements the routers against it; `B7` and `B8` consume the client and never call
 `fetch` directly.
 
@@ -1131,6 +1131,10 @@ context `schedule`: the month read (plan and fact per active expert, fact from t
 reserve read over `work_assignment_current`, and five keyed administrator commands. Every table is an append-only journal;
 moving an assignment to another expert goes through `dispatch`'s `transition_assignment`.
 
+`UI-PARITY-C6` (contract `1.41.0`, no migration) adds `listRunFindingBlocks`: the portal blocks that hold each published
+finding's evidence, derived on read from the run's text-layer block index and page inventory and the version's portal blocks
+(`analysis/geometry/finding_blocks.py`), so a finding can show the blocks it sits in and a block the findings in it.
+
 `UI-PARITY-P0O` (contract `1.30.0`, no migration) adds `listVersionSheetLabels`: each page's sheet label from the
 version's portal geometry, so a finding's page is shown with its sheet as in the original.
 
@@ -1211,6 +1215,7 @@ could.
 | `importRunDecisions` | `POST /runs/{run_id}/decision-imports` |
 | `getProject` | `GET /projects/{project_uid}` |
 | `listVersionSheetLabels` | `GET /versions/{version_uid}/sheet-labels` |
+| `listRunFindingBlocks` | `GET /runs/{run_id}/finding-blocks` |
 | `getWorkSchedule` | `GET /work-schedule` |
 | `getWorkScheduleReserve` | `GET /work-schedule/reserve` |
 | `setWorkScheduleSettings` | `PUT /work-schedule/settings` |

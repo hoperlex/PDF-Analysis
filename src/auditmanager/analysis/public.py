@@ -139,6 +139,13 @@ from auditmanager.analysis.text.windows import (  # SECTION-CHUNKED-ANALYSIS-01
 )
 from auditmanager.analysis.recognised import KIND_PORTAL_DESCRIPTION, KIND_RECOGNISED_TEXT, QUOTE_SOURCE_RECOGNISED  # W55B-RECOGNISED-01
 from auditmanager.analysis.ports.artifacts import ROLE_CROP_IMAGE, ROLE_PORTAL_BLOCKS  # W55B-GEOMETRY-01
+from auditmanager.analysis.geometry.finding_blocks import (  # UI-PARITY-C6
+    EvidenceSpan,
+    PortalBox,
+    TextLine,
+    link_evidence,
+    linkable_pages,
+)
 from auditmanager.analysis.geometry.saved_crop_custody import (
     CheckedCropBytes,
     CheckedCropItem,
@@ -182,6 +189,11 @@ from auditmanager.analysis.geometry.render import (  # CMP-PROFILE-01
 )
 
 __all__ = [
+    "EvidenceSpan",
+    "PortalBox",
+    "TextLine",
+    "link_evidence",
+    "linkable_pages",
     "BetaV3Profile",
     "BetaV3ProfileRefused",
     "SealedV3Request",

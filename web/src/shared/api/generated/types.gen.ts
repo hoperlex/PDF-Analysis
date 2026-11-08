@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.40.0 (OpenAPI 3.1.0)
- *   sha256 4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1
+ *   AuditManager PC-01 API 1.41.0 (OpenAPI 3.1.0)
+ *   sha256 ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.40.0';
+export const CONTRACT_VERSION = '1.41.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1';
+export const CONTRACT_DIGEST = 'ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -392,6 +392,7 @@ export const SCHEMA_NAMES = [
   'ExtendedRunReview',
   'FailExecutorTaskRequest',
   'Finding',
+  'FindingBlockLink',
   'FindingCategory',
   'FindingComparison',
   'FindingDetail',
@@ -542,6 +543,7 @@ export const SCHEMA_NAMES = [
   'RunCostEstimate',
   'RunCostEstimateRequest',
   'RunExecutor',
+  'RunFindingBlockLinks',
   'RunId',
   'RunNormReferences',
   'RunPreset',
@@ -4125,7 +4127,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.40.0";
+  contract_version: "1.41.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4939,6 +4941,12 @@ export type Finding = {
   /** Document value grounded in the project evidence; absent for legacy and nonnormative observations. Mirrors the canonical observation. */
   stated_value?: string;
   version_uid: VersionUid;
+};
+
+/** `UI-PARITY-C6` (contract 1.41.0): the portal blocks that hold one finding's evidence. */
+export type FindingBlockLink = {
+  finding_uid: FindingUid;
+  portal_block_ids: Array<PortalBlockId>;
 };
 
 /** Closed finding categories: seven prior categories and five v3 normative categories. */
@@ -6454,6 +6462,22 @@ export type RunExecutor = {
   connection_id: ExecutorConnectionId;
   display_name: string;
   pin_id: string;
+};
+
+/**
+ * `UI-PARITY-C6`: a run's findings and the portal blocks their evidence sits in, derived on read from the run's text
+ * layer geometry, its page inventory and the version's portal blocks (``docs/program/UI-PARITY-01.md``); nothing is
+ * stored and the evidence is not changed. One item per published finding of the run, ``portal_block_ids`` empty where
+ * no block holds the evidence. ``unlinked_pages`` are the pages of the portal geometry on which no link can be derived
+ * (the portal's raster does not describe the PDF page): a block of such a page is **unknown**, never "no findings".
+ * ``not_produced`` and no items while the run has no text-layer geometry or the version no portal geometry.
+ */
+export type RunFindingBlockLinks = {
+  items: Array<FindingBlockLink>;
+  run_id: RunId;
+  status: "produced" | "not_produced";
+  unlinked_pages: Array<number>;
+  version_uid: VersionUid;
 };
 
 export type RunId = string;

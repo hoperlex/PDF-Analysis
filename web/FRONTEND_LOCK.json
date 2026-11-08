@@ -22,7 +22,7 @@
     "dispatch_named_commit": "0b4045e7cc4ac52c9ec8741e9a1459791d2cbd70",
     "commit_note": "Resealed by UI-PARITY-AUDIT-STATE: contract 1.40.0 (DocumentAudit.active_run, RunStatus.estimated_finish_at, OptimisationProposal.saving_percent, the typed conflict of decideOptimisationProposal; one new schema DocumentActiveRun).",
     "openapi_version": "3.1.0",
-    "info_version": "1.40.0",
+    "info_version": "1.41.0",
     "paths": 273,
     "operations": 301,
     "component_schemas": 727,

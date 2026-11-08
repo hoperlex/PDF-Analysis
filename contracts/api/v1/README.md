@@ -11,7 +11,31 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.40.0` (`UI-PARITY-AUDIT-STATE`)
+## Current contract `1.41.0` (`UI-PARITY-C6`)
+
+Slice for register rows `UI-A-74`, `UI-A-82` and `UI-A-84` (the portal blocks that hold a finding's evidence: the thumbnails under an
+opened finding, the number of findings on a block tile, «Без сущностей»). **One operation, no migration, no error code** (head stays
+`0058`). Two new schemas, `FindingBlockLink` and `RunFindingBlockLinks`.
+
+- **`listRunFindingBlocks`** (`GET /runs/{run_id}/finding-blocks`, any one role): one item per published finding of the run, with
+  `portal_block_ids`, the portal blocks that hold the finding's canonical observation's evidence, in the portal list's order. A
+  **derivation on read**, nothing stored and no evidence changed: the evidence's characters are located on their page by the
+  run's own text-layer block index (the line boxes, `geometry.block_index`) and page inventory (`prepared.page_inventory`), the
+  evidence's box is the part of the line its characters occupy, and a portal block (the version's `geometry.portal_blocks`, the
+  document `listVersionPortalBlocks` serves) holds the evidence when it covers at least half of that box. The rule, with its known
+  misses, is `analysis/geometry/finding_blocks.py`; no model and no text search is involved.
+- **Absent is not empty.** `status: "not_produced"` (and no items) when the run has no text-layer geometry or the version no portal
+  geometry; with `produced`, a finding whose evidence no block holds has an empty `portal_block_ids`. `unlinked_pages` are the
+  pages of the portal geometry on which no link can be derived (the portal's raster does not describe the PDF page: a
+  `geometry_mismatch`, or an aspect or rotation the text layer's page does not share): a block on such a page is unknown, never
+  «no findings». An unknown run is `404`.
+- **Not changed.** `Finding`, `Evidence`, `PortalBlock` and `listRunFindings` are as they were; the link is a separate read so that a
+  link that cannot be derived never takes the findings list down with it.
+
+The API now has 274 paths, 302 operations and 729 schemas (the new schemas are `FindingBlockLink` and `RunFindingBlockLinks`);
+migration head `0058`. The domain catalogs are at candidate revision 58.
+
+## Contract `1.40.0` (`UI-PARITY-AUDIT-STATE`, historical)
 
 Slice for register rows `UI-A-47` (the original's «идёт аудит» strip on a document), `UI-A-65` / `UI-B-45` (the estimated finish
 on the run page) and `UI-B-07` (the percent beside a proposal's saving). **No operation, no error code, no migration** (head
@@ -39,8 +63,8 @@ stays `0058`). One new schema, `DocumentActiveRun`; three optional properties, e
   rounded; never computed by a client. The proposals' CSV and workbook and `AcceptedOptimisationProposal` do not carry it (`D-346`).
 - **Not changed.** The four audit states, `ExecutionQueueItem`, the counters, every operation's request.
 
-The API now has 273 paths, 301 operations and 727 schemas (the new schema is `DocumentActiveRun`); migration head `0058`. The
-domain catalogs are at candidate revision 57.
+The API then had 273 paths, 301 operations and 727 schemas (the new schema was `DocumentActiveRun`); migration head `0058`. The
+domain catalogs were at candidate revision 57.
 
 ## Contract `1.39.0` (`UI-PARITY-FINDING-ORIGIN`, historical)
 

@@ -9,6 +9,7 @@ model looks at a crop.
 
 * :mod:`.maths` -- the page box, the page-box check and the crop's scale and clip: pure;
 * :mod:`.portal` -- the block list normalised and ordered: pure;
+* :mod:`.finding_blocks` -- which portal blocks a finding's evidence sits in: pure, derived on read;
 * :mod:`.render` -- the only caller of PDFium, always under ``PDFIUM_LOCK``;
 * :mod:`.crops` -- PNG encoding, the content-addressed blobs, the manifest records;
 * :mod:`.source_file` -- the source PDF in a temporary file.
@@ -22,6 +23,13 @@ from auditmanager.analysis.geometry.crops import (
     CropPublisher,
     crop_record,
     encode_png,
+)
+from auditmanager.analysis.geometry.finding_blocks import (
+    EvidenceSpan,
+    PortalBox,
+    TextLine,
+    link_evidence,
+    linkable_pages,
 )
 from auditmanager.analysis.geometry.maths import (
     GEOMETRY_MISMATCH,
@@ -52,6 +60,7 @@ from auditmanager.analysis.geometry.render import (
 from auditmanager.analysis.geometry.source_file import source_file
 
 __all__ = [
+    "EvidenceSpan",
     "GEOMETRY_MISMATCH",
     "GEOMETRY_OK",
     "IMAGE",
@@ -66,12 +75,16 @@ __all__ = [
     "PageGeometry",
     "PdfiumDocument",
     "PortalBlockGeometry",
+    "PortalBox",
     "PortalLayout",
+    "TextLine",
     "base_scale",
     "check_page",
     "crop_record",
     "encode_png",
     "image_blocks_to_crop",
+    "link_evidence",
+    "linkable_pages",
     "pdfium_lock",
     "plan_crop",
     "portal_blocks_body",

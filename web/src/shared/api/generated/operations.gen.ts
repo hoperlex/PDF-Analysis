@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.40.0 (OpenAPI 3.1.0)
- *   sha256 4c218b5943097d759786e1b00ec40d9c8d6e6115fe64434a4a4819d90b48a1c1
+ *   AuditManager PC-01 API 1.41.0 (OpenAPI 3.1.0)
+ *   sha256 ca4e3dd68f57c7ae1bccdafe15a04149e1f69ce65975dcfbc6e50b50c1c2dd44
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -230,6 +230,7 @@ import type {
   ReviseStageAssemblyRequest,
   RunCostEstimate,
   RunCostEstimateRequest,
+  RunFindingBlockLinks,
   RunId,
   RunNormReferences,
   RunStatus,
@@ -515,6 +516,7 @@ export const OPERATION_IDS = [
   'listProposalDecisions',
   'listRegistrations',
   'listReleases',
+  'listRunFindingBlocks',
   'listRunFindings',
   'listRuns',
   'listStageAiReviews',
@@ -5087,6 +5089,29 @@ export type ListReleasesInput = {
 
 /** Success body of `listReleases` (`application/json`, HTTP 200). */
 export type ListReleasesResult = ReleaseList;
+
+// ------------------------------------------------------------------------------------
+// listRunFindingBlocks - GET /runs/{run_id}/finding-blocks
+// ------------------------------------------------------------------------------------
+
+/**
+ * List Run Finding Blocks
+ *
+ * `UI-PARITY-C6` (contract 1.41.0): which portal blocks a finding's evidence sits in, for the original's block thumbnails under a finding and the number of findings on a block tile. Derived on read, nothing stored: the evidence's characters are located on their page by the run's text-layer block index (the line boxes) and the page inventory (the page sizes), and a portal block holds the evidence when it covers at least half of the evidence's box on that page. One item per published finding, `portal_block_ids` in the portal list's order and empty when no block holds the evidence; `unlinked_pages` are the pages where the portal's raster does not describe the PDF page and no link can be derived (their blocks are unknown, not free of findings). A run without text-layer geometry, or a version without portal geometry, answers `status: "not_produced"` and no items. An unknown run is `404`. Any one role (`R-80`).
+ */
+export type ListRunFindingBlocksInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/finding-blocks`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `listRunFindingBlocks` (`application/json`, HTTP 200). */
+export type ListRunFindingBlocksResult = RunFindingBlockLinks;
 
 // ------------------------------------------------------------------------------------
 // listRunFindings - GET /runs/{run_id}/findings
@@ -10893,6 +10918,20 @@ export const OPERATIONS = {
     successStatuses: [200],
     errorStatuses: [401, 403, 500, 503],
     tags: ['releases'],
+  },
+  listRunFindingBlocks: {
+    operationId: 'listRunFindingBlocks',
+    method: 'GET',
+    path: '/runs/{run_id}/finding-blocks',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
+    tags: ['findings'],
   },
   listRunFindings: {
     operationId: 'listRunFindings',

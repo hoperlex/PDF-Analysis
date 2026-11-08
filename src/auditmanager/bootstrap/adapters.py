@@ -2295,6 +2295,95 @@ class BlockAdapter(_SessionHolder):
             }) for page in sorted(counts)],
         )
 
+    def list_run_finding_blocks(self, *, run_id: str) -> models.RunFindingBlockLinks:
+        """`UI-PARITY-C6`: the portal blocks that hold each published finding's evidence, derived on read.
+
+        Three saved documents are joined, each read with the digest its stage result recorded: the **run's** block
+        index (``geometry.block_index``, the line boxes the evidence's character spans index) and page inventory
+        (``prepared.page_inventory``, the page sizes), and the **version's** portal blocks (the document
+        ``listVersionPortalBlocks`` serves). The rule and its known misses are
+        ``analysis.geometry.finding_blocks``'s; nothing is stored and no evidence is changed.
+        """
+        from auditmanager.analysis.public import (
+            ROLE_BLOCK_INDEX,
+            ROLE_PAGE_INVENTORY,
+            ROLE_PORTAL_BLOCKS,
+            EvidenceSpan,
+            PortalBox,
+            TextLine,
+            link_evidence,
+            linkable_pages,
+        )
+        from auditmanager.findings import (
+            group_published_findings, published_finding_evidence, published_findings,
+        )
+        from auditmanager.runs import RunRepository
+
+        def read(session: Session) -> tuple[Any, Mapping[str, Any], Any, Any]:
+            repository = RunRepository()
+            run = repository.find(session, run_id)
+            if run is None:
+                raise DomainError(ErrorCode.NOT_FOUND, aggregate_type="AuditRun")
+            stages = {stage.stage_id: stage for stage in repository.stage_results(session, run_id)}
+            groups = group_published_findings(published_findings(session, run_id))
+            return run, stages, groups, published_finding_evidence(session, run_id)
+
+        run, stages, groups, evidence = self._read(read)
+
+        def absent() -> models.RunFindingBlockLinks:
+            return models.RunFindingBlockLinks(
+                run_id=run_id, version_uid=run.version_uid, status="not_produced", unlinked_pages=[], items=[],
+            )
+
+        geometry, preparation = stages.get("page_geometry_extraction"), stages.get("source_preparation")
+        index_ref = (
+            None if geometry is None or geometry.status != "succeeded"
+            else self._artifact_reference(geometry.artifacts, ROLE_BLOCK_INDEX)
+        )
+        inventory_ref = (
+            None if preparation is None or preparation.status != "succeeded"
+            else self._artifact_reference(preparation.artifacts, ROLE_PAGE_INVENTORY)
+        )
+        source = self._portal_source(run.version_uid)
+        if index_ref is None or inventory_ref is None or source is None:
+            return absent()
+
+        portal = self._portal_document(source.portal_blocks, ROLE_PORTAL_BLOCKS, run.version_uid)
+        index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, run.version_uid)
+        inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, run.version_uid)
+        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
+        lines: dict[int, list[Any]] = {}
+        for block in index["blocks"]:
+            box = block["bbox"]
+            lines.setdefault(int(block["page_number"]), []).append(TextLine(
+                int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
+                float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
+            ))
+        boxes = [
+            PortalBox(
+                block["portal_block_id"], int(block["page_number"]),
+                float(block["bbox_norm"][0]), float(block["bbox_norm"][1]),
+                float(block["bbox_norm"][2]), float(block["bbox_norm"][3]),
+            )
+            for block in portal["blocks"]
+        ]
+        items = []
+        for group in sorted(groups, key=lambda group: group.canonical.finding_uid):
+            canonical = group.canonical.finding_observation_id
+            spans = [
+                EvidenceSpan(item.page_number, item.char_start, item.char_end)
+                for item in evidence if item.finding_observation_id == canonical
+            ]
+            items.append(models.FindingBlockLink(
+                finding_uid=group.canonical.finding_uid,
+                portal_block_ids=list(link_evidence(spans, lines=lines, pages=pages, blocks=boxes)),
+            ))
+        return models.RunFindingBlockLinks(
+            run_id=run_id, version_uid=run.version_uid, status="produced",
+            unlinked_pages=sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages),
+            items=items,
+        )
+
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (
             KIND_PORTAL_DESCRIPTION,

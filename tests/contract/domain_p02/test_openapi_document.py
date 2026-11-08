@@ -138,6 +138,8 @@ REQUIRED_OPERATIONS = {
     "getProject",
     # `UI-PARITY-P0O`. Each page's sheet label, from the portal geometry.
     "listVersionSheetLabels",
+    # `UI-PARITY-C6`. The portal blocks that hold each finding of a run.
+    "listRunFindingBlocks",
     # `UI-PARITY-P0P`, `R-152a`…`R-152h`. «График работ»: the month, the reserve, the administrator's writes.
     "getWorkSchedule",
     "getWorkScheduleReserve",
