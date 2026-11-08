@@ -18,6 +18,17 @@ export const AUTH_EVENT_LABELS: Readonly<Record<AuthEventType, string>> = {
   sessions_ended: 'Сеансы завершены администратором',
 };
 
+/** The tone of a line's badge: a sign-in green, a refused one red, what changes access amber or blue. */
+export const AUTH_EVENT_TONES: Readonly<Record<AuthEventType, 'ok' | 'failed' | 'degraded' | 'active'>> = {
+  sign_in_succeeded: 'ok',
+  sign_in_blocked: 'failed',
+  password_changed: 'active',
+  password_reset: 'degraded',
+  role_granted: 'active',
+  role_revoked: 'degraded',
+  sessions_ended: 'degraded',
+};
+
 /** The facts beyond the type, as short phrases; empty when the type carries none. */
 export function authEventDetails(event: Pick<AuthEvent, 'event_type' | 'role' | 'failures' | 'default_credential' | 'source'>): readonly string[] {
   const details: string[] = [];

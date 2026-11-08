@@ -129,7 +129,7 @@ describe('the front door is compact', () => {
   });
 });
 
-describe("a section's arrow opens the section in one click when a project is chosen", () => {
+describe('a section row opens the section in one click when a project is chosen', () => {
   const PROJECT = 'prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B' as ProjectUid;
   const render = (projectUid: ProjectUid | null): string => {
     const client = newClient();
@@ -137,15 +137,35 @@ describe("a section's arrow opens the section in one click when a project is cho
     return renderWith(client, createElement(Dashboard, { projectUid }));
   };
 
-  it('is a link to the project’s section page for every section', () => {
+  it('is a link to the project’s section page for every section, with the section’s code and name in it', () => {
     const markup = render(PROJECT);
     for (const section of PROJECT_SECTIONS) {
-      expect(markup, section.code).toContain(`data-section-open="${section.code}"`);
-      expect(markup, section.code).toContain(`href="/projects/${PROJECT}/sections/${section.code}"`);
+      const link = markup.match(new RegExp(`<a [^>]*data-section-open="${section.code}"[^>]*>(.*?)</a>`))?.[0];
+      expect(link, section.code).toBeDefined();
+      expect(link, section.code).toContain(`href="/projects/${PROJECT}/sections/${section.code}"`);
+      expect(link, section.code).toContain(section.name);
     }
   });
 
-  it('is only an arrow across all projects, where there is no one section page to open', () => {
-    expect(render(null)).not.toContain('data-section-open');
+  it('keeps the panel with the section’s optimisation reachable from a toggle at the row’s end', () => {
+    const markup = render(PROJECT);
+    for (const section of PROJECT_SECTIONS) {
+      expect(markup, section.code).toMatch(new RegExp(`<button[^>]*data-section-toggle="${section.code}"`));
+    }
+  });
+
+  it('is a button that opens the panel across all projects, where there is no one section page to open', () => {
+    const markup = render(null);
+    expect(markup).not.toContain('data-section-open');
+    expect(markup).not.toContain('data-section-toggle');
+  });
+
+  it('stretches the link over the row and lifts the figure link and the toggle above it', () => {
+    const css = module('widgets/dashboard/ui/sections-panel.module.css');
+    expect(declarations(css, '.sectionRow').get('position')).toBe('relative');
+    expect(declarations(css, '.rowLink::after').get('position')).toBe('absolute');
+    expect(declarations(css, '.rowLink::after').get('inset')).toBe('0');
+    expect(declarations(css, '.metricLink').get('z-index')).toBe('1');
+    expect(declarations(css, '.toggle').get('z-index')).toBe('1');
   });
 });

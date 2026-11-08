@@ -13,7 +13,7 @@
 .projects,
 .sheets {
   display: grid;
-  gap: var(--am-gap);
+  gap: var(--am-gap-sm);
   min-width: 0;
   max-width: 100%;
 }
@@ -159,11 +159,52 @@
   background: var(--am-degraded-light);
 }
 
+/*
+ * The table of the sets scrolls in its own box, as the original's `vcp-table-wrap` does (a height that leaves room for the page above it):
+ * the heads of the columns and the code of the set stay in view while the rows and the seven steps are read.
+ */
+.tableBox {
+  overflow: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 20rem);
+  min-height: 7.5rem;
+  border: 1px solid var(--am-line-strong);
+  border-radius: var(--am-radius-sm);
+}
+
+.tableBox thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--am-surface-sunken);
+}
+
+.tableBox thead th:first-child {
+  left: 0;
+  z-index: 3;
+}
+
+.codeCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 10rem;
+  max-width: 16rem;
+  background: var(--am-surface);
+}
+
+@media (max-width: 780px) {
+  .tableBox {
+    max-height: none;
+  }
+}
+
 .row {
   cursor: pointer;
 }
 
-.row:hover {
+.row:hover,
+.row:hover .codeCell {
   background: var(--am-surface-sunken);
 }
 
@@ -242,6 +283,42 @@
   margin: 0;
   font-size: var(--am-text-lg);
   overflow-wrap: anywhere;
+}
+
+/* The name of the set is the button of the caret (the original's whole header is): it folds the blocks above the matrix. */
+.setToggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setToggle:focus-visible {
+  outline: 2px solid var(--am-accent);
+  outline-offset: 2px;
+}
+
+.caret {
+  min-width: 1.2ch;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.setToggle:hover .caret {
+  color: var(--am-ink);
+}
+
+.top {
+  display: grid;
+  gap: var(--am-gap-sm);
+  min-width: 0;
 }
 
 .setActions {
@@ -368,8 +445,34 @@
 .head,
 .headA,
 .headB {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   min-width: 9rem;
   background: var(--am-surface-sunken);
+}
+
+/* The corner of the two sticky edges: the column heads (with «Было» and «Стало») stay in view as the rows scroll, as the original's do. */
+.matrix thead .rowHead {
+  top: 0;
+  z-index: 3;
+}
+
+.colFile {
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-xs);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+/* What the chosen pair adds up to, above the matrix. */
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-2xs) var(--am-gap);
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
 }
 
 .headA {
@@ -571,12 +674,66 @@
   background: var(--am-surface-sunken);
 }
 
-.viewerHost {
-  min-width: 0;
-  max-width: 100%;
+/*
+ * The window of the opened pair (`pair-viewer-window.tsx`): the original's `.vcv-overlay`, over the whole screen. The size is the
+ * review lane's «Во весь экран» (94vh, at most 1600px wide); every colour, radius, gap and shadow is a token.
+ */
+
+.viewerWindow {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  width: min(1600px, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  height: 94vh;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: hidden;
+}
+
+/* «Порядок версий» and «Сформировать PDF-отчёт…» in a window: the card stays the card, the window gives it a width to stand in. */
+.modalWindow {
+  width: min(64rem, calc(100vw - 2 * var(--am-gap)));
+  max-width: none;
+  max-height: 94vh;
   padding: var(--am-gap-sm);
-  border: 1px solid var(--am-line-strong);
-  border-radius: var(--am-radius);
+  border: 1px solid var(--am-line);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-surface);
+  color: var(--am-ink);
+  box-shadow: var(--am-shadow-3);
+  overflow: auto;
+}
+
+.viewerBox {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.viewerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap);
+  padding: var(--am-gap-sm) var(--am-gap);
+  border-bottom: 1px solid var(--am-line);
+  background: var(--am-paper);
+}
+
+.viewerBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--am-gap-sm) var(--am-gap) var(--am-gap);
+  overflow: auto;
 }
 
 @media (max-width: 520px) {

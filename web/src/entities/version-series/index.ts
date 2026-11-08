@@ -60,6 +60,7 @@ export {
   OVERVIEW_FILTERS,
   READY_SENTENCE,
   SORT_PRESETS,
+  STORED_VIEW_KEY,
   anythingRunning,
   codeOf,
   countsOf,
@@ -70,7 +71,9 @@ export {
   nextSort,
   nextStepSentence,
   parseSort,
+  parseStoredView,
   sortValue,
+  storedViewOf,
   visibleSets,
 } from './model/overview-view';
 export type { VerdictPart } from './model/verdict';
@@ -131,7 +134,7 @@ export {
   RESTART_CONFIRM_TITLE,
   stepActions,
 } from './model/step-actions';
-export type { Sides } from './model/matrix-view';
+export type { PairTally, Sides } from './model/matrix-view';
 export {
   adjacentSides,
   columnName,
@@ -139,9 +142,11 @@ export {
   cellOf,
   changedRows,
   defaultSides,
+  isChangedPair,
   isSoleSheet,
   matchedCells,
   openablePairs,
+  pairTally,
   pageKey,
   pairOfRow,
   referencePage,

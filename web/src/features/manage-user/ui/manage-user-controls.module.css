@@ -1,0 +1,21 @@
+/* The groups of the account controls (`UI-A-93`): name, roles, access, standing. Token reads only. */
+
+.controls {
+  display: grid;
+  gap: var(--am-gap);
+  min-width: 0;
+}
+
+.group {
+  display: grid;
+  gap: var(--am-gap-sm);
+  padding-top: var(--am-gap);
+  border-top: 1px solid var(--am-line-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-sm);
+}

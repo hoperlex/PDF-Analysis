@@ -42,7 +42,7 @@ import {
 
 import { useSectionFigures } from '../api/use-section-figures';
 import type { SectionFigures } from '../model/section-figures';
-import { UNCLASSIFIED_FIGURES } from '../model/section-figures';
+import { UNCLASSIFIED_FIGURES, totalFigures } from '../model/section-figures';
 import { projectStructure } from '../model/structure';
 import type { CardSelection } from '../model/use-batch-selection';
 import { startable, useBatchSelection } from '../model/use-batch-selection';
@@ -107,6 +107,8 @@ export interface ProjectStructureViewProps {
 /** The grouped structure of one page of documents. Rendered by the static harness. */
 export function ProjectStructureView({ projectUid, items, hasNextPage, selection, figures }: ProjectStructureViewProps) {
   const structure = projectStructure(items);
+  // `UI-A-36`: the sections' column sums, from the server's figures only; none while those are absent or incomplete.
+  const sum = figures === undefined ? undefined : totalFigures(figures);
   return (
     <div data-project-structure="" data-document-count={items.length}>
       <p className={styles.rule} data-section-rule="confirmed">
@@ -182,6 +184,18 @@ export function ProjectStructureView({ projectUid, items, hasNextPage, selection
             </li>
           );
         })}
+        {sum === undefined ? null : (
+          // `UI-A-36`: the original's «Σ Итого», after the sections it adds up; «Не классифицировано» below is not in it.
+          <li className={`${styles.section} ${styles.totalCard}`} data-section-total="" data-section-documents={sum.documents}>
+            <div className={`${styles.card} ${styles.totalBody}`}>
+              <span className={styles.code}>Σ</span>
+              <span className={styles.headText}>
+                <h3 className={styles.heading}>Итого по разделам</h3>
+                <AuditTallyLine tally={sum} label="Итого по разделам" />
+              </span>
+            </div>
+          </li>
+        )}
         {(() => {
           const exact = figures?.get(UNCLASSIFIED_FIGURES);
           const total = Math.max(exact?.documents ?? 0, structure.unclassified.length);

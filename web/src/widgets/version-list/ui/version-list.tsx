@@ -16,17 +16,55 @@
 
 import { useState } from 'react';
 
-import type { DocumentUid, ProjectUid } from '@/shared/api';
+import type { DocumentAudit, DocumentUid, ProjectSection, ProjectUid } from '@/shared/api';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
 import { classifyListingFailure, routes } from '@/shared/lib';
-import { VersionRow, useVersionList } from '@/entities/document-version';
+import { VersionRow, useSectionDocumentWalk, useVersionList } from '@/entities/document-version';
+import { findProjectSection } from '@/entities/project';
 
 export interface VersionListProps {
   readonly projectUid: ProjectUid;
   readonly documentUid: DocumentUid;
+  /**
+   * `UI-A-45`: the section the document's current version is confirmed for, when it is. The audit state of a version is
+   * read for the documents of a listing (`listDocuments`), never for a document's version list, so the current version's chip
+   * comes from its section's listing -- the walk the section strip of this screen already reads, under the same keys, so
+   * it costs no further request. Absent, or while the walk is read, no row carries a chip.
+   */
+  readonly sectionCode?: string | undefined;
 }
 
-export function VersionList({ projectUid, documentUid }: VersionListProps) {
+const NO_AUDITS: ReadonlyMap<string, DocumentAudit> = new Map();
+
+/** The versions of a document whose current version is confirmed for a section: the chip of that version, once its section is read. */
+export function VersionList({ projectUid, documentUid, sectionCode }: VersionListProps) {
+  const section = sectionCode === undefined ? null : findProjectSection(sectionCode);
+  if (section === null) return <VersionRows projectUid={projectUid} documentUid={documentUid} audits={NO_AUDITS} />;
+  // Keyed, so another section (or project) is another walk and never inherits this one's cursors.
+  return <AuditedVersionRows key={`${projectUid}:${section.code}`} projectUid={projectUid} documentUid={documentUid} sectionCode={section.code} />;
+}
+
+function AuditedVersionRows({ projectUid, documentUid, sectionCode }: {
+  readonly projectUid: ProjectUid;
+  readonly documentUid: DocumentUid;
+  readonly sectionCode: ProjectSection;
+}) {
+  const walk = useSectionDocumentWalk(projectUid, sectionCode);
+  const audits = new Map<string, DocumentAudit>();
+  if (walk.status === 'complete') {
+    for (const item of walk.items) {
+      if (item.document_uid === documentUid && item.audit !== undefined) audits.set(item.version_uid, item.audit);
+    }
+  }
+  return <VersionRows projectUid={projectUid} documentUid={documentUid} audits={audits} />;
+}
+
+/** The rows. `audits` is the audit state of the versions the screen has one for, by `version_uid`. */
+function VersionRows({ projectUid, documentUid, audits }: {
+  readonly projectUid: ProjectUid;
+  readonly documentUid: DocumentUid;
+  readonly audits: ReadonlyMap<string, DocumentAudit>;
+}) {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const query = useVersionList(documentUid, cursor);
 
@@ -65,13 +103,17 @@ export function VersionList({ projectUid, documentUid }: VersionListProps) {
   return (
     <div data-version-count={page.items.length}>
       <ul className="am-rows">
-        {page.items.map((version) => (
-          <VersionRow
-            key={version.version_uid}
-            version={version}
-            href={routes.version(projectUid, version.version_uid)}
-          />
-        ))}
+        {page.items.map((version) => {
+          const audit = audits.get(version.version_uid);
+          return (
+            <VersionRow
+              key={version.version_uid}
+              version={audit === undefined ? version : { ...version, audit }}
+              href={routes.version(projectUid, version.version_uid)}
+              reviewAddress={(runId) => routes.review(projectUid, runId)}
+            />
+          );
+        })}
       </ul>
       <p className="am-note">
         <em>

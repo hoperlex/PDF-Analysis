@@ -13,9 +13,21 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import type { AuthEvent } from '@/shared/api';
+import { AUTH_EVENT_TYPE_VALUES } from '@/shared/api';
 import { formatInstant, routes } from '@/shared/lib';
 import { EmptyState, ErrorState, LoadingState } from '@/shared/ui';
-import { AUTH_EVENT_LABELS, AUTH_EVENT_PAGE_LIMIT, authEventDetails, authEventFailure, useAuthEvents } from '@/entities/auth-event';
+import {
+  AUTH_EVENT_LABELS,
+  AUTH_EVENT_PAGE_LIMIT,
+  AUTH_EVENT_TONES,
+  NO_AUTH_EVENT_FILTER,
+  authEventDetails,
+  authEventFailure,
+  filterAuthEvents,
+  isFiltering,
+  useAuthEvents,
+} from '@/entities/auth-event';
+import type { AuthEventFilter } from '@/entities/auth-event';
 
 import styles from './auth-event-list.module.css';
 
@@ -45,7 +57,7 @@ export function AuthEventRows({ items }: { readonly items: readonly AuthEvent[] 
               <tr key={event.event_id} data-auth-event={event.event_type}>
                 <td className={styles.when}>{formatInstant(event.occurred_at)}</td>
                 <td>
-                  {AUTH_EVENT_LABELS[event.event_type]}
+                  <span className={`am-badge am-badge--${AUTH_EVENT_TONES[event.event_type]}`}>{AUTH_EVENT_LABELS[event.event_type]}</span>
                   {details.map((detail) => <small key={detail} className={styles.detail}>{detail}</small>)}
                 </td>
                 <td><Person uid={event.subject_user_uid} label={event.subject_label} /></td>
@@ -61,8 +73,33 @@ export function AuthEventRows({ items }: { readonly items: readonly AuthEvent[] 
   );
 }
 
+/** The filters of the journal, over the events already read (`UI-A-94`): kind, account or administrator, and a range of days. */
+export function AuthEventFilters({ filter, onChange }: { readonly filter: AuthEventFilter; readonly onChange: (next: AuthEventFilter) => void }) {
+  return (
+    <div className={styles.filters} role="group" aria-label="Фильтры журнала" data-auth-event-filters="">
+      <label className={styles.filter}>Событие{' '}
+        <select value={filter.type} onChange={(event) => onChange({ ...filter, type: event.target.value as AuthEventFilter['type'] })}>
+          <option value="">Все события</option>
+          {AUTH_EVENT_TYPE_VALUES.map((value) => <option key={value} value={value}>{AUTH_EVENT_LABELS[value]}</option>)}
+        </select>
+      </label>
+      <label className={styles.filter}>Пользователь{' '}
+        <input type="search" value={filter.text} placeholder="Фамилия или инициалы" maxLength={120} autoComplete="off" onChange={(event) => onChange({ ...filter, text: event.target.value })} />
+      </label>
+      <label className={styles.filter}>С{' '}
+        <input type="date" value={filter.from} max={filter.to === '' ? undefined : filter.to} onChange={(event) => onChange({ ...filter, from: event.target.value })} />
+      </label>
+      <label className={styles.filter}>По{' '}
+        <input type="date" value={filter.to} min={filter.from === '' ? undefined : filter.from} onChange={(event) => onChange({ ...filter, to: event.target.value })} />
+      </label>
+      {isFiltering(filter) ? <button type="button" className="am-button am-button--quiet am-button--small" onClick={() => onChange(NO_AUTH_EVENT_FILTER)}>Сбросить фильтры</button> : null}
+    </div>
+  );
+}
+
 export function AuthEventList() {
   const [cursor, setCursor] = useState<string | undefined>();
+  const [filter, setFilter] = useState<AuthEventFilter>(NO_AUTH_EVENT_FILTER);
   const query = useAuthEvents({ limit: AUTH_EVENT_PAGE_LIMIT, ...(cursor ? { cursor } : {}) });
   return (
     <div>
@@ -78,15 +115,30 @@ export function AuthEventList() {
       {query.isSuccess ? (
         query.data.items.length === 0 ? (
           <EmptyState title="В журнале пока нет событий." detail="Здесь появятся входы, смена паролей и ролей и завершение сеансов." />
-        ) : (
-          <div>
-            <AuthEventRows items={query.data.items} />
-            <div className="am-pager">
-              {cursor ? <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setCursor(undefined)}>В начало</button> : null}
-              {query.data.page.next_cursor ? <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setCursor(query.data.page.next_cursor ?? undefined)}>Дальше</button> : null}
+        ) : (() => {
+          const items = filterAuthEvents(query.data.items, filter);
+          const filtering = isFiltering(filter);
+          return (
+            <div>
+              <AuthEventFilters filter={filter} onChange={setFilter} />
+              <p className="am-note" aria-live="polite" data-auth-event-count={items.length} data-auth-event-loaded={query.data.items.length}>
+                {filtering
+                  ? `Показано ${items.length} из ${query.data.items.length} загруженных событий. Фильтры действуют на события этой страницы журнала.`
+                  : `Загружено событий: ${query.data.items.length}, от новых к старым.`}
+              </p>
+              {items.length === 0 ? (
+                <EmptyState
+                  title="Под фильтр ничего не подошло."
+                  detail="Измените условия или сбросьте фильтры; более ранние события открываются кнопкой «Дальше»."
+                />
+              ) : <AuthEventRows items={items} />}
+              <div className="am-pager">
+                {cursor ? <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setCursor(undefined)}>В начало</button> : null}
+                {query.data.page.next_cursor ? <button className="am-button am-button--quiet am-button--small" type="button" onClick={() => setCursor(query.data.page.next_cursor ?? undefined)}>Дальше</button> : null}
+              </div>
             </div>
-          </div>
-        )
+          );
+        })()
       ) : null}
     </div>
   );

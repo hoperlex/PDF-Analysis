@@ -13,8 +13,11 @@ import { useQuery } from '@tanstack/react-query';
 import type { AuthEventListFilters, AuthEventPage } from '@/shared/api';
 import { listAuthEvents, queryKeys } from '@/shared/api';
 
-/** One page of the journal. */
-export const AUTH_EVENT_PAGE_LIMIT = 50;
+/**
+ * One page of the journal: the most the contract allows (200). The filters of the screen work on the events in hand, so a
+ * page is as long as it can be; the original reads 300 at once.
+ */
+export const AUTH_EVENT_PAGE_LIMIT = 200;
 
 export function useAuthEvents(filters: AuthEventListFilters) {
   return useQuery<AuthEventPage>({

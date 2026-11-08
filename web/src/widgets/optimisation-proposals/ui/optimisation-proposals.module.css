@@ -122,11 +122,12 @@
 .card {
   display: grid;
   grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr) minmax(16rem, 26rem);
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
   grid-template-areas:
     'head quote judgement'
     'prov frame judgement'
-    'figs basis judgement';
+    'figs basis judgement'
+    'blocks blocks blocks';
   align-items: start;
   column-gap: var(--am-gap);
   margin: 0 0 var(--am-gap-xs);
@@ -194,8 +195,16 @@
       'frame'
       'figs'
       'basis'
-      'judgement';
+      'judgement'
+      'blocks';
   }
+}
+
+/* `UI-B-09`: the strip of the sheet's blocks takes the card's full width under the row. */
+.sheetBlocks {
+  grid-area: blocks;
+  min-width: 0;
+  margin-top: var(--am-gap-xs);
 }
 
 .state {

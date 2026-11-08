@@ -85,6 +85,8 @@ export type { RunPresetLine } from './model/run-preset';
 export { runPresetLine, runPresetSentence, runPresetValue } from './model/run-preset';
 
 export { QUEUE_REASON_LABELS, knownQueueReason, runQueueReason, runQueueReasonLabel } from './model/run-queue-reason';
+export type { RunNextTask, RunNextTaskSource } from './model/run-next-task';
+export { nextTaskPlace, nextTaskWhy, nextTaskWork, runNextTask } from './model/run-next-task';
 
 export type { QueueItemWaitingReading } from './model/queue-item-waiting';
 export { queueItemWaiting } from './model/queue-item-waiting';

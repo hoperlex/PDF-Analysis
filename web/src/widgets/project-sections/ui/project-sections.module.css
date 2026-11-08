@@ -131,6 +131,21 @@
   margin: 0 0 var(--am-gap-sm);
 }
 
+/* `UI-A-36`: the original's total row: across the grid, set off by a heavier line, the figures as the rows' own, not opened. */
+.totalCard {
+  grid-column: 1 / -1;
+}
+
+.totalBody {
+  display: flex;
+  align-items: center;
+  gap: var(--am-gap-sm);
+  height: auto;
+  padding: var(--am-gap-xs) var(--am-gap-sm);
+  border-top: 2px solid var(--am-line-strong);
+  box-shadow: none;
+}
+
 @media (max-width: 780px) {
   .sections {
     grid-template-columns: minmax(0, 1fr);

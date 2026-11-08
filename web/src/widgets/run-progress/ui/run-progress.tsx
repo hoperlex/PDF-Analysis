@@ -81,6 +81,7 @@ import {
 import styles from './run-progress.module.css';
 import { PdfPrecheckProgress } from './pdf-precheck-progress';
 import { RunLiveLine } from './run-live-line';
+import { RunNextTask } from './run-next-task';
 import { ExtendedReview } from '@/widgets/extended-review';
 
 import {
@@ -542,6 +543,9 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
       <Figures status={status} />
 
       <Outcome status={status} />
+
+      {/* `UI-B-70`: a run that waits in the queue says what goes first and why it waits, as the original's «Следующая задача». */}
+      {status.state === 'queued' ? <RunNextTask status={status} /> : null}
 
       <div className={styles.columns}>
         <section className={styles.panel} aria-label="Сведения о прогоне">

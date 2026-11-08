@@ -457,6 +457,21 @@ describe('the screen this seam redirects to can render every outcome it produces
     expect(markup).not.toContain(`href="${SIGN_IN_PATH}`);
   });
 
+  it('starts on the current password and offers the way out the original has: «Выйти» for a forced change, the profile otherwise', () => {
+    const forced = render(createElement(ChangePasswordPage, { mustChange: true }));
+    expect(forced).toMatch(/<input[^>]*id="change-password-current"[^>]*autofocus=""/);
+    expect(forced).toMatch(/<form[^>]*action="\/bff\/v1\/session\/end"[^>]*method="post"[^>]*>[\s\S]*?Выйти[\s\S]*?<\/form>/);
+    expect(forced).not.toContain('data-change-password-back');
+    const free = render(createElement(ChangePasswordPage, {}));
+    expect(free).toContain('data-change-password-back=""');
+    expect(free).toContain('href="/account"');
+    expect(free).not.toContain('Выйти');
+    // after a change the way on is the front door, not the profile
+    const changed = render(createElement(ChangePasswordPage, { outcome: 'changed' }));
+    expect(changed).toContain('data-change-password-onward=""');
+    expect(changed).not.toContain('data-change-password-back');
+  });
+
   it('says out loud that changing the password revokes what was issued', () => {
     const markup = render(createElement(ChangePasswordPage, { login: LOGIN }));
     // The one sentence a reviewer must read BEFORE pressing the button, not after: this

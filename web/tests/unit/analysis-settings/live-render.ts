@@ -198,6 +198,12 @@ export interface LiveRender {
    * which case nothing was called, as in a browser.
    */
   press(label: string): Promise<boolean>;
+  /**
+   * Press the one button carrying `attribute="value"` (a `data-*` marker), for a control whose text is shared by its
+   * siblings (the arrow of each row of a list). Same rules as {@link press}: throws unless exactly one matches, and a
+   * disabled button is not pressed.
+   */
+  pressMarked(attribute: string, value: string): Promise<boolean>;
   /** How many buttons carry exactly this text. */
   count(label: string): number;
   /**
@@ -260,6 +266,20 @@ export async function mountLive(element: ReactElement): Promise<LiveRender> {
       if (button.getAttribute('disabled') !== null) return false;
       const onClick = propsOf(button).onClick;
       if (onClick === undefined) throw new Error(`button «${label}» has no onClick`);
+      await act(async () => {
+        onClick({ type: 'click', preventDefault() {}, stopPropagation() {} });
+        await tick();
+        await tick();
+      });
+      return true;
+    },
+    pressMarked: async (attribute, value) => {
+      const found = descendants(container).filter((node) => node.nodeName === 'button' && node.getAttribute(attribute) === value);
+      if (found.length !== 1) throw new Error(`expected one button with ${attribute}="${value}", found ${found.length}`);
+      const button = found[0] as FakeNode;
+      if (button.getAttribute('disabled') !== null) return false;
+      const onClick = propsOf(button).onClick;
+      if (onClick === undefined) throw new Error(`button ${attribute}="${value}" has no onClick`);
       await act(async () => {
         onClick({ type: 'click', preventDefault() {}, stopPropagation() {} });
         await tick();

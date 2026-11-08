@@ -576,6 +576,17 @@ body {
   padding: 0;
 }
 
+/*
+ * Focus and anchor jumps clear the pinned furniture: the top strip at a desktop width (44 px) and the bar at a narrow one
+ * (about 48 px) are both sticky, and without this a control reached with Tab, or a `#fragment`, scrolled in under them.
+ */
+html {
+  scroll-padding-top: calc(var(--am-strip-height) + var(--am-gap-sm));
+  /* A phone turned sideways keeps the type size the stylesheet gave it. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--am-font);
   font-size: var(--am-text-base);
@@ -667,6 +678,13 @@ a:hover {
   text-decoration-color: currentColor;
 }
 
+/* A disclosure's handle is a target: 24 px tall at the least (WCAG 2.5.8); they were 18.5 to 20.7 px. */
+summary {
+  min-height: 24px;
+  padding-block: var(--am-gap-2xs);
+  cursor: pointer;
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -681,6 +699,17 @@ summary:focus-visible {
 code {
   font-family: var(--am-font-mono);
   font-size: 0.86em;
+}
+
+/*
+ * A dump (a JSON receipt, a code block of a report) is wider than a phone and than a narrow column. It scrolls inside
+ * its own box instead of pushing the page sideways; the words in it are not broken, because a hash is read whole.
+ */
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: var(--am-font-mono);
+  font-size: var(--am-text-sm);
 }
 
 /*
@@ -729,6 +758,12 @@ dd > p:last-child {
 }
 
 table {
+  /*
+   * The containing block of whatever is absolutely positioned inside it. A visually hidden label in a header cell (1 px, clipped,
+   * `position: absolute`) otherwise had the page as its containing block, so the scrolling wrapper around a wide table did not
+   * clip it and it stretched the page to 807 px on 23 comparison screens at 390 and 768 px.
+   */
+  position: relative;
   border-collapse: collapse;
   width: 100%;
   font-size: var(--am-text-sm);
@@ -802,6 +837,13 @@ input[type='number'],
 textarea,
 select {
   font: inherit;
+  /*
+   * A field never outgrows its column: a select with a long option, a textarea with a wide cols. `min-width: 0` is the half that
+   * matters in a grid or a flex row: the automatic minimum is the control's own intrinsic width (770 px for the routes select),
+   * and a track or a flex item will not shrink below it, so `max-width: 100%` alone has nothing to resolve against.
+   */
+  min-width: 0;
+  max-width: 100%;
   /* As tall as a button (34px), so a field and its button line up in one row, as in the original. */
   min-height: 34px;
   padding: 5px 10px;
@@ -878,6 +920,8 @@ input[type='file']::file-selector-button:hover {
   display: grid;
   grid-template-columns: 214px minmax(0, 1fr);
   min-height: 100vh;
+  /* A phone's address bar takes part of 100vh; the dynamic unit is what is actually visible. */
+  min-height: 100dvh;
   background: var(--am-showcase-bg);
   transition: grid-template-columns var(--am-motion-base) var(--am-ease);
 }
@@ -1464,10 +1508,25 @@ input[type='file']::file-selector-button:hover {
   }
 }
 
+/* A phone: the side gutters narrow from 16 px to 12 px, so a screen's content gains 8 px of the 390 it has. */
 @media (max-width: 590px) {
+  .am-app__bar,
+  .am-app[data-sidebar='compact'] .am-app__bar {
+    padding: var(--am-gap-sm) var(--am-gap-md);
+  }
+
   .am-app__utility {
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: var(--am-gap-sm) var(--am-gap-md);
+    padding: var(--am-gap-xs) var(--am-gap-md);
+  }
+
+  .am-app__main {
+    padding: var(--am-gap-sm) var(--am-gap-md) var(--am-gap-md);
+  }
+
+  .am-app__footer {
+    padding: var(--am-gap-sm) var(--am-gap-md);
   }
 }
 
@@ -1491,14 +1550,22 @@ input[type='file']::file-selector-button:hover {
 
 .am-page__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--am-gap-md);
+  gap: var(--am-gap-sm) var(--am-gap-md);
   margin-bottom: var(--am-gap-md);
+}
+
+/* The heading takes the line when the actions do not fit beside it, instead of being squeezed to a word a line. */
+.am-page__header > :first-child {
+  flex: 1 1 18rem;
+  min-width: 0;
 }
 
 .am-page__title {
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: var(--am-text-xl);
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -1689,6 +1756,7 @@ li.am-state .am-state__detail {
 .am-badge {
   display: inline-flex;
   align-items: baseline;
+  max-width: 100%;
   gap: 6px;
   padding: 1px var(--am-gap-sm);
   border-radius: var(--am-radius-pill);
@@ -1698,6 +1766,22 @@ li.am-state .am-state__detail {
   line-height: 1.5;
   white-space: nowrap;
   vertical-align: baseline;
+}
+
+/* A badge that is a link or a button is pressed, so it is a target: 24 px tall at the least (it was 21.3 and 22.5). */
+a.am-badge,
+button.am-badge {
+  align-items: center;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+/* A status with a sentence in it (a reason, a key that is not ready) wraps at a phone width instead of running off it. */
+@media (max-width: 590px) {
+  .am-badge {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 .am-badge--pending,
@@ -2222,6 +2306,7 @@ li.am-state .am-state__detail {
   font-size: var(--am-text-base);
   line-height: var(--am-leading-relaxed);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .am-quotation__anchor {
@@ -2553,6 +2638,8 @@ li.am-state .am-state__detail {
 
 .am-form {
   display: grid;
+  /* One track that may shrink: an `auto` track is as wide as the widest select option (770 px at 390 on the routes form). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--am-gap-sm);
   max-width: 44rem;
 }
@@ -2576,6 +2663,9 @@ li.am-state .am-state__detail {
 
 .am-form__field {
   display: grid;
+  /* The same one shrinking track inside a field: its select stays in the column instead of sizing the track to its longest option. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--am-gap-xs);
 }
 
@@ -2659,6 +2749,8 @@ span.am-note {
   align-items: center;
   gap: var(--am-gap-sm);
   flex-shrink: 0;
+  /* Capped at the line it stands on: its own links wrap inside it rather than leave the screen. */
+  max-width: 100%;
 }
 
 .am-page__actions a {

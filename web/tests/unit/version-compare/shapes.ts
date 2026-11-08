@@ -516,9 +516,16 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
     make: () =>
       createElement(SheetsTabView, sheetsProps({
         viewer: createElement(ComparisonViewer, { pair: comparedPair({ sheet_pair_id: PAIR_ID }) }),
+        viewerStatic: true,
+        onCloseViewer: noop,
+        onCloseOrder: noop,
+        reportWindow: createElement(ReportWindowView, windowProps()),
+        onCloseReport: noop,
         orderDialog: createElement(VersionOrderDialogView, { heading: '133/23-ГК-ЭМ1', source: 'expert', rows: [{ versionUid: V1, name: '№1', file: 'ЭМ-изм0.pdf', pages: 7 }], changed: true, pending: false, failure: null, onMove: noop, onSave: noop, onCancel: noop }),
       })),
   },
+  // The caret of the header has folded the pair choice and the blocks above the matrix (UI-B-98).
+  { name: 'sheets-tab-top-hidden', make: () => createElement(SheetsTabView, sheetsProps({ topHidden: true, onToggleTop: noop })) },
   { name: 'sheets-tab-restart-asked', make: () => createElement(SheetsTabView, sheetsProps({ confirmingRestart: true })) },
   { name: 'sheets-tab-applying', make: () => createElement(SheetsTabView, sheetsProps({ draft: DRAFT, applying: true })) },
   { name: 'sheets-tab-reader', make: () => createElement(SheetsTabView, sheetsProps({ mayEdit: false, series: series({ state: 'paused' }) })) },
@@ -554,7 +561,7 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
   { name: 'version-order-dialog-own-order', make: () => createElement(VersionOrderDialogView, { heading: '133/23-ГК-ЭМ1', rows: [{ versionUid: V1, name: '№1', file: 'ЭМ-изм0.pdf', pages: 7 }], changed: false, pending: false, failure: null, onMove: noop, onSave: noop, onCancel: noop }) },
   {
     name: 'pair-viewer-pending',
-    make: () => createElement(PairViewerSlot, { pairId: PAIR_ID, siblings: pairs(), renderViewer: () => null, onOpen: noop, onClose: noop }),
+    make: () => createElement(PairViewerSlot, { pairId: PAIR_ID, siblings: pairs(), renderViewer: () => null, onOpen: noop }),
   },
   {
     name: 'pair-viewer-opened',
@@ -562,15 +569,16 @@ export const COMPARISON_SHAPES: readonly ComparisonShape[] = [
       createElement(PairViewerSlot, {
         pairId: PAIR_ID,
         siblings: pairs(),
-        renderViewer: ({ pair, rasterSize, navigation }) => createElement(ComparisonViewer, { pair, navigation, ...(rasterSize === undefined ? {} : { rasterSize }) }),
+        renderViewer: ({ pair, rasterSize, navigation, versionLabels }) => createElement(ComparisonViewer, { pair, navigation, versionLabels, ...(rasterSize === undefined ? {} : { rasterSize }) }),
         onOpen: noop,
-        onClose: noop,
+        names: SET_NAMES,
+        titles: new Map([[V1, 'ЭМ-изм0.pdf'], [V2, 'ЭМ-изм1.pdf'], [V3, 'ЭМ-изм2.pdf']]),
       }),
     seedClient: (c) => c.setQueryData(COMPARISON_KEYS.pair(PAIR_ID), comparedPair({ sheet_pair_id: PAIR_ID })),
   },
   {
     name: 'pair-viewer-refused',
-    make: () => createElement(PairViewerSlot, { pairId: PAIR_ID, siblings: [], renderViewer: () => null, onOpen: noop, onClose: noop }),
+    make: () => createElement(PairViewerSlot, { pairId: PAIR_ID, siblings: [], renderViewer: () => null, onOpen: noop }),
     seedClient: (c) => seedError(c, COMPARISON_KEYS.pair(PAIR_ID), refusal('dependency_unavailable', { dependency: 'comparison_series' })),
   },
 

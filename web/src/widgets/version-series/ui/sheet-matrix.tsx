@@ -36,6 +36,7 @@ import {
   pairReasonWords,
   partsLine,
   pairOfRow,
+  pairTally,
   parseDragged,
   rowHeading,
   unlinkSheet,
@@ -197,6 +198,39 @@ function RowStatus({
   );
 }
 
+/**
+ * What the chosen pair adds up to, with the sheets that stand in one version only («только в №1» — gone from the newer one,
+ * «только в №2» — new in it). Arithmetic over the statuses of the pairs; it asserts nothing the pairs do not already say.
+ */
+function PairTally({
+  pairs,
+  sides,
+  names,
+}: {
+  readonly pairs: readonly ComparisonSheetPair[];
+  readonly sides: Sides;
+  readonly names: ReadonlyMap<string, string>;
+}) {
+  const tally = pairTally(pairs);
+  const older = sides.a === null ? '№?' : (names.get(sides.a) ?? '№?');
+  const newer = sides.b === null ? '№?' : (names.get(sides.b) ?? '№?');
+  return (
+    <p className={styles.tally} data-pair-tally="">
+      <span>
+        Пара {older} → {newer}: листов {tally.sheets}
+      </span>
+      <span>с отличиями: {tally.changed}</span>
+      {tally.needsReview > 0 ? <span>нужна проверка: {tally.needsReview}</span> : null}
+      <span data-tally-only="old" title={`Листы, которые есть только в версии ${older} и пропали в ${newer}.`}>
+        только в {older}: {tally.onlyOld}
+      </span>
+      <span data-tally-only="new" title={`Листы, которых не было в версии ${older} и которые появились в ${newer}.`}>
+        только в {newer}: {tally.onlyNew}
+      </span>
+    </p>
+  );
+}
+
 export function SheetMatrix({
   matrix,
   names,
@@ -219,94 +253,98 @@ export function SheetMatrix({
   const hasPairs = pairs !== null && pairs.length > 0;
   const rows = onlyChanged && hasPairs ? changedRows(allRows, sides, pairs) : allRows;
   return (
-    <div className={styles.matrixWrap}>
-      <table
-        className={styles.matrix}
-        aria-busy={locked}
-        {...(locked ? { inert: true } : {})}
-        data-comparison-matrix=""
-      >
-        <thead>
-          <tr>
-            <th scope="col" className={styles.rowHead}>
-              <span>Лист \ версия</span>
-              <label className={styles.onlyChanged} title={hasPairs ? 'Скрыть листы без изменений в выбранной паре «было → стало».' : NO_PAIR_FOR_CHANGES}>
-                <input type="checkbox" checked={onlyChanged && hasPairs} disabled={!hasPairs} onChange={(event) => onOnlyChanged(event.target.checked)} />
-                {' '}только изменения
-                {onlyChanged && hasPairs ? <span className={styles.note}> ({rows.length} из {allRows.length})</span> : null}
-              </label>
-            </th>
-            {columns.map((column) => (
-              <th
-                key={column.version_uid}
-                scope="col"
-                className={column.version_uid === sides.a ? styles.headA : column.version_uid === sides.b ? styles.headB : styles.head}
-              >
-                <div className={styles.colLabel} title={titles.get(column.version_uid)}>
-                  Версия {names.get(column.version_uid) ?? '№?'}
-                  <span className={styles.note}> · стр. {column.page_count}</span>
-                </div>
-                <div className={styles.pick}>
-                  <button
-                    type="button"
-                    className="am-button am-button--small am-button--quiet"
-                    aria-pressed={column.version_uid === sides.a}
-                    title="Сделать эту версию стороной «было» выбранной пары."
-                    onClick={() => onSide('a', column.version_uid)}
-                  >
-                    Было
-                  </button>
-                  <button
-                    type="button"
-                    className="am-button am-button--small am-button--quiet"
-                    aria-pressed={column.version_uid === sides.b}
-                    title="Сделать эту версию стороной «стало» выбранной пары."
-                    onClick={() => onSide('b', column.version_uid)}
-                  >
-                    Стало
-                  </button>
-                </div>
+    <>
+      {hasPairs ? <PairTally pairs={pairs} sides={sides} names={names} /> : null}
+      <div className={styles.matrixWrap}>
+        <table
+          className={styles.matrix}
+          aria-busy={locked}
+          {...(locked ? { inert: true } : {})}
+          data-comparison-matrix=""
+        >
+          <thead>
+            <tr>
+              <th scope="col" className={styles.rowHead}>
+                <span>Лист \ версия</span>
+                <label className={styles.onlyChanged} title={hasPairs ? 'Скрыть листы без изменений в выбранной паре «было → стало».' : NO_PAIR_FOR_CHANGES}>
+                  <input type="checkbox" checked={onlyChanged && hasPairs} disabled={!hasPairs} onChange={(event) => onOnlyChanged(event.target.checked)} />
+                  {' '}только изменения
+                  {onlyChanged && hasPairs ? <span className={styles.note}> ({rows.length} из {allRows.length})</span> : null}
+                </label>
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const heading = rowHeading(row);
-            const pair = pairs === null ? null : pairOfRow(row, sides, pairs);
-            return (
-              <tr key={row.row_id} data-row-id={row.row_id}>
-                <th scope="row" className={styles.rowHead}>
-                  <div className={styles.rowTitle}>{heading.title === '' ? 'Лист без названия' : heading.title}</div>
-                  {heading.number === '' ? null : <div className={styles.note}>лист {heading.number}</div>}
-                  <RowStatus pair={pair} onOpenPair={onOpenPair} />
+              {columns.map((column) => (
+                <th
+                  key={column.version_uid}
+                  scope="col"
+                  className={column.version_uid === sides.a ? styles.headA : column.version_uid === sides.b ? styles.headB : styles.head}
+                >
+                  <div className={styles.colLabel} title={titles.get(column.version_uid)}>
+                    Версия {names.get(column.version_uid) ?? '№?'}
+                    <span className={styles.note}> · стр. {column.page_count}</span>
+                  </div>
+                  {(titles.get(column.version_uid) ?? '') === '' ? null : <div className={styles.colFile}>{titles.get(column.version_uid)}</div>}
+                  <div className={styles.pick}>
+                    <button
+                      type="button"
+                      className="am-button am-button--small am-button--quiet"
+                      aria-pressed={column.version_uid === sides.a}
+                      title="Сделать эту версию стороной «было» выбранной пары."
+                      onClick={() => onSide('a', column.version_uid)}
+                    >
+                      Было
+                    </button>
+                    <button
+                      type="button"
+                      className="am-button am-button--small am-button--quiet"
+                      aria-pressed={column.version_uid === sides.b}
+                      title="Сделать эту версию стороной «стало» выбранной пары."
+                      onClick={() => onSide('b', column.version_uid)}
+                    >
+                      Стало
+                    </button>
+                  </div>
                 </th>
-                {row.cells.map((cell) => (
-                  <MatrixCellView
-                    key={cell.version_uid}
-                    row={row}
-                    cell={cell}
-                    versionName={names.get(cell.version_uid) ?? '№?'}
-                    touched={touched}
-                    mayEdit={mayEdit}
-                    side={cell.version_uid === sides.a ? 'a' : cell.version_uid === sides.b ? 'b' : null}
-                    hints={hintsFor(hints, row, cell)}
-                    onSheet={onSheet}
-                    onUnlink={(r, c) => (c.page === undefined ? undefined : onGesture(unlinkSheet(r, c.page)))}
-                    onLink={(r, c, candidate: ComparisonMatrixCandidate) => onGesture(linkCandidate(r, c.version_uid, candidate))}
-                    onAbsent={(r, c) => onGesture(markAbsent(r, c.version_uid))}
-                    onDropped={(r, c, text) => {
-                      const dragged = parseDragged(text);
-                      if (dragged !== null) onGesture(dropOnCell(r, c.version_uid, dragged));
-                    }}
-                  />
-                ))}
-              </tr>
-            );
-          })}
-          <UnassignedRow matrix={matrix} mayEdit={mayEdit} />
-        </tbody>
-      </table>
-    </div>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const heading = rowHeading(row);
+              const pair = pairs === null ? null : pairOfRow(row, sides, pairs);
+              return (
+                <tr key={row.row_id} data-row-id={row.row_id}>
+                  <th scope="row" className={styles.rowHead}>
+                    <div className={styles.rowTitle}>{heading.title === '' ? 'Лист без названия' : heading.title}</div>
+                    {heading.number === '' ? null : <div className={styles.note}>лист {heading.number}</div>}
+                    <RowStatus pair={pair} onOpenPair={onOpenPair} />
+                  </th>
+                  {row.cells.map((cell) => (
+                    <MatrixCellView
+                      key={cell.version_uid}
+                      row={row}
+                      cell={cell}
+                      versionName={names.get(cell.version_uid) ?? '№?'}
+                      touched={touched}
+                      mayEdit={mayEdit}
+                      side={cell.version_uid === sides.a ? 'a' : cell.version_uid === sides.b ? 'b' : null}
+                      hints={hintsFor(hints, row, cell)}
+                      onSheet={onSheet}
+                      onUnlink={(r, c) => (c.page === undefined ? undefined : onGesture(unlinkSheet(r, c.page)))}
+                      onLink={(r, c, candidate: ComparisonMatrixCandidate) => onGesture(linkCandidate(r, c.version_uid, candidate))}
+                      onAbsent={(r, c) => onGesture(markAbsent(r, c.version_uid))}
+                      onDropped={(r, c, text) => {
+                        const dragged = parseDragged(text);
+                        if (dragged !== null) onGesture(dropOnCell(r, c.version_uid, dragged));
+                      }}
+                    />
+                  ))}
+                </tr>
+              );
+            })}
+            <UnassignedRow matrix={matrix} mayEdit={mayEdit} />
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

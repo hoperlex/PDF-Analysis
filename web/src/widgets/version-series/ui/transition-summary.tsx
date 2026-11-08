@@ -104,7 +104,7 @@ function TransitionRow({
           <td>{summary.zones_only}</td>
           <td>{summary.different}</td>
           <td>{summary.needs_review}</td>
-          <td>
+          <td title={`Листов только в новой версии: ${summary.added}. Листов только в прежней: ${summary.removed}.`} data-composition="">
             +{summary.added} / −{summary.removed}
           </td>
           <td className={styles.verdict}>
@@ -274,7 +274,7 @@ export function TransitionSummary({
                     <th scope="col" title="Изменены только служебные зоны">◐</th>
                     <th scope="col" title="Есть отличия">●</th>
                     <th scope="col" title="Нужна проверка">⚠</th>
-                    <th scope="col">Состав</th>
+                    <th scope="col" title="Первое число — листов только в новой версии (добавлены), второе — листов только в прежней (удалены).">Состав</th>
                     <th scope="col">Вывод</th>
                     <th scope="col">
                       <span className={styles.visuallyHidden}>Действие</span>

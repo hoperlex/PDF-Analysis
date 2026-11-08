@@ -5482,6 +5482,14 @@ export function branchLabelsInSource(): readonly { readonly label: string; reado
  */
 const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: string }[] = [
   {
+    label: 'Загрузка: блоки листа…',
+    why: 'UI-B-09: the block strip of a proposal\'s sheet reads the version and its blocks only after «Блоки листа» is pressed on a proposal card; one static pass renders the closed strip. tests/unit/optimisation-proposals/sheet-blocks.test.ts renders the loading branch of the open strip.',
+  },
+  {
+    label: 'Версия не прочитана: блоков листа нет',
+    why: 'UI-B-09: the open strip of a proposal\'s sheet says this only when the read of the pass\'s version was refused, after «Блоки листа» is pressed; one static pass cannot press it. tests/unit/optimisation-proposals/sheet-blocks.test.ts seeds the refusal and renders the branch.',
+  },
+  {
     label: 'Загрузка: решения по предложениям…',
     why: 'R-151h: the knowledge base reads the proposal journal only after «Тип: Предложения» is pressed; one static pass renders «Замечания». tests/unit/knowledge-base/proposal-journal.test.ts renders the loading branch of ProposalDecisions.',
   },
@@ -5702,6 +5710,20 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       "`DocumentChooser`'s empty answer, reached only once a project is chosen and that " +
       'project turns out to have published nothing. Same mechanism: the component that ' +
       'would render it is never mounted by a single static pass.',
+  },
+  {
+    label: 'На этой странице ничего не нашлось.',
+    why:
+      "«Диспетчер»'s answer when the typed search leaves nothing of the page already read " +
+      '(`UI-PARITY` P5). The search text is a `useState` the administrator fills, so one static pass starts ' +
+      'with it empty and the page whole; the pure narrowing is held by `filterAssignments` in `tests/unit/dispatcher`.',
+  },
+  {
+    label: 'Под фильтр ничего не подошло.',
+    why:
+      "«Журнал входов»'s answer when the kind, name or day filters leave nothing of the events " +
+      'already read (`UI-A-94`). The filters are a `useState` the administrator sets, so one static pass starts with ' +
+      'them empty and every event shown; the pure narrowing is held by `filterAuthEvents` in `tests/unit/auth-events`.',
   },
 ];
 

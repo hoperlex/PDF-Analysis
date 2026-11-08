@@ -10,7 +10,7 @@ import { AdminAuthEventsPage } from '@/_pages/admin-auth-events';
 import type { AuthEvent, AuthEventPage, ErrorEnvelope } from '@/shared/api';
 import { ApiError, AUTH_EVENT_TYPE_VALUES, queryKeys } from '@/shared/api';
 import { SCREEN_REGISTRY } from '@/shared/config/screen-registry';
-import { AUTH_EVENT_LABELS, AUTH_EVENT_PAGE_LIMIT, authEventDetails, authEventFailure } from '@/entities/auth-event';
+import { AUTH_EVENT_LABELS, AUTH_EVENT_PAGE_LIMIT, AUTH_EVENT_TONES, NO_AUTH_EVENT_FILTER, authEventDetails, authEventFailure, filterAuthEvents, isFiltering } from '@/entities/auth-event';
 import { AuthEventRows } from '@/widgets/auth-event-list';
 
 import { newClient, renderScreen } from '../screens/harness';
@@ -120,5 +120,56 @@ describe('the list', () => {
 
   it('is invalidated with the accounts, so ending sessions refreshes it', () => {
     expect(queryKeys.users.authEvents({ limit: 50 }).slice(0, 1)).toEqual(queryKeys.users.all());
+  });
+});
+
+describe('the filters (`UI-A-94`)', () => {
+  const ADMIN_UID = 'usr_01J9ZQ8K7NHVXW3T2R5M6P4Q8A';
+  const events: AuthEvent[] = [
+    event('sign_in_succeeded', { event_id: 'evt_A', occurred_at: '2026-11-05T23:59:59Z' }),
+    event('sessions_ended', { event_id: 'evt_B', occurred_at: '2026-11-06T00:00:01Z', actor_user_uid: ADMIN_UID, actor_label: 'Админова О. С.' }),
+    event('role_granted', { event_id: 'evt_C', occurred_at: '2026-11-07T12:00:00Z', subject_label: null, role: 'expert' }),
+  ];
+
+  it('asks the server for as many events as the contract allows, so the filters have something to work on', () => {
+    expect(AUTH_EVENT_PAGE_LIMIT).toBe(200);
+  });
+
+  it('keeps everything when nothing is asked, and says whether anything is', () => {
+    expect(filterAuthEvents(events, NO_AUTH_EVENT_FILTER)).toEqual(events);
+    expect(isFiltering(NO_AUTH_EVENT_FILTER)).toBe(false);
+    expect(isFiltering({ ...NO_AUTH_EVENT_FILTER, text: '  ' })).toBe(false);
+    expect(isFiltering({ ...NO_AUTH_EVENT_FILTER, from: '2026-11-01' })).toBe(true);
+  });
+
+  it('narrows by kind', () => {
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, type: 'sessions_ended' }).map((e) => e.event_id)).toEqual(['evt_B']);
+  });
+
+  it('narrows by the words of the account\'s or the administrator\'s label, in any case', () => {
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, text: 'АДМИНОВА' }).map((e) => e.event_id)).toEqual(['evt_B']);
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, text: 'экспертова' }).map((e) => e.event_id)).toEqual(['evt_A', 'evt_B']);
+    // an account that is gone has no label to match, and is not matched by a guess
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, text: 'удалена' })).toEqual([]);
+  });
+
+  it('narrows by UTC day, both bounds included', () => {
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, from: '2026-11-06' }).map((e) => e.event_id)).toEqual(['evt_B', 'evt_C']);
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, to: '2026-11-05' }).map((e) => e.event_id)).toEqual(['evt_A']);
+    expect(filterAuthEvents(events, { ...NO_AUTH_EVENT_FILTER, from: '2026-11-06', to: '2026-11-06' }).map((e) => e.event_id)).toEqual(['evt_B']);
+    expect(filterAuthEvents([event('sign_in_succeeded', { occurred_at: 'not a time' })], { ...NO_AUTH_EVENT_FILTER, from: '2026-11-01' })).toEqual([]);
+  });
+
+  it('gives every kind a tone, and draws the line\'s kind as a badge with the filters above the list', () => {
+    expect(Object.keys(AUTH_EVENT_TONES).sort()).toEqual([...AUTH_EVENT_TYPE_VALUES].sort());
+    const client = newClient();
+    client.setQueryData(queryKeys.users.authEvents({ limit: AUTH_EVENT_PAGE_LIMIT }), { items: events, page: { next_cursor: null } });
+    const markup = renderScreen(client, createElement(AdminAuthEventsPage));
+    expect(markup).toContain('data-auth-event-filters=""');
+    expect(markup).toContain('type="date"');
+    expect(markup).toContain('am-badge--degraded');
+    expect(markup).toContain('data-auth-event-count="3"');
+    expect(markup).toContain('Загружено событий: 3');
+    expect(markup).not.toContain('Сбросить фильтры');
   });
 });
