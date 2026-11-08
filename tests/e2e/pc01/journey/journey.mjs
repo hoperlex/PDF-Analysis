@@ -61,6 +61,18 @@ import { runWritePhase } from './write.mjs';
 import { openSession } from './session.mjs';
 import { provisionAccounts } from './accounts.mjs';
 import { measureWidth, widthFindings } from './width.mjs';
+import {
+  parseDimension,
+  pausedFindings,
+  queryString,
+  readViewport,
+  routeQuery,
+  stateExpression,
+  stateFindings,
+  stateProbeExpression,
+  stateReached,
+} from './walk-options.mjs';
+import { pauseDispatch, restoreDispatch } from './dispatch.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -76,6 +88,12 @@ function parseArgs(argv) {
     routes: null,
     seed: null,
     allowSpend: process.env.E2E_PC01_ALLOW_SPEND === '1',
+    // `D-380`. The read walk's viewport (the manifest declares one width), the state dispatch is held in around it,
+    // and a named state the routes that declare it must be in. See `walk-options.mjs`.
+    width: null,
+    height: null,
+    paused: false,
+    state: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -87,6 +105,15 @@ function parseArgs(argv) {
     else if (flag === '--routes') args.routes = argv[++i].split(',').filter(Boolean);
     else if (flag === '--seed') args.seed = argv[++i];
     else if (flag === '--allow-spend') args.allowSpend = true;
+    else if (flag === '--width' || flag === '--height') {
+      try {
+        args[flag.slice(2)] = parseDimension(flag, argv[++i]);
+      } catch (error) {
+        console.error(`e2e:pc01: ${error.message}`);
+        process.exit(2);
+      }
+    } else if (flag === '--paused') args.paused = true;
+    else if (flag === '--state') args.state = argv[++i];
     else {
       console.error(`e2e:pc01: unknown argument '${flag}'`);
       process.exit(2);
@@ -94,6 +121,10 @@ function parseArgs(argv) {
   }
   if (!['read', 'write', 'all', 'core'].includes(args.phase)) {
     console.error(`e2e:pc01: --phase must be read, write, all or core (got '${args.phase}')`);
+    process.exit(2);
+  }
+  if (args.phase === 'write' && (args.width !== null || args.height !== null || args.paused || args.state !== null)) {
+    console.error('e2e:pc01: --width, --height, --paused and --state shape the READ walk, and --phase write makes none');
     process.exit(2);
   }
   return args;
@@ -124,6 +155,18 @@ const OUT_DIR = resolve(args.out ?? process.env.E2E_PC01_OUT ?? join(HERE, '.out
 const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 const ID = manifest.identifier_pattern;
 const API_PREFIX = manifest.api_prefix;
+
+// `D-380`: the READ walk's viewport. It is the manifest's unless `--width`/`--height` say otherwise; the write half keeps
+// the declared one (its steps and refusals are specified at it), and the width assertion below holds each route to
+// the viewport the walk was actually laid out at, never to a number nobody stated.
+const READ_VIEWPORT = readViewport(manifest.viewport, { width: args.width, height: args.height });
+if (args.state !== null && !manifest.routes.some((route) => route.read_state?.[args.state] !== undefined)) {
+  console.error(
+    `e2e:pc01: --state '${args.state}' names no state: the routes declare ` +
+      `${[...new Set(manifest.routes.flatMap((route) => Object.keys(route.read_state ?? {})))].join(', ') || '(none)'}`,
+  );
+  process.exit(2);
+}
 
 /** `{project_uid}` -> a captured identity, then a declared placeholder sample, or a hard failure. */
 function fill(template, captured, samples = {}) {
@@ -337,226 +380,310 @@ if (PHASE === 'read') {
 if (PHASE === 'write') {
   console.log('phase: write only -- the read walk was NOT run.');
 }
-for (const route of PHASE === 'write' ? [] : manifest.routes) {
-  if (args.routes !== null && !args.routes.includes(route.name)) continue;
-  const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {});
-
-  const record = await withColdBrowser(async (page) => {
-    // Before anything is navigated: what this profile actually holds. An empty profile
-    // plus exactly the cookie names the sign-in produced is `D-16`'s property, measured
-    // per route instead of claimed in a comment. Anything else means the browser is not
-    // cold, and that is a finding about the instrument rather than about the screen.
-    const startedWith = page.startedWith() ?? [];
-    await page.goto(url);
-    const landedOn = await page.evaluate('document.location.pathname');
-    const title = await page.evaluate('document.title');
-    const bodyText = await page.evaluate(
-      "document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n') : ''",
-    );
-    const links = await page.evaluate(
-      "Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))",
-    );
-    return {
-      name: route.name,
-      url,
-      navigationAttempts: page.navigationAttempts,
-      startedWith,
-      viewport: page.viewport ?? null,
-      width: await measureWidth(page),
-      landedOn,
-      title,
-      bodyText,
-      links,
-      exchanges: page.exchanges(),
-      consoleErrors: page.consoleErrors(),
-      pageErrors: page.pageErrors(),
-    };
-  }, { cookies: SESSION_COOKIES, viewport: VIEWPORT });
-
-  // ---- D-16: this route's browser was cold, plus exactly what it was handed ---------
-  const started = [...record.startedWith].sort();
-  if (started.join(',') !== COOKIE_NAMES.join(',')) {
-    fail(
-      route.name,
-      `its browser started with cookies [${started.join(', ') || '(none)'}] and the ` +
-        `journey handed it [${COOKIE_NAMES.join(', ') || '(none)'}]. D-16 requires every ` +
-        'route to open in a profile holding nothing but what this walk explicitly gave it',
+// `D-380`, `--paused`: dispatch is held paused around the read walk, through the API as the administrator, and put back as it
+// was found even when the walk throws (`dispatch.mjs`). A pause the API does not confirm blocks the walk: a read of a state
+// that was not entered is not a read of it.
+const dispatchWhere = { origin: ORIGIN, apiPrefix: API_PREFIX, cookies: SESSION_COOKIES, viewport: VIEWPORT };
+let heldDispatch = null;
+let pausedEntry = null;
+let restoredDispatch = null;
+let readBlocked = false;
+try {
+  if (PHASE !== 'write' && args.paused) {
+    const entered = await pauseDispatch(dispatchWhere);
+    pausedEntry = entered.entry;
+    heldDispatch = entered.held;
+    failures.push(...entered.findings);
+    readBlocked = entered.findings.length > 0;
+    console.log(
+      `dispatch: found ${entered.entry.before?.paused === true ? 'paused' : 'open'}, now ` +
+        `${entered.entry.after?.paused === true ? 'PAUSED' : `NOT paused (${entered.entry.after?.status ?? 'no answer'})`} ` +
+        `(PUT ${entered.entry.command == null ? 'not needed' : entered.entry.command.status})\n`,
     );
   }
+  for (const route of PHASE === 'write' ? [] : manifest.routes) {
+    if (args.routes !== null && !args.routes.includes(route.name)) continue;
+    if (readBlocked) break;
+    // `D-380`: a screen that follows the header's project reads it from the address, and with two or more projects on the
+    // stand it draws a chooser and nothing else. A route's `query` names the journey's project there, from what an
+    // earlier route captured, so what the walk reads does not depend on how many projects the stand holds.
+    const query = routeQuery(route, (template) => fill(template, captured, route.sample_identifiers ?? {}));
+    const url = ORIGIN + fill(route.path, captured, route.sample_identifiers ?? {}) + queryString(query);
+    const readState = args.state === null ? undefined : route.read_state?.[args.state];
 
-  // ---- D-93: the screen does not scroll sideways at the declared width -------------
-  if (VIEWPORT === null) {
-    fail(
-      route.name,
-      'this manifest declares no `viewport`, so no route can be held to a width. D-93: ' +
-        'the frontend battery cannot express one either, which is why this assertion is here',
-    );
-  } else {
-    for (const finding of widthFindings(route.name, record.width, manifest.viewport)) {
-      failures.push(finding);
-    }
-  }
+    const record = await withColdBrowser(async (page) => {
+      // Before anything is navigated: what this profile actually holds. An empty profile
+      // plus exactly the cookie names the sign-in produced is `D-16`'s property, measured
+      // per route instead of claimed in a comment. Anything else means the browser is not
+      // cold, and that is a finding about the instrument rather than about the screen.
+      const startedWith = page.startedWith() ?? [];
+      await page.goto(url);
+      // The state the walk was asked to hold the route in (`--state`) is waited for under the state's own bound BEFORE
+      // the width is read: the layout fault under test (a wide table) exists only once the state is drawn.
+      let stateWait = null;
+      if (readState !== undefined) {
+        stateWait = await page.waitFor(stateExpression(readState), {
+          boundMs: readState.bound_ms,
+          what: `the state '${args.state}'`,
+        });
+        if (!stateWait.ok) stateWait.detail = await page.evaluate(stateProbeExpression(readState));
+        await page.settle();
+      }
+      // `--paused`: a screen that asked for the pause state draws its strip once the answer is in; give it a few seconds
+      // before reading the strip, so a slow answer is not reported as a strip that says something else.
+      if (
+        args.paused &&
+        page.exchanges().some((e) => e.method === 'GET' && /\/execution\/dispatch$/.test(new URL(e.url).pathname))
+      ) {
+        await page.waitFor("document.querySelector('[data-pause-status=\"paused\"]') ? true : null", {
+          boundMs: 5000,
+          what: 'the frame strip to say paused',
+        });
+      }
+      const landedOn = await page.evaluate('document.location.pathname');
+      const title = await page.evaluate('document.title');
+      const bodyText = await page.evaluate(
+        "document.body ? document.body.innerText.replace(/\\n{3,}/g, '\\n\\n') : ''",
+      );
+      const links = await page.evaluate(
+        "Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))",
+      );
+      // The frame's pause strip, as the page drew it: 'paused', 'running', 'unread' or nothing (a screen without the strip).
+      const pauseStrip = await page.evaluate(
+        "document.querySelector('[data-pause-status]')?.getAttribute('data-pause-status') ?? null",
+      );
+      return {
+        name: route.name,
+        url,
+        navigationAttempts: page.navigationAttempts,
+        startedWith,
+        viewport: page.viewport ?? null,
+        width: await measureWidth(page),
+        pauseStrip,
+        stateWait,
+        landedOn,
+        title,
+        bodyText,
+        links,
+        exchanges: page.exchanges(),
+        consoleErrors: page.consoleErrors(),
+        pageErrors: page.pageErrors(),
+      };
+    }, { cookies: SESSION_COOKIES, viewport: READ_VIEWPORT });
 
-  // ---- the document itself, redirects included -------------------------------------
-  // A route may redirect, so "the document" is a chain and not one response. Every hop is
-  // kept with its own status and `location`: a 200 reached through a 307 and a 200 served
-  // directly are different facts, and collapsing them is how a journey stops being
-  // evidence.
-  // Only documents fetched over HTTP. The review screen's PDF pane opens a `blob:` URL
-  // and Chrome's built-in viewer at `chrome-extension://...`, both of which the protocol
-  // reports as documents; treating either as the landing page would mean the route's
-  // verdict came from the viewer rather than from the application.
-  const documents = record.exchanges.filter(
-    (e) => e.resourceType === 'Document' && /^https?:/.test(e.url),
-  );
-  record.documentChain = documents.map((e) => ({
-    url: e.url,
-    status: e.status,
-    redirectedTo: e.redirectedTo ?? null,
-    location: e.responseHeaders?.location ?? null,
-  }));
-  const landed = documents[documents.length - 1];
-  record.documentStatus = landed?.status ?? null;
-  if (record.documentStatus !== 200) {
-    fail(
-      route.name,
-      `the document answered ${record.documentStatus} at ${landed?.url ?? url} ` +
-        `(chain: ${record.documentChain.map((h) => `${h.status} ${h.url}`).join(' -> ') || 'none'})`,
-    );
-  }
-
-  // ---- a declared redirect actually redirected ------------------------------------
-  if (route.redirects_to && record.landedOn !== route.redirects_to) {
-    fail(
-      route.name,
-      `declares it redirects to ${route.redirects_to} but the browser landed on ${record.landedOn}`,
-    );
-  }
-
-  // ---- the page rendered something -----------------------------------------------
-  if (!record.bodyText || record.bodyText.trim().length === 0) {
-    fail(route.name, 'rendered an empty body');
-  }
-
-  // ---- an uncaught exception is a red, a console message is a note -----------------
-  if (record.pageErrors.length > 0) {
-    fail(route.name, `threw ${record.pageErrors.length} uncaught exception(s): ${record.pageErrors[0]}`);
-  }
-
-  // ---- T-6: the browser holds no credential ---------------------------------------
-  const credentialled = record.exchanges.filter((e) => e.requestCarriedAuthorization);
-  record.requestsCarryingAuthorization = credentialled.map((e) => `${e.method} ${e.url}`);
-  if (credentialled.length > 0) {
-    fail(
-      route.name,
-      `${credentialled.length} browser request(s) carried an Authorization header; ` +
-        `T-6 puts the credential in the BFF, server-side: ${record.requestsCarryingAuthorization.join(', ')}`,
-    );
-  }
-
-  // ---- the declared API calls were made -------------------------------------------
-  const observed = record.exchanges
-    .filter((e) => new URL(e.url).pathname.startsWith(API_PREFIX))
-    .map((e) => `${e.method} ${new URL(e.url).pathname}`);
-  record.observedApi = [...new Set(observed)];
-
-  // A call on the seam that answered an error, whatever the screen then chose to render.
-  // `D-28`: `/projects/<anything>` answers 200 and renders an error state, so a route can
-  // look walked while every call under it refused. The write half has asserted this since
-  // `W22-E2E`; the read walk never did, which is half of why `D-92` looked like a link
-  // that was missing rather than like fifteen screens with no session. It is also what
-  // makes a session that expires mid-walk loud instead of invisible.
-  for (const exchange of record.exchanges) {
-    let path;
-    try {
-      path = new URL(exchange.url).pathname;
-    } catch {
-      continue;
-    }
-    if (!path.startsWith(API_PREFIX)) continue;
-    if (typeof exchange.status !== 'number' || exchange.status < 400) continue;
-    fail(
-      route.name,
-      `${exchange.method} ${path} answered ${exchange.status}. ` +
-        `correlation-id: ${exchange.responseHeaders?.['x-correlation-id'] ?? '(none)'}; ` +
-        `body: ${JSON.stringify((exchange.responseBody ?? '').slice(0, 400))}`,
-    );
-  }
-
-  const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured, route.constants ?? {}));
-  // An optional call may name an identifier this walk never captured -- the review screen
-  // opens a *finding*, and no earlier route hands out a finding uid. Optional calls are
-  // therefore matched by shape, with every identifier segment collapsed to `{id}`.
-  const optionalShapes = (route.optional_api ?? []).map(
-    (e) => `${e.method} ${API_PREFIX}${e.path}`.replace(/\{[a-z_]+\}/g, '{id}'),
-  );
-  record.requiredApi = required;
-  record.optionalApi = optionalShapes;
-  for (const expectation of required) {
-    if (!record.observedApi.includes(expectation)) {
+    // ---- D-16: this route's browser was cold, plus exactly what it was handed ---------
+    const started = [...record.startedWith].sort();
+    if (started.join(',') !== COOKIE_NAMES.join(',')) {
       fail(
         route.name,
-        `declares ${expectation} but the browser did not make it. ` +
-          `It made: ${record.observedApi.join(' | ') || '(no API call at all)'}`,
+        `its browser started with cookies [${started.join(', ') || '(none)'}] and the ` +
+          `journey handed it [${COOKIE_NAMES.join(', ') || '(none)'}]. D-16 requires every ` +
+          'route to open in a profile holding nothing but what this walk explicitly gave it',
       );
     }
-  }
 
-  // Undeclared traffic on the seam is drift in the other direction: the app grew a call
-  // the written-down journey does not know about. The manifest is the claim, so this
-  // reddens rather than being logged and forgotten.
-  const declared = new Set(required);
-  const undeclaredTemplated = record.observedApi.filter(
-    (call) => !declared.has(call) && !optionalShapes.includes(shapeOf(call)),
-  );
-  record.undeclaredApi = undeclaredTemplated;
-  if (undeclaredTemplated.length > 0) {
-    fail(
-      route.name,
-      `made ${undeclaredTemplated.length} API call(s) no route in the manifest declares: ` +
-        undeclaredTemplated.join(' | '),
-    );
-  }
-
-  // ---- follow the app's own link to the next identifier ----------------------------
-  if (route.follow) {
-    const pattern = new RegExp(route.follow.href_pattern.replaceAll('%ID%', ID));
-    const hit = (record.links ?? [])
-      .filter((href) => typeof href === 'string')
-      .map((href) => pattern.exec(href))
-      .find((m) => m !== null);
-    if (hit === undefined) {
+    // ---- D-93: the screen does not scroll sideways at the declared width -------------
+    if (READ_VIEWPORT === null) {
       fail(
         route.name,
-        `rendered no link matching ${route.follow.href_pattern} so the journey cannot ` +
-          `reach ${route.follow.capture}. Links offered: ${(record.links ?? []).join(' | ') || '(none)'}`,
+        'this manifest declares no `viewport`, so no route can be held to a width. D-93: ' +
+          'the frontend battery cannot express one either, which is why this assertion is here',
       );
-      record.captured = null;
     } else {
-      captured[route.follow.capture] = hit[1];
-      record.captured = { [route.follow.capture]: hit[1] };
+      for (const finding of widthFindings(route.name, record.width, READ_VIEWPORT)) {
+        failures.push(finding);
+      }
+    }
+
+    // ---- the document itself, redirects included -------------------------------------
+    // A route may redirect, so "the document" is a chain and not one response. Every hop is
+    // kept with its own status and `location`: a 200 reached through a 307 and a 200 served
+    // directly are different facts, and collapsing them is how a journey stops being
+    // evidence.
+    // Only documents fetched over HTTP. The review screen's PDF pane opens a `blob:` URL
+    // and Chrome's built-in viewer at `chrome-extension://...`, both of which the protocol
+    // reports as documents; treating either as the landing page would mean the route's
+    // verdict came from the viewer rather than from the application.
+    const documents = record.exchanges.filter(
+      (e) => e.resourceType === 'Document' && /^https?:/.test(e.url),
+    );
+    record.documentChain = documents.map((e) => ({
+      url: e.url,
+      status: e.status,
+      redirectedTo: e.redirectedTo ?? null,
+      location: e.responseHeaders?.location ?? null,
+    }));
+    const landed = documents[documents.length - 1];
+    record.documentStatus = landed?.status ?? null;
+    if (record.documentStatus !== 200) {
+      fail(
+        route.name,
+        `the document answered ${record.documentStatus} at ${landed?.url ?? url} ` +
+          `(chain: ${record.documentChain.map((h) => `${h.status} ${h.url}`).join(' -> ') || 'none'})`,
+      );
+    }
+
+    // ---- a declared redirect actually redirected ------------------------------------
+    if (route.redirects_to && record.landedOn !== route.redirects_to) {
+      fail(
+        route.name,
+        `declares it redirects to ${route.redirects_to} but the browser landed on ${record.landedOn}`,
+      );
+    }
+
+    // ---- the page rendered something -----------------------------------------------
+    if (!record.bodyText || record.bodyText.trim().length === 0) {
+      fail(route.name, 'rendered an empty body');
+    }
+
+    // ---- an uncaught exception is a red, a console message is a note -----------------
+    if (record.pageErrors.length > 0) {
+      fail(route.name, `threw ${record.pageErrors.length} uncaught exception(s): ${record.pageErrors[0]}`);
+    }
+
+    // ---- T-6: the browser holds no credential ---------------------------------------
+    const credentialled = record.exchanges.filter((e) => e.requestCarriedAuthorization);
+    record.requestsCarryingAuthorization = credentialled.map((e) => `${e.method} ${e.url}`);
+    if (credentialled.length > 0) {
+      fail(
+        route.name,
+        `${credentialled.length} browser request(s) carried an Authorization header; ` +
+          `T-6 puts the credential in the BFF, server-side: ${record.requestsCarryingAuthorization.join(', ')}`,
+      );
+    }
+
+    // ---- the declared API calls were made -------------------------------------------
+    const observed = record.exchanges
+      .filter((e) => new URL(e.url).pathname.startsWith(API_PREFIX))
+      .map((e) => `${e.method} ${new URL(e.url).pathname}`);
+    record.observedApi = [...new Set(observed)];
+
+    // `D-380`, `--state`: the route is in the state the walk was asked to hold it in, or that is the finding.
+    if (readState !== undefined) {
+      record.state = {
+        name: args.state,
+        reached: stateReached(record.stateWait),
+        waitedMs: record.stateWait?.waitedMs ?? null,
+        seen: record.stateWait?.value?.seen ?? record.stateWait?.detail?.seen ?? null,
+      };
+      for (const finding of stateFindings(route.name, args.state, readState, record.stateWait, record.bodyText)) {
+        failures.push(finding);
+      }
+    }
+    // `D-380`, `--paused`: a screen that asked for the pause state must say it is paused.
+    if (args.paused) {
+      for (const finding of pausedFindings(route.name, record.observedApi, record.pauseStrip)) failures.push(finding);
+    }
+
+    // A call on the seam that answered an error, whatever the screen then chose to render.
+    // `D-28`: `/projects/<anything>` answers 200 and renders an error state, so a route can
+    // look walked while every call under it refused. The write half has asserted this since
+    // `W22-E2E`; the read walk never did, which is half of why `D-92` looked like a link
+    // that was missing rather than like fifteen screens with no session. It is also what
+    // makes a session that expires mid-walk loud instead of invisible.
+    for (const exchange of record.exchanges) {
+      let path;
+      try {
+        path = new URL(exchange.url).pathname;
+      } catch {
+        continue;
+      }
+      if (!path.startsWith(API_PREFIX)) continue;
+      if (typeof exchange.status !== 'number' || exchange.status < 400) continue;
+      fail(
+        route.name,
+        `${exchange.method} ${path} answered ${exchange.status}. ` +
+          `correlation-id: ${exchange.responseHeaders?.['x-correlation-id'] ?? '(none)'}; ` +
+          `body: ${JSON.stringify((exchange.responseBody ?? '').slice(0, 400))}`,
+      );
+    }
+
+    const required = (route.expects_api ?? []).map((e) => concreteApi(e, captured, route.constants ?? {}));
+    // An optional call may name an identifier this walk never captured -- the review screen
+    // opens a *finding*, and no earlier route hands out a finding uid. Optional calls are
+    // therefore matched by shape, with every identifier segment collapsed to `{id}`.
+    const optionalShapes = (route.optional_api ?? []).map(
+      (e) => `${e.method} ${API_PREFIX}${e.path}`.replace(/\{[a-z_]+\}/g, '{id}'),
+    );
+    record.requiredApi = required;
+    record.optionalApi = optionalShapes;
+    for (const expectation of required) {
+      if (!record.observedApi.includes(expectation)) {
+        fail(
+          route.name,
+          `declares ${expectation} but the browser did not make it. ` +
+            `It made: ${record.observedApi.join(' | ') || '(no API call at all)'}`,
+        );
+      }
+    }
+
+    // Undeclared traffic on the seam is drift in the other direction: the app grew a call
+    // the written-down journey does not know about. The manifest is the claim, so this
+    // reddens rather than being logged and forgotten.
+    const declared = new Set(required);
+    const undeclaredTemplated = record.observedApi.filter(
+      (call) => !declared.has(call) && !optionalShapes.includes(shapeOf(call)),
+    );
+    record.undeclaredApi = undeclaredTemplated;
+    if (undeclaredTemplated.length > 0) {
+      fail(
+        route.name,
+        `made ${undeclaredTemplated.length} API call(s) no route in the manifest declares: ` +
+          undeclaredTemplated.join(' | '),
+      );
+    }
+
+    // ---- follow the app's own link to the next identifier ----------------------------
+    if (route.follow) {
+      const pattern = new RegExp(route.follow.href_pattern.replaceAll('%ID%', ID));
+      const hit = (record.links ?? [])
+        .filter((href) => typeof href === 'string')
+        .map((href) => pattern.exec(href))
+        .find((m) => m !== null);
+      if (hit === undefined) {
+        fail(
+          route.name,
+          `rendered no link matching ${route.follow.href_pattern} so the journey cannot ` +
+            `reach ${route.follow.capture}. Links offered: ${(record.links ?? []).join(' | ') || '(none)'}`,
+        );
+        record.captured = null;
+      } else {
+        captured[route.follow.capture] = hit[1];
+        record.captured = { [route.follow.capture]: hit[1] };
+      }
+    }
+
+    records.push(record);
+    const verdict = failures.some((f) => f.startsWith(`${route.name}:`)) ? 'RED ' : 'ok  ';
+    console.log(
+      `${verdict}${route.name.padEnd(14)} ${String(record.documentStatus).padEnd(4)} ` +
+        `api=${record.observedApi.length} auth=${credentialled.length} ` +
+        `console=${record.consoleErrors.length} ` +
+        `jar=[${record.startedWith.join(',')}] ` +
+        `w=${record.width?.scrollWidth ?? '?'}/${record.width?.innerWidth ?? '?'} ` +
+        `${args.paused ? `strip=${record.pauseStrip ?? '-'} ` : ''}` +
+        `${record.state ? `state=${record.state.reached ? 'yes' : 'NO'} ` : ''}` +
+        `${record.captured ? JSON.stringify(record.captured) : ''}`,
+    );
+
+    // A route that could not capture the identifier the next route needs makes every
+    // route after it meaningless rather than red. Stop and say so.
+    if (route.follow && record.captured === null) {
+      console.error(
+        `\ne2e:pc01: stopping at '${route.name}' -- the walk cannot continue without ` +
+          `${route.follow.capture}. The routes after it were NOT checked.`,
+      );
+      break;
     }
   }
-
-  records.push(record);
-  const verdict = failures.some((f) => f.startsWith(`${route.name}:`)) ? 'RED ' : 'ok  ';
-  console.log(
-    `${verdict}${route.name.padEnd(14)} ${String(record.documentStatus).padEnd(4)} ` +
-      `api=${record.observedApi.length} auth=${credentialled.length} ` +
-      `console=${record.consoleErrors.length} ` +
-      `jar=[${record.startedWith.join(',')}] ` +
-      `w=${record.width?.scrollWidth ?? '?'}/${record.width?.innerWidth ?? '?'} ` +
-      `${record.captured ? JSON.stringify(record.captured) : ''}`,
-  );
-
-  // A route that could not capture the identifier the next route needs makes every
-  // route after it meaningless rather than red. Stop and say so.
-  if (route.follow && record.captured === null) {
-    console.error(
-      `\ne2e:pc01: stopping at '${route.name}' -- the walk cannot continue without ` +
-        `${route.follow.capture}. The routes after it were NOT checked.`,
+} finally {
+  if (heldDispatch !== null) {
+    restoredDispatch = await restoreDispatch(dispatchWhere, heldDispatch);
+    failures.push(...restoredDispatch.findings);
+    console.log(
+      `\ndispatch: ${restoredDispatch.note}` +
+        (restoredDispatch.exit === null ? '' : ` (now ${restoredDispatch.exit.after?.paused === true ? 'STILL PAUSED' : restoredDispatch.exit.after?.paused === false ? 'open' : 'UNKNOWN'})`),
     );
-    break;
   }
 }
 
@@ -580,6 +707,18 @@ const envelopePath = writeEnvelope(
       // applies to `Authorization`.
       session: { opened: true, ...session.record },
       viewport: VIEWPORT,
+      // `D-380`: what the READ walk was laid out at and held in, when it is not the manifest's own.
+      read: {
+        viewport: READ_VIEWPORT,
+        paused: args.paused
+          ? {
+              entry: pausedEntry,
+              restored: restoredDispatch,
+              restoredBy: heldDispatch === null ? 'nothing to restore' : 'restoreDispatch',
+            }
+          : null,
+        state: args.state,
+      },
       partial: PARTIAL,
       accounts: accounts.record,
       write:

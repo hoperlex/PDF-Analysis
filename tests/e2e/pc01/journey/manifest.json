@@ -1232,8 +1232,23 @@
       "$comment": [
         "«Сравнение стадий» (CMP-STAGE-PAIR-01) reads projects, account roles and module state on a cold route.",
         "A single visible project opens its confirmed pair catalog and nonbinding suggestions. A reader with several",
-        "projects chooses one before those operations are sent. Confirming a pair is an explicit expert action."
+        "projects chooses one before those operations are sent. Confirming a pair is an explicit expert action.",
+        "`query` (D-380, lane J2): the screen reads the header's project from `?project=` (`useAddressProject`), so the walk names",
+        "the journey's own project there and reads the same workspace whether the stand holds one project or several.",
+        "`read_state` (D-380): `--state confirmed_pair` makes the walk wait until the catalog shows a confirmed pair and its table,",
+        "the state in which the pairs table widened the page to 839 px; a stand with no pair (no `cmp-stage-assembly`) is a finding,",
+        "not a pass of a state that was never read."
       ],
+      "query": {"project": "{project_uid}"},
+      "read_state": {
+        "confirmed_pair": {
+          "bound_ms": 20000,
+          "present": [
+            {"selector": "[data-pair-counters]", "text_matches": "Сопоставлено: [1-9]"},
+            {"selector": "section[aria-labelledby=\"stage-pair-heading\"] table"}
+          ]
+        }
+      },
       "expects_api": [
         {"method": "GET", "path": "/projects", "operationId": "listProjects"},
         {"method": "GET", "path": "/me", "operationId": "getMe"}

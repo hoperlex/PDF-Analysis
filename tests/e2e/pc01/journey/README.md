@@ -388,26 +388,41 @@ sides** — `wrap`, then `nowrap` — which is what makes the scratch copy and t
 the same mutation rather than a claim that they are. It imports `width.mjs`, the
 journey's own assertion, rather than a second copy written to agree with it.
 
-**A phone width is walked with a copy of the manifest** (lane V3, 2026-11-08, `D-380`). The journey declares one
-width, and a layout fault that needs a particular state to show is outside it: the frame's end group ended at 471 px
-only while dispatch was paused; the stage comparison's controls ended at 399 px only while the list held exactly one
-project (with two, the screen asks for a choice first); and its pair catalog ended at 839 px (843 px at the declared
-780) only once a pair was confirmed, which the ordinary `--phase all` never does. The read phase takes `--manifest`, so a
-copy whose `viewport` says 390 × 844 walks every route at a phone width and asserts the same
-`scrollWidth <= innerWidth`:
+**Other widths and other states are flags, not copies of the manifest** (lane J2, 2026-11-09, `D-380`). The journey declares one
+width and walks the quiet state, and a layout fault that needs a particular width or state to show is outside it: the frame's end
+group ended at 471 px only while dispatch was paused; the stage comparison's controls ended at 399 px only while the list held exactly
+one project (with two, the screen asks for a choice first); and its pair catalog ended at 839 px (843 px at the declared 780) only once a
+pair was confirmed, which the ordinary `--phase all` never does. Lane V3 found all three with a copy of the manifest whose `viewport` said
+390 x 844. The read walk now takes the width and the states as options:
+
+| option | what the read walk does | how a run is wrong |
+|---|---|---|
+| `--width <px>` (and `--height <px>`) | lays every route out at that viewport and holds it to `scrollWidth <= innerWidth` (240 to 3840; a missing height stays the manifest's 900). The write half keeps the declared viewport: its steps and refusals are specified at it | a finding per route: `the screen scrolls sideways at the requested width. scrollWidth 471 > innerWidth 390 ... overflowing by 81 px`, with the widest boxes crossing the edge; the envelope carries `read.viewport` and the per-route `width` |
+| `--paused` | pauses dispatch through the API as the administrator (`PUT /execution/dispatch`, `{"paused": true}`, an idempotency key, from a cold browser of the stand's origin), reads the state back, walks, and puts dispatch back **in a `finally`** (a stand found paused is left paused; a resume the API does not confirm is a finding) | a pause the API does not confirm blocks the walk; a route that asked `getExecutionDispatch` and whose strip (`[data-pause-status]`) does not say `paused` is a finding. `read.paused` in the envelope keeps the three answers of the pause and of the resume |
+| `--state <name>` | waits (under the state's `bound_ms`) until each route that declares `read_state.<name>` shows it, before the width is read. `confirmed_pair` is the stage catalog with a confirmed pair and its table (`[data-pair-counters]` counting a pair, the pair table drawn) | a route not in the state is a finding with the last reading and the words the screen showed; a name no route declares stops the run (exit 2) |
+
+A route's `query` (`stage-compare`: `{"project": "{project_uid}"}`) writes the journey's own project into the address, so
+`/stage-comparison` reads the same workspace whether the stand holds one project or several (`useAddressProject` reads `?project=`);
+before it, a stand with two projects drew only the chooser and the walk measured a screen nobody had meant to measure.
 
 ```
-python3 -c "import json; m = json.load(open('tests/e2e/pc01/journey/manifest.json')); \
-  m['viewport'].update(width=390, height=844); json.dump(m, open('<scratch>/manifest-390.json', 'w'), ensure_ascii=False)"
-node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --manifest <scratch>/manifest-390.json --out <dir>
+# 1280 and 390 px, and the paused state, on a stand that already holds a project, a document and a run
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 1280 --out <dir>
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --out <dir>
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --paused --out <dir>
+# the stage catalog with a confirmed pair (a LANE_C4=1 stand after cmp-stage-upload and cmp-stage-assembly)
+node tests/e2e/pc01/journey/journey.mjs --origin <origin> --phase read --width 390 --height 844 --state confirmed_pair --out <dir>
 ```
 
-Run it after a write phase has left a project, a document and a run on the stand. The paused state is entered by the
-steps `queue-pause-dispatch` and `queue-start-a-run-while-paused` (and left by `queue-resume-dispatch`); the read walk
-runs with dispatch open, so it does not see it. Measured on the 0.17.1 tree: 35 of 35 routes at 390 px with one finding (the stage controls' select) and, with dispatch
-paused, the frame's end group on every route; after the CSS fixes 35 of 35 clean and the paused probe at 375 of 390 on
-six screens. The stage catalog with a confirmed pair needs the `LANE_C4=1` stand (`cmp-stage-upload`, `cmp-stage-assembly`)
-and a probe of `/stage-comparison` after them.
+`walk-options.mjs` holds the pure rules (the dimension parser, the viewport, the address query, the state expression and the
+paused-strip verdict) and `dispatch.mjs` the pause; `walk-options.test.mjs` and `dispatch.test.mjs` (`node --test`) hold them without a
+browser, and `test_pc01_journey_conformance.py` runs both and reads the manifest's `query` and `read_state` against `web/src`.
+
+**A step that could not be driven keeps what its browser did** (`D-382`). A control that is not there, or a wait that ran out, threw
+inside the browser's callback; the browser was torn down with the exception and the step's envelope kept `exchanges: []`, so the findings
+said "the browser made no API call at all" about a page that had asked for a dependency and been refused 503. `keepingExchanges` (in
+`write.mjs`) copies the exchanges, console errors, page errors and location into the step's record before the exception leaves, and the
+finding for `could not be driven` now ends with the calls the browser had made (`GET /bff/v1/... -> 503`). The error is rethrown unchanged.
 
 ## No dependency
 

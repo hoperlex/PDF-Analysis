@@ -5,7 +5,9 @@ import { runInNewContext } from 'node:vm';
 import {
   csvCells,
   csvShape,
+  describeCalls,
   formulaLikeCells,
+  keepingExchanges,
   namesNeededBy,
   nightWindowMayRun,
   pendingActivation,
@@ -113,4 +115,45 @@ test('a step marked pending_v3_activation is reported with the manifest reason a
   // A mark without a reason still reports, and says the reason is missing, rather than vanishing.
   assert.match(pendingActivation({ name: 'e', pending_v3_activation: true }, {}), /gives no reason/);
   assert.match(pendingActivation({ name: 'f', pending_v3_activation: true }, { ar_bound: { pending_v3_activation_reason: ' ' } }), /gives no reason/);
+});
+
+test('D-382: a step that could not be driven keeps the calls its browser had made, and the error still leaves', async () => {
+  const exchanges = [
+    { method: 'GET', url: 'http://127.0.0.1:1/bff/v1/me', status: 200, requestBody: null },
+    { method: 'GET', url: 'http://127.0.0.1:1/bff/v1/comparison-series/cs_1/ai-sheet-changes/estimate', status: 503, requestBody: null },
+    { method: 'GET', url: 'http://127.0.0.1:1/_next/static/chunk.js', status: 200, requestBody: null },
+    { method: 'PUT', url: 'http://127.0.0.1:1/bff/v1/x', status: undefined, requestBody: '{"new_password":"abc"}' },
+  ];
+  const page = {
+    exchanges: () => exchanges,
+    consoleErrors: () => ['boom'],
+    pageErrors: () => [],
+    location: async () => 'http://127.0.0.1:1/version-comparison',
+  };
+  const record = { exchanges: [] };
+  const control = new Error('click button [text="Запустить"]: no element matches it');
+  await assert.rejects(keepingExchanges(record, async () => { throw control; })(page), (error) => error === control);
+  assert.equal(record.exchanges.length, 4, 'every exchange the page recorded, not only the API ones');
+  assert.deepEqual(describeCalls(record.exchanges, '/bff/v1'), [
+    'GET /bff/v1/me -> 200',
+    'GET /bff/v1/comparison-series/cs_1/ai-sheet-changes/estimate -> 503',
+    'PUT /bff/v1/x -> no answer',
+  ]);
+  assert.match(record.exchanges[3].requestBody, /"new_password":"\(redacted\)"/, 'the redaction applies to what is kept');
+  assert.deepEqual(record.consoleErrors, ['boom']);
+  assert.equal(record.finalLocation, 'http://127.0.0.1:1/version-comparison');
+});
+
+test('D-382: a step that succeeds is left alone, and a browser that is gone does not hide the driving error', async () => {
+  const untouched = { exchanges: ['not replaced'] };
+  assert.equal(await keepingExchanges(untouched, async () => 'value')({ exchanges: () => { throw new Error('gone'); } }), 'value');
+  assert.deepEqual(untouched.exchanges, ['not replaced']);
+  const dead = { exchanges: [] };
+  const control = new Error('no element matches it');
+  await assert.rejects(
+    keepingExchanges(dead, async () => { throw control; })({ exchanges: () => { throw new Error('the browser went away'); } }),
+    (error) => error === control,
+  );
+  assert.deepEqual(dead.exchanges, []);
+  assert.deepEqual(describeCalls(undefined, '/bff/v1'), []);
 });

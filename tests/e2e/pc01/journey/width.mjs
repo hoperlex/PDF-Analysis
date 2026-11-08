@@ -89,11 +89,14 @@ export function widthFindings(where, measurement, declared) {
     return [`${where}: the width could not be read from the page at all`];
   }
   const { scrollWidth, innerWidth, clientWidth, offenders, offenderCount } = measurement;
+  // `D-380`: a run may ask for another width than the manifest's (`--width`); `declared.requested` says so, and the
+  // findings then name the width as requested, because "declared" would send a reader to a manifest that says 780.
+  const kind = declared.requested === true ? 'requested' : 'declared';
   if (innerWidth !== declared.width) {
     // The viewport was not the one declared, so whatever the comparison says is a
     // statement about some other width. That is a finding, not a caveat.
     return [
-      `${where}: the page was laid out at ${innerWidth} px and this manifest declares ` +
+      `${where}: the page was laid out at ${innerWidth} px and this ${declared.requested === true ? 'run requests' : 'manifest declares'} ` +
         `${declared.width} px, so the width assertion measured a viewport nobody stated`,
     ];
   }
@@ -110,7 +113,7 @@ export function widthFindings(where, measurement, declared) {
           )
           .join('; ');
   return [
-    `${where}: the screen scrolls sideways at the declared width. ` +
+    `${where}: the screen scrolls sideways at the ${kind} width. ` +
       `scrollWidth ${scrollWidth} > innerWidth ${innerWidth} (clientWidth ${clientWidth}), ` +
       `overflowing by ${scrollWidth - innerWidth} px. ` +
       `${offenderCount} element(s) cross the right edge; widest: ${named}. ` +
