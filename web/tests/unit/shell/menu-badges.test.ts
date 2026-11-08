@@ -417,12 +417,18 @@ function frameAt(client: QueryClient, subject: AppFrameSession | null, pathname:
   }
 }
 
-/** The link to `address`, with or without the `?project=` the frame carries onto it (`R-150c`). */
-const linkTo = (markup: string, address: string) =>
-  linksIn(markup).find((link) => link.href === address || link.href === `${address}?project=${PROJECT}` || link.href === `${address}?project=${OTHER_PROJECT}`);
+/**
+ * The link to `address`, with or without the `?project=` the frame carries onto it (`R-150c`), whatever the project is
+ * spelled as. A missing link is an error, not an empty answer: «no badge» must never pass because the link was not found.
+ */
+const linkTo = (markup: string, address: string) => {
+  const link = linksIn(markup).find((found) => found.href === address || found.href.startsWith(`${address}?project=`));
+  if (link === undefined) throw new Error(`no link to ${address} in the markup`);
+  return link;
+};
 
 const kbPills = (markup: string, which: 'row' | 'rail' | 'stacked' = 'row'): string[] =>
-  pillsIn(linkTo(state(markup, which), KNOWLEDGE_BASE)?.inside ?? '');
+  pillsIn(linkTo(state(markup, which), KNOWLEDGE_BASE).inside);
 
 describe('«База знаний» counts the entries of the project the address names, as the screen behind it does', () => {
   it('says what it counts: the project\'s entries when a project is chosen, the installation\'s otherwise', () => {
@@ -480,7 +486,7 @@ describe('«База знаний» counts the entries of the project the addres
     client.getQueryCache().find({ queryKey: [...PROJECT_KB_KEY] })?.setState({ status: 'error', error: new Error('нет связи'), errorUpdatedAt: Date.now() + 1, fetchStatus: 'idle' });
     const markup = frameAt(client, ADMIN_ONLY, '/dashboard', `project=${PROJECT}`);
     expect(kbPills(markup)).toEqual([]);
-    expect(pillsIn(linkTo(state(markup, 'row'), REGISTRATIONS)?.inside ?? '')).toEqual(['count:5']);
+    expect(pillsIn(linkTo(state(markup, 'row'), REGISTRATIONS).inside)).toEqual(['count:5']);
   });
 
   it('is not asked about a project the address spells as no uid, and draws no figure for it', () => {
