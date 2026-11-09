@@ -1903,7 +1903,7 @@ project.
 ### Before you start
 
 1. **The owner's permission, in writing, first (`R-146aj`).** An operator never erases a project without it. Nothing can verify it:
-   the script requires `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, for example
+   the script requires `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, not beginning with `-`, for example
    `owner mail of 2026-11-02, filed under the release record`) and writes that line into both journal events. The product has no
    legal-hold concept and the erase does not check one; whether the project is subject to a hold is the operator's question to the
    owner.
@@ -1961,7 +1961,7 @@ All commands run from the repository root on the host, as the operator who will 
    tool refuses with `could not lock the tables`: the worker's heartbeat is the usual writer. If it still cannot lock, the script
    prints the two commands that stop and start `api` and `web` around the run. To wait longer than the module's `15s`, set
    `PROJECT_ERASE_LOCK_TIMEOUT` in the environment of the command (`PROJECT_ERASE_LOCK_TIMEOUT=60s infra/deploy/erase-project.sh ...`); the
-   script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min` before any connection (`D-580`).
+   script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min`, or longer than 2147483647 ms (about 35791 min), before any connection (`D-580`, `D-632`).
 
 4. **Check the rest state.** The script prints three commands; run them. `ADR-0022` asks for the first two:
 
@@ -2329,7 +2329,7 @@ memory yet ... There is no override.`: step 1 above. `could not lock within 15s`
 still for the count and the write, so a decision cannot slip between them); run it again in a moment, or wait longer by
 setting `MEMORY_SETTING_LOCK_TIMEOUT` in the environment of the command (`MEMORY_SETTING_LOCK_TIMEOUT=60s infra/deploy/memory-setting.sh ...`;
 default `15s`; the script hands the variable to the one-off container, and refuses before any connection a value that is not a positive number of
-`ms`, `s` or `min`, `D-515`). `the database is at migration X, the tool was written for Y`: the tool is older than the schema; use the tool of the
+`ms`, `s` or `min`, or is longer than PostgreSQL's `lock_timeout` takes (2147483647 ms, about 35791 min), `D-515`, `D-632`). `the database is at migration X, the tool was written for Y`: the tool is older than the schema; use the tool of the
 tree that is deployed. `what was retyped is not the new value`: nothing was written; run it again and type the value. Exit `4`
 (`the change failed`) means the connection or the container failed; the write is one transaction, so the settings in force say whether it was
 made: run `show`.
@@ -2368,13 +2368,14 @@ procedure is the operator's, and so are the copies it did not reach.
 ### Before you start
 
 1. **The owner's permission, in writing, first (`R-146aj`).** Nothing can verify it: the script requires
-   `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, for example
+   `--owner-permission-ref "<one line saying where it is recorded>"` (at most 200 characters, not beginning with `-`, for example
    `owner mail of 2026-11-09, filed under the release record`) and writes that line into the tombstones and both journal events.
 2. **An administrator's login** for `--actor` (the journal records the account's `usr_` identity, never the login).
 3. **The stack is up** (`postgres` and `s3`). **`api` and `worker` should not be running during the apply** (`D-497` item 2): the tool takes
    its locks in another order than a capture does, so a capture, a withdraw or a restore that arrives while it runs can make it deadlock or
    roll back. It fails safe (nothing is changed, and you run it again), but a forget of many cases is long enough for that to happen.
-   `--stop-services` stops the ones of the two that are running and starts exactly those again afterwards, whatever the result. The worker's
+   `--stop-services` stops the ones of the two that are running and starts exactly those again afterwards, whatever the result (also when
+   `docker compose stop` itself fails or is interrupted half way: the list is made before the stop, `D-631`). The worker's
    sweep and the product's captures pause for the run.
 4. **Decide about the copies now**, not after: the forget reaches none of them (step 6).
 5. `infra/deploy/env/alpha.env` has `MIGRATOR_DATABASE_URL` (section 16); the script hands the tool the owner's url (the application role holds
@@ -2455,7 +2456,7 @@ refused: identities only.
 | `REFUSED: [migrator_url_unset]` (3) | `alpha.env` has no owner url | section 16 |
 | `REFUSED: the plan the memory has now is not the plan you approved` (3) | the memory changed after the dry run | read the new plan; get the owner's permission for it; run again with its digest |
 | `REFUSED: what was retyped is not the number of cases and the plan above` (3) | a wrong or missing answer | nothing changed; run again and type both |
-| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-services`; then look for another writer (a second operator session, a restore); to wait longer than `15s` set `MEMORY_FORGET_LOCK_TIMEOUT` (for example `60s`; the script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min`) |
+| tool: `could not lock the tables` (3) | something is still writing | run again with `--stop-services`; then look for another writer (a second operator session, a restore); to wait longer than `15s` set `MEMORY_FORGET_LOCK_TIMEOUT` (for example `60s`; the script hands it to the container and refuses a value that is not a positive number of `ms`, `s` or `min`, or longer than 2147483647 ms, about 35791 min) |
 | tool: `another forget holds the lock` (3) | a second forget is running | wait for it to finish |
 | tool: `the lock table ran out` (3) | the selection is too large for one transaction | see "Large selections" below |
 | tool: `Blob row(s) are in erasure_pending` (3) | an earlier erase or forget committed and did not finish | find its id in the event that began it (`erasure.requested` for a project erase, `memory.forget_requested` for a forget) and finish that one with `--resume` (a forget: this script; an erase: `erase-project.sh`) |

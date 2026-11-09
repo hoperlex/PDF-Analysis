@@ -173,6 +173,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
     ("owner-permission-ref", apply_args(ref="x" * 201), "--owner-permission-ref is required", True),
     ("owner-permission-ref", apply_args(ref="line one\nline two"), "--owner-permission-ref is required", True),
     ("owner-permission-ref", (*COMMON, "--resume", FORGET, "--actor", ACTOR), "--owner-permission-ref is required", True),
+    # `F4`: argparse of the module reads a value that begins with "-" (and has no space) as an option, after --stop-services has stopped api
+    ("owner-permission-ref", apply_args(ref="-ticket42"), "--owner-permission-ref must not begin with '-'", True),
+    ("owner-permission-ref", apply_args(ref="  - see mail"), "--owner-permission-ref must not begin with '-'", True),
+    ("owner-permission-ref", (*COMMON, "--resume", FORGET, "--actor", ACTOR, "--owner-permission-ref", "-ticket42"),
+     "--owner-permission-ref must not begin with '-'", True),
     ("plan-digest-shape", apply_args(sha=None), "--apply needs --plan-sha256", True),
     ("plan-digest-shape", apply_args(sha=SHA.upper()), "--apply needs --plan-sha256", True),
     ("plan-digest-shape", apply_args(sha=SHA[:63]), "--apply needs --plan-sha256", True),
@@ -658,6 +663,23 @@ def test_the_services_come_back_whatever_the_apply_did(answer: dict[str, object]
     assert broken.called("stop api worker") and not broken.called("up -d --no-deps"), "without the trap a refusal leaves the services stopped"
 
 
+def test_a_stop_that_fails_half_way_still_brings_the_services_back_and_the_check_can_fail(rig: Rig) -> None:
+    """`F2` of the 2026-11-10 judge report: `compose stop api worker` stops api, then the worker does not stop in time (or the operator presses
+    Ctrl-C), and the command exits non-zero. The services are listed BEFORE the stop, so the exit trap starts what was running; listed after it,
+    nothing was listed yet and a stopped production api stayed stopped."""
+    rig.answers["stop_status"] = 1
+    completed = rig.run(*APPLY, "--stop-services", typed=TYPED)
+    assert completed.returncode == FAILED, (completed.stdout, completed.stderr)
+    assert not tool_reached_the_write(rig), "a stop that failed is no reason to forget anything"
+    assert rig.index("up -d --no-deps api worker") > rig.index("stop api worker"), rig.calls
+    assert "starting api worker again" in completed.stdout
+    old_order = rig.edited('        STOPPED=("${to_stop[@]}")\n        compose stop "${to_stop[@]}"\n',
+                           '        compose stop "${to_stop[@]}"\n        STOPPED=("${to_stop[@]}")\n')
+    stopped_for_good = old_order.run(*APPLY, "--stop-services", typed=TYPED)
+    assert stopped_for_good.returncode == FAILED and old_order.called("stop api worker")
+    assert not old_order.called("up -d --no-deps"), "with the list made after the stop the failure leaves the services down: this is the defect"
+
+
 def test_without_the_option_the_services_are_left_alone(rig: Rig) -> None:
     assert rig.run(*APPLY, typed=TYPED).returncode == 0
     assert not any({"stop", "up", "ps"} & set(record["argv"]) for record in rig.records), rig.calls
@@ -697,7 +719,8 @@ def test_the_pass_through_of_the_lock_timeout_can_fail(rig: Rig) -> None:
         "with the pass-through removed the value still reached the container: the test above would prove nothing")
 
 
-@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s"),
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s",
+                                   "35792min", "36000min", "999999min"),  # `F3`: PostgreSQL's lock_timeout ends at 2147483647 ms, 35791 min
                          ids=lambda v: repr(v))
 def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
     completed = rig.run(*PLAN, env={"MEMORY_FORGET_LOCK_TIMEOUT": value})
@@ -711,7 +734,7 @@ def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_co
         "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
 
 
-@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999s"), ids=lambda v: repr(v))
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999ms", "999999s", "35791min"), ids=lambda v: repr(v))
 def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
     completed = rig.run(*APPLY, env={"MEMORY_FORGET_LOCK_TIMEOUT": value}, typed=TYPED)
     assert completed.returncode == 0, (completed.stdout, completed.stderr)

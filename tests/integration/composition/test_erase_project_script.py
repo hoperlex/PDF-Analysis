@@ -80,6 +80,9 @@ config = json.load(open(os.environ["STUB_CONFIG"]))
 rest = argv
 while rest and rest[0] in ("compose", "--env-file", "--file"):
     rest = rest[1:] if rest[0] == "compose" else rest[2:]
+if rest[:1] == ["stop"] and config.get("stop_status", 0):
+    sys.stderr.write("docker stub: compose stop failed\n")
+    sys.exit(config["stop_status"])
 if rest[:1] == ["stop"] or (rest[:1] == ["up"] and rest[-1] == "worker"):
     sys.exit(0)
 if "scripts.recovery.project_erase" in rest:
@@ -279,6 +282,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
     ("owner-permission-ref", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--plan-sha256", SHA,
                               "--owner-permission-ref", "line one\nline two"), "--owner-permission-ref is required", True),
     ("owner-permission-ref", (*COMMON, "--resume", ERASE, "--actor", ACTOR), "--owner-permission-ref is required", True),
+    # `F4`: argparse of the module reads a value that begins with "-" (and has no space) as an option
+    ("owner-permission-ref", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--plan-sha256", SHA,
+                              "--owner-permission-ref", "-ticket42"), "--owner-permission-ref must not begin with '-'", True),
+    ("owner-permission-ref", (*COMMON, "--resume", ERASE, "--actor", ACTOR, "--owner-permission-ref", "  - see mail"),
+     "--owner-permission-ref must not begin with '-'", True),
     ("plan-digest-shape", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--owner-permission-ref", REF),
      "--apply needs --plan-sha256", True),
     ("plan-digest-shape", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "test_data", "--owner-permission-ref", REF,
@@ -628,7 +636,8 @@ def test_the_rig_does_not_let_the_operators_shell_decide_what_the_container_is_g
     assert [lock_timeout_items(call) for call in rig.tool_calls()] == [["PROJECT_ERASE_LOCK_TIMEOUT=77s"]]
 
 
-@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s"),
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s",
+                                   "35792min", "36000min", "999999min"),  # `F3`: PostgreSQL's lock_timeout ends at 2147483647 ms, 35791 min
                          ids=lambda v: repr(v))
 def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
     completed = rig.run(*PLAN, env={"PROJECT_ERASE_LOCK_TIMEOUT": value})
@@ -642,7 +651,7 @@ def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_co
         "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
 
 
-@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999s"), ids=lambda v: repr(v))
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999ms", "999999s", "35791min"), ids=lambda v: repr(v))
 def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
     completed = rig.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": value}, typed=TYPED)
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
@@ -839,6 +848,19 @@ def test_the_worker_comes_back_whatever_the_apply_did(answer: dict[str, object],
     assert broken.run(*APPLY, "--stop-worker", typed=TYPED).returncode == status
     assert broken.called("stop worker") and not broken.called("up -d --no-deps worker"), (
         "without the trap a refusal leaves the worker stopped")
+
+
+def test_a_stop_that_fails_still_brings_the_worker_back_and_the_check_can_fail(rig: Rig) -> None:
+    """The rule of `F2` (2026-11-10 judge report, found in `memory-forget.sh`): the worker is marked BEFORE `compose stop worker`, because a
+    stop that fails or is interrupted may already have stopped it."""
+    rig.answers["stop_status"] = 1  # type: ignore[assignment]
+    completed = rig.run(*APPLY, "--stop-worker", typed=TYPED)
+    assert completed.returncode == FAILED, (completed.stdout, completed.stderr)
+    assert not rig.reached_the_erase(), "a stop that failed is no reason to erase anything"
+    assert rig.index("up -d --no-deps worker") > rig.index("stop worker"), rig.calls
+    old_order = rig.edited("        WORKER_STOPPED=yes\n        compose stop worker\n", "        compose stop worker\n        WORKER_STOPPED=yes\n")
+    assert old_order.run(*APPLY, "--stop-worker", typed=TYPED).returncode == FAILED and old_order.called("stop worker")
+    assert not old_order.called("up -d --no-deps worker"), "with the mark made after the stop the failure leaves the worker down"
 
 
 def test_no_worker_service_means_no_worker_is_touched(tmp_path: Path) -> None:
