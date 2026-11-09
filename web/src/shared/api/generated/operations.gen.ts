@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.45.0 (OpenAPI 3.1.0)
- *   sha256 415f8eb3950460753d5e309ed336900358898292e50ab55e4614f57153c89f70
+ *   AuditManager PC-01 API 1.46.0 (OpenAPI 3.1.0)
+ *   sha256 9bad911d85cd3b0908c40666e424ca7e568daaeb1643b507aac21a455ad093dc
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -247,6 +247,7 @@ import type {
   RunFindingBlockLinks,
   RunId,
   RunNormReferences,
+  RunStages,
   RunStartReadiness,
   RunStatus,
   RunStatusPage,
@@ -476,6 +477,7 @@ export const OPERATION_IDS = [
   'getProject',
   'getRunNormReferences',
   'getRunNormVerification',
+  'getRunStages',
   'getRunStartReadiness',
   'getRunStatus',
   'getSectionSpecification',
@@ -3583,6 +3585,29 @@ export type GetRunNormVerificationInput = {
 
 /** Success body of `getRunNormVerification` (`application/json`, HTTP 200). */
 export type GetRunNormVerificationResult = NormVerificationReport;
+
+// ------------------------------------------------------------------------------------
+// getRunStages - GET /runs/{run_id}/stages
+// ------------------------------------------------------------------------------------
+
+/**
+ * Get Run Stages
+ *
+ * `HOSTS-SEAL-2` (ADR-0028, plan section 9.4): the data of the window «Этапы анализа раздела». For each chip of the run -- `preparation`, `text`, `blocks`, `cross_check`, `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`, in that order, only those the run has -- the code stage ids it covers, its **plan** (the cells the run froze in its `stage_plan`: role, model, effort, answer limit, timeout, access and the server the cell is bound to; for a run that froze none, one line from its binding) and its **facts**: the state; the first and last call (or the stage result's times); the calls succeeded, failed and retried; the input and output tokens, the part of them served by a subscription and the cost; the last error code; and the batches planned and completed where the extended review keeps them. The facts come from the stage results, the extended review artifact and the call journal; a call journalled before migration `0062` has no `stage_key` and is placed by its extended phase. `role:admin|expert|viewer`: the viewer reads the run's stages but never the server or the access (`R-150w`), which are absent from the answer. `404 not_found` for an unknown run.
+ */
+export type GetRunStagesInput = {
+  /** Path parameters, substituted into `/runs/{run_id}/stages`. */
+  path: {
+    run_id: RunId;
+  };
+  /**
+   * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
+   */
+  correlationId?: CorrelationId;
+};
+
+/** Success body of `getRunStages` (`application/json`, HTTP 200). */
+export type GetRunStagesResult = RunStages;
 
 // ------------------------------------------------------------------------------------
 // getRunStartReadiness - POST /runs/start-readiness
@@ -10687,6 +10712,20 @@ export const OPERATIONS = {
     responseMediaType: 'application/json',
     successStatuses: [200],
     errorStatuses: [401, 403, 404, 500, 503],
+    tags: ['runs'],
+  },
+  getRunStages: {
+    operationId: 'getRunStages',
+    method: 'GET',
+    path: '/runs/{run_id}/stages',
+    pathParams: ['run_id'],
+    queryParams: [],
+    headerParams: [],
+    requiresIdempotencyKey: false,
+    requestMediaType: null,
+    responseMediaType: 'application/json',
+    successStatuses: [200],
+    errorStatuses: [401, 403, 404, 422, 500, 503],
     tags: ['runs'],
   },
   getRunStartReadiness: {

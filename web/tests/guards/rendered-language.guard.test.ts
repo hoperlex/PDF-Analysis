@@ -4616,8 +4616,8 @@ function translatedVocabulary(): ReadonlySet<string> {
  * row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Several of those values are plain English
  * words (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`, `online`). They leave the permitted vocabulary NOW, so the
  * guard keeps reddening `review` as it did before the contract carried it as a bare value (`StageRowKey`), but they are not yet
- * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` moves each
- * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
+ * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` and `RUN-SCREEN-01` move each
+ * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empty this list.
  */
 const RESERVED_TRANSLATED_SCHEMAS = [
   'StageRowKey',
@@ -4630,6 +4630,11 @@ const RESERVED_TRANSLATED_SCHEMAS = [
   'ExecutorHostState',
   'ModelUnavailableReason',
   'RunStartRoute',
+  // `HOSTS-SEAL-2` (contract 1.46.0): the window «Этапы анализа раздела» will say a chip, its state and where its plan comes from in Russian, with the
+  // contract value in a `data-` attribute (`RUN-SCREEN-01`). `text`, `blocks`, `merge`, `norms`, `review`, `done` and `preparation` are plain English words.
+  'RunStageChip',
+  'RunStageState',
+  'RunStagePlanSource',
 ] as const;
 
 const TRANSLATED = translatedVocabulary();
