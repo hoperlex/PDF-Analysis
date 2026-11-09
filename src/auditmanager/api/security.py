@@ -1019,7 +1019,10 @@ class RunnerIdentity:
     translated into it by the adapter."""
 
     token_id: str
-    connection_id: str
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-INT-WIRE-01`, ADR-0028 decision 1): a token of a ``pull``
+    #: connection, or the host token of one host, which serves every system connection of that host.
+    connection_id: str | None
+    host_id: str | None = None
 
 
 @runtime_checkable
@@ -1044,8 +1047,10 @@ class EnrollmentIdentity:
     this request and is in no repr."""
 
     enrollment_id: str
-    connection_id: str
+    #: Exactly one of ``connection_id`` and ``host_id`` is set (`HOSTS-INT-WIRE-01`): the grant of a ``pull`` connection, or of a host.
+    connection_id: str | None
     exchange_key: bytes = field(repr=False)
+    host_id: str | None = None
 
 
 @runtime_checkable

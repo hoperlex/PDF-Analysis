@@ -414,6 +414,8 @@ class ExecutionAdapter(_SessionHolder):
                                  # A run adapter always has the attribute (``None`` is the `environment` source); the
                                  # default is for the stand-ins older suites hand this port, which have no group seam.
                                  group_admitter=getattr(self._runs, "group_admitter", None),
+                                 # `HOSTS-INT-WIRE-01` (ADR-0028 decision 14): with the stage layout on, the re-audit takes today's plan.
+                                 stage_plans=getattr(self._runs, "stage_plans", None),
                                  started_by_user_uid=user_uid,  # `R-151v`
                                  **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
@@ -448,6 +450,7 @@ class ExecutionAdapter(_SessionHolder):
                 cost_preflight=self._runs.cost_preflight if self._runs.require_cost_consent or cost_consent is not None else None,
                 cost_consent=cost_consent, cost_actor_uid=user_uid,
                 group_admitter=getattr(self._runs, "group_admitter", None),
+                stage_plans=getattr(self._runs, "stage_plans", None),  # `HOSTS-INT-WIRE-01`: today's plan, as a re-audit
                 started_by_user_uid=user_uid,  # `R-151v`
                 **explicit)
             return result.run_id, result.replayed, _run_status_view(session, result.run_id)
@@ -1262,8 +1265,14 @@ class RunAdapter(_SessionHolder):
         require_cost_consent: bool = False,
         group_admitter: Any = None,
         ar_v3_start_allowed: bool = False,
+        stage_plans: Any = None,
     ) -> None:
         super().__init__(session_factory)
+        # `HOSTS-INT-WIRE-01` (ADR-0028 decisions 5, 8 and 14). The seam that reads the stage layout when a run **starts**
+        # (``StagePlanService.freezer``): ``stage_plans(session)`` is ``None`` while the switch is off and the draft while it is on. The
+        # same object is handed to the three start commands and to the cost preflight, so the estimate, the consent and the plan a run
+        # freezes are one reading. ``None`` is a bare adapter (and the many tests that build one): the legacy route, exactly as before.
+        self._stage_plans = stage_plans
         # `AR-V3-OPT-IN` (design 4.2). The deployment's allowance to **start** an AR v3 group or to ask what one costs
         # (``AR_V3_BETA_START_ALLOWED``, read once by the composition root, ``False`` by default and for every bare
         # adapter a test builds). The pack alone no longer allows a start; execution, reading and review need only the
@@ -1329,7 +1338,7 @@ class RunAdapter(_SessionHolder):
             self._cost_preflight = RunCostPreflight(section_profiles=section_profiles, text_profiles=text_profiles,
                 provider_config=provider_config, provider_mode=provider_mode, connection_route=route_freezer,
                 preset_resolver=preset_resolver, pack_registry=ar_v3_pack_registry, blob_store=blob_store,
-                group_admitter=group_admitter)
+                group_admitter=group_admitter, stage_plans=stage_plans)
         if require_cost_consent and self._cost_preflight is None:
             raise ValueError("served analysis starts require a cost preflight policy")
 
@@ -1566,6 +1575,7 @@ class RunAdapter(_SessionHolder):
                 cost_actor_uid=cost_actor_uid,
                 executor_group_id=executor_group_id,
                 group_admitter=self._group_admitter,
+                stage_plans=self._stage_plans,  # `HOSTS-INT-WIRE-01`
                 started_by_user_uid=started_by_user_uid,  # `R-151v`
             )
             if not started.replayed:
@@ -1669,6 +1679,12 @@ class RunAdapter(_SessionHolder):
         """`EXEC2-GROUP-RUN-01`: the seam that admits a start on a group, or ``None`` (the `environment` source).
         ``ExecutionAdapter.reaudit_run`` passes it so a re-audit keeps the kind of selector the original start used."""
         return self._group_admitter
+
+    @property
+    def stage_plans(self) -> Any:
+        """`HOSTS-INT-WIRE-01`: the seam that reads the stage layout at the start of a run, or ``None``.
+        ``ExecutionAdapter.reaudit_run`` and ``start_run_from_stage`` pass it so they take today's plan, as ``start_run`` does."""
+        return self._stage_plans
 
     @property
     def cost_preflight(self) -> Any:
@@ -7164,7 +7180,8 @@ def _pull_channel_facts(session: Session, connection_id: str) -> dict[str, Any]:
 def _enrollment_view(record: Any) -> dict[str, Any]:
     """A grant's metadata. Neither the secret nor its hash is a field of the record."""
     return _present(
-        enrollment_id=record.enrollment_id, connection_id=record.connection_id,
+        # `HOSTS-INT-WIRE-01`: exactly one of ``connection_id`` and ``host_id`` is set; the other is absent.
+        enrollment_id=record.enrollment_id, connection_id=record.connection_id, host_id=record.host_id,
         secret_prefix=record.secret_prefix, state=record.state, created_at=record.created_at,
         created_by=record.created_by, expires_at=record.expires_at,
         redeemed_at=record.redeemed_at, runner_token_id=record.runner_token_id,
@@ -7249,11 +7266,20 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
 
     def __init__(
         self, session_factory: sessionmaker[Session], *, ring: Any = None,
-        public_origin: str | None = None,
+        public_origin: str | None = None, hosts: Any = None,
     ) -> None:
         super().__init__(session_factory)
         self._ring = ring
         self._public_origin = public_origin
+        #: `HOSTS-INT-WIRE-01` (ADR-0028 decision 1): the ``ExecutorHostAdapter`` the two calls of a **host** token are made through
+        #: (``redeem_host_enrollment`` and ``report_host_health``). Without one a host token is refused, typed
+        #: (``dependency_unavailable`` / ``executor_hosts``), never served as a connection's.
+        self._hosts = hosts
+
+    def _host_adapter(self) -> Any:
+        if self._hosts is None:
+            raise DomainError(ErrorCode.DEPENDENCY_UNAVAILABLE, dependency="executor_hosts")
+        return self._hosts
 
     @staticmethod
     def _roles(session: Session, user_uid: str) -> Any:
@@ -7273,7 +7299,7 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
                 return None
             return EnrollmentIdentity(
                 enrollment_id=principal.enrollment_id, connection_id=principal.connection_id,
-                exchange_key=principal.exchange_key)
+                exchange_key=principal.exchange_key, host_id=principal.host_id)
         return self._read(work)
 
     # -- the administrator's -----------------------------------------------------------------
@@ -7363,12 +7389,17 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
         from auditmanager.bootstrap.runner import runner_token_view
         from auditmanager.executors.public import EnrollmentPrincipal, redeem_enrollment
 
+        if enrollment.host_id is not None:
+            # The grant of a host: the exchange yields the host token, its host and the catalogue, and takes no model.
+            return self._host_adapter().redeem_host_enrollment(
+                enrollment=enrollment, runner_instance_id=runner_instance_id)
+
         def work(session: Session) -> models.IssuedRunnerToken:
             redeemed = redeem_enrollment(
                 session,
                 EnrollmentPrincipal(
                     enrollment_id=enrollment.enrollment_id, connection_id=enrollment.connection_id,
-                    exchange_key=enrollment.exchange_key),
+                    exchange_key=enrollment.exchange_key, host_id=enrollment.host_id),
                 runner_instance_id=runner_instance_id,
             )
             (view,) = _with_runner_health(session, [runner_token_view(redeemed.record)])
@@ -7379,7 +7410,13 @@ class ExecutorEnrollmentAdapter(_SessionHolder):
     def report_health(
         self, *, runner: Any, body: models.ReportRunnerHealthRequest
     ) -> models.RunnerHealthAck:
-        from auditmanager.executors.public import report_runner_health
+        from auditmanager.executors.public import refuse_host_members_for_connection_token, report_runner_health
+
+        if runner.host_id is not None:
+            # The host token's report: the token's health as for any runner, then the host's snapshot when it changed.
+            return self._host_adapter().report_host_health(runner=runner, body=body)
+        # A connection token speaks the earlier wire: a report that carries a host's members is refused before anything is written.
+        refuse_host_members_for_connection_token(providers=body.providers, slots=body.slots, key_file=body.key_file)
 
         def work(session: Session) -> models.RunnerHealthAck:
             recorded = report_runner_health(

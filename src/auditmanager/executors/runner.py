@@ -683,8 +683,12 @@ def _check_host_answer(
     usage: Mapping[str, int] | None, on_mismatch: Callable[[], Exception],
 ) -> tuple[int | None, int | None]:
     """Hold a host answer to its task: ``provider`` and ``access`` equal the task's, ``reported_model`` one of the catalogue's accepted strings for
-    the task's model. Answers the token counts of ``usage`` (``None`` when the provider gave none)."""
-    from auditmanager.executors.catalogue import catalogue
+    the task's model. Answers the token counts of ``usage`` (``None`` when the provider gave none).
+
+    `HOSTS-INT-WIRE-01` (ADR-0028 decision 6): the model that *answered* is held to ``analysis.public.accepted_reported`` -- the one exact
+    list of the catalogue the text stage and the extended review also use (`R-133`: no prefix, no case folding). The declared ``model`` is
+    compared before this, exactly, in :func:`submit_answer`: by contract it is the task's ``model_id``, so a list lookup would only widen it."""
+    from auditmanager.analysis.public import accepted_reported
 
     host = payload.get("host")
     if not isinstance(host, Mapping):
@@ -699,7 +703,7 @@ def _check_host_answer(
     if reported_model is None:
         raise DomainError(ErrorCode.VALIDATION_FAILED, message="a host answer names the model that answered",
                           field="reported_model", constraint="required")
-    if not catalogue().reported_is_accepted(str(host.get("provider")), str(host.get("model_id")), reported_model):
+    if not accepted_reported(str(host.get("model_id")), reported_model, provider=str(host.get("provider"))):
         raise on_mismatch()
     if usage is None:
         return None, None
