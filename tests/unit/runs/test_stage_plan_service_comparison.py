@@ -23,7 +23,7 @@ def events(monkeypatch):
 
 
 def body(kit="codex_only", *, comparison="table", edit=None, rows_edit=None):
-    cells = layout.cells_to_wire(layout.preset_cells(kit))
+    cells = layout.cells_to_wire(layout.preset_cells(kit if kit != "custom" else "claude_only"))
     for cell in cells:
         if rows_edit and cell["row"] in rows_edit:
             cell.update(rows_edit[cell["row"]])
@@ -88,10 +88,14 @@ def test_a_comparison_cell_the_catalogue_or_the_set_does_not_allow_is_refused_an
 def test_a_list_with_a_kind_missing_or_repeated_is_refused(events):
     service, store = make()
     wire = layout.comparison_cells_to_wire(layout.comparison_preset_cells("codex_only"))
-    assert refusal(service.revise_layout, body=body(comparison=wire[:3]), user_uid=ADMIN, idempotency_key="a").detail_fields == {
-        "field": "comparison_cells", "constraint": "cell_missing"}
-    assert refusal(service.revise_layout, body=body(comparison=[*wire, wire[0]]), user_uid=ADMIN, idempotency_key="b").detail_fields[
-        "constraint"] == "cell_repeated"
+    with pytest.raises(Exception):  # the wire is four cells, each once: three are not a request
+        body(comparison=wire[:3])
+    with pytest.raises(Exception):
+        body(comparison=[*wire, wire[0]])
+    # four cells with one kind twice get through the wire and are the service's to refuse: a kind is missing and another is repeated
+    twice = body(comparison=[wire[0], wire[0], wire[1], wire[2]])
+    assert refusal(service.revise_layout, body=twice, user_uid=ADMIN, idempotency_key="b").detail_fields == {
+        "field": "comparison_cells", "constraint": "cell_repeated"}
     assert not store.revisions
 
 

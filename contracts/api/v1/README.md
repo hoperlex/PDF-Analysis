@@ -40,6 +40,9 @@ stays `0062`. The paths and operations are those of `1.46.0`.
 - **The call.** The cell's effort replaces the module's, its limit is a ceiling over the module's own (`min(module limit, cell limit)`, also in the
   estimate's `output_tokens`) and its timeout is the window of the call to the server. A job admitted by the legacy route or by a rule keeps today's
   values.
+- **Prose corrected.** The description of `startRun` said that a start that finds another rate or another access since the estimate was read answers
+  `409` with `conflict_reason` `cost_estimate_binding_changed`. The code, its tests and ADR-0028 decision 8 answer `422 analysis_input_invalid` with
+  `details.reason` `cost_estimate_binding_changed`, before the key is claimed; the description now says so (prose only, no schema change).
 - **Not changed.** Every operation, every other schema, the stage plan a run freezes (it holds the six rows only) and every error code.
 
 The API has 296 paths, 324 operations and 796 schemas; migration head `0062`. The domain catalogs are at candidate revision 64.
@@ -89,8 +92,8 @@ fact**. **One operation, seven schemas, no migration, no new error code, no stat
   - **A start on the stage layout that finds another rate or another access since the estimate was read** is refused with the existing
     cost-preflight refusal, `422 analysis_input_invalid` with `details.stage_id` `text_analysis` and `details.reason`
     `cost_estimate_binding_changed`, before the key is claimed, and the client reads `getRunStartReadiness` again. (The description of `startRun` in
-    `openapi.json` says `409` with `conflict_reason`; that is not what the stand answers, and the schema's description wording is to be corrected
-    by the next contract owner -- a contract gap recorded by `HOSTS-INT-WIRE-01`.)
+    `openapi.json` said `409` with `conflict_reason`, which is not what the stand answers; `1.47.0` (`HOSTS-SEAL-3`) corrects that prose to
+    `422 analysis_input_invalid` with `details.reason` -- prose only, no schema change.)
 
 The API has 296 paths, 324 operations and 794 schemas; migration head `0062`. The domain catalogs are at candidate revision 63.
 

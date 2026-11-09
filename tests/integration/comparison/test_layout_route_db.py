@@ -15,7 +15,10 @@ What each shows:
 4. a kind whose model no server serves is refused at the estimate and at the start with ``executor_route_missing`` and **creates nothing**, though a legacy
    connection is routed for it and a rule would name a group: it is not routed anywhere else;
 5. with the switch off the job is what it always was (``frozen_at_start``, the routed connection, no cell); a kind the layout has no cell of is read as before;
-6. a job keeps **its own cell** when the layout is revised afterwards, in a re-estimate of what it has left.
+6. a job keeps **its own cell** when the layout is revised afterwards, in a re-estimate of what it has left;
+7. the layout the **real service** revises (``StagePlanService`` over the real store, the servers' ``HostModelAvailability``) is the layout the route reads: the cells
+   it returns are the cells a start freezes, the cells no server serves are named in ``unavailable_cell_keys``, and the access the availability port reports for
+   a model is the access the route is made with.
 
 Break-it-once (the lane's mutation script, in a scratch copy of ``src``): without the third branch of ``estimate.read_route`` tests 1, 2, 3 and 6 fail
 (the route is the legacy connection's or ``executor_route_missing``); without the host-aware reading of a system member (``dispatch.member_facts_of``)
@@ -398,3 +401,50 @@ def test_a_job_keeps_its_own_cell_when_the_layout_is_revised_afterwards(db: Db) 
         again = s.service.estimate_in(session, s.scope, AiMode.LEFT, job=s.service.job(session, started.job_id))
     assert again.route.cell == started.cell and again.route.cell.effort == "medium" and again.totals.output_tokens == 10 * 900
     assert again.route.executor_group_revision_id == started.executor_group_revision_id
+
+
+# -- 7. the real service writes what the route reads ---------------------------------------------------------------------------
+
+
+def test_the_layout_the_real_service_revises_is_the_layout_the_route_reads_and_the_availability_agrees_with_the_route(db: Db) -> None:
+    from auditmanager.access.public import AccountRepository, UserRepository
+    from auditmanager.bootstrap.hosts_dispatch import HostModelAvailability
+    from auditmanager.bootstrap.stage_plan_service import StagePlanService
+
+    with db.sessions() as session:
+        admin = str(UserRepository().create_user(session, "cmp-layout-" + uuid.uuid4().hex, "layout-test-password").user_uid)
+        AccountRepository().grant_role(session, user_uid=admin, role="admin", granted_by=None)
+        session.commit()
+    server(db, "layout-7", report("codex", "api", ASTRA))
+    service = StagePlanService(session_factory=db.sessions, availability=HostModelAvailability(), provider_source="database")
+    wire = layout.comparison_cells_to_wire(cells(comparison_pair_check={"effort": "medium", "max_output_tokens": 900}))
+    body = models.ReviseStageModelLayoutRequest.model_validate({
+        "kit": "codex_only", "cells": layout.cells_to_wire(layout.preset_cells("codex_only")), "comparison_cells": wire})
+    service.revise_layout(body=body, user_uid=admin, idempotency_key=key())
+    view = service.set_layout_enabled(enabled=True, user_uid=admin, idempotency_key=key())
+
+    shown = models.StageModelLayout.model_validate(view)
+    assert shown.enabled and [item.work_kind.value for item in shown.current.comparison_cells] == list(layout.COMPARISON_KINDS)
+    assert shown.current.comparison_cells[0].effort.value == "medium" and shown.current.comparison_cells[0].max_output_tokens == 900
+    unserved = set(view["unavailable_cell_keys"])
+    assert "comparison_pair_check:main" not in unserved and "comparison_spec:main" not in unserved, "gpt-6-astra is on the server"
+    assert {"comparison_sheet_changes:main", "comparison_report:main"} <= unserved, "gpt-6.1-sol is on no server: named, as the rows' cells are"
+
+    s = scene(db)
+    with db.sessions() as session:
+        port = HostModelAvailability().availability(session, [ASTRA])[ASTRA]
+    assert (port.subscription, port.api, port.access) == (False, True, "api")
+    route = s.service.estimate(s.scope).route
+    assert (route.billing, route.cell.effort, route.cell.max_output_tokens) == ("metered", "medium", 900), "the access of the port, the cell of the revision"
+    server(db, "layout-7b", report("codex", "subscription", ASTRA))
+    with db.sessions() as session:
+        port = HostModelAvailability().availability(session, [ASTRA])[ASTRA]
+    assert (port.subscription, port.access) == (True, "subscription")
+    assert s.service.estimate(s.scope).route.billing == "not_metered", "a subscription, once one serves the model, for the route as for the port"
+    # the kind whose model no server serves is refused through the same layout
+    sheet_scope = AiScope(method="sheet_changes", project_uid=s.world["project"], document_uid=s.world["document"], series_id=s.world["series"])
+    sheets = ComparisonAiJobService(
+        db.sessions, methods=[ai.FakeMethod(method="sheet_changes")], work=db.work, comparison_modules="versions", provider_mode="live")
+    with pytest.raises(DomainError) as refused:
+        sheets.estimate(sheet_scope)
+    assert refused.value.detail_fields["dependency"] == "executor_route_missing"
