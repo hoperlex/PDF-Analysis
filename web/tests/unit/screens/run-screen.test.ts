@@ -293,8 +293,18 @@ describe('the tiles', () => {
   it('«Расход» prints a figure with the calls it sums and the word for its basis, and nothing it has not', () => {
     const markup = screen({ state: 'published', cost_micros: 4_500_000, cost_basis: 'measured', model_call_count: 3 });
     expect(markup).toContain('data-run-spend="reported"');
-    expect(markup).toContain('data-spend-micros="4500000">4.500000<');
+    expect(markup).toContain('data-spend-micros="4500000">$4.5<');
     expect(markup).toContain('вызовов 3 · измерено');
+  });
+
+  it('«Расход» writes the figure as dollars, as every other money of the application, and never as the raw six digits (RUN-SCREEN-FIX-01)', () => {
+    const spend = (cost_micros: number) => screen({ state: 'published', cost_micros, cost_basis: 'measured', model_call_count: 3 });
+    expect(spend(6_120_000)).toContain('data-spend-micros="6120000">$6.12<');
+    // The tile's figure; the raw six digits stay in the notes of «Подробнее», which spell out the unit.
+    expect(spend(6_120_000)).not.toContain('data-spend-micros="6120000">6.120000<');
+    expect(spend(1)).toContain('>$0.000001<');
+    expect(spend(0)).toContain('data-spend-micros="0">$0<');
+    expect(spend(6_120_000)).toContain('· измерено');
   });
 
   it('«Расход» says «по подписке» for an unmetered run with no figure, and that a run that called no provider did not', () => {

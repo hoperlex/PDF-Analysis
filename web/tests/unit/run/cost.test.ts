@@ -122,6 +122,12 @@ describe('a cost is never reported without the count it sums (M-5)', () => {
     expect(runCost({ cost_micros: -1, model_call_count: 1 }).kind).toBe('unreadable');
   });
 
+  it('refuses a cost beyond the safe integers: the money the tile writes as dollars cannot be exact there (RUN-SCREEN-FIX-01)', () => {
+    expect(runCost({ cost_micros: Number.MAX_SAFE_INTEGER, model_call_count: 1 }).kind).toBe('reported');
+    expect(runCost({ cost_micros: 2 ** 53, model_call_count: 1 }).kind).toBe('unreadable');
+    expect(runCost({ cost_micros: 1e21, model_call_count: 1 }).kind).toBe('unreadable');
+  });
+
   it('carries the count through when it is present', () => {
     expect(runCost({ cost_micros: 10, cost_basis: 'estimated', model_call_count: 3 })).toEqual({
       kind: 'reported',

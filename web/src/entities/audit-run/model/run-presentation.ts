@@ -431,7 +431,7 @@ export function runCost(status: {
   if (callCount === undefined || callCount === null) {
     return { kind: 'unreadable', why: 'она несёт стоимость без числа вызовов модели' };
   }
-  if (typeof micros !== 'number' || !Number.isInteger(micros) || micros < 0) {
+  if (typeof micros !== 'number' || !Number.isSafeInteger(micros) || micros < 0) {
     return { kind: 'unreadable', why: 'её стоимость не является неотрицательным целым' };
   }
   if (typeof callCount !== 'number' || !Number.isInteger(callCount) || callCount < 1) {

@@ -78,6 +78,7 @@ import {
   NotApplicableState,
   STATE_LABELS,
   COST_BASIS_LABELS,
+  microsAsUsd,
   runStageLabel,
   PROVIDER_MODE_LABELS,
   PROVIDER_MODE_UNKNOWN_LABEL,
@@ -439,7 +440,7 @@ function SpendTile({ status }: { readonly status: RunStatus }) {
       <h2>Расход</h2>
       {cost.kind === 'reported' ? (
         <p className={styles.spend}>
-          <span className={styles.spendFigure} data-spend-micros={cost.micros}>{formatCostMicros(cost.micros)}</span>
+          <span className={styles.spendFigure} data-spend-micros={cost.micros}>{`$${microsAsUsd(cost.micros)}`}</span>
           <span className={styles.spendNote}>
             вызовов {cost.callCount}
             {cost.basis === null ? '' : cost.basis === 'unrecognized' ? ' · основание: неизвестное значение' : ` · ${COST_BASIS_LABELS[cost.basis]}`}
