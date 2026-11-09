@@ -3,41 +3,38 @@
 /**
  * Run progress.
  *
- * The one screen that polls, and it polls through `pollRunStatus` in `@/shared/api` —
- * the single loop, at the frozen 2 s / ×1.5 / 15 s schedule, with no deadline.
+ * The one screen that polls, and it polls through `pollRunStatus` in `@/shared/api` --
+ * the single loop, at the frozen 2 s / x1.5 / 15 s schedule, with no deadline.
+ *
+ * `RUN-SCREEN-01a` (plan `executors-runs-rework-plan` §9) rebuilt the layout on the same data; the rules below are the ones it kept.
+ * The screen is a head over two tabs: the head states the run (its state, the stage it is on, a bar, the estimated finish, the live
+ * line and the rail of chips) and what to do next; «Обзор» holds the findings and spend tiles, the outcome, the queue card and a folded
+ * «Подробнее»; «Журнал» holds the run's events. A chip opens «Этапы анализа раздела», which holds the stage table, the planned
+ * procedures, the executor and the preset.
  *
  * What this widget is careful about:
  *
  *   **The state is the contract's word.** `RunStateBadge` renders `created`, `queued`,
  *   `running`, `validating`, `published`, `partial`, `failed` or `cancelled` and nothing
  *   else. There is no "in progress", no "done" and no "OK". `succeeded` is a stage
- *   status and appears only in the stage table below, where it is correct.
+ *   status and appears only in the stage table, in the dialog, where it is correct.
  *
  *   **`published` is the success terminal, and `partial` and `failed` borrow nothing
  *   from it.** A `partial` run states its recorded degradation set; a `failed` run states
  *   the catalog code it terminated with, and its interrupted reason when `OD-10`
  *   reconciled it.
  *
- *   **A recorded run never reads as a live one.** The provider mode sits on the badge and
- *   again as a sentence. Missing and unrecognised modes have different labels, neither
- *   of which can be mistaken for `live`.
+ *   **A recorded run still says so.** The provider mode no longer sits on the head's badge (plan §9.1); it is a row of «Подробнее»
+ *   with its sentence, and a missing or unrecognised mode has its own label there, neither of which can be mistaken for `live`.
  *
- *   **Motion stops when the run stops.** A terminal or reconciled reading shows no
- *   activity indicator, because there is no activity.
- *
- *   **The screen leads with what the run did, not with what the poller is doing.**
- *   `DEBT_REGISTER.md` `D-20` is open: `execute_run` is inline, so a run is already
- *   `published` when `startRun` answers and there is no observable `running` state to
- *   watch. Every real reading is therefore terminal, `isRunAnimating` is false, and the
- *   activity line reads "Not polling. This reading is final." That sentence is true, and
- *   it is the one thing on this screen a user cannot otherwise check, so it stays — but
- *   it sits below the result rather than above it. Leading a terminal run with a
- *   paragraph about polling puts machinery where the answer belongs.
+ *   **Motion stops when the run stops.** A terminal or reconciled reading shows no live line, because there is no activity. The
+ *   head keeps `data-run-activity` (`polling` or `stopped`) for the browser journey, which reads it, and says a sentence only for the
+ *   one case a reader must not miss: the poll has stopped while the run is still open, so the reading is the last one received.
  *
  *   **Two counts, never one.** Published findings are admitted evidence; diagnostic
  *   observations are what the run noticed and did not admit. They are rendered apart and
  *   never summed. The finding count stays inside `Outcome`, where it is scoped to the
- *   states that can have one — a `cancelled` run published nothing, and "Published
+ *   states that can have one -- a `cancelled` run published nothing, and "Published
  *   findings: 0" would be a claim about a publication that never happened.
  *
  *   **The worker is named only while one can hold the run.** In `running` and `validating`
@@ -46,50 +43,45 @@
  *   the run (`W54-WORKERS-WEB`). In any other state no worker holds it and nothing is read.
  *
  *   **The executor is named only when the reading carries one.** `EXEC-PAR-WEB-01`: a run that
- *   froze a connection shows its name and pinned model in the run's facts, and a run in the queue
- *   says it is waiting for that executor. A run with none — every run on the environment source
- *   — shows no row and no placeholder, because a screen that cannot say which executor does not
- *   say one.
+ *   froze a connection shows its name and pinned model in the dialog and the live line, and a run in the queue
+ *   says it is waiting for that executor. A run with none -- every run on the environment source
+ *   -- shows no row and no placeholder, because a screen that cannot say which executor does not
+ *   say one. The read-only role is shown no server (`R-150w`).
  *
  *   **A cost is never shown without the count it sums.** `D-15` is open: the total spans
  *   retry attempts. `runCost` returns `unreadable` rather than print a figure whose span
- *   the reader cannot see.
+ *   the reader cannot see; the spend tile and the notes follow it.
  */
 
 import Link from 'next/link';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import type { RunStatus } from '@/shared/api';
 import { isTerminalRunState } from '@/shared/api';
 import { SHOW_REVIEW_INDICATION } from '@/shared/config';
 import { formatInstant, routes } from '@/shared/lib';
+import { useMe } from '@/entities/account';
 import { RunWorkerLine, runHoldsLease, runWorker, useWorkerLookup } from '@/entities/execution';
 import { GroupWaitDetail } from '@/entities/executor-group';
+import { groupByCategory, runFindingsQueryOptions, SEVERITY_LABELS } from '@/entities/finding';
+import { tallySeverity } from '@/widgets/finding-list';
 import { NormReferencesSection } from '@/widgets/norm-references';
+import { RunStagesDialog } from '@/widgets/run-stages-dialog';
+import { ExtendedReview, useExtendedReviewReading } from '@/widgets/extended-review';
 import {
   ErrorState,
   LoadingState,
   NotApplicableState,
-  RunStateBadge,
-  StageStatusBadge,
-  runStageLabel,
   STATE_LABELS,
   COST_BASIS_LABELS,
+  runStageLabel,
   PROVIDER_MODE_LABELS,
   PROVIDER_MODE_UNKNOWN_LABEL,
 } from '@/shared/ui';
-import styles from './run-progress.module.css';
-import { PdfPrecheckProgress } from './pdf-precheck-progress';
-import { RunLiveLine } from './run-live-line';
-import { RunNextTask } from './run-next-task';
-import { ExtendedReview } from '@/widgets/extended-review';
-import { startedFrom, type StartedFrom } from '../model/started-from';
-
 import {
-  StageTable,
-  type StageRow,
   arV3GroupReviewAddress,
-  badgeProviderMode,
   costBasisCaption,
   diagnosticObservationCount,
   elapsedMs,
@@ -99,29 +91,45 @@ import {
   interruptedReason,
   isRunAnimating,
   looksLikeArV3GroupId,
+  extendedLiveProgress,
+  procedureReadings,
   providerModeCaption,
   runAnalysis,
   runAnalysisKind,
+  runChips,
   runCost,
   runExecutorLine,
-  runExecutorValue,
   runHasPublishedResult,
   runOutcome,
-  runPresetLine,
-  runPresetValue,
   runProviderMode,
+  runQueueReasonLabel,
   runWaitingSentence,
-  stageRows,
+  shortModelName,
   terminalReasonNote,
   useArV3StartAllowed,
   useRunStatus,
 } from '@/entities/audit-run';
+import type { RunChipDefinition } from '@/entities/audit-run';
+
+import styles from './run-progress.module.css';
+import { PdfPrecheckProgress } from './pdf-precheck-progress';
+import { RunHeader } from './run-header';
+import { RunNextTask } from './run-next-task';
+import { RunTabs } from './run-tabs';
+import { startedFrom } from '../model/started-from';
+import { maySeeServer } from '../model/server-access';
+import type { RunTab } from '../model/run-tabs';
 
 export interface RunProgressProps {
   readonly projectUid: string;
   readonly runId: string;
   /** The page's own controls for this run («Отменить прогон»), beside the review call in the head. */
   readonly actions?: ReactNode;
+  /**
+   * The run's events, for the «Журнал» tab (`UI-B-39`). The page decides whether the account may read the journal (`R-150w`) and
+   * passes it only then: with none the tab is not drawn, as it was not before for a read-only account.
+   */
+  readonly journal?: ReactNode;
 }
 
 /** The worker holding a running or validating run, read from the registry's first page. */
@@ -131,37 +139,6 @@ function RunHolder({ runId }: { readonly runId: string }) {
 }
 
 const UNKNOWN_RUN_TITLE = 'Прогон содержит неизвестное значение.';
-
-/** The original-style rail displays only stages reported or scheduled for this Run. */
-function PipelineRail({ rows, reused }: { readonly rows: readonly StageRow[]; readonly reused?: ReadonlySet<string> }) {
-  return (
-    <div className={styles.pipeline} role="list" aria-label="Этапы этого прогона" data-run-pipeline="">
-      {rows.map((row, index) => (
-        <div className={styles.pipelineItem} key={row.stageId} role="listitem">
-          <div
-            className={styles.pipelineStage}
-            data-pipeline-stage={row.stageId}
-            data-pipeline-status={row.status ?? 'not-reported'}
-            {...(reused?.has(row.stageId) ? { 'data-pipeline-reused': '' } : {})}
-          >
-            <span className={styles.pipelineOrdinal}>{row.ordinal === null ? '—' : String(row.ordinal).padStart(2, '0')}</span>
-            <span className={styles.pipelineName}>{runStageLabel(row.stageId)}</span>
-            <span className={styles.pipelineStatus}>
-              {row.status === null ? 'Не начинался' : <StageStatusBadge status={row.status} errorCode={row.errorCode} />}
-            </span>
-            {/* `R-151i`: a stage taken from the earlier run took no time here; the rail says where it came from instead. */}
-            {reused?.has(row.stageId) ? <span className={styles.pipelineTook}>из прогона</span> : elapsedMs(row.startedAt, row.finishedAt) === null ? null : (
-              <span className={styles.pipelineTook} data-pipeline-took={formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}>
-                {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
-              </span>
-            )}
-          </div>
-          {index === rows.length - 1 ? null : <span className={styles.pipelineArrow} aria-hidden="true">→</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /**
  * The second sentence of a published AR v3 beta Run (`R-146as`, `R-146ba`).
@@ -193,22 +170,6 @@ function V3PublishedSentence({ findingCount }: { readonly findingCount: number |
  * start of v3 (`start_allowed`), so a deployment with one analysis shows no line about the other. Only a standard run asks
  * the server whether v3 is allowed; a v3 run needs no answer.
  */
-/**
- * `R-151i` («Запущен с этапа N из прогона …»): the earlier run this one took its first stages from, linked. Nothing for a run
- * that was not started from a stage.
- */
-function StartedFromFact({ status, from }: { readonly status: RunStatus; readonly from: StartedFrom }) {
-  return (
-    <>
-      <dt>Запущен с этапа</dt>
-      <dd data-run-started-from={from.sourceRunId} data-run-start-stage={from.stageId}>
-        {from.ordinal}. {runStageLabel(from.stageId)} из прогона{' '}
-        <Link href={routes.run(status.project_uid, from.sourceRunId)}><code>{from.sourceRunId}</code></Link>
-      </dd>
-    </>
-  );
-}
-
 function AnalysisFact({ status }: { readonly status: RunStatus }) {
   return runAnalysisKind(status) === 'standard' ? <StandardAnalysisFact status={status} /> : <AnalysisLine status={status} />;
 }
@@ -262,10 +223,7 @@ function Outcome({ status }: { readonly status: RunStatus }) {
         <div className={styles.outcome} data-run-outcome="published">
           <p>
             Прогон достиг успешного терминального состояния{' '}
-            <span data-run-state="published">{STATE_LABELS.published}</span>.
-          </p>
-          <p>
-            Опубликованных находок:{' '}
+            <span data-run-state="published">{STATE_LABELS.published}</span>. Опубликованных находок:{' '}
             {outcome.findingCount === null ? <em>не сообщено</em> : outcome.findingCount}
           </p>
         </div>
@@ -431,49 +389,80 @@ function Recorded({ status }: { readonly status: RunStatus }) {
 }
 
 /**
- * The line of figures under the head, as the original's spend bar («⚡ ↓вход ↑выход · Платно $ · N calls ·
- * длительность»). Each tile is shown only when its figure is one the screen may state: the finding count only
- * for a run that published, the cost only with the number of calls it sums. The sentences that qualify each
- * figure are below, in «Пояснения к цифрам»; nothing here is a zero the reading did not report.
+ * The tile «Находки» (`R-151j`): the run's findings by the severity the expert decided, read from the same complete list «Разбор»
+ * reads (`runFindingsQueryOptions`, one cache entry), and the way into «Разбор». Counts are over the whole run. A finding without a
+ * decided severity is «Не определена»; the model's proposals are not counted here (they are on «Разбор», under their own label).
+ * Until the list has been read, or when it cannot be, the tile shows only the way in: it claims no count it has not got.
  */
-function Figures({ status }: { readonly status: RunStatus }) {
-  const outcome = runOutcome(status);
-  const diagnostics = diagnosticObservationCount(status);
-  const cost = runCost(status);
+function FindingsTile({ projectUid, status }: { readonly projectUid: string; readonly status: RunStatus }) {
+  const findings = useQuery(runFindingsQueryOptions(status.run_id));
+  const items = findings.data?.data.items;
+  const tally = items === undefined ? null : tallySeverity(groupByCategory(items));
+  const strip = tally === null
+    ? []
+    : [
+        ...(['critical', 'economic', 'operational', 'recommendation', 'check_adjacent'] as const).map((value) => ({
+          key: value, label: SEVERITY_LABELS[value], count: tally.decided[value],
+        })),
+        { key: 'undetermined', label: 'Не определена', count: tally.decided.undetermined },
+      ].filter((entry) => entry.count > 0);
   return (
-    <dl className={styles.figures} aria-label="Итоги прогона">
-      {outcome.kind === 'published' ? (
-        <div className={styles.figure}>
-          <dt>Находок</dt>
-          <dd>{outcome.findingCount === null ? '—' : outcome.findingCount}</dd>
-        </div>
-      ) : null}
-      <div className={styles.figure}>
-        <dt>Диагностических наблюдений</dt>
-        <dd>{diagnostics === null ? '—' : diagnostics}</dd>
-      </div>
-      <div className={styles.figure}>
-        <dt>Длительность</dt>
-        <dd>{formatElapsed(elapsedMs(status.created_at, status.terminal_at))}</dd>
-      </div>
-      {cost.kind === 'reported' ? (
-        <>
-          <div className={styles.figure}>
-            <dt>Стоимость</dt>
-            <dd>{formatCostMicros(cost.micros)}</dd>
-          </div>
-          <div className={styles.figure}>
-            <dt>Вызовов провайдера</dt>
-            <dd>{cost.callCount}</dd>
-          </div>
-        </>
-      ) : null}
-    </dl>
+    <section className={styles.tile} aria-label="Находки" data-run-findings-tile="">
+      <h2>Находки</h2>
+      {strip.length === 0 ? null : (
+        <ul className={styles.severities} aria-label="Важность, решённая экспертом" data-severity-strip="">
+          {strip.map((entry) => (
+            <li key={entry.key} className={styles.severity} data-severity={entry.key}>
+              {entry.label} {entry.count}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className={styles.tileLink}>
+        <Link href={routes.review(projectUid, status.run_id)}>в Разбор →</Link>
+      </p>
+    </section>
   );
 }
 
-export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
+/**
+ * The tile «Расход»: the totals, and only the totals the reading has. A figure is printed with the number of calls it sums
+ * (`D-15`); a run on a subscription connection has no figure and says so; a run that called no provider has nothing to report, which is
+ * not a zero. The reading has no token counts, so none are shown. The sentences that qualify these figures are in «Пояснения к цифрам».
+ */
+function SpendTile({ status }: { readonly status: RunStatus }) {
+  const cost = runCost(status);
+  return (
+    <section className={styles.tile} aria-label="Расход" data-run-spend={cost.kind}>
+      <h2>Расход</h2>
+      {cost.kind === 'reported' ? (
+        <p className={styles.spend}>
+          <span className={styles.spendFigure} data-spend-micros={cost.micros}>{formatCostMicros(cost.micros)}</span>
+          <span className={styles.spendNote}>
+            вызовов {cost.callCount}
+            {cost.basis === null ? '' : cost.basis === 'unrecognized' ? ' · основание: неизвестное значение' : ` · ${COST_BASIS_LABELS[cost.basis]}`}
+          </span>
+        </p>
+      ) : cost.kind === 'unmetered' ? (
+        <p className={styles.spendNote}>
+          По подписке. {costBasisCaption('unmetered')}
+          {cost.callCount === null ? '' : ` Вызовов: ${cost.callCount}.`}
+        </p>
+      ) : cost.kind === 'unreadable' ? (
+        <p className={styles.spendNote}>Стоимость прочитать нельзя; причина — в «Подробнее», «Пояснения к цифрам».</p>
+      ) : (
+        <p className={styles.spendNote}>Прогон не обращался к провайдеру.</p>
+      )}
+    </section>
+  );
+}
+
+export function RunProgress({ projectUid, runId, actions, journal }: RunProgressProps) {
   const { status, failure, polling, retry } = useRunStatus(runId);
+  const me = useMe();
+  const reading = useExtendedReviewReading(runId);
+  const [tab, setTab] = useState<RunTab>('overview');
+  const [dialogChip, setDialogChip] = useState<RunChipDefinition['id'] | null>(null);
 
   if (status === null && failure !== null) {
     return (
@@ -508,125 +497,59 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
   const animating = isRunAnimating(status);
   const interrupted = interruptedReason(status);
   const executor = runExecutorLine(status);
-  const preset = runPresetLine(status);
-  const waiting = executor === null ? null : runWaitingSentence(executor);
-
   const from = startedFrom(status);
   const v3Beta = runAnalysisKind(status) === 'ar_v3_beta';
   const reviewable = !v3Beta && runHasPublishedResult(status.state, status.analysis_profile_id);
+  const showServer = maySeeServer(me.data?.roles);
+  const modelShort = shortModelName(executor?.model);
+  const pin = executor?.model ?? null;
+  const model = modelShort === null || pin === null ? null : { short: modelShort, pin };
+  const chips = runChips({
+    status,
+    procedures: procedureReadings(reading?.result),
+    reused: from === null ? undefined : from.reusedStageIds,
+  });
+  const liveProgress = extendedLiveProgress(reading?.result);
+  const cost = runCost(status);
+  const tabs: readonly RunTab[] = journal === undefined ? ['overview'] : ['overview', 'journal'];
+  const active: RunTab = tabs.includes(tab) ? tab : 'overview';
 
-  return (
-    <div className={styles.progress} data-run-id={status.run_id}>
-      {/*
-        The head, as the original's pipeline card: the state and whether the reading is final on top, the stages
-        in a rail, and on the right what to do next -- review the findings, or stop the run.
-      */}
-      <section className={styles.head} aria-label="Этапы и действия">
-        <div className={styles.headTop}>
-          <p className={styles.mode}>
-            <RunStateBadge state={status.state} providerMode={badgeProviderMode(mode)} />
-            <span data-provider-mode={mode}>
-              режим провайдера: <strong data-provider-mode={mode}>{modeText}</strong>
-            </span>
-          </p>
-          <p className={styles.activity} data-run-activity={animating && polling ? 'polling' : 'stopped'}>
-            {animating && polling
-              ? 'Идёт опрос следующего показания: интервал растёт с 2 с до 15 с и прекращается в терминальном состоянии.'
-              : animating
-                ? 'Опрос остановлен, но прогон ещё открыт: показание — последнее полученное, а не окончательное.'
-                : 'Опрос остановлен, показание окончательное.'}
-          </p>
-        </div>
-        {/* `UI-A-65`: the open run's live line -- the stage it is on and how long it has been going. */}
-        {animating ? <RunLiveLine status={status} rows={stageRows(status)} /> : null}
-        <div className={styles.headBody}>
-          <PipelineRail rows={stageRows(status)} {...(from === null ? {} : { reused: from.reusedStageIds })} />
-          {reviewable || actions !== undefined ? (
-            <div className={styles.headActions}>
-              {reviewable ? (
-                <p className={styles.reviewCall}>
-                  <Link className="am-button" href={routes.review(projectUid, status.run_id)}>
-                    Разобрать находки
-                  </Link>
-                  <span>
-                    режим провайдера этого прогона: <strong data-provider-mode={mode}>{modeText}</strong>
-                  </span>
-                </p>
-              ) : null}
-              {actions}
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      {/* `R-151i`: a run started from a stage says so under its head, with the way back to the run it took the first stages from. */}
-      {from === null ? null : (
-        <p className={styles.caption} data-run-started-from-note={from.stageId}>
-          Запущен с этапа {from.ordinal} «{runStageLabel(from.stageId)}» из прогона{' '}
-          <Link href={routes.run(status.project_uid, from.sourceRunId)}><code>{from.sourceRunId}</code></Link>:
-          результаты предыдущих этапов взяты из него, этот этап и следующие выполнены заново.
-        </p>
-      )}
-
-      <Figures status={status} />
-
-      <Outcome status={status} />
-
-      {/* `UI-B-70`: a run that waits in the queue says what goes first and why it waits, as the original's «Следующая задача». */}
-      {status.state === 'queued' ? <RunNextTask status={status} /> : null}
-
-      <div className={styles.columns}>
-        <section className={styles.panel} aria-label="Сведения о прогоне">
-          <h2>Сведения о прогоне</h2>
-          <p className={styles.caption}>{providerModeCaption(mode)}</p>
-          <dl className={styles.facts}>
-            <dt>Прогон</dt>
-            <dd><code>{status.run_id}</code></dd>
-            <dt>Версия</dt>
-            <dd>
-              <Link href={routes.version(status.project_uid, status.version_uid)}>
-                <code>{status.version_uid}</code>
-              </Link>
-            </dd>
-            <AnalysisFact status={status} />
-            {from === null ? null : <StartedFromFact status={status} from={from} />}
-            {executor === null ? null : <><dt>Исполнитель</dt><dd data-run-executor>{runExecutorValue(executor)}</dd></>}
-            {preset === null ? null : <><dt>Пресет</dt><dd data-run-preset>{runPresetValue(preset)}</dd></>}
-            {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}
-            <dt>Запустил</dt>
-            <dd data-run-started-by={status.started_by_user_uid ?? 'unknown'}>{status.started_by_label ?? 'неизвестно'}</dd>
-            <dt>Создан</dt>
-            <dd>{formatInstant(status.created_at)}</dd>
-            <dt>Завершён</dt>
-            <dd>{formatInstant(status.terminal_at)}</dd>
-            <dt>Длительность</dt>
-            <dd data-run-elapsed={elapsedMs(status.created_at, status.terminal_at) ?? 'unknown'}>
-              {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
-            </dd>
-          </dl>
-
-          {waiting === null ? null : <p data-run-executor-waiting>{waiting}</p>}
-          {/* `EXEC2-FOLLOWUP-01`: a group Run that waits for a runner says what is actually wrong, and that the wait ends. */}
-          {executor === null || executor.phase !== 'planned' ? null : (
-            <GroupWaitDetail
-              groupId={status.planned?.executor_group_id}
-              revisionId={status.planned?.executor_group_revision_id}
-              waitReason={executor.queueReason ?? null}
-            />
-          )}
-          {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
-          <p className={styles.caption}>
-            Прогон никогда не меняет прочитанную версию; остальные её прогоны перечислены на её странице.
-          </p>
-        </section>
-
-        <section className={styles.panel} aria-label="Подробности этапов">
-          <h2>Подробности этапов</h2>
-          <StageTable rows={stageRows(status)} {...(from === null ? {} : { reused: from.reusedStageIds })} />
-        </section>
+  const overview = (
+    <>
+      <div className={styles.tiles}>
+        {reviewable ? (
+          <FindingsTile projectUid={projectUid} status={status} />
+        ) : (
+          <section className={styles.tile} aria-label="Находки" data-run-findings-tile="">
+            <h2>Находки</h2>
+            {v3Beta ? (
+              <NotApplicableState
+                title={SHOW_REVIEW_INDICATION ? 'Предварительный разбор АР v3' : 'Разбор АР v3'}
+                detail={
+                  <p>
+                    Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
+                  </p>
+                }
+              />
+            ) : (
+              <NotApplicableState
+                title="Разбирать нечего."
+                detail={
+                  <p>
+                    Находки появляются только когда терминальное состояние публикует результат —{' '}
+                    <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
+                    <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
+                    <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
+                  </p>
+                }
+              />
+            )}
+          </section>
+        )}
+        <SpendTile status={status} />
       </div>
 
-      <ExtendedReview key={runId} runId={runId} active={animating} projectUid={projectUid} />
+      <Outcome status={status} />
 
       {interrupted !== null && status.state !== 'failed' ? (
         <p data-interrupted-reason={interrupted}>
@@ -634,65 +557,137 @@ export function RunProgress({ projectUid, runId, actions }: RunProgressProps) {
         </p>
       ) : null}
 
-      <PdfPrecheckProgress status={status} />
+      {/* `UI-B-70`: a run that waits in the queue says what goes first and why it waits, as the original's «Следующая задача». */}
+      {status.state === 'queued' ? <RunNextTask status={status} /> : null}
 
-      {reviewable ? null : (
-        <>
-          <h2>Разбор</h2>
-          {v3Beta ? (
-            <NotApplicableState
-              title={SHOW_REVIEW_INDICATION ? 'Предварительный разбор АР v3' : 'Разбор АР v3'}
-              detail={
-                <p>
-                  Для просмотра шести прогонов откройте «Настройки анализа» и укажите идентификатор группы из ответа запуска. Здесь нет канонических находок для разбора или принятия решения.
-                </p>
-              }
+      {/* Folded: the run's identity, the checks that precede it, the norms it cites, the full analysis and the notes on the figures. */}
+      <details className={styles.more} data-run-more="" open={cost.kind === 'unreadable'}>
+        <summary className={styles.moreSummary}>Подробнее</summary>
+        <div className={styles.moreBody}>
+          <section className={styles.panel} aria-label="Сведения о прогоне">
+            <h2>Сведения о прогоне</h2>
+            <p className={styles.caption}>{providerModeCaption(mode)}</p>
+            <dl className={styles.facts}>
+              <dt>Прогон</dt>
+              <dd><code>{status.run_id}</code></dd>
+              <dt>Версия</dt>
+              <dd>
+                <Link href={routes.version(status.project_uid, status.version_uid)}>
+                  <code>{status.version_uid}</code>
+                </Link>
+              </dd>
+              <AnalysisFact status={status} />
+              <dt>Режим провайдера</dt>
+              <dd><strong data-provider-mode={mode}>{modeText}</strong></dd>
+              {/* `R-151v`: who started the run; a run created before contract 1.21.0 does not know. */}
+              <dt>Запустил</dt>
+              <dd data-run-started-by={status.started_by_user_uid ?? 'unknown'}>{status.started_by_label ?? 'неизвестно'}</dd>
+              <dt>Создан</dt>
+              <dd>{formatInstant(status.created_at)}</dd>
+              <dt>Завершён</dt>
+              <dd>{formatInstant(status.terminal_at)}</dd>
+              <dt>Длительность</dt>
+              <dd data-run-elapsed={elapsedMs(status.created_at, status.terminal_at) ?? 'unknown'}>
+                {formatElapsed(elapsedMs(status.created_at, status.terminal_at))}
+              </dd>
+            </dl>
+            {runHoldsLease(status.state) ? <RunHolder runId={status.run_id} /> : null}
+            <p className={styles.caption}>
+              Прогон никогда не меняет прочитанную версию; остальные её прогоны перечислены на её странице.
+            </p>
+          </section>
+
+          <PdfPrecheckProgress status={status} />
+
+          {/* `NORM-REFS-RUN-01`: the norms the stored run's text cites. Only once the run has stopped;
+              while it is in flight its text layer may not exist yet, and «нет текстового слоя»
+              would be a claim about a run that has not got that far. */}
+          {isTerminalRunState(status.state) ? <NormReferencesSection runId={status.run_id} /> : null}
+
+          <ExtendedReview key={runId} runId={runId} active={animating} projectUid={projectUid} planElsewhere />
+
+          {/*
+            The sentences that qualify the figures stay on the screen and are read when asked for, as the CSV columns are
+            on the export bar (`R-18`). They open by themselves when the cost cannot be read, because that sentence is
+            the only place the screen says why no figure is shown.
+          */}
+          <section className={styles.notes} aria-label="Пояснения к цифрам">
+            <details open={cost.kind === 'unreadable'} data-run-notes="">
+              <summary className={styles.notesSummary}>Пояснения к цифрам</summary>
+              <Recorded status={status} />
+            </details>
+          </section>
+        </div>
+      </details>
+    </>
+  );
+
+  return (
+    <div className={styles.progress} data-run-id={status.run_id}>
+      <RunHeader
+        status={status}
+        chips={chips}
+        executor={executor}
+        model={model}
+        showServer={showServer}
+        liveProgress={liveProgress}
+        polling={polling}
+        from={from}
+        waiting={status.state === 'queued' ? (executor === null ? runQueueReasonLabel(status) : runWaitingSentence(executor)) : null}
+        waitDetail={
+          status.state === 'queued' && executor !== null && executor.phase === 'planned' ? (
+            <GroupWaitDetail
+              groupId={status.planned?.executor_group_id}
+              revisionId={status.planned?.executor_group_revision_id}
+              waitReason={executor.queueReason ?? null}
             />
-          ) : (
-            <NotApplicableState
-              title="Разбирать нечего."
-              detail={
-                <p>
-                  Находки появляются только когда терминальное состояние публикует результат —{' '}
-                  <span data-run-state="published">{STATE_LABELS.published}</span> или{' '}
-                  <span data-run-state="partial">{STATE_LABELS.partial}</span>. Этот прогон —{' '}
-                  <span data-run-state={status.state}>{STATE_LABELS[status.state]}</span>.
-                </p>
-              }
-            />
-          )}
-        </>
-      )}
-
-      {/* `NORM-REFS-RUN-01`: the norms the stored run's text cites. Only once the run has stopped;
-          while it is in flight its text layer may not exist yet, and «нет текстового слоя»
-          would be a claim about a run that has not got that far. */}
-      {isTerminalRunState(status.state) ? <NormReferencesSection runId={status.run_id} /> : null}
-
-      {/*
-        The sentences that qualify the figures stay on the screen and are read when asked for, as the CSV columns are
-        on the export bar (`R-18`). They open by themselves when the cost cannot be read, because that sentence is
-        the only place the screen says why no figure is shown.
-      */}
-      <section className={styles.notes} aria-label="Пояснения к цифрам">
-        <details open={runCost(status).kind === 'unreadable'} data-run-notes="">
-          <summary className={styles.notesSummary}>Пояснения к цифрам</summary>
-          <Recorded status={status} />
-        </details>
-      </section>
+          ) : null
+        }
+        actions={
+          <>
+            {reviewable ? (
+              <Link className="am-button" href={routes.review(projectUid, status.run_id)}>
+                Разобрать находки
+              </Link>
+            ) : null}
+            {actions}
+          </>
+        }
+        onOpenChip={setDialogChip}
+      />
 
       {failure !== null ? (
         <ErrorState
           title={failure.title}
           detail={
             <span data-run-failure={failure.kind}>
-              {failure.detail} Показание выше — последнее полученное.
+              {failure.detail} Показание ниже — последнее полученное.
             </span>
           }
           correlationId={failure.correlationId}
           {...(failure.retryable ? { onRetry: retry, retryLabel: 'Повторить' } : {})}
         />
       ) : null}
+
+      {tabs.length < 2 ? (
+        overview
+      ) : (
+        <RunTabs tabs={tabs} active={active} onSelect={setTab}>
+          {active === 'journal' ? journal : overview}
+        </RunTabs>
+      )}
+
+      {dialogChip === null ? null : (
+        <RunStagesDialog
+          status={status}
+          chips={chips}
+          selected={dialogChip}
+          onSelect={setDialogChip}
+          onClose={() => setDialogChip(null)}
+          reusedStageIds={from === null ? undefined : from.reusedStageIds}
+          showServer={showServer}
+        />
+      )}
     </div>
   );
 }

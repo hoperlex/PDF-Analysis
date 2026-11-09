@@ -32,18 +32,18 @@ vi.mock('@/shared/api', async (importOriginal) => {
 });
 
 import {
-  ApiError, archiveAnalysisPreset, createAnalysisPreset, listAnalysisPresets, queryKeys, reviseAnalysisPreset, startRun, estimateRunCost,
+  ApiError, archiveAnalysisPreset, createAnalysisPreset, listAnalysisPresets, reviseAnalysisPreset, startRun, estimateRunCost,
 } from '@/shared/api';
 import type { AnalysisPreset, ErrorEnvelope, RunStatus } from '@/shared/api';
 import { ANALYSIS_PRESETS_KEY, presetBlocker, presetChoices, presetFailure, presetOptionLabel } from '@/entities/analysis-preset';
 import { RunTable, classifyRunFailure, runPresetLine, runPresetSentence, runPresetValue } from '@/entities/audit-run';
 import { executorChoices } from '@/entities/executor-connection';
 import { StartRunControl, startRunBody, startRunIntent } from '@/features/start-run';
-import { RunProgress } from '@/widgets/run-progress';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
 
 import { PROJECT_UID, VERSION_UID, render, runStatus } from '../review/fixtures';
 import { newClient, renderWith } from '../screens/harness';
+import { runDialog } from '../run/run-dialog-fixture';
 import { READY, SPARE, ALL_CASES, executorCase, seedExecutors } from '../workers/executor-fixtures';
 import { mountLive } from './live-render';
 import { COST_CONSENT, approveCost, costEstimate } from './cost-estimate-fixtures';
@@ -517,17 +517,15 @@ describe('the preset on a run', () => {
   });
 });
 
-describe('the preset on the run page and the run row', () => {
+describe('the preset in «Этапы анализа раздела» and the run row', () => {
   const PRESET = { preset_id: presetId(1), revision_no: 2, name: 'Быстрый черновик' };
 
+  // `RUN-SCREEN-01a`: the «Пресет» row moved from the run's facts into the dialog a chip of the rail opens.
   function page(over: Partial<RunStatus>): string {
-    const status = runStatus(over);
-    const client = newClient();
-    client.setQueryData(queryKeys.runs.detail(status.run_id), status);
-    return renderWith(client, createElement(RunProgress, { projectUid: PROJECT_UID, runId: status.run_id }));
+    return runDialog(runStatus(over));
   }
 
-  it('names the preset and its version on the run page, beside the executor', () => {
+  it('names the preset and its version in the dialog, beside the executor', () => {
     const markup = page({ preset: PRESET });
     expect(markup).toContain('<dt>Пресет</dt>');
     expect(markup).toContain('data-run-preset');
