@@ -24,9 +24,9 @@ import type { RunCostConsent } from './start-run-intent';
 /** `409 conflict` of a start whose digest is no longer the one the server computes. */
 export const ESTIMATE_STALE_REASON = 'run_cost_estimate_stale';
 /**
- * The model, rate or revision (or, on the stage layout, the access) the estimate was bound to has changed. The Run path answers
- * `422 analysis_input_invalid` with this `reason`; the layout's start (contract 1.45.0, `startRun` on `stage_plan`) words it as
- * `409 conflict` with this `conflict_reason`. Both are the same answer for the person: read again.
+ * The model, rate or revision (or, on the stage layout, the access) the estimate was bound to has changed. Both the Run path and
+ * the layout's start answer `422 analysis_input_invalid` with this `reason` (`ADR-0028` decision 8, proved by `HOSTS-INT-WIRE-01`);
+ * a `409 conflict` with this `conflict_reason` is still read the same way. Either is the same answer for the person: read again.
  */
 export const BINDING_CHANGED_REASON = 'cost_estimate_binding_changed';
 
