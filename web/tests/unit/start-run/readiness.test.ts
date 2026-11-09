@@ -216,17 +216,23 @@ describe('the line under the button', () => {
     expect(view.markup()).not.toContain('data-start-readiness');
   });
 
-  it('is read again when the server sends the start back because the access changed', async () => {
+  it.each([
+    ['422 analysis_input_invalid, as the Run path says it', () => refusal(422, 'analysis_input_invalid', { reason: 'cost_estimate_binding_changed' })],
+    ['409 conflict, as contract 1.45.0 says it of the stage layout', () => refusal(409, 'conflict', { conflict_reason: 'cost_estimate_binding_changed' })],
+  ])('is read again when the server sends the start back because the access changed (%s)', async (_name, error) => {
     vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({
       data: { ...costEstimate(body), billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0 },
     }) as never);
-    vi.mocked(startRun).mockRejectedValueOnce(refusal(422, 'analysis_input_invalid', { reason: 'cost_estimate_binding_changed' }));
+    vi.mocked(startRun).mockRejectedValueOnce(error());
     vi.mocked(getRunStartReadiness).mockResolvedValue({ data: READINESS_MIXED } as never);
     const { view } = await mount();
     expect(getRunStartReadiness).not.toHaveBeenCalled();
     await view.pressMarked(...BUTTON);
     expect(getRunStartReadiness).toHaveBeenCalledTimes(1);
     expect(lineOf(view.markup())).toContain('часть по API — покажем оценку');
+    // The answer is a new estimate, shown, and not a failure beside the button.
+    expect(view.markup()).toContain('data-start-run-dialog');
+    expect(view.markup()).not.toContain('Повторить с тем же ключом');
   });
 });
 
