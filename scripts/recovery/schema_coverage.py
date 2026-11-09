@@ -506,7 +506,9 @@ SEQUENCES = {
 #: binding's run, group revision and connection revision), nine primary keys and five unique constraints (a journal's number per host and the
 #: layout's per-layout numbers, the token's key to its host): c 1453, f 399, p 153, t 10, u 138 (measured on a throwaway database at ``0062``,
 #: 2026-11-09).
-CONSTRAINT_COUNTS = {"c": 1453, "f": 399, "p": 153, "t": 10, "u": 138}
+#: `G-1` (the sealed key of a host's SSH install is a secret of the host): `executor_secret.host_id` adds its foreign key, its format check and the
+#: exactly-one-of check: c 1455, f 400.
+CONSTRAINT_COUNTS = {"c": 1455, "f": 400, "p": 153, "t": 10, "u": 138}
 
 #: Indexes in schema ``public`` at ``HEAD`` (primary-key and unique indexes included): 386 at 0041,
 #: plus 40 of 0042 (12 primary keys, 19 unique constraints, eight run indexes, one partial unique
@@ -522,7 +524,8 @@ CONSTRAINT_COUNTS = {"c": 1453, "f": 399, "p": 153, "t": 10, "u": 138}
 #: `0061` adds the settings table's primary key: 484 (measured on a throwaway database at ``0061``, 2026-11-09).
 #: `0062` adds 22 (nine primary keys, five unique constraints, and eight lookups and partial unique indexes): 506 (measured on a throwaway
 #: database at ``0062``, 2026-11-09).
-INDEX_COUNT = 506
+#: `G-1` adds the partial unique index of one current secret per host and purpose: 507.
+INDEX_COUNT = 507
 
 #: Trigger functions that make a table immutable or append-only (the claim a restore must keep).
 GUARD_FUNCTIONS = frozenset((

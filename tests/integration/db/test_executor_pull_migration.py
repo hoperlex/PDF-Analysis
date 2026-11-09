@@ -248,7 +248,9 @@ def test_a_task_of_one_connection_names_a_revision_and_a_token_of_that_connectio
                     "UPDATE executor_task SET state = 'claimed', claimed_by_token_id = :t, "
                     "claim_expires_at = now() + interval '1 minute', claim_count = 1, "
                     "first_claimed_at = now() WHERE task_id = :id"), {"t": other_token, "id": task_id})
-        assert _sqlstate(claimed) == "23503", "a token of another connection cannot hold the claim"
+        # `0062_hosts_stage_models` replaced the composite key (token, connection) by a plain key and `trg_executor_task_claimer`, which also
+        # admits the token of the host that owns the connection; a stranger's token is still refused, now with the trigger's `AM001`.
+        assert _sqlstate(claimed) == "AM001", "a token of another connection cannot hold the claim"
         own = _token(connection, mine)
         connection.execute(text(
             "UPDATE executor_task SET state = 'claimed', claimed_by_token_id = :t, "
