@@ -6,18 +6,18 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
- *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
+ *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
+ *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
  */
 
 /** The `info.version` of the contract these types were generated from. */
-export const CONTRACT_VERSION = '1.42.0';
+export const CONTRACT_VERSION = '1.44.0';
 
 /** sha256 of the OpenAPI document these types were generated from. */
-export const CONTRACT_DIGEST = '8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a';
+export const CONTRACT_DIGEST = 'cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6';
 
 /** Every component schema name in the contract, sorted. */
 export const SCHEMA_NAMES = [
@@ -297,6 +297,20 @@ export const SCHEMA_NAMES = [
   'DecisionImportRefusal',
   'DecisionImportReport',
   'DecisionImportRow',
+  'DecisionMemoryCase',
+  'DecisionMemoryCaseId',
+  'DecisionMemoryCasePage',
+  'DecisionMemoryCaseSummary',
+  'DecisionMemoryContent',
+  'DecisionMemoryCountRow',
+  'DecisionMemoryCrop',
+  'DecisionMemoryDecision',
+  'DecisionMemoryEvidence',
+  'DecisionMemoryNormRef',
+  'DecisionMemoryStatus',
+  'DecisionMemoryStatusChange',
+  'DecisionMemoryStatusChangeRequest',
+  'DecisionMemoryStatusEvent',
   'DecisionRecord',
   'DecisionRecordPage',
   'DiffHunk',
@@ -759,7 +773,7 @@ export const SCHEMA_NAMES = [
  *
  * A row is named by its proposal's own identity (``optimisation_proposal_id``); ``page_number`` and ``row_position``
  * locate it in the drawing and are never an identity. The prices and the saving are the proposal's own exact decimal
- * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. `carried_from` (`D-335`, contract 1.39.0) is `null` for an acceptance an expert made directly and names the source decision -- with its pass, version and the version's display ordinal -- when the acceptance was carried over from an earlier version's pass (`UI-B-14`).
+ * text; ``saving`` is ``null`` -- never ``0`` -- when the row's quantity is not a plain number. `carried_from` (`D-335`, contract 1.39.0) is `null` for an acceptance an expert made directly and names the source decision -- with its pass, version and the version's display ordinal -- when the acceptance was carried over from an earlier version's pass (`UI-B-14`). `saving_percent` (`D-346`, contract 1.43.0) is the proposals read's percent of the current unit price, present where `saving` is `null` too.
  */
 export type AcceptedOptimisationProposal = {
   actor_label: string;
@@ -785,6 +799,8 @@ export type AcceptedOptimisationProposal = {
   row_position: string | null;
   row_text: string;
   saving: string | null;
+  /** `D-346` (contract 1.43.0): how much cheaper the proposed unit price is than the current one, in percent of the current unit price -- the very figure `listOptimisationProposals` states for the proposal (`OptimisationProposal.saving_percent`): computed exactly and rounded half up to two decimals, written without a trailing zero (`25`, `33.33`). It is present where `saving` is `null` because the quantity is not a plain number; absent only when the current unit price is zero. Never computed by a client. */
+  saving_percent?: string;
   section?: ProjectSection;
   unit: string;
   version_uid: VersionUid;
@@ -3918,6 +3934,149 @@ export type DecisionImportRow = {
   row: number;
 };
 
+/** A case with everything it keeps. ``content`` is ``null`` and the lists are empty for a forgotten case (its tombstone only). */
+export type DecisionMemoryCase = {
+  content: DecisionMemoryContent | null;
+  crops: Array<DecisionMemoryCrop>;
+  decisions: Array<DecisionMemoryDecision>;
+  evidence: Array<DecisionMemoryEvidence>;
+  norm_refs: Array<DecisionMemoryNormRef>;
+  status_events: Array<DecisionMemoryStatusEvent>;
+  summary: DecisionMemoryCaseSummary;
+};
+
+export type DecisionMemoryCaseId = string;
+
+/** The contract pattern for `DecisionMemoryCaseId`. Anchored; use with `new RegExp()`. */
+export const DECISION_MEMORY_CASE_ID_PATTERN = "^dmc_[0-9A-HJKMNP-TV-Z]{26}$";
+
+export type DecisionMemoryCasePage = {
+  items: Array<DecisionMemoryCaseSummary>;
+  page: PageInfo;
+};
+
+/** One case as the list gives it: where it stands (``status``), the verdict of its latest decision and how many decisions it holds. */
+export type DecisionMemoryCaseSummary = {
+  captured_at: string;
+  case_id: DecisionMemoryCaseId;
+  category: string;
+  crop_state: "referenced" | "none_available";
+  current_decided_at: string | null;
+  current_origin_kind: "direct" | "carried" | "imported" | null;
+  current_severity: Severity | null;
+  current_verdict: "accepted" | "rejected" | null;
+  data_class: "test" | "real";
+  decision_count: number;
+  origin_project_uid: ProjectUid;
+  section_code: string | null;
+  status: "active" | "withdrawn" | "forgotten";
+  status_changed_at: string | null;
+  status_reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other" | null;
+};
+
+/** What the model proposed, as it stood when the decision was taken (immutable, a primary record from capture). */
+export type DecisionMemoryContent = {
+  analysis_profile_id: AnalysisProfileId;
+  finding_text: string;
+  proposed_severity: Severity | null;
+  provider_mode: "live" | "recorded";
+  recommendation_text: string;
+  required_value: string | null;
+  stage_id: string;
+  stated_value: string | null;
+};
+
+export type DecisionMemoryCountRow = {
+  cases: number;
+  data_class: "test" | "real";
+  status: "active" | "withdrawn" | "forgotten";
+};
+
+/** A crop image the case references (a binding to an existing Blob, never a copy); ``bbox`` is the normalised box on the page. */
+export type DecisionMemoryCrop = {
+  bbox: Array<number>;
+  crop_id: string;
+  crop_ordinal: number;
+  evidence_ordinal: number | null;
+  height_px: number;
+  media_type: "image/png";
+  page_number: number;
+  portal_description: string | null;
+  selection_rule: string;
+  sha256: string;
+  size_bytes: number;
+  width_px: number;
+};
+
+/** One captured decision. ``comment`` is the expert's own words, ``null`` for a carried decision and for a forgotten case. */
+export type DecisionMemoryDecision = {
+  comment: string | null;
+  decided_at: string;
+  event_type: "accept" | "reject";
+  memory_decision_id: string;
+  origin_kind: "direct" | "carried" | "imported";
+  severity: Severity | null;
+  verdict: "accepted" | "rejected";
+};
+
+/** A quoted span the expert looked at. ``bbox`` is ``[x0, y0, x1, y1]`` in ``bbox_unit`` from ``bbox_origin`` when the block was known. */
+export type DecisionMemoryEvidence = {
+  bbox: Array<number> | null;
+  bbox_origin: string | null;
+  bbox_unit: string | null;
+  block_ref: string | null;
+  char_end: number;
+  char_start: number;
+  ordinal: number;
+  page_number: number;
+  quote: string;
+};
+
+/** A certified normative reference the finding rested on (ids that stay resolvable, and the quoted norm text). */
+export type DecisionMemoryNormRef = {
+  citation_state: "verified" | "rebound";
+  clause_number: string | null;
+  designation: string;
+  norm_document_id: NormDocumentId;
+  norm_paragraph_id: NormParagraphId;
+  ordinal: number;
+  page_label: number;
+  quote: string;
+};
+
+/** What the memory holds and the installation settings in force (nothing journalled means ``test`` and ``off``). */
+export type DecisionMemoryStatus = {
+  by_status_and_class: Array<DecisionMemoryCountRow>;
+  cases: number;
+  data_class: "test" | "real";
+  decisions: number;
+  training_use: "off" | "on";
+};
+
+/** What a withdraw or a restore did: the status event written (or, for a replay, the first call's) and the standing after it. */
+export type DecisionMemoryStatusChange = {
+  case_id: DecisionMemoryCaseId;
+  changed_at: string;
+  kind: "withdraw" | "restore";
+  reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other";
+  status: "active" | "withdrawn";
+  status_event_id: string;
+};
+
+/** Why a case is withdrawn or restored: a closed reason (free text would put personal data into an append-only record). */
+export type DecisionMemoryStatusChangeRequest = {
+  reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other";
+};
+
+/** One change of standing, newest last. A ``forget`` carries the digest of the content that was forgotten, never the content. */
+export type DecisionMemoryStatusEvent = {
+  created_at: string;
+  forgotten_content_sha256: string | null;
+  kind: "withdraw" | "restore" | "forget";
+  reason_code: "capture_defect" | "wrong_decision" | "client_request" | "test_data" | "other";
+  status_event_id: string;
+};
+
 /** One event of the decision journal, with the finding context it was recorded against. A rebuildable projection and never a source of truth: every property here is derived from `expert_decision_event`, `finding`, `finding_observation` and the `finding_current_verdict` projection, and nothing is stored in this shape. It restates `DecisionEvent`'s properties rather than composing them with `allOf`, for the reason `FindingDetail` states: under JSON Schema 2020-12 an `additionalProperties: false` is evaluated against its own schema object's property annotations only, so an `allOf` branch over the closed `DecisionEvent` would reject the properties the sibling branch adds. `document_uid`, `version_uid`, `project_name` and `document_name` say where the decision belongs; the two names are joined at read time from the project and the document and are stored nowhere. `section` is the expert-confirmed section of the finding's version and is absent while that version is unclassified (`UI-PARITY-P0A`). `carried_from` (`UI-A-73`) is as on `DecisionEvent`. */
 export type DecisionRecord = {
   /** OD-12, as `R-37` now defines it: the display name of the reviewer who recorded the event -- the name they chose, or their login when they have chosen none -- derived server-side from the authenticated credential and **never** taken from a request body. It IS a subject identity: it names which reviewer judged, which is what `P04` needs and what one configured label for every reviewer could not give it. It still authorizes nothing: it is what the ledger records about who judged, not a permission anybody holds, and no client can choose it. The ledger is append-only, so an event keeps the label it was written with even after that reviewer is renamed. */
@@ -3999,10 +4158,14 @@ export type DocumentActiveRun = {
  * figure (`R-150u`).
  *
  * `active_run` (`UI-A-47`, contract 1.40.0) names the version's run in flight -- its latest run of the standard analysis in state `queued`, `running` or `validating`, by the order of the result run -- and is absent when none is. It is a fact beside the four words and changes none of them: a document whose first run is in flight is still `not_run`, and a `checked` one with a re-run in flight is still `checked`.
+ *
+ * `optimisation_proposal_count` and `optimisation_undecided_count` (`D-361`, contract 1.43.0) are the proposals of the version's latest optimisation pass and how many of them have no decision in force (none, or a withdrawn one) -- the original's «Оптимизация N» pill. Both are present when a pass was started over the version and both are absent when none was: absent is "no optimisation read", never zero. They are a fact beside the four words and change none of them (`R-150u`).
  */
 export type DocumentAudit = {
   active_run?: DocumentActiveRun;
   finding_count: number;
+  optimisation_proposal_count?: number;
+  optimisation_undecided_count?: number;
   partial: boolean;
   result_run_id?: RunId;
   state: "not_run" | "clean" | "awaiting_decision" | "checked";
@@ -4128,7 +4291,7 @@ export type ErrorCode = (typeof ERROR_CODE_VALUES)[number];
 
 /** The one failure shape. Rendered by ``envelope_response`` and by nothing else. */
 export type ErrorEnvelope = {
-  contract_version: "1.42.0";
+  contract_version: "1.44.0";
   correlation_id: CorrelationId;
   details?: {
     [key: string]: string | number | boolean | null;
@@ -4201,6 +4364,8 @@ export type ExecutionQueueItem = {
 
 export type ExecutionQueuePage = {
   items: Array<ExecutionQueueItem>;
+  /** `D-395` (contract 1.43.0): how many failed jobs (`failed` or `dead_letter`) nothing has answered yet -- those with no later job for a run of the same document version and the same analysis (the standard analysis, or the AR v3 beta one) -- over all history, whatever the period or state filter of this page. The original's «ошибки» figure: a failure drops out by being retried or superseded, not by ageing. Independent of the filters, so a one-row page carries it too. */
+  live_failure_count?: number;
   overview?: Array<ExecutionQueueStateCount>;
   page: PageInfo;
   paused: boolean;
@@ -6124,9 +6289,16 @@ export type ProposalDecisionList = {
   items: Array<ProposalDecision>;
 };
 
-/** `R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it decided about -- the knowledge base's «Предложения» half, as `DecisionRecord` is its «Замечания» half. */
+/**
+ * `R-151h` (contract 1.25.0): one expert decision on an optimisation proposal, with where it belongs and what it
+ * decided about -- the knowledge base's «Предложения» half, as ``DecisionRecord`` is its «Замечания» half.
+ *
+ * ``carried_from`` (`D-335`, contract 1.43.0) is present only for a decision an expert carried over from an earlier
+ * version's pass, and names the source; it is absent for a decision made directly.
+ */
 export type ProposalDecisionRecord = {
   actor_label: string;
+  carried_from?: ProposalDecisionCarriedFrom;
   comment: string | null;
   decided_at: string;
   document_name: string;

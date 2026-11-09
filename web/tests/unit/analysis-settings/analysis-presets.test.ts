@@ -92,7 +92,7 @@ const BLOCKED = ALL_CASES.find((one) => {
 function apiError(status: number, errorCode: string, details: Record<string, unknown> = {}): ApiError {
   const envelope = {
     error_code: errorCode, message: 'x', retryable: false, correlation_id: 'cid-0123456789abcdef', details,
-    contract_version: '1.42.0',
+    contract_version: '1.44.0',
   } as unknown as ErrorEnvelope;
   return new ApiError(status, envelope, null);
 }

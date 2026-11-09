@@ -2649,6 +2649,8 @@ def test_control_a_refusal_drive_that_lost_its_session_is_detected() -> None:
 # --------------------------------------------------------------------------------------
 
 ACTION_KINDS = frozenset({"fill", "click", "select", "attach_file", "goto", "wait_for", "stage_c4", "approve_run_cost"})
+#: The stages «Запустить с этапа» offers (`web/src/features/start-run-from-stage/model/stages.ts`): the PC-01 chain after its first stage.
+START_FROM_STAGE_IDS = frozenset({"page_geometry_extraction", "document_context_build", "text_analysis"})
 STAGE_C4_PRODUCES = {
     "upload": {"cmp_stage_documents", "cmp_stage_last_upload_id", "cmp_stage_last_candidate_id"},
     "assembly": {"cmp_stage_pair_id", "cmp_stage_assembly_id"},
@@ -2693,6 +2695,8 @@ NIGHT_SCREENS = (
     # `PC01-JOURNEY-GAPS-01`
     "blocks",
     "norms-document",
+    # `RUN-FROM-STAGE-01` (lane J4): «Запустить с этапа» on an ended run's page
+    "run-from-stage",
 )
 
 #: Operations the write half must perform at least once, because each is a thing the matrix
@@ -2738,6 +2742,8 @@ NIGHT_OPERATIONS = (
     "getNormDocument",
     "listNormParagraphs",
     "streamNormDocumentContent",
+    # `RUN-FROM-STAGE-01` (lane J4)
+    "startRunFromStage",
 )
 
 _TEMPLATE = re.compile(r"\{([a-z_]+)\}")
@@ -2853,10 +2859,15 @@ def night_window_findings(manifest: dict, openapi: dict) -> list[str]:
                     findings.append(f"{label}: stage_c4 has no maintained driver")
             if kind == "approve_run_cost":
                 base = {"do", "scope", "value", "bound_ms"}
-                if set(action) not in (base, base | {"source_run_id"}) or action.get("scope") not in {"run", "ar_v3_group"}:
+                if set(action) not in (base, base | {"source_run_id"}, base | {"source_run_id", "stage_id"}) or action.get("scope") not in {"run", "ar_v3_group", "run_from_stage"}:
                     findings.append(f"{label}: unknown cost approval action shape/scope")
-                if "source_run_id" in action and (action.get("scope") != "run" or not re.fullmatch(r"\{[a-z_]+\}", str(action["source_run_id"]))):
+                if "source_run_id" in action and (action.get("scope") not in {"run", "run_from_stage"} or not re.fullmatch(r"\{[a-z_]+\}", str(action["source_run_id"]))):
                     findings.append(f"{label}: re-audit cost approval must bind one captured source Run")
+                # `UI-A-60`: a start from a stage names the source Run it continues AND the stage it starts from, and nothing else does.
+                if (action.get("scope") == "run_from_stage") != ("stage_id" in action) or (action.get("scope") == "run_from_stage" and "source_run_id" not in action):
+                    findings.append(f"{label}: a start from a stage names its source Run and its stage; no other cost approval does")
+                if "stage_id" in action and action["stage_id"] not in START_FROM_STAGE_IDS:
+                    findings.append(f"{label}: {action['stage_id']!r} is not a stage a run can be started from {sorted(START_FROM_STAGE_IDS)}")
                 if action.get("value") != "{version_uid}" or not isinstance(action.get("bound_ms"), int) or not 0 < action["bound_ms"] <= 60_000:
                     findings.append(f"{label}: cost approval requires the selected version and a positive bounded wait")
             if kind == "fill" and ("value" in action) == ("secret" in action):
@@ -4164,6 +4175,8 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
         'startRun': ('run', 'Запустить прогон', 'estimateRunCost', '/runs/cost-estimate'),
         'startArV3BetaGroup': ('ar_v3_group', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
         'reauditRun': ('run', 'Подтвердить', 'estimateRunCost', '/runs/cost-estimate'),
+        # `UI-A-60`: the dialog of an ended run's page; its estimate is read when the stage is chosen, its start is the dialog's «Запустить».
+        'startRunFromStage': ('run_from_stage', 'Запустить', 'estimateRunCost', '/runs/cost-estimate'),
     }
     for step in write_steps(manifest):
         actions = step.get('actions', [])
@@ -4177,17 +4190,19 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
             if not any(call.get('operationId') == estimate and call.get('method') == 'POST'
                        and call.get('path') == path and call.get('expect_status') == 200 for call in step.get('expects_api', [])):
                 findings.append(f"{step['name']}: {start} has no declared successful cost estimate")
-            if start == 'reauditRun':
+            if start in ('reauditRun', 'startRunFromStage'):
                 action = actions[approval[0]] if len(approval) == 1 else {}
                 names = _templates(action.get('source_run_id'))
                 source = names[0] if len(names) == 1 else None
                 calls = step.get('expects_api', [])
-                if source is None or not any(call.get('operationId') == 'getRunStatus' and call.get('expect_status') == 200
-                    and (call.get('bind') or {}).get('run_id') == source for call in calls):
-                    findings.append(f"{step['name']}: re-audit has no fresh read of its selected source Run")
-                if source is None or not any(call.get('operationId') == 'reauditRun'
-                    and (call.get('bind') or {}).get('run_id') == source for call in calls):
-                    findings.append(f"{step['name']}: re-audit start addresses another source Run")
+                # A call with no `bind` addresses `{run_id}` as the journey captured it, which is the source when the action says so.
+                def addresses(call: dict) -> bool:
+                    return source is not None and (call.get('bind') or {}).get('run_id', 'run_id') == source
+                what = 'a start from a stage' if start == 'startRunFromStage' else 're-audit'
+                if not any(call.get('operationId') == 'getRunStatus' and call.get('expect_status') == 200 and addresses(call) for call in calls):
+                    findings.append(f"{step['name']}: {what} has no fresh read of its selected source Run")
+                if not any(call.get('operationId') == start and addresses(call) for call in calls):
+                    findings.append(f"{step['name']}: {what} start addresses another source Run")
     return findings
 
 
@@ -4223,6 +4238,176 @@ def test_control_missing_or_late_cost_approval_is_detected(scope, start, label, 
     assert cost_preflight_findings(document)
     step['actions'].pop()
     assert cost_preflight_findings(document)
+
+
+# --------------------------------------------------------------------------------------
+# `RUN-FROM-STAGE-01` (lane J4, D-412). «Запустить с этапа» is walked by three steps, pinned by NAME so that one which disappears, or
+# quietly stops asserting what it was written to assert, is a red test and not a shrinking journey that still reports OK.
+# --------------------------------------------------------------------------------------
+
+FROM_STAGE_REFUSED = "run-from-stage-refused-for-a-run-that-never-ran"
+FROM_STAGE_TAKEN = "run-from-stage-takes-the-earlier-stages-of-the-first-run"
+FROM_STAGE_UNCHANGED = "run-from-stage-leaves-the-first-run-as-it-was"
+
+#: step name -> (case, the operations the step must declare).
+FROM_STAGE_STEPS: dict[str, tuple[str, frozenset[str]]] = {
+    FROM_STAGE_REFUSED: ("refused", frozenset({"getRunStatus", "estimateRunCost"})),
+    FROM_STAGE_TAKEN: ("action", frozenset({"getRunStatus", "estimateRunCost", "startRunFromStage"})),
+    FROM_STAGE_UNCHANGED: ("refused", frozenset({"getRunStatus"})),
+}
+
+
+def from_stage_findings(manifest: dict) -> list[str]:
+    """The three steps are there, in their order, and say what each is for."""
+    steps = write_steps(manifest)
+    by_name = {step["name"]: step for step in steps}
+    order = [step["name"] for step in steps]
+    findings: list[str] = []
+    for name, (case, operations) in FROM_STAGE_STEPS.items():
+        step = by_name.get(name)
+        if step is None:
+            findings.append(f"the run-from-stage step '{name}' is gone from the manifest")
+            continue
+        if step.get("screen") != "run-from-stage":
+            findings.append(f"{name}: belongs to screen {step.get('screen')!r}, not 'run-from-stage'")
+        if step.get("case") != case:
+            findings.append(f"{name}: is a {step.get('case')!r} case, not {case!r}")
+        missing = sorted(operations - _declared_operations(step))
+        if missing:
+            findings.append(f"{name}: no longer declares {missing}")
+    if findings:
+        return findings
+
+    # Order: a run that was cancelled while it waited must exist before it is refused; the workers must take work again before a run is
+    # expected to finish; the first run is read last.
+    for later, earlier in (
+        (FROM_STAGE_REFUSED, "queue-cancel-the-waiting-run"),
+        (FROM_STAGE_TAKEN, "worker-takes-new-work-again"),
+        (FROM_STAGE_UNCHANGED, FROM_STAGE_TAKEN),
+    ):
+        if earlier in order and order.index(later) < order.index(earlier):
+            findings.append(f"{later}: comes before '{earlier}', which it needs")
+
+    refused = by_name[FROM_STAGE_REFUSED]
+    estimate = next(c for c in refused["expects_api"] if c["operationId"] == "estimateRunCost")
+    if not (estimate.get("refusal") is True and estimate.get("expect_status") == 422
+            and estimate.get("expect_error_code") == "analysis_input_invalid"):
+        findings.append(f"{FROM_STAGE_REFUSED}: the price is not declared as the typed refusal 422 analysis_input_invalid")
+    if not any(c.get("method") == "POST" and c.get("path") == "/runs/{run_id}/start-from-stage" for c in refused.get("expects_not_called") or ()):
+        findings.append(f"{FROM_STAGE_REFUSED}: does not require that nothing is started in place of the refused stage")
+    answered = {(c.get("json_path"), c.get("equals")) for c in refused.get("expects_response") or () if c.get("of") == "estimateRunCost"}
+    if ("details.reason", "source_stage_not_completed") not in answered:
+        findings.append(f"{FROM_STAGE_REFUSED}: does not require the refusal to name its reason")
+
+    taken = by_name[FROM_STAGE_TAKEN]
+    actions = taken.get("actions") or []
+    chosen = [a.get("option_value") for a in actions if a.get("do") == "select"]
+    approved = [a for a in actions if a.get("do") == "approve_run_cost"]
+    if len(approved) != 1 or approved[0].get("scope") != "run_from_stage" or chosen != [approved[0].get("stage_id")]:
+        findings.append(f"{FROM_STAGE_TAKEN}: does not approve the cost of the stage it chose")
+    start = next(c for c in taken["expects_api"] if c["operationId"] == "startRunFromStage")
+    if not (start.get("expect_status") == 202 and start.get("count") == 1 and start.get("path") == "/runs/{run_id}/start-from-stage"):
+        findings.append(f"{FROM_STAGE_TAKEN}: the start is not declared as one 202 on the source run's own door")
+    if not any(a.get("do") == "wait_for" and "{run_id}" in a.get("selector", "") and "data-run-started-from" in a["selector"] for a in actions):
+        findings.append(f"{FROM_STAGE_TAKEN}: never waits for the NEW run's page to say which run it was started from")
+    await_terminal = taken.get("await_terminal") or {}
+    if await_terminal.get("accept") != ["published"] or not await_terminal.get("bound_ms"):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not wait, under a bound, for the new run to be published")
+    captures = [c for c in [taken.get("capture"), *(taken.get("captures") or ())] if c]
+    if not any(c.get("kind") == "text" and c.get("as") == ["source_finding_count"] and c.get("when") == "before_actions" for c in captures):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not read the source run's finding count before it starts the new one")
+    present = taken.get("expects_present") or []
+    def count_of(entry: dict) -> int:
+        return entry.get("min_count", 1)
+    if not any(p.get("selector") == "[data-run-pipeline] [data-pipeline-reused]" and count_of(p) >= 3 for p in present):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not require three reused stages in the rail")
+    if not any(p.get("selector", "").endswith('[data-stage-elapsed="reused"]') and count_of(p) >= 3 and p.get("text_contains") == "из прогона" for p in present):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not require the details table to say «из прогона» for the three reused stages (D-412)")
+    if not any("{source_finding_count}" in p.get("text_matches", "") for p in present):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not hold the new run's finding count to the source's")
+    if not any('a[href$="/runs/{run_id}"]' in p.get("selector", "") for p in present):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not require the link to the source run")
+    absent = {a.get("selector") for a in taken.get("expects_absent") or ()}
+    if '[data-pipeline-stage="text_analysis"][data-pipeline-reused]' not in absent:
+        findings.append(f"{FROM_STAGE_TAKEN}: does not require the computed stage to be unmarked in the rail")
+
+    unchanged = by_name[FROM_STAGE_UNCHANGED]
+    absent = {a.get("selector") for a in unchanged.get("expects_absent") or ()}
+    if not {"[data-run-started-from-note]", "[data-pipeline-reused]"} <= absent:
+        findings.append(f"{FROM_STAGE_UNCHANGED}: does not require the first run to carry no mark of a start from a stage")
+    return findings
+
+
+def test_the_run_from_stage_steps_are_there_and_say_what_they_are_for(manifest: dict) -> None:
+    assert from_stage_findings(manifest) == []
+
+
+def test_control_a_run_from_stage_step_that_goes_or_stops_asserting_is_detected(manifest: dict) -> None:
+    for name in FROM_STAGE_STEPS:
+        assert any(f"'{name}' is gone" in f for f in from_stage_findings(_without_step(manifest, name))), name
+    for mutate, expected in (
+        (lambda s: s.update(screen="queue"), "belongs to screen 'queue'"),
+        (lambda s: s.update(case="refused"), "is a 'refused' case"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, FROM_STAGE_TAKEN))
+        assert any(expected in f for f in from_stage_findings(copy)), expected
+    mutations: list[tuple[str, object, str]] = [
+        (FROM_STAGE_REFUSED, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "estimateRunCost").update(expect_status=200), "typed refusal"),
+        (FROM_STAGE_REFUSED, lambda s: s.pop("expects_not_called"), "nothing is started in place"),
+        (FROM_STAGE_REFUSED, lambda s: s["expects_response"].pop(0), "name its reason"),
+        (FROM_STAGE_TAKEN, lambda s: next(a for a in s["actions"] if a["do"] == "approve_run_cost").update(stage_id="document_context_build"), "cost of the stage it chose"),
+        (FROM_STAGE_TAKEN, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "startRunFromStage").update(expect_status=200), "one 202"),
+        (FROM_STAGE_TAKEN, lambda s: s["actions"].pop(), "NEW run's page"),
+        (FROM_STAGE_TAKEN, lambda s: s["await_terminal"].update(accept=["published", "partial"]), "to be published"),
+        (FROM_STAGE_TAKEN, lambda s: s["captures"].pop(0), "finding count before it starts"),
+        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(3), "three reused stages in the rail"),
+        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(5), "«из прогона»"),
+        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(6), "finding count to the source's"),
+        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(1), "link to the source run"),
+        (FROM_STAGE_TAKEN, lambda s: s.pop("expects_absent"), "computed stage to be unmarked"),
+        (FROM_STAGE_UNCHANGED, lambda s: s.pop("expects_absent"), "no mark of a start from a stage"),
+    ]
+    for name, mutate, expected in mutations:
+        copy = json.loads(json.dumps(manifest))
+        mutate(_step_of(copy, name))
+        assert any(expected in f for f in from_stage_findings(copy)), (name, expected)
+    # the order: the first run is read before the run that continues it exists
+    swapped = json.loads(json.dumps(manifest))
+    steps = swapped["write"]["steps"]
+    names = [s["name"] for s in steps]
+    i, j = names.index(FROM_STAGE_TAKEN), names.index(FROM_STAGE_UNCHANGED)
+    steps[i], steps[j] = steps[j], steps[i]
+    assert any("comes before" in f for f in from_stage_findings(swapped))
+
+
+def test_control_a_start_from_a_stage_without_its_source_or_fresh_read_is_detected(manifest: dict) -> None:
+    assert not cost_preflight_findings(manifest)
+    changed = copy.deepcopy(manifest)
+    step = next(s for s in write_steps(changed) if s['name'] == FROM_STAGE_TAKEN)
+    step['expects_api'] = [call for call in step['expects_api'] if call.get('operationId') != 'getRunStatus']
+    assert any('fresh read' in issue for issue in cost_preflight_findings(changed))
+    changed = copy.deepcopy(manifest)
+    step = next(s for s in write_steps(changed) if s['name'] == FROM_STAGE_TAKEN)
+    next(call for call in step['expects_api'] if call.get('operationId') == 'startRunFromStage')['bind'] = {'run_id': 'third_run_id'}
+    assert any('another source' in issue for issue in cost_preflight_findings(changed))
+    changed = copy.deepcopy(manifest)
+    step = next(s for s in write_steps(changed) if s['name'] == FROM_STAGE_TAKEN)
+    step['actions'] = [a for a in step['actions'] if a.get('do') != 'approve_run_cost']
+    assert any('lacks explicit preflight' in issue for issue in cost_preflight_findings(changed))
+
+
+def test_a_cost_approval_names_its_source_and_stage_only_for_a_start_from_a_stage(manifest: dict, openapi: dict) -> None:
+    assert not night_window_findings(manifest, openapi)
+    for mutate, expected in (
+        (lambda a: a.pop("stage_id"), "names its source Run and its stage"),
+        (lambda a: a.update(stage_id="source_preparation"), "is not a stage a run can be started from"),
+        (lambda a: a.pop("source_run_id"), "unknown cost approval action shape"),
+        (lambda a: a.update(scope="run"), "names its source Run and its stage"),
+    ):
+        copy = json.loads(json.dumps(manifest))
+        mutate(next(a for a in _step_of(copy, FROM_STAGE_TAKEN)["actions"] if a.get("do") == "approve_run_cost"))
+        assert any(expected in f for f in night_window_findings(copy, openapi)), expected
 
 
 def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> None:
@@ -4264,6 +4449,33 @@ def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> Non
       assert.throws(()=>assertCostApprovedStart(approval,{{...exchange,url:'http://127.0.0.1/bff/v1/runs/run_other/reaudit'}}));
       assert.throws(()=>assertCostApprovedStart(approval,{{...exchange,requestBody:JSON.stringify({{...body,version_uid:options.version_uid}})}}));
       assert.throws(()=>costApprovalFromEstimate(estimate,{{...options,executor_connection_id:'exc_override'}},'run','1.5'));
+      {{
+        // `UI-A-60`: a start from a stage is priced for the stages it computes and starts through the source Run's own door.
+        const stage = 'text_analysis';
+        const from = {{version_uid:'ver_fixture',start_from_run_id:source,start_stage_id:stage}};
+        const priced = {{scope:'run',version_uid:from.version_uid,relaxed_limits:false,currency:'USD',provider_mode:'recorded',
+          billing:'metered',estimate_digest:'c'.repeat(64),estimated_cost_micros:1200000,recommended_ceiling_micros:1500000,
+          start_from_run_id:source,start_stage_id:stage,
+          reused_stage_ids:['source_preparation','page_geometry_extraction','document_context_build'],computed_stage_ids:[stage]}};
+        const taken = costApprovalFromEstimate(priced,from,'run_from_stage','1.5');
+        assert.equal(taken.source_run_id, source);
+        assert.equal(taken.start_stage_id, stage);
+        const sent = {{stage_id:stage,cost_consent:{{estimate_digest:priced.estimate_digest,ceiling_micros:1500000,confirmed:true}}}};
+        const door = {{url:`http://127.0.0.1/bff/v1/runs/${{source}}/start-from-stage`,requestBody:JSON.stringify(sent),requestHeaders:{{'idempotency-key':'from-stage-key'}}}};
+        assertCostApprovedStart(taken,door);
+        assert.throws(()=>assertCostApprovedStart(taken,{{...door,url:'http://127.0.0.1/bff/v1/runs/run_other/start-from-stage'}}));
+        assert.throws(()=>assertCostApprovedStart(taken,{{...door,url:`http://127.0.0.1/bff/v1/runs/${{source}}/reaudit`}}));
+        assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestBody:JSON.stringify({{...sent,stage_id:'document_context_build'}})}}));
+        assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestBody:JSON.stringify({{...sent,executor_connection_id:'exc_override'}})}}));
+        assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestHeaders:{{}}}}));
+        assert.throws(()=>costApprovalFromEstimate({{...priced,start_stage_id:'document_context_build'}},from,'run_from_stage','1.5'));
+        assert.throws(()=>costApprovalFromEstimate(priced,{{...from,executor_connection_id:'exc_override'}},'run_from_stage','1.5'));
+        assert.throws(()=>costApprovalFromEstimate({{...priced,reused_stage_ids:[]}},from,'run_from_stage','1.5'));
+        assert.throws(()=>costApprovalFromEstimate({{...priced,reused_stage_ids:['source_preparation']}},from,'run_from_stage','1.5'));
+        assert.throws(()=>costApprovalFromEstimate({{...priced,computed_stage_ids:[]}},from,'run_from_stage','1.5'));
+        assert.throws(()=>costApprovalFromEstimate({{...priced,computed_stage_ids:[stage,'source_preparation']}},from,'run_from_stage','1.5'));
+        assert.throws(()=>costApprovalFromEstimate(priced,from,'run','1.5'));
+      }}
       console.log('cost approval source checks passed; browser not executed');
     """
     result = subprocess.run([node, '--input-type=module', '-e', program], cwd=REPOSITORY_ROOT,

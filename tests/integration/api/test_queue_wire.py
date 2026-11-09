@@ -113,6 +113,35 @@ def test_a_state_outside_the_eight_is_refused_not_ignored(queue_surface: Surface
         assert json.loads(answer.body)["error_code"] == "validation_failed"
 
 
+def test_a_group_reaches_the_database_and_a_name_outside_the_three_is_refused(
+    queue_surface: Surface, session: Session, mixed_run: MixedRun
+) -> None:
+    """`D-370` (contract 1.43.0): `state_group` lists every job of the group; the empty string is the absent parameter."""
+    ids, at = _jobs(session, mixed_run, 2)
+    active = ok(get(queue_surface, f"{QUEUE}?state_group=active&{_bounds(at)}&limit=200"))
+    assert _mine(active, ids) == ids and {i["state"] for i in active["items"]} <= {"queued", "leased", "running", "retry_wait"}
+    for other in ("completed", "errors"):
+        assert _mine(ok(get(queue_surface, f"{QUEUE}?state_group={other}&{_bounds(at)}&limit=200")), ids) == [], other
+    # The page's counts are the same whatever the group, and the live failures ride every page.
+    assert active["overview"] and isinstance(active["live_failure_count"], int)
+    whole = ok(get(queue_surface, f"{QUEUE}?limit=200"))
+    empty = ok(get(queue_surface, f"{QUEUE}?limit=200&state_group="))
+    assert [i["job_id"] for i in empty["items"]] == [i["job_id"] for i in whole["items"]]
+    for bad in ("nonsense", "Active", "failed", "active,errors"):
+        answer = get(queue_surface, f"{QUEUE}?state_group={quote(bad)}")
+        assert answer.status == 422, (bad, answer.body)
+        assert json.loads(answer.body)["error_code"] == "validation_failed"
+
+
+def test_a_state_and_a_group_together_are_refused_with_the_constraint_named(queue_surface: Surface) -> None:
+    for query in ("state=failed&state_group=errors", "state=queued&state_group=errors"):
+        answer = get(queue_surface, f"{QUEUE}?{query}")
+        assert answer.status == 422, (query, answer.body)
+        envelope = json.loads(answer.body)
+        assert envelope["error_code"] == "validation_failed"
+        assert envelope["details"] == {"field": "state_group", "constraint": "conflicts_with_state"}
+
+
 def test_a_period_without_an_offset_or_not_a_time_is_refused(queue_surface: Surface) -> None:
     for name in ("created_from", "created_to"):
         for bad in ("2032-05-01T00:00:00", "2032-05-01", "yesterday", "1"):

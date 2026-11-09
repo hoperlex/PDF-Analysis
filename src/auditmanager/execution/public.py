@@ -68,6 +68,17 @@ class QueuePosition:
 
 _QUEUE_RANK = {"queued": 0, "leased": 1, "running": 2, "retry_wait": 3}
 
+#: `D-370` (contract 1.43.0): the queue's three groups of states, as the original's «Активные / Завершённые / Ошибки»
+#: sub-tabs list them. ``listExecutionQueue`` takes a group by name (``state_group``) and lists every job in any of its
+#: states, so the group is one filtered, paged, counted list and not a client-side merge of several single-state pages.
+#: A cancelled job ended without a failure, so it stands with the completed ones (a choice, `D-370`). Every job state is in
+#: exactly one group.
+QUEUE_STATE_GROUPS: Mapping[str, tuple[str, ...]] = {
+    "active": ("queued", "leased", "running", "retry_wait"),
+    "completed": ("succeeded", "cancelled"),
+    "errors": ("failed", "dead_letter"),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class JournalEntry:
@@ -127,14 +138,14 @@ _ITEM_JOINS = """
   ) qp ON qp.job_id = page.job_id"""
 #: The page of jobs is cut from ``job`` alone, sorted and limited first; only those rows are then joined to the run,
 #: the project and the document, so the cost of a read is the sort it always was plus one lookup per listed row.
-#: The three optional filters bind as ``CAST(:name AS type) IS NULL OR ...``: a state, and the half-open period
+#: The optional filters bind as ``CAST(:name AS type) IS NULL OR ...``: a set of states (one state, or a group's), and the half-open period
 #: ``[created_from, created_to)`` over ``job.created_at`` (the ``created_at`` the item reports).
 _QUEUE = text(f"""
     SELECT {_ITEM_COLUMNS}
       FROM (
         SELECT j.job_id, j.run_id, j.state, j.priority, j.created_at, j.available_at, j.terminal_at
           FROM job j
-         WHERE (CAST(:state AS text) IS NULL OR j.state = :state)
+         WHERE (CAST(:states AS text[]) IS NULL OR j.state = ANY(CAST(:states AS text[])))
            AND (CAST(:created_from AS timestamptz) IS NULL OR j.created_at >= CAST(:created_from AS timestamptz))
            AND (CAST(:created_to AS timestamptz) IS NULL OR j.created_at < CAST(:created_to AS timestamptz))
            AND (CAST(:cursor_job_id AS text) IS NULL OR j.job_id <> :cursor_job_id)
@@ -234,16 +245,24 @@ _OVERVIEW = text("""
 """)
 
 
+def _state_set(state: str | None, states: tuple[str, ...] | None) -> list[str] | None:
+    """The states a listing keeps, or ``None`` for every state: ``state`` and ``states`` narrow each other."""
+    if states is None:
+        return None if state is None else [state]
+    return [item for item in states if state is None or item == state]
+
+
 class ExecutionRepository:
     def list_queue(
         self, session: Session, *, cursor: QueuePosition | None, limit: int,
         state: str | None = None, created_from: datetime | None = None,
-        created_to: datetime | None = None,
+        created_to: datetime | None = None, states: tuple[str, ...] | None = None,
     ) -> tuple[QueueItem, ...]:
-        """One page of the queue in its fixed order. ``state`` keeps the jobs in that state, and
-        ``[created_from, created_to)`` the jobs created in that period; each is ``None`` for no filter."""
+        """One page of the queue in its fixed order. ``state`` keeps the jobs in that state, ``states`` (`D-370`) the jobs
+        in any of those states, and ``[created_from, created_to)`` the jobs created in that period; each is ``None`` for no
+        filter. ``state`` and ``states`` together keep the jobs that satisfy both."""
         rows = session.execute(_QUEUE, {
-            "state": state, "created_from": created_from, "created_to": created_to,
+            "states": _state_set(state, states), "created_from": created_from, "created_to": created_to,
             "cursor_rank": None if cursor is None else cursor.rank,
             "cursor_priority": None if cursor is None else cursor.priority,
             "cursor_created_at": None if cursor is None else cursor.created_at,
@@ -258,6 +277,34 @@ class ExecutionRepository:
         """``{state: count}`` of the jobs created in ``[created_from, created_to)``; a state with none is absent."""
         rows = session.execute(_OVERVIEW, {"created_from": created_from, "created_to": created_to}).all()
         return {str(row[0]): int(row[1]) for row in rows}
+
+    def live_failure_count(self, session: Session) -> int:
+        """`D-395` (contract 1.43.0): the failed jobs that are still the last word on their document version.
+
+        A job in ``failed`` or ``dead_letter`` counts unless a **later job exists for a run of the same version and of the
+        same analysis** (the standard analysis, or the AR v3 beta one): someone re-audited it, started from a stage, or
+        simply ran it again, and the failure has been answered -- whatever became of that later job. If the later job failed
+        too, it is the one that counts. Every run has exactly one job (``uq_job_run_id``) and a re-audit makes a new run, so
+        "a later job for the same run" -- the original's "retried" -- is read as a later job of the same version, which is
+        what a retry is here. Over all history, with no window: a failure ages out only by being answered.
+        """
+        from auditmanager.runs.public import STANDARD_RUN_SQL
+
+        kinded = f"(SELECT r.run_id, r.version_uid, ({STANDARD_RUN_SQL}) AS standard FROM audit_run r)"
+        count = session.execute(text(f"""
+            SELECT count(*)
+              FROM job j
+              JOIN {kinded} k ON k.run_id = j.run_id
+             WHERE j.state IN ('failed', 'dead_letter')
+               AND NOT EXISTS (
+                   SELECT 1
+                     FROM job n
+                     JOIN {kinded} nk ON nk.run_id = n.run_id
+                    WHERE nk.version_uid = k.version_uid AND nk.standard = k.standard
+                      AND (n.created_at, n.job_id) > (j.created_at, j.job_id)
+               )
+        """)).scalar_one()
+        return int(count)
 
     def get_queue_item(self, session: Session, job_id: str) -> QueueItem | None:
         row = session.execute(_QUEUE_ITEM, {"job_id": job_id}).mappings().first()

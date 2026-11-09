@@ -32,7 +32,10 @@ from auditmanager.shared.identity import (
     DecisionMemoryStatusEventId,
 )
 
-HEAD = "0060_run_from_stage"  # the head the fixture migrates to; 0059 is the migration under test, one step below it
+HEAD = "0061_decision_memory_m2"  # the head the fixture migrates to; 0059 is the migration under test, two steps below it
+#: `0061` (phase M2) adds the settings' journal to the family and replaces the content tables' guard; its own test is `test_decision_memory_m2_migration.py`.
+M2_TABLES = {"decision_memory_setting_event"}
+CONTENT_TABLES = {"decision_memory_content", "decision_memory_decision_text", "decision_memory_evidence", "decision_memory_norm_ref", "decision_memory_crop"}
 PREVIOUS = "0058_finding_decision_origin"
 TABLES = (
     "decision_memory_case", "decision_memory_decision", "decision_memory_decision_text", "decision_memory_status_event",
@@ -144,14 +147,20 @@ def test_the_eight_tables_exist_at_head_and_are_append_only(at_head: tuple[Engin
         found = {
             name for (name,) in connection.execute(text("SELECT relname FROM pg_class WHERE starts_with(relname, 'decision_memory_') AND relkind = 'r'"))
         }
-        assert found == set(TABLES)
+        assert found - M2_TABLES == set(TABLES)
         triggers = {
             (table, name, function, mask) for table, name, function, mask in connection.execute(text(
                 "SELECT c.relname, t.tgname, p.proname, t.tgtype::integer FROM pg_trigger t "
                 "JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid "
                 "WHERE NOT t.tgisinternal AND starts_with(c.relname, 'decision_memory_')"))
         }
-    assert triggers == {(table, f"trg_{table}_immutable", "am_immutable_row", 27) for table in TABLES}
+    # `0059` made all eight append-only; `0061` (`D-394`) swapped the five content tables' guard for the forget guard (still 27: UPDATE
+    # is refused, a DELETE only beside a same-transaction forget event) and added the transition rule on the status event's INSERT.
+    identity = {(table, f"trg_{table}_immutable", "am_immutable_row", 27) for table in set(TABLES) - CONTENT_TABLES}
+    content = {(table, f"trg_{table}_forget_guard", "am_guard_decision_memory_forget", 27) for table in CONTENT_TABLES}
+    later = {("decision_memory_setting_event", "trg_decision_memory_setting_event_immutable", "am_immutable_row", 27),
+             ("decision_memory_status_event", "trg_decision_memory_status_event_transition", "am_guard_decision_memory_status", 7)}
+    assert triggers == identity | content | later
 
 
 def test_a_case_and_its_decision_are_refused_an_update_and_a_delete(at_head: tuple[Engine, str]) -> None:
@@ -183,9 +192,12 @@ def test_no_table_has_a_foreign_key_into_the_product(at_head: tuple[Engine, str]
                 "SELECT conrelid::regclass::text, confrelid::regclass::text FROM pg_constraint "
                 "WHERE contype = 'f' AND starts_with(conrelid::regclass::text, 'decision_memory_')"))
         }
-    allowed_outside = {"blob", "command_record"}
+    allowed_outside = {"blob", "command_record", "app_user"}
     outside = {(child, parent) for child, parent in references if parent not in TABLES}
-    assert outside == {("decision_memory_crop", "blob"), ("decision_memory_status_event", "command_record")}
+    # `0061` gives the actor of a status event (and of a setting) its RESTRICT key to the account; still no key into a project, document,
+    # finding or the ledger.
+    assert outside == {("decision_memory_crop", "blob"), ("decision_memory_status_event", "command_record"),
+                       ("decision_memory_status_event", "app_user"), ("decision_memory_setting_event", "app_user")}
     assert {parent for _, parent in outside} <= allowed_outside
     assert {child for child, parent in references if parent in TABLES} == set(TABLES) - {"decision_memory_case"}
 
@@ -310,13 +322,13 @@ def test_a_crop_reference_is_held_by_its_checks(at_head: tuple[Engine, str], con
 
 
 _STATUS = (
-    "INSERT INTO decision_memory_status_event (status_event_id, case_id, kind, reason_code, actor_user_uid, owner_permission_ref) "
-    "VALUES (:id, :c, :kind, :reason, :actor, :ref)"
+    "INSERT INTO decision_memory_status_event (status_event_id, case_id, kind, reason_code, actor_user_uid, owner_permission_ref, "
+    "forgotten_content_sha256) VALUES (:id, :c, :kind, :reason, :actor, :ref, :digest)"
 )
 
 
 @pytest.mark.parametrize(("constraint", "over"), [
-    ("ck_decision_memory_status_event_forget_permission", {"kind": "forget"}),    # a forget names the owner's permission
+    ("ck_decision_memory_status_event_forget_permission", {"kind": "forget", "digest": SHA}),    # a forget names the owner's permission
     ("ck_decision_memory_status_event_forget_permission", {"ref": "owner message"}),  # and nothing else does
     ("ck_decision_memory_status_event_reason_code", {"reason": "because I said so"}),
     ("ck_decision_memory_status_event_kind", {"kind": "delete"}),
@@ -325,10 +337,14 @@ _STATUS = (
 def test_a_status_event_is_held_by_its_checks(at_head: tuple[Engine, str], constraint: str, over: dict[str, Any]) -> None:
     engine, _ = at_head
     case = _case_values()
-    good = dict(id=DecisionMemoryStatusEventId.new().value, c=case["case_id"], kind="withdraw", reason="wrong_decision", actor=USER, ref=None)
+    with engine.connect() as connection:   # `0061` (`D-393`): the actor is a real account now, so the rows that obey name one
+        admin = str(connection.execute(text("SELECT user_uid FROM app_user WHERE login = 'admin'")).scalar_one())
+    good = dict(id=DecisionMemoryStatusEventId.new().value, c=case["case_id"], kind="withdraw", reason="wrong_decision", actor=admin, ref=None,
+                digest=None)
     assert _breaks_after(engine, constraint, [(_CASE, case)], _STATUS, {**good, **over})
     assert not _breaks_after(engine, constraint, [(_CASE, case)], _STATUS, good)
-    assert not _breaks_after(engine, constraint, [(_CASE, case)], _STATUS, {**good, "kind": "forget", "ref": "owner message 2026-11-09"})
+    assert not _breaks_after(engine, constraint, [(_CASE, case)], _STATUS, {**good, "kind": "forget", "ref": "owner message 2026-11-09",
+                                                                             "digest": SHA})
 
 
 def test_the_downgrade_refuses_over_a_memory_row_and_drops_the_tables_without_one(

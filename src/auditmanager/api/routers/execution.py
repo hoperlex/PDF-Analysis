@@ -14,7 +14,7 @@ from pydantic import WithJsonSchema
 
 from auditmanager.api.routers.declarations import (
     CursorParam, LimitParam, QueueCreatedFromParam, QueueCreatedToParam, QueueStateFilterParam,
-    envelope_responses, success,
+    QueueStateGroupFilterParam, envelope_responses, success,
 )
 from auditmanager.api.routers.idempotency import RequiredIdempotencyKey
 from auditmanager.api.routers.ports import ExecutionPort
@@ -44,10 +44,11 @@ def build_execution_routes(router: APIRouter, execution: ExecutionPort) -> None:
         state: QueueStateFilterParam = None,  # type: ignore[assignment]
         created_from: QueueCreatedFromParam = None,  # type: ignore[assignment]
         created_to: QueueCreatedToParam = None,  # type: ignore[assignment]
+        state_group: QueueStateGroupFilterParam = None,  # type: ignore[assignment]
     ) -> WireResponse:
         page = execution.list_queue(
             cursor=cursor, limit=limit, state=state,
-            created_from=created_from, created_to=created_to,
+            created_from=created_from, created_to=created_to, state_group=state_group,
         )
         # `UI-PARITY-QUEUE-A`: a property an item does not have is omitted, not sent as `null` -- the
         # contract declares none of them nullable, and `binding_state` / `wait_reason` were sent as

@@ -122,6 +122,10 @@ _CASE_DIGEST = text(
     "SELECT content_sha256 FROM decision_memory_case WHERE origin_observation_id = :observation_id"
 )
 
+_FORGOTTEN = text(
+    "SELECT 1 FROM decision_memory_status_event WHERE case_id = :case_id AND kind = 'forget' LIMIT 1"
+)
+
 _CAPTURED_SOURCES = text(
     "SELECT source_decision_id FROM decision_memory_decision WHERE source_decision_id IN :ids"
 ).bindparams(bindparam("ids", expanding=True))
@@ -202,6 +206,13 @@ class MemoryRepository:
         ).scalar_one_or_none()
         if created is None:
             return CaptureResult(case_id=case_id, memory_decision_id=None, case_created=case_created, decision_created=False)
+        if not case_created and session.execute(_FORGOTTEN, {"case_id": case_id}).first() is not None:
+            # A forgotten case is a tombstone (`DECISION-MEMORY-01` section 4.5): its content was removed on the owner's order and
+            # it accepts none back. The decision row is still recorded -- its verdict, severity and time hold no words of the
+            # expert, and without it the ledger event would stay "uncaptured" for ever (guard G1, the sweep) -- but not the comment.
+            return CaptureResult(
+                case_id=case_id, memory_decision_id=memory_decision_id, case_created=False, decision_created=True
+            )
         session.execute(_INSERT_DECISION_TEXT, {"memory_decision_id": memory_decision_id, "comment": decision.comment})
         return CaptureResult(
             case_id=case_id, memory_decision_id=memory_decision_id, case_created=case_created, decision_created=True

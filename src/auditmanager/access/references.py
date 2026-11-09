@@ -31,9 +31,11 @@ red test, and the database refuses a purge that this register would have allowed
 so the one account column it copies -- ``decision_memory_decision.author_user_uid``, written
 since phase M1 from the deciding ledger event's author -- is an opaque ``usr_...`` identity
 with **no** foreign key to ``app_user`` (open question Q7): ``purgeUser`` stays possible, and
-the id then becomes an orphan the memory never resolves. The same holds for
-``decision_memory_status_event.actor_user_uid`` until the operations that write it arrive
-(``D-393``). Such a
+the id then becomes an orphan the memory never resolves. The account that *acts on* the memory
+is different: ``decision_memory_status_event.actor_user_uid`` (who withdrew, restored or forgot a case; a
+tombstone must keep a resolvable actor) and ``decision_memory_setting_event.actor_user_uid`` (who changed an
+installation setting) have a ``RESTRICT`` key since ``0061_decision_memory_m2`` (``D-393``), and are register
+entries below. Such a
 column is not a register entry (it is not a foreign key, so ``purge_account`` cannot see it and
 the register-equals-schema test above does not list it); it is named in this header instead, and
 ``test_every_memory_column_that_names_an_account_without_a_foreign_key_is_named_in_this_header``
@@ -176,6 +178,18 @@ ACCOUNT_REFERENCES: Final[tuple[AccountReference, ...]] = (
         "actor_user_uid",
         "RESTRICT",
         "this account planned an assignment's date (R-152h, migration 0055)",
+    ),
+    AccountReference(
+        "decision_memory_status_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account withdrew, restored or forgot a decision-memory case (DECISION-MEMORY-01 phase M2, migration 0061)",
+    ),
+    AccountReference(
+        "decision_memory_setting_event",
+        "actor_user_uid",
+        "RESTRICT",
+        "this account changed an installation setting of the decision memory (DECISION-MEMORY-01 phase M2, migration 0061)",
     ),
     AccountReference(
         "finding_execution_status",

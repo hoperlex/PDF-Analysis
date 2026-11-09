@@ -217,6 +217,8 @@ function ProposalRecordItem({ record }: { readonly record: ProposalDecisionRecor
         <span className="am-kb__verdict" data-verdict={record.verdict}>
           {DECISION_EVENT_LABELS[record.verdict]}
         </span>
+        {/* `D-335`, `UI-B-14`: a decision carried over from an earlier version's pass says so, beside the verdict; none made directly draws nothing. */}
+        {record.carried_from === undefined ? null : <CarriedMark carriedFrom={record.carried_from} />}
       </p>
       <p className="am-kb__meta" data-record-place="true">
         {place.join(' · ')}

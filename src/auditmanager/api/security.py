@@ -413,6 +413,13 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "importRunDecisions": _EXPERT,
         # `UI-PARITY-P0P` (`R-151x`): «График работ» is read by an administrator (everyone) and an expert (their own row);
         # the plans, the calendar, the absences and the reserve's moves are the administrator's.
+        # `DECISION-MEMORY-01` phase M2 (contract 1.44.0): the memory is read by experts and administrators (not by the viewer: it holds
+        # the experts' own words and quotes of client documents); its standing and settings are the administrator's.
+        "listDecisionMemoryCases": _ANY_ROLE,
+        "getDecisionMemoryCase": _ANY_ROLE,
+        "getDecisionMemoryStatus": _ADMIN,
+        "withdrawDecisionMemoryCase": _ADMIN,
+        "restoreDecisionMemoryCase": _ADMIN,
         "getWorkSchedule": _ANY_ROLE,
         "getWorkScheduleReserve": _ANY_ROLE,
         "setWorkScheduleSettings": _ADMIN,

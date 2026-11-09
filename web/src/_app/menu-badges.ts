@@ -6,18 +6,19 @@
  * this module only names it: nothing is computed that the server did not count, and a figure that is not known is no
  * badge (never a zero, never an error mark).
  *
- *   - «Очередь»: two figures, both from the `overview` of `ExecutionQueuePage` (contract 1.28.0), read with `limit: 1`
- *     (`D-350`): the figure is the overview, not the page's rows.
- *       - The jobs that are waiting or being run, over the whole history. The overview counts every job in a state, so the
- *         states that end (`succeeded`, `failed`, `cancelled`, `dead_letter`) only grow; they are not a "now" and make
- *         no count badge.
- *       - The red error badge (`D-331`): the jobs accepted in the **last 24 hours** that ended in `failed` or
- *         `dead_letter`. The original's badge is `kpis.errors` of «Диспетчер»: the failed attempts that are still the
- *         job's live attempt, not a retried or superseded one. A failed job here is final (`state-machines.json`: `failed`
- *         and `dead_letter` have no way out) and a re-audit makes a new job, so "not yet retried" is not a figure the
- *         overview can give; a count over all history never returns to zero, and a badge that is always red says nothing.
- *         The window is the nearest figure that does return to zero: the overview takes `created_from`, so the count
- *         is of jobs *accepted* in the last day (a job accepted earlier that fails now is not in it).
+ *   - «Очередь»: two figures from one read of `listExecutionQueue` with `limit: 1` (`D-350`): the figure is the page's counts,
+ *     not its rows.
+ *       - The jobs that are waiting or being run, over the whole history: the `overview` of `ExecutionQueuePage` (contract
+ *         1.28.0). It counts every job in a state, so the states that end (`succeeded`, `failed`, `cancelled`,
+ *         `dead_letter`) only grow; they are not a "now" and make no count badge.
+ *       - The red error badge (`D-331`, `D-395`): `live_failure_count` of the same page (contract 1.43.0) -- the failed
+ *         (`failed`, `dead_letter`) jobs that nothing has answered yet, over all history. The original's badge is
+ *         `kpis.errors` of «Диспетчер»: the failed attempts that are still the job's live attempt, not a retried or
+ *         superseded one. The server says it: a failed job counts unless a later job of the same document version and
+ *         analysis exists (it was run again, re-audited or started from a stage). So the figure returns to zero by being
+ *         answered and not by ageing, and a failure that happened today is in it whenever its job was accepted. (Until
+ *         1.43.0 the badge counted the jobs *accepted* in the last 24 hours that ended in an error, the nearest figure the
+ *         overview could give; that window is gone.)
  *   - «База знаний»: `KnowledgeBaseEntryPage.total`, the entries of both journals together -- the decisions on findings and
  *     those on optimisation proposals (`D-362`). The screen behind the link opens on the type «Замечания» (`R-151h`), whose
  *     own total is the findings alone, so the number is larger than the one the reader meets until they choose «Все» (which
@@ -94,8 +95,8 @@ export function badgeSourcesOf(navigation: Navigation): ReadonlySet<MenuBadgeSou
 /** What the reads hold. `undefined` is "no figure": still loading, refused, failed, or not asked for. */
 export interface MenuBadgeReadings {
   readonly queueOverview?: readonly ExecutionQueueStateCount[] | undefined;
-  /** `D-331`: the overview of the jobs accepted in the last 24 hours (`created_from`); its failed states make the red badge. */
-  readonly queueRecentOverview?: readonly ExecutionQueueStateCount[] | undefined;
+  /** `D-395`: the server's count of the failed jobs nothing has answered yet (`live_failure_count`); it makes the red badge. */
+  readonly queueLiveFailures?: number | undefined;
   readonly knowledgeBaseTotal?: number | undefined;
   /** `R-150c`: `knowledgeBaseTotal` counts one project's entries (the address names one), not the installation's. */
   readonly knowledgeBaseOfProject?: boolean | undefined;
@@ -105,15 +106,11 @@ export interface MenuBadgeReadings {
 /** The job states that are not over: waiting for a worker, held by one, being run, or waiting to be run again. */
 export const QUEUE_OPEN_STATES = ['queued', 'leased', 'running', 'retry_wait'] as const satisfies readonly ExecutionQueueStateCount['state'][];
 
-/** `D-331`: the job states that are an error, and end the job: `failed`, and `dead_letter` (stopped after the retries). */
-export const QUEUE_ERROR_STATES = ['failed', 'dead_letter'] as const satisfies readonly ExecutionQueueStateCount['state'][];
-/** `D-331`: how far back the red badge looks, in hours; the words of the badge say it. */
-export const QUEUE_ERROR_WINDOW_HOURS = 24;
-
 export const QUEUE_BADGE_LABEL = 'Задач в очереди и в работе';
-export const QUEUE_ERRORS_BADGE_LABEL = `Заданий с ошибкой за последние ${QUEUE_ERROR_WINDOW_HOURS} часа`;
+/** `D-395`: the original's «ошибки» figure -- failures nobody has run again -- in the words of the badge. */
+export const QUEUE_ERRORS_BADGE_LABEL = 'Заданий с ошибкой, которые ещё не повторяли';
 const QUEUE_ERRORS_BADGE_TITLE =
-  'Задания, принятые за последние 24 часа и закончившиеся ошибкой или остановкой после повторов. Уходит из числа через сутки после постановки. Подробности — на экране «Очередь», в состояниях «Ошибка» и «Остановлена после повторов».';
+  'Задания, закончившиеся ошибкой или остановкой после повторов, после которых тот же документ ещё не запускали заново. Число уменьшается, когда документ запущен повторно, и не зависит от того, когда задание было принято. Подробности — на экране «Очередь», в группе «Ошибки».';
 /** `D-362`: both journals, said in the label: the screen opens on «Замечания» and shows this figure under «Все». */
 export const KNOWLEDGE_BASE_BADGE_LABEL = 'Записей в базе знаний (замечания и предложения вместе)';
 /** `R-150c`: the same count, when the address names a project and the screen behind the item lists that project's entries. */
@@ -131,18 +128,18 @@ function jobsIn(overview: readonly ExecutionQueueStateCount[], states: readonly 
 }
 
 /**
- * The queue's badges: the count of the jobs that are waiting or running, then the red mark of the jobs accepted in the last
- * 24 hours that ended in an error (`D-331`). Each comes from its own overview and is absent when that overview is unknown or
- * its figure is zero, so one read failing leaves the other badge.
+ * The queue's badges: the count of the jobs that are waiting or running, then the red mark of the failed jobs nobody has run
+ * again (`D-331`, `D-395`). The first comes from the overview, the second from the server's `live_failure_count`; each is absent
+ * when its figure is unknown or zero, so a page that carried one and not the other leaves the other badge.
  */
 export function queueBadges(
   overview: readonly ExecutionQueueStateCount[] | undefined,
-  recentOverview?: readonly ExecutionQueueStateCount[] | undefined,
+  liveFailures?: number | undefined,
 ): readonly MenuBadge[] {
   const badges: MenuBadge[] = [];
   const open = overview === undefined ? 0 : jobsIn(overview, QUEUE_OPEN_STATES);
   if (open > 0) badges.push({ tone: 'count', count: open, label: named(QUEUE_BADGE_LABEL, open) });
-  const failed = recentOverview === undefined ? 0 : jobsIn(recentOverview, QUEUE_ERROR_STATES);
+  const failed = liveFailures ?? 0;
   if (failed > 0) {
     badges.push({
       tone: 'alert',
@@ -182,7 +179,7 @@ export function menuBadgesOf(readings: MenuBadgeReadings): MenuBadges {
   const add = (address: string, badges: readonly MenuBadge[]): void => {
     if (badges.length > 0) found[address] = badges;
   };
-  add(routes.queue(), queueBadges(readings.queueOverview, readings.queueRecentOverview));
+  add(routes.queue(), queueBadges(readings.queueOverview, readings.queueLiveFailures));
   add(
     KNOWLEDGE_BASE_SCREEN,
     countBadge(

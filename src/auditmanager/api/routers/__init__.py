@@ -1,4 +1,4 @@
-"""The 303 operations of ``contracts/api/v1/openapi.json``, and nothing else.
+"""The 308 operations of ``contracts/api/v1/openapi.json``, and nothing else.
 
 :func:`build_router` assembles one ``APIRouter`` from the forty-three router modules. It takes
 its dependencies as arguments and constructs none of them: choosing what sits behind each
@@ -68,6 +68,7 @@ from auditmanager.api.routers.section_specification import build_section_specifi
 from auditmanager.api.routers.specification_prices import build_specification_price_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.dispatch import build_dispatch_routes
+from auditmanager.api.routers.decision_memory import build_decision_memory_routes
 from auditmanager.api.routers.schedule import build_schedule_routes
 from auditmanager.api.routers.me import build_me_routes
 from auditmanager.api.routers.norms import build_norm_routes
@@ -122,6 +123,7 @@ from auditmanager.api.routers.ports import (
     ComparisonStageRunPort,
     ComparisonStageC4Port,
     DispatchPort,
+    DecisionMemoryPort,
     SchedulePort,
     CredentialPort,
     CsvExportPort,
@@ -237,6 +239,7 @@ __all__ = [
     "ComparisonSpecificationPort",
     "AnalysisProfilePort",
     "DispatchPort",
+    "DecisionMemoryPort",
     "SchedulePort",
     "OptimisationPort",
     "SectionSpecificationPort",
@@ -268,7 +271,7 @@ BASE_PATH: Final[str] = "/api/v1"
 
 #: ``info.version`` of the frozen document, and the ``ErrorEnvelope.contract_version``
 #: const. The two are one value on purpose.
-CONTRACT_VERSION: Final[str] = "1.42.0"
+CONTRACT_VERSION: Final[str] = "1.44.0"
 
 
 def build_router(
@@ -294,6 +297,7 @@ def build_router(
     xlsx_exports: XlsxExportPort | None = None,
     dispatch: DispatchPort | None = None,
     schedule: SchedulePort | None = None,
+    decision_memory: DecisionMemoryPort | None = None,
     optimisation: OptimisationPort | None = None,
     specification_prices: SpecificationPricesPort | None = None,
     optimisation_proposals: OptimisationProposalPort | None = None,
@@ -322,7 +326,7 @@ def build_router(
     comparison_stage_runs: ComparisonStageRunPort | None = None,
     comparison_stage_c4: ComparisonStageC4Port | None = None,
 ) -> Router:
-    """Assemble the 303 operations, from the router modules -- ``me``,
+    """Assemble the 308 operations, from the router modules -- ``me``,
     ``registrations`` and ``users`` are `W49-SEAL-01`'s three, ``sections``
     `W59-SECTION-SEAL-01`'s, ``comparison`` `W59-VERSION-COMPARE-01`'s,
     ``analysis_profiles`` `W59-ANALYSIS-SETTINGS-01`'s, ``dispatch`` `W61-DISPATCHER-01`'s and
@@ -406,6 +410,8 @@ def build_router(
     build_dispatch_routes(router, dispatch)  # type: ignore[arg-type]
     # `UI-PARITY-P0P`. «График работ»: done work against plans, the calendar and the reserve.
     build_schedule_routes(router, schedule)  # type: ignore[arg-type]
+    # `DECISION-MEMORY-01` phase M2 (contract 1.44.0). The expert decision memory: cases, standing, status.
+    build_decision_memory_routes(router, decision_memory)  # type: ignore[arg-type]
     # `W60-PRICE-LIST-01`. Project price lists and vendor lists. Optional with a default, for
     # the reason `blocks` gives above.
     build_optimisation_routes(router, optimisation)  # type: ignore[arg-type]

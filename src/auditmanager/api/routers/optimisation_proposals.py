@@ -345,7 +345,10 @@ def build_optimisation_proposal_routes(
             "decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. "
             "`project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that "
             "section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of "
-            "proposals the filters match, on every page. Any one role, `role:admin|expert|viewer`."
+            "proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, "
+            "the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` "
+            "states, present where `saving` is `null` and absent only at a zero current price. Any one role, "
+            "`role:admin|expert|viewer`."
         ),
     )
     def list_accepted_optimisation_proposals(
@@ -369,8 +372,10 @@ def build_optimisation_proposal_routes(
         items = []
         for row in page.items:
             item = row.model_dump(mode="json")
-            if item.get("section") is None:
-                item.pop("section", None)
+            # An optional property that is absent is omitted, never sent as `null` (`carried_from` is the one nullable).
+            for optional in ("section", "saving_percent"):
+                if item.get(optional) is None:
+                    item.pop(optional, None)
             items.append(item)
         body = page_body(items, page.next_cursor)
         body["total"] = len(rows)
@@ -426,7 +431,10 @@ def build_optimisation_proposal_routes(
             "Every proposal of the pass as a CSV file, one row each in ordinal order: the "
             "pass, the specification row's provenance, both positions, both exact unit "
             "prices, the saving (an empty cell when it is absent, never `0`) and the current "
-            "decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; "
+            "decision, and, as the last two columns, `saving_percent` (`D-346`, contract 1.43.0: the share of the current "
+            "unit price the proposed one saves, empty only at a zero current price) and `decision_carried_from_version` "
+            "(`D-335`: the display ordinal of the earlier version the decision in force was carried over from, empty for one "
+            "made directly). UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; "
             "every cell that a spreadsheet would read as a formula is prefixed with an "
             "apostrophe. Computed on request from the stored rows; separate from the "
             "findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`."
@@ -475,8 +483,11 @@ def build_optimisation_proposal_routes(
             "row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by "
             "which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the "
             "specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never "
-            "`0`), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на "
-            "доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins "
+            "`0`), «Экономия, %» (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, "
+            "empty only at a zero current price), and the two columns an expert edits, «Решение эксперта» (`не решено`, "
+            "`принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. The last column, "
+            "«Перенесено из версии» (`D-335`), reads «V2» for a decision in force that was carried over from the earlier "
+            "version's pass and is empty otherwise; it moves none of the columns above. Every cell is text, so one that begins "
             "with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. "
             "Any one role, `role:admin|expert|viewer`."
         ),

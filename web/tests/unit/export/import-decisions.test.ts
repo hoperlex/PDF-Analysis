@@ -36,7 +36,7 @@ const REPORT: DecisionImportReport = {
 
 function refusal(constraint: string): ApiError {
   const envelope = {
-    contract_version: '1.42.0', error_code: 'validation_failed', message: 'refused',
+    contract_version: '1.44.0', error_code: 'validation_failed', message: 'refused',
     correlation_id: 'cor_1', retryable: false, details: { field: 'file', constraint },
   } as unknown as ErrorEnvelope;
   return new ApiError(422, envelope, 'cor_1');

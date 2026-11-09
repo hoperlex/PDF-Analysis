@@ -67,6 +67,12 @@ import type { StageRow } from '../model/run-presentation';
 
 export interface StageTableProps {
   readonly rows: readonly StageRow[];
+  /**
+   * `R-151i` / `D-412`: the stages this run took by reference from an earlier run (a run started from a stage). Such a row's
+   * start and finish are one instant, the moment of the reuse, so its duration is not «0 с» -- it took none here -- and the
+   * cell says where the stage's result came from instead, as the pipeline rail does.
+   */
+  readonly reused?: ReadonlySet<string>;
 }
 
 const UNKNOWN_STAGE_TITLE = 'Этап содержит неизвестное значение.';
@@ -118,7 +124,7 @@ function DependencyNote({ dependsOn, stageId }: { readonly dependsOn: readonly S
   );
 }
 
-export function StageTable({ rows }: StageTableProps) {
+export function StageTable({ rows, reused }: StageTableProps) {
   if (rows.some((row) => !hasKnownVocabulary(row))) {
     return (
       <div data-stage-table-fault="closed-vocabulary">
@@ -149,7 +155,7 @@ export function StageTable({ rows }: StageTableProps) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.stageId} data-stage-id={row.stageId}>
+            <tr key={row.stageId} data-stage-id={row.stageId} {...(reused?.has(row.stageId) ? { 'data-stage-reused': '' } : {})}>
               <td className={styles.ordinal} data-stage-ordinal={row.ordinal ?? 'unscheduled'}>
                 {row.ordinal ?? '—'}
               </td>
@@ -165,12 +171,18 @@ export function StageTable({ rows }: StageTableProps) {
               </td>
               <td className={styles.instant}>{formatInstant(row.startedAt)}</td>
               <td className={styles.instant}>{formatInstant(row.finishedAt)}</td>
-              <td
-                className={styles.elapsed}
-                data-stage-elapsed={elapsedMs(row.startedAt, row.finishedAt) ?? 'unknown'}
-              >
-                {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
-              </td>
+              {reused?.has(row.stageId) ? (
+                <td className={styles.elapsed} data-stage-elapsed="reused">
+                  из прогона
+                </td>
+              ) : (
+                <td
+                  className={styles.elapsed}
+                  data-stage-elapsed={elapsedMs(row.startedAt, row.finishedAt) ?? 'unknown'}
+                >
+                  {formatElapsed(elapsedMs(row.startedAt, row.finishedAt))}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

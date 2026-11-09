@@ -132,6 +132,12 @@ REQUIRED_OPERATIONS = {
     "importOptimisationProposalDecisions",
     # `UI-PARITY-OPT-CARRYOVER`, `UI-B-14`. The decisions of an earlier version's pass, carried into this one by content.
     "carryOverProposalDecisions",
+    # `DECISION-MEMORY-M2` (1.44.0). The expert decision memory: cases, one case, the status, withdraw and restore.
+    "listDecisionMemoryCases",
+    "getDecisionMemoryCase",
+    "getDecisionMemoryStatus",
+    "withdrawDecisionMemoryCase",
+    "restoreDecisionMemoryCase",
     # `UI-PARITY-P0L`, `R-151d`. Decisions loaded back from the run's own workbook.
     "importRunDecisions",
     # `UI-PARITY-P0N`. One project as the listing gives it.
@@ -463,6 +469,9 @@ WRITE_OPERATIONS = {
     "importOptimisationProposalDecisions",
     # `UI-B-14` (1.37.0): the carried decisions are appended under one key, each under a key derived from it.
     "carryOverProposalDecisions",
+    # `DECISION-MEMORY-M2` (1.44.0): a change of a case's standing is an append-only status event, keyed.
+    "withdrawDecisionMemoryCase",
+    "restoreDecisionMemoryCase",
     "importRunDecisions",
     # `W59-DECISION-CARRYOVER-01`. Appends a decision event, so it is keyed like `appendDecision`.
     "carryOverDecision",
@@ -968,6 +977,7 @@ def _takes_caller_input(document: dict, operation: dict) -> bool:
 #: rather than a drift nobody notices. Moves on a reseal that adds or removes every
 #: parameter, header and body an operation takes.
 INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
+    # `DECISION-MEMORY-M2` (1.44.0) adds ``getDecisionMemoryStatus``: the counts and the settings take no input.
     # `W59-ANALYSIS-SETTINGS-01` adds ``listAnalysisProfiles``: the registry takes no input.
     # `EXEC-SEAL-01` adds the two executor lists: a connection list and a route list take no input.
     # `AR-V3-BETA-PACK-STATUS-API-01` adds ``getArV3BetaPackStatus``: it reads the server's own
@@ -984,7 +994,7 @@ INPUT_LESS_OPERATIONS: frozenset[str] = frozenset(
      "listExecutorConnections", "listExecutorRoutes", "getArV3BetaPackStatus",
      "listAnalysisPresets", "getComparisonQueueSummary", "getComparisonAiQueue",
      "listExecutorGroups", "listExecutorRoutingRules", "previewExecutorRouting",
-     "getExecutionDispatch"}
+     "getExecutionDispatch", "getDecisionMemoryStatus"}
 )
 
 

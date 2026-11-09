@@ -101,11 +101,13 @@ class ExecutionPort(Protocol):
 
     def list_queue(
         self, *, cursor: str | None, limit: int, state: str | None,
-        created_from: datetime | None, created_to: datetime | None,
+        created_from: datetime | None, created_to: datetime | None, state_group: str | None = None,
     ) -> models.ExecutionQueuePage:
         """One page of the queue, in its fixed order.
 
-        ``state`` keeps the jobs in that state and ``[created_from, created_to)`` the jobs created in that
+        ``state`` keeps the jobs in that state, ``state_group`` (`D-370`: ``active``, ``completed`` or ``errors``) the
+        jobs in any state of that group -- not together with ``state`` (``validation_failed`` on ``state_group``,
+        ``conflicts_with_state``) -- and ``[created_from, created_to)`` the jobs created in that
         period (`UI-PARITY-QUEUE-A`); each is ``None`` for no filter. **A cursor belongs to the filters it was
         issued under**: one presented with other filters is ``validation_failed`` with ``constraint: scope``,
         never a page from the wrong place. An adapter that accepts a filter and ignores it is the defect
@@ -2441,3 +2443,27 @@ class SchedulePort(Protocol):
     def schedule_assignments(
         self, *, moves: Sequence[tuple[str, Any, str | None]], user_uid: str, idempotency_key: str,
     ) -> None: ...
+
+
+@runtime_checkable
+class DecisionMemoryPort(Protocol):
+    """The expert decision memory (`DECISION-MEMORY-01` phase M2, contract 1.44.0): reads for ``expert``/``admin``, the standing
+    changes and the status for ``admin``. Every rule is ``auditmanager.decision_memory``'s; a withdraw and a restore are keyed."""
+
+    def list_cases(
+        self, *, section_code: str | None, category: str | None, verdict: str | None, status: str | None,
+        data_class: str | None, origin_project_uid: str | None, cursor: str | None, limit: int,
+    ) -> models.DecisionMemoryCasePage: ...
+
+    def get_case(self, *, case_id: str) -> models.DecisionMemoryCase | None: ...
+
+    def status(self) -> models.DecisionMemoryStatus: ...
+
+    def withdraw_case(
+        self, *, case_id: str, reason_code: str, user_uid: str, idempotency_key: str,
+    ) -> models.DecisionMemoryStatusChange: ...
+
+    def restore_case(
+        self, *, case_id: str, reason_code: str, user_uid: str, idempotency_key: str,
+    ) -> models.DecisionMemoryStatusChange: ...
+__all__ += ["DecisionMemoryPort"]

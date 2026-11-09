@@ -100,9 +100,10 @@ def test_the_declaration_partitions_exactly_the_tables_schema_coverage_declares(
     # planning and are kept (KEEP 37 -> 41).
     # `0059_decision_memory` (`ADR-0027`): the eight tables of the decision memory are kept (KEEP 41 -> 49); none of them has a
     # foreign key into a PRODUCT table, so the purge's TRUNCATE never needs them.
-    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 8
+    # `0061_decision_memory_m2` adds the installation settings' journal, kept like the schedule's settings (KEEP 49 -> 50).
+    assert tool.KEEP_MEMORY_TABLES <= tool.KEEP_TABLES and len(tool.KEEP_MEMORY_TABLES) == 9
     assert not tool.KEEP_MEMORY_TABLES & (tool.PRODUCT_TABLES | tool.MIXED_TABLES)
-    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 49 and len(tool.MIXED_TABLES) == 3
+    assert len(tool.PRODUCT_TABLES) == 92 and len(tool.KEEP_TABLES) == 50 and len(tool.MIXED_TABLES) == 3
     assert tool.PRODUCT_TABLES | tool.KEEP_TABLES | tool.MIXED_TABLES == TABLES
     # the corpus half of KEEP is schema_coverage's own list, not a copy of it
     assert tool.KEEP_NORM_TABLES is EXEMPT_FROM_FINGERPRINT
@@ -449,11 +450,13 @@ def _an_uncaptured_decision(s: Stand) -> None:
     """One accept or reject has no decision-memory row any more: its memory decision is removed with its guard switched off."""
     with s.engine.connect() as connection:
         decision = connection.execute(text("SELECT memory_decision_id FROM decision_memory_decision ORDER BY 1 LIMIT 1")).scalar_one()
-    for table in ("decision_memory_decision_text", "decision_memory_decision"):
+    # `0061_decision_memory_m2`: the comment's table carries the forget guard now (`trg_<table>_forget_guard`), the decision's the plain one.
+    for table, trigger in (("decision_memory_decision_text", "trg_decision_memory_decision_text_forget_guard"),
+                           ("decision_memory_decision", "trg_decision_memory_decision_immutable")):
         with s.engine.begin() as connection:
-            connection.execute(text(f'ALTER TABLE public."{table}" DISABLE TRIGGER trg_{table}_immutable'))
+            connection.execute(text(f'ALTER TABLE public."{table}" DISABLE TRIGGER {trigger}'))
             connection.execute(text(f'DELETE FROM public."{table}" WHERE memory_decision_id = :d'), {"d": decision})
-            connection.execute(text(f'ALTER TABLE public."{table}" ENABLE TRIGGER trg_{table}_immutable'))
+            connection.execute(text(f'ALTER TABLE public."{table}" ENABLE TRIGGER {trigger}'))
 
 
 def act_plan(m: types.ModuleType, h: Harness) -> tuple[int, str, str]:

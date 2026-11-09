@@ -154,7 +154,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              contract_version: '1.42.0',
+              contract_version: '1.44.0',
               error_code: 'dependency_unavailable',
               message: 'A caller-safe sentence.',
               correlation_id: 'corr-poll',
@@ -183,7 +183,7 @@ describe('a failure is absorbed or surfaced according to the envelope', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            contract_version: '1.42.0',
+            contract_version: '1.44.0',
             error_code: 'not_found',
             message: 'A caller-safe sentence.',
             correlation_id: 'corr-poll',
@@ -657,17 +657,16 @@ describe('this slice adds no second polling loop', () => {
     // No schedule of its own: React Query owns it and the policy function answers "how long?".
     expect(text).not.toMatch(/setInterval\s*\(|setTimeout\s*\(|refetchInterval|refetchIntervalInBackground/);
     // Three places spell the spread: the knowledge base's total, the pending registrations and `queueCountOptions`, the one
-    // helper that both queue counters (the whole history, the last day) are built by; each also re-reads on the tab's return.
+    // helper the queue counter (the overview and the live failures, `D-395`) is built by; each also re-reads on the tab's return.
     expect(spreadsIn(text)).toBe(3);
     expect(text.match(/refetchOnWindowFocus:\s*'always'/g) ?? []).toHaveLength(3);
-    // The queue counters read one row each (`D-350`), through that helper, and are not the queue screen's own page of 25.
-    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\('all',\s*sources\.has\('queue'\)\)\)/);
-    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\('last-day',\s*sources\.has\('queue'\)\)\)/);
+    // The queue counter reads one row (`D-350`), through that helper, and is not the queue screen's own page of 25.
+    expect(text).toMatch(/useQuery<ExecutionQueuePage>\(queueCountOptions\(sources\.has\('queue'\)\)\)/);
     expect(text).toMatch(/QUEUE_PROBE\s*=\s*\{\s*limit:\s*1\s*\}/);
     expect(text).not.toMatch(/queueQueryOptions/);
     // Every counter is read only for a session whose menu holds the item it feeds.
     expect(text.match(/enabled:\s*sources\.has\('(?:knowledge-base|registrations)'\)/g) ?? []).toHaveLength(2);
-    expect(text.match(/sources\.has\('queue'\)/g) ?? []).toHaveLength(2);
+    expect(text.match(/sources\.has\('queue'\)/g) ?? []).toHaveLength(1);
     // The reads are list operations and none of them is the run endpoint.
     expect(text).toMatch(/listExecutionQueue/);
     expect(text).toMatch(/listKnowledgeBaseEntries/);
@@ -681,7 +680,7 @@ describe('this slice adds no second polling loop', () => {
     const ungated = "useQuery({ queryKey, queryFn, ...OPERATIONAL_LIST_POLL })";
     expect(ungated.match(/enabled:\s*sources\.has\('(?:queue|knowledge-base|registrations)'\)/g) ?? []).toHaveLength(0);
     // A queue counter built without the helper is not the shape this guard names.
-    expect(/useQuery<ExecutionQueuePage>\(queueCountOptions\('all',\s*sources\.has\('queue'\)\)\)/.test('useQuery<ExecutionQueuePage>({ ...queueQueryOptions(), enabled: true })')).toBe(false);
+    expect(/useQuery<ExecutionQueuePage>\(queueCountOptions\(sources\.has\('queue'\)\)\)/.test('useQuery<ExecutionQueuePage>({ ...queueQueryOptions(), enabled: true })')).toBe(false);
     expect(spreadsIn(ungated)).toBe(1);
   });
 

@@ -218,7 +218,7 @@ function withRouter(element: ReactElement): string {
 
 function apiError(status: number, code: ErrorCode, retryable: boolean): ApiError {
   const envelope: ErrorEnvelope = {
-    contract_version: '1.42.0',
+    contract_version: '1.44.0',
     error_code: code,
     message: 'Одна безопасная для вызывающей стороны фраза.',
     correlation_id: 'cid-contrast-1',
@@ -755,8 +755,8 @@ export function screens(): Screen[] {
           sections: sectionNavigationOf(waitingRows, PROJECT_UID, sectionPage),
           badges: menuBadgesOf({
             queueOverview: [{ state: 'queued', count: 2 }, { state: 'running', count: 1 }],
-            // `D-331`: the red mark beside the count on «Очередь».
-            queueRecentOverview: [{ state: 'failed', count: 2 }],
+            // `D-395`: the red mark beside the count on «Очередь».
+            queueLiveFailures: 2,
             knowledgeBaseTotal: 140,
             pendingRegistrations: 5,
           }),
@@ -1801,6 +1801,10 @@ export function screens(): Screen[] {
         ...(state === 'not_run' ? {} : { result_run_id: runId }),
         finding_count: state === 'not_run' || state === 'clean' ? 0 : 3,
         undecided_finding_count: state === 'awaiting_decision' ? 2 : 0,
+        // `D-361`: the «Оптимизация N» pill, with its marker while some proposals wait and without it once all are decided.
+        ...(state === 'checked' || state === 'awaiting_decision'
+          ? { optimisation_proposal_count: 7, optimisation_undecided_count: state === 'checked' ? 0 : 3 }
+          : {}),
       },
     });
     const cards = [

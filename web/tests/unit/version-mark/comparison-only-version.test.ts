@@ -205,7 +205,7 @@ describe('ordinary runs on comparison PDFs', () => {
     expect(loading).not.toContain('data-start-run-control');
     const failed = newClient();
     seedError(failed, queryKeys.runs.list(VERSION_UID, undefined, RUN_PAGE_LIMIT),
-      new ApiError(503, { contract_version: '1.42.0', error_code: 'dependency_unavailable',
+      new ApiError(503, { contract_version: '1.44.0', error_code: 'dependency_unavailable',
         message: 'm', correlation_id: 'c', retryable: true }, 'c'));
     expect(renderScreen(failed, createElement(RunList, {
       projectUid: PROJECT_UID, versionUid: VERSION_UID, uploadKind: 'comparison_pdf',

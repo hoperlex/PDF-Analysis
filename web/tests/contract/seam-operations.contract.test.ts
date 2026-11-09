@@ -209,6 +209,8 @@ describe('the seam operations', () => {
       'removeComparisonLaunchEntry',
       'renameDocument',
       'requestExecutorProbe',
+      // `DECISION-MEMORY-M2` (contract 1.44.0): withdrawing and restoring a memory case are keyed administrator commands.
+      'restoreDecisionMemoryCase',
       'resumeComparisonAiPairCheck',
       'resumeComparisonAiSheetChanges',
       'resumeComparisonLaunchQueue',
@@ -267,6 +269,7 @@ describe('the seam operations', () => {
       'uploadPriceList',
       'uploadStageUploadPart',
       // `COMPARE-PERSISTED-SUMMARY-01`: ending a sheet link appends a row too, keyed like its approval.
+      'withdrawDecisionMemoryCase',
       'withdrawSheetPairing',
     ]);
   });
