@@ -114,7 +114,7 @@ opened finding, the number of findings on a block tile, «Без сущност�
 `0058`). Two new schemas, `FindingBlockLink` and `RunFindingBlockLinks`.
 
 - **`listRunFindingBlocks`** (`GET /runs/{run_id}/finding-blocks`, any one role): one item per published finding of the run, with
-  `portal_block_ids`, the portal blocks that hold the finding's canonical observation's evidence, in the portal list's order. A
+  `portal_block_ids`, the portal blocks that hold the evidence of the finding's canonical observation and of every observation merged into it (`D-520`): the canonical observation's blocks first in the portal list's order, then each merged observation's in observation-id order, every block once. A
   **derivation on read**, nothing stored and no evidence changed: the evidence's characters are located on their page by the
   run's own text-layer block index (the line boxes, `geometry.block_index`) and page inventory (`prepared.page_inventory`), the
   evidence's box is the part of the line its characters occupy, and a portal block (the version's `geometry.portal_blocks`, the
