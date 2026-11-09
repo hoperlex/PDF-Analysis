@@ -4322,6 +4322,19 @@ const TRANSLATED_SCHEMAS = [
   'ExecutorIdentityBasis',
   'ExecutorRateCheck',
   'ExecutorWorkKind',
+  // `HOSTS-SEAL-1` (ADR-0028): «Исполнители» and «Модели по этапам» say the state of a server, a model and a provider's login, the
+  // access, the effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. `review`,
+  // `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid` and `online` are plain English words and must not be permitted bare.
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
   // `CMP-VC-UI-01`: «Сравнение версий» says every status, flag, state and reason of the comparison in Russian, with the contract
   // value in a `data-` attribute. Several are plain English words (`same`, `added`, `removed`, `manual`, `high`, `scan`,
   // `queued`, `running`, `stale`, `failed`, `done`), which must not be permitted bare. `ComparisonLayer` and `ComparisonChannelState`
