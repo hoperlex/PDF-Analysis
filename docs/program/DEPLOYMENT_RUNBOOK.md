@@ -2251,3 +2251,70 @@ leave with a revert of the compose file.
 * Nothing here was run against Docker. The mechanism is checked by `tests/integration/composition/test_compose_log_and_memory_limits.py`
   (the file read by indentation, `docker compose`'s variable rules reimplemented and tested against their documentation);
   the first `docker compose config` on a real host is step 5.
+
+---
+
+## 20. The decision memory: the `data_class` switch before the first real client document (`D-490`, `D-496`; `DECISION-MEMORY-01` section 8, phase M2)
+
+**What it is for.** Every decision an expert takes leaves a case in the decision memory (`ADR-0027`). A case is stored with a
+`data_class`, `test` or `real`, and **the column is immutable**: a case captured as `test` stays `test` for good. The class a case gets is
+the installation setting in force **when the case is captured**, and the setting starts as `test` (the safe direction: the training export
+reads `real` only). So the stand holds test data until an operator says otherwise, and **a real client document decided before that is
+remembered as test data and silently left out of every export.** The remedy for a case captured under the wrong class is a withdraw,
+not a reclassification. Nothing else in the deploy asks for this step, so this is where it is written down.
+
+**When.** Once, **before the first real client document is uploaded** (`R-4`; section 7 says who decides that), and **after the worker's
+sweep has captured everything the ledger already holds**. The tool enforces the second half: it refuses the change while the memory has not
+captured every accept or reject decision of the ledger (a decision taken before the memory existed, or one whose capture failed and is
+retried), because the sweep would capture those under the **new** class. Switching later, back and forth, follows the same rule.
+
+**How.** The tool is `scripts/recovery/memory_setting.py`. It connects as the **owner** (`MIGRATOR_DATABASE_URL`, section 16), names an
+administrator's login in `--actor` (the journal records the account's `usr_` identity, never the login) and refuses a run in which any `PG*`
+variable is set. It has no wrapper script; run it the way `infra/deploy/erase-project.sh` runs its Python half, in a one-off `api`
+container with the owner's url and the five modules it imports mounted read-only (`memory_setting`, `project_erase`, `product_purge`,
+`schema_coverage`, `blob_reference_audit`; the import closure was read from the source and imported from a directory holding only those
+five files, and the command below has **not** been run on a host):
+
+```
+ENV=infra/deploy/env/alpha.env
+DC="docker compose --env-file $ENV --file infra/deploy/compose.server.yml"
+MIGRATOR_URL="$(sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?MIGRATOR_DATABASE_URL=//p' "$ENV" | tail -1 \
+    | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/")"
+memory_setting() {
+    local mounts=() module
+    for module in memory_setting project_erase product_purge schema_coverage blob_reference_audit; do
+        mounts+=(-v "$PWD/scripts/recovery/$module.py:/purge/scripts/recovery/$module.py:ro")
+    done
+    DATABASE_URL="$MIGRATOR_URL" $DC run --rm --no-deps -T --user "$(id -u):$(id -g)" -e PYTHONPATH=/app/src:/purge \
+        "${mounts[@]}" --entrypoint python api -m scripts.recovery.memory_setting --database <POSTGRES_DB> "$@" </dev/null
+}
+```
+
+1. **Look.** `memory_setting show`. Expected, on a stand that has never been switched:
+
+   ```
+   data_class: test (default; default test)
+   training_use: off (default; default off)
+   uncaptured-decisions: 0 (ledger accept/reject events with no memory decision; a data_class change is refused until this is 0)
+   ```
+
+   A number above `0` means the sweep has more to do. The sweep runs in the **worker** (section 12; about 50 events every 30 s), so check
+   that the worker is up and `show` again in a minute. A number that does not go down is a capture that fails: the worker's log names the
+   decision (`decision memory: could not capture dec_...`); fix that first, the tool has no way around it.
+2. **Switch.** `memory_setting set data_class real --actor <admin login>`. Expected: `memory-setting: data_class: test -> real (revision 1).`
+   and the line saying cases already captured keep their class. Exit `0`. Setting a value that is already in force records nothing (`nothing
+   to do`).
+3. **Look again.** `memory_setting show` must read `data_class: real (revision 1; default test)`. Write the output and the date in the
+   release record. A deploy needs nothing else: the setting is data, not configuration, and survives a restart and a restore.
+
+**What it says when it stops (exit `3`, nothing changed).** `N accept/reject decision(s) of the ledger are not captured by the decision
+memory yet ... There is no override.`: step 1 above. `could not lock within 15s`: a decision was being written (the tool holds the ledger
+still for the count and the write, so a decision cannot slip between them); run it again in a moment, or set
+`MEMORY_SETTING_LOCK_TIMEOUT` (default `15s`). `the database is at migration X, the tool was written for Y`: the tool is older than the
+schema; use the tool of the tree that is deployed.
+
+**What it does not do.** It does not reclassify a case that was already captured (withdraw it, `DECISION-MEMORY-01` section 4.5, and let the
+expert decide again). It does not switch `training_use` on its own account: that is a different setting with its own rule (it needs
+`--owner-permission-ref`, and it releases client-derived content off the host, `ADR-0022` section 4). It is **not** run by a deploy, a
+restore or `reset.sh`, so a stand rebuilt from a dump keeps whatever the dump held, and a stand rebuilt empty starts at `test` again:
+repeat step 1 to 3 after it, before real data.

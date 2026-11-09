@@ -9,6 +9,11 @@ import re
 from auditmanager.analysis.public import ModelResponse
 
 
+def primary_keys(validation):
+    """The unmatched primary pages: legacy keeps them under `batch`, windowed-v1 directly in the metadata."""
+    return validation["batch"]["primary_keys"] if "batch" in validation else validation["primary_keys"]
+
+
 def synthetic_response(request):
     payload = json.loads(request.body["messages"][-1]["content"].split("\nINPUT\n", 1)[1])
     procedure = payload["_experimental_procedure"]
@@ -56,7 +61,7 @@ def synthetic_response(request):
                 "new_pages": [page["physical_page"]] if page["side"] == "NEW" else [],
                 "evidence_items": [evidence(page)], "missing_proof_or_conflict": "Синтетический тест не делает вывода.",
             } for i, page in enumerate(pages) if (page["side"], page["physical_page"]) in
-                [tuple(k) for k in payload["_validation"]["batch"]["primary_keys"]]]
+                [tuple(k) for k in primary_keys(payload["_validation"])]]
     elif procedure == "dedupe":
         answer = {"pair": pair, "decisions": [{"decision": "KEEP_SEPARATE",
             "projectchange_ids": [row["projectchange_id"]], "reason": "Синтетический тестовый ответ."}
@@ -67,6 +72,12 @@ def synthetic_response(request):
             "unit": item["parameter"]["unit"], "explanation": "Синтетический ответ, не инженерное заключение.",
             "evidence_refs": [{k: source[k] for k in ("side", "physical_page", "block_id")} for source in item["sources"]],
         } for item in payload["items"]]}
+    elif procedure == "consolidate":
+        # windowed-global-v1: the safe answer. Every requested pair is kept apart with no source claim,
+        # so a lifecycle run never merges events on the strength of a synthetic reply.
+        answer = {"pair": pair, "decisions": [{"pair_id": row["pair_id"], "event_ids": row["event_ids"],
+            "decision": "SEPARATE", "reason": "Синтетический ответ, не инженерное заключение.",
+            "source_evidence": []} for row in payload["pairs"]]}
     else:
         raise ValueError("unsupported synthetic V3 procedure; no fallback")
     return ModelResponse(output_text=json.dumps(answer, ensure_ascii=False), stop_reason="end_turn",

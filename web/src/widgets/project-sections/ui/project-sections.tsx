@@ -85,6 +85,7 @@ function DocumentRows({
         documentHref: routes.document(projectUid, version.document_uid),
       })}
       reviewAddress={(runId) => routes.review(projectUid, runId)}
+      optimisationAddress={(version) => routes.documentOptimisation(projectUid, version.document_uid)}
       select={selectionSlot(selection)}
     />
   );
