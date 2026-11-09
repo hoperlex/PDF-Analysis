@@ -149,13 +149,13 @@ describe('the standard analysis is the default every time', () => {
 });
 
 describe('choosing the other analysis replaces the form and clears what the first one held', () => {
-  it('swaps the standard form for the v3 form, selectors included, and back', async () => {
+  it('swaps the standard form for the v3 form, «▾» menu included, and back', async () => {
     live = await mountLive(tree(newClient()));
-    expect(live.markup()).toContain('data-start-mode'); // the standard form's three ways to start
+    expect(live.markup()).toContain('data-start-run-more'); // the standard form's «▾» menu beside its one button
     await live.change(V3_OPTION, 'ar_v3_beta');
     expect(live.markup()).toContain(V3_FORM);
     expect(live.markup()).not.toContain(STANDARD_FORM);
-    expect(live.markup(), 'the executor selectors were kept beside a start that takes none').not.toContain('data-start-mode');
+    expect(live.markup(), 'the standard form’s «▾» menu was kept beside a start that has none').not.toContain('data-start-run-more');
     expect(live.markup()).toContain('data-ar-v3-choice-note');
     expect(live.markup()).toContain('Это другой анализ, а не замена стандартного');
     await live.change(STANDARD_OPTION, 'standard');
@@ -205,7 +205,7 @@ describe('one start sends one analysis’s operation', () => {
     await live.press(SIX_CHECKS);
     expect(live.markup()).toContain('data-ar-v3-group-failure');
     expect(live.markup()).not.toContain(STANDARD_FORM);
-    expect(live.count('Запустить прогон')).toBe(0);
+    expect(live.count('Запустить')).toBe(0);
     expect(vi.mocked(startRun)).not.toHaveBeenCalled();
   });
 
@@ -216,7 +216,9 @@ describe('one start sends one analysis’s operation', () => {
     expect(live.markup()).toContain('data-cost-approval');
     await live.change(STANDARD_OPTION, 'standard');
     expect(live.markup()).not.toContain('data-cost-approval');
-    expect(live.markup()).toMatch(/<button[^>]*disabled=""[^>]*>Запустить прогон<\/button>/);
+    // The standard form is back with its one button, which carries no consent of the v3 estimate: nothing was sent.
+    expect(live.markup()).toMatch(/<button[^>]*data-start-run-button=""[^>]*>Запустить<\/button>/);
+    expect(vi.mocked(startRun)).not.toHaveBeenCalled();
   });
 });
 

@@ -10,7 +10,16 @@ import { ceilingMicros, microsAsUsd, usableCostEstimate } from '@/shared/ui';
 
 type Approval = { requestKey: string; digest: string; minimum: number; ceiling: string; approved: boolean };
 
-/** One fresh reading per queue confirmation, bound to the selected source Run. */
+/**
+ * One fresh reading per queue confirmation, bound to the selected source Run.
+ *
+ * `RUN-START-ONE-01a` (plan v3 §8), the one-button rule for a repeated Run: an estimate that charges nothing
+ * (`billing: unmetered`, which the server prices at 0 and accepts with `ceiling_micros: 0`) is agreed to by
+ * the confirmation itself, so its consent exists as soon as the estimate has been read and `unmetered` says
+ * so; the person's «Подтвердить» is the only act. An estimate that can charge still shows its figure and
+ * asks for the ceiling and the agreement, once, in the confirmation panel. A fresh estimate (after
+ * `refresh`, or after a stale digest) is agreed to again on the same terms.
+ */
 export function useReauditCostApproval(sourceRunId: string | null, requestKey: string | null) {
   const [approval, setApproval] = useState<Approval | null>(null);
   const reading = useQuery({
@@ -40,7 +49,7 @@ export function useReauditCostApproval(sourceRunId: string | null, requestKey: s
     if (estimate === null || requestKey === null) return;
     setApproval({ requestKey, digest: estimate.estimate_digest,
       minimum: Math.max(estimate.billing === 'metered' ? 1 : 0, estimate.estimated_cost_micros),
-      ceiling: microsAsUsd(estimate.recommended_ceiling_micros), approved: false });
+      ceiling: microsAsUsd(estimate.recommended_ceiling_micros), approved: estimate.billing === 'unmetered' });
   }, [estimate, requestKey, updatedAt]);
   const current = approval?.requestKey === requestKey ? approval : null;
   const amount = current === null ? null : ceilingMicros(current.ceiling, current.minimum);
@@ -51,10 +60,13 @@ export function useReauditCostApproval(sourceRunId: string | null, requestKey: s
   const idempotencyKey = useIntentKey(signature);
   return {
     estimate, consent, idempotencyKey, ceiling: current?.ceiling ?? '', approved: current?.approved === true,
+    /** The estimate charges nothing: its consent is given without a separate agreement. */
+    unmetered: estimate !== null && estimate.billing === 'unmetered',
     pending: sourceRunId !== null && (reading.isPending || reading.isFetching),
     error: reading.error,
     clear: () => setApproval(null),
     refresh: () => {
+      // A fresh reading is agreed to again; an unmetered one is agreed to by the effect above.
       setApproval((previous) => previous === null ? null : { ...previous, approved: false });
       void reading.refetch();
     },

@@ -81,6 +81,38 @@ describe('fresh cost consent for repeated paid Runs', () => {
     expect(changed.idempotencyKey).not.toBe(first.idempotencyKey);
   });
 
+  it('an estimate that charges nothing is agreed to by the confirmation itself (RUN-START-ONE-01a)', async () => {
+    const free = (body: Parameters<typeof costEstimate>[0], digest = COST_CONSENT.estimate_digest) => ({
+      ...costEstimate(body), billing: 'unmetered' as const, estimated_cost_micros: 0, recommended_ceiling_micros: 0, estimate_digest: digest,
+    });
+    vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({ data: free(body) }) as never);
+    const { view } = await mount();
+    await view.press('Повторный аудит');
+    await settleCost(view);
+    // No tick-box is pressed: the consent of the estimate exists, with the ceiling the estimate itself carries.
+    expect(await view.press('Подтвердить')).toBe(true);
+    expect(vi.mocked(reauditRun).mock.calls[0]![0]).toEqual({ path: { run_id: RUN_ID },
+      body: { cost_consent: { estimate_digest: COST_CONSENT.estimate_digest, ceiling_micros: 0, confirmed: true } },
+      idempotencyKey: expect.any(String) });
+    // A fresh reading is agreed to on the same terms, and carries its own digest and its own key.
+    vi.mocked(estimateRunCost).mockImplementation(async ({ body }) => ({ data: free(body, 'e'.repeat(64)) }) as never);
+    await view.press('Обновить оценку стоимости');
+    await settleCost(view);
+    expect(await view.press('Подтвердить')).toBe(true);
+    const fresh = vi.mocked(reauditRun).mock.calls[1]![0];
+    expect(fresh.body?.cost_consent).toEqual({ estimate_digest: 'e'.repeat(64), ceiling_micros: 0, confirmed: true });
+    expect(fresh.idempotencyKey).not.toBe(vi.mocked(reauditRun).mock.calls[0]![0].idempotencyKey);
+  });
+
+  it('an estimate that can charge still waits for the agreement, once', async () => {
+    const { view } = await mount();
+    await view.press('Повторный аудит');
+    await settleCost(view);
+    expect(view.markup().match(/data-cost-approval/g)).toHaveLength(1);
+    expect(await view.press('Подтвердить')).toBe(false);
+    expect(reauditRun).not.toHaveBeenCalled();
+  });
+
   it('a failed estimate cannot confirm a repeated Run', async () => {
     vi.mocked(estimateRunCost).mockRejectedValueOnce(new TypeError('Failed to fetch'));
     const { view } = await mount();

@@ -94,29 +94,21 @@ describe('the start-run control', () => {
   const control = () =>
     renderWith(newClient(), createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }));
 
-  it('offers cost estimate and run actions, with no provider-mode selector', () => {
+  it('offers one start button and the «▾» item, with no provider-mode selector and no executor choice', () => {
     const markup = control();
-    expect(markup).toContain('>Запустить прогон</button>');
-    expect(markup.match(/<button\b/g)).toHaveLength(2);
-    // `EXEC-PAR-WEB-01`: the executor's select. `ANALYSIS-PRESETS-01`: and the preset's, which fills it.
-    // Neither names a provider mode, and nothing else on the control is a choice.
-    expect(markup.match(/<select\b/g)).toHaveLength(2);
-    expect(markup).toContain('data-preset-select');
-    expect(markup).toContain('>Пресет</label>');
-    expect(markup).toContain('data-executor-select');
-    expect(markup).toContain('>Исполнитель</label>');
+    expect(markup).toContain('>Запустить</button>');
+    // The start button, the «▾» trigger and its one item; there is no separate estimate button.
+    expect(markup.match(/<button\b/g)).toHaveLength(3);
+    expect(markup).not.toContain('Оценить стоимость');
+    // `RUN-START-ONE-01a`: no executor, group or preset select, no radio, no tick-box. Nothing on the control is a
+    // choice of executor, and none is a provider mode.
+    expect(markup).not.toContain('<select');
+    expect(markup).not.toContain('type="radio"');
+    expect(markup).not.toContain('type="checkbox"');
     for (const mode of ['live', 'recorded', 'proxy']) {
       expect(markup, mode).not.toContain(`value="${mode}"`);
     }
-    // `EXEC2-WEB-GROUPS-01`: the only radios are the three ways to choose an executor; none is a provider mode.
-    const radioValues = [...markup.matchAll(/<input[^>]*type="radio"[^>]*>/g)]
-      .map((tag) => /value="([^"]*)"/.exec(tag[0])?.[1]);
-    expect(radioValues.every((value) => ['auto', 'group', 'connection'].includes(value ?? ''))).toBe(true);
     expect(markup).not.toContain('recorded mode instead');
-  });
-
-  it('says the provider mode is the deployment’s and is never chosen here', () => {
-    expect(control()).toContain('не выбирается здесь');
   });
 
   it('offers no cancel and no re-run carryover, which PC-01 rules out', () => {

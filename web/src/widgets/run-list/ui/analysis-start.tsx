@@ -14,8 +14,8 @@
  * or another visit opens on the standard analysis. One start sends exactly one analysis's operation: `startRun` through
  * `StartRunControl` for the standard analysis, `startArV3BetaGroup` through `StartArV3GroupControl` for v3. v3 is its own
  * operation; there is no flag on the default start, no fallback from either to the other and no substitute offered after a
- * refusal. Choosing v3 replaces the standard form, with its executor, preset and group selectors, by the v3 form: the
- * group start takes none, and showing them would promise a choice the server ignores. Changing the choice clears what
+ * refusal. Choosing v3 replaces the standard form, with its «Запустить» button and its «▾» menu, by the v3 form: the
+ * group start takes no "without a money ceiling" choice, and showing it would promise a choice the server ignores. Changing the choice clears what
  * the form that is left held (its estimate, its consent, its refusal).
  *
  * The caller of the v3 start holds its intent for as long as this component lives, as `useArV3GroupStartIntent` asks: a

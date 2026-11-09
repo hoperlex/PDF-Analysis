@@ -67,8 +67,9 @@ describe('old group review addresses and the restored ordinary AR start', () => 
     const markup = listMarkup(installedPackFixture());
     expect(captured.props, 'an installed old pack must not mount the default six-check start').toBeNull();
     expect(markup).toContain('data-start-run-control="true"');
-    expect(markup).toContain('>Оценить стоимость</button>');
-    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Запустить прогон<\/button>/);
+    // `RUN-START-ONE-01a`: one «Запустить», which reads the estimate itself; no estimate step and no agreement yet.
+    expect(markup).toMatch(/<button[^>]*data-start-run-button=""[^>]*>Запустить<\/button>/);
+    expect(markup).not.toContain('Оценить стоимость');
     expect(markup).not.toContain('data-cost-approval');
     expect(markup).not.toContain('data-ar-v3-group-start');
     expect(navigation.pushed).toEqual([]);
