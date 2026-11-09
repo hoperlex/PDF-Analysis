@@ -101,11 +101,13 @@ class ExecutionPort(Protocol):
 
     def list_queue(
         self, *, cursor: str | None, limit: int, state: str | None,
-        created_from: datetime | None, created_to: datetime | None,
+        created_from: datetime | None, created_to: datetime | None, state_group: str | None = None,
     ) -> models.ExecutionQueuePage:
         """One page of the queue, in its fixed order.
 
-        ``state`` keeps the jobs in that state and ``[created_from, created_to)`` the jobs created in that
+        ``state`` keeps the jobs in that state, ``state_group`` (`D-370`: ``active``, ``completed`` or ``errors``) the
+        jobs in any state of that group -- not together with ``state`` (``validation_failed`` on ``state_group``,
+        ``conflicts_with_state``) -- and ``[created_from, created_to)`` the jobs created in that
         period (`UI-PARITY-QUEUE-A`); each is ``None`` for no filter. **A cursor belongs to the filters it was
         issued under**: one presented with other filters is ``validation_failed`` with ``constraint: scope``,
         never a page from the wrong place. An adapter that accepts a filter and ignores it is the defect

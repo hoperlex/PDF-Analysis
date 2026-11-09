@@ -296,3 +296,170 @@ def test_a_period_cursor_is_bound_to_the_period_too(session, blob_store, helpers
     with pytest.raises(DomainError) as error:
         adapter.list_queue(cursor=first_cursor, limit=1, created_from=at[0], created_to=at[2])
     assert dict(error.value.detail_fields) == {"field": "cursor", "constraint": "scope"}
+
+
+# ------------------------------------------------------------------------------ a group of states (`D-370`, contract 1.43.0)
+
+
+def _ids(items) -> set[str]:
+    return {item.job_id for item in items}
+
+
+def test_a_group_lists_every_job_of_its_states_and_the_three_groups_partition_the_queue(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    mine = _four_states(session, seeded)  # queued, running, cancelled, failed
+    adapter = _adapter(session)
+    active, completed, errors = (_everything(adapter, state_group=group) for group in ("active", "completed", "errors"))
+    assert {item.state for item in active} <= {"queued", "leased", "running", "retry_wait"}
+    assert {item.state for item in completed} <= {"succeeded", "cancelled"}
+    assert {item.state for item in errors} <= {"failed", "dead_letter"}
+    assert {mine["queued"], mine["running"]} <= _ids(active) and not ({mine["cancelled"], mine["failed"]} & _ids(active))
+    assert mine["cancelled"] in _ids(completed) and not ({mine["queued"], mine["failed"]} & _ids(completed))
+    assert mine["failed"] in _ids(errors) and not ({mine["queued"], mine["cancelled"]} & _ids(errors))
+    # Together they are the whole queue: nothing is in two groups and nothing in none.
+    everything = _everything(adapter)
+    assert sorted(_ids(active) | _ids(completed) | _ids(errors)) == sorted(_ids(everything))
+    assert len(active) + len(completed) + len(errors) == len(everything)
+
+
+def test_a_group_listing_is_the_whole_listing_with_other_states_removed_in_the_same_order(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    _four_states(session, seeded)
+    adapter = _adapter(session)
+    whole = _everything(adapter)
+    for group, states in (("active", {"queued", "leased", "running", "retry_wait"}), ("errors", {"failed", "dead_letter"})):
+        assert [item.job_id for item in _everything(adapter, state_group=group)] == [
+            item.job_id for item in whole if item.state in states
+        ]
+
+
+def test_a_group_count_is_what_its_press_lists(session, blob_store, helpers):
+    """The page's overview counts states and the group sums them: the sum is the number of rows the group lists."""
+    seeded = helpers.seed_version(session, blob_store)
+    _four_states(session, seeded)
+    adapter = _adapter(session)
+    overview = {entry.state: entry.count for entry in adapter.list_queue(cursor=None, limit=1).overview}
+    for group, states in (
+        ("active", ("queued", "leased", "running", "retry_wait")),
+        ("completed", ("succeeded", "cancelled")),
+        ("errors", ("failed", "dead_letter")),
+    ):
+        assert len(_everything(adapter, state_group=group)) == sum(overview[state] for state in states), group
+
+
+def test_a_group_composes_with_the_period(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    ids, at = _dated(session, seeded, 3)
+    adapter = _adapter(session)
+    after_all = at[2] + timedelta(microseconds=1)
+    kept = [item.job_id for item in _everything(adapter, state_group="active", created_from=at[1], created_to=after_all)]
+    assert [job for job in kept if job in ids] == ids[1:]
+    assert _everything(adapter, state_group="errors", created_from=at[0], created_to=after_all) == []
+
+
+def test_paging_under_a_group_walks_exactly_the_group_and_the_cursor_is_bound_to_it(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    for _ in range(5):
+        run_id, _ = _queued(session, seeded)
+        JobRepository().cancel_for_run(session, run_id=run_id)
+    adapter = _adapter(session)
+    whole = [item.job_id for item in _everything(adapter, state_group="completed")]
+    walked, cursor, pages = [], None, 0
+    while True:
+        page = adapter.list_queue(cursor=cursor, limit=2, state_group="completed")
+        assert len(page.items) <= 2 and {item.state for item in page.items} <= {"succeeded", "cancelled"}
+        walked.extend(item.job_id for item in page.items)
+        pages += 1
+        cursor = page.page.next_cursor
+        if cursor is None:
+            break
+        assert decode_cursor(cursor)[:2] == ("q2", "group:completed"), "a group's page issues the filtered format, scoped to the group"
+        issued = cursor
+    assert walked == whole and pages >= 3
+
+    # A group's cursor reads under its own group only: not under another, under a state, or under none.
+    for other in ({"state_group": "errors"}, {"state": "cancelled"}, {}):
+        with pytest.raises(DomainError) as error:
+            adapter.list_queue(cursor=issued, limit=2, **other)
+        assert dict(error.value.detail_fields) == {"field": "cursor", "constraint": "scope"}, other
+    # And a state's cursor is not read under the group that holds that state.
+    state_cursor = adapter.list_queue(cursor=None, limit=1, state="cancelled").page.next_cursor
+    assert state_cursor is not None
+    with pytest.raises(DomainError) as error:
+        adapter.list_queue(cursor=state_cursor, limit=1, state_group="completed")
+    assert dict(error.value.detail_fields) == {"field": "cursor", "constraint": "scope"}
+    assert adapter.list_queue(cursor=issued, limit=2, state_group="completed").items
+
+
+def test_a_state_and_a_group_together_are_refused_and_not_merged(session, blob_store, helpers):
+    helpers.seed_version(session, blob_store)
+    adapter = _adapter(session)
+    for pair in ({"state": "failed", "state_group": "errors"}, {"state": "queued", "state_group": "errors"}):
+        with pytest.raises(DomainError) as error:
+            adapter.list_queue(cursor=None, limit=1, **pair)
+        assert error.value.code is ErrorCode.VALIDATION_FAILED
+        assert dict(error.value.detail_fields) == {"field": "state_group", "constraint": "conflicts_with_state"}, pair
+
+
+# ------------------------------------------------------------------------------ the failures nobody has answered (`D-395`)
+
+
+def _failed(session, seeded) -> tuple[str, str]:
+    """A run and its job, ended in `failed` by the real commands."""
+    run_id, job_id = _queued(session, seeded)
+    jobs = JobRepository()
+    authority = jobs.start_execution(session, run_id=run_id)
+    jobs.finish_execution(session, authority, publishes_result=False)
+    return run_id, job_id
+
+
+def _live_failures(adapter: ExecutionAdapter) -> int:
+    count = adapter.list_queue(cursor=None, limit=1).live_failure_count
+    assert count is not None, "the page carries the count whatever its filters"
+    return count
+
+
+def test_a_failed_job_nothing_has_answered_is_a_live_failure_and_a_later_job_of_the_version_answers_it(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    adapter = _adapter(session)
+    before = _live_failures(adapter)
+    _failed(session, seeded)
+    assert _live_failures(adapter) == before + 1, "a failure no one has run again counts"
+
+    # The version is run again (a re-audit, a start from a stage, a plain new run): the failure is answered, whatever
+    # became of the new job.
+    later_run, _ = _queued(session, seeded)
+    assert _live_failures(adapter) == before
+    JobRepository().cancel_for_run(session, run_id=later_run)
+    assert _live_failures(adapter) == before, "a cancelled retry is still a retry: the failure stays answered"
+
+
+def test_a_later_job_that_failed_too_is_the_one_that_counts(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    adapter = _adapter(session)
+    before = _live_failures(adapter)
+    _failed(session, seeded)
+    _failed(session, seeded)
+    _failed(session, seeded)
+    assert _live_failures(adapter) == before + 1, "three failures of one version in a row are one live failure: the last"
+
+
+def test_a_job_of_another_version_answers_nothing(session, blob_store, helpers):
+    first = helpers.seed_version(session, blob_store)
+    other = helpers.seed_version(session, blob_store)
+    assert first.version_uid != other.version_uid
+    adapter = _adapter(session)
+    before = _live_failures(adapter)
+    _failed(session, first)
+    _queued(session, other)  # a later job, but of a document nobody failed on
+    assert _live_failures(adapter) == before + 1
+
+
+def test_the_count_ignores_the_period_and_the_state_filter_of_the_page(session, blob_store, helpers):
+    seeded = helpers.seed_version(session, blob_store)
+    adapter = _adapter(session)
+    before = _live_failures(adapter)
+    _failed(session, seeded)
+    ahead = datetime.now(timezone.utc) + timedelta(days=1)
+    for filters in ({"state": "queued"}, {"state_group": "active"}, {"created_from": ahead}, {"state": "failed", "created_to": SOME_INSTANT}):
+        assert adapter.list_queue(cursor=None, limit=1, **filters).live_failure_count == before + 1, filters

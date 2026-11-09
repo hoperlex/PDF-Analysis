@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from auditmanager.shared.errors import DomainError, ErrorCode
 from auditmanager.shared.identity import IdentityError, ProjectUid
 
+from .generator import saving_percent_for
 from .policy import AGGREGATE_OPTIMISATION_PROPOSAL, VERDICT_ACCEPT, require_reader
 from .repository import CarriedFromRecord
 
@@ -93,6 +94,10 @@ class AcceptedProposal:
     decided_at: datetime
     #: `D-335`: where an acceptance carried over from an earlier version's pass came from; ``None`` for one made directly.
     carried_from: CarriedFromRecord | None = None
+    #: `D-346` (contract 1.43.0): the percent the proposed unit price is below the current one, the very figure the proposals
+    #: read states (:func:`saving_percent_for` over the two stored prices); ``None`` only at a zero current price. It does not
+    #: wait for a numeric quantity, so it is present where ``saving`` is ``None``.
+    saving_percent: Decimal | None = None
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -146,6 +151,9 @@ def list_accepted_proposals(
             proposed_unit_price=Decimal(row["proposed_unit_price"]),
             currency=row["currency"],
             saving=_decimal(row["saving"]),
+            saving_percent=saving_percent_for(
+                current_unit_price=Decimal(row["current_unit_price"]), proposed_unit_price=Decimal(row["proposed_unit_price"]),
+            ),
             comment=row["comment"],
             actor_user_uid=row["actor_user_uid"],
             decided_at=row["decided_at"],

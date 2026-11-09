@@ -250,6 +250,16 @@ def test_decisions_are_carried_by_content_into_the_later_pass(unit, factory, cas
     # The proposal list reads the same provenance as the history does.
     assert states["Окно"].current_decision.carried_from == decision.carried_from
 
+    # `D-335`: the journal names the source of a carried decision too, and nothing for the decisions made directly.
+    from auditmanager.optimisation.proposals.journal import proposal_decision_journal
+
+    journal = {entry.proposal_decision_id: entry for entry in unit(proposal_decision_journal, project_uid=two_passes["first"].project_uid)}
+    carried_entry = journal[decision.proposal_decision_id]
+    assert carried_entry.carried_from == decision.carried_from
+    assert carried_entry.carried_from.version_ordinal == 1 and carried_entry.carried_from.optimisation_pass_id == first_id
+    assert journal[source_history[0].proposal_decision_id].carried_from is None
+    assert sum(1 for entry in journal.values() if entry.carried_from is not None) == 2  # the window and the anchor
+
 
 def test_a_touched_target_stands_and_a_repeat_carries_nothing_more(unit, factory, cast, two_passes) -> None:
     old, new = _by_row(two_passes["old"]), _by_row(two_passes["new"])

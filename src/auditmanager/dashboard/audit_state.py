@@ -178,6 +178,31 @@ _ACTIVE_RUN_RULE = f""",
         ORDER BY r.version_uid, r.created_at DESC, r.run_id DESC
     )"""
 
+#: The optimisation of each version in scope (`D-361`, contract 1.43.0): its latest pass -- by ``(started_at DESC,
+#: optimisation_pass_id DESC)`` -- with the number of its proposals and the number whose decision in force is none (no
+#: decision, or a withdrawn one: ``pending``, as the pass's ``decision_counts`` say it). A version no pass was started over
+#: has no row. A fact beside the audit state, never part of it (`R-150u`): it changes none of the four words, and the
+#: counters' statement does not read it.
+_OPTIMISATION_RULE = """,
+    latest_pass AS (
+        SELECT DISTINCT ON (p.version_uid) p.version_uid, p.optimisation_pass_id, p.proposal_count
+        FROM optimisation_pass p
+        WHERE p.version_uid IN (SELECT version_uid FROM current_docs)
+        ORDER BY p.version_uid, p.started_at DESC, p.optimisation_pass_id DESC
+    ),
+    pass_undecided AS (
+        SELECT lp.version_uid, count(*) AS undecided
+        FROM latest_pass lp
+        JOIN optimisation_proposal q ON q.optimisation_pass_id = lp.optimisation_pass_id
+        LEFT JOIN LATERAL (
+            SELECT d.verdict FROM optimisation_proposal_decision d
+            WHERE d.optimisation_proposal_id = q.optimisation_proposal_id
+            ORDER BY d.seq DESC LIMIT 1
+        ) cur ON TRUE
+        WHERE cur.verdict IS NULL OR cur.verdict = 'revoke'
+        GROUP BY lp.version_uid
+    )"""
+
 #: One row per *kind* of current document, grouped in the database: the project and the confirmed section of the
 #: document's current version, the state of its result run (``NULL`` when it has none), whether that run
 #: published any finding and whether any of them is undecided -- with the number of documents of that kind and the
@@ -215,15 +240,20 @@ _DOCUMENT_AUDITS = text(
     _CURRENT_DOCS_OF_VERSIONS
     + _RESULT_RUN_RULES
     + _ACTIVE_RUN_RULE
+    + _OPTIMISATION_RULE
     + """
     SELECT cd.version_uid, rr.state AS result_state, rr.run_id,
            coalesce(vf.findings, 0) AS findings,
            coalesce(vf.undecided, 0) AS undecided,
-           ar.run_id AS active_run_id, ar.state AS active_run_state
+           ar.run_id AS active_run_id, ar.state AS active_run_state,
+           lp.proposal_count AS optimisation_proposals,
+           CASE WHEN lp.version_uid IS NULL THEN NULL ELSE coalesce(pu.undecided, 0) END AS optimisation_undecided
     FROM current_docs cd
     LEFT JOIN result_run rr ON rr.version_uid = cd.version_uid
     LEFT JOIN version_findings vf ON vf.version_uid = cd.version_uid
     LEFT JOIN active_run ar ON ar.version_uid = cd.version_uid
+    LEFT JOIN latest_pass lp ON lp.version_uid = cd.version_uid
+    LEFT JOIN pass_undecided pu ON pu.version_uid = cd.version_uid
     """
 ).bindparams(bindparam("version_uids", expanding=True))
 
@@ -341,6 +371,10 @@ class DocumentAuditRecord:
     #: flight. A fact beside the audit state: it never changes :attr:`state`.
     active_run_id: str | None = None
     active_run_state: str | None = None
+    #: `D-361` (contract 1.43.0): the proposals of the version's latest optimisation pass and how many of them have no decision
+    #: in force; both ``None`` when no pass was started over the version. A fact beside the audit state, never part of it.
+    optimisation_proposal_count: int | None = None
+    optimisation_undecided_count: int | None = None
 
     @property
     def audit(self) -> DocumentAuditState:
@@ -511,6 +545,8 @@ class DocumentAuditReadModel:
                 undecided_finding_count=int(row[4]),
                 active_run_id=None if row[5] is None else str(row[5]),
                 active_run_state=None if row[6] is None else str(row[6]),
+                optimisation_proposal_count=None if row[7] is None else int(row[7]),
+                optimisation_undecided_count=None if row[8] is None else int(row[8]),
             )
             for row in (tuple(r) for r in rows)
         }

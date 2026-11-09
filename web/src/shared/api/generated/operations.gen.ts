@@ -7,8 +7,8 @@
  * Produced by `npm --prefix web run api:generate`
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
- *   AuditManager PC-01 API 1.42.0 (OpenAPI 3.1.0)
- *   sha256 8cca969ec13c58b0f8f8b8d8d6a9366c7d7493eee84083c9036d81438059286a
+ *   AuditManager PC-01 API 1.43.0 (OpenAPI 3.1.0)
+ *   sha256 3b39fe53c76676d56aa1d43dade300a6e0a6117d077f2a123989ed59bfc2d0ff
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -2306,7 +2306,7 @@ export type ExcludeComparisonUploadSetResult = ComparisonProposalSet;
 /**
  * Export Optimisation Proposals Csv
  *
- * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision. UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * Every proposal of the pass as a CSV file, one row each in ordinal order: the pass, the specification row's provenance, both positions, both exact unit prices, the saving (an empty cell when it is absent, never `0`) and the current decision, and, as the last column, `saving_percent` (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, empty only at a zero current price). UTF-8 with a byte-order mark, CRLF line endings, RFC 4180 quoting; every cell that a spreadsheet would read as a formula is prefixed with an apostrophe. Computed on request from the stored rows; separate from the findings' CSV. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ExportOptimisationProposalsCsvInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.csv`. */
@@ -2329,7 +2329,7 @@ export type ExportOptimisationProposalsCsvResult = Blob;
 /**
  * Export Optimisation Proposals Xlsx
  *
- * `UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never `0`), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
+ * `UI-B-15` (contract 1.35.0): every proposal of the pass as a workbook with one sheet, «Предложения», one row each in ordinal order. The first column, «ID предложения», is the proposal's own identity -- the key by which `importOptimisationProposalDecisions` reads the file back, never the display number «№»; then the specification row, both positions, the exact prices and the saving (an empty cell when it is absent, never `0`), «Экономия, %» (`D-346`, contract 1.43.0: the share of the current unit price the proposed one saves, empty only at a zero current price), and the two columns an expert edits, «Решение эксперта» (`не решено`, `принято`, `отклонено` or `на доработку`) and «Комментарий», filled with the decision in force. Every cell is text, so one that begins with `=` is shown and not evaluated. Computed on request from the stored rows. An unknown pass is `404`. Any one role, `role:admin|expert|viewer`.
  */
 export type ExportOptimisationProposalsXlsxInput = {
   /** Path parameters, substituted into `/optimisation-passes/{optimisation_pass_id}/export.xlsx`. */
@@ -3988,7 +3988,7 @@ export type IssueTokenResult = IssueTokenResponse;
 /**
  * List Accepted Optimisation Proposals
  *
- * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. Any one role, `role:admin|expert|viewer`.
+ * The optimisation proposals whose decision in force is an acceptance, across every pass, newest acceptance first (`cursor`, `limit`), each with where it belongs -- project, document set, version and the version's section -- and the acceptance itself (who, when, the comment). A proposal whose latest decision is a rejection, a revision request or a withdrawal, or that nobody decided, is not listed. `project_uid` narrows to one project and `section_code` to the versions an expert confirmed in that section; neither is a parent, so an empty result is a `200` with no rows. `total` is the number of proposals the filters match, on every page. `D-346` (contract 1.43.0): each row carries `saving_percent`, the share of the current unit price the proposed one saves -- the figure `listOptimisationProposals` states, present where `saving` is `null` and absent only at a zero current price. Any one role, `role:admin|expert|viewer`.
  */
 export type ListAcceptedOptimisationProposalsInput = {
   /** Query string parameters. */
@@ -4644,6 +4644,8 @@ export type ListExecutionQueueInput = {
     limit?: number;
     /** Only the jobs in this state; every state when absent. A cursor is valid only under the filters it was issued under: presented with other filters it is refused as `validation_failed` with `constraint: scope`. */
     state?: "queued" | "leased" | "running" | "retry_wait" | "succeeded" | "failed" | "cancelled" | "dead_letter";
+    /** Only the jobs in the states of this group: `active` (`queued`, `leased`, `running`, `retry_wait`), `completed` (`succeeded`, `cancelled`) or `errors` (`failed`, `dead_letter`); every state when absent. Not together with `state` (`422 validation_failed`, `constraint: conflicts_with_state`). Part of the filters a cursor is bound to. */
+    state_group?: "active" | "completed" | "errors";
   };
   /**
    * Optional `X-Correlation-Id`. The edge assigns one when the caller does not.
@@ -10690,7 +10692,7 @@ export const OPERATIONS = {
     method: 'GET',
     path: '/execution/queue',
     pathParams: [],
-    queryParams: ['created_from', 'created_to', 'cursor', 'limit', 'state'],
+    queryParams: ['created_from', 'created_to', 'cursor', 'limit', 'state', 'state_group'],
     headerParams: [],
     requiresIdempotencyKey: false,
     requestMediaType: null,

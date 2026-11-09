@@ -11,7 +11,43 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.42.0` (`UI-PARITY-S2`)
+## Current contract `1.43.0` (`UI-PARITY-C7`)
+
+Slice that closes five open debts end to end (`D-335`, `D-346`, `D-361`, `D-370`, `D-395`). **No operation, no schema, no migration (head stays
+`0060`), no error code.** Optional members and one optional query parameter only; every one is additive, so a client that does not know
+them reads the same answers as before.
+
+- **`D-335` -- the source of a carried proposal decision.** `ProposalDecisionRecord` (`listProposalDecisionJournal`, and the `proposal` of
+  a `listKnowledgeBaseEntries` entry) gains the optional `carried_from` (`ProposalDecisionCarriedFrom`: the source decision, the pass and
+  version it was made in, and the version's display ordinal), present only for a decision an expert carried over from an earlier
+  version's pass and absent for one made directly -- as `ProposalDecision` and `AcceptedOptimisationProposal` already carry it.
+- **`D-346` -- the percent beside the saving.** `AcceptedOptimisationProposal` gains the optional `saving_percent`, the very figure
+  `OptimisationProposal.saving_percent` states (computed by the same function over the two stored unit prices; present where `saving` is
+  `null`, absent only at a zero current price). The proposals **CSV** (`exportOptimisationProposalsCsv`) gains `saving_percent` as its
+  **last** column: the file is read by position by whoever scripts against it, so a column in the middle would shift every one after
+  it. The proposals **workbook** (`exportOptimisationProposalsXlsx`) gains «Экономия, %» after «Экономия»: its way back
+  (`importOptimisationProposalDecisions`) finds «ID предложения», «Решение эксперта» and «Комментарий» by their headers, so the two
+  edited columns move one place right and nothing reads them by position. An empty cell is an absent percent, never `0`.
+- **`D-370` -- a group of states.** `listExecutionQueue` takes the optional `state_group`: `active` (`queued`, `leased`, `running`,
+  `retry_wait`), `completed` (`succeeded`, `cancelled`) or `errors` (`failed`, `dead_letter`) -- the original's three sub-tabs. It lists
+  every job in any state of the group, one paged list with the page's `overview` and cursor as for any other filter; the cursor is bound
+  to it (`validation_failed`, `constraint: scope`, under another). `state` and `state_group` are two spellings of one filter and are
+  refused together (`422 validation_failed`, `field: state_group`, `constraint: conflicts_with_state`), never merged by a guess.
+- **`D-395` -- the failures nobody has answered.** `ExecutionQueuePage` gains the optional `live_failure_count`: the jobs in `failed` or
+  `dead_letter` with no **later job for a run of the same document version and the same analysis**. A job belongs to exactly one run, so
+  the original's "retried or superseded" is read as the version having been run again since (a re-audit, a start from a stage, a plain
+  new run, whatever became of it); a later job that failed too is the one that counts. Over all history, whatever the period or state
+  filter of the page, so a one-row page carries it: the side menu's red mark reads it and the 24-hour acceptance window of `D-331` is gone.
+- **`D-361` -- the optimisation of a document.** `DocumentAudit` (the `audit` of each `listDocuments` item) gains the optional
+  `optimisation_proposal_count` and `optimisation_undecided_count`: the proposals of the version's latest optimisation pass and, of
+  those, the ones with no decision in force (none, or a withdrawn one) -- the original's «Оптимизация N» pill. Both are present when a
+  pass was started over the version and both are absent when none was (absent is "no optimisation read", never zero). Read in the same
+  statement as the audit; a fact beside the four words, which it changes none of (`R-150u`), and the counters do not read it.
+- **Not changed.** Every operation, schema, error code and the migration head.
+
+The API still has 275 paths, 303 operations and 730 schemas; migration head `0060`. The domain catalogs are at candidate revision 60.
+
+## Contract `1.42.0` (`UI-PARITY-S2`, historical)
 
 Slice for register row `UI-A-60` (ruling `R-151i`, debt `D-301`): «Запустить с этапа». **One operation, one migration (`0060_run_from_stage`),
 no error code.** One new schema, `StartRunFromStageRequest`; optional properties on `RunStatus`, `RunCostEstimateRequest` and
@@ -38,8 +74,8 @@ no error code.** One new schema, `StartRunFromStageRequest`; optional properties
   from the same earlier run and stage has not ended, a second is `409 conflict`.
 - **Not changed.** `reauditRun`, `startRun`, the stage vocabulary, the error catalogue and every other operation.
 
-The API now has 275 paths, 303 operations and 730 schemas (the new schema is `StartRunFromStageRequest`); migration head `0060`
-(chained after `0059_decision_memory`). The domain catalogs are at candidate revision 59.
+The API then had 275 paths, 303 operations and 730 schemas (the new schema was `StartRunFromStageRequest`); migration head `0060`
+(chained after `0059_decision_memory`). The domain catalogs were at candidate revision 59.
 
 ## Contract `1.41.0` (`UI-PARITY-C6`, historical)
 

@@ -131,18 +131,20 @@ def _execution_cursor(raw: str | None) -> str | None:
 
 
 def _queue_scope(
-    state: str | None, created_from: datetime | None, created_to: datetime | None,
+    state: str | None, created_from: datetime | None, created_to: datetime | None, state_group: str | None = None,
 ) -> tuple[str, str, str] | None:
     """The filters a queue page was read under, as the three words a cursor carries; ``None`` for no filter.
 
-    An instant is written in UTC, so the same moment sent with two offsets is the same scope."""
-    if state is None and created_from is None and created_to is None:
+    An instant is written in UTC, so the same moment sent with two offsets is the same scope. The first word is the
+    state filter: a state, or ``group:`` and the group's name (`D-370`) -- a state never starts with it, so the cursor
+    format and every cursor already issued are unchanged."""
+    if state is None and state_group is None and created_from is None and created_to is None:
         return None
 
     def instant(value: datetime | None) -> str:
         return "" if value is None else value.astimezone(timezone.utc).isoformat()
 
-    return (state or "", instant(created_from), instant(created_to))
+    return (state or ("" if state_group is None else f"group:{state_group}"), instant(created_from), instant(created_to))
 
 
 def _queue_cursor(raw: str | None, scope: tuple[str, str, str] | None = None) -> "QueuePosition | None":
@@ -296,18 +298,22 @@ class ExecutionAdapter(_SessionHolder):
 
     def list_queue(
         self, *, cursor: str | None, limit: int, state: str | None = None,
-        created_from: datetime | None = None, created_to: datetime | None = None,
+        created_from: datetime | None = None, created_to: datetime | None = None, state_group: str | None = None,
     ) -> models.ExecutionQueuePage:
-        from auditmanager.execution.public import ExecutionRepository
+        from auditmanager.execution.public import QUEUE_STATE_GROUPS, ExecutionRepository
 
-        scope = _queue_scope(state, created_from, created_to)
+        if state_group is not None and state is not None:
+            # `D-370`: two spellings of the one filter are refused, not merged by a guess.
+            raise DomainError(ErrorCode.VALIDATION_FAILED, field="state_group", constraint="conflicts_with_state")
+        states = None if state_group is None else QUEUE_STATE_GROUPS[state_group]
+        scope = _queue_scope(state, created_from, created_to, state_group)
 
         def read(session: Session) -> models.ExecutionQueuePage:
             repo = ExecutionRepository()
             after = _queue_cursor(cursor, scope)
             rows = repo.list_queue(
                 session, cursor=after, limit=limit + 1,
-                state=state, created_from=created_from, created_to=created_to,
+                state=state, states=states, created_from=created_from, created_to=created_to,
             )
             items = rows[:limit]
             if len(rows) > limit:
@@ -336,6 +342,8 @@ class ExecutionAdapter(_SessionHolder):
                 # `UI-PARITY-P0M`: every state, in the queue's order, 0 when no job stands in it.
                 overview=[models.ExecutionQueueStateCount(state=state, count=counts.get(state, 0))
                           for state in get_args(models.ExecutionQueueStateCount.model_fields["state"].annotation)],
+                # `D-395`: the failed jobs nothing has answered yet, over all history -- not over the period filter.
+                live_failure_count=repo.live_failure_count(session),
             )
         return self._read(read)
 
@@ -1125,6 +1133,9 @@ class DocumentAdapter:
                 active_run=None if record.active_run_id is None else DocumentActiveRunView(
                     run_id=record.active_run_id, state=record.active_run_state,
                 ),
+                # `D-361`: the optimisation of the version's latest pass, read in the same statement; absent without a pass.
+                optimisation_proposal_count=record.optimisation_proposal_count,
+                optimisation_undecided_count=record.optimisation_undecided_count,
             )
             for name, record in records.items()
         }
@@ -2849,6 +2860,7 @@ class DecisionAdapter(_SessionHolder):
                     row_text=entry.row_text,
                     proposed_vendor=entry.proposed_vendor,
                     unit=entry.unit,
+                    **({} if entry.carried_from is None else {"carried_from": _proposal_carried_from(entry.carried_from)}),
                 )
                 for entry in entries
             )
@@ -6328,12 +6340,8 @@ class OptimisationProposalAdapter(_SessionHolder):
                     comment=row.comment,
                     actor_label=labels.of(row.actor_user_uid),
                     decided_at=row.decided_at,
-                    carried_from=None if row.carried_from is None else models.ProposalDecisionCarriedFrom(
-                        proposal_decision_id=row.carried_from.proposal_decision_id,
-                        optimisation_pass_id=row.carried_from.optimisation_pass_id,
-                        version_uid=row.carried_from.version_uid,
-                        version_ordinal=row.carried_from.version_ordinal,
-                    ),
+                    carried_from=None if row.carried_from is None else _proposal_carried_from(row.carried_from),
+                    **_unset_none(saving_percent=_optional_decimal(row.saving_percent)),
                 )
                 for row in rows
             )
@@ -6404,6 +6412,16 @@ def _optimisation_pass_view(record: Any, labels: "_Labels") -> models.Optimisati
     )
 
 
+def _proposal_carried_from(source: Any) -> models.ProposalDecisionCarriedFrom:
+    """`UI-B-14`: the wire view of where a carried proposal decision came from."""
+    return models.ProposalDecisionCarriedFrom(
+        proposal_decision_id=source.proposal_decision_id,
+        optimisation_pass_id=source.optimisation_pass_id,
+        version_uid=source.version_uid,
+        version_ordinal=source.version_ordinal,
+    )
+
+
 def _proposal_decision_view(record: Any, labels: "_Labels") -> models.ProposalDecision:
     return models.ProposalDecision(
         proposal_decision_id=record.proposal_decision_id,
@@ -6413,14 +6431,7 @@ def _proposal_decision_view(record: Any, labels: "_Labels") -> models.ProposalDe
         actor_user_uid=record.actor_user_uid,
         actor_label=labels.of(record.actor_user_uid),
         decided_at=record.decided_at,
-        carried_from=None
-        if record.carried_from is None
-        else models.ProposalDecisionCarriedFrom(
-            proposal_decision_id=record.carried_from.proposal_decision_id,
-            optimisation_pass_id=record.carried_from.optimisation_pass_id,
-            version_uid=record.carried_from.version_uid,
-            version_ordinal=record.carried_from.version_ordinal,
-        ),
+        carried_from=None if record.carried_from is None else _proposal_carried_from(record.carried_from),
     )
 
 

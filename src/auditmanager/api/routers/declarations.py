@@ -232,6 +232,25 @@ QueueStateFilterParam = Annotated[
         json_schema_extra=optional_property,
     ),
 ]
+#: `D-370` (contract 1.43.0). The queue's three groups of states, the original's «Активные / Завершённые / Ошибки»: the
+#: server holds the set (``execution.public.QUEUE_STATE_GROUPS``) and lists every job in any state of it, so a group is one
+#: filtered, paged and counted list. ``state`` and ``state_group`` are two ways to say the one filter; together they are
+#: refused (``validation_failed`` on ``state_group``, ``conflicts_with_state``), never merged by a guess.
+QUEUE_STATE_GROUP_NAMES: Final[tuple[str, ...]] = ("active", "completed", "errors")
+QueueStateGroupFilterParam = Annotated[
+    Literal["active", "completed", "errors"] | None,
+    BeforeValidator(_absent),
+    WithJsonSchema({"type": "string", "enum": list(QUEUE_STATE_GROUP_NAMES)}),
+    Query(
+        description=(
+            "Only the jobs in the states of this group: `active` (`queued`, `leased`, `running`, `retry_wait`), "
+            "`completed` (`succeeded`, `cancelled`) or `errors` (`failed`, `dead_letter`); every state when absent. "
+            "Not together with `state` (`422 validation_failed`, `constraint: conflicts_with_state`). Part of the "
+            "filters a cursor is bound to."
+        ),
+        json_schema_extra=optional_property,
+    ),
+]
 QueueCreatedFromParam = Annotated[
     AwareDatetime | None,
     BeforeValidator(_instant),

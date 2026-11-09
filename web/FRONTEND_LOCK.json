@@ -22,7 +22,7 @@
     "dispatch_named_commit": "42f0a0296638ca9d31dae050a1a8ed4bac465e26",
     "commit_note": "Resealed by UI-PARITY-S2: contract 1.42.0 (startRunFromStage; started_from_run_id and start_stage_id on RunStatus; the cost estimate of a start from a stage).",
     "openapi_version": "3.1.0",
-    "info_version": "1.42.0",
+    "info_version": "1.43.0",
     "paths": 275,
     "operations": 303,
     "component_schemas": 730,

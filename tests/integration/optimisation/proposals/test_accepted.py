@@ -7,6 +7,7 @@ it back. The filters are filters, not parents; the order is newest acceptance fi
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -82,6 +83,16 @@ def test_a_proposal_is_listed_exactly_while_an_acceptance_is_the_decision_in_for
     assert row_door.matched_name and row_door.proposed_name and row_door.row_text
     # The tape's quantity is not a number: no saving, never ``0``.
     assert (row_tape.quantity, row_tape.saving) == (None, None)
+    # `D-346`: the percent of the price, the very figure the proposals read states; the tape has it where it has no amount.
+    assert (row_door.saving_percent, row_tape.saving_percent) == (Decimal("16"), Decimal("33.33"))
+    states = {
+        item.optimisation_proposal_id: item.saving_percent
+        for item in unit(
+            list_optimisation_proposals, optimisation_pass_id=started["pass"].optimisation_pass_id,
+            actor_roles=frozenset({"expert"}),
+        ).items
+    }
+    assert states[door] == row_door.saving_percent and states[tape] == row_tape.saving_percent
 
     # A withdrawal takes it off; a later acceptance puts it back, newest first again.
     _decide(unit, cast, door, "revoke", "a-5")

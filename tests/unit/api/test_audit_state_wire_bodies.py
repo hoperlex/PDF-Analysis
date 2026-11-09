@@ -135,3 +135,30 @@ def test_the_frozen_shape_of_the_percent_is_optional_beside_the_required_nullabl
     proposal = _schemas()["OptimisationProposal"]
     assert "saving_percent" not in proposal["required"] and "saving" in proposal["required"]
     assert "saving_percent" in models.OptimisationProposal.model_json_schema()["properties"]
+
+
+# --- DocumentAudit.optimisation_* (`D-361`, contract 1.43.0) -------------------------------------------------------
+
+
+def test_the_optimisation_counts_are_rendered_together_or_not_at_all_and_leave_the_four_words_alone() -> None:
+    quiet = document_audit_body(_audit())
+    assert "optimisation_proposal_count" not in quiet and "optimisation_undecided_count" not in quiet, (
+        "no pass is no figure: omitted, never sent as null and never a zero"
+    )
+    read = document_audit_body(_audit(optimisation_proposal_count=7, optimisation_undecided_count=3))
+    assert (read["optimisation_proposal_count"], read["optimisation_undecided_count"]) == (7, 3)
+    assert {key: read[key] for key in quiet} == quiet, "the state, the flag and the counts are what they were"
+    # A pass with no proposal is a figure: zero is said, because a pass was read.
+    empty = document_audit_body(_audit(optimisation_proposal_count=0, optimisation_undecided_count=0))
+    assert (empty["optimisation_proposal_count"], empty["optimisation_undecided_count"]) == (0, 0)
+
+
+def test_the_frozen_shape_of_the_optimisation_counts_is_two_optional_counts() -> None:
+    audit = _schemas()["DocumentAudit"]
+    for name in ("optimisation_proposal_count", "optimisation_undecided_count"):
+        assert audit["properties"][name]["type"] == "integer" and audit["properties"][name]["minimum"] == 0
+        assert name not in audit["required"], "optional: absent when no pass was started over the version"
+    generated = models.DocumentAudit.model_json_schema()
+    assert {"optimisation_proposal_count", "optimisation_undecided_count"} <= set(generated["properties"])
+    assert not {"optimisation_proposal_count", "optimisation_undecided_count"} & set(generated.get("required", []))
+    assert audit["properties"]["state"]["enum"] == ["not_run", "clean", "awaiting_decision", "checked"]

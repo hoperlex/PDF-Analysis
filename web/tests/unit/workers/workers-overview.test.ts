@@ -177,7 +177,7 @@ describe('«Обзор», the first tab of «Исполнители»', () => {
     const client = newClient();
     client.setQueryData(queryKeys.execution.workers(undefined, WORKER_PAGE_LIMIT), { items: WORKERS, page: { next_cursor: null } });
     seedError(client, queryKeys.execution.queue(undefined, {}), new ApiError(503, {
-      contract_version: '1.42.0', error_code: 'dependency_unavailable',
+      contract_version: '1.43.0', error_code: 'dependency_unavailable',
       message: 'Безопасный отказ.', correlation_id: 'cid-queue-1', retryable: false,
     }, null));
     client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });

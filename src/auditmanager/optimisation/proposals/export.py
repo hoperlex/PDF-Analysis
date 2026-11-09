@@ -12,7 +12,9 @@ altered by the rule.
 
 One row per proposal in ordinal order, the pass's identities repeated on each row; the
 header is written even for a pass with no proposals. A saving that is absent is an empty
-cell -- never ``0``. Two exports of one pass with no new decision are byte-identical:
+cell -- never ``0``; the same goes for ``saving_percent`` (`D-346`, the share of the current unit price the
+proposed one saves, which stands where ``saving`` is absent for want of a numeric quantity, and is empty only at a zero
+current price). Two exports of one pass with no new decision are byte-identical:
 nothing here reads a clock, a locale or a random source.
 """
 
@@ -86,6 +88,10 @@ COLUMNS: Final[tuple[str, ...]] = (
     "decision_comment",
     "decided_by_user_uid",
     "decided_at",
+    # `D-346` (contract 1.43.0): appended, not placed beside ``saving``. The file is read by position by whoever scripts
+    # against it, so a column inserted in the middle would shift every one after it; the percent is the one new column and
+    # takes the end.
+    "saving_percent",
 )
 
 BOM: Final[bytes] = b"\xef\xbb\xbf"
@@ -172,6 +178,7 @@ def _row(header: OptimisationPassRecord, item: OptimisationProposalRecord) -> tu
         None if decision is None else decision.comment,
         None if decision is None else decision.actor_user_uid,
         None if decision is None else decision.decided_at,
+        item.saving_percent,
     )
     return tuple(_cell(value) for value in values)
 
