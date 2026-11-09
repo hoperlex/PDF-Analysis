@@ -278,6 +278,8 @@ def group_capacity(
     revision = repo.current_revisions(session, [group_id]).get(group_id)
     if revision is None:
         raise _inconsistent("an executor group has no revision")
+    if record.system_managed:
+        return _system_group_capacity(session, record, revision, store, repo)
     rows = _facts(session, revision, store)
     in_service = [facts for facts, _, _ in rows if facts.in_service]
     return GroupCapacity(
@@ -294,6 +296,65 @@ def group_capacity(
         used=sum(facts.used for facts in in_service),
         waiting=repo.pending_count(session, group_id),
     )
+
+
+def _system_group_capacity(
+    session: Session, record: GroupRecord, revision: GroupRevisionRecord, store: ExecutorRepository, repo: GroupRepository,
+) -> GroupCapacity:
+    """The capacity of a **system** group (`HOSTS-BACKEND-01`, ADR-0028 decisions 3 and 16): each member is a system connection of a host, its
+    occupancy is that of its capacity **pool** (the units the pool's runs and calls hold against the host's slots of the provider), and the issue
+    that keeps it from being chosen is read from the host's facts -- the unavailability reasons, then ``at_capacity``.
+
+    The reasons come **before** ``at_capacity`` here, whatever the enumeration's order, so that a member whose only issue is ``at_capacity`` is one
+    that is available and busy (``MemberStatus.eligible`` is the absence of any issue). ``host_offline`` is reported as ``runner_offline`` and
+    ``login_required`` as ``model_not_verified``: the contract has no words of its own for them."""
+    from auditmanager.executors.group_selection import ISSUE_AT_CAPACITY, ISSUE_CONNECTION_ARCHIVED, ISSUE_REVISION_CHANGED
+    from auditmanager.executors.host_commands import member_reasons, read_hosts
+    from auditmanager.executors.hosts import (
+        REASON_HOST_DISABLED, REASON_HOST_OFFLINE, REASON_LOGIN_REQUIRED, REASON_MODEL_COOLING_DOWN,
+        REASON_MODEL_NOT_VERIFIED, access_of_billing, split_pool,
+    )
+
+    ids = [member.connection_id for member in revision.members]
+    currents = store.current_revisions(session, ids)
+    connections = {cid: store.get_connection(session, cid) for cid in ids}
+    host_ids = sorted({split_pool(conn.capacity_pool)[0] for conn in connections.values()
+                       if conn is not None and conn.capacity_pool is not None})
+    hosts = {item.record.host_id: item for item in read_hosts(session, host_ids, include_archived=True)}
+    statuses: list[MemberStatus] = []
+    capacity = used = 0
+    for member in revision.members:
+        connection = connections.get(member.connection_id)
+        if connection is None or connection.capacity_pool is None:
+            raise _inconsistent("a system group member has no connection")
+        host_id, provider = split_pool(connection.capacity_pool)
+        host = hosts[host_id]
+        current = currents.get(member.connection_id)
+        slot = host.slot_of(provider)
+        occupancy = Occupancy(capacity=0 if slot is None else slot.slots, active_runs=0 if slot is None else slot.in_use, active_calls=0)
+        issue: str | None = None
+        if current is None or current.revision_id != member.connection_revision_id:
+            issue = ISSUE_REVISION_CHANGED
+        elif connection.archived_at is not None or host.record.archived_at is not None:
+            issue = ISSUE_CONNECTION_ARCHIVED
+        else:
+            reasons, _full = member_reasons(
+                host, provider=provider, access=access_of_billing(current.settings.billing), model_id=revision.pin_id)
+            issue = next((word for reason, word in (
+                (REASON_HOST_OFFLINE, "runner_offline"), (REASON_HOST_DISABLED, "host_disabled"),
+                (REASON_LOGIN_REQUIRED, "model_not_verified"), (REASON_MODEL_NOT_VERIFIED, "model_not_verified"),
+                (REASON_MODEL_COOLING_DOWN, "model_cooling_down")) if reason in reasons), None)
+            if issue is None and not occupancy.has_free_unit:
+                issue = ISSUE_AT_CAPACITY
+            if current.revision_id == member.connection_revision_id:
+                capacity += occupancy.capacity
+                used += occupancy.used
+        statuses.append(MemberStatus(
+            connection_id=member.connection_id, snapshot_revision_id=member.connection_revision_id,
+            current_revision_id=None if current is None else current.revision_id, occupancy=occupancy, issue=issue))
+    return GroupCapacity(
+        group_id=record.group_id, group_revision_id=revision.group_revision_id, members=tuple(statuses),
+        capacity=capacity, used=used, waiting=repo.pending_count(session, record.group_id))
 
 
 # --- commands --------------------------------------------------------------------------------------------------------
