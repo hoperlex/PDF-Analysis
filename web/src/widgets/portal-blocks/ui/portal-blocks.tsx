@@ -94,6 +94,16 @@ export interface PortalBlockListViewProps {
   readonly staticOpen?: boolean | undefined;
 }
 
+/**
+ * The list of blocks no finding was linked to (judge J3 F7). The relation is geometric and has known misses (`D-353`: a
+ * quotation in the gap between blocks, in a line the portal did not box, a merged observation's evidence), so the list says
+ * what is known -- nothing was linked -- and not that the block has no findings.
+ */
+const NOT_LINKED_TITLE =
+  'Привязка замечаний к блокам считается по положению цитаты на странице; цитата в зазоре между блоками или в строке, которую портал не выделил, ни к какому блоку не привязана.';
+const NOT_LINKED_HINT =
+  'Ни одно замечание прогона не привязано к этим блокам по положению цитаты на странице. Это не значит, что замечаний по ним нет: привязка приблизительная и может пропустить цитату.';
+
 /** The sentence under the summary that says what the numbers on the tiles are, or why there are none. */
 function FindingsNote({ reading }: { readonly reading: PageFindingsReading }) {
   if (reading.kind === 'none') return null;
@@ -258,13 +268,13 @@ export function PortalBlockListView({
         <>
           {(
             [
-              ['withoutFindings', 'Замечаний не выявлено', 'Ни одно замечание прогона не лежит в этих блоках: в них есть что читать, а замечаний по ним нет.', noEntities.withoutFindings],
-              ['withoutContent', 'Без значимого содержимого', 'В этих блоках нечего читать: штампы и области, в которых портал ничего не распознал.', noEntities.withoutContent],
+              ['withoutFindings', 'Замечания к блоку не привязаны', NOT_LINKED_HINT, noEntities.withoutFindings, NOT_LINKED_TITLE],
+              ['withoutContent', 'Без значимого содержимого', 'В этих блоках нечего читать: штампы и области, в которых портал ничего не распознал.', noEntities.withoutContent, undefined],
             ] as const
-          ).map(([group, title, hint, list]) =>
+          ).map(([group, title, hint, list, explanation]) =>
             list.length === 0 ? null : (
               <section key={group} className={styles.page} data-portal-empty={group}>
-                <h3 className={styles.pageTitle}>{`${title} (${list.length})`}</h3>
+                <h3 className={styles.pageTitle} title={explanation}>{`${title} (${list.length})`}</h3>
                 <p className="am-note">{hint}</p>
                 <ol className={styles.blocks}>
                   {list.map((block) => {

@@ -65,6 +65,8 @@ export interface FindingListProps {
   readonly sheetOf?: ((page: number) => number | undefined) | undefined;
   /** `UI-A-74`: the table's count of the portal blocks that hold a finding's evidence; the page reads it from the run's block links. */
   readonly blockCountOf?: ((findingUid: string) => number | undefined) | undefined;
+  /** The run's `unlinked_pages`: a finding that cites one has a block count that is partial, and the table says so. */
+  readonly unlinkedPages?: ReadonlySet<number> | undefined;
   /** `R-151j`: the severity filter, when the page keeps it (in the address). Absent, the list keeps its own. */
   readonly severityFilter?: SeverityFilter | undefined;
   readonly onSeverityFilterChange?: ((filter: SeverityFilter) => void) | undefined;
@@ -319,6 +321,7 @@ export function FindingList({
   renderExpansion,
   toolbar,
   blockCountOf,
+  unlinkedPages,
 }: FindingListProps) {
   const [ownFilter, setOwnFilter] = useState<VerdictFilter>('all');
   const [ownSeverity, setOwnSeverity] = useState<SeverityFilter>('all');
@@ -405,6 +408,7 @@ export function FindingList({
           renderExpansion={renderExpansion}
           sheetOf={sheetOf}
           blockCountOf={blockCountOf}
+          unlinkedPages={unlinkedPages}
         />
       ) : null}
 
