@@ -1201,6 +1201,9 @@ def test_a_subject_is_published_and_only_one_operation_reads_who_it_is(
         # page reads take no subject.
         "comparison_uploads.py",
         "comparison_version_orders.py",
+        # `DECISION-MEMORY-M2` (1.44.0): a withdraw and a restore record WHO changed a case's standing (the actor of the status event
+        # and of the command receipt); that only an administrator may is the role register's. The reads take no subject.
+        "decision_memory.py",
         "decisions.py",
         # `W61-DISPATCHER-01`: an assignment records WHO created or moved it; what they may
         # do is the role register's and the dispatch context's own re-read of the role set.
