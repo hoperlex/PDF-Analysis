@@ -7,9 +7,13 @@
  * fake clock (only `Date`: staleness is read from it) and a stand-in `fetch` that counts the requests: a walk at human pace over a run that has ended costs one read; the
  * answers that can still change (a run that has not ended, a run whose state is not known, `not_produced`) still cost one per
  * mount after 30 s, because they are not a fact yet.
+ *
+ * Not for good (`D-472`): the server joins the run's own geometry with the version's NEWEST portal blocks, so even a produced answer of an
+ * ended run can change when a later run re-produces the portal geometry, and nothing in the answer says so. It is kept for ten minutes,
+ * then read again by the next strip that mounts and by the window getting the focus back.
  */
 
-import { QueryObserver, environmentManager } from '@tanstack/react-query';
+import { QueryObserver, environmentManager, focusManager } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,6 +28,10 @@ import { BLOCKS_VERSION_UID, blockId } from './fixtures';
 const wasServer = environmentManager.isServer();
 beforeAll(() => environmentManager.setIsServer(() => false));
 afterAll(() => environmentManager.setIsServer(() => wasServer));
+afterEach(() => focusManager.setFocused(undefined));
+
+/** What a produced answer of an ended run is kept for (`D-472`); the code's own constant is private, and a change of it is a change to restate here. */
+const KEPT_MS = 10 * 60_000;
 
 const LINKS: RunFindingBlockLinks = {
   run_id: RUN_ID,
@@ -124,5 +132,49 @@ describe('what is not yet a fact is still read again after the default 30 s', ()
     later(10_000);
     await openAFinding(client);
     expect(reads).toBe(1);
+  });
+});
+
+describe('a produced answer of an ended run is not kept for ever (`D-472`)', () => {
+  it('is read again by the next strip once the ten minutes are out, and not before', async () => {
+    const client = withRun('published');
+    await openAFinding(client);
+    later(KEPT_MS - 1_000);
+    await openAFinding(client);
+    expect(reads).toBe(1);
+    later(2_000);
+    await openAFinding(client);
+    expect(reads).toBe(2);
+  });
+
+  it('is read again when the window gets the focus back after the ten minutes, and not before', async () => {
+    const client = withRun('published');
+    client.mount(); // what `QueryClientProvider` does: the client listens to the window's focus
+    try {
+      const observer = new QueryObserver(client, runFindingBlocksQueryOptions(RUN_ID as RunId, client));
+      const stop = observer.subscribe(() => {});
+      await vi.waitFor(() => expect(observer.getCurrentResult().isFetching).toBe(false));
+      expect(reads).toBe(1);
+
+      later(KEPT_MS - 1_000);
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await new Promise((resolve) => setTimeout(resolve, 25)); // real time: a refetch would have been counted by now
+      expect(reads).toBe(1);
+
+      later(2_000);
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await vi.waitFor(() => expect(reads).toBe(2));
+      stop();
+    } finally {
+      client.unmount();
+    }
+  });
+
+  it('asks for the read on focus itself: the app’s default is off', () => {
+    const options = runFindingBlocksQueryOptions(RUN_ID as RunId, createQueryClient());
+    expect(createQueryClient().getDefaultOptions().queries?.refetchOnWindowFocus).toBe(false);
+    expect(options.refetchOnWindowFocus).toBe(true);
   });
 });

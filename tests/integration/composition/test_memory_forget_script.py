@@ -27,7 +27,16 @@ from pathlib import Path
 import pytest
 
 from auditmanager.decision_memory.public import STATUS_REASON_CODES
-from tests.support.wrapper_rig import ROOT, Rig, Wrapper, env_without, guard_names, modules_imported_by
+from tests.support.wrapper_rig import (
+    ROOT,
+    Rig,
+    Wrapper,
+    env_without,
+    guard_names,
+    guard_names_in,
+    modules_imported_by,
+    runbook_guards_text,
+)
 
 SCRIPT = ROOT / "infra/deploy/memory-forget.sh"
 MODULE_DIR = ROOT / "scripts/recovery"
@@ -654,6 +663,61 @@ def test_without_the_option_the_services_are_left_alone(rig: Rig) -> None:
     assert not any({"stop", "up", "ps"} & set(record["argv"]) for record in rig.records), rig.calls
 
 
+# --- the lock timeout the operator sets (`D-515`) ---------------------------------------------------
+
+
+def lock_timeout_items(call: dict[str, object]) -> list[str]:
+    argv = [str(item) for item in call["argv"]]  # type: ignore[attr-defined]
+    return [item for item in argv if item.startswith("MEMORY_") and "_LOCK_TIMEOUT" in item]
+
+
+def test_the_lock_timeout_the_operator_sets_is_handed_to_every_container_run_and_the_other_wrappers_is_not(rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"MEMORY_FORGET_LOCK_TIMEOUT": "45s", "MEMORY_SETTING_LOCK_TIMEOUT": "99s"}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert len(rig.tool_calls()) == 2
+    for call in rig.tool_calls():
+        argv = [str(item) for item in call["argv"]]
+        assert lock_timeout_items(call) == ["MEMORY_FORGET_LOCK_TIMEOUT=45s"], argv
+        assert argv[argv.index("MEMORY_FORGET_LOCK_TIMEOUT=45s") - 1] == "-e", "a variable of the one-off container is an -e of `compose run`"
+        # an option of `compose run` after the service name would be the tool's argument
+        assert argv.index("MEMORY_FORGET_LOCK_TIMEOUT=45s") < argv.index("--entrypoint")
+
+
+def test_no_lock_timeout_is_passed_when_the_operator_set_none_and_the_default_stays_the_modules(rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"MEMORY_SETTING_LOCK_TIMEOUT": "99s"}, typed=TYPED)  # the other wrapper's variable is not ours
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert all(lock_timeout_items(call) == [] for call in rig.tool_calls()), [lock_timeout_items(c) for c in rig.tool_calls()]
+
+
+def test_the_pass_through_of_the_lock_timeout_can_fail(rig: Rig) -> None:
+    broken = rig.edited('"${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" ', "")
+    completed = broken.run(*APPLY, env={"MEMORY_FORGET_LOCK_TIMEOUT": "45s"}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert all(lock_timeout_items(call) == [] for call in broken.tool_calls()), (
+        "with the pass-through removed the value still reached the container: the test above would prove nothing")
+
+
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s"),
+                         ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
+    completed = rig.run(*PLAN, env={"MEMORY_FORGET_LOCK_TIMEOUT": value})
+    assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+    assert "MEMORY_FORGET_LOCK_TIMEOUT must be a positive number of ms, s or min" in completed.stderr, completed.stderr
+    assert not rig.log.exists(), f"refused, but only after running docker: {rig.calls}"
+    broken = rig.mutant("lock-timeout-shape")
+    completed = broken.run(*PLAN, env={"MEMORY_FORGET_LOCK_TIMEOUT": value})
+    assert "must be a positive number" not in completed.stderr
+    assert broken.log.exists() and any("MEMORY_FORGET_LOCK_TIMEOUT=" + value in item for call in broken.tool_calls() for item in call["argv"]), (
+        "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
+
+
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999s"), ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"MEMORY_FORGET_LOCK_TIMEOUT": value}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert all(lock_timeout_items(call) == ["MEMORY_FORGET_LOCK_TIMEOUT=" + value] for call in rig.tool_calls())
+
+
 # --- the manifest on disk is the one the database holds ---------------------------------------
 
 
@@ -751,12 +815,33 @@ def test_the_script_is_executable_and_in_the_deploy_directory() -> None:
     assert SCRIPT.parent == ROOT / "infra/deploy"
 
 
+def test_the_runbook_names_every_guard_of_the_script_and_the_check_can_fail() -> None:
+    """`D-513`: runbook section 21 lists the script's guards by name, and the list is held to the script's markers."""
+    markers = guard_names(SCRIPT)
+    text = runbook_guards_text(21)
+    assert guard_names_in(text) == markers, (sorted(markers - guard_names_in(text)), sorted(guard_names_in(text) - markers))
+    assert guard_names_in(text.replace("`lock-timeout-shape`", "")) != markers, "the comparison cannot see a name that is missing"
+    assert guard_names_in(text + " `a-guard-nobody-wrote`") != markers, "the comparison cannot see a name that is not in the script"
+
+
+def test_the_locks_line_of_the_plan_reaches_the_operator_before_the_apply_asks_anything(rig: Rig) -> None:
+    """`D-516`: the module's dry run says how near the selection is to the server's lock table; the wrapper shows the plan it was given, so the
+    warning is on the screen before the digest and the retype, in the dry run and in an apply."""
+    warning = "  WARNING: this selection needs 188 % of that size (the warning starts above 80 %)."
+    rig.answers["plan"] = {"stdout": plan_text().replace("cases: 3\n", f"{warning}\n\ncases: 3\n", 1)}
+    dry = rig.run(*PLAN)
+    assert dry.returncode == 0 and warning in dry.stdout and dry.stdout.index(warning) < dry.stdout.index("dry run. NOTHING ABOVE")
+    applied = rig.run(*APPLY, typed=TYPED)
+    assert applied.returncode == 0, (applied.stdout, applied.stderr)
+    assert applied.stdout.index(warning) < applied.stdout.index("retype the number of cases")
+
+
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     markers = guard_names(SCRIPT)
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 24, sorted(markers)
+    assert len(markers) == 25, sorted(markers)
     text = SCRIPT.read_text(encoding="utf-8")
     for name in markers:
         assert len(re.findall(rf"^ *# <<< guard: {re.escape(name)}$", text, re.MULTILINE)) == 1

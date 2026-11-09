@@ -158,6 +158,7 @@ import {
 import { addedPair, comparedPair } from '../comparison/viewer/viewer-fixtures';
 import { description as aiDescription } from '../version-compare/ai-fixtures';
 import { COMPARISON_SHAPES, panelProps } from '../version-compare/shapes';
+import { MEMORY_SHAPES } from '../decision-memory/shapes';
 import { newClient, renderScreen, renderWith, seedError } from '../screens/harness';
 import {
   ADMIN as HOME_ADMIN, EXPERT as HOME_EXPERT, LABEL as HOME_LABEL, PROJECTS as HOME_PROJECTS, loaded as loadedHome, projectPage as homeProjectPage,
@@ -3175,6 +3176,14 @@ export function screens(): Screen[] {
     const client = newClient();
     shape.seedClient?.(client);
     add(`Comparison: ${shape.name}`, renderScreen(client, shape.make()));
+  }
+
+  // `D-495`: «Память решений» of «База знаний» -- the list in every standing, the case (active, withdrawn, forgotten), the status
+  // line and the filters, so every colour-bearing rule of `decision-memory.module.css` is reached (`tests/unit/decision-memory/shapes.ts`).
+  for (const shape of MEMORY_SHAPES) {
+    const client = newClient();
+    shape.seedClient?.(client);
+    add(`Memory: ${shape.name}`, renderScreen(client, shape.make()));
   }
 
   /*

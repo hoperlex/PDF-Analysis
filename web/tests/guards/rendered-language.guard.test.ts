@@ -219,6 +219,7 @@ import { REPO_ROOT } from './lib/repo';
 import { sectionAudit } from '../unit/dashboard/audit-counts';
 import { newClient, renderScreen, seedError } from '../unit/screens/harness';
 import { COMPARISON_SHAPES } from '../unit/version-compare/shapes';
+import { MEMORY_SHAPES } from '../unit/decision-memory/shapes';
 import {
   NOT_INSTALLED_PACK, installedPackFixture, withoutMember,
 } from '../unit/analysis-settings/ar-v3-beta-pack-fixtures';
@@ -3968,6 +3969,9 @@ const SCREENS: readonly ScreenCase[] = [
   ...EXTRA_SHAPES,
   // `CMP-VC-UI-01`: every state of «Сравнение версий» one static pass reaches (`tests/unit/version-compare/shapes.ts`).
   ...COMPARISON_SHAPES,
+  // `D-495`: «Память решений» of «База знаний» -- the list, the case (active, withdrawn, forgotten), the status line and the filters
+  // (`tests/unit/decision-memory/shapes.ts`); the page reaches the tab only through `?kind=memory`, which a cold read does not take.
+  ...MEMORY_SHAPES,
 ];
 
 /**
@@ -5740,6 +5744,14 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
       "«Журнал входов»'s answer when the kind, name or day filters leave nothing of the events " +
       'already read (`UI-A-94`). The filters are a `useState` the administrator sets, so one static pass starts with ' +
       'them empty and every event shown; the pure narrowing is held by `filterAuthEvents` in `tests/unit/auth-events`.',
+  },
+  /*
+   * `D-495`: the memory case's two standing controls. The list, the case (active, withdrawn, forgotten), the status line and the
+   * filters have states of their own (`tests/unit/decision-memory/shapes.ts`); only what a press leaves behind is here.
+   */
+  {
+    label: 'Состояние дела не изменено',
+    why: '`case-standing-control.tsx`, after «Отозвать» or «Вернуть» was refused or lost on the way: the failure sits in a settled `useMutation` that the press of the button starts, and the harness fires no event. web/tests/unit/knowledge-base/knowledge-base-memory.test.ts presses it against a rejected write and reads this title, and the sentence is worded by `failureMessage` (judged by the shared language guards).',
   },
 ];
 

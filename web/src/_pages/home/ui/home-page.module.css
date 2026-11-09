@@ -22,9 +22,16 @@
   line-height: var(--am-leading-tight);
 }
 
+/*
+ * `WALK-V4`: the tasks and the section table sit side by side only where the table fits. A row of the table needs about 520 px
+ * beside its name (five numbers of 5.5rem, the arrow, the gaps and the paddings), so the name column is the width of the
+ * table's column minus that: measured on a built stand it was 0 px at 1280 and 52 px at 1440 (the rows became 797 and 145 px
+ * tall and the page 9065 px), 144 px at 1600 (rows of three lines) and 190 px at 1680 (two lines). One column below 1680 px
+ * keeps the name at the width of the page.
+ */
 .overviewGrid {
   display: grid;
-  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--am-gap);
   min-width: 0;
@@ -61,11 +68,13 @@
   margin-top: 0;
 }
 
-@media (max-width: 1279px) {
+@media (min-width: 1680px) {
   .overviewGrid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
   }
+}
 
+@media (max-width: 1279px) {
   .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

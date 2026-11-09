@@ -30,10 +30,14 @@ from pathlib import Path
 
 import pytest
 
+from tests.support.wrapper_rig import guard_names, guard_names_in, runbook_guards_text
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "infra/deploy/erase-project.sh"
 MODULE_DIR = ROOT / "scripts/recovery"
 MODULES = ("project_erase", "product_purge", "schema_coverage", "blob_reference_audit")
+#: What an operator may set to make a module wait longer for a lock: this wrapper hands its own to the container, never the other wrappers' (`D-580`).
+LOCK_TIMEOUT_VARIABLES = ("PROJECT_ERASE_LOCK_TIMEOUT", "MEMORY_SETTING_LOCK_TIMEOUT", "MEMORY_FORGET_LOCK_TIMEOUT")
 
 INSTANCE, DATABASE, BUCKET, USER = "an-instance", "the_configured_database", "the-configured-bucket", "the_user"
 REFUSED, FAILED, USAGE = 3, 4, 2
@@ -176,6 +180,8 @@ class Rig:
     def run(self, *args: str, env: dict[str, str] | None = None, typed: str = "") -> subprocess.CompletedProcess[str]:
         self.config.write_text(json.dumps(self.answers), encoding="utf-8")
         environment = dict(os.environ)
+        for ambient in LOCK_TIMEOUT_VARIABLES:  # an operator's shell must not decide what a test passes to the container (`D-580`)
+            environment.pop(ambient, None)
         environment.update(
             PATH=f"{self.bin}{os.pathsep}{environment['PATH']}", ALPHA_ENV_FILE=str(self.env_file),
             ALPHA_DUMP_ROOT=str(self.dumps), ALPHA_ERASE_MODULE_DIR=str(self.module_dir),
@@ -255,6 +261,11 @@ CASES: tuple[tuple[str, tuple[str, ...], str, bool], ...] = (
      "--actor must be the login", True),
     ("actor-required", (*COMMON, "--resume", ERASE, "--actor", "two words", "--owner-permission-ref", REF),
      "--actor must be the login", True),
+    # `D-514`: a login that starts with `-` is a swallowed option, refused as `memory-setting.sh` and `memory-forget.sh` refuse it.
+    ("actor-required", (*COMMON, "--resume", ERASE, "--actor", "-x", "--owner-permission-ref", REF),
+     "--actor must be the login", True),
+    ("actor-required", (*PLAN, "--apply", "--actor", "--reason", "--reason", "test_data", "--owner-permission-ref", REF,
+                        "--plan-sha256", SHA), "--actor must be the login", True),
     ("reason-closed-list", (*PLAN, "--apply", "--actor", ACTOR, "--reason", "because they asked",
                             "--owner-permission-ref", REF, "--plan-sha256", SHA), "--reason must be one of", True),
     ("reason-closed-list", (*PLAN, "--apply", "--actor", ACTOR, "--owner-permission-ref", REF, "--plan-sha256", SHA),
@@ -299,6 +310,18 @@ def test_deleting_the_guard_removes_the_refusal(guard: str, args: tuple[str, ...
         f"the {guard} guard was deleted and the refusal happened anyway: it was never testing that guard")
     if reaches:
         assert broken.log.exists(), f"with {guard} gone the script should have gone on to the stack: {completed.stderr}"
+
+
+def test_the_leading_dash_rule_of_the_actor_is_its_own_clause_and_can_fail(rig: Rig) -> None:
+    """`D-514`: the block-deletion mutant above removes the whole `actor-required` guard; this removes only the clause that refuses a login
+    starting with `-`, and shows `-x` then goes on to the stack while a login with a space is still refused."""
+    args = (*COMMON, "--resume", ERASE, "--actor", "-x", "--owner-permission-ref", REF)
+    assert rig.run(*args).returncode == REFUSED
+    broken = rig.edited(' || [[ "$ACTOR" == -* ]]', "")
+    completed = broken.run(*args)
+    assert "--actor must be the login" not in completed.stderr and broken.log.exists(), completed.stderr
+    spaced = (*COMMON, "--resume", ERASE, "--actor", "two words", "--owner-permission-ref", REF)
+    assert "--actor must be the login" in broken.run(*spaced).stderr
 
 
 def test_a_missing_environment_file_is_refused_and_the_guard_can_fail(rig: Rig, tmp_path: Path) -> None:
@@ -387,6 +410,7 @@ def test_help_is_a_usage_error_with_its_own_status(rig: Rig) -> None:
     completed = rig.run("--help")
     assert completed.returncode == USAGE and "usage: erase-project.sh" in completed.stderr
     assert "NO DUMP IS TAKEN" in completed.stderr
+    assert "PROJECT_ERASE_LOCK_TIMEOUT" in completed.stderr  # `D-580`: the operator is told the variable exists
     assert not rig.log.exists()
 
 
@@ -549,6 +573,80 @@ def test_the_four_modules_are_mounted_read_only_and_nothing_else_of_the_checkout
         at = argv.index("--entrypoint")
         assert argv[at + 1 : at + 5] == ["python", "api", "-m", "scripts.recovery.project_erase"]
         assert "run" in argv and "--rm" in argv and "--no-deps" in argv and "-T" in argv
+
+
+# --- the lock timeout the operator sets (`D-580`) ---------------------------------------------------
+
+
+def lock_timeout_items(call: dict[str, object]) -> list[str]:
+    argv = [str(item) for item in call["argv"]]  # type: ignore[attr-defined]
+    return [item for item in argv if item.startswith(("PROJECT_ERASE_", "MEMORY_")) and "_LOCK_TIMEOUT" in item]
+
+
+def test_the_lock_timeout_the_operator_sets_is_handed_to_every_container_run_and_the_other_wrappers_is_not(rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": "45s", "MEMORY_FORGET_LOCK_TIMEOUT": "99s",
+                                     "MEMORY_SETTING_LOCK_TIMEOUT": "98s"}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert len(rig.tool_calls()) == 2  # the dry run it makes first, and the apply
+    for call in rig.tool_calls():
+        argv = [str(item) for item in call["argv"]]  # type: ignore[union-attr]
+        assert lock_timeout_items(call) == ["PROJECT_ERASE_LOCK_TIMEOUT=45s"], argv
+        assert argv[argv.index("PROJECT_ERASE_LOCK_TIMEOUT=45s") - 1] == "-e", "a variable of the one-off container is an -e of `compose run`"
+        # an option of `compose run` after the service name would be the tool's argument
+        assert argv.index("PROJECT_ERASE_LOCK_TIMEOUT=45s") < argv.index("--entrypoint")
+
+
+def test_a_resume_hands_the_lock_timeout_over_too(rig: Rig) -> None:
+    completed = rig.run(*RESUME, env={"PROJECT_ERASE_LOCK_TIMEOUT": "2min"})
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert [lock_timeout_items(call) for call in rig.tool_calls()] == [["PROJECT_ERASE_LOCK_TIMEOUT=2min"]]
+
+
+def test_no_lock_timeout_is_passed_when_the_operator_set_none_and_the_default_stays_the_modules(rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"MEMORY_FORGET_LOCK_TIMEOUT": "99s"}, typed=TYPED)  # another wrapper's variable is not ours
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.tool_calls() and all(lock_timeout_items(call) == [] for call in rig.tool_calls()), [lock_timeout_items(c) for c in rig.tool_calls()]
+
+
+def test_the_pass_through_of_the_lock_timeout_can_fail(rig: Rig) -> None:
+    broken = rig.edited('"${LOCK_TIMEOUT_ENV[@]+"${LOCK_TIMEOUT_ENV[@]}"}" ', "")
+    completed = broken.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": "45s"}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert broken.tool_calls() and all(lock_timeout_items(call) == [] for call in broken.tool_calls()), (
+        "with the pass-through removed the value still reached the container: the test above would prove nothing")
+
+
+def test_the_rig_does_not_let_the_operators_shell_decide_what_the_container_is_given(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PROJECT_ERASE_LOCK_TIMEOUT", "77s")
+    completed = rig.run(*PLAN)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.tool_calls() and all(lock_timeout_items(call) == [] for call in rig.tool_calls())
+    # and the scrub is what does it: without it the shell's value reaches the container
+    monkeypatch.setattr(sys.modules[__name__], "LOCK_TIMEOUT_VARIABLES", ())
+    rig.log.unlink()
+    assert rig.run(*PLAN).returncode == 0
+    assert [lock_timeout_items(call) for call in rig.tool_calls()] == [["PROJECT_ERASE_LOCK_TIMEOUT=77s"]]
+
+
+@pytest.mark.parametrize("value", ("15", "0s", "0ms", "-5s", "1 s", "1.5s", "15S", "1h", "1234567s", "15s; DROP TABLE x", "s", "", " 15s"),
+                         ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_not_a_positive_duration_is_refused_before_any_connection_and_the_guard_can_fail(value: str, rig: Rig) -> None:
+    completed = rig.run(*PLAN, env={"PROJECT_ERASE_LOCK_TIMEOUT": value})
+    assert completed.returncode == REFUSED, (completed.stdout, completed.stderr)
+    assert "PROJECT_ERASE_LOCK_TIMEOUT must be a positive number of ms, s or min" in completed.stderr, completed.stderr
+    assert not rig.log.exists(), f"refused, but only after running docker: {rig.calls}"
+    broken = rig.mutant("lock-timeout-shape")
+    completed = broken.run(*PLAN, env={"PROJECT_ERASE_LOCK_TIMEOUT": value})
+    assert "must be a positive number" not in completed.stderr
+    assert broken.log.exists() and any("PROJECT_ERASE_LOCK_TIMEOUT=" + value in item for call in broken.tool_calls() for item in call["argv"]), (
+        "with the guard gone the bad value goes into the container as it is: this is why the guard exists")
+
+
+@pytest.mark.parametrize("value", ("1ms", "250ms", "15s", "30s", "2min", "999999s"), ids=lambda v: repr(v))
+def test_a_lock_timeout_that_is_a_positive_duration_goes_through(value: str, rig: Rig) -> None:
+    completed = rig.run(*APPLY, env={"PROJECT_ERASE_LOCK_TIMEOUT": value}, typed=TYPED)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert rig.tool_calls() and all(lock_timeout_items(call) == ["PROJECT_ERASE_LOCK_TIMEOUT=" + value] for call in rig.tool_calls())
 
 
 AMBIENT = "postgresql+psycopg://ambient:ambient@elsewhere:5432/ambient"
@@ -847,12 +945,22 @@ def test_the_script_is_executable_and_in_the_deploy_directory() -> None:
     assert SCRIPT.parent == ROOT / "infra/deploy"
 
 
+def test_the_runbook_names_every_guard_of_the_script_and_the_check_can_fail() -> None:
+    """`D-513`: runbook section 17 lists the script's guards by name. It once listed 23 of 25 (the two `D-470` guards were added to the
+    script and not to the list); the list is now held to the script's markers, so a guard added or renamed without the runbook is red."""
+    markers = guard_names(SCRIPT)
+    text = runbook_guards_text(17)
+    assert guard_names_in(text) == markers, (sorted(markers - guard_names_in(text)), sorted(guard_names_in(text) - markers))
+    assert guard_names_in(text.replace("`memory-loss-reason`", "")) != markers, "the comparison cannot see a name that is missing"
+    assert guard_names_in(text + " `a-guard-nobody-wrote`") != markers, "the comparison cannot see a name that is not in the script"
+
+
 def test_every_guard_in_the_script_has_a_case_here() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
     markers = set(re.findall(r"^ *# >>> guard: ([a-z-]+)$", text, re.MULTILINE))
     me = Path(__file__).read_text(encoding="utf-8")
     missing = sorted(name for name in markers if f'"{name}"' not in me)
     assert not missing, f"guards with no case: {missing}"
-    assert len(markers) == 25, sorted(markers)
+    assert len(markers) == 26, sorted(markers)
     for name in markers:
         assert len(re.findall(rf"^ *# <<< guard: {re.escape(name)}$", text, re.MULTILINE)) == 1

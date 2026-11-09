@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import re
 import subprocess
@@ -108,6 +109,34 @@ def test_a_change_is_journalled_once_with_the_admins_identity_and_the_same_value
                               ("training_use", 1, "on", admin, REF)]
     shown = run(tool, clone, "show")[1]
     assert "data_class: test (revision 2; default test)" in shown and "training_use: on (revision 1; default off)" in shown
+
+
+def shown_json(clone: Any) -> dict[str, Any]:
+    code, out, err = run(tool, clone, "show", "--json")
+    assert code == 0 and err == "" and out.count("\n") == 1, (code, out, err)       # ONE line, nothing on the error stream
+    view = json.loads(out)
+    assert tuple(view) == tool.SHOW_JSON_KEYS, "the members and their order are what the wrapper reads"
+    return view  # type: ignore[no-any-return]
+
+
+def test_show_json_says_what_the_screen_says_from_the_same_read_and_the_wrapper_reads_it(clone: Any) -> None:
+    """`D-517`: `memory-setting.sh` decides from `show --json`, never from the screen. The two are one function's output, held together here:
+    for every state the screen's lines are what the JSON's members give, and the JSON's values are the journal's."""
+    assert shown_json(clone) == {
+        "data_class": "test", "data_class_revision": 0, "data_class_default": "test",
+        "training_use": "off", "training_use_revision": 0, "training_use_default": "off", "uncaptured_decisions": 0}
+    assert run(tool, clone, "set", "data_class", "real", "--actor", "admin")[0] == 0
+    assert run(tool, clone, "set", "data_class", "test", "--actor", "admin")[0] == 0
+    assert run(tool, clone, "set", "training_use", "on", "--actor", "admin", "--owner-permission-ref", REF)[0] == 0
+    view = shown_json(clone)
+    assert (view["data_class"], view["data_class_revision"], view["training_use"], view["training_use_revision"]) == ("test", 2, "on", 1)
+    assert view["data_class"] == journal(clone)[1][2] and view["training_use"] == journal(clone)[2][2]
+    screen = run(tool, clone, "show")[1].splitlines()
+    for name in ("data_class", "training_use"):
+        origin = "default" if view[f"{name}_revision"] == 0 else f"revision {view[f'{name}_revision']}"
+        assert f"{name}: {view[name]} ({origin}; default {view[f'{name}_default']})" in screen, screen
+    assert screen[2].startswith(f"uncaptured-decisions: {view['uncaptured_decisions']} (")
+    assert run(tool, clone, "show", "--json", database="some_other_database")[0] == tool.EXIT_REFUSED   # the refusals are the screen's too
 
 
 def test_the_refusals_change_nothing(clone: Any) -> None:
@@ -249,7 +278,7 @@ def test_the_flip_is_refused_with_the_sweeps_own_count_and_allowed_when_the_real
     assert code == tool.EXIT_REFUSED and err.startswith("memory_setting: REFUSED: 2 " + SAYS_BACKLOG), (code, out, err)
     assert "Let the worker's sweep finish" in err and "There is no override" in err and "Nothing was changed" in err
     assert journal(clone) == []
-    assert "uncaptured-decisions: 2" in run(tool, clone, "show")[1]
+    assert "uncaptured-decisions: 2" in run(tool, clone, "show")[1] and shown_json(clone)["uncaptured_decisions"] == 2
 
     report = ledger.sweep()                         # the real sweep, the real assembler
     assert (report.captured, report.failed) == (2, 0)      # the number the tool refused with is the number the sweep captured
@@ -258,7 +287,7 @@ def test_the_flip_is_refused_with_the_sweeps_own_count_and_allowed_when_the_real
     assert code == 0 and "test -> real (revision 1)" in out, (out, err)
     assert [row[:3] for row in journal(clone)] == [("data_class", 1, "real")]
     assert ledger.classes() == {"test": 2}          # what was decided before the flip stayed what it was: two cases, both test
-    assert "uncaptured-decisions: 0" in run(tool, clone, "show")[1]
+    assert "uncaptured-decisions: 0" in run(tool, clone, "show")[1] and shown_json(clone)["uncaptured_decisions"] == 0
 
 
 def test_every_change_of_data_class_waits_for_the_sweep_and_nothing_else_does(clone: Any, ledger: Ledger) -> None:

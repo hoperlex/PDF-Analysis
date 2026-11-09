@@ -30,6 +30,12 @@
  * `listDecisions` read with `limit=1`, under the same project and category). The page counts nothing itself; a count the
  * server has not answered is drawn «—», not a zero.
  *
+ * **«Память решений»** (`D-495`, `DECISION-MEMORY-01`) is the fourth «Тип»: the copy of what an expert saw and decided, kept after the
+ * project and the document are gone. The expert and the administrator are offered it; the viewer sees nothing of it, neither the
+ * button nor the tab through an address (`useMemoryAccess`: hidden, not disabled). It has its own filters and its open case in the
+ * address (`model/memory-address.ts`), and the administrator's «Отозвать» / «Вернуть» and status line; the page only composes it.
+ * Unlike the journal it is not a projection: the memory is a primary record from the moment of capture (`ADR-0027`).
+ *
  * The two filters are the contract's own `category` and `verdict`, and they mean what the
  * contract says they mean: the **finding's** category, and the verdict that now stands for
  * it. Neither filters the event, so a comment left on a finding that was later accepted is
@@ -43,21 +49,25 @@ import type { ErrorStateProps } from '@/shared/ui';
 import type { ProjectUid } from '@/shared/api';
 import { ApiError, ApiFailure, catalogMessage } from '@/shared/api';
 import { readProjectContext, switchProject, useAddressState } from '@/shared/lib';
-import { PageShell } from '@/shared/ui';
+import { LoadingState, PageShell } from '@/shared/ui';
 import type { DecisionVerdictTotals } from '@/entities/expert-decision';
 import {
   CATEGORY_LABELS, recordCountLabel, useDecisionJournal, useDecisionVerdictTotals, useKnowledgeBaseJournal,
   useProposalDecisionJournal,
 } from '@/entities/expert-decision';
 import { ProposalDecisions } from '@/widgets/proposal-journal';
+import { DecisionMemoryFilters } from '@/widgets/decision-memory';
+import { useMemoryAccess } from '@/entities/decision-memory';
 import { useProjectList } from '@/entities/project';
 
 import {
-  CATEGORY_CHOICES, VERDICT_CHOICES, readKbAddress, writeKbAddress,
+  CATEGORY_CHOICES, DEFAULT_KB_ADDRESS, VERDICT_CHOICES, readKbAddress, writeKbAddress,
 } from '../model/address';
-import type { CategoryChoice, KbAddress, KbView, VerdictChoice } from '../model/address';
+import type { CategoryChoice, KbAddress, KbKind, KbView, VerdictChoice } from '../model/address';
 import { NO_CURSORS, useCursorWalk } from '../model/use-cursor-walk';
+import { useMemoryTab } from '../model/use-memory-tab';
 import { LazyKnowledgeBase } from './lazy-knowledge-base';
+import { MemoryResults } from './memory-results';
 import styles from './knowledge-base-page.module.css';
 
 /** `UI-B-34`: the labels of how the decisions are drawn (the choice itself is in the address, `model/address.ts`). */
@@ -147,11 +157,19 @@ function journalFailure(error: unknown, retry: () => void): ErrorStateProps {
 }
 
 /** «Тип»: both journals, the decisions on findings, the decisions on optimisation proposals. */
-const KIND_LABELS: Readonly<Record<'all' | 'findings' | 'proposals', string>> = {
+const KIND_LABELS: Readonly<Record<KbKind, string>> = {
   all: 'Все',
   findings: 'Замечания',
   proposals: 'Предложения',
+  memory: 'Память решений',
 };
+
+const SUBTITLE =
+  'Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий.';
+
+/** `D-495`: the memory is not a projection. It is the record of what the expert saw and decided, kept apart from the project. */
+const MEMORY_SUBTITLE =
+  'Память решений: то, что эксперт видел и решил в момент решения. Хранится отдельно и остаётся после удаления проекта и документа; это история, а не действующий вердикт.';
 
 export function KnowledgeBasePage() {
   // `null` only where no router is mounted; the address is then no address and names no project.
@@ -164,8 +182,12 @@ export function KnowledgeBasePage() {
   // `R-151h`: «Тип» -- the decisions on findings, or on optimisation proposals, as the original's knowledge base, or both as one
   // journal («Все», `D-317`). «Замечания» stays the first screen, as it was before «Все».
   const [address, setAddress] = useAddressState(readKbAddress, writeKbAddress);
-  const { kind, view, category, verdict } = address;
-  const choose = (patch: Partial<KbAddress>) => setAddress({ ...address, ...patch }, 'replace');
+  const { view, category, verdict } = address;
+  // `D-495`: «Память решений» is for the expert and the administrator. An address that names it for an account known to hold
+  // neither (the viewer) shows the first screen, and is not echoed back; while the account is not known the tab waits for it.
+  const memoryAccess = useMemoryAccess();
+  const kind: KbKind = address.kind === 'memory' && memoryAccess.known && !memoryAccess.read ? DEFAULT_KB_ADDRESS.kind : address.kind;
+  const choose = (patch: Partial<KbAddress>) => setAddress({ ...address, kind, ...patch }, 'replace');
   /*
    * The cursors of the pages walked past (see `useCursorWalk`). A cursor belongs to the filters it was issued under, so each stack
    * carries them: the decisions on findings walk under the project, the category and the verdict; the other two under the project.
@@ -194,7 +216,9 @@ export function KnowledgeBasePage() {
     ...(category === 'all' ? {} : { category }),
     ...(verdict === 'all' ? {} : { verdict }),
     ...(cursor === undefined ? {} : { cursor }),
-  });
+  }, kind !== 'memory');
+  // `D-495`: the memory tab's address state and reads; nothing is requested unless the tab is on screen and the account may read it.
+  const memory = useMemoryTab(projectUid, kind === 'memory', memoryAccess);
   // `UI-B-32`: the chips' numbers follow the project and the category, and are read only where the chips are drawn.
   const verdictTotals = useDecisionVerdictTotals(
     {
@@ -236,12 +260,12 @@ export function KnowledgeBasePage() {
     <PageShell
       title="База знаний"
       surface="canvas"
-      subtitle="Все решения проверяющего по находкам, новые сверху. Это проекция над журналом решений: ничего не хранится отдельно и всё пересчитывается из событий."
+      subtitle={kind === 'memory' ? MEMORY_SUBTITLE : SUBTITLE}
     >
       <div className={`am-kb__filters ${styles.filters}`} role="group" aria-label="Отбор решений">
         <div className="am-kb__filter" role="group" aria-label="Тип решений">
           <span>Тип</span>
-          {(['all', 'findings', 'proposals'] as const).map((value) => (
+          {(memoryAccess.read ? (['all', 'findings', 'proposals', 'memory'] as const) : (['all', 'findings', 'proposals'] as const)).map((value) => (
             <button
               key={value}
               type="button"
@@ -254,7 +278,7 @@ export function KnowledgeBasePage() {
             </button>
           ))}
         </div>
-        {kind === 'proposals' ? null : (
+        {kind === 'proposals' || kind === 'memory' ? null : (
           <div className="am-kb__filter" role="group" aria-label="Вид списка">
             <span>Вид</span>
             {(['table', 'events'] as const).map((value) => (
@@ -301,7 +325,22 @@ export function KnowledgeBasePage() {
           </select>
         </div>
         </>}
+        {kind !== 'memory' || !memoryAccess.read || memory.caseId !== null ? null : (
+          <DecisionMemoryFilters value={memory.filters} onChange={memory.setFilters} />
+        )}
       </div>
+      {kind === 'memory' ? (
+        memoryAccess.read ? (
+          <MemoryResults
+            memory={memory}
+            access={memoryAccess}
+            narrowedByProject={projectUid !== null}
+            scope={projectUid === null ? ALL_PROJECTS : <ProjectName projectUid={projectUid} recordedName={undefined} />}
+          />
+        ) : (
+          <LoadingState what="память решений" />
+        )
+      ) : null}
       {kind === 'proposals' ? (
         <div className={styles.results}>
           {proposals.data === undefined ? null : (

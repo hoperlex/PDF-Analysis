@@ -82,6 +82,7 @@ export type {
   AssignmentListFilters,
   AuthEventListFilters,
   DecisionJournalFilters,
+  DecisionMemoryListFilters,
   FindingListFilters,
   QueryNamespace,
   RegistrationListFilters,
