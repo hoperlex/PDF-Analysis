@@ -269,7 +269,7 @@ def test_the_name_of_a_used_single_model_agent_blocks_a_host_enrollment(sessions
         s.execute(text("INSERT INTO executor_connection (connection_id, kind, display_name, created_by) VALUES (:c, 'pull', 'idle-guard', :a)"),
                   {"c": cid[:-2] + "AC", "a": ADMIN})
         s.execute(text("INSERT INTO executor_route_event (route_event_id, work_kind, route_no, primary_connection_id, set_by) "
-                       "VALUES ('exre_01M2545JSD15ETSNNV904X99AB', 'text_analysis', (SELECT COALESCE(max(route_no), 0) + 1 FROM executor_route_event "
+                       "VALUES ('ert_01M2545JSD15ETSNNV904X99AB', 'text_analysis', (SELECT COALESCE(max(route_no), 0) + 1 FROM executor_route_event "
                        "WHERE work_kind = 'text_analysis'), :c, :a)"), {"c": cid, "a": ADMIN})
         s.commit()
         with pytest.raises(DomainError) as refused:
