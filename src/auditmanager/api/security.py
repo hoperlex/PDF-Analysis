@@ -789,6 +789,10 @@ OPERATION_ROLES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "setStageModelLayoutEnabled": _ADMIN,
         "listModelCatalogue": _ANY_ROLE,
         "getRunStartReadiness": _ANY_ROLE,
+        # `HOSTS-SEAL-2` (ADR-0028, contract 1.46.0). The stages of a run, plan and fact, are a product read like `getRunStatus`: the
+        # viewer reads them too, and the answer leaves out the server and the access of a cell for the viewer (`R-150w`). The omission
+        # is the implementation's, which re-reads the role set; the register only says who may ask.
+        "getRunStages": _PRODUCT_READ,
         # `W55A-SEAL-01` (R-113). Who designated which snapshot, and the designation itself.
         "listNormSnapshotEvents": _ADMIN,
         "setCurrentNormSnapshot": _ADMIN,
