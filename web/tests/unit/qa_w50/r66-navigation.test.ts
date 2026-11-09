@@ -19,6 +19,12 @@
  * registered, reachable screen (`inMenu: false`). `RULING` below is the R-66 order **without** it,
  * and the `R-150b` cases after the menu cases hold the replacement.
  *
+ * **`R-153h` (owner, 2026-11-09) brings the list back, but not as a row:** the first item of «Работа» is «Проект»
+ * when the address names a project and «Проекты» when it names none, drawn from the navigation's `projectEntry`
+ * (`web/tests/unit/shell/project-entry.test.ts` holds it). The frame in these cases has no router, so it names no
+ * project: its first item is «Проекты», `/projects`. The registry still holds `/projects` with `inMenu: false`, and
+ * the data cases below (`buildNavigation`'s groups) are unchanged.
+ *
  * The expectation below is typed from the ruling, not read from the registry, and the menu is
  * read three ways: the data the frame builds (`buildNavigation`), and the two rendered states of
  * the real frame (`AppFrame` — the one-row bar and the stacked «Меню»), in document order.
@@ -139,7 +145,12 @@ function readMenu(html: string): { readonly groups: string[]; readonly links: [s
   return { groups, links };
 }
 
-const RULED_LINKS: [string, string][] = RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string]));
+// `R-153h`: the frame renders with no router, so it names no project and its first link is the list; «Проект» replaces it
+// on a project's address (`project-entry.test.ts`).
+const RULED_LINKS: [string, string][] = [
+  ['/projects', 'Проекты'],
+  ...RULING.flatMap((g) => g.items.map(([a, l]) => [a, l] as [string, string])),
+];
 
 // --------------------------------------------------------------------------------- the menu
 
@@ -439,7 +450,7 @@ describe('the frame’s menu per kind of visitor', () => {
 
 // ------------------------------------------------------------------------------------ R-150b
 
-describe('R-150b: «Проекты» left the menu, and the selector in the top strip took its place', () => {
+describe('R-150b: «Проекты» left the menu rows, and the selector in the top strip took its place', () => {
   const ROLE_SETS = [['expert'], ['admin'], ['admin', 'expert']] as const;
 
   it('/projects is a registered, open screen that no menu offers', () => {
@@ -455,7 +466,7 @@ describe('R-150b: «Проекты» left the menu, and the selector in the top 
     expect(SCREEN_REGISTRY.filter((row) => row.inMenu).map((row) => row.address)).not.toContain('/projects');
   });
 
-  it('is in no group, as data and in all three rendered states of the bar', () => {
+  it('is in no group of the data, and `R-153h` draws it only as the first item of «Работа» in all three states of the bar', () => {
     for (const roles of ROLE_SETS) {
       const navigation = buildNavigation({ roles, isDefaultCredential: false, profileComplete: true });
       const offered = navigation.groups.flatMap((group) => group.items.map((item) => item.address));
@@ -463,7 +474,9 @@ describe('R-150b: «Проекты» left the menu, and the selector in the top 
       expect(navigation.groups[0]?.items.map((item) => item.address)[0], roles.join(',')).toBe('/dashboard');
       const markup = renderFrame(frameSession({ roles }));
       for (const state of ['row', 'rail', 'stacked']) {
-        expect(region(markup, `data-nav-state="${state}"`), `${roles.join(',')} ${state}`).not.toContain('href="/projects"');
+        const links = [...region(markup, `data-nav-state="${state}"`).matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1]);
+        expect(links.filter((href) => href === '/projects'), `${roles.join(',')} ${state}`).toHaveLength(1);
+        expect(links[0], `${roles.join(',')} ${state}`).toBe('/projects');
       }
     }
   });

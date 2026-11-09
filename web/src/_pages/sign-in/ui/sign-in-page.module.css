@@ -1,17 +1,42 @@
+/*
+ * `/login` (owner, 2026-11-09): the credentials card and, beside it, a wordless animated scene —
+ * drawing sheets, a scan across a floor plan, remark marks, the expert's stamp — over a drawing
+ * grid that drifts behind both. One screen, no scroll, both themes through `--am-showcase-*`.
+ *
+ * Motion (the landing-page skill's B7): transform and opacity only, on
+ * cubic-bezier(0.22, 1, 0.36, 1) for arrivals. Every loop lives inside
+ * `prefers-reduced-motion: no-preference`; outside it the scene rests in its finished state
+ * (marks and stamp in place, no scan) and the arrival is a plain fade. CSS only: this slice ships
+ * no client script (`C-22`). The SVG paints with `stroke`/`fill`, which carry no text and no edge.
+ */
 .screen {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(380px, 1.05fr);
+  grid-template-columns: minmax(0, 420px) minmax(360px, 540px);
+  justify-content: center;
   align-items: center;
   gap: var(--am-gap-xl);
-  width: min(100%, 1200px);
+  box-sizing: border-box;
+  width: 100%;
   min-height: calc(100dvh - 160px);
   margin: 0 auto;
   padding: var(--am-gap) 0;
   color: var(--am-showcase-ink);
-  background: radial-gradient(circle at 72% 54%, color-mix(in srgb, var(--am-showcase-accent) 10%, transparent), transparent 38%);
 }
-.copy { min-width: 0; }
-.eyebrow, .cardEyebrow, .sceneEyebrow {
+.card {
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  padding: var(--am-gap);
+  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 35%, transparent);
+  border-radius: var(--am-radius-lg);
+  background: var(--am-showcase-card);
+  box-shadow: var(--am-shadow-3);
+}
+.header { display: flex; align-items: center; gap: var(--am-gap-md); }
+.signInMark { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: var(--am-radius-sm); color: var(--am-showcase-accent-strong); background: var(--am-showcase-accent-soft); }
+.signInMark svg { width: 20px; height: 20px; }
+.cardEyebrow {
   margin: 0;
   color: var(--am-showcase-accent-strong);
   font-size: var(--am-text-xs);
@@ -20,75 +45,123 @@
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
-.eyebrow { margin-bottom: var(--am-gap-sm); }
-.title { margin: 0; font-size: var(--am-text-2xl); font-weight: 720; line-height: 1.15; letter-spacing: -0.03em; }
-.lead { max-width: 49ch; margin: var(--am-gap-sm) 0 var(--am-gap); color: var(--am-showcase-muted); font-size: var(--am-text-md); line-height: 1.55; }
-.card, .scene {
-  border: 1px solid color-mix(in srgb, var(--am-showcase-line) 35%, transparent);
-  border-radius: var(--am-radius-lg);
-  background: var(--am-showcase-card);
-  box-shadow: var(--am-shadow-3);
-}
-.card { box-sizing: border-box; width: min(100%, 420px); padding: var(--am-gap); }
-.header { display: flex; align-items: center; gap: var(--am-gap-md); }
-.signInMark { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; border-radius: var(--am-radius-sm); color: var(--am-showcase-accent-strong); background: var(--am-showcase-accent-soft); }
-.signInMark svg { width: 20px; height: 20px; }
-
-.cardTitle { margin: 0; font-size: var(--am-text-lg); font-weight: 700; letter-spacing: -0.02em; }
-.reason { margin: var(--am-gap-sm) 0 0; padding: var(--am-gap-sm) var(--am-gap-md); border-left: 3px solid var(--am-showcase-accent); border-radius: var(--am-radius-sm); background: var(--am-showcase-accent-soft); color: var(--am-showcase-ink); font-size: var(--am-text-sm); font-weight: 600; line-height: 1.5; }
-.formLead { margin: var(--am-gap-sm) 0 var(--am-gap-md); color: var(--am-showcase-muted); font-size: var(--am-text-sm); line-height: 1.5; }
+.cardTitle { margin: 0; font-size: var(--am-text-lg); font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+.reason { margin: var(--am-gap-sm) 0 0; padding: var(--am-gap-sm) var(--am-gap-md); border-left: 3px solid var(--am-showcase-accent); border-radius: var(--am-radius-sm); background: var(--am-showcase-accent-soft); color: var(--am-showcase-ink); font-size: var(--am-text-sm); font-weight: 600; line-height: 1.5; text-wrap: pretty; }
+.formLead { margin: var(--am-gap-sm) 0 var(--am-gap-md); color: var(--am-showcase-muted); font-size: var(--am-text-sm); line-height: 1.5; text-wrap: pretty; }
 .register { display: flex; flex-wrap: wrap; gap: var(--am-gap-xs) var(--am-gap-md); margin: var(--am-gap-md) 0 0; color: var(--am-showcase-muted); font-size: var(--am-text-sm); }
 .register a { color: var(--am-showcase-accent-strong); font-weight: 700; }
 .register a:focus-visible { outline: 2px solid var(--am-showcase-accent); outline-offset: 3px; border-radius: 2px; }
 .accessNote { margin: var(--am-gap-md) 0 0; padding-top: var(--am-gap-sm); border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 36%, transparent); color: var(--am-showcase-soft); font-size: var(--am-text-xs); }
-.scene { position: relative; display: flex; flex-direction: column; min-width: 0; height: clamp(500px, 40vw, 560px); padding: var(--am-gap-lg); overflow: hidden; }
-.sceneHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.sceneEyebrow { color: var(--am-showcase-soft); }
-.sceneBadge { padding: var(--am-gap-xs) var(--am-gap-md); border-radius: var(--am-radius-pill); background: var(--am-showcase-accent-soft); color: var(--am-showcase-accent-strong); font-size: var(--am-text-xs); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
-.sceneTitle { margin: var(--am-gap-md) 0 0; font-size: var(--am-text-xl); font-weight: 700; letter-spacing: -0.02em; }
-.orbit { position: relative; flex: 1; min-height: 0; isolation: isolate; }
-.orbitGlow { position: absolute; top: 50%; left: 50%; width: min(96%, 400px); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--am-showcase-accent) 16%, transparent), transparent 67%); transform: translate(-50%, -50%); }
-.ring, .orbitArc, .orbitArcSecondary { position: absolute; top: 50%; left: 50%; aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
-.ringOuter { width: min(76%, 350px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 30%, transparent); }
-.ringDashed { width: min(61%, 282px); border: 1px dashed color-mix(in srgb, var(--am-showcase-line) 52%, transparent); }
-.ringMiddle { width: min(47%, 215px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 22%, transparent); }
-.ringInner { width: min(33%, 155px); border: 1px solid color-mix(in srgb, var(--am-showcase-accent) 14%, transparent); }
-.orbitArc { width: min(76%, 350px); border: 4px solid transparent; border-top-color: var(--am-showcase-accent); border-left-color: var(--am-showcase-accent); transform: translate(-50%, -50%) rotate(-22deg); }
-.orbitArcSecondary { width: min(61%, 282px); border: 3px solid transparent; border-bottom-color: var(--am-showcase-accent); transform: translate(-50%, -50%) rotate(28deg); opacity: 0.76; }
-.orbitCore { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 88px; height: 88px; border: 2px solid var(--am-showcase-accent); border-radius: 50%; background: var(--am-showcase-card); box-shadow: 0 9px 24px color-mix(in srgb, var(--am-showcase-ink) 15%, transparent); color: var(--am-showcase-accent-strong); transform: translate(-50%, -50%); }
-.orbitCore svg { width: 47px; height: 47px; }
-.orbitNode { position: absolute; display: grid; justify-items: center; gap: var(--am-gap-xs); width: 80px; color: var(--am-showcase-muted); font-size: var(--am-text-xs); }
-.orbitNode b { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid color-mix(in srgb, var(--am-showcase-line) 45%, transparent); border-radius: 50%; background: var(--am-showcase-card); color: var(--am-showcase-accent-strong); box-shadow: var(--am-shadow-2); font-size: var(--am-text-xs); }
-.orbitNode small { font-size: var(--am-text-xs); }
-.nodeDocument { top: calc(50% - min(38%, 175px) - 37px); left: 50%; transform: translateX(-50%); }
-.nodeAnalysis { top: calc(50% + min(31%, 140px) - 19px); left: calc(50% + min(31%, 140px) - 40px); }
-.nodeExpert { top: calc(50% + min(31%, 140px) - 19px); left: calc(50% - min(31%, 140px) - 40px); }
-.nodeAnalysis b { background: var(--am-showcase-accent-soft); }
-.sceneFoot { display: flex; align-items: center; gap: var(--am-gap-sm); margin: 0; padding: var(--am-gap-md) var(--am-gap); border: 1px solid color-mix(in srgb, var(--am-showcase-line) 30%, transparent); border-radius: var(--am-radius); background: var(--am-showcase-card-alt); color: var(--am-showcase-muted); font-size: var(--am-text-xs); }
-.sceneFoot span { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--am-showcase-accent); }
-.screen:has(input:focus) .orbitGlow { opacity: 0.28; }
+
+/* ---- the living background: a drawing grid one major cell larger than the screen each way */
+/* The mask only fades the grid into the page at its edges; it paints nothing (alpha of a token). */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 72% 68% at 50% 50%, var(--am-showcase-ink) 52%, transparent 100%);
+}
+.backdropGrid { position: absolute; top: -120px; left: -120px; width: calc(100% + 240px); height: calc(100% + 240px); }
+.gridMinor { stroke: color-mix(in srgb, var(--am-showcase-line) 16%, transparent); stroke-width: 1; }
+.gridMajor { stroke: color-mix(in srgb, var(--am-showcase-line) 30%, transparent); stroke-width: 1; }
+.backdropSheets { position: absolute; inset: 0; width: 100%; height: 100%; }
+.contour { fill: none; stroke: color-mix(in srgb, var(--am-showcase-accent) 24%, transparent); stroke-width: 1.5; }
+
+/* ---- the scene */
+.scene { min-width: 0; }
+.scene svg { display: block; width: 100%; height: auto; overflow: visible; }
+.sheet, .mark, .stamp, .markPulse { transform-box: fill-box; transform-origin: center; }
+.paper {
+  fill: var(--am-showcase-card);
+  stroke: color-mix(in srgb, var(--am-showcase-line) 45%, transparent);
+  stroke-width: 1;
+  filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--am-showcase-ink) 14%, transparent));
+}
+.frame { fill: none; stroke: color-mix(in srgb, var(--am-showcase-line) 60%, transparent); stroke-width: 1; }
+.ink { fill: none; stroke: var(--am-showcase-muted); stroke-width: 1.6; stroke-linecap: round; }
+.inkThin { fill: none; stroke: var(--am-showcase-soft); stroke-width: 1; stroke-linecap: round; }
+.wall { fill: none; stroke: var(--am-showcase-ink); stroke-width: 5; stroke-linejoin: miter; }
+.partition { fill: none; stroke: var(--am-showcase-ink); stroke-width: 2.5; }
+.slab { fill: none; stroke: var(--am-showcase-ink); stroke-width: 4; }
+.ground { fill: none; stroke: var(--am-showcase-muted); stroke-width: 2.2; }
+.windowGap { fill: var(--am-showcase-card); stroke: none; }
+.axis { fill: none; stroke: color-mix(in srgb, var(--am-showcase-accent) 55%, transparent); stroke-width: 0.8; stroke-dasharray: 10 2 2 2; }
+.bubble { fill: var(--am-showcase-card); stroke: var(--am-showcase-soft); stroke-width: 1; }
+.levelMark { fill: var(--am-showcase-soft); stroke: none; }
+.cut { fill: none; stroke: var(--am-showcase-ink); stroke-width: 2.5; }
+.scan { opacity: 0; }
+.scanBand { fill: color-mix(in srgb, var(--am-showcase-accent) 18%, transparent); }
+.scanLine { fill: none; stroke: var(--am-showcase-accent); stroke-width: 2; }
+.markHalo { fill: color-mix(in srgb, var(--am-showcase-accent) 20%, transparent); }
+.markRing { fill: var(--am-showcase-card); stroke: var(--am-showcase-accent-strong); stroke-width: 2; }
+.markDot { fill: var(--am-showcase-accent-strong); }
+.markPulse { fill: none; stroke: var(--am-showcase-accent); stroke-width: 1.5; opacity: 0; }
+.stampOuter { fill: color-mix(in srgb, var(--am-showcase-accent-soft) 90%, transparent); stroke: var(--am-showcase-accent-strong); stroke-width: 2.5; }
+.stampInner { fill: none; stroke: var(--am-showcase-accent); stroke-width: 1; }
+.stampCheck { fill: none; stroke: var(--am-showcase-accent-strong); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.stampLines { fill: none; stroke: var(--am-showcase-accent); stroke-width: 2.5; stroke-linecap: round; }
+
+/*
+ * One cycle of the scene is 9 s. The scan crosses the plan in the first 42 %, easing into each
+ * remark and out of it: it stands on A (x 98, a window) at 14 %, on B (x 209, the stair) at 26 %
+ * and on C (x 285, the bath) at 35 %, and each mark lights as the line arrives. The stamp lands on
+ * the title block at 52–62 %; everything clears at 90–97 % and the cycle starts again.
+ */
+@keyframes signInRise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes signInAppear { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gridDrift { from { transform: translate(0, 0); } to { transform: translate(120px, 120px); } }
+@keyframes contourSway { from { transform: translate(0, 0); } to { transform: translate(-36px, 18px); } }
+@keyframes sheetFloat { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+@keyframes planScan {
+  0% { opacity: 0; transform: translateX(20px); }
+  4% { opacity: 1; transform: translateX(20px); }
+  14% { transform: translateX(98px); }
+  26% { transform: translateX(209px); }
+  35% { transform: translateX(285px); }
+  42% { opacity: 1; transform: translateX(336px); }
+  46%, 100% { opacity: 0; transform: translateX(336px); }
+}
+@keyframes markInA { 0%, 14% { opacity: 0; transform: scale(0.4); } 18%, 90% { opacity: 1; transform: scale(1); } 97%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes markInB { 0%, 26% { opacity: 0; transform: scale(0.4); } 30%, 90% { opacity: 1; transform: scale(1); } 97%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes markInC { 0%, 35% { opacity: 0; transform: scale(0.4); } 39%, 90% { opacity: 1; transform: scale(1); } 97%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes markPulse { 0% { opacity: 0.7; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(2.2); } }
+@keyframes stampPress {
+  0%, 52% { opacity: 0; transform: scale(1.4); }
+  58% { opacity: 1; transform: scale(0.95); }
+  62%, 90% { opacity: 1; transform: scale(1); }
+  97%, 100% { opacity: 0; transform: scale(1); }
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .orbitArc { animation: orbitTurn 24s linear infinite; }
-  .orbitArcSecondary { animation: orbitTurnReverse 30s linear infinite; }
-  .orbitGlow { animation: orbitBreathe 8s ease-in-out infinite; }
-  @keyframes orbitTurn { to { transform: translate(-50%, -50%) rotate(338deg); } }
-  @keyframes orbitTurnReverse { to { transform: translate(-50%, -50%) rotate(-332deg); } }
-  @keyframes orbitBreathe { 50% { opacity: 0.55; } }
+  .card { animation: signInRise 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .scene { animation: signInRise 500ms cubic-bezier(0.22, 1, 0.36, 1) 100ms both; }
+  .backdrop { animation: signInAppear 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .backdropGrid { animation: gridDrift 36s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+  .contourA { animation: contourSway 22s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
+  .contourB { animation: contourSway 26s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate-reverse; }
+  .floatSlow { animation: sheetFloat 8s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate; }
+  .floatFast { animation: sheetFloat 6s cubic-bezier(0.37, 0, 0.63, 1) -2s infinite alternate; }
+  .scan { animation: planScan 9s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite; }
+  .markA { animation: markInA 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .markB { animation: markInB 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .markC { animation: markInC 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .markPulse { animation: markPulse 2250ms cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .stamp { animation: stampPress 9s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
 }
-@media (max-width: 1250px) {
-  .screen { grid-template-columns: minmax(0, 1fr) minmax(330px, 0.95fr); gap: var(--am-gap-lg); }
-  .scene { height: 500px; padding: var(--am-gap); }
+/* Reduced motion: the card, the scene and the grid arrive by opacity alone, and nothing loops. */
+@media (prefers-reduced-motion: reduce) {
+  .card, .scene, .backdrop { animation: signInAppear 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 }
-/* Narrow: the form alone, as the original's sign-in is; the illustration below the form only cost a screen of scrolling. */
+
+/* Narrow: the card alone over the grid; the scene would only cost a screen of scrolling. */
 @media (max-width: 1120px) {
-  .screen { grid-template-columns: 1fr; max-width: 440px; min-height: 0; }
-  .copy { display: grid; justify-items: start; }
-  .lead { max-width: 62ch; }
-  .card { width: 100%; }
+  .screen { grid-template-columns: minmax(0, 420px); }
   .scene { display: none; }
 }
+/* Phone: the card starts at the top, so the fields and «Войти» stay above the on-screen keyboard. */
 @media (max-width: 640px) {
-  .screen { padding: var(--am-gap-sm) 0 var(--am-gap); }
-  .title { font-size: var(--am-text-xl); }
-  .card { padding: var(--am-gap); border-radius: var(--am-radius); }
+  .screen { align-items: start; min-height: 0; padding: var(--am-gap-sm) 0 var(--am-gap); }
+  .card { border-radius: var(--am-radius); }
 }

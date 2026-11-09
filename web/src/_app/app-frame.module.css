@@ -101,19 +101,35 @@
   border-top: 1px solid color-mix(in srgb, var(--am-showcase-line) 24%, transparent);
 }
 
+/*
+ * `NAV-01b`: a group's name is bare text in the button (the shared `Disclosure` wraps it in nothing), so it cannot take an
+ * ellipsis from here; it has to fit. The column is 182 px, and 172 once the open «Разделы» list makes the nav scroll and its thin
+ * scrollbar takes 10. «АДМИНИСТРИРОВАНИЕ» is 138.1 px set at 11.5 px / 650, and with the old 0.11em tracking, a 6 px gap, the chevron
+ * (6.1 px) and 8 px each side it needed 187.7 px, so its chevron stood 177 px out in a 172 px column and the nav clipped it. Now: tracking
+ * at half the caps token (0.035em, 145 px), a 4 px gap and a 4 px right side need 155 of the 160 px the button has at 172, which is the
+ * narrowest it gets; `navigation-fit.test.ts` holds the sum. A name that still does not fit wraps (`anywhere` lets the text item shrink
+ * to a letter; `balance` splits it evenly) instead of running out of the nav, and the chevron below keeps its size while it does.
+ */
 .row :global(.am-disclosure__button) {
   display: flex;
   justify-content: space-between;
   width: 100%;
+  gap: var(--am-gap-xs);
   /* 11.5 px type and 4 px padding made this 23 px tall, one under the 24 px a target needs (WCAG 2.5.8). */
   min-height: 24px;
-  padding: var(--am-gap-xs) var(--am-gap-sm);
+  padding: var(--am-gap-xs) var(--am-gap-xs) var(--am-gap-xs) var(--am-gap-sm);
   color: var(--am-ink-muted);
   font-size: var(--am-text-xs);
   font-weight: 650;
-  letter-spacing: 0.11em;
+  letter-spacing: calc(var(--am-tracking-caps) * 0.5);
+  overflow-wrap: anywhere;
   text-transform: uppercase;
+  text-wrap: balance;
   transition: color var(--am-motion-fast) var(--am-ease), background var(--am-motion-fast) var(--am-ease);
+}
+
+.row :global(.am-disclosure__button)::after {
+  flex: 0 0 auto;
 }
 
 .row :global(.am-disclosure__button[aria-expanded='true']) {
@@ -298,16 +314,24 @@
   margin: 0;
 }
 
-/* `UI-A-04`: the current project's «Разделы» — each section's mark, and the number of its documents as a badge. */
+/*
+ * `UI-A-04`: the current project's «Разделы» — each section's mark, and the number of its documents as a badge. `NAV-01b`: the row is
+ * a flex line with 146 px of room at the narrowest. The text takes what is left and ends in an ellipsis rather than pushing the
+ * counters out (the section's full name is the link's `aria-label` and `title`); the counters, below, never wrap and never shrink.
+ */
 .sectionMark {
   flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
   font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sectionCount {
   flex: 0 0 auto;
   min-width: 2ch;
+  white-space: nowrap;
   padding: 0 var(--am-gap-xs);
   border-radius: var(--am-radius-pill);
   background: var(--am-surface);
@@ -316,6 +340,11 @@
   font-variant-numeric: tabular-nums;
   line-height: var(--am-leading-base);
   text-align: center;
+}
+
+/* `R-153g`: a section with no document is in the list too, its 0 in the muted ink of a note, not the ink of a count. */
+.sectionCountEmpty {
+  color: var(--am-ink-muted);
 }
 
 /*
@@ -329,10 +358,12 @@
   align-items: center;
   gap: var(--am-gap-xs);
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .badge {
   min-width: 2ch;
+  white-space: nowrap;
   padding: 0 var(--am-gap-xs);
   border: 1px solid transparent;
   border-radius: var(--am-radius-pill);
@@ -560,6 +591,15 @@
 
   :global(.am-app[data-sidebar='compact']) .row {
     display: none;
+  }
+
+  /*
+   * `NAV-01b`: the rail's nav is 44 px and its links 40. With the project's fifteen sections the rail is taller than the bar, and a
+   * thin scrollbar (10 px) would leave 34 px for a 40 px link and clip it. The rail scrolls by wheel, touch and keyboard all the same;
+   * a link cut by the bar's edge says there is more.
+   */
+  :global(.am-app[data-sidebar='compact']) .nav {
+    scrollbar-width: none;
   }
 
   :global(.am-app[data-sidebar='compact']) .rail {

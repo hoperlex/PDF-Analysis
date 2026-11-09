@@ -149,6 +149,11 @@ export const SCREEN_REGISTRY = [
    * «Проекты ▾» selector in the frame's top strip (`widgets/project-switcher`), which replaces this
    * item of the `R-66` order. The address and the screen stay; the selector's «Новый проект» and,
    * from a required or global screen, «Все проекты» lead here.
+   *
+   * `R-153h` (2026-11-09): the menu leads here again, but not through this row. The first item of «Работа» is
+   * «Проекты» when the address names no project and «Проект» (`/projects/[project_uid]`, below) when it names
+   * one, drawn from the navigation's `projectEntry` (`_app/navigation.ts`) after `screenDecision` of these two
+   * rows. Both keep `inMenu: false`: the selector in the top strip stays, and the menu rows are unchanged.
    */
   {
     address: '/projects',

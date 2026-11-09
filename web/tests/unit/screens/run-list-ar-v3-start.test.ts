@@ -91,8 +91,8 @@ describe('the six-check start is drawn on no answer of the pack status, for a ve
         expect(markup).not.toContain('data-ar-start-note');
         // The ordinary start is the only start, drawn once, and untouched by any of it.
         expect(markup).toContain('data-start-run-control="true"');
-        expect(markup).toContain('>Запустить прогон</button>');
-        expect(markup.match(/>Запустить прогон<\/button>/g)).toHaveLength(1);
+        expect(markup).toContain('>Запустить</button>');
+        expect(markup.match(/>Запустить<\/button>/g)).toHaveLength(1);
       });
     }
   }

@@ -19,6 +19,7 @@ import { withProjectParam } from '@/shared/lib';
 import type { MenuBadge, MenuBadges } from './menu-badges';
 import { badgeText, itemLabelWithBadges } from './menu-badges';
 import type { CurrentScreen, NavigationGroup } from './navigation';
+import { itemIsCurrent } from './navigation';
 import { NavigationGlyph } from './navigation-glyph';
 import styles from './app-frame.module.css';
 
@@ -81,7 +82,7 @@ export function BadgedLinks({
               className="am-disclosure__link"
               href={href}
               aria-label={own.length === 0 ? undefined : itemLabelWithBadges(item.label, own)}
-              aria-current={current?.address === item.address ? 'page' : undefined}
+              aria-current={itemIsCurrent(item, current) ? 'page' : undefined}
             >
               <span className="am-disclosure__icon" aria-hidden="true"><NavigationGlyph label={item.label} /></span>
               {item.label}

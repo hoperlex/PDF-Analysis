@@ -16,13 +16,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 const settled = vi.hoisted(() => ({ error: null as unknown }));
 
-// The control reads its refusal off its mutation; a static render cannot settle one, so the
-// mutation hook answers with the refusal this file puts in `settled`.
+// The control reads its refusal off the start mutation; a static render cannot settle one, so that
+// mutation hook answers with the refusal this file puts in `settled`. The start's `useMutation` is the one
+// with an `onSuccess` (`useStartRun`); the estimate's has none and stays unsettled.
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    useMutation: () => ({ mutate: () => {}, reset: () => {}, isPending: false, error: settled.error }),
+    useMutation: (options: { onSuccess?: unknown }) => ({
+      mutate: () => {}, reset: () => {}, isPending: false,
+      error: options.onSuccess === undefined ? null : settled.error,
+    }),
     useQueryClient: () => ({ setQueryData: () => {}, invalidateQueries: () => Promise.resolve() }),
   };
 });
@@ -198,7 +202,7 @@ describe('a refused start offers a retry under the same key and nothing else', (
   });
 });
 
-describe('the control keeps the select and the start beside a refusal', () => {
+describe('the control keeps the start button beside a refusal', () => {
   function control(error: unknown): string {
     settled.error = error;
     return renderToStaticMarkup(createElement(
@@ -208,16 +212,17 @@ describe('the control keeps the select and the start beside a refusal', () => {
     ));
   }
 
-  it('shows the refusal, the select with its choice, the start button and exactly one retry', () => {
+  it('shows the refusal, no select at all, the start button and exactly one retry', () => {
     const markup = control(cannotServe('archived'));
     expect(markup).toContain('data-run-failure="executor_unavailable"');
-    expect(markup).toContain('data-executor-select');
-    // the executor's select and, since `ANALYSIS-PRESETS-01`, the preset's beside it
-    expect(markup.match(/<select\b/g)).toHaveLength(2);
-    expect(markup).toContain('>Запустить прогон</button>');
+    // The executor can no longer be chosen here: a refusal of the route's own executor offers no way round it.
+    expect(markup).not.toContain('<select');
+    expect(markup).not.toContain('data-executor-select');
+    expect(markup).toContain('>Запустить</button>');
     expect(markup.match(new RegExp(RETRY, 'g'))).toHaveLength(1);
-    // The start button, the retry, and the select’s own «Прочитать список снова» is absent here.
-    expect(markup.match(/<button\b/g)).toHaveLength(3); // estimate, start and same-key retry
+    // The start button, the «▾» trigger and its one item, and the same-key retry; no estimate button any more.
+    expect(markup.match(/<button\b/g)).toHaveLength(4);
+    expect(markup).not.toContain('Оценить стоимость');
   });
 
   it('shows nothing of a refusal before one has happened', () => {

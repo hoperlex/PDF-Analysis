@@ -28,6 +28,11 @@
  * choosing another group is another intent. «Автоматически (по типу задачи)» is the absence of all
  * three, as «По умолчанию (маршрут)» always was.
  *
+ * **The one-button control sends none of the three** (`RUN-START-ONE-01a`, plan v3 §8): the request names no
+ * executor, group or preset, and the server's automatic route applies. The selectors stay in the command and
+ * the body because they are fields of the contract and of its idempotency payload, and a caller that sets
+ * one still gets exactly one.
+ *
  * The optional raised-limit choice is also part of the request and the intent. With the switch
  * off, both the signature and body keep their earlier shape for existing idempotency keys.
  * A cost-approved start additionally pins the estimate digest and exact approved ceiling.
@@ -122,9 +127,4 @@ export function startRunBody({
           ? {}
           : { executor_connection_id: executorConnectionId }),
   };
-}
-
-/** The empty option of the selector is the default; any other value is a connection's id. */
-export function chosenExecutor(optionValue: string): ExecutorConnectionId | null {
-  return optionValue === '' ? null : optionValue;
 }

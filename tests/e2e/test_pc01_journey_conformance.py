@@ -25,7 +25,7 @@ being replaced by this file.
 **`W22-E2E` widened it, because the write half needed it widened.** The read walk is
 addressed entirely by route and operation, so checking addressing covered it. The write
 half presses named *controls* -- ``#new-project-name``, ``#upload-file``, the button whose
-text is ``Запустить прогон`` -- and reads named *markers* -- ``data-created-project``,
+text is ``Запустить`` -- and reads named *markers* -- ``data-created-project``,
 ``data-run-outcome``, ``data-run-activity``. None of those is addressing. Rename an id in
 ``web/src`` with the route untouched and the old guard would have stayed green while the
 journey silently stopped being able to press anything, which is the rot this file exists
@@ -901,7 +901,7 @@ _SYNTHETIC_WRITE_MANIFEST = {
                 "at": "/projects",
                 "page_module": "web/src/app/projects/page.tsx",
                 "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
-                "actions": [{"do": "click", "selector": "button", "text": "Запустить прогон"}],
+                "actions": [{"do": "click", "selector": "button", "text": "Запустить"}],
                 "expects_api": [
                     {
                         "method": "POST",
@@ -980,8 +980,8 @@ def test_control_a_renamed_id_is_detected() -> None:
 
 def test_control_a_dropped_marker_attribute_is_detected() -> None:
     handles = handles_named_by_write_step(_only_write_step("start-run"))
-    assert handles == {"data-run-outcome", "data-run-activity", "Запустить прогон"}
-    source_after_the_marker_went = '<p data-run-activity="stopped">Запустить прогон</p>'
+    assert handles == {"data-run-outcome", "data-run-activity", "Запустить"}
+    source_after_the_marker_went = '<p data-run-activity="stopped">Запустить</p>'
     missing = sorted(h for h in handles if h not in source_after_the_marker_went)
     assert missing == ["data-run-outcome"]
 
@@ -991,8 +991,8 @@ def test_control_a_relabelled_button_is_detected() -> None:
     source_after_the_relabel = (
         '<button data-run-outcome data-run-activity>Run the audit</button>'
     )
-    assert "Запустить прогон" in handles
-    assert "Запустить прогон" not in source_after_the_relabel
+    assert "Запустить" in handles
+    assert "Запустить" not in source_after_the_relabel
 
 
 def test_control_a_generic_selector_claims_nothing() -> None:
@@ -4168,14 +4168,24 @@ def test_control_a_seed_that_states_no_paragraph_count_is_detected() -> None:
     assert seed_paragraph_count_findings(source.replace("paragraphs=len(entries)", "paragraphs=0", 1))
 
 
+#: `RUN-START-ONE-01b`: controls the two-step start used to press. The one-button start (`startRun`, `reauditRun`) is pressed and agreed to inside
+#: `approve_run_cost` (the button, then the dialog's typed ceiling and «Запустить»), so a step that still presses one of these by text is
+#: driving a flow the application no longer has.
+ONE_BUTTON_RETIRED_CLICKS = frozenset({'Запустить прогон', 'Оценить стоимость', 'Подтвердить'})
+
+
 # BETA-COST-JOURNEY-1030: preflight is a real UI action, never an implicit bypass.
 def cost_preflight_findings(manifest: dict) -> list[str]:
     findings = []
+    # operation -> (scope, the text of the step's own start click or None when `approve_run_cost` presses start itself, estimate operation, estimate path)
     scopes = {
-        'startRun': ('run', 'Запустить прогон', 'estimateRunCost', '/runs/cost-estimate'),
+        # `RUN-START-ONE-01b`: one button; the approval action presses it and agrees in the dialog (or the click is the agreement), so there is no start click.
+        'startRun': ('run', None, 'estimateRunCost', '/runs/cost-estimate'),
         'startArV3BetaGroup': ('ar_v3_group', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
-        'reauditRun': ('run', 'Подтвердить', 'estimateRunCost', '/runs/cost-estimate'),
-        # `UI-A-60`: the dialog of an ended run's page; its estimate is read when the stage is chosen, its start is the dialog's «Запустить».
+        # The click on the row's «Повторный аудит» is the request; the approval action observes the estimate and agrees in the dialog.
+        'reauditRun': ('run', None, 'estimateRunCost', '/runs/cost-estimate'),
+        # `UI-A-60`, moved by `RUN-SCREEN-01a`: the dialog of an ended run's chip; its estimate is read when the dialog opens on a chip with one startable stage
+        # (or when a stage is chosen), its start is the dialog's «Запустить».
         'startRunFromStage': ('run_from_stage', 'Запустить', 'estimateRunCost', '/runs/cost-estimate'),
     }
     for step in write_steps(manifest):
@@ -4184,9 +4194,16 @@ def cost_preflight_findings(manifest: dict) -> list[str]:
             if not any(call.get('operationId') == start for call in step.get('expects_api', [])):
                 continue
             approval = [i for i, action in enumerate(actions) if action.get('do') == 'approve_run_cost' and action.get('scope') == scope]
-            clicks = [i for i, action in enumerate(actions) if action.get('do') == 'click' and action.get('text') == label]
-            if len(approval) != 1 or len(clicks) != 1 or approval[0] >= clicks[0]:
-                findings.append(f"{step['name']}: {start} lacks explicit preflight before its start click")
+            if label is None:
+                retired = sorted({action.get('text') for action in actions if action.get('do') == 'click' and action.get('text') in ONE_BUTTON_RETIRED_CLICKS})
+                if len(approval) != 1:
+                    findings.append(f"{step['name']}: {start} lacks explicit preflight (one approve_run_cost of scope {scope!r})")
+                if retired:
+                    findings.append(f"{step['name']}: {start} still presses {retired}, which the one-button start retired; the approval action presses and agrees")
+            else:
+                clicks = [i for i, action in enumerate(actions) if action.get('do') == 'click' and action.get('text') == label]
+                if len(approval) != 1 or len(clicks) != 1 or approval[0] >= clicks[0]:
+                    findings.append(f"{step['name']}: {start} lacks explicit preflight before its start click")
             if not any(call.get('operationId') == estimate and call.get('method') == 'POST'
                        and call.get('path') == path and call.get('expect_status') == 200 for call in step.get('expects_api', [])):
                 findings.append(f"{step['name']}: {start} has no declared successful cost estimate")
@@ -4222,22 +4239,42 @@ def test_control_reaudit_without_fresh_source_read_is_detected(manifest: dict) -
 
 
 @pytest.mark.parametrize('scope,start,label,estimate,path', [
-    ('run', 'startRun', 'Запустить прогон', 'estimateRunCost', '/runs/cost-estimate'),
+    ('run', 'startRun', None, 'estimateRunCost', '/runs/cost-estimate'),
     ('ar_v3_group', 'startArV3BetaGroup', 'Запустить шесть проверок АР v3', 'estimateArV3GroupCost', '/ar-v3-beta/groups/cost-estimate'),
 ])
 def test_control_missing_or_late_cost_approval_is_detected(scope, start, label, estimate, path) -> None:
     step = {'name': 'synthetic-cost', 'actions': [
         {'do': 'approve_run_cost', 'scope': scope, 'value': '{version_uid}', 'bound_ms': 30000},
-        {'do': 'click', 'selector': 'button', 'text': label},
+        *([{'do': 'click', 'selector': 'button', 'text': label}] if label is not None else []),
     ], 'expects_api': [
         {'operationId': start}, {'operationId': estimate, 'method': 'POST', 'path': path, 'expect_status': 200},
     ]}
     document = {'write': {'steps': [step]}}
     assert not cost_preflight_findings(document)
-    step['actions'].reverse()
-    assert cost_preflight_findings(document)
+    if label is not None:
+        step['actions'].reverse()
+        assert cost_preflight_findings(document)
     step['actions'].pop()
     assert cost_preflight_findings(document)
+
+
+@pytest.mark.parametrize('step_name,retired', [
+    ('start-run', 'Запустить прогон'),
+    ('start-run', 'Оценить стоимость'),
+    ('queue-reaudit-the-cancelled-run', 'Подтвердить'),
+])
+def test_control_a_step_that_still_presses_the_retired_two_step_start_is_detected(manifest: dict, step_name: str, retired: str) -> None:
+    """`RUN-START-ONE-01b`: «Запустить прогон», «Оценить стоимость» and the queue's «Подтвердить» of a re-audit no longer exist to press."""
+    assert not cost_preflight_findings(manifest)
+    changed = copy.deepcopy(manifest)
+    step = next(s for s in write_steps(changed) if s['name'] == step_name)
+    step['actions'].append({'do': 'click', 'selector': 'button', 'text': retired})
+    assert any('retired' in issue for issue in cost_preflight_findings(changed)), (step_name, retired)
+    # and the approval is still required: the one-button start has no other preflight to fall back on
+    changed = copy.deepcopy(manifest)
+    step = next(s for s in write_steps(changed) if s['name'] == step_name)
+    step['actions'] = [a for a in step['actions'] if a.get('do') != 'approve_run_cost']
+    assert any('lacks explicit preflight' in issue for issue in cost_preflight_findings(changed))
 
 
 # --------------------------------------------------------------------------------------
@@ -4248,6 +4285,48 @@ def test_control_missing_or_late_cost_approval_is_detected(scope, start, label, 
 FROM_STAGE_REFUSED = "run-from-stage-refused-for-a-run-that-never-ran"
 FROM_STAGE_TAKEN = "run-from-stage-takes-the-earlier-stages-of-the-first-run"
 FROM_STAGE_UNCHANGED = "run-from-stage-leaves-the-first-run-as-it-was"
+
+#: `RUN-SCREEN-01a`: «Запустить с этапа» is no longer on the run page. A chip of the rail (`data-run-chip`) opens «Этапы анализа раздела»; the
+#: start button in it is labelled so, and a chip that covers exactly ONE startable stage has no stage select (`data-start-from-stage-only`).
+START_FROM_STAGE_OFFER = "Запустить с этого этапа"
+CHIP_SELECTOR = re.compile(r'\[data-run-chip="([a-z_0-9]+)"\]')
+OFFER_SELECTOR = '[data-run-start-from-stage="offer"]'
+#: The chips whose dialog starts from a stage with nothing to choose, by the stage they start from. The dictionary is checked below
+#: (`test_the_chip_the_journey_presses_covers_the_stage_it_approves`); «Подготовка» covers two startable stages and so draws a select.
+CHIP_START_STAGE = {"text": "text_analysis"}
+
+
+def chip_pressed_before_the_offer(step: dict) -> str | None:
+    """The chip whose dialog the step presses «Запустить с этого этапа» in: the click that comes right before the offer click, or None."""
+    actions = step.get("actions") or []
+    for index, action in enumerate(actions):
+        if action.get("do") == "click" and action.get("selector") == OFFER_SELECTOR and action.get("text") == START_FROM_STAGE_OFFER:
+            previous = actions[index - 1] if index > 0 else {}
+            match = CHIP_SELECTOR.fullmatch(previous.get("selector", "")) if previous.get("do") == "click" else None
+            return match.group(1) if match else None
+    return None
+
+
+def opens_dialog_on_chip(step: dict, chip: str, after_wait_for: str | None = None) -> bool:
+    """The step presses the chip `chip` of the rail; with `after_wait_for`, only after the last `wait_for` whose selector holds that text.
+
+    The dialog is opened so that its details table is on the page when the step's `expects_*` are read; a press BEFORE the wait would open it on
+    the page the journey is leaving.
+    """
+    actions = step.get("actions") or []
+    start = 0
+    if after_wait_for is not None:
+        waits = [index for index, action in enumerate(actions) if action.get("do") == "wait_for" and after_wait_for in action.get("selector", "")]
+        if not waits:
+            return False
+        start = waits[-1] + 1
+    return any(a.get("do") == "click" and a.get("selector") == f'[data-run-chip="{chip}"]' for a in actions[start:])
+
+
+def chip_row_pattern(chip: str, stage: str) -> re.Pattern[str]:
+    """The row of `stage-dictionary.ts` that gives the chip `chip` exactly the one stage `stage`."""
+    return re.compile(rf"id: '{chip}',[^\n]*stageIds: \['{stage}'\]")
+
 
 #: step name -> (case, the operations the step must declare).
 FROM_STAGE_STEPS: dict[str, tuple[str, frozenset[str]]] = {
@@ -4298,12 +4377,23 @@ def from_stage_findings(manifest: dict) -> list[str]:
     answered = {(c.get("json_path"), c.get("equals")) for c in refused.get("expects_response") or () if c.get("of") == "estimateRunCost"}
     if ("details.reason", "source_stage_not_completed") not in answered:
         findings.append(f"{FROM_STAGE_REFUSED}: does not require the refusal to name its reason")
+    if CHIP_START_STAGE.get(chip_pressed_before_the_offer(refused) or "") != "text_analysis":
+        findings.append(f"{FROM_STAGE_REFUSED}: does not press a chip with one startable stage, then «{START_FROM_STAGE_OFFER}»")
+    if any(a.get("do") == "select" for a in refused.get("actions") or ()):
+        findings.append(f"{FROM_STAGE_REFUSED}: still chooses a stage in a select, which a chip with one startable stage does not draw")
+    if not any("data-start-from-stage-only" in p.get("selector", "") for p in refused.get("expects_present") or ()):
+        findings.append(f"{FROM_STAGE_REFUSED}: does not require the dialog to show the stage the chip started from")
 
     taken = by_name[FROM_STAGE_TAKEN]
     actions = taken.get("actions") or []
-    chosen = [a.get("option_value") for a in actions if a.get("do") == "select"]
+    chip = chip_pressed_before_the_offer(taken)
+    chosen = CHIP_START_STAGE.get(chip or "")
     approved = [a for a in actions if a.get("do") == "approve_run_cost"]
-    if len(approved) != 1 or approved[0].get("scope") != "run_from_stage" or chosen != [approved[0].get("stage_id")]:
+    if chip is None or chosen is None:
+        findings.append(f"{FROM_STAGE_TAKEN}: does not press a chip with one startable stage, then «{START_FROM_STAGE_OFFER}»")
+    if any(a.get("do") == "select" for a in actions):
+        findings.append(f"{FROM_STAGE_TAKEN}: still chooses a stage in a select, which a chip with one startable stage does not draw")
+    if len(approved) != 1 or approved[0].get("scope") != "run_from_stage" or chosen is None or chosen != approved[0].get("stage_id"):
         findings.append(f"{FROM_STAGE_TAKEN}: does not approve the cost of the stage it chose")
     start = next(c for c in taken["expects_api"] if c["operationId"] == "startRunFromStage")
     if not (start.get("expect_status") == 202 and start.get("count") == 1 and start.get("path") == "/runs/{run_id}/start-from-stage"):
@@ -4319,27 +4409,65 @@ def from_stage_findings(manifest: dict) -> list[str]:
     present = taken.get("expects_present") or []
     def count_of(entry: dict) -> int:
         return entry.get("min_count", 1)
-    if not any(p.get("selector") == "[data-run-pipeline] [data-pipeline-reused]" and count_of(p) >= 3 for p in present):
-        findings.append(f"{FROM_STAGE_TAKEN}: does not require three reused stages in the rail")
-    if not any(p.get("selector", "").endswith('[data-stage-elapsed="reused"]') and count_of(p) >= 3 and p.get("text_contains") == "из прогона" for p in present):
+    # The three reused stages are the ONE chip «Подготовка» (`stage-dictionary.ts`); the rail marks it, and its dialog's table has three rows.
+    if not any(p.get("selector") == '[data-run-rail] [data-run-chip="preparation"][data-chip-reused]' for p in present):
+        findings.append(f"{FROM_STAGE_TAKEN}: does not require the chip of the three reused stages to be marked in the rail")
+    if not any(p.get("selector", "").startswith('[data-run-stage-detail="preparation"]') and p.get("selector", "").endswith('[data-stage-elapsed="reused"]')
+               and count_of(p) >= 3 and p.get("text_contains") == "из прогона" for p in present):
         findings.append(f"{FROM_STAGE_TAKEN}: does not require the details table to say «из прогона» for the three reused stages (D-412)")
+    if not opens_dialog_on_chip(taken, "preparation", after_wait_for="data-run-started-from"):
+        findings.append(f"{FROM_STAGE_TAKEN}: never opens the dialog on «Подготовка» of the NEW run, where the details table is")
     if not any("{source_finding_count}" in p.get("text_matches", "") for p in present):
         findings.append(f"{FROM_STAGE_TAKEN}: does not hold the new run's finding count to the source's")
     if not any('a[href$="/runs/{run_id}"]' in p.get("selector", "") for p in present):
         findings.append(f"{FROM_STAGE_TAKEN}: does not require the link to the source run")
     absent = {a.get("selector") for a in taken.get("expects_absent") or ()}
-    if '[data-pipeline-stage="text_analysis"][data-pipeline-reused]' not in absent:
+    if '[data-run-chip="text"][data-chip-reused]' not in absent:
         findings.append(f"{FROM_STAGE_TAKEN}: does not require the computed stage to be unmarked in the rail")
 
     unchanged = by_name[FROM_STAGE_UNCHANGED]
     absent = {a.get("selector") for a in unchanged.get("expects_absent") or ()}
-    if not {"[data-run-started-from-note]", "[data-pipeline-reused]"} <= absent:
+    if not {"[data-run-started-from-note]", "[data-chip-reused]", '[data-stage-elapsed="reused"]'} <= absent:
         findings.append(f"{FROM_STAGE_UNCHANGED}: does not require the first run to carry no mark of a start from a stage")
+    if not opens_dialog_on_chip(unchanged, "preparation"):
+        findings.append(f"{FROM_STAGE_UNCHANGED}: never opens the dialog on «Подготовка», so a reused row could not be on the page to be refused")
     return findings
 
 
 def test_the_run_from_stage_steps_are_there_and_say_what_they_are_for(manifest: dict) -> None:
     assert from_stage_findings(manifest) == []
+
+
+def _drop_present(step: dict, needle: str, key: str = "selector") -> None:
+    """Remove the `expects_present` entries whose `key` contains `needle`, and fail the mutation itself when there was none to remove."""
+    before = len(step["expects_present"])
+    step["expects_present"] = [p for p in step["expects_present"] if needle not in p.get(key, "")]
+    assert len(step["expects_present"]) < before, f"the mutation removed nothing: no expects_present {key} contains {needle!r}"
+
+
+def _drop_actions(step: dict, selector: str, then=None) -> None:
+    """Remove every action on `selector`; fail the mutation itself when there was none to remove."""
+    before = len(step["actions"])
+    step["actions"] = [a for a in step["actions"] if a.get("selector") != selector]
+    assert len(step["actions"]) < before, f"the mutation removed nothing: no action on {selector!r}"
+    if then is not None:
+        then(step["actions"])
+
+
+def test_the_chip_the_journey_presses_covers_the_stage_it_approves() -> None:
+    """`CHIP_START_STAGE` is held to the dictionary the rail is drawn from: the chip covers that stage and that stage alone."""
+    source = _require(WEB_SRC / "entities/audit-run/model/stage-dictionary.ts").read_text(encoding="utf-8")
+    for chip, stage in CHIP_START_STAGE.items():
+        assert chip_row_pattern(chip, stage).search(source), f"the chip {chip!r} no longer covers exactly {stage!r}"
+    assert START_FROM_STAGE_OFFER in _require(WEB_SRC / "widgets/run-stages-dialog/ui/run-stages-dialog.tsx").read_text(encoding="utf-8")
+    assert 'data-start-from-stage-only' in _require(WEB_SRC / "features/start-run-from-stage/ui/start-run-from-stage-control.tsx").read_text(encoding="utf-8")
+
+
+def test_control_a_chip_that_no_longer_covers_the_stage_is_detected() -> None:
+    """The dictionary check can fail: a chip row that covers two stages does not satisfy the pattern."""
+    row = "  { id: 'text', short: 'Текст', full: 'Анализ текста', stageIds: ['text_analysis', 'block_analysis'], callsModel: true },"
+    assert not chip_row_pattern("text", "text_analysis").search(row)
+    assert chip_row_pattern("text", "text_analysis").search(row.replace(", 'block_analysis'", ""))
 
 
 def test_control_a_run_from_stage_step_that_goes_or_stops_asserting_is_detected(manifest: dict) -> None:
@@ -4358,15 +4486,27 @@ def test_control_a_run_from_stage_step_that_goes_or_stops_asserting_is_detected(
         (FROM_STAGE_REFUSED, lambda s: s["expects_response"].pop(0), "name its reason"),
         (FROM_STAGE_TAKEN, lambda s: next(a for a in s["actions"] if a["do"] == "approve_run_cost").update(stage_id="document_context_build"), "cost of the stage it chose"),
         (FROM_STAGE_TAKEN, lambda s: next(c for c in s["expects_api"] if c["operationId"] == "startRunFromStage").update(expect_status=200), "one 202"),
-        (FROM_STAGE_TAKEN, lambda s: s["actions"].pop(), "NEW run's page"),
+        (FROM_STAGE_TAKEN, lambda s: s.update(actions=[a for a in s["actions"] if not ("data-run-started-from" in a.get("selector", "") and a.get("do") == "wait_for")]), "NEW run's page"),
         (FROM_STAGE_TAKEN, lambda s: s["await_terminal"].update(accept=["published", "partial"]), "to be published"),
         (FROM_STAGE_TAKEN, lambda s: s["captures"].pop(0), "finding count before it starts"),
-        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(3), "three reused stages in the rail"),
-        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(5), "«из прогона»"),
-        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(6), "finding count to the source's"),
-        (FROM_STAGE_TAKEN, lambda s: s["expects_present"].pop(1), "link to the source run"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, 'data-chip-reused]'), "chip of the three reused stages to be marked in the rail"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, '[data-stage-elapsed="reused"]'), "«из прогона»"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, "{source_finding_count}", key="text_matches"), "finding count to the source's"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_present(s, 'a[href$="/runs/{run_id}"]'), "link to the source run"),
         (FROM_STAGE_TAKEN, lambda s: s.pop("expects_absent"), "computed stage to be unmarked"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_actions(s, '[data-run-chip="preparation"]'), "never opens the dialog on «Подготовка»"),
+        (FROM_STAGE_TAKEN, lambda s: s["actions"].insert(0, s["actions"].pop()), "never opens the dialog on «Подготовка»"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "does not press a chip with one startable stage"),
+        (FROM_STAGE_TAKEN, lambda s: _drop_actions(s, '[data-run-chip="text"]', then=lambda a: a.insert(0, {"do": "click", "selector": '[data-run-chip="preparation"]'})),
+         "does not press a chip with one startable stage"),
+        (FROM_STAGE_TAKEN, lambda s: next(a for a in s["actions"] if a.get("selector") == OFFER_SELECTOR).update(text="Запустить с этапа"), "does not press a chip with one startable stage"),
+        (FROM_STAGE_TAKEN, lambda s: s["actions"].insert(2, {"do": "select", "selector": '[data-run-start-from-stage="dialog"] select', "option_value": "text_analysis"}),
+         "still chooses a stage in a select"),
+        (FROM_STAGE_REFUSED, lambda s: _drop_actions(s, '[data-run-chip="text"]'), "does not press a chip with one startable stage"),
+        (FROM_STAGE_REFUSED, lambda s: _drop_present(s, "data-start-from-stage-only"), "show the stage the chip started from"),
         (FROM_STAGE_UNCHANGED, lambda s: s.pop("expects_absent"), "no mark of a start from a stage"),
+        (FROM_STAGE_UNCHANGED, lambda s: s.update(expects_absent=[a for a in s["expects_absent"] if a["selector"] != '[data-stage-elapsed="reused"]']), "no mark of a start from a stage"),
+        (FROM_STAGE_UNCHANGED, lambda s: _drop_actions(s, '[data-run-chip="preparation"]'), "never opens the dialog on «Подготовка»"),
     ]
     for name, mutate, expected in mutations:
         copy = json.loads(json.dumps(manifest))
@@ -4416,7 +4556,7 @@ def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> Non
     module = json.dumps(_require(JOURNEY_DIR / 'write.mjs').as_uri())
     program = f"""
       import assert from 'node:assert/strict';
-      import {{ costApprovalFromEstimate, assertCostApprovedStart }} from {module};
+      import {{ costApprovalFromEstimate, assertCostApprovedStart, usdText }} from {module};
       for (const scope of ['run', 'ar_v3_group']) {{
         const options = {{version_uid:'ver_fixture',relaxed_limits:true}};
         const estimate = {{scope,version_uid:options.version_uid,relaxed_limits:true,currency:'USD',
@@ -4449,6 +4589,23 @@ def test_cost_approval_driver_rejects_changed_options_or_forged_consent() -> Non
       assert.throws(()=>assertCostApprovedStart(approval,{{...exchange,url:'http://127.0.0.1/bff/v1/runs/run_other/reaudit'}}));
       assert.throws(()=>assertCostApprovedStart(approval,{{...exchange,requestBody:JSON.stringify({{...body,version_uid:options.version_uid}})}}));
       assert.throws(()=>costApprovalFromEstimate(estimate,{{...options,executor_connection_id:'exc_override'}},'run','1.5'));
+      {{
+        // `RUN-START-ONE-01b`: an estimate that charges nothing is agreed to by the click itself, and the consent that click sends is the
+        // estimate's own digest and recommended ceiling; the figure is written exactly (whole micro-dollars), never rounded.
+        assert.equal(usdText(0), '0');
+        assert.equal(usdText(1500000), '1.5');
+        assert.equal(usdText(1200001), '1.200001');
+        assert.equal(usdText(3000000), '3');
+        for (const bad of [-1, 1.5, Infinity, NaN, '1']) assert.throws(()=>usdText(bad));
+        const free = {{...estimate,billing:'unmetered',estimated_cost_micros:0,recommended_ceiling_micros:0,estimate_digest:'f'.repeat(64)}};
+        const taken = costApprovalFromEstimate(free,options,'run',usdText(free.recommended_ceiling_micros));
+        const sent = {{cost_consent:{{estimate_digest:free.estimate_digest,ceiling_micros:0,confirmed:true}}}};
+        const door = {{...exchange,requestBody:JSON.stringify(sent)}};
+        assertCostApprovedStart(taken,door);
+        for (const patch of [{{confirmed:false}},{{ceiling_micros:1}},{{estimate_digest:estimate.estimate_digest}}]) {{
+          assert.throws(()=>assertCostApprovedStart(taken,{{...door,requestBody:JSON.stringify({{cost_consent:{{...sent.cost_consent,...patch}}}})}}));
+        }}
+      }}
       {{
         // `UI-A-60`: a start from a stage is priced for the stages it computes and starts through the source Run's own door.
         const stage = 'text_analysis';

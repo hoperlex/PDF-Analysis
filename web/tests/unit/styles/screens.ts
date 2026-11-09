@@ -84,7 +84,7 @@ import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
-import { BatchStartPanelView } from '@/features/start-run';
+import { BatchStartPanelView, StartRunCostDialogView } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
 import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
@@ -102,7 +102,8 @@ import type { BatchEstimate, BatchOutcome } from '@/features/start-run';
 import { costEstimate } from '../analysis-settings/cost-estimate-fixtures';
 import { ProjectList } from '@/widgets/project-list';
 import { RunList } from '@/widgets/run-list';
-import { RunProgress } from '@/widgets/run-progress';
+import { RunEta, RunProgress } from '@/widgets/run-progress';
+import { RunStagesDialog } from '@/widgets/run-stages-dialog';
 import { UploadPanel } from '@/widgets/upload-panel';
 import { DocumentContext, SectionNeighboursView, VersionTabsView, versionTabs } from '@/widgets/document-context';
 import { VersionList } from '@/widgets/version-list';
@@ -145,7 +146,7 @@ import {
   VERSION_PAGE_LIMIT,
 } from '@/entities/document-version';
 import type { StageRow } from '@/entities/audit-run';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable, runChips } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -880,6 +881,107 @@ export function screens(): Screen[] {
     'RunProgress unknown vocabulary',
     runScreen('future_state' as RunState),
   );
+
+  /*
+   * `RUN-SCREEN-01a`: the run screen's new shapes. The tabs (the journal slot is given), the findings strip, the spend tile with a
+   * figure, an open run on a model chip with its window, model and server, and «Этапы анализа раздела» drawn open on a chip -- for a
+   * queued run (a chip that waits) and for a run whose chips stand in every state. Every colour-bearing rule of
+   * `run-progress.module.css` and `run-stages-dialog.module.css` is reached here or by the screens above.
+   */
+  {
+    const EXECUTOR = { connection_id: 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8F', display_name: 'adm1.hlab.kz', pin_id: 'claude-opus-5-5' };
+    const ok = (stage_id: 'source_preparation' | 'page_geometry_extraction' | 'document_context_build' | 'text_analysis') => ({
+      stage_id, status: 'succeeded' as const, error_code: null, started_at: '2026-09-10T08:00:00.000Z', finished_at: '2026-09-10T08:00:02.000Z',
+    });
+    const prepared = (['source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis'] as const).map(ok);
+    const seededRun = (overrides: Partial<RunStatus>, seed: (client: ReturnType<typeof newClient>) => void, props: Record<string, unknown> = {}) => {
+      const client = newClient();
+      const status = runStatus({ run_id: RUN_ID, ...overrides });
+      client.setQueryData(queryKeys.runs.detail(RUN_ID), status);
+      seed(client);
+      return renderWith(client, createElement(RunProgress, { projectUid: PROJECT_UID, runId: RUN_ID, ...props }));
+    };
+    const reading = (result: Record<string, unknown>) => (client: ReturnType<typeof newClient>) =>
+      client.setQueryData(['extended-run-review', RUN_ID], { run_id: RUN_ID, status: 'running', result });
+    const journal = createElement('p', null, 'События прогона');
+
+    add(
+      'RunProgress published, the tabs, the findings strip and a spend figure',
+      seededRun(
+        { state: 'published', stages: prepared, executor: EXECUTOR, cost_micros: 4_500_000, cost_basis: 'measured', model_call_count: 3 },
+        (client) => client.setQueryData(queryKeys.runs.findings(RUN_ID), { data: {
+          items: [
+            finding({ finding_uid: FINDING_UID, decided_severity: 'critical' }),
+            finding({ finding_uid: `${FINDING_UID.slice(0, -1)}C`, decided_severity: 'economic' }),
+            finding({ finding_uid: `${FINDING_UID.slice(0, -1)}D` }),
+          ],
+          page: { next_cursor: null },
+        } }),
+        { journal },
+      ),
+    );
+    add(
+      'RunProgress running on a model chip: the window, the model and the server',
+      seededRun(
+        { state: 'running', terminal_at: null, stages: prepared, executor: EXECUTOR, estimated_finish_at: '2026-09-10T09:30:00.000Z' },
+        reading({
+          workflow_version: 'extended-review-v3',
+          procedures: [
+            { id: 'block_analysis', title: 'Анализ блоков', status: 'running' },
+            { id: 'comprehensive_analysis', title: 'Комплексная сверка', status: 'queued' },
+            { id: 'finding_merge', title: 'Свод наблюдений', status: 'queued' },
+          ],
+          windows: [{ window_id: 'w1', index: 0, status: 'completed' }, { window_id: 'w2', index: 1, status: 'running' }],
+          window_progress: { total: 5 },
+        }),
+        { journal },
+      ),
+    );
+    // The estimate appears after mount (the clock is the browser's), which one server pass does not reach: the view is rendered by itself.
+    add('RunEta, the estimated finish of an open run, on time and late', render(createElement('div', null,
+      createElement(RunEta, { finish: { iso: '2026-09-10T09:30:00.000Z', clock: '09:30', late: false } }),
+      createElement(RunEta, { finish: { iso: '2026-09-10T08:30:00.000Z', clock: '08:30', late: true } }),
+    )));
+    add('RunProgress subscription run, a spend note without a figure', seededRun(
+      { state: 'published', stages: prepared, cost_basis: 'unmetered' as never, cost_micros: 0, model_call_count: 2 }, () => undefined,
+    ));
+
+    const dialog = (overrides: Partial<RunStatus>, selected: 'preparation' | 'text' | 'merge', procedures: readonly {
+      id: string; title: string; status: 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'unavailable' | 'skipped'; reason?: string;
+    }[] = []) => {
+      const status = runStatus({ run_id: RUN_ID, ...overrides });
+      const client = newClient();
+      client.setQueryData(queryKeys.runs.detail(RUN_ID), status);
+      client.setQueryData(queryKeys.account.me(), { roles: ['expert'] });
+      const chips = runChips({
+        status,
+        procedures: procedures.map((p) => ({ title: p.title, id: p.id, status: p.status, reason: p.reason ?? null, dependency: null, errorCode: null })),
+      });
+      return renderScreen(client, createElement(RunStagesDialog, {
+        status, chips, selected, onSelect: () => undefined, onClose: () => undefined, showServer: true, staticOpen: true,
+      }));
+    };
+    add('RunStagesDialog, a queued run: the chip that waits', dialog({ state: 'queued', terminal_at: null, stages: [], executor: EXECUTOR, queue_reason: 'executor_at_capacity' }, 'preparation'));
+    add('RunStagesDialog, every state of a chip, the plan list and the start', dialog(
+      {
+        state: 'partial', degradation_set: ['text_analysis'], executor: EXECUTOR,
+        stages: [
+          ok('source_preparation'),
+          { stage_id: 'page_geometry_extraction', status: 'partial', error_code: 'analysis_input_budget_exceeded', started_at: '2026-09-10T08:00:02.000Z', finished_at: '2026-09-10T08:00:09.000Z' },
+          { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:00:09.000Z', finished_at: '2026-09-10T08:00:10.000Z' },
+        ],
+      },
+      'merge',
+      [
+        { id: 'block_analysis', title: 'Анализ блоков', status: 'completed' },
+        { id: 'comprehensive_analysis', title: 'Комплексная сверка', status: 'running' },
+        { id: 'finding_merge', title: 'Свод наблюдений', status: 'failed', reason: 'dependency_failed' },
+        { id: 'norm_verification', title: 'Проверка нормативных ссылок', status: 'unavailable', reason: 'corpus_unavailable' },
+        { id: 'finding_review', title: 'Критик наблюдений', status: 'skipped' },
+        { id: 'finding_correction', title: 'Предложения по уточнению', status: 'queued' },
+      ],
+    ));
+  }
 
   // ------------------------------------------------------------------ the widgets
   add('ProjectList cold', withRouter(createElement(ProjectList, {})));
@@ -1930,6 +2032,20 @@ export function screens(): Screen[] {
         onClose: noop,
       })),
     );
+  }
+  // `RUN-START-ONE-01a`: the one dialog of a start that can charge money, drawn open: a billed estimate with its ceiling,
+  // one the server sent back, and a start without a money ceiling.
+  {
+    const dialog = (over: Partial<Parameters<typeof StartRunCostDialogView>[0]>) =>
+      render(createElement(StartRunCostDialogView, {
+        estimate: costEstimate({ version_uid: VERSION_UID }), relaxed: false, ceiling: '1.5', changed: false, busy: false,
+        staticOpen: true, onCeilingChange: noop, onConfirm: noop, onCancel: noop, ...over,
+      }));
+    add('StartRunCostDialog, a billed estimate with its ceiling', dialog({}));
+    add('StartRunCostDialog, ceiling too low, estimate changed', dialog({ ceiling: '1.1', changed: true }));
+    add('StartRunCostDialog, without a money ceiling', dialog({
+      relaxed: true, ceiling: '0', estimate: costEstimate({ version_uid: VERSION_UID, relaxed_limits: true }),
+    }));
   }
   add(
     'FindingList failed',

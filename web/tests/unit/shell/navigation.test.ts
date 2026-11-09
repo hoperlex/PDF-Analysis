@@ -26,6 +26,7 @@ import {
   UNKNOWN_ROLE,
 } from './subjects';
 
+
 /** The menu as plain text: `Группа: пункт, пункт`. The brand links home separately. */
 function outline(navigation: Navigation): string[] {
   return navigation.groups.map(
@@ -35,8 +36,9 @@ function outline(navigation: Navigation): string[] {
 
 /**
  * `R-66` with the two comparison modules added in their menu order, written independently of the
- * registry — and without «Проекты», which `R-150b` moved out of the menu into the project selector
- * of the top strip.
+ * registry — and without «Проекты», which `R-150b` moved out of the menu rows into the project selector
+ * of the top strip. `R-153h` brings «Проект» / «Проекты» back as the first item of «Работа», but not as a
+ * row: it is the navigation's `projectEntry`, tested in `project-entry.test.ts`, so `buildNavigation`'s groups stay as they were.
  */
 const R66 = [
   // `R-152a`: «График работ» after «Диспетчер», as in the original's menu (expert and admin).
@@ -121,11 +123,14 @@ describe('navigation disclosure behavior', () => {
 
 describe('navigation glyph coverage', () => {
   it('has a distinct drawn glyph for every currently offered menu label', () => {
-    const labels = buildNavigation(ADMIN_AND_EXPERT).groups.flatMap((group) => group.items.map((item) => item.label));
-    // `R-150b`: «Проекты» left the menu, and `R-151m` took «Блоки» out too; their glyphs draw no menu row any
-    // more. They are named here so that they are the only ones: every other glyph is a menu row, and every menu
-    // row has its glyph.
-    const RETIRED_FROM_THE_MENU = ['Проекты', 'Блоки'];
+    const navigation = buildNavigation(ADMIN_AND_EXPERT);
+    // `R-153h`: the first item of «Работа» is «Проект» or «Проекты», by the project the address names; both are drawn.
+    const entry = [navigation.projectEntry?.project, navigation.projectEntry?.list].filter((label): label is string => label !== null && label !== undefined);
+    expect(entry).toEqual(['Проект', 'Проекты']);
+    const labels = [...navigation.groups.flatMap((group) => group.items.map((item) => item.label)), ...entry];
+    // `R-151m` took «Блоки» out of the menu; its glyph draws no menu row any more. It is named here so that it is the
+    // only one: every other glyph is a menu row or the project entry, and every one of those has its glyph.
+    const RETIRED_FROM_THE_MENU = ['Блоки'];
     expect([...NAVIGATION_GLYPH_LABELS].sort()).toEqual([...labels, ...RETIRED_FROM_THE_MENU].sort());
     for (const label of labels) {
       const markup = renderToStaticMarkup(createElement(NavigationGlyph, { label }));
@@ -134,6 +139,13 @@ describe('navigation glyph coverage', () => {
       expect(markup, label).toContain('aria-hidden="true"');
     }
     expect(renderToStaticMarkup(createElement(NavigationGlyph, { label: 'Новый раздел' }))).toContain('data-nav-glyph="fallback"');
+  });
+
+  it('R-153h: «Проект» and «Проекты» are told apart by their drawings', () => {
+    const drawing = (label: string): string => renderToStaticMarkup(createElement(NavigationGlyph, { label }));
+    expect(drawing('Проект')).toContain('data-nav-glyph="project"');
+    expect(drawing('Проекты')).toContain('data-nav-glyph="projects"');
+    expect(drawing('Проект')).not.toEqual(drawing('Проекты'));
   });
 });
 
@@ -179,7 +191,12 @@ describe('the project is carried by the frame\'s own links (R-150c)', () => {
   it('every row of the live menu takes the project, since none of them is a required screen', () => {
     const live = buildNavigation(EXPERT);
     const addresses = live.groups.flatMap((group) => group.items.map((item) => item.address));
-    const hrefs = hrefsOf(draw(live, PROJECT));
+    const all = hrefsOf(draw(live, PROJECT));
+    // `R-153h`: the first item of «Работа» is the current project's page, a required screen whose project is in its path:
+    // it is in each of the three states, and it takes no `?project=`.
+    const own = `/projects/${PROJECT}`;
+    expect(all.filter((href) => href === own)).toHaveLength(3);
+    const hrefs = all.filter((href) => href !== own);
     expect(hrefs).toHaveLength(addresses.length * 3);
     for (const href of hrefs) expect(href, href).toMatch(new RegExp(`\\?project=${PROJECT}$`));
   });

@@ -34,6 +34,16 @@ export {
   stageRows,
 } from './model/run-presentation';
 
+export type { RunChipDefinition, RunChipId } from './model/stage-dictionary';
+export {
+  AR_V3_CHIP_ID, AR_V3_RUN_CHIP, RUN_CHIP, RUN_CHIPS, RUN_CHIP_IDS, chipById, chipOfStage, phaseFullLabel,
+} from './model/stage-dictionary';
+export { shortModelName } from './model/model-short-name';
+export type { LiveProgress, ProcedureReading, ProcedureStatus } from './model/extended-readings';
+export { PROCEDURE_STATUS_VALUES, extendedLiveProgress, liveProgressText, procedureReadings } from './model/extended-readings';
+export type { ChipProgress, ChipState, RunChip, RunChipsInput } from './model/run-chips';
+export { CHIP_STATE_LABELS, chipProgress, runChips } from './model/run-chips';
+
 export type { RunFinishEstimate } from './model/run-estimate';
 export { formatClockTime, runFinishEstimate } from './model/run-estimate';
 

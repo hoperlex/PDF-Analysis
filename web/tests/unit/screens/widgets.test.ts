@@ -91,7 +91,7 @@ describe('the upload panel states the envelope before the file picker (U-09)', (
     // The version now has an address, and the Start-run control lives there.
     const markup = panel();
     expect(markup).not.toContain('No version published in this session');
-    expect(markup).not.toContain('Запустить прогон');
+    expect(markup).not.toContain('data-start-run-control');
   });
 
   it('says a published version is immutable rather than offering to replace one', () => {

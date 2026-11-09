@@ -38,6 +38,7 @@ import { AR_V3_BETA_PROFILE_ID } from '@/entities/audit-run';
 import { RunProgress } from '@/widgets/run-progress';
 
 import { PROJECT_UID, RUN_ID, runStatus } from '../review/fixtures';
+import { runDialog } from '../run/run-dialog-fixture';
 import { newClient, renderWith } from './harness';
 
 /** Render the widget over a cache seeded with one reading. */
@@ -52,22 +53,30 @@ function screen(overrides: Partial<RunStatus> = {}): string {
 }
 
 describe('the harness reaches this widget at all', () => {
-  it('shows a horizontal rail from actual Run stages and retains the detailed table', () => {
-    const markup = screen({
+  it('shows a rail of chips from the stages the Run reports and holds the detailed table in the dialog', () => {
+    const status = runStatus({
       stages: [{ stage_id: 'text_analysis', status: 'succeeded', error_code: null }],
     });
-    expect(markup).toContain('data-run-pipeline=""');
-    expect(markup).toMatch(/data-pipeline-stage="text_analysis"[^>]*data-pipeline-status="succeeded"/);
-    expect(markup).not.toContain('data-pipeline-stage="block_analysis"');
-    expect(markup).toContain('data-stage-id="text_analysis"');
-    expect(markup).toContain('Подробности этапов');
+    const markup = screen({ stages: status.stages });
+    expect(markup).toContain('data-run-rail=""');
+    expect(markup).toMatch(/data-run-chip="text"[^>]*data-chip-state="done"/);
+    // A chip the Run does not have is not drawn.
+    expect(markup).not.toContain('data-run-chip="blocks"');
+    expect(markup).not.toContain('data-run-chip="review"');
+    // The stage table is not on the page; it is in «Этапы анализа раздела», which a chip opens.
+    expect(markup).not.toContain('data-stage-id=');
+    expect(markup).not.toContain('Подробности этапов');
+    const dialog = runDialog(status, { selected: 'text' });
+    expect(dialog).toContain('data-stage-id="text_analysis"');
+    expect(dialog).toContain('Подробности этапов');
   });
 
   it('shows an in-flight v3 Run with no fabricated PC-01 stages', () => {
     const markup = screen({ state: 'queued', analysis_profile_id: AR_V3_BETA_PROFILE_ID, stages: [] });
-    expect(markup).toContain('Сведения об этапах пока не поступили.');
+    expect(markup).not.toContain('data-run-rail');
+    expect(markup).not.toContain('data-run-chip=');
     expect(markup).not.toContain('data-stage-id=');
-    expect(markup).not.toContain('Подготовка источника');
+    expect(markup).not.toContain('Подготовка');
   });
 
   it('renders a real reading, not a spinner, when the cache carries one', () => {
@@ -149,7 +158,10 @@ describe('motion stops when the run stops (U-02)', () => {
     const markup = screen({ state, published_finding_count: state === 'published' ? 1 : 0 });
     expect(markup).toContain('data-run-activity="stopped"');
     expect(markup).not.toContain('data-run-activity="polling"');
-    expect(markup).toContain('показание окончательное');
+    // The head no longer prints a sentence about polling (`RUN-SCREEN-01a`); the attribute is what the journey reads.
+    expect(markup).not.toContain('Идёт опрос');
+    expect(markup).not.toContain('data-run-poll-stopped');
+    expect(markup).not.toContain('data-run-live=');
   });
 
   it('an open run does show it, so the assertion is not vacuously true of every run', () => {
@@ -197,7 +209,15 @@ describe('review is offered only by a run that published a result (U-03)', () =>
         : {}),
     });
     expect(markup).not.toContain(`/runs/${RUN_ID}/review`);
-    expect(markup).toContain('Разбирать нечего.');
+    // `RUN-SCREEN-FIX-01`: «Разбирать нечего.» is what a run that ENDED without a result says; a run that is still open has not got
+    // one yet and says that instead.
+    if (state === 'failed' || state === 'cancelled') {
+      expect(markup).toContain('Разбирать нечего.');
+      expect(markup).not.toContain('Появятся по ходу прогона.');
+    } else {
+      expect(markup).toContain('Появятся по ходу прогона.');
+      expect(markup).not.toContain('Разбирать нечего.');
+    }
     // Used to assert `<code>${state}</code>`. Under the owner's 2026-09-22 ruling the state
     // is rendered as its Russian label, and the contract value keeps its home in
     // `data-run-state` -- which is what `PA-01` criterion 4 was re-driven against, so the
@@ -214,20 +234,22 @@ describe('review is offered only by a run that published a result (U-03)', () =>
  * Criterion 4's other half. A recorded run must never read as a live one, and a reading
  * that carries no recognised mode says `unknown` — never `live`.
  */
-describe('the provider mode is on screen, twice, and is never guessed', () => {
-  it.each(['live', 'recorded'] as const)('renders %s on the badge and as a sentence', (mode) => {
+describe('the provider mode is among the run\'s facts, once, and is never guessed', () => {
+  it.each(['live', 'recorded'] as const)('renders %s as a Russian label in «Подробнее», not on the head\'s badge', (mode) => {
     const markup = screen({ provider_mode: mode });
-    expect(markup).toContain(`data-provider-mode="${mode}"`);
-    // Once on the badge qualifier, once in the sentence beside it.
-    // Was 2 — the badge and the review sentence. It is 4 since 2026-09-22, because the two
-    // places that printed the CONTRACT VALUE as a bare word now print the Russian label and
-    // carry the machine value in the attribute instead. The count is what says the attribute
-    // followed the label rather than being dropped with it.
-    expect(markup.split(`data-provider-mode="${mode}"`).length - 1).toBe(4);
-    // Was `<strong>${mode}</strong>` — the contract value as a bare word in a Russian
-    // sentence, which a photograph of the run screen caught and no test did.
     expect(markup).toContain(`<strong data-provider-mode="${mode}">${PROVIDER_MODE_LABELS[mode]}`);
+    expect(markup.split(`data-provider-mode="${mode}"`).length - 1).toBe(1);
     expect(markup).not.toContain(`<strong>${mode}</strong>`);
+    // The head's badge carries the state and nothing about how the provider was reached; a recorded run has its own small chip beside
+    // it (`WEB-INT-1`, tests/unit/screens/run-screen.test.ts), which is not the badge's qualifier and says no «режим провайдера:».
+    expect(markup).not.toContain('am-badge__qualifier');
+    expect(markup).not.toContain('режим провайдера:');
+    expect(markup.indexOf('data-run-more=""')).toBeLessThan(markup.indexOf(`data-provider-mode="${mode}"`));
+  });
+
+  it('keeps the sentence that says what a recorded run is not evidence of', () => {
+    expect(screen({ provider_mode: 'recorded' })).toContain('Этот прогон не является свидетельством живого вызова провайдера.');
+    expect(screen({ provider_mode: 'live' })).toContain('Для этого прогона выполнялись живые вызовы провайдера.');
   });
 
   it('calls an unrecognised mode unrecognised rather than absent or live', () => {
@@ -240,15 +262,6 @@ describe('the provider mode is on screen, twice, and is never guessed', () => {
     expect(markup).not.toContain('turbo');
   });
 
-  it('names the mode again beside the review link, so a reviewer cannot miss it', () => {
-    const markup = screen({ state: 'published', provider_mode: 'recorded' });
-    const linkTail = markup.slice(markup.indexOf('Разобрать находки'));
-    // Was `<strong>recorded</strong>`. The owner ruled contract vocabulary translated, and a
-    // photograph of the run screen showed this sentence still reading `live` in Russian prose.
-    expect(linkTail).toContain(PROVIDER_MODE_LABELS.recorded);
-    expect(linkTail).toContain('data-provider-mode="recorded"');
-    expect(linkTail).not.toContain('<strong>recorded</strong>');
-  });
 });
 
 /** The state vocabulary is the contract's word: no "in progress", no "done", no "OK". */
@@ -634,9 +647,9 @@ describe('the stage timings carry a measurement, not two identical stamps (M-13)
   ];
 
   it('reports how long a sub-second stage took', () => {
-    const markup = screen({ state: 'published', published_finding_count: 3, stages });
+    const markup = runDialog(runStatus({ state: 'published', published_finding_count: 3, stages }), { selected: 'preparation' });
     expect(markup).toContain('data-stage-elapsed="115"');
-    expect(markup).toContain('115 ms');
+    expect(markup).toContain('115 мс');
   });
 
   it('reports how long the whole run took', () => {
@@ -647,11 +660,11 @@ describe('the stage timings carry a measurement, not two identical stamps (M-13)
       terminal_at: '2026-09-18T13:02:34.901Z',
     });
     expect(markup).toContain('data-run-elapsed="374"');
-    expect(markup).toContain('374 ms');
+    expect(markup).toContain('374 мс');
   });
 
   it('says nothing rather than zero for a stage that never ran', () => {
-    const markup = screen({ state: 'published', published_finding_count: 3, stages: [] });
+    const markup = runDialog(runStatus({ state: 'published', published_finding_count: 3, stages: [] }), { selected: 'preparation' });
     expect(markup).toContain('data-stage-elapsed="unknown"');
     expect(markup).not.toContain('data-stage-elapsed="0"');
   });

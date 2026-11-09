@@ -1827,17 +1827,17 @@
         "at": "/projects/{project_uid}/versions/{version_uid}",
         "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "$comment": [
+          "RUN-START-ONE-01b: the start control is one button («Запустить»). `approve_run_cost` presses it, observes the cost estimate, and",
+          "agrees in the only way the estimate asks: a metered one opens a dialog whose ceiling is typed and whose «Запустить» is the",
+          "agreement; one that charges nothing starts the run at once. There is no second click in this step."
+        ],
         "actions": [
           {
             "do": "approve_run_cost",
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -2295,11 +2295,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -2688,11 +2683,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -5026,11 +5016,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -5245,11 +5230,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -8427,11 +8407,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -8679,7 +8654,10 @@
         "page_module": "web/src/app/queue/page.tsx",
         "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
         "$comment": [
-          "A re-audit of the cancelled run starts a new run of the same version (accepted, 202); the queue links to it."
+          "A re-audit of the cancelled run starts a new run of the same version (accepted, 202); the queue links to it.",
+          "RUN-START-ONE-01b: the click on «Повторный аудит» is the request. `approve_run_cost` observes the source run's read and the estimate,",
+          "and agrees as the estimate asks: a dialog (ceiling typed, «Запустить») when it can charge, nothing when it does not, and then the",
+          "re-audit is sent. There is no «Подтвердить» and no tick-box any more."
         ],
         "actions": [
           {
@@ -8694,11 +8672,6 @@
             "value": "{version_uid}",
             "source_run_id": "{queued_run_id}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "[data-execution-intent=\"reaudit\"] button",
-            "text": "Подтвердить"
           }
         ],
         "expects_api": [
@@ -8982,24 +8955,27 @@
           "run_id": "queued_run_id"
         },
         "$comment": [
-          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4). The run the queue steps cancelled while it waited never began a",
-          "stage, but it has ENDED, so its page offers «Запустить с этапа». Choosing «Анализ текста» asks the price of a run that would take",
-          "the three stages before it from this one, and the server answers the typed refusal `analysis_input_invalid` with the first stage it",
-          "cannot take (`source_preparation`) and the reason (`source_stage_not_completed`) instead of a figure. The dialog says so in words,",
-          "draws no plan and no consent, and sends nothing: no `POST /runs/{run_id}/start-from-stage`, and no run is created in its place.",
-          "The first stage cannot be tried, because the dialog does not offer it (a start from it reuses nothing: that is a re-audit)."
+          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4); the way in is RUN-SCREEN-01a's (WEB-INT-1). The run the queue",
+          "steps cancelled while it waited never began a stage, but it has ENDED, so a stage of its rail offers the start: the expert presses the chip",
+          "«Текст» (`data-run-chip=\"text\"`), which opens «Этапы анализа раздела» on it, and in that dialog «Запустить с этого этапа». The chip covers",
+          "one startable stage, `text_analysis`, so the dialog has no stage select (`data-start-from-stage-only`) and asks the price of a run that would",
+          "take the three stages before it from this one as soon as it opens. The server answers the typed refusal `analysis_input_invalid` with the",
+          "first stage it cannot take (`source_preparation`) and the reason (`source_stage_not_completed`) instead of a figure. The dialog says so in",
+          "words, draws no plan and no consent, and sends nothing: no `POST /runs/{run_id}/start-from-stage`, and no run is created in its place.",
+          "The first stage cannot be tried: the chip «Подготовка» covers three stages and the dialog offers only the two startable ones (a start from",
+          "the first reuses nothing: that is a re-audit)."
         ],
         "actions": [
           {
             "do": "click",
-            "selector": "[data-run-start-from-stage=\"offer\"]",
-            "text": "Запустить с этапа",
+            "selector": "[data-run-chip=\"text\"]",
             "settle": true
           },
           {
-            "do": "select",
-            "selector": "[data-run-start-from-stage=\"dialog\"] select",
-            "option_value": "text_analysis"
+            "do": "click",
+            "selector": "[data-run-start-from-stage=\"offer\"]",
+            "text": "Запустить с этого этапа",
+            "settle": true
           },
           {
             "do": "wait_for",
@@ -9052,6 +9028,11 @@
           {
             "selector": "[data-start-from-stage-refusal]",
             "text_contains": "Новый прогон не создан"
+          },
+          {
+            "selector": "[data-run-stages-dialog] [data-run-start-from-stage=\"dialog\"] [data-start-from-stage-only=\"text_analysis\"]",
+            "text_contains": "Анализ текста",
+            "$why": "the stage under test is the chip's own, shown in the dialog the chip opened; with a select instead the journey could be asking about another stage"
           }
         ],
         "expects_absent": [
@@ -9060,6 +9041,10 @@
           },
           {
             "selector": "[data-run-start-from-stage=\"dialog\"] [data-cost-approval]"
+          },
+          {
+            "selector": "[data-run-start-from-stage=\"dialog\"] select",
+            "$why": "a chip with one startable stage has no stage to choose; a select here would be the old page-level dialog"
           }
         ],
         "forbids_rendered": [
@@ -9075,13 +9060,15 @@
         "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
         "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
         "$comment": [
-          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4). The first run of the journey ended `published` on the recorded",
-          "provider. On its page the expert presses «Запустить с этапа», chooses «Анализ текста» and reads what the server answers for the",
-          "remaining stages: the three before it are taken from this run, only «Анализ текста» is computed, and the figure and the consent are",
-          "for that stage. After the consent the start goes through the SOURCE run's own door (`POST /runs/{run_id}/start-from-stage`, 202,",
-          "queued), the screen moves to the new run, and that run says «Запущен с этапа 4 … из прогона <source>» with a link to the source, marks",
-          "the three reused stages in the rail (`data-pipeline-reused`) and in the details table (their duration is «из прогона», not 0 с, D-412),",
-          "and finishes `published` with exactly as many findings as the source: the recorded provider answers the same request."
+          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4); the way in and the marks are RUN-SCREEN-01a's (WEB-INT-1). The",
+          "first run of the journey ended `published` on the recorded provider. On its page the expert presses the chip «Текст» of the rail, which",
+          "opens «Этапы анализа раздела» on it, presses «Запустить с этого этапа» there and reads what the server answers for the remaining stages:",
+          "the three before it are taken from this run, only «Анализ текста» is computed, and the figure and the consent are for that stage. After",
+          "the consent the start goes through the SOURCE run's own door (`POST /runs/{run_id}/start-from-stage`, 202, queued), the screen moves to",
+          "the new run, and that run says «Запущен с этапа 4 … из прогона <source>» with a link to the source. Its rail marks the chip «Подготовка»,",
+          "which covers the three reused stages, as taken (`data-chip-reused`, «из прогона» in place of a duration), and the dialog the journey",
+          "opens on that chip lists the three stages with «из прогона» in the duration cell, not 0 с (D-412). The run finishes `published` with",
+          "exactly as many findings as the source: the recorded provider answers the same request."
         ],
         "captures": [
           {
@@ -9109,14 +9096,14 @@
         "actions": [
           {
             "do": "click",
-            "selector": "[data-run-start-from-stage=\"offer\"]",
-            "text": "Запустить с этапа",
+            "selector": "[data-run-chip=\"text\"]",
             "settle": true
           },
           {
-            "do": "select",
-            "selector": "[data-run-start-from-stage=\"dialog\"] select",
-            "option_value": "text_analysis"
+            "do": "click",
+            "selector": "[data-run-start-from-stage=\"offer\"]",
+            "text": "Запустить с этого этапа",
+            "settle": true
           },
           {
             "do": "wait_for",
@@ -9147,6 +9134,12 @@
             "do": "wait_for",
             "selector": "[data-run-started-from=\"{run_id}\"]",
             "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "[data-run-chip=\"preparation\"]",
+            "settle": true,
+            "$why": "the details table lives in the dialog a chip opens; the reused stages are the three of «Подготовка», so that is the chip it is opened on, and it stays open while the run is waited for"
           }
         ],
         "expects_api": [
@@ -9250,34 +9243,43 @@
             "text_matches": "^{run_id}$"
           },
           {
-            "selector": "[data-run-started-from=\"{run_id}\"][data-run-start-stage=\"text_analysis\"]"
+            "selector": "[data-run-started-from-note=\"text_analysis\"] [data-run-started-from=\"{run_id}\"]"
           },
           {
-            "selector": "[data-run-pipeline] [data-pipeline-reused]",
-            "min_count": 3
+            "selector": "[data-run-rail] [data-run-chip=\"preparation\"][data-chip-reused]",
+            "$why": "RUN-SCREEN-01a: the three reused stages are one chip, «Подготовка»; the rail marks it as taken from the source"
           },
           {
-            "selector": "[data-run-pipeline] [data-pipeline-stage=\"text_analysis\"]",
-            "text_contains": "Анализ текста"
+            "selector": "[data-run-rail] [data-run-chip=\"preparation\"] [data-chip-took=\"из прогона\"]",
+            "text_contains": "из прогона",
+            "$why": "D-412 in the rail: a chip taken by reference says where it came from instead of a duration"
           },
           {
-            "selector": "tr[data-stage-id] [data-stage-elapsed=\"reused\"]",
+            "selector": "[data-run-rail] [data-run-chip=\"text\"]",
+            "text_contains": "Текст"
+          },
+          {
+            "selector": "[data-run-stage-detail=\"preparation\"] tr[data-stage-id] [data-stage-elapsed=\"reused\"]",
             "text_contains": "из прогона",
             "min_count": 3,
             "$why": "D-412: the details table said «0 с» for a stage taken by reference"
           },
           {
-            "selector": "[data-run-outcome=\"published\"] > p:nth-of-type(2)",
-            "text_matches": "^Опубликованных находок: {source_finding_count}$",
-            "$why": "as many findings as the source run published"
+            "selector": "[data-run-outcome=\"published\"]",
+            "text_matches": "Опубликованных находок: {source_finding_count}$",
+            "$why": "as many findings as the source run published; the outcome is one paragraph now, so the figure ends the block's text"
           }
         ],
         "expects_absent": [
           {
-            "selector": "[data-pipeline-stage=\"text_analysis\"][data-pipeline-reused]"
+            "selector": "[data-run-chip=\"text\"][data-chip-reused]"
           },
           {
-            "selector": "tr[data-stage-id=\"text_analysis\"] [data-stage-elapsed=\"reused\"]"
+            "selector": "[data-run-chip=\"text\"] [data-chip-took=\"из прогона\"]"
+          },
+          {
+            "selector": "[data-run-stage-detail=\"preparation\"] [data-stage-elapsed]:not([data-stage-elapsed=\"reused\"])",
+            "$why": "every row of the dialog's table for the reused chip is taken by reference; a measured duration there would be a stage the new run computed"
           }
         ],
         "forbids_rendered": [
@@ -9295,7 +9297,16 @@
         "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
         "$comment": [
           "R-151i: the earlier run is unchanged (runs are immutable history). Its page, read cold after the new run ended, still says it was",
-          "started from nothing, marks no stage as taken, shows its own four measured durations and the finding count the new run matched."
+          "started from nothing, marks no chip as taken, shows its own measured durations (the rail's two chips and, in the dialog the journey",
+          "opens on «Подготовка», its three stages) and the finding count the new run matched."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-run-chip=\"preparation\"]",
+            "settle": true,
+            "$why": "the details table lives in the dialog a chip opens; without it no row of the table is on the page and the absence of a reused row would prove nothing"
+          }
         ],
         "expects_api": [
           {
@@ -9307,16 +9318,21 @@
         ],
         "expects_present": [
           {
-            "selector": "[data-run-outcome=\"published\"] > p:nth-of-type(2)",
-            "text_matches": "^Опубликованных находок: {source_finding_count}$"
+            "selector": "[data-run-outcome=\"published\"]",
+            "text_matches": "Опубликованных находок: {source_finding_count}$"
           },
           {
-            "selector": "[data-run-pipeline] [data-pipeline-status=\"succeeded\"]",
-            "min_count": 4
+            "selector": "[data-run-rail] [data-run-chip][data-chip-state=\"done\"]",
+            "min_count": 2,
+            "$why": "«Подготовка» (three stages) and «Текст» (one): all four stages of the first run succeeded"
           },
           {
-            "selector": "tr[data-stage-id] [data-stage-elapsed]",
-            "min_count": 4
+            "selector": "[data-run-rail] [data-chip-took]",
+            "min_count": 2
+          },
+          {
+            "selector": "[data-run-stage-detail=\"preparation\"] tr[data-stage-id] [data-stage-elapsed]",
+            "min_count": 3
           }
         ],
         "expects_absent": [
@@ -9327,7 +9343,7 @@
             "selector": "[data-run-started-from]"
           },
           {
-            "selector": "[data-pipeline-reused]"
+            "selector": "[data-chip-reused]"
           },
           {
             "selector": "[data-stage-elapsed=\"reused\"]"

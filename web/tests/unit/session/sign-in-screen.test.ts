@@ -55,6 +55,18 @@ function visibleText(markup: string): string[] {
   return out;
 }
 
+/** `css` with the block that opens at `prelude` (and its braces) cut out; unchanged when absent. */
+function withoutBlock(css: string, prelude: string): string {
+  const start = css.indexOf(prelude);
+  if (start < 0) return css;
+  let depth = 0;
+  for (let at = css.indexOf('{', start); at < css.length; at += 1) {
+    if (css[at] === '{') depth += 1;
+    else if (css[at] === '}' && (depth -= 1) === 0) return css.slice(0, start) + css.slice(at + 1);
+  }
+  return css.slice(0, start);
+}
+
 function latinIn(markup: string): string[] {
   return [...new Set(visibleText(markup).flatMap((text) => text.match(/[A-Za-z]+/g) ?? []))].sort();
 }
@@ -62,11 +74,42 @@ function latinIn(markup: string): string[] {
 describe('the screen offers a credentials form and nothing that holds a credential', () => {
   const markup = render(createElement(SignInPage, {}));
 
-  it('shows the selected orbit concept without turning its stages into live results', () => {
-    expect(markup).toContain('Точность начинается');
-    expect(markup).toContain('Проверка как система связей');
-    expect(markup).toContain('Иллюстрация');
-    expect(markup).toContain('aria-hidden="true"');
+  it('draws its scene and its grid as decoration: hidden, wordless, outside the form', () => {
+    // Owner, 2026-11-09: the card, a wordless animated scene and a drifting grid -- no copy.
+    const hidden = [...markup.matchAll(/<div class="[^"]*" aria-hidden="true">([\s\S]*?)<\/svg><\/div>/g)];
+    expect(hidden.length, 'the backdrop and the scene, each a hidden wrapper').toBe(2);
+    for (const [, body] of hidden) {
+      expect(body).not.toMatch(/<text[\s>]|<input|<a\s/);
+      expect(body).toContain('focusable="false"');
+    }
+    const form = /<form[^>]*>[\s\S]*?<\/form>/.exec(markup)?.[0] ?? '';
+    expect(form).not.toContain('<svg');
+  });
+
+  it('loops only for a browser that has not asked for reduced motion', () => {
+    const css = readFileSync(join(WEB_ROOT, 'src/_pages/sign-in/ui/sign-in-page.module.css'), 'utf8');
+    const outside = withoutBlock(css, '@media (prefers-reduced-motion: no-preference)');
+    expect(css.includes('infinite'), 'the scene has loops to guard').toBe(true);
+    expect(outside, 'a loop declared outside the no-preference block').not.toMatch(/\binfinite\b/);
+    // Can fail: the same reading of a sheet that loops in the open is refused.
+    expect(withoutBlock('.a { animation: x 1s infinite; }', '@media (prefers-reduced-motion: no-preference)')).toMatch(/\binfinite\b/);
+  });
+
+  it('is the credentials card and its scene: no hero copy, no former panel (owner, 2026-11-09)', () => {
+    for (const removed of [
+      'Анализ проектной документации',
+      'Точность начинается',
+      'Один вход',
+      'Демонстрация сценария',
+      'Проверка как система связей',
+      'Иллюстрация',
+    ]) {
+      expect(markup, `«${removed}» is back on the sign-in screen`).not.toContain(removed);
+    }
+    // The card's title is the page's one heading, and the section is named by it.
+    expect(markup.match(/<h[1-6][\s>]/g)).toEqual(['<h1 ']);
+    expect(markup).toMatch(/<h1[^>]*id="sign-in-title"[^>]*>Продолжить работу<\/h1>/);
+    expect(markup).toMatch(/<section[^>]*aria-labelledby="sign-in-title"/);
   });
 
   it('posts to the exchange, with both fields and a submit', () => {
