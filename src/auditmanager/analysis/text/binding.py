@@ -37,7 +37,21 @@ class CallBinding:
     unmetered: bool = False
     identity_basis: str | None = None
     connection_revision_id: str | None = None
+    #: `HOSTS-LAYOUT-01` (ADR-0028 decision 6). Set only for a call of a run frozen with a stage plan: the cell the call belongs to
+    #: (``row:role``), its access (``subscription`` or ``api``) and the host that serves it. ``stage_key`` is the layout row, which is
+    #: what the call journal records. Never set for a connection-bound or environment run, whose calls are recorded as before.
+    cell_key: str | None = None
+    access: str | None = None
+    host_id: str | None = None
 
     def __post_init__(self) -> None:
         if (self.connection_revision_id is None) != (self.identity_basis is None):
             raise ValueError("a connection revision and an identity basis go together")
+        if self.cell_key is not None and (not self.check_identity or not self.expected_model or self.access is None):
+            # A planned call always asks for the identity check against the cell's model (`R-133`).
+            raise ValueError("a cell call is held to the cell's model and carries its access")
+
+    @property
+    def stage_key(self) -> str | None:
+        """The layout row of a planned call, or ``None``: the value of ``model_call.stage_key``."""
+        return None if self.cell_key is None else self.cell_key.partition(":")[0]
