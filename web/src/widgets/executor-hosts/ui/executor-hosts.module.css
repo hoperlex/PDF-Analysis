@@ -1,0 +1,130 @@
+/*
+ * «Серверы» (`HOSTS-WEB-01`). Layout only; the colour of the dot and of a grey row is read from the tokens, none is declared.
+ * A server is one line that wraps: the dot and the name, the switch, the models, the load and the menu.
+ * Every rule is reached by a screen in `tests/unit/styles/screens.ts`.
+ */
+
+.panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.summary {
+  margin: 0 0 var(--am-gap-xs);
+  font-size: var(--am-text-base);
+  font-weight: 600;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0 0 var(--am-gap-sm);
+}
+
+.list {
+  display: grid;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--am-gap-xs) var(--am-gap);
+  margin: 0;
+  padding: var(--am-gap-sm) var(--am-gap);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius);
+  background: var(--am-paper);
+}
+
+/* A server with no contact is a grey row: its text is muted and nothing about it is offered as usable. */
+.rowOffline {
+  background: var(--am-inert-light);
+  color: var(--am-ink-muted);
+}
+
+.dot {
+  font-size: var(--am-text-lg);
+  line-height: 1;
+}
+
+.dotOk {
+  color: var(--am-ok);
+}
+
+.dotBusy {
+  color: var(--am-degraded);
+}
+
+.dotOffline {
+  color: var(--am-inert);
+}
+
+.name {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--am-gap-xs);
+  margin: 0;
+  padding: var(--am-gap-2xs) var(--am-gap-sm);
+  border: 1px solid var(--am-line-soft);
+  border-radius: var(--am-radius-pill);
+  font-size: var(--am-text-sm);
+}
+
+.modelBusy {
+  color: var(--am-ink-muted);
+}
+
+.api {
+  padding: 0 var(--am-gap-xs);
+  border-radius: var(--am-radius-sm);
+  background: var(--am-degraded-light);
+  color: var(--am-degraded);
+  font-size: var(--am-text-xs);
+  font-weight: 600;
+}
+
+.note {
+  margin: 0;
+  color: var(--am-ink-muted);
+  font-size: var(--am-text-sm);
+}
+
+.load {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--am-gap-xs);
+  font-size: var(--am-text-sm);
+}
+
+.meter {
+  width: 4rem;
+}
+
+.extra {
+  flex: 1 1 100%;
+  min-width: 0;
+}
