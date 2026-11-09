@@ -201,6 +201,34 @@ def test_a_carried_and_an_imported_decision_keep_their_origin(session: Session, 
     assert refused.value.code is ErrorCode.VALIDATION_FAILED
 
 
+def test_a_carried_decisions_system_sentence_is_not_stored_as_the_experts_words(
+    session: Session, published: Any, memory: SimpleNamespace
+) -> None:
+    """J3 F8: the carry-over's ledger comment is `carryover_comment(...)` -- identities of the source decision, finding and versions.
+    The memory's text table is the expert's own words, so a carried decision stores none and says `carried` in its origin; the
+    sweep (a process that decided without the port) does the same."""
+    from auditmanager.decisions.carryover import CarryoverProvenance, carryover_comment
+    from auditmanager.shared.identity import VersionUid
+
+    source = _decide(session, published, "accept", comment="подтверждаю")
+    sentence = carryover_comment(CarryoverProvenance(
+        source_finding_uid=published.finding_uid, source_decision_id=source.decision_id, source_version_uid=VersionUid.new().value,
+        source_version_ordinal=1, target_version_uid=published.version_uid, mode="version"))
+    carried = record_decision(
+        session, finding_uid=published.second_finding_uid, finding_observation_id=published.second_finding_observation_id,
+        event_type="accept", comment=sentence, author_label="Петрова А.", author_user_uid=None,
+        carried_from_decision_id=source.decision_id)
+    rows = dict(session.execute(text(
+        "SELECT d.source_decision_id, t.comment FROM decision_memory_decision d JOIN decision_memory_decision_text t "
+        "ON t.memory_decision_id = d.memory_decision_id")).all())
+    assert rows[source.decision_id] == "подтверждаю"                      # the expert's own words are kept
+    assert rows[carried.decision_id] is None                              # the system's sentence is not
+    origin = session.execute(text("SELECT origin_kind FROM decision_memory_decision WHERE source_decision_id = :d"),
+                             {"d": carried.decision_id}).scalar_one()
+    assert origin == "carried"
+    assert sentence not in "".join(str(value) for value in rows.values() if value is not None)
+
+
 def test_a_capture_that_fails_fails_the_decision_and_leaves_no_event(session: Session, published: Any, memory: SimpleNamespace) -> None:
     def broken(session: Session, event: Any, origin_kind: str) -> None:
         raise RuntimeError("the memory could not be written")

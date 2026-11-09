@@ -3208,8 +3208,11 @@ class MemoryCaptureAssembler:
             crops=crops,
             decision=DecisionFact(
                 source_decision_id=event.decision_id, event_type=event.event_type, severity=event.severity,
-                comment=event.comment, author_user_uid=event.author_user_uid, origin_kind=origin_kind,
-                decided_at=event.recorded_at,
+                # The memory keeps the expert's own words. A carried event's comment is the system sentence of
+                # `decisions.carryover.carryover_comment` (identities of the source decision, finding and versions): not theirs,
+                # and `origin_kind = carried` already says it came from an earlier version.
+                comment=None if origin_kind == "carried" else event.comment,
+                author_user_uid=event.author_user_uid, origin_kind=origin_kind, decided_at=event.recorded_at,
             ),
         )
 
