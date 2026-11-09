@@ -11,7 +11,36 @@ Minimum conventions:
 - object-level authorization server-side;
 - file reads return safe/scoped representations, not internal S3 key.
 
-## Current contract `1.45.0` (`HOSTS-SEAL-1`)
+## Current contract `1.46.0` (`HOSTS-SEAL-2`)
+
+Slice for `HOSTS-SEAL-2` with `RUN-STAGES-01` (ADR-0028; plan section 9.4 of the owner-approved plan of 2026-11-09): **the stages of a run, plan and
+fact**. **One operation, seven schemas, no migration, no new error code, no state machine and no identity prefix**; migration head stays `0062`.
+
+- `getRunStages` -- `GET /runs/{run_id}/stages` (`runs`; `role:admin|expert|viewer`, a product read like `getRunStatus`): the data of the window
+  «Этапы анализа раздела». For each chip the run has, **in the order the rail draws them** (`preparation`, `text`, `blocks`, `cross_check`,
+  `merge`, `norms`, `review`, `correction` and, for the AR v3 profile, `ar_v3`; a chip that no stage result, procedure, plan cell or call mentions
+  is not listed) it answers `stage_ids` (the code stage and procedure ids the chip covers), `plan` and `facts`.
+- **`plan`** is the run's frozen `stage_plan` cells for the chip's row -- `role`, `model_id`, `effort`, `max_output_tokens`, `timeout_seconds`,
+  `access` and, once the cell is bound (`audit_run_cell_binding`), `server`, the display name of the host. A run that froze no `stage_plan`
+  (`plan_source` `run_binding`) has one line per chip that calls a model, `role` `main` and the model its binding pins (the server and access of its
+  binding too; with no binding, the model the journal names). A chip that calls no model (`preparation`, `merge`) has an empty plan.
+- **`facts`**: `state` (`pending`, `running`, `done`, `partial`, `failed`, `skipped`, `unavailable`); `started_at` and `finished_at` (the earliest and
+  the latest call of a chip that calls a model, else the times of its stage results; `finished_at` only once the chip has finished, and none from a
+  stage taken from an earlier run, which is named by `reused_from_run_id`); `calls_succeeded`, `calls_failed`, `calls_retried`; `input_tokens`,
+  `output_tokens`, the part of them served by a subscription (`subscription_input_tokens`, `subscription_output_tokens`) and `cost_micros`;
+  `last_error_code`; `reason` (the extended review's reason a procedure did not complete); and `planned` and `completed`, the batches of the
+  extended review's `phase_coverage`, absent where the review keeps none.
+- **Where the facts come from.** The PC-01 `stage_result` rows; the extended review artifact through its custody-checked reader (`procedures` for the
+  state, `phase_coverage` for the batches); the call journal (`model_call` and `provider_call_effect`), each call placed on a chip by its `stage_key`
+  (written since `0062`) or, for an older row, **derived at read time** from `parameters ->> 'extended_phase'`. A journal row whose key or phase is
+  unknown is `500 storage_integrity_error`, never a guess.
+- **The viewer** («Наблюдатель», `R-150w`) reads the stages but not the server nor the access: both are absent from every cell of its answer (not
+  null). An expert and an administrator see everything.
+- **Not changed.** Every other operation, schema and error code. No page calls the new operation yet (`RUN-SCREEN-01`).
+
+The API has 296 paths, 324 operations and 794 schemas; migration head `0062`. The domain catalogs are at candidate revision 63.
+
+## Contract `1.45.0` (`HOSTS-SEAL-1`, historical)
 
 Slice for `HOSTS-SEAL-1` (ADR-0028; the owner-approved plan of 2026-11-09): **servers** (hosts) and **the models of the analysis stages**.
 **Fifteen operations, forty-three schemas, one parameter, no new error code and no new state machine**; migration `0062_hosts_stage_models`; five

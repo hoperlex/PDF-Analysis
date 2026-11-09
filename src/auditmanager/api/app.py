@@ -84,7 +84,7 @@ __all__ = [
 #: So the four built-in routes are suppressed (``openapi_url=None`` and the three below it
 #: in :func:`_assemble`) and the same four routes are declared as ``APIRoute``s, which do
 #: carry the application's dependencies. They stay out of the document --
-#: ``include_in_schema=False`` -- because the contract declares 295 paths and these are
+#: ``include_in_schema=False`` -- because the contract declares 296 paths and these are
 #: not among them.
 OPENAPI_PATH: Final[str] = "/openapi.json"
 _DOCS_PATH: Final[str] = "/docs"
@@ -106,7 +106,7 @@ DOCUMENTATION_PATHS: Final[tuple[str, ...]] = (
 #: is the same string.
 _TITLE: Final[str] = "AuditManager API"
 _DESCRIPTION: Final[str] = (
-    "The 323 operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
+    "The 324 operations of the PC-01 surface. Every failure is one `ErrorEnvelope` "
     "carrying a catalog `error_code`, and every response carries `X-Correlation-Id`."
 )
 
@@ -155,7 +155,7 @@ def create_asgi_app(
     *,
     application: Application | None = None,
 ) -> FastAPI:
-    """The ASGI application: the 323 operations, the seam, and the four middlewares.
+    """The ASGI application: the 324 operations, the seam, and the four middlewares.
 
     ``application`` lets a caller that has already built one -- a test driving two
     applications in one process, for instance -- avoid building it twice. When it is omitted
@@ -206,7 +206,7 @@ def _drop_the_422_this_surface_cannot_answer(document: dict[str, Any]) -> dict[s
     **Why this is not document surgery, and how you can tell.** `W13-CONF` measured that
     FastAPI's own 422 must be *displaced, not deleted*: declaring the contract's own
     ``422: {"model": ErrorEnvelope, ...}`` replaces it and keeps ``HTTPValidationError`` and
-    ``ValidationError`` out of ``components.schemas``. **Two hundred and twenty-five** of the 323
+    ``ValidationError`` out of ``components.schemas``. **Two hundred and twenty-six** of the 324
     operations do exactly that -- measured from the contract, not recalled: this paragraph
     read *"Twelve of the seventeen"* until wave 39, and twelve plus the four below is
     sixteen, which was never the size of this surface. It was thirteen of seventeen before
@@ -370,7 +370,7 @@ def _declare_the_documentation_routes(app: FastAPI) -> None:
     ``app.router.dependencies``, instead of a ``starlette.routing.Route``, which carries
     nothing.
 
-    ``include_in_schema=False`` on all four. The contract declares 295 paths and
+    ``include_in_schema=False`` on all four. The contract declares 296 paths and
     these are not among them; a documentation route that described itself would be a
     twenty-eighth.
 
@@ -478,7 +478,7 @@ def _assemble(
             ),
         ],
         # A model with a default would otherwise be emitted twice, as `X-Input` and
-        # `X-Output`. The 787 schema names are pinned by the contract and by the frontend's
+        # `X-Output`. The 794 schema names are pinned by the contract and by the frontend's
         # generated client, so the split is a conformance failure -- and the fix belongs
         # here, in the application, never in the gate's normalization. `W13-CONF` measured
         # it: `test_the_gate_catches_a_split_input_and_output_schema`.

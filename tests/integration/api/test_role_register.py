@@ -109,6 +109,8 @@ SAMPLES: dict[str, tuple[str, str]] = {
     "setStageModelLayoutEnabled": ("PUT", "/model-layout/enabled"),
     "listModelCatalogue": ("GET", "/model-catalogue"),
     "getRunStartReadiness": ("POST", "/runs/start-readiness"),
+    # `HOSTS-SEAL-2` (contract 1.46.0).
+    "getRunStages": ("GET", "/runs/run_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/stages"),
     "importRunDecisions": ("POST", "/runs/run_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/decision-imports"),
     "getProject": ("GET", "/projects/prj_01J9ZQ8K7NHVXW3T2R5M6P4Q8B"),
     "listVersionSheetLabels": ("GET", "/versions/ver_01J9ZQ8K7NHVXW3T2R5M6P4Q8B/sheet-labels"),
@@ -560,6 +562,8 @@ EXPECTED_ROLES: dict[str, frozenset[str]] = {
     "setStageModelLayoutEnabled": _ADMIN,
     "listModelCatalogue": _ANY_ROLE,
     "getRunStartReadiness": _ANY_ROLE,
+    # `HOSTS-SEAL-2` (contract 1.46.0): every role that reads a run reads its stages, the viewer too; the server and the access are left out of the viewer's answer by the implementation (`R-150w`), not by the register.
+    "getRunStages": _READ,
     "importRunDecisions": _EXPERT,
     "getProject": _READ,
     "listVersionSheetLabels": _READ,
