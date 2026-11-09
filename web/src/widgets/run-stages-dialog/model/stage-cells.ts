@@ -64,11 +64,14 @@ export function hasModelWork(facts: RunStageFacts): boolean {
   return facts.calls_succeeded + facts.calls_failed + facts.calls_retried + facts.input_tokens + facts.output_tokens > 0;
 }
 
-/** «вход 61 240 · выход 9 310», and, where a subscription served some, «по подписке: вход … · выход …». */
+/**
+ * «входных 61 240 · выходных 9 310», and, where a subscription served some, «по подписке: входных … · выходных …». The words are not
+ * «вход» and «выход»: a sentence with the bare «вход» beside a «нет» reads to the screen guard as a denial of the sign-in.
+ */
 export function tokensText(facts: RunStageFacts): string {
-  const total = `вход ${groupDigits(facts.input_tokens)} · выход ${groupDigits(facts.output_tokens)}`;
+  const total = `входных ${groupDigits(facts.input_tokens)} · выходных ${groupDigits(facts.output_tokens)}`;
   if (facts.subscription_input_tokens + facts.subscription_output_tokens === 0) return total;
-  return `${total} · по подписке: вход ${groupDigits(facts.subscription_input_tokens)} · выход ${groupDigits(facts.subscription_output_tokens)}`;
+  return `${total} · по подписке: входных ${groupDigits(facts.subscription_input_tokens)} · выходных ${groupDigits(facts.subscription_output_tokens)}`;
 }
 
 /**

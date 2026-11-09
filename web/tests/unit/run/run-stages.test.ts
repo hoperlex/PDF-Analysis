@@ -1,21 +1,23 @@
 /**
  * `RUN-STAGES-WEB-01` — the models and the facts of a chip, as `getRunStages` states them: the rail's one line, the read of the
- * answer, the poll that follows the status loop's delays, and the view a screen reads.
+ * answer, the cadence (the stages have no clock; the run's one loop marks them stale at each reading), and the view a screen reads.
  *
- * Pure functions are calls; the view is one render over a seeded cache (the harness runs no effect, so what is read is the cache's
- * answer, which is exactly what a screen sees before its first re-read).
+ * Pure functions are calls; the cadence is driven on a client and an observer, so no timer is waited on; the view is one render over a
+ * seeded cache (the harness runs no effect, so what is read is the cache's answer, which is exactly what a screen sees before its
+ * first re-read).
  */
 
 import { createElement } from 'react';
-import { describe, expect, it } from 'vitest';
+import { QueryObserver } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { RunStage, RunStageCell, RunStages } from '@/shared/api';
-import { pollDelayMs } from '@/shared/config';
+import type { RunStage, RunStageCell, RunStages, RunStatus } from '@/shared/api';
+import { queryKeys } from '@/shared/api';
 import {
-  chipModelLine, modelsCount, planModelIds, runStagesKey, runStagesPollInterval, stageOfChip, useRunStages,
+  chipModelLine, modelsCount, planModelIds, recordRunReading, runStagesKey, stageOfChip, useRunStages,
 } from '@/entities/audit-run';
 
-import { RUN_ID } from '../review/fixtures';
+import { RUN_ID, runStatus } from '../review/fixtures';
 import { newClient, renderScreen } from '../screens/harness';
 
 const FACTS = {
@@ -70,33 +72,70 @@ describe('the line a chip carries on the rail', () => {
   });
 });
 
-describe('the poll', () => {
-  it('follows the status loop\'s delays, counted from the readings, and never asks at once', () => {
-    expect([1, 2, 3, 4, 5, 6, 7].map((readings) => runStagesPollInterval(true, readings))).toEqual([2000, 3000, 4500, 6750, 10125, 15000, 15000]);
-    expect([1, 2, 3, 4, 5, 6].map((readings) => runStagesPollInterval(true, readings))).toEqual([1, 2, 3, 4, 5, 6].map(pollDelayMs));
-    // A query that has not read yet waits the first delay, not zero.
-    expect(runStagesPollInterval(true, 0)).toBe(2000);
+describe('the cadence: the stages are asked about when the run is, and by nobody else', () => {
+  const status = (state: RunStatus['state']) => runStatus({ state, terminal_at: state === 'running' ? null : '2026-09-10T08:04:00.000Z' });
+  const keysOf = (spy: ReturnType<typeof vi.spyOn>) => spy.mock.calls.map((call) => (call[0] as { queryKey: unknown }).queryKey);
+
+  it('files a reading of the run and marks the stages and the journal stale, and the dashboard only at the terminal one', () => {
+    const client = newClient();
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    recordRunReading(client, RUN_ID, status('running'));
+    expect(client.getQueryData(queryKeys.runs.detail(RUN_ID))?.state).toBe('running');
+    expect(keysOf(spy)).toEqual([queryKeys.execution.journal(RUN_ID), runStagesKey(RUN_ID)]);
+    spy.mockClear();
+    recordRunReading(client, RUN_ID, status('published'));
+    expect(keysOf(spy)).toEqual([queryKeys.execution.journal(RUN_ID), runStagesKey(RUN_ID), queryKeys.dashboard.summary()]);
   });
 
-  it('stops when the run is not open', () => {
-    expect(runStagesPollInterval(false, 1)).toBe(false);
-    expect(runStagesPollInterval(false, 9)).toBe(false);
+  it('makes a mounted reader read again at each reading, and a reader that is not mounted ask nothing', async () => {
+    const client = newClient();
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: runStagesKey(RUN_ID),
+      queryFn: async () => { reads += 1; return answer([]); },
+    });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const unsubscribe = observer.subscribe(() => undefined);
+    await settle();
+    expect(reads).toBe(1);
+    recordRunReading(client, RUN_ID, status('running'));
+    await settle();
+    expect(reads).toBe(2);
+    // The reading that ends the loop is the last one the reader makes: it is the one that makes the facts final.
+    recordRunReading(client, RUN_ID, status('published'));
+    await settle();
+    expect(reads).toBe(3);
+    unsubscribe();
+    recordRunReading(client, RUN_ID, status('running'));
+    await settle();
+    expect(reads).toBe(3);
+    // Another run's readings do not touch this run's stages.
+    const other = 'run_01M2545JSD15ETSNNV904X99ZZ';
+    const again = observer.subscribe(() => undefined);
+    await settle();
+    const before = reads;
+    recordRunReading(client, other, runStatus({ run_id: other, state: 'running', terminal_at: null }));
+    await settle();
+    expect(reads).toBe(before);
+    again();
   });
 });
 
 describe('the view a screen reads', () => {
-  function Probe({ active }: { readonly active: boolean }) {
-    const view = useRunStages(RUN_ID, active);
+  function Probe({ enabled }: { readonly enabled: boolean }) {
+    const view = useRunStages(RUN_ID, enabled);
     return createElement('p', { 'data-phase': view.phase, 'data-items': view.phase === 'read' ? view.stages.items.length : -1 });
   }
-  const render = (seed: RunStages | null) => {
+  const render = (seed: RunStages | null, enabled = true) => {
     const client = newClient();
     if (seed !== null) client.setQueryData(runStagesKey(RUN_ID), seed);
-    return renderScreen(client, createElement(Probe, { active: true }));
+    return renderScreen(client, createElement(Probe, { enabled }));
   };
 
   it('is loading before the first answer, and is not an error', () => {
     expect(render(null)).toContain('data-phase="loading"');
+    // A run not read yet (or not found) has no stages to ask for: the view stays loading and nothing is requested.
+    expect(render(null, false)).toContain('data-phase="loading"');
   });
 
   it('is the answer once the cache holds one', () => {

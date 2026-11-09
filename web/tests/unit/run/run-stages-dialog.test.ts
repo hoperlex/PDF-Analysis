@@ -85,7 +85,7 @@ describe('the plan of a chip with a blocks ensemble (a run that froze its stage 
     expect(markup).toMatch(/data-fact-row="state"[^>]*>[\s\S]*?<td[^>]*>идёт<\/td>/);
     expect(markup).toMatch(/data-fact-row="progress"[\s\S]*?12 из 40/);
     expect(markup).toContain('успешно 12 · с ошибкой 1 · повторов 2');
-    expect(markup).toContain(`вход 102${G}400 · выход 18${G}800 · по подписке: вход 90${G}000 · выход 15${G}000`);
+    expect(markup).toContain(`входных 102${G}400 · выходных 18${G}800 · по подписке: входных 90${G}000 · выходных 15${G}000`);
     expect(markup).toContain('0.412000 единиц валюты провайдера');
     expect(markup).toMatch(/data-fact-row="started"[\s\S]*?2026-11-10 09:06:41 UTC/);
     expect(markup).toMatch(/data-fact-row="finished"[\s\S]*?<td>—<\/td>/);
@@ -114,7 +114,7 @@ describe('a run that froze no stage plan (`run_binding`)', () => {
     expect(markup).not.toContain('data-plan-row="cell"');
     expect(markup).toContain('data-plan-source="run_binding"');
     // The facts are still the answer's: they do not depend on where the plan came from.
-    expect(markup).toContain(`вход 30${G}100 · выход 4${G}200`);
+    expect(markup).toContain(`входных 30${G}100 · выходных 4${G}200`);
   });
 });
 
@@ -161,7 +161,7 @@ describe('the facts of other kinds of chip', () => {
   it('a model chip that has made no call says zeros, and states no cost it does not have', () => {
     const markup = dialog(stages([stage('text', [cell('main', 'claude-sonnet-5-5')], { state: 'pending' })]), {}, { selected: 'text' });
     expect(markup).toContain('успешно 0 · с ошибкой 0 · повторов 0');
-    expect(markup).toContain('вход 0 · выход 0');
+    expect(markup).toContain('входных 0 · выходных 0');
     expect(markup).not.toContain('data-fact-row="cost"');
     expect(markup).not.toContain('по подписке:');
   });

@@ -18,6 +18,9 @@
  * The loop stops on any terminal state, on unmount, and on a non-retryable failure. A
  * retryable failure is absorbed by the loop itself and never surfaces here as an error.
  *
+ * `RUN-STAGES-WEB-01`: each reading also marks the run's stages (`getRunStages`) stale, so they are re-read at this cadence too and
+ * not at a second one of their own (`recordRunReading`).
+ *
  * `W46-WIRE`: the terminal reading also invalidates `queryKeys.dashboard.summary()`. The
  * dashboard's `run_activity.spend` and its state distribution only reach their real,
  * settled values once a run finishes — inventing them from an in-progress reading would be
@@ -28,6 +31,7 @@
  * handler already invalidated it once, for the run's first, non-terminal state.
  */
 
+import type { QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -36,6 +40,26 @@ import { TransportError, isTerminalRunState, pollRunStatus, queryKeys } from '@/
 
 import type { RunFailure } from '../model/run-failure';
 import { classifyRunFailure } from '../model/run-failure';
+
+import { runStagesKey } from './use-run-stages';
+
+/**
+ * What one reading of the run does to the cache: it is filed under `queryKeys.runs.detail(runId)`, and the reads that have no timer
+ * of their own are marked stale, so a mounted reader reads them again at this very cadence and a reader that is not mounted does not
+ * ask at all. They are the run's journal (page validation) and the run's stages (`getRunStages`, the model and the facts of each
+ * chip). The reading that ends the loop also marks the dashboard's summary, whose spend and state distribution only reach their
+ * settled values then (`W46-WIRE`); every earlier reading of the same run leaves the summary alone.
+ *
+ * A function rather than lines of the effect below, so that a test can call it with a client and see which keys it touches.
+ */
+export function recordRunReading(queryClient: QueryClient, runId: RunId, reading: RunStatus): void {
+  queryClient.setQueryData(queryKeys.runs.detail(runId), reading);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.execution.journal(runId) });
+  void queryClient.invalidateQueries({ queryKey: runStagesKey(runId) });
+  if (isTerminalRunState(reading.state)) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
+  }
+}
 
 export interface RunStatusPolling {
   /** The most recent reading, or `null` before the first one arrives. */
@@ -90,12 +114,8 @@ export function useRunStatus(runId: RunId): RunStatusPolling {
         onUpdate: (reading) => {
           if (!live) return;
           setStatus(reading);
-          queryClient.setQueryData(queryKeys.runs.detail(runId), reading);
-          // Page validation uses the same cadence as this Run; its journal has no timer.
-          void queryClient.invalidateQueries({ queryKey: queryKeys.execution.journal(runId) });
-          if (isTerminalRunState(reading.state)) {
-            void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
-          }
+          // The journal and the stages of the run have no timer: they follow this loop's cadence (`recordRunReading`).
+          recordRunReading(queryClient, runId, reading);
         },
       },
     )
