@@ -1154,7 +1154,7 @@ class JobRepository:
         # (`pending`) takes the dispatch path below; every other Run takes the connection path it always took.
         #
         # `HOSTS-BACKEND-01` (ADR-0028 decision 5). A Run that froze a ``stage_plan`` is bound **by cell**: it has no group revision and no
-        # connection of its own, so neither of the two paths below fits it. ``pending``, it takes the planned dispatch path (every pool its
+        # connection of its own, so neither of the two branches below fits it. ``pending``, it takes the planned dispatch path (every pool its
         # cells might be bound in is locked, in ascending order, and every cell is bound or none is); ``bound``, its retry holds the pools it
         # was bound in. The read is unlocked and read again under the Run lock.
         plan_state, pending_revision, stage_plan = self._claim_view(session, run_id=run_id)

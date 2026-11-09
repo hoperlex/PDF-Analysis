@@ -16,16 +16,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any, Final
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from auditmanager.runs.public import ModelAvailability
 from auditmanager.shared.errors import DomainError, ErrorCode
 
-__all__ = ["DEPENDENCY", "bind_planned_run", "claim_for_host_token"]
+__all__ = ["DEPENDENCY", "HostModelAvailability", "bind_planned_run", "claim_for_host_token"]
 
 DEPENDENCY: Final[str] = "executor_host_dispatch"
 
@@ -81,3 +82,41 @@ def claim_for_host_token(session: Session, *, token_id: str, runner_instance_id:
     return claim_task(
         _Borrowed(session), RunnerPrincipal(token_id=token_id, connection_id=None, host_id=str(host_id)),
         wait_seconds=wait_seconds, runner_instance_id=runner_instance_id)
+
+
+class HostModelAvailability:
+    """``runs.ModelAvailabilityPort`` over the servers (`HOSTS-INT-WIRE-01`, ADR-0028 decisions 3 and 16): can a catalogue model be served **now**,
+    and by which kind of access?
+
+    Answered from the facts of every live host, computed on read (``executors.public.read_hosts`` and ``model_availability``): a model is
+    served by *subscription* (or *api*) when some host has it ``available`` -- or ``busy``, which is available with every slot taken: a run then
+    waits for the unit, it is not refused (``executor_at_capacity``). A model no host can serve now carries the **one** reason of the host closest
+    to serving it (the fewest reasons, then the most actionable one), the order ``REASON_ORDER`` gives, the same choice the binding's wait makes
+    (``cell_binding._cause_of``). A model no live host reports is left out of the answer, which the port reads as ``not_on_any_server``.
+    Read-only; it writes nothing and calls no model."""
+
+    def availability(self, session: Session, model_ids: Sequence[str]) -> Mapping[str, ModelAvailability]:
+        from auditmanager.executors.public import REASON_ORDER, model_availability, read_hosts
+
+        wanted = set(model_ids)
+        served: dict[str, set[str]] = {}
+        closest: dict[str, tuple[str, ...]] = {}
+        for facts in read_hosts(session):
+            for item in model_availability(facts):
+                if item.model_id not in wanted:
+                    continue
+                if item.state in ("available", "busy"):
+                    served.setdefault(item.model_id, set()).add(item.access)
+                    continue
+                current = closest.get(item.model_id)
+                if item.reasons and (current is None or len(item.reasons) < len(current)):
+                    closest[item.model_id] = item.reasons
+        answer: dict[str, ModelAvailability] = {}
+        for model_id in wanted:
+            accesses = served.get(model_id, set())
+            if accesses:
+                answer[model_id] = ModelAvailability(subscription="subscription" in accesses, api="api" in accesses)
+            elif model_id in closest:
+                answer[model_id] = ModelAvailability(reasons=(min(closest[model_id], key=REASON_ORDER.index),))
+            # a model no live host reports stays out of the answer: the port reads that as ``not_on_any_server``
+        return answer

@@ -105,7 +105,7 @@ def test_server_rechecks_claim_after_blob_read_and_refuses_changed_bytes(monkeyp
     monkeypatch.setattr(executor_public, "claimed_image", authorize)
     store = FakeBlobStore()
     adapter = RunnerAdapter(lambda: nullcontext(None), blob_store=store)
-    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a")
+    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a", host_id=None)
     assert adapter.read_image(runner=runner, task_id="ext_a", blob_id=IMAGE["blob_id"]) == PNG
     assert len(checks) == 2 and store.reads == 1
     store.content = PNG + b"changed"
@@ -126,7 +126,7 @@ def test_server_does_not_release_bytes_if_claim_ends_during_blob_read(monkeypatc
     monkeypatch.setattr(executor_public, "claimed_image", authorize)
     store = FakeBlobStore()
     adapter = RunnerAdapter(lambda: nullcontext(None), blob_store=store)
-    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a")
+    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a", host_id=None)
     with pytest.raises(DomainError):
         adapter.read_image(runner=runner, task_id="ext_a", blob_id=IMAGE["blob_id"])
     assert checks == 2 and store.reads == 1
@@ -212,7 +212,7 @@ def test_the_served_bytes_of_a_crop_are_checked_against_its_descriptor(monkeypat
             yield crop_bytes if Store.reads == 1 else crop_bytes + b"x"
 
     adapter = RunnerAdapter(lambda: nullcontext(None), blob_store=Store())
-    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a")
+    runner = SimpleNamespace(token_id="ern_a", connection_id="exc_a", host_id=None)
     assert adapter.read_image(runner=runner, task_id="ext_a", blob_id=image["blob_id"]) == crop_bytes
     with pytest.raises(DomainError):
         adapter.read_image(runner=runner, task_id="ext_a", blob_id=image["blob_id"])

@@ -70,6 +70,27 @@ fact**. **One operation, seven schemas, no migration, no new error code, no stat
 - **The viewer** («Наблюдатель», `R-150w`) reads the stages but not the server nor the access: both are absent from every cell of its answer (not
   null). An expert and an administrator see everything.
 - **Not changed.** Every other operation, schema and error code. No page calls the new operation yet (`RUN-SCREEN-01`).
+- **Details the stand answers on existing codes** (`HOSTS-INT-WIRE-01`, which wired `HOSTS-BACKEND-01` and `HOSTS-LAYOUT-01`; prose only: no schema,
+  no operation and no version change, and `error-codes.json` carries the same notes).
+  - `409 conflict`, `details.conflict_reason`: `system_managed` (a connection or group the stand keeps for a server is revised, archived, keyed,
+    probed, routed, enrolled or named by a rule by hand), `host_name_in_use` (a live server holds the name), `host_archived` (a write names an
+    archived server), `host_in_use` (`archiveExecutorHost` while a bound run still holds a unit of the server's pool) and `upgrade_blocked_by_use`
+    (a host enrollment or install under the name of a single-model `pull` connection that a route or a rule still uses, until `HOSTS-CMP-01`).
+  - `422 validation_failed`, `details.field` `slots` or `providers` (and `key_file` or `agent_version`) with a `constraint` that names what the
+    request got wrong: for `slots` `required`, `range` (1 to 16), `type` and `provider_not_reported`; for `providers` `required`, `length`, `type`,
+    `enum`, `access`, `auth_state`, `unique`, `accept_images`, `models`, `checked_at`, `failure_code` and `verified_without_login` (a provider that is
+    not logged in has no verified model); `host_token_only` (a connection token sends `providers`, `slots`, `key_file`, or a host answer's
+    `provider`/`reported_model`: it speaks the earlier wire); on a host token's answer `provider`, `access` and `reported_model` `required`, and
+    `provider` or `access` `not_the_task`. A value is never echoed.
+  - `503 dependency_unavailable`, `details.dependency` `model_catalogue`: `contracts/analysis/v1/model-catalogue.json` cannot be read; there is no
+    built-in copy to fall back to.
+  - The answer of `reportRunnerHealth` and `submitExecutorTaskAnswer` for a model that is not the task's is the runner's existing refusal; for a host
+    token the model that *answered* (`reported_model`) is held to the catalogue's `accepted_reported` for the task's model, exactly (`R-133`).
+  - **A start on the stage layout that finds another rate or another access since the estimate was read** is refused with the existing
+    cost-preflight refusal, `422 analysis_input_invalid` with `details.stage_id` `text_analysis` and `details.reason`
+    `cost_estimate_binding_changed`, before the key is claimed, and the client reads `getRunStartReadiness` again. (The description of `startRun` in
+    `openapi.json` says `409` with `conflict_reason`; that is not what the stand answers, and the schema's description wording is to be corrected
+    by the next contract owner -- a contract gap recorded by `HOSTS-INT-WIRE-01`.)
 
 The API has 296 paths, 324 operations and 794 schemas; migration head `0062`. The domain catalogs are at candidate revision 63.
 
