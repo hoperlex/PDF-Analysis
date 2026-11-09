@@ -322,7 +322,7 @@ def test_the_comparison_can_fail(session: Session, monkeypatch: pytest.MonkeyPat
     honest = model.audits(session, version_uids=[version])[version]
     assert (honest.optimisation_proposal_count, honest.optimisation_undecided_count) == (5, _expected_undecided(histories)) == (5, 3)
 
-    original = str(module._DOCUMENT_AUDITS)
+    original = module._DOCUMENT_AUDITS.text  # the source text, with its `:version_uids`; str() would show the expanded placeholder
     assert "cur.verdict <> 'revoke'" in original
     bent = original.replace("cur.verdict <> 'revoke'", "cur.verdict IS NOT NULL")  # any decision, a withdrawal included, is "decided"
     monkeypatch.setattr(module, "_DOCUMENT_AUDITS", text(bent).bindparams(bindparam("version_uids", expanding=True)))
