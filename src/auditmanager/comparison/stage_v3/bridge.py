@@ -24,6 +24,13 @@ def _implementation(policy):
     return windowed
 
 
+def _source_rule(policy):
+    """The source admission of the plan the policy selects (legacy, `windowed-v1` and `windowed-global-v1` plan over `windowed`)."""
+    if policy is None: return p.source
+    from . import windowed
+    return windowed.source
+
+
 class V3Method(StageAiMethod):
     def __init__(self, *args, v3_policy=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,9 +58,9 @@ class V3Method(StageAiMethod):
             count += len(fragments)
             facts.append({"profile_id": row["profile_id"], "version_uid": row["version_uid"],
                           "content_key": row["content_key"], "fragment_keys": [f.content_key for f in fragments]})
-        limits = self.v3_policy["limits"] if self.v3_policy else {"pages": p.MAX_PAGES, "characters": p.MAX_CHARACTERS, "fragments": p.MAX_FRAGMENTS}
-        if not 2 <= len(facts) <= limits["pages"] or characters > limits["characters"] or count > limits["fragments"]:
-            raise StageAiValidationError("v3_native_source_budget")
+        # The selected plan decides what it admits: the estimate asks the plan's own source rule, so it refuses exactly
+        # what the run would refuse at plan time, with the plan's own code (D-532).
+        _source_rule(self.v3_policy)(snapshot)
         self.source_profiles = facts
         self.source_signature = digest({"engine": ENGINE, "bundle": self.bundle_version, "revision": revision, "profiles": facts})
         # Explicit one-call consent window. Resume estimates the exact next

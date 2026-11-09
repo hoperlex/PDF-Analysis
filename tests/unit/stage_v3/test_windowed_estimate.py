@@ -12,7 +12,7 @@ import pytest
 
 from auditmanager.comparison.ai_jobs.model import AiMode
 from auditmanager.comparison.stage_ai.validation import StageAiValidationError
-from auditmanager.comparison.stage_v3 import bridge, consolidation as c, windowed as w
+from auditmanager.comparison.stage_v3 import bridge, consolidation as c, procedures as legacy, windowed as w
 from auditmanager.comparison.stage_v3.policy import GLOBAL_LIMITS, GLOBAL_VERSION, LIMITS, VERSION
 from auditmanager.shared.errors import DomainError
 from tests.unit.stage_v3.windowed_fixture import MODEL, drive, mapping_edit, numbered, region, snapshot_of
@@ -83,24 +83,29 @@ def test_the_estimate_grows_with_the_number_of_pages_the_catalogue_lists(monkeyp
 def test_the_estimate_refuses_exactly_what_the_plan_would_refuse(monkeypatch):
     method(snapshot_of([["t"]] * 32, [["t"]] * 32), WINDOWED, monkeypatch).counts(None, request())            # 64 pages
     method(snapshot_of([["t"]] * 9, [["t"]] * 9), WINDOWED, monkeypatch).counts(None, request())               # more than legacy admits
-    with pytest.raises(StageAiValidationError, match="source_budget"):
-        method(snapshot_of([["t"]] * 33, [["t"]] * 32), WINDOWED, monkeypatch).counts(None, request())          # 65 pages
-    with pytest.raises(StageAiValidationError, match="source_budget"):
+    method(snapshot_of([["t"]] * 9, [["t"]] * 9), GLOBAL, monkeypatch).counts(None, request())
+    refused = [(snapshot_of([["t"]] * 33, [["t"]] * 32), "65 pages"),
+               (snapshot_of([["t"] * 801], [["t"] * 800]), "1601 fragments"),
+               (snapshot_of([["я" * 120_001]], [["я" * 120_000]]), "240001 characters")]
+    for policy in (WINDOWED, GLOBAL):                       # the windowed plans refuse with their own code, never the legacy one
+        for source, _why in refused:
+            with pytest.raises(StageAiValidationError, match="^v3_windowed_source_budget$"):
+                method(source, policy, monkeypatch).counts(None, request())
+    with pytest.raises(StageAiValidationError, match="^v3_native_source_budget$"):
         method(snapshot_of([["t"]] * 9, [["t"]] * 9), None, monkeypatch).counts(None, request())               # the legacy plan: 16 pages
-    with pytest.raises(StageAiValidationError, match="source_budget"):
-        method(snapshot_of([["t"] * 801], [["t"] * 800]), WINDOWED, monkeypatch).counts(None, request())        # 1601 fragments
-    with pytest.raises(StageAiValidationError, match="source_budget"):
-        method(snapshot_of([["я" * 120_001]], [["я" * 120_000]]), WINDOWED, monkeypatch).counts(None, request())  # 240001 characters
 
 
-@pytest.mark.xfail(strict=True, reason="D-532: V3Method.counts admits a one-sided revision that windowed.source refuses at plan time "
-                                       "(the fix is in bridge.py, outside this lane)")
-def test_the_estimate_refuses_a_one_sided_revision_as_the_plan_does(monkeypatch):
+@pytest.mark.parametrize("policy,rule,code", [(WINDOWED, w.source, "v3_windowed_source_budget"),
+                                              (GLOBAL, w.source, "v3_windowed_source_budget"),
+                                              (None, legacy.source, "v3_native_source_budget")])
+def test_the_estimate_refuses_a_one_sided_revision_as_the_plan_does(monkeypatch, policy, rule, code):
     source = snapshot_of([["t"]] * 2, [])
-    with pytest.raises(StageAiValidationError, match="source_budget"):
-        w.source(source)                                                                                     # the plan refuses it ...
-    with pytest.raises(StageAiValidationError, match="source_budget"):
-        method(source, WINDOWED, monkeypatch).counts(None, request())                                        # ... the estimate must too
+    with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+        rule(source)                                                                                         # the plan refuses it ...
+    with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+        method(source, policy, monkeypatch).counts(None, request())                                          # ... the estimate must too, with its code
+    with pytest.raises(StageAiValidationError, match=f"^{code}$"):
+        method(snapshot_of([], [["t"]] * 2), policy, monkeypatch).counts(None, request())                    # either side may be the empty one
 
 
 def test_a_page_without_text_or_a_changed_saved_profile_is_refused_before_any_spend(monkeypatch):

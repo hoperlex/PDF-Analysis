@@ -1,10 +1,16 @@
-"""Explicit, rolled-back PostgreSQL smoke: python -m tests.unit.stage_v3.db_smoke.
+"""Explicit, rolled-back PostgreSQL smoke: python -m tests.unit.stage_v3.db_smoke [plan ...].
 
+`plan` is one of legacy, windowed-v1, windowed-global-v1 (default: legacy). Each plan is walked on its own connection
+that is rolled back at the end: the run is started under that plan exactly as a start command freezes it (the switch is
+set, `fresh_policy()` is written into the command outcome as `stage_v3_policy`), then estimated, consented window by
+window, advanced call by call through durable units, reviewed into cards and read back as progress.
 Uses existing lane DATABASE_URL, durable job/spend/units, synthetic responses only.
 This is not collected as a unit test and never starts infrastructure.
 """
 import json
 import os
+import sys
+import traceback
 from types import SimpleNamespace
 
 from sqlalchemy import text
@@ -16,6 +22,7 @@ from auditmanager.comparison.spend.model import CallRoute
 from auditmanager.comparison.stage_ai.runtime import StageAiRuntime
 from auditmanager.comparison.stage_review.service import StageReviewService
 from auditmanager.comparison.stage_v3.mode import ENGINE, experimental_progress
+from auditmanager.comparison.stage_v3.policy import bundle_for, fresh_policy, policy_for_run
 from auditmanager.comparison.work.model import Failed
 from auditmanager.comparison.work.repository import ComparisonWorkRepository
 from auditmanager.workers.public import WorkerRegistry
@@ -29,7 +36,18 @@ from auditmanager.analysis.public import ProviderMode
 from tests.unit.stage_v3.recorded_fixture import synthetic_response
 
 
-def main():
+PLANS = ("legacy", "windowed-v1", "windowed-global-v1")
+#: The first group of the plan: the legacy Mapper sees whole pages, the windowed plans a bounded catalogue.
+MAPPER_GROUP = {"legacy": "v3:mapper:all", "windowed-v1": "v3:mapper:catalogue", "windowed-global-v1": "v3:mapper:catalogue"}
+#: One page per side, one changed parameter: every plan needs Mapper, one Miner pack, Dedupe and one Verification.
+EXPECTED_CALLS = {"legacy": ["mapper", "miner", "dedupe", "verify"], "windowed-v1": ["mapper", "miner", "dedupe", "verify"],
+                  "windowed-global-v1": ["mapper", "miner", "dedupe", "verify"]}
+
+
+def main(plan="legacy"):
+    assert plan in PLANS, plan
+    os.environ["AUDITMANAGER_STAGE_V3_PLAN"] = plan          # the fresh-start switch the estimate and the start command read
+    selected = fresh_policy()                                # None for legacy
     engine = create_database_engine(DatabaseSettings(url=parse_database_url(os.environ["DATABASE_URL"])))
     with engine.connect() as connection:
         transaction = connection.begin()
@@ -62,7 +80,7 @@ def main():
         with sessions() as session:
             run_id, command_id = _id("crn"), _command(session, "start_stage_chain_run")
             session.execute(text("UPDATE command_record SET outcome=CAST(:outcome AS jsonb) WHERE command_id=:id"),
-                            {"outcome": json.dumps({"engine": ENGINE}), "id": command_id})
+                            {"outcome": json.dumps({"engine": ENGINE, **({"stage_v3_policy": selected} if selected else {})}), "id": command_id})
             pins = session.execute(text("SELECT version_uid FROM comparison_page_profile WHERE comparison_page_profile_id=ANY(CAST(:ids AS text[]))"), {"ids": [left, right]}).scalars().all()
             session.execute(text("INSERT INTO stage_chain_run(stage_chain_run_id,stage_pair_id,stage_link_revision_id,input_sha256,pinned_version_uids,state,actor_user_uid,command_id,kind,with_ai) VALUES(:run,:pair,:revision,:sha,CAST(:pins AS jsonb),'running',:actor,:command,'full',true)"),
                 {"run": run_id, "pair": pair, "revision": revision, "sha": "f" * 64,
@@ -103,20 +121,45 @@ def main():
                     break
             else:
                 raise AssertionError((phase, "did not terminate"))
-        assert adapter.calls == ["mapper", "miner", "dedupe", "verify"], adapter.calls
-        assert pauses == 3, pauses
+        assert adapter.calls == EXPECTED_CALLS[plan], adapter.calls
+        assert pauses == len(adapter.calls) - 1, pauses
         review = StageReviewService(sessions)
         outcome = review.advance(item, run_id)
         with sessions() as session:
+            # The durable record of the plan: stored with the start command, and every unit saved under its bundle.
+            assert policy_for_run(session, run_id) == selected, (plan, policy_for_run(session, run_id))
+            bundle = bundle_for(selected)
+            units = session.execute(text("SELECT group_id,state,progress->>'prompt_bundle_version' AS bundle FROM stage_ai_unit "
+                                         "WHERE stage_chain_run_id=:run AND group_id LIKE 'v3:%'"), {"run": run_id}).mappings().all()
+            assert all(row["state"] == "completed" for row in units), (plan, units)
+            plans = [row for row in units if row["group_id"] != "v3:window:consent"]     # the consent window is bookkeeping, no bundle
+            assert any(row["group_id"] == "v3:window:consent" for row in units), (plan, units)
+            assert all(row["bundle"] == bundle for row in plans), (plan, units)
+            groups = {row["group_id"] for row in plans}
+            assert MAPPER_GROUP[plan] in groups and "v3:final:cards" in groups, (plan, groups)
+            assert len([g for g in groups if g.startswith("v3:miner:")]) == 1, (plan, groups)
             progress = experimental_progress(session, run_id)
             assert progress["status"] == "completed", progress
+            assert progress["plan_version"] == (selected["plan_version"] if selected else "native-text-v3/1"), progress
+            assert progress["limits"] == (selected["limits"] if selected else progress["limits"]), progress
+            assert progress["completed_units"] == progress["planned_units"] and progress["pending_units"] == 0, progress
+            assert ("Consolidator" in [p["name"] for p in progress["procedures"]]) == (plan == "windowed-global-v1"), progress
         cards, _, _ = review.page(run_id)
         assert len(cards) == 1, cards
         assert cards[0]["experimental"]["parameters"][0]["verification"]["verdict"] == "CONFIRMED"
-        print("V3 DB smoke PASS: 4 synthetic calls, 3 fresh consents, 1 typed REVIEW card; source transaction rolls back")
+        print(f"V3 DB smoke PASS [{plan}]: {len(adapter.calls)} synthetic calls {adapter.calls}, {pauses} fresh consents, "
+              f"{len(plans)} plan units under bundle {bundle[:12]}, 1 typed REVIEW card; source transaction rolls back")
         transaction.rollback()
     engine.dispose()
 
 
 if __name__ == "__main__":
-    main()
+    failed = []
+    for chosen in sys.argv[1:] or ["legacy"]:       # every plan runs even after a failure, so one run reports them all
+        try:
+            main(chosen)
+        except Exception:
+            traceback.print_exc()
+            print(f"V3 DB smoke FAIL [{chosen}]")
+            failed.append(chosen)
+    sys.exit(1 if failed else 0)
