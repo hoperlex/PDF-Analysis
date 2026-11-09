@@ -7,16 +7,25 @@ E2E_PC01_LOGIN=<login> E2E_PC01_PASSWORD=<password> \
 
 A sign-in, two phases, one instrument, one envelope, one exit code.
 
-`BETA-COST-JOURNEY-1030` keeps the existing ordinary starts compatible with required cost approval.
-Each declared start first presses its cost-estimate control, reads the actual successful source-bound response,
-checks that the prefilled finite USD cap equals the server's recommendation and covers its estimate, then presses
-the unchecked approval checkbox. The later start must carry identical version/executor-or-preset/raised-limit
-options, the exact estimate digest/cap and a real command key. Failed/missing/stale endpoints or changed payloads
-fail the step. Recorded mode is required unless `--allow-spend` explicitly permits live approval, including the
-first core Run. No provider mode is selected or replaced by the harness.
+`BETA-COST-JOURNEY-1030` keeps the existing starts compatible with required cost approval.
+`RUN-START-ONE-01b` moved the ordinary start (scope `run`) to the application's one-button start: the control is a single
+«Запустить» (`[data-start-run-button]`) with no estimate button and no tick-box, and the `approve_run_cost` action itself presses it.
+It then reads the actual successful source-bound `POST /runs/cost-estimate` response and agrees as the estimate asks:
 
-The closed `approve_run_cost` action supports `run` and `ar_v3_group`; the latter uses «Оценить стоимость шести
-проверок». The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
+- **metered**: the dialog `[data-start-run-dialog]` must be open with its finite USD ceiling prefilled and equal to the server's
+  recommendation and covering its estimate; the driver types that ceiling into the field and presses `[data-start-run-confirm]`
+  («Запустить» in the dialog). That press is the agreement.
+- **unmetered**: the click was the agreement. The estimate must be priced at 0, no dialog may be on the page, and the start fires by
+  itself with the estimate's own digest and recommended ceiling.
+
+Either way the start must then carry the identical version options, the exact estimate digest/cap and a real command key
+(`assertCostApprovedStart`); a manifest step has no click of its own after the action. Failed/missing/stale endpoints or changed payloads
+fail the step. Recorded mode is required unless `--allow-spend` explicitly permits live approval, including the first core Run;
+because an unmetered click starts the run at once, a live origin (known from an earlier run) is refused BEFORE the button is pressed.
+No provider mode is selected or replaced by the harness.
+
+The closed `approve_run_cost` action supports `run`, `run_from_stage` and `ar_v3_group`; the last keeps its estimate button and tick-box
+(«Оценить стоимость шести проверок»). The current manifest has six ordinary starts, including two historical pending AR v1 steps. Their
 pending status is preserved; this compatibility update does not invent an executed six-check AR v3 journey or
 activate those older steps. Browser execution of these new approval actions remains **UNVERIFIED**.
 
@@ -29,8 +38,10 @@ six-check default button is not a prerequisite for this walk. Its API, historica
 The existing queue re-audit step uses that same `run` cost scope with an explicit captured source Run. Selecting
 «Повторный аудит» automatically reads the selected Run and estimates its version with `reaudit_of_run_id`; the
 driver observes both responses, checks the source/version and the absence of client routing overrides, then
-presses the previously unchecked cost agreement. The subsequent «Подтвердить» must send fresh digest/cap consent
-to that same source's re-audit endpoint with a new command key. A parent's old approval is never substituted.
+agrees as the estimate asks: the page's dialog (ceiling typed, «Запустить») when it can charge, nothing when it does not, because
+the click on the row was the agreement. There is no «Подтвердить» and no tick-box in this flow any more. The re-audit sent must carry
+fresh digest/cap consent to that same source's re-audit endpoint with a new command key. A parent's old approval is never substituted.
+Browser execution of the one-button flow is **UNVERIFIED** (no live journey was run by `RUN-START-ONE-01b`).
 
 `CMP-JOURNEY-CODE-01` adds six concrete version-module steps over `fixtures/comparison/vs1`: upload five PDFs,
 confirm grouping/order, prepare the matrix, compare all four adjacent transitions, open real viewer tiles,
@@ -535,7 +546,7 @@ Re-measure both with the two commands above on a stand before quoting a figure.
 
 **And that is also why three of them stopped proving anything.** `W44-JOURNEY` found the
 two write fixtures pressing controls labelled `Create`, `Upload` and `Start run` — the
-application says `Создать`, `Загрузить` and `Запустить прогон` — so each died at its first
+application said `Создать`, `Загрузить` and `Запустить прогон` (now `Запустить`, `RUN-START-ONE-01a`) — so each died at its first
 click and reported findings about a control it could not press **instead of** the
 deliberate wrongs it declares. The real manifest did not rot, because `make gate` reads
 it; the fixtures are exempt from that guard by design, and the exemption is what let them

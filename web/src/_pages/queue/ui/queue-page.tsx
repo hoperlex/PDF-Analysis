@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import type { ExecutionQueueItem, RunStatus } from '@/shared/api';
-import { ApiError, newIdempotencyKey } from '@/shared/api';
+import { newIdempotencyKey } from '@/shared/api';
 import { routes, useAddressState } from '@/shared/lib';
 import { useMe } from '@/entities/account';
 import {
@@ -18,11 +18,14 @@ import { useReauditCostApproval, useReauditRun } from '@/features/reaudit-run';
 import { useSetJobPriority } from '@/features/set-job-priority';
 import { usePauseExecution } from '@/features/pause-execution';
 import { ComparisonQueueBlock, ExecutionQueue, QueueStateStrip } from '@/widgets/execution-queue';
-import { CostApproval, ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
+import { ErrorState, LoadingState, PageShell, UnsupportedState } from '@/shared/ui';
 import { EMPTY_QUEUE_ADDRESS, readQueueAddress, writeQueueAddress } from '../model/address';
 import type { QueueAddress } from '../model/address';
 import { QUEUE_PERIOD_OPTIONS, isQueuePeriod, queuePeriodStart } from '../model/period';
 import type { QueuePeriod } from '../model/period';
+import { reauditEstimateChanged, reauditStep } from '../model/reaudit-start';
+import type { ReauditStep } from '../model/reaudit-start';
+import { ReauditStart } from './reaudit-start';
 import styles from './queue-page.module.css';
 
 interface RunIntent {
@@ -89,6 +92,10 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   const [commandFailure, setCommandFailure] = useState<ExecutionFailure | null>(null);
   const [lastRun, setLastRun] = useState<RunStatus | null>(null);
   const [completed, setCompleted] = useState(false);
+  // `RUN-START-ONE-01b`: the server said the estimate changed, so the person looks at the new one before anything is sent.
+  const [lookAgain, setLookAgain] = useState(false);
+  // The estimate a repeated Run was sent for by the click alone, so a refusal of that send is not followed by another one.
+  const sentByClick = useRef<string | null>(null);
   // `UI-B-52`: what the last drag or Alt+arrow move of a waiting job came to; read out by the list's polite live region.
   const [reorderNote, setReorderNote] = useState<string | null>(null);
   const sequence = useRef(0);
@@ -118,6 +125,11 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
   // does not describe. `0` means no read has succeeded yet.
   const asOf = queue.dataUpdatedAt > 0 ? queue.dataUpdatedAt : null;
   const costFailure = reauditCost.error === null ? null : executionFailure(reauditCost.error, false);
+  // One click on «Повторный аудит» is the agreement when the estimate charges nothing; otherwise one dialog asks.
+  const reauditNow: ReauditStep | null = intent?.kind !== 'reaudit' ? null : reauditStep({
+    pending: reauditCost.pending, error: reauditCost.error, ready: reauditCost.estimate !== null,
+    unmetered: reauditCost.unmetered, lookAgain, failed: commandFailure !== null,
+  });
 
   function chooseState(next: string) {
     const known = QUEUE_STATE_OPTIONS.find((option) => option.value === next);
@@ -169,6 +181,15 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
     setCommandFailure(null);
     setCompleted(false);
     setLastRun(null);
+    setLookAgain(false);
+  }
+
+  /** «Отмена» of any confirmation: nothing is sent and nothing is kept. */
+  function dismiss() {
+    sequence.current += 1;
+    setIntent(null);
+    setCommandFailure(null);
+    setLookAgain(false);
   }
 
   async function execute(chosen: Intent) {
@@ -194,19 +215,32 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
       setCommandFailure(null);
       setCompleted(true);
       setIntent(null);
+      setLookAgain(false);
       setCursors([]);
     } catch (error) {
       if (mine !== sequence.current) return;
-      if (chosen.kind === 'reaudit' && error instanceof ApiError && error.details?.conflict_reason === 'run_cost_estimate_stale') {
-        reauditCost.clear();
-        setCommandFailure({ kind: 'conflict', detail: 'Оценка стоимости устарела. Получите новую оценку и подтвердите лимит снова.', correlationId: error.correlationId });
+      if (chosen.kind === 'reaudit' && reauditEstimateChanged(error)) {
+        // The answer to a changed estimate is a new estimate, shown in the dialog whatever its figure.
+        setLookAgain(true);
+        setCommandFailure(null);
         setCompleted(false);
+        reauditCost.refresh();
         return;
       }
       setCommandFailure(executionFailure(error, true));
       setCompleted(false);
     }
   }
+
+  // An estimate that charges nothing is agreed to by the click itself: the repeated Run is sent once for each estimate, and a
+  // refusal of that send is said (`failed`) and not sent again by this line.
+  useEffect(() => {
+    if (reauditNow !== 'send' || intent?.kind !== 'reaudit' || reauditCost.consent === undefined) return;
+    const mark = `${intent.key}:${reauditCost.consent.estimate_digest}`;
+    if (sentByClick.current === mark) return;
+    sentByClick.current = mark;
+    void execute(intent);
+  });
 
   return (
     <PageShell
@@ -307,23 +341,29 @@ export function QueuePage({ initialAddress = EMPTY_QUEUE_ADDRESS }: QueuePagePro
       <div className={styles.panel}>
         <ComparisonQueueBlock />
       </div>
-      {intent !== null ? (
+      {intent !== null && intent.kind === 'reaudit' && reauditNow !== null ? (
+        <ReauditStart
+          step={reauditNow}
+          runId={intent.item.run_id}
+          estimate={reauditCost.estimate}
+          ceiling={reauditCost.ceiling}
+          changed={lookAgain}
+          busy={busy}
+          failure={reauditNow === 'unreadable' ? costFailure : commandFailure}
+          onCeilingChange={reauditCost.setCeiling}
+          onConfirm={() => void execute(intent)}
+          onCancel={dismiss}
+          onReadAgain={reauditCost.refresh}
+          onRetry={() => void execute(intent)}
+        />
+      ) : null}
+      {intent !== null && intent.kind !== 'reaudit' ? (
         <section className={styles.intent} role="group" aria-label="Подтверждение команды выполнения" data-execution-intent={intent.kind}>
           <p>{intentLabel(intent)}</p>
-          {intent.kind === 'reaudit' ? <>
-            <p className="am-note">Повторный аудит требует новой оценки и согласия. Исполнителя и текущие параметры определяет сервер по исходному прогону.</p>
-            {reauditCost.pending ? <LoadingState what="стоимость повторного аудита" /> : null}
-            {costFailure === null ? null : <ErrorState title="Стоимость повторного аудита не оценена" detail={costFailure.detail} correlationId={costFailure.correlationId} />}
-            {reauditCost.estimate === null ? null : <CostApproval estimate={reauditCost.estimate} ceiling={reauditCost.ceiling}
-              approved={reauditCost.approved} disabled={busy || reauditCost.pending}
-              onCeilingChange={reauditCost.setCeiling} onApprovedChange={reauditCost.setApproved} />}
-            <button type="button" className="am-button am-button--quiet" disabled={busy || reauditCost.pending}
-              onClick={() => { setCommandFailure(null); reauditCost.refresh(); }}>Обновить оценку стоимости</button>
-          </> : null}
-          <button type="button" className="am-button" disabled={busy || (intent.kind === 'reaudit' && (reauditCost.pending || reauditCost.consent === undefined)) || (commandFailure !== null && commandFailure.kind !== 'unknown_outcome')} onClick={() => void execute(intent)}>
+          <button type="button" className="am-button" disabled={busy || (commandFailure !== null && commandFailure.kind !== 'unknown_outcome')} onClick={() => void execute(intent)}>
             {commandFailure?.kind === 'unknown_outcome' ? 'Повторить с тем же ключом' : 'Подтвердить'}
           </button>{' '}
-          <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={() => { sequence.current += 1; setIntent(null); setCommandFailure(null); }}>Отмена</button>
+          <button type="button" className="am-button am-button--quiet" disabled={busy} onClick={dismiss}>Отмена</button>
         </section>
       ) : null}
       {commandFailure !== null ? (

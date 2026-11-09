@@ -1827,17 +1827,17 @@
         "at": "/projects/{project_uid}/versions/{version_uid}",
         "page_module": "web/src/app/projects/[project_uid]/versions/[version_uid]/page.tsx",
         "control_module": "web/src/features/start-run/ui/start-run-control.tsx",
+        "$comment": [
+          "RUN-START-ONE-01b: the start control is one button («Запустить»). `approve_run_cost` presses it, observes the cost estimate, and",
+          "agrees in the only way the estimate asks: a metered one opens a dialog whose ceiling is typed and whose «Запустить» is the",
+          "agreement; one that charges nothing starts the run at once. There is no second click in this step."
+        ],
         "actions": [
           {
             "do": "approve_run_cost",
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -2295,11 +2295,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -2688,11 +2683,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -5026,11 +5016,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -5245,11 +5230,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -8427,11 +8407,6 @@
             "scope": "run",
             "value": "{version_uid}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "button",
-            "text": "Запустить прогон"
           }
         ],
         "expects_api": [
@@ -8679,7 +8654,10 @@
         "page_module": "web/src/app/queue/page.tsx",
         "control_module": "web/src/widgets/execution-queue/ui/execution-queue.tsx",
         "$comment": [
-          "A re-audit of the cancelled run starts a new run of the same version (accepted, 202); the queue links to it."
+          "A re-audit of the cancelled run starts a new run of the same version (accepted, 202); the queue links to it.",
+          "RUN-START-ONE-01b: the click on «Повторный аудит» is the request. `approve_run_cost` observes the source run's read and the estimate,",
+          "and agrees as the estimate asks: a dialog (ceiling typed, «Запустить») when it can charge, nothing when it does not, and then the",
+          "re-audit is sent. There is no «Подтвердить» and no tick-box any more."
         ],
         "actions": [
           {
@@ -8694,11 +8672,6 @@
             "value": "{version_uid}",
             "source_run_id": "{queued_run_id}",
             "bound_ms": 30000
-          },
-          {
-            "do": "click",
-            "selector": "[data-execution-intent=\"reaudit\"] button",
-            "text": "Подтвердить"
           }
         ],
         "expects_api": [

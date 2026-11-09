@@ -156,10 +156,9 @@ import {
   SettingsFields, SshKeyControl,
 } from '@/features/manage-executor-connection';
 import { EXECUTOR_SECRET_OUTCOMES, SetExecutorSecretForm } from '@/features/set-executor-secret';
-import { ExecutorSelectView, StartRunControl, StartRunFailureView } from '@/features/start-run';
+import { StartRunControl, StartRunCostDialogView, StartRunFailureView } from '@/features/start-run';
 import { ANALYSIS_PRESETS_KEY } from '@/entities/analysis-preset';
 import { AnalysisPresets } from '@/widgets/analysis-presets';
-import { executorChoices } from '@/entities/executor-connection';
 import { StageChanges, StageJournal } from '@/widgets/stage-changes';
 import { STAGE_REVIEW_KEYS } from '@/widgets/stage-changes/api/reads';
 import { StagePairCatalog } from '@/widgets/stage-pair-catalog';
@@ -177,11 +176,11 @@ import { PdfPrecheckProgress } from '@/widgets/run-progress/ui/pdf-precheck-prog
 import { executorGroupCapacityKey, executorGroupsKey, executorRoutingRulesKey } from '@/entities/executor-group';
 import { executionFailure } from '@/entities/execution';
 import { GroupCommandFailure } from '@/features/manage-executor-group';
-import { GroupSelectView } from '@/features/start-run';
 import { SshInstallSession, agentInstallQueryKey } from '@/features/connect-remote-agent';
 import {
   ARCHIVED_GROUP, MAIN_GROUP, ROUTED_GROUP, capacityOf, ruleList, ruleOf,
 } from '../unit/executor-groups/executor-groups-fixtures';
+import { costEstimate } from '../unit/analysis-settings/cost-estimate-fixtures';
 import { connectionId as executorConnectionId } from '../unit/workers/executor-fixtures';
 import { install as agentInstall } from '../unit/workers/connect-remote-agent-fixtures';
 import {
@@ -2157,29 +2156,13 @@ const BLOCKS_SHAPES: readonly ScreenCase[] = [
 ];
 
 /*
- * `EXEC-PAR-WEB-01`. The start control's «Исполнитель» and the refusals of a chosen executor.
+ * `EXEC-PAR-WEB-01`. The refusals of a start whose executor the stand will not use.
  *
- * The control itself is rendered in every cache state, so its loading, failed and read shapes
- * (every probe outcome, an archived connection, a connection with no settings) are all on a screen.
- * What a settled `useMutation` or a `useState` decides is not: a refusal of the executor that was
- * chosen, and a select whose value is a connection that cannot serve or has left the list. Those
- * are rendered through the views the control renders (`StartRunFailureView`, `ExecutorSelectView`).
+ * What a settled `useMutation` decides is not on a static render: a refusal of the executor the route
+ * chose. Those are rendered through the view the control renders (`StartRunFailureView`). The start control's
+ * own «Исполнитель» select was removed by `RUN-START-ONE-01a`, and with it the select shapes that stood here.
  */
 function startRunExecutorShapes(): ReactElement {
-  const details = new Map(EXECUTOR_CASES.map((one) => [one.connection.connection_id as string, one.detail]));
-  const connections = EXECUTOR_CASES.map((one) => one.connection);
-  const choices = executorChoices(connections, details);
-  const blocked = choices.find((choice) => choice.blocker === 'probe_failed');
-  const archived = choices.find((choice) => choice.archived);
-  if (blocked === undefined || archived === undefined) {
-    throw new Error('the executor fixtures hold no blocked and no archived connection to choose');
-  }
-  // A connection whose settings were not read: only the list, with no detail for it.
-  const unread = executorChoices([EXECUTOR_READY.connection], new Map());
-  const select = (key: string, reading: Parameters<typeof ExecutorSelectView>[0]['reading'], value: string | null) =>
-    createElement(ExecutorSelectView, { key, id: `select-${key}`, reading, value, disabled: false, onChange: () => undefined });
-  const ready = { phase: 'ready', choices } as const;
-
   const refusal = (
     code: ErrorCode, status: number, retryable: boolean,
     details: Readonly<Record<string, string>>, message = 'Сообщение об отказе.',
@@ -2200,19 +2183,40 @@ function startRunExecutorShapes(): ReactElement {
   return createElement(
     'div',
     null,
-    select('ready-default', ready, null),
-    select('ready-blocked-chosen', ready, blocked.connectionId),
-    select('ready-archived-chosen', ready, archived.connectionId),
-    select('ready-chosen-left-the-list', ready, 'exc_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z'),
-    select('ready-unread', { phase: 'ready', choices: unread }, null),
-    select('ready-empty', { phase: 'ready', choices: [] }, null),
-    select('failed', {
-      phase: 'failed', detail: 'Сервер не ответил.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100',
-      onRetry: () => undefined,
-    }, null),
     ...failures.map((failure, index) => createElement(StartRunFailureView, {
       key: `failure-${index}`, failure, projectUid: PROJECT_UID, versionUid: VERSION_UID, onRetry: () => undefined,
     })),
+  );
+}
+
+/**
+ * `RUN-START-ONE-01a`: the one dialog of a start that can charge money, drawn open in each shape it takes: a billed
+ * estimate with its ceiling, one with a ceiling too low to cover it, one the server sent back (`changed`), a start
+ * without a money ceiling, and an estimate that charges nothing (shown after a changed answer).
+ */
+function startRunCostDialogShapes(): ReactElement {
+  // The model is the stand's own word for it; a Russian one keeps the case about the dialog's words, not a fixture's.
+  const estimate = { ...costEstimate({ version_uid: VERSION_UID }), model_id: 'модель-основная' };
+  const view = (key: string, over: Partial<Parameters<typeof StartRunCostDialogView>[0]>) =>
+    createElement(StartRunCostDialogView, {
+      key, estimate, relaxed: false, ceiling: '1.5', changed: false, busy: false, staticOpen: true,
+      onCeilingChange: () => undefined, onConfirm: () => undefined, onCancel: () => undefined, ...over,
+    });
+  return createElement(
+    'div',
+    null,
+    view('billed', {}),
+    view('ceiling-too-low', { ceiling: '1.1' }),
+    view('sending', { busy: true }),
+    view('changed', { changed: true }),
+    // `RUN-START-ONE-01b`: the queue's repeated Run names the run in the dialog's subject line.
+    view('repeated-run', { subject: 'Повторный аудит прогона run_01J9ZQ8K7NHVXW3T2R5M6P4Q8F.' }),
+    view('without-ceiling', { relaxed: true, ceiling: '0', estimate: { ...estimate, relaxed_limits: true } }),
+    view('recorded', { estimate: { ...estimate, provider_mode: 'recorded' } }),
+    view('free', {
+      changed: true, ceiling: '0',
+      estimate: { ...estimate, billing: 'unmetered', estimated_cost_micros: 0, recommended_ceiling_micros: 0 },
+    }),
   );
 }
 
@@ -2285,8 +2289,8 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     name: 'start-run-control',
     make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
   },
-  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа» and the preset select of
-  // the start control, in the states a default cache does not select.
+  // `ANALYSIS-PRESETS-01`: the section «Пресеты запуска» of «Настройки анализа», in the states a default cache does not
+  // select (the preset select of the start control was removed by `RUN-START-ONE-01a`).
   {
     name: 'analysis-presets-for-an-administrator',
     make: () => createElement(AnalysisPresets, { roles: ['admin'] }),
@@ -2317,24 +2321,12 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
     seedClient: (client) => seedError(client, [...ANALYSIS_PRESETS_KEY], apiError(503, 'dependency_unavailable')),
   },
   {
-    name: 'start-run-control-with-presets',
-    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-    seedClient: seedPresets([
-      presetFixture(1),
-      presetFixture(2, { executor_connection_id: 'exc_01M2545JSD15ETSNNV904X9999' }),
-    ]),
-  },
-  {
-    name: 'start-run-control-presets-read-refused',
-    make: () => createElement(StartRunControl, { projectUid: PROJECT_UID, versionUid: VERSION_UID }),
-    seedClient: (client) => {
-      seedExecutors(client, EXECUTOR_CASES);
-      seedError(client, [...ANALYSIS_PRESETS_KEY], apiError(503, 'dependency_unavailable'));
-    },
-  },
-  {
     name: 'start-run-executor-shapes',
     make: startRunExecutorShapes,
+  },
+  {
+    name: 'start-run-cost-dialog',
+    make: startRunCostDialogShapes,
   },
   // `AR-V3-BETA-SCREEN-GATE-REPAIR-01`: these four branches are conditional on the
   // group ID and its separate read, so the default settings route cannot reach them.
@@ -3224,33 +3216,6 @@ const EXTRA_SHAPES: readonly ScreenCase[] = [
       ruleOf('text_analysis', ROUTED_GROUP, 1),
       ruleOf('comparison_pair_check', { ...MAIN_GROUP, current_revision: { ...MAIN_GROUP.current_revision, group_revision_id: 'exgr_01J9ZQ8K7NHVXW3T2R5M6P4Q8Z' } }, 2),
     ])),
-  },
-  {
-    // The three-way start choice's group select, over every answer the group list can be in.
-    name: 'start-run-group-select',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'ready', groups: [MAIN_GROUP, ROUTED_GROUP, ARCHIVED_GROUP] },
-      value: MAIN_GROUP.group_id, disabled: false, onChange: () => {},
-    }),
-  },
-  {
-    name: 'start-run-group-select-loading',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'loading' }, value: null, disabled: false, onChange: () => {},
-    }),
-  },
-  {
-    name: 'start-run-group-select-failed',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'failed', detail: 'Список групп не получен.', correlationId: '0f0e9d8c-7b6a-4948-b726-150413021100', onRetry: () => {} },
-      value: null, disabled: false, onChange: () => {},
-    }),
-  },
-  {
-    name: 'start-run-group-select-gone',
-    make: () => createElement(GroupSelectView, {
-      id: 'group-select', reading: { phase: 'ready', groups: [] }, value: MAIN_GROUP.group_id, disabled: true, onChange: () => {},
-    }),
   },
   {
     // The one sentence under every refused or unknown group, rule and mode command.
@@ -5397,13 +5362,6 @@ describe('R-18: no Latin word reaches a reviewer that a contract did not put the
     // journey itself (`tests/e2e/pc01/journey`) is the instrument that presses it.
     const PRESSED_BEFORE_IT_EXISTS: readonly { readonly text: string; readonly why: string }[] = [
       {
-        text: 'Подтвердить',
-        why:
-          'The confirmation panel of «Очередь» (`queue-page.tsx`, `data-execution-intent`) is drawn when `intent` is set by ' +
-          'pressing a row action: «Отменить прогон», «Повторный аудит» or the priority form. `intent` is a `useState` and one ' +
-          'static pass presses nothing. «Исполнители» and «Нормы» confirm the same way, behind their own press.',
-      },
-      {
         text: 'Возобновить выдачу',
         why:
           'The queue header\'s switch (`queue-page.tsx`) reads «Возобновить выдачу» only while the dispatcher is paused, and ' +
@@ -5676,15 +5634,19 @@ const UNREACHABLE_IN_ONE_PASS: readonly { readonly label: string; readonly why: 
    */
   {
     label: 'Загрузка: оценка стоимости…',
-    why: '`start-run-control.tsx`, while the cost estimate of the start is in flight: `useRunCostApproval` holds it in a `useMutation` that «Оценить стоимость» starts. One static pass cannot press the button or put a mutation into the pending state through a query cache.',
+    why: '`start-run-control.tsx`, while the cost estimate of the start is in flight: `useRunCostApproval` holds it in a `useMutation` that «Запустить» starts (`RUN-START-ONE-01a`). One static pass cannot press the button or put a mutation into the pending state through a query cache.',
   },
   {
     label: 'Загрузка: стоимость повторного аудита…',
-    why: '`queue-page.tsx`, between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): a `useMutation` in flight, which one static pass cannot start.',
+    why: '`reaudit-start.tsx` (step `reading`), between the press of «Повторный аудит» and the answer of the cost estimate it asks for first (`use-reaudit-cost-approval.ts`): the read is enabled only once `intent`, a `useState` of `queue-page.tsx`, holds a repeated Run, and one static pass presses nothing (`RUN-START-ONE-01b`).',
   },
   {
     label: 'Стоимость повторного аудита не оценена',
-    why: '`queue-page.tsx`, after the cost estimate of a re-audit was refused: the refusal sits in a settled `useMutation` that «Повторный аудит» started. A seeded query cache does not set a mutation observer\'s state.',
+    why: '`reaudit-start.tsx` (step `unreadable`), after the cost estimate of a re-audit could not be read: the query is disabled until «Повторный аудит» sets `intent` (a `useState`), so there is no error to seed into a cache in a static pass (`RUN-START-ONE-01b`).',
+  },
+  {
+    label: 'Загрузка: запрос на повторный прогон…',
+    why: '`reaudit-start.tsx` (step `send`), while an estimate that charges nothing has been agreed to by the click and the re-audit is on its way: `intent` is a `useState` set by «Повторный аудит» and the send is a `useMutation` started by an effect, which one static pass cannot reach (`RUN-START-ONE-01b`).',
   },
   {
     label: 'Загрузка: предложение перехода…',

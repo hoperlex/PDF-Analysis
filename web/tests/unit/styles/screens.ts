@@ -76,7 +76,7 @@ import type { EvidenceState } from '@/widgets/comparison-viewer';
 import { evidenceOf } from '@/entities/version-series';
 import type { TileStatus, ViewerAction, ViewerContext } from '@/widgets/comparison-viewer';
 import { FindingList, FindingRowActions } from '@/widgets/finding-list';
-import { BatchStartPanelView } from '@/features/start-run';
+import { BatchStartPanelView, StartRunCostDialogView } from '@/features/start-run';
 import { DocumentLifecycleView, DocumentTagsView } from '@/features/manage-document';
 import { ExecutionStatusControlView } from '@/features/set-execution-status';
 import { ImportDecisionsView } from '@/features/import-decisions';
@@ -1887,6 +1887,20 @@ export function screens(): Screen[] {
         onClose: noop,
       })),
     );
+  }
+  // `RUN-START-ONE-01a`: the one dialog of a start that can charge money, drawn open: a billed estimate with its ceiling,
+  // one the server sent back, and a start without a money ceiling.
+  {
+    const dialog = (over: Partial<Parameters<typeof StartRunCostDialogView>[0]>) =>
+      render(createElement(StartRunCostDialogView, {
+        estimate: costEstimate({ version_uid: VERSION_UID }), relaxed: false, ceiling: '1.5', changed: false, busy: false,
+        staticOpen: true, onCeilingChange: noop, onConfirm: noop, onCancel: noop, ...over,
+      }));
+    add('StartRunCostDialog, a billed estimate with its ceiling', dialog({}));
+    add('StartRunCostDialog, ceiling too low, estimate changed', dialog({ ceiling: '1.1', changed: true }));
+    add('StartRunCostDialog, without a money ceiling', dialog({
+      relaxed: true, ceiling: '0', estimate: costEstimate({ version_uid: VERSION_UID, relaxed_limits: true }),
+    }));
   }
   add(
     'FindingList failed',

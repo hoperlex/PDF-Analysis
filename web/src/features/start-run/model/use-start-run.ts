@@ -10,14 +10,9 @@
  * exactly the substitution that makes a replayed run look like evidence of a real
  * provider call. The mode this run actually used is read back from the reading and shown.
  *
- * **`executor_connection_id` is sent only when the person chose a connection** (`EXEC-PAR-WEB-01`,
- * `./start-run-intent.ts`). «По умолчанию (маршрут)» is the absence of the field, which is the
- * start this command always made; a chosen connection is never replaced by the stand, so a
- * refusal of it is shown as itself and not retried on another.
- *
- * `EXEC2-WEB-GROUPS-01`: `executor_group_id` is the third selector, exclusive with the other two
- * (`./start-run-intent.ts`, `./start-mode.ts`). A run admitted on a group answers `binding_state`
- * `pending` with the planned model and no connection, and the run page words it as a plan.
+ * **No executor, group or preset is sent by the control** (`RUN-START-ONE-01a`, `./use-run-cost-approval.ts`):
+ * the start follows the stand's automatic route. The command still carries the three optional selectors of the
+ * contract (`./start-run-intent.ts`), exclusive with one another, for a caller that sets one.
  *
  * The 202 body is a full `RunStatus`, so it seeds `queryKeys.runs.detail(run_id)`: the
  * run screen opens on the run's real first state instead of on a loading state for a
