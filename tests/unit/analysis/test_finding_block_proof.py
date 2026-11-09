@@ -6,7 +6,22 @@ missed) is produced here from hand-made geometry, with a stand-in for the PDF or
 
 from __future__ import annotations
 
-from tests.support.finding_block_proof import BlockFact, EvidenceFact, analyse, covered_share, figures, normalise_text, text_verdict
+import pytest
+
+from auditmanager.analysis.geometry import TextLine
+from tests.support.finding_block_proof import (
+    BlockFact,
+    EvidenceFact,
+    MemoOracle,
+    analyse,
+    covered_share,
+    degrade,
+    figures,
+    normalise_text,
+    require_same_links,
+    rule_links,
+    text_verdict,
+)
 
 LEFT = BlockFact("blk_left", 1, "text", (0.0, 0.2, 0.5, 0.3), "Итого")
 RIGHT = BlockFact("blk_right", 1, "text", (0.5, 0.2, 1.0, 0.3), "Огнестойкость узла не менее R30")
@@ -93,3 +108,66 @@ def test_the_text_verdict_tells_most_of_the_words_from_some_and_none():
     assert text_verdict("a b c d", "a b c x")[0] == "most"
     assert text_verdict("a b c d", "a x y z")[0] == "some"
     assert text_verdict("a b c d", "x y z")[0] == "none"
+
+
+# --- the second witness's reproduction (D-450) -------------------------------------------------------------------------------
+
+TEXT = "Огнестойкость узла не менее R30 при пожаре в помещении класса Ф1"
+
+
+def test_degrade_is_deterministic_keeps_the_layout_and_damages_none_at_zero_and_every_word_at_one():
+    assert degrade("blk", TEXT, 0.0) == TEXT
+    assert degrade("blk", TEXT, 0.3) == degrade("blk", TEXT, 0.3)
+    assert degrade("blk", "a   b\nc", 0.0) == "a   b\nc" and degrade("blk", "a   b\nc", 1.0).count("\n") == 1
+    everything = degrade("blk", TEXT, 1.0).split()
+    assert len(everything) == len(TEXT.split()) and all(a != b for a, b in zip(everything, TEXT.split()))
+
+
+def test_degrade_at_a_rate_damages_some_of_the_words_and_never_adds_one():
+    some = degrade("blk", TEXT, 0.3).split()
+    changed = sum(1 for a, b in zip(some, TEXT.split()) if a != b)
+    assert len(some) == len(TEXT.split()) and 0 < changed < len(some)
+
+
+def test_a_damaged_reading_stops_matching_the_quotation_and_an_unlinked_page_links_to_nothing():
+    line = TextLine(1, 100, 140, 50.0, 200.0, 550.0, 212.0)
+    blocks = [BlockFact("blk_l", 1, "text", (0.0, 0.2, 0.5, 0.3), "Итого"), BlockFact("blk_r", 1, "text", (0.5, 0.2, 1.0, 0.3), None)]
+    quote = "Огнестойкость узла не менее R30"
+    fact, sizes = EvidenceFact(1, 100, 140, quote), {1: (600.0, 800.0)}
+    assert rule_links([fact], [line], sizes, blocks, set(), {"blk_r": quote}) == ["blk_r"]
+    assert rule_links([fact], [line], sizes, blocks, set(), {"blk_r": degrade("blk_r", quote, 1.0)}) == []
+    assert rule_links([fact], [line], sizes, blocks, set(), None) == []
+    assert rule_links([fact], [line], sizes, blocks, {1}, {"blk_r": quote}) == []
+
+
+def test_the_reproduction_guard_passes_on_the_same_answers():
+    require_same_links({"a": ["blk_1"], "b": []}, {"a": ["blk_1"], "b": []})
+
+
+@pytest.mark.parametrize(
+    ("reproduced", "shipped"),
+    [
+        ({"a": ["blk_1"], "b": []}, {"a": ["blk_1"], "b": ["blk_2"]}),
+        ({"a": ["blk_1"]}, {"a": ["blk_1"], "b": ["blk_2"]}),
+        ({"a": ["blk_1"], "b": ["blk_9"]}, {"a": ["blk_1"]}),
+        ({"a": ["blk_1", "blk_2"]}, {"a": ["blk_2", "blk_1"]}),
+    ],
+    ids=["a link missing", "a finding not answered", "a finding the adapter does not know", "another order"],
+)
+def test_the_reproduction_guard_fails_on_a_difference(reproduced, shipped):
+    with pytest.raises(AssertionError, match="differs for"):
+        require_same_links(reproduced, shipped)
+
+
+def test_the_memo_oracle_asks_the_pdf_once_per_placement():
+    class Counting:
+        calls = 0
+
+        def quote_boxes(self, page, start, quote):
+            Counting.calls += 1
+            return [(0.0, 0.0, 1.0, 1.0)]
+
+    memo = MemoOracle(Counting())
+    assert memo.quote_boxes(1, 5, "x") == memo.quote_boxes(1, 5, "x") and Counting.calls == 1
+    memo.quote_boxes(1, 6, "x")
+    assert Counting.calls == 2
