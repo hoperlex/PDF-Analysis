@@ -2171,8 +2171,15 @@ class BlockAdapter(_SessionHolder):
     """
 
     def __init__(self, session_factory: sessionmaker[Session], *, blob_store: Any) -> None:
+        import threading
+        from collections import OrderedDict
+
         super().__init__(session_factory)
         self._blob_store = blob_store
+        # `listRunFindingBlocks`'s derived inputs, by the digests of the three documents they come from (see `_run_geometry`).
+        self._geometry_cache: "OrderedDict[tuple[Any, ...], tuple[BlockAdapter._RunGeometry, int]]" = OrderedDict()
+        self._geometry_cache_bytes = 0
+        self._geometry_cache_lock = threading.Lock()
 
     def get_block_index(self, *, version_uid: str) -> VersionBlockIndexView:
         return self._read(lambda session: self.block_index_in(session, version_uid))
@@ -2444,12 +2451,8 @@ class BlockAdapter(_SessionHolder):
         from auditmanager.analysis.public import (
             ROLE_BLOCK_INDEX,
             ROLE_PAGE_INVENTORY,
-            ROLE_PORTAL_BLOCKS,
             EvidenceSpan,
-            PortalBox,
-            TextLine,
             link_evidence,
-            linkable_pages,
         )
         from auditmanager.findings import (
             group_published_findings, published_finding_evidence, published_findings,
@@ -2485,25 +2488,8 @@ class BlockAdapter(_SessionHolder):
         if index_ref is None or inventory_ref is None or source is None:
             return absent()
 
-        portal = self._portal_document(source.portal_blocks, ROLE_PORTAL_BLOCKS, run.version_uid)
-        index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, run.version_uid)
-        inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, run.version_uid)
-        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
-        lines: dict[int, list[Any]] = {}
-        for block in index["blocks"]:
-            box = block["bbox"]
-            lines.setdefault(int(block["page_number"]), []).append(TextLine(
-                int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
-                float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
-            ))
-        boxes = [
-            PortalBox(
-                block["portal_block_id"], int(block["page_number"]),
-                float(block["bbox_norm"][0]), float(block["bbox_norm"][1]),
-                float(block["bbox_norm"][2]), float(block["bbox_norm"][3]),
-            )
-            for block in portal["blocks"]
-        ]
+        geometry_of_run = self._run_geometry(index_ref, inventory_ref, source.portal_blocks, run.version_uid)
+        pages, lines, boxes = geometry_of_run.pages, geometry_of_run.lines, geometry_of_run.boxes
         items = []
         for group in sorted(groups, key=lambda group: group.canonical.finding_uid):
             canonical = group.canonical.finding_observation_id
@@ -2517,9 +2503,101 @@ class BlockAdapter(_SessionHolder):
             ))
         return models.RunFindingBlockLinks(
             run_id=run_id, version_uid=run.version_uid, status="produced",
-            unlinked_pages=sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages),
+            unlinked_pages=list(geometry_of_run.unlinked_pages),
             items=items,
         )
+
+    class _RunGeometry:
+        """What :meth:`list_run_finding_blocks` derives from the run's block index and page inventory and the version's portal
+        blocks, and nothing else: immutable, so a cached copy can be shared by concurrent reads."""
+
+        __slots__ = ("pages", "lines", "boxes", "unlinked_pages")
+
+        def __init__(
+            self, *, pages: Mapping[int, tuple[float, float]], lines: Mapping[int, tuple[Any, ...]],
+            boxes: tuple[Any, ...], unlinked_pages: tuple[int, ...],
+        ) -> None:
+            self.pages, self.lines, self.boxes, self.unlinked_pages = pages, lines, boxes, unlinked_pages
+
+    #: How many runs' derived geometry one adapter keeps, and the most the three documents of all of them may declare together.
+    #: A document larger than the budget is read and derived as before, and not kept.
+    _GEOMETRY_CACHE_ENTRIES = 8
+    _GEOMETRY_CACHE_BYTES = 48 * 1024 * 1024
+
+    def _run_geometry(
+        self, index_ref: Mapping[str, Any], inventory_ref: Mapping[str, Any], portal_ref: Mapping[str, Any], version_uid: str,
+    ) -> "BlockAdapter._RunGeometry":
+        """The derived inputs of one run's relation, from a per-process cache when the same three documents were derived before.
+
+        The key is the version and the SHA-256 and size each ``stage_result`` recorded for the three artifacts, so a hit is the
+        very content a miss verified and parsed (the blob store is content-addressed, ``_verified_bytes`` holds every read to that
+        declaration): **a miss is the whole truth** and a hit changes no answer. The cache is lost with the process and is never
+        read by anything but this method. What a hit does not do is read the object store again, so an object that disappears
+        or is damaged afterwards is noticed by the next miss (another document, an eviction, a restart), not by a hit; the
+        findings and their evidence, which decide the answer, are read from the database on every call.
+        """
+        from types import MappingProxyType
+
+        from auditmanager.analysis.public import (
+            ROLE_BLOCK_INDEX,
+            ROLE_PAGE_INVENTORY,
+            ROLE_PORTAL_BLOCKS,
+            PortalBox,
+            TextLine,
+            linkable_pages,
+        )
+
+        declared = [
+            (role, reference.get("sha256"), reference.get("size_bytes"))
+            for role, reference in (
+                (ROLE_BLOCK_INDEX, index_ref), (ROLE_PAGE_INVENTORY, inventory_ref), (ROLE_PORTAL_BLOCKS, portal_ref),
+            )
+        ]
+        weight = sum(int(size) for _, sha, size in declared if sha is not None and size is not None)
+        key = (version_uid, *declared) if all(sha is not None and size is not None for _, sha, size in declared) else None
+        if key is not None:
+            with self._geometry_cache_lock:
+                hit = self._geometry_cache.get(key)
+                if hit is not None:
+                    self._geometry_cache.move_to_end(key)
+                    return hit[0]
+
+        portal = self._portal_document(portal_ref, ROLE_PORTAL_BLOCKS, version_uid)
+        index = self._portal_document(index_ref, ROLE_BLOCK_INDEX, version_uid)
+        inventory = self._portal_document(inventory_ref, ROLE_PAGE_INVENTORY, version_uid)
+        pages = linkable_pages(portal["pages"], {int(page["page_number"]): page for page in inventory["pages"]})
+        collected: dict[int, list[Any]] = {}
+        for block in index["blocks"]:
+            box = block["bbox"]
+            collected.setdefault(int(block["page_number"]), []).append(TextLine(
+                int(block["page_number"]), int(block["char_start"]), int(block["char_end"]),
+                float(box["x0"]), float(box["y0"]), float(box["x1"]), float(box["y1"]),
+            ))
+        built = BlockAdapter._RunGeometry(
+            pages=MappingProxyType(pages),
+            lines=MappingProxyType({page: tuple(page_lines) for page, page_lines in collected.items()}),
+            boxes=tuple(
+                PortalBox(
+                    block["portal_block_id"], int(block["page_number"]),
+                    float(block["bbox_norm"][0]), float(block["bbox_norm"][1]),
+                    float(block["bbox_norm"][2]), float(block["bbox_norm"][3]),
+                )
+                for block in portal["blocks"]
+            ),
+            unlinked_pages=tuple(sorted(int(page["page_number"]) for page in portal["pages"] if int(page["page_number"]) not in pages)),
+        )
+        if key is not None and weight <= self._GEOMETRY_CACHE_BYTES:
+            with self._geometry_cache_lock:
+                if key not in self._geometry_cache:
+                    self._geometry_cache[key] = (built, weight)
+                    self._geometry_cache_bytes += weight
+                while self._geometry_cache and (
+                    len(self._geometry_cache) > self._GEOMETRY_CACHE_ENTRIES
+                    or self._geometry_cache_bytes > self._GEOMETRY_CACHE_BYTES
+                ):
+                    _, (_, evicted) = self._geometry_cache.popitem(last=False)
+                    self._geometry_cache_bytes -= evicted
+        return built
 
     def list_portal_blocks(self, *, version_uid: str) -> PortalBlockIndexView:
         from auditmanager.analysis.public import (
