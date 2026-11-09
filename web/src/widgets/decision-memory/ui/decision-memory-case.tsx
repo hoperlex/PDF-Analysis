@@ -138,7 +138,9 @@ export function DecisionMemoryCaseView({ data, isLoading, error, manage, onBack 
           {summary.status_changed_at === null ? null : ` ${formatInstant(summary.status_changed_at)}.`}
         </p>
       )}
-      {manage ? <CaseStandingControl caseId={summary.case_id} status={summary.status} /> : null}
+      {/* Keyed by the case: a jump from one cached case to another does not unmount this view, and the chosen reason and the
+          answer of the last change belong to the case they were made on. */}
+      {manage ? <CaseStandingControl key={summary.case_id} caseId={summary.case_id} status={summary.status} /> : null}
       <div className={styles.columns}>
         <div className={styles.column}>
           {content === null ? null : (
