@@ -32,6 +32,9 @@ _SAFE_KEYS = frozenset({
 # `EXEC-PULL-01`: a runner token is addressed by its identity, never by its value, its prefix
 # or its hash.
 _SAFE_KEYS = _SAFE_KEYS | frozenset({"token_id", "task_id"})
+# `HOSTS-BACKEND-01` (ADR-0028): the servers' journal. A host, a provider, a model, an access, a slot count, an on/off switch and a
+# cell key are identities and controlled words; a name, an address, a key, a path and a provider's text are never in a payload.
+_SAFE_KEYS = _SAFE_KEYS | frozenset({"host_id", "enabled", "provider", "model_id", "access", "slots", "cell_key"})
 _INSERT = text(
     "INSERT INTO audit_event (audit_event_id, event_type, aggregate_type, "
     "aggregate_id, payload) VALUES (:event_id, :event_type, :aggregate_type, "

@@ -312,7 +312,7 @@ def resolve_origin(configured: str | None) -> str:
 # -- the command ------------------------------------------------------------------------------
 
 
-def install_command(*, origin: str, package: AgentPackage, secret: str, model: str) -> str:
+def install_command(*, origin: str, package: AgentPackage, secret: str, model: str | None = None) -> str:
     """The copyable command of path B: download the package, verify its sha256, unpack it, run ``install.sh``.
 
     The secret is the value of :data:`ENROLLMENT_SECRET_ENV`, assigned in front of ``sudo`` -- an assignment
@@ -320,16 +320,19 @@ def install_command(*, origin: str, package: AgentPackage, secret: str, model: s
     ``sudo`` by ``--preserve-env`` (which names variables and takes no value). The command runs in a fresh
     temporary directory. ``--proto =https`` is added when the origin is ``https``: a downgrade is a refusal.
     ``model`` is the connection's pinned ``gateway_model`` (:data:`AGENT_MODEL_ENV`): the installer configures
-    the agent to declare exactly it and derives the CLI from it, never a default of its own."""
+    the agent to declare exactly it and derives the CLI from it, never a default of its own. **No model** (`HOSTS-BACKEND-01`,
+    ADR-0028 decision 1) is the command of a host agent: the installer then asks for none and installs host mode, which serves every
+    model its machine can reach."""
     url = origin + DOWNLOAD_PATH.format(version=package.version)
     flags = "-fsSL --proto '=https' --tlsv1.2" if origin.startswith("https://") else "-fsSL"
     archive = "agent.tar.gz"
+    carried = f"{ENROLLMENT_SECRET_ENV},{STAND_ORIGIN_ENV}" + ("" if model is None else f",{AGENT_MODEL_ENV}")
+    assigned = (f"{ENROLLMENT_SECRET_ENV}={shlex.quote(secret)} {STAND_ORIGIN_ENV}={shlex.quote(origin)} "
+                + ("" if model is None else f"{AGENT_MODEL_ENV}={shlex.quote(model)} "))
     return " && ".join((
         'cd "$(mktemp -d)"',
         f"curl {flags} -o {archive} {shlex.quote(url)}",
         f"echo {shlex.quote(f'{package.sha256}  {archive}')} | sha256sum -c -",
         f"tar -xzf {archive}",
-        f"{ENROLLMENT_SECRET_ENV}={shlex.quote(secret)} {STAND_ORIGIN_ENV}={shlex.quote(origin)} "
-        f"{AGENT_MODEL_ENV}={shlex.quote(model)} "
-        f"sudo --preserve-env={ENROLLMENT_SECRET_ENV},{STAND_ORIGIN_ENV},{AGENT_MODEL_ENV} bash install.sh",
+        f"{assigned}sudo --preserve-env={carried} bash install.sh",
     ))

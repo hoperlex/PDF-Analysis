@@ -85,6 +85,7 @@ from typing import Any, Final
 from sqlalchemy.orm import Session
 
 from auditmanager.executors.answers import read_answer
+from auditmanager.executors.model import refuse_system_object
 from auditmanager.executors.repository import ExecutorRepository
 from auditmanager.executors.runner_repository import (
     DEFAULT_CLAIM_IMAGES,
@@ -230,10 +231,12 @@ class IssuedToken:
 
 @dataclass(frozen=True, slots=True)
 class RunnerPrincipal:
-    """Who a runner request is: one token of one connection. Not a user, and carrying no role."""
+    """Who a runner request is: one token of one connection -- or, `HOSTS-BACKEND-01`, the host token of one host, which serves every
+    system connection of that host. Exactly one of ``connection_id`` and ``host_id`` is set. Not a user, and carrying no role."""
 
     token_id: str
-    connection_id: str
+    connection_id: str | None
+    host_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +251,15 @@ class ClaimedTask:
     user_text: str
     output_schema: Mapping[str, Any]
     images: tuple[Mapping[str, Any], ...] = ()
+    #: `HOSTS-BACKEND-01` (ADR-0028 decision 9, RUNNER_API 10.4): the members of a task claimed with a host token -- all seven or none.
+    #: The agent runs exactly this provider, access, model and effort; ``model`` above is then ``model_id``.
+    provider: str | None = None
+    access: str | None = None
+    model_id: str | None = None
+    effort: str | None = None
+    max_output_tokens: int | None = None
+    timeout_seconds: int | None = None
+    cell_key: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -319,6 +331,8 @@ def issue_runner_token(
     connection = store.get_connection(session, connection_id, lock=True)
     if connection is None:
         raise DomainError(ErrorCode.NOT_FOUND, aggregate_type=_AGGREGATE)
+    if connection.system_managed:
+        raise refuse_system_object()
     if connection.archived_at is not None:
         raise _conflict("connection_archived", "the connection is archived")
     if connection.kind != "pull":
@@ -407,7 +421,7 @@ def authenticate_runner(
     if not hmac.compare_digest(candidate, stored.token_hash) or not stored.usable:
         return None
     store.touch_token(session, stored.token_id, None if address is None else address[:64])
-    return RunnerPrincipal(token_id=stored.token_id, connection_id=stored.connection_id)
+    return RunnerPrincipal(token_id=stored.token_id, connection_id=stored.connection_id, host_id=stored.host_id)
 
 
 # -- tasks ----------------------------------------------------------------------------------
@@ -422,18 +436,35 @@ def _own_task(
     session: Session, principal: RunnerPrincipal, task_id: str, store: RunnerRepository
 ) -> TaskRecord:
     task = store.get_task(session, task_id, lock=True)
-    if task is None or task.connection_id != principal.connection_id:
+    if task is None:
+        raise _not_found()
+    if principal.host_id is None:
+        if task.connection_id != principal.connection_id:
+            raise _not_found()
+    elif store.connection_host(session, task.connection_id) != principal.host_id:
         raise _not_found()
     return task
 
 
+#: The seven members of a host task (RUNNER_API 10.4), as ``payload.host`` holds them (the pull adapter writes them).
+HOST_TASK_MEMBERS: Final[tuple[str, ...]] = (
+    "provider", "access", "model_id", "effort", "max_output_tokens", "timeout_seconds", "cell_key")
+
+
 def _claimed(row: ClaimedRow) -> ClaimedTask:
     payload = row.payload
+    host = payload.get("host")
+    extra: dict[str, Any] = {}
+    if isinstance(host, Mapping):
+        # All seven or none (the contract's rule): a task that carries the key carries every member, or it is not served.
+        if any(host.get(name) is None for name in HOST_TASK_MEMBERS):
+            raise DomainError(ErrorCode.INTERNAL_ERROR, message="a host task is missing a member")
+        extra = {name: host[name] for name in HOST_TASK_MEMBERS}
     return ClaimedTask(
         task_id=row.task_id, claim_expires_at=row.claim_expires_at, deadline_at=row.deadline_at,
         model=row.expected_model, system=str(payload["system"]),
         user_text=str(payload["user_text"]), output_schema=payload["output_schema"],
-        images=tuple(payload.get("images", ())),
+        images=tuple(payload.get("images", ())), **extra,
     )
 
 
@@ -527,10 +558,18 @@ def _poll(
             # connection not archived): one that is not claims nothing, exactly as a missing one.
             if not store.lock_token(session, principal.token_id):
                 raise DomainError(ErrorCode.AUTHENTICATION_REQUIRED)
-            current = revisions.current_revisions(session, [principal.connection_id]).get(
-                principal.connection_id)
-            limit = 1 if current is None else (current.settings.max_claimed_tasks or 1)
-            store.sweep(session, principal.connection_id)
+            if principal.host_id is not None:
+                # A host token holds at most the sum of its host's slots (ADR-0028 decision 4: ``max_claimed_tasks`` >= the sum).
+                from auditmanager.executors.host_commands import host_claim_limit
+
+                limit = host_claim_limit(session, principal.host_id)
+                store.sweep_host(session, principal.host_id)
+            else:
+                assert principal.connection_id is not None
+                current = revisions.current_revisions(session, [principal.connection_id]).get(
+                    principal.connection_id)
+                limit = 1 if current is None else (current.settings.max_claimed_tasks or 1)
+                store.sweep(session, principal.connection_id)
             if first:  # retention is housekeeping, once per call and not once per poll
                 store.clear_terminal_payloads(
                     session, older_than_days=PAYLOAD_RETENTION_DAYS, limit=20)
@@ -542,9 +581,10 @@ def _poll(
                     max_images=max_images, runner_instance_id=runner_instance_id)
             if row is None and store.held_claims(session, principal.token_id) < limit:
                 row = store.claim_next(
-                    session, connection_id=principal.connection_id,
-                    token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
-                    max_images=max_images, runner_instance_id=runner_instance_id)
+                    session, token_id=principal.token_id, lease_seconds=CLAIM_LEASE_SECONDS,
+                    max_images=max_images, runner_instance_id=runner_instance_id,
+                    **({"host_id": principal.host_id} if principal.host_id is not None
+                       else {"connection_id": principal.connection_id}))
             session.commit()
         if row is not None:
             return _claimed(row)
@@ -588,18 +628,32 @@ def submit_answer(
     session: Session, principal: RunnerPrincipal, task_id: str, *, output_text: str,
     model: str, input_tokens: int | None, output_tokens: int | None,
     on_mismatch: Callable[[], Exception], repository: RunnerRepository | None = None,
+    provider: str | None = None, access: str | None = None, reported_model: str | None = None,
+    usage: Mapping[str, int] | None = None,
 ) -> TaskAck:
     """Accept the runner's answer.
 
     Idempotent on the task: the same answer again is accepted, a different one is a conflict.
     ``on_mismatch`` builds the refusal for a declared model that is not the task's (the caller
-    owns its status); both the model and the schema refusals leave the claim as it was."""
+    owns its status); both the model and the schema refusals leave the claim as it was.
+
+    **A host agent's answer** (`HOSTS-BACKEND-01`, RUNNER_API 10.6) carries ``model`` (the task's ``model_id``), ``provider`` and ``access`` (the
+    task's), the **exact** model string the provider ``reported_model`` and, when the provider gave a count, ``usage``; it sends no top-level
+    token counts. The stand holds ``provider`` and ``access`` to the task's, and ``reported_model`` to the catalogue's ``accepted_reported`` for the
+    task's model, exactly (`R-133`: no prefix, no case folding); a reported model outside it is ``on_mismatch``. What is recorded as the call's
+    model is the reported string, so the stage compares the model that *answered*. A connection token that sends any of these members is refused
+    (``validation_failed`` / ``host_token_only``): it speaks the earlier wire."""
     store = repository or RunnerRepository()
     task = _own_task(session, principal, task_id, store)
+    host_members = (provider, access, reported_model, usage)
+    if principal.host_id is None and any(item is not None for item in host_members):
+        raise DomainError(ErrorCode.VALIDATION_FAILED, message="a connection token's answer is the earlier wire",
+                          field="provider" if provider is not None else "reported_model", constraint="host_token_only")
+    recorded_model = model if principal.host_id is None else (reported_model or model)
     if task.state == "answered":
         stored_text, stored_model = store.answer_of(session, task_id)
         if (task.claimed_by_token_id == principal.token_id and stored_text == output_text
-                and stored_model == model):
+                and stored_model == recorded_model):
             return TaskAck(task_id, "answered")
         raise _conflict("answer_differs", "a different answer was already accepted")
     _must_hold(task, principal)
@@ -608,6 +662,10 @@ def submit_answer(
     payload = store.payload_of(session, task_id)
     if payload is None:  # cleared payloads belong to terminal tasks; unreachable for a claim
         raise _conflict("task_terminal", "the task has no payload")
+    if principal.host_id is not None:
+        input_tokens, output_tokens = _check_host_answer(
+            payload, provider=provider, access=access, reported_model=reported_model, usage=usage,
+            on_mismatch=on_mismatch)
     violation = read_answer(payload["output_schema"], output_text)
     if violation is not None:
         raise DomainError(
@@ -615,9 +673,37 @@ def submit_answer(
             field="output_text", constraint="output_schema",
         )
     store.record_answer(
-        session, task_id=task_id, answer_text=output_text, declared_model=model,
+        session, task_id=task_id, answer_text=output_text, declared_model=recorded_model,
         input_tokens=input_tokens, output_tokens=output_tokens)
     return TaskAck(task_id, "answered")
+
+
+def _check_host_answer(
+    payload: Mapping[str, Any], *, provider: str | None, access: str | None, reported_model: str | None,
+    usage: Mapping[str, int] | None, on_mismatch: Callable[[], Exception],
+) -> tuple[int | None, int | None]:
+    """Hold a host answer to its task: ``provider`` and ``access`` equal the task's, ``reported_model`` one of the catalogue's accepted strings for
+    the task's model. Answers the token counts of ``usage`` (``None`` when the provider gave none)."""
+    from auditmanager.executors.catalogue import catalogue
+
+    host = payload.get("host")
+    if not isinstance(host, Mapping):
+        raise _conflict("task_terminal", "the task is not a host task")
+    for field_name, sent, wanted in (("provider", provider, host.get("provider")), ("access", access, host.get("access"))):
+        if sent is None:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, message="a host answer names the task's provider and access",
+                              field=field_name, constraint="required")
+        if sent != wanted:
+            raise DomainError(ErrorCode.VALIDATION_FAILED, message="the answer is not the task's",
+                              field=field_name, constraint="not_the_task")
+    if reported_model is None:
+        raise DomainError(ErrorCode.VALIDATION_FAILED, message="a host answer names the model that answered",
+                          field="reported_model", constraint="required")
+    if not catalogue().reported_is_accepted(str(host.get("provider")), str(host.get("model_id")), reported_model):
+        raise on_mismatch()
+    if usage is None:
+        return None, None
+    return usage.get("input_tokens"), usage.get("output_tokens")
 
 
 def _violation_message(violation: object) -> str:
@@ -648,5 +734,17 @@ def fail_task(
             raise _conflict("claim_lost", "the claim on the task is lost")
         return TaskAck(task_id, "failed")
     _must_hold(task, principal)
-    store.record_failure(session, task_id=task_id, reason=_scrub(reason))
+    cleaned = _scrub(reason)
+    store.record_failure(session, task_id=task_id, reason=cleaned)
+    if principal.host_id is not None:
+        # The passive check (ADR-0028 decision 16): a real refusal of access, quota or model takes the pair out of availability for
+        # 15 minutes or until a changed report. Any other failure takes nothing out of service.
+        from auditmanager.executors.host_commands import record_task_failure
+
+        payload = store.payload_of(session, task_id)
+        host = None if payload is None else payload.get("host")
+        if isinstance(host, Mapping):
+            record_task_failure(
+                session, host_id=principal.host_id, provider=host.get("provider"), model_id=host.get("model_id"),
+                reason=cleaned)
     return TaskAck(task_id, "failed")

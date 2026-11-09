@@ -49,7 +49,8 @@ from auditmanager.shared.identity import (
 
 __all__ = ["GroupRepository"]
 
-_GROUP_COLUMNS: Final = "group_id, display_name, rotation_cursor, created_at, created_by, archived_at, archived_by"
+_GROUP_COLUMNS: Final = (
+    "group_id, display_name, rotation_cursor, created_at, created_by, archived_at, archived_by, system_managed")
 _REVISION_COLUMNS: Final = (
     "group_revision_id, group_id, revision_no, pin_id, gateway_model, billing, input_per_mtok_usd, "
     "output_per_mtok_usd, strategy, created_at, created_by"
@@ -80,7 +81,8 @@ _PENDING_COUNT = text(
 
 def _group(row: Mapping[str, Any]) -> GroupRecord:
     return GroupRecord(**{name: row[name] for name in (
-        "group_id", "display_name", "rotation_cursor", "created_at", "created_by", "archived_at", "archived_by")})
+        "group_id", "display_name", "rotation_cursor", "created_at", "created_by", "archived_at", "archived_by",
+        "system_managed")})
 
 
 def _member(row: Mapping[str, Any]) -> GroupMemberRecord:
@@ -145,9 +147,9 @@ class GroupRepository:
         return None if row is None else _group(row)
 
     def list_groups(self, session: Session, *, limit: int = 500) -> list[GroupRecord]:
-        """Active groups first, then archived ones; newest first inside each."""
+        """Active groups first, then archived ones; newest first inside each. The system groups of the hosts are not listed."""
         rows = session.execute(text(
-            f"SELECT {_GROUP_COLUMNS} FROM executor_group "
+            f"SELECT {_GROUP_COLUMNS} FROM executor_group WHERE NOT system_managed "
             "ORDER BY archived_at IS NOT NULL, created_at DESC, group_id DESC LIMIT :limit"
         ), {"limit": limit}).mappings().all()
         return [_group(row) for row in rows]

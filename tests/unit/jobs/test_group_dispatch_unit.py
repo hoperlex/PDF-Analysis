@@ -504,6 +504,8 @@ class Sweeper:
                            if (row["created_at"], row["run_id"]) > (params["after_created_at"], params["after_run_id"])]
             return _Page([{key: value for key, value in row.items() if key != "wait_expired"}
                           for row in ordered[:params["batch_size"]]])
+        if sql.startswith("SELECT r.run_id, r.stage_plan"):
+            return _Page([])  # `HOSTS-BACKEND-01`: the planned Runs' own page (tests/unit/jobs/test_planned_dispatch_unit.py); none here
         if sql.startswith("SELECT run_id, wait_reason, waiting_since"):
             if not self.locked:
                 return _Page([])

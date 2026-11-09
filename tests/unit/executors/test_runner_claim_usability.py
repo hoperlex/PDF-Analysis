@@ -58,8 +58,10 @@ def test_the_lock_locks_the_tokens_own_row_and_reads_its_usability_from_that_row
     (sql, params), = session.statements
     assert params == {"t": "ern_T"}
     assert sql.endswith("WHERE t.token_id = :t FOR UPDATE OF t"), "the token's row, and only that row, is locked"
-    for part in ("t.revoked_at IS NULL", "t.expires_at > clock_timestamp()", "c.archived_at IS NULL",
-                 "JOIN executor_connection c ON c.connection_id = t.connection_id"):
+    # `HOSTS-BACKEND-01`: the token of a host is usable while its host is not archived, as a connection's while the connection is not.
+    for part in ("t.revoked_at IS NULL", "t.expires_at > clock_timestamp()", "COALESCE(c.archived_at, h.archived_at) IS NULL",
+                 "LEFT JOIN executor_connection c ON c.connection_id = t.connection_id",
+                 "LEFT JOIN executor_host h ON h.host_id = t.host_id"):
         assert part in sql, part
     assert "FOR UPDATE OF c" not in sql and "FOR SHARE" not in sql, (
         "the connection is read and not locked: the administrator's writes take it before the token")
