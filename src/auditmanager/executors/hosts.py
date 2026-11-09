@@ -62,6 +62,7 @@ __all__ = [
     "model_reasons",
     "model_state",
     "normalise_host_report",
+    "pair_group_name",
     "pool_of",
     "slots_in_force",
     "split_pool",
@@ -233,6 +234,11 @@ def split_pool(pool: str) -> tuple[str, str]:
     if found is None:
         raise ValueError("a capacity pool is <host_id>:<provider>")
     return found.group(1), found.group(2)
+
+
+def pair_group_name(model_id: str, access: str) -> str:
+    """The display name of the system group of a (model, access) pair: ``<model> · <access>`` (the name an administrator would never type)."""
+    return f"{model_id} · {access}"[:120]
 
 
 def billing_of_access(access: str) -> str:

@@ -82,6 +82,7 @@ from auditmanager.executors.hosts import (
     model_reasons,
     model_state,
     normalise_host_report,
+    pair_group_name,
     pool_of,
     slots_in_force,
 )
@@ -561,10 +562,6 @@ def confirm_host_agent_install_host_key(
 # --- the system objects ------------------------------------------------------------------------------------------------
 
 
-def _pair_group_name(model_id: str, access: str) -> str:
-    return f"{model_id} · {access}"[:120]
-
-
 def _system_settings(model_id: str, access: str) -> RevisionSettings:
     return RevisionSettings(
         pin_id=model_id, gateway_model=model_id, billing=billing_of_access(access), allow_client_documents=False,
@@ -578,7 +575,7 @@ def _refresh_pair_group(
 ) -> None:
     """Make the current revision of the pair's group hold exactly the live system connections of the pair (the oldest sixteen), writing a
     revision only when the membership differs, and archiving the group when no connection is left."""
-    name = _pair_group_name(model_id, access)
+    name = pair_group_name(model_id, access)
     billing = billing_of_access(access)
     groups.lock_name(session, name)
     group_id = hosts.system_group_for(session, name)
