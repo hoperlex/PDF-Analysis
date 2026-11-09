@@ -1,17 +1,19 @@
-"""A three-page PDF whose text lines cross the places a portal would cut its blocks (D-353). Not product code.
+"""A four-page PDF whose text lines cross the places a portal would cut its blocks (D-353). Not product code.
 
 The synthetic «Пояснительная записка» and the АР baseline keep each line inside one block. A drawing set's specification
 tables, a stamp's label/value rows and two-column text do not: the extractor joins words that stand side by side at one height
 into ONE line with one space for any gap, so the line spans the gap and every block that stands on either side of it. This PDF
 has exactly those, in volume, with real text and a real text layer (reportlab, deterministic):
 
-* page 1: a schedule of 30 rows, three columns at x 56, 150 and 430 pt;
-* page 2: running text in two columns (x 56 and x 310 pt), 30 lines each on the same baselines;
-* page 3: 30 label/value rows, the label at x 56 pt, the value at x 360 pt;
-* page 4: 30 rows of a wide left column (a long sentence on the odd rows, a short «Итого n» label on the even ones, so the
+* page 1: a schedule of 40 rows, three columns at x 56, 150 and 430 pt;
+* page 2: running text in two columns (x 56 and x 310 pt), 40 lines each on the same baselines;
+* page 3: 40 label/value rows, the label at x 56 pt, the value at x 360 pt;
+* page 4: 40 rows of a wide left column (a long sentence on the odd rows, a short «Итого n» label on the even ones, so the
   column's block is wide) next to a phrase at x 330 pt: the judge's label / gap / phrase line (J3 F1), in volume.
 
-Every phrase is unique on its page, so a quotation of any part of it resolves to one place.
+The leading (13 pt for 10 pt text) is that of running text: the rows are not separated by white bands, so a raster XY-cut finds
+the COLUMNS as blocks, as a portal does for a page of columns. Every phrase is unique on its page, so a quotation of any part of it
+resolves to one place.
 """
 
 from __future__ import annotations
@@ -29,9 +31,9 @@ FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 )
-ROWS = 30
+ROWS = 40
 TOP = 800.0
-LEADING = 22.0
+LEADING = 13.0
 SIZE = 10.0
 
 _WORDS = ("плита", "балка", "колонна", "перемычка", "ригель", "панель", "стойка", "связь", "опора", "анкер")
