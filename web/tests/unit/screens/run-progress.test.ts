@@ -641,7 +641,7 @@ describe('the stage timings carry a measurement, not two identical stamps (M-13)
   it('reports how long a sub-second stage took', () => {
     const markup = runDialog(runStatus({ state: 'published', published_finding_count: 3, stages }), { selected: 'preparation' });
     expect(markup).toContain('data-stage-elapsed="115"');
-    expect(markup).toContain('115 ms');
+    expect(markup).toContain('115 мс');
   });
 
   it('reports how long the whole run took', () => {
@@ -652,7 +652,7 @@ describe('the stage timings carry a measurement, not two identical stamps (M-13)
       terminal_at: '2026-09-18T13:02:34.901Z',
     });
     expect(markup).toContain('data-run-elapsed="374"');
-    expect(markup).toContain('374 ms');
+    expect(markup).toContain('374 мс');
   });
 
   it('says nothing rather than zero for a stage that never ran', () => {

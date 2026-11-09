@@ -398,7 +398,7 @@ describe('«Этапы анализа раздела»', () => {
     expect(markup).toContain('title="Идентификатор модели прогона">claude-opus-5-5<');
     expect(markup).toMatch(/data-plan-row="server"[\s\S]*?adm1\.hlab\.kz/);
     for (const row of ['state', 'started', 'finished', 'elapsed']) expect(markup).toContain(`data-fact-row="${row}"`);
-    expect(markup).toContain('<th scope="row">Длительность</th><td>3.0 s</td>');
+    expect(markup).toContain('<th scope="row">Длительность</th><td>3 с</td>');
     expect(markup).not.toContain('data-fact-row="error"');
   });
 

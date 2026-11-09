@@ -229,21 +229,44 @@ describe('a diagnostic count that was not reported is not zero (M-8)', () => {
  */
 describe('a span is rendered at a resolution that still says something (M-11)', () => {
   it('reports a sub-second stage in milliseconds rather than as zero', () => {
-    expect(formatElapsed(30)).toBe('30 ms');
-    expect(formatElapsed(363)).toBe('363 ms');
-    expect(formatElapsed(999)).toBe('999 ms');
+    expect(formatElapsed(30)).toBe('30 мс');
+    expect(formatElapsed(363)).toBe('363 мс');
+    expect(formatElapsed(999)).toBe('999 мс');
     // The mutation this exists to kill: everything below a second collapsing to '0 s'.
     expect(formatElapsed(30)).not.toBe('0 s');
     expect(formatElapsed(363)).not.toBe('0 s');
   });
 
-  it('reports a multi-second span in seconds', () => {
-    expect(formatElapsed(1_000)).toBe('1.0 s');
-    expect(formatElapsed(11_400)).toBe('11.4 s');
+  it('reports a span under ten seconds with one decimal and a comma, and writes no decimal that would be a zero (RUN-SCREEN-FIX-01)', () => {
+    expect(formatElapsed(9_500)).toBe('9,5 с');
+    expect(formatElapsed(2_500)).toBe('2,5 с');
+    expect(formatElapsed(1_000)).toBe('1 с');
+    expect(formatElapsed(3_000)).toBe('3 с');
+    // Truncated, not rounded: a span never reads longer than it took.
+    expect(formatElapsed(9_999)).toBe('9,9 с');
+    // The mutations these kill: a decimal point instead of the comma, and «20.0 s».
+    expect(formatElapsed(9_500)).not.toContain('.');
+    expect(formatElapsed(3_000)).not.toContain('0');
   });
 
-  it('reports a span over a minute in minutes and seconds', () => {
-    expect(formatElapsed(65_000)).toBe('1 m 5 s');
+  it('reports a span from ten seconds to a minute in whole seconds, with no decimal (RUN-SCREEN-FIX-01)', () => {
+    expect(formatElapsed(10_000)).toBe('10 с');
+    expect(formatElapsed(11_400)).toBe('11 с');
+    expect(formatElapsed(20_000)).toBe('20 с');
+    expect(formatElapsed(59_999)).toBe('59 с');
+    expect(formatElapsed(20_000)).not.toMatch(/[.,]/);
+  });
+
+  it('reports a span over a minute in minutes and seconds, in Russian (RUN-SCREEN-FIX-01)', () => {
+    expect(formatElapsed(60_000)).toBe('1 мин 0 с');
+    expect(formatElapsed(65_000)).toBe('1 мин 5 с');
+    expect(formatElapsed(150_000)).toBe('2 мин 30 с');
+  });
+
+  it('draws no Latin letter in any span it prints (RUN-SCREEN-FIX-01)', () => {
+    for (const ms of [0, 30, 999, 1_000, 9_500, 20_000, 59_999, 65_000, 150_000, 3_700_000]) {
+      expect(formatElapsed(ms)).not.toMatch(/[A-Za-z]/);
+    }
   });
 
   it('says nothing rather than zero when there is no span to report', () => {
