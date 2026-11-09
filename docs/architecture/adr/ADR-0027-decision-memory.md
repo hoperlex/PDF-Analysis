@@ -83,3 +83,28 @@ embedder), Q11 (the fine-tuning target).
 ## Not changed
 
 `JobPackage v1`, analysis results, comparison evidence, the API contract and the web client. This phase adds no operation.
+
+## Addendum 2026-11-09 (phase M2: standing, forget, settings)
+
+Built by lane M2 (migration `0061_decision_memory_m2`; `DECISION-MEMORY-01` section 8, «Built 2026-11-09 (phase M2)»). Behaviour that changes or
+sharpens the decisions above; the owner may revise any of it.
+
+- **Decision 5 (append-only) is refined, not weakened.** The three identity tables (case, decision, status event) stay `am_immutable_row`. The
+  five content tables (content, evidence, norm references, crops and the expert's comment) are protected by `am_guard_decision_memory_forget`:
+  `UPDATE` is refused always, `DELETE` is permitted only beside a `forget` status event of the same case inserted by the same transaction
+  (the event's `xmin`), and the application role holds no `DELETE`. Nothing switches a trigger off to forget.
+- **Decision 2 (what a forget is).** `forget` is an operator act on the owner's permission reference (`scripts/recovery/memory_forget.py`): it
+  deletes a case's content rows and the crop Blobs nothing else references, and leaves the case, its decisions and a tombstone (the `forget` event
+  with the digest of the content that was forgotten). It is not part of the project erase (`Q2` stays open; `--forget-memory` is not built) and
+  there is no API operation for it (`Q5` stays open; the operator-only answer is the design's recommendation, implemented).
+- **A forgotten case is terminal and takes no words back.** A new decision on its observation is recorded without the expert's comment; any
+  further status event is `conflict` (`memory_case_forgotten`).
+- **Withdraw and restore** are append-only status events (a closed reason, the acting admin's account under a `RESTRICT` key, the command receipt
+  for a keyed call). The rule that a withdraw needs an active case and a restore a withdrawn one is repeated by a database trigger under an
+  advisory lock per case.
+- **Q3(c) / D-390.** `data_class` and `training_use` are an installation setting: an append-only journal read at every capture, `test` and `off`
+  when nothing is journalled, written only by an operator tool naming an admin account (an `on` names the owner's permission). The class of a
+  case already captured is not changed by a later switch.
+- **Consequence for accounts.** An account that withdrew, restored or forgot a case, or changed a setting, can no longer be purged
+  (`R-61`, the `RESTRICT` key); the author of a decision still can (`Q7`).
+- **Still not decided and not built:** `Q2`, `Q4`, `Q5`, `Q9`, `Q10`, `Q11`; the export, the embeddings, the hint and the prompt use.

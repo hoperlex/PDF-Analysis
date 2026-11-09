@@ -1,6 +1,6 @@
 # DECISION-MEMORY-01 — expert decision memory, and normative material for external executors
 
-**Status: design; phases M0 and M1 built 2026-11-09 (`ADR-0027`, migration `0059_decision_memory`; see the end of section 8).** Written 2026-11-07 by design lane M (`agent/lane-decision-memory-01`), base
+**Status: design; phases M0, M1 and M2 built 2026-11-09 (`ADR-0027`, migrations `0059_decision_memory` and `0061_decision_memory_m2`; see the end of section 8).** Written 2026-11-07 by design lane M (`agent/lane-decision-memory-01`), base
 `origin/dev` `dcb0083b9` (API contract `1.35.0`, migration head `0056_optimisation_decisions`). This document
 changes no contract, migration, product code or test. Everything in sections 3 to 8 is a proposal until the owner
 has answered section 9, where the decisions only the owner can make are collected. Sources are cited as `path:line` at
@@ -571,6 +571,59 @@ What exists, as built; where it differs from sections 3 and 7, this list is the 
 - **Debts of this phase** (`DEBT_REGISTER.md`): `D-390` every case is `data_class = test` until M2 makes it a setting; `D-391` the
   import's `imported`; `D-392` the crop rule and `model_identity`; `D-393` the status event's actor key and command types; `D-394`
   the forget guard and the crop state guard; `D-397` the object-store reads inside a first decision and the sweep's scan.
+### Built 2026-11-09 (phase M2)
+
+Lane M2 (`agent/lane-decision-memory-m2-01`, migration **`0061_decision_memory_m2`**, base `36b9048d1`). What exists, as built; where it differs
+from sections 3, 4 and 7, this list is the fact:
+
+- **The actor's key.** `decision_memory_status_event.actor_user_uid` has its `RESTRICT` foreign key to `app_user` and an entry in
+  `access/references.py` (`D-393`); so has the new settings journal. (`decision_memory_decision.author_user_uid` keeps no key, `Q7`.)
+- **The transition rule is the database's too.** `am_guard_decision_memory_status` (a `BEFORE INSERT` trigger) takes an advisory lock per case
+  and refuses, with `AM003`, a second `withdraw`, a `restore` of a case that is not withdrawn and any event after a `forget`. The application
+  (`decision_memory/service.py`, `status.py`) checks first and answers `state_transition_not_allowed`, or `conflict` with
+  `conflict_reason: memory_case_forgotten` for a forgotten case; the lock key is the trigger's, character for character, and a test pins that.
+- **The forget guard** (`D-394`) replaces `am_immutable_row` on **five** content tables (`decision_memory_content`, `_evidence`, `_norm_ref`,
+  `_crop` and `_decision_text` -- the expert's comment is content, not identity). `UPDATE` is always refused; `DELETE` only when a `forget`
+  status event of the same case was inserted by **the same transaction** (the event row's `xmin` equals `pg_current_xact_id()::xid`, so an
+  event an earlier transaction committed, an event of another case, a `withdraw` and an event made in a savepoint all fail to open it). The
+  application role holds no `DELETE` on them either. The identity tables (case, decision, status event) stay `am_immutable_row`.
+- **The tombstone** is the `forget` status event plus a new column `forgotten_content_sha256` (exactly on a `forget`, a `CHECK`): the digest of
+  the content that was forgotten, so the case row, the event and the audit trail prove what is gone without holding it. The case keeps its
+  decisions (verdict, severity, author, time -- no words of the expert).
+- **A decision after a forget.** When the expert decides again on an observation whose case was forgotten, `MemoryRepository.capture` records the
+  decision row and **not** its comment: the forgotten case accepts no content back, and the ledger event still counts as captured (guard G1,
+  the sweep).
+- **Forget is the operator's tool**, `scripts/recovery/memory_forget.py` (`Q5`'s recommended answer, implemented; the question stays open):
+  plan (dry run, digest over the cases with their content digests, the per-table row facts, the Blob classification and the object keys) ->
+  one transaction (lock, re-derive and compare the digest, `memory.forget_requested`, one `forget` event per case, exclusive Blobs to
+  `erasure_pending`, the deletes, verification that nothing outside the scope moved) -> objects by exact key -> finish (`memory.forget_completed`).
+  Selectors: `--case` (repeatable), `--origin-project`, `--all`. The id of a forget is an `era_` identity (no new prefix). `--owner-permission-ref`
+  is required to apply or resume (`R-146aj`), `--reason` is the closed list of the status event, the actor must be an active admin. A Blob is
+  exclusive when no other case, no live artifact and no corpus row references it; the others stay with their objects. Idempotent: a finished
+  forget run again finds nothing to forget. It does not reach exports already produced, prompts already sent, dumps and mirrors
+  (`NOT_REACHED` in the tool). The dry run and the `--apply` of the project erase are unchanged: the erase still leaves the memory (section 4.1),
+  and `--forget-memory` on the erase (`Q2`) is **not** built.
+- **Settings** (`D-390`, `Q3c`): `decision_memory_setting_event`, an append-only journal in the shape of `schedule_setting_event`
+  (`data_class` `test`/`real`, `training_use` `off`/`on`; an `on` carries `owner_permission_ref`, by a `CHECK`). Nothing journalled means `test`
+  and `off`. The capture reads `data_class` at every decision (`MemoryCaptureAssembler`; `MEMORY_DATA_CLASS` is gone); a case keeps the class it
+  was captured with. The application only reads; `scripts/recovery/memory_setting.py` (`show`, `set`) writes it as the owner, naming an admin
+  account. No consumer of `training_use` exists before the export (M5).
+- **The read model.** The view `decision_memory_case_current` (status from the latest event, current verdict from the latest decision, the
+  decision count) and `decision_memory.reads.MemoryReader` (list with filters and keyset paging, one case with content, decisions, crops and
+  status history, counts, settings). A forgotten case answers its tombstone only.
+- **Withdraw and restore** are `decision_memory.service.withdraw_case` / `restore_case` (a status event each, a closed `reason_code`) and, as
+  keyed commands, `DecisionMemoryAdapter.withdraw_case` / `restore_case` in the composition root (command types `withdraw_decision_memory_case`
+  and `restore_decision_memory_case`, both `KEEP` in the purge; a replay answers the first call's event, another payload under the key is
+  `idempotency_key_reuse`). **No API operation yet** (see the end of this list).
+- **Recovery classification.** `schema_coverage` (`HEAD`, one table, one view, the trigger set, `am_guard_decision_memory_forget` in
+  `GUARD_FUNCTIONS`), `grant_classification` (the settings journal is `read-only` for the application; `decision_memory_status_event` is written
+  by the code now), `product_purge` (`KEEP_MEMORY_TABLES` + the settings journal, `KEEP_EVENT_PREFIXES += "memory."`, the two command types),
+  `synthetic_drill_compare` (the restore drill probes the new guard).
+- **`D-470`.** `infra/deploy/purge-product-data.sh` and `infra/deploy/erase-project.sh` forward `--accept-memory-loss <reason>` (a closed list
+  checked by the wrapper too) to every step that builds the plan; never to a finish or a resume.
+- **Contract slice 1.44.0 is not built.** The five operations of section 7.3 (`listDecisionMemoryCases`, `getDecisionMemoryCase`, `getDecisionMemoryStatus`, `withdrawDecisionMemoryCase`, `restoreDecisionMemoryCase`) wait for the contract slot (lane C7 owned it while this lane worked, `1.42.0` -> `1.43.0`); what they need exists (`MemoryReader`, `withdraw_case`, `restore_case`, `DecisionMemoryAdapter`), `D-495`.
+- **New debts** (`DEBT_REGISTER.md`): `D-490` .. `D-495`; closed: `D-390`, `D-393`, `D-470`; narrowed: `D-394`.
+
 ### Risks
 
 | # | Risk | Mitigation |
