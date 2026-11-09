@@ -128,6 +128,11 @@ export { arV3PackStatusQueryOptions, useArV3PackStatus, useArV3StartAllowed } fr
 export type { RunStatusPolling } from './api/use-run-status';
 export { useRunStatus } from './api/use-run-status';
 
+export type { RunStagesView } from './api/use-run-stages';
+export { runStagesKey, runStagesPollInterval, runStagesQueryOptions, useRunStages } from './api/use-run-stages';
+export type { ChipModelLine } from './model/run-stages';
+export { chipModelLine, modelsCount, planModelIds, stageOfChip } from './model/run-stages';
+
 export type { RunTableProps } from './ui/run-table';
 export { RunTable, STARTED_BY_UNKNOWN } from './ui/run-table';
 
