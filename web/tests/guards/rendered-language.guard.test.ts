@@ -4574,6 +4574,19 @@ const TRANSLATED_SCHEMAS = [
   'ComparisonReportUnitMark',
   'ComparisonLaunchQueueState',
   'ComparisonLaunchEntryState',
+  // `HOSTS-WEB-01` (ADR-0028): «Исполнители» and «Модели по этапам» say a server's state, a model's availability, the access, the
+  // effort and the row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Two of them are named in
+  // `NOT_YET_ON_A_SCREEN`: no screen of this wave can show them.
+  'StageRowKey',
+  'StageCellRole',
+  'StageModelKit',
+  'ModelEffort',
+  'ExecutorModelAccess',
+  'ProviderAuthState',
+  'ModelProbeState',
+  'ExecutorHostState',
+  'ModelUnavailableReason',
+  'RunStartRoute',
 ] as const;
 
 function translatedVocabulary(): ReadonlySet<string> {
@@ -4593,27 +4606,13 @@ function translatedVocabulary(): ReadonlySet<string> {
 }
 
 /**
- * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0): enumerations of the servers and the stage layout that no screen renders yet.
- *
- * «Исполнители» and «Модели по этапам» will say the state of a server, a model and a provider's login, the access, the effort and the
- * row, kit and role of a cell in Russian, with the contract value in a `data-` attribute. Several of those values are plain English
- * words (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`, `online`). They leave the permitted vocabulary NOW, so the
- * guard keeps reddening `review` as it did before the contract carried it as a bare value (`StageRowKey`), but they are not yet
- * `TRANSLATED_SCHEMAS`: that list demands a marker attribute some rendered screen carries, and none does. `HOSTS-WEB-01` moves each
- * schema into `TRANSLATED_SCHEMAS`, with its marker, in the commit that renders it, and empties this list.
+ * `HOSTS-SEAL-1` (ADR-0028, contract 1.45.0) reserved ten enumerations of the servers and the stage layout here, before any
+ * screen rendered them, so that their plain English values (`review`, `text`, `blocks`, `norms`, `main`, `high`, `api`, `valid`,
+ * `online`) left the permitted vocabulary at once. `HOSTS-WEB-01` renders them and moves each schema into `TRANSLATED_SCHEMAS`
+ * with its marker (or into `NOT_YET_ON_A_SCREEN` with the reason), so the list is empty; `HOSTS-WEB-01b` finished that move, which
+ * had left the ten out of `TRANSLATED_SCHEMAS` while their markers were in `SCHEMA_MARKERS`.
  */
-const RESERVED_TRANSLATED_SCHEMAS = [
-  'StageRowKey',
-  'StageCellRole',
-  'StageModelKit',
-  'ModelEffort',
-  'ExecutorModelAccess',
-  'ProviderAuthState',
-  'ModelProbeState',
-  'ExecutorHostState',
-  'ModelUnavailableReason',
-  'RunStartRoute',
-] as const;
+const RESERVED_TRANSLATED_SCHEMAS = [] as const;
 
 const TRANSLATED = translatedVocabulary();
 
