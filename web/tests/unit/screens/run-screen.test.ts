@@ -293,8 +293,24 @@ describe('the tiles', () => {
   it('«Расход» prints a figure with the calls it sums and the word for its basis, and nothing it has not', () => {
     const markup = screen({ state: 'published', cost_micros: 4_500_000, cost_basis: 'measured', model_call_count: 3 });
     expect(markup).toContain('data-run-spend="reported"');
-    expect(markup).toContain('data-spend-micros="4500000">4.500000<');
+    expect(markup).toContain('data-spend-micros="4500000">$4.5<');
     expect(markup).toContain('вызовов 3 · измерено');
+  });
+
+  it('«Расход» writes the figure as dollars, as every other money of the application, and never as the raw six digits (RUN-SCREEN-FIX-01)', () => {
+    const spend = (cost_micros: number) => screen({ state: 'published', cost_micros, cost_basis: 'measured', model_call_count: 3 });
+    expect(spend(6_120_000)).toContain('data-spend-micros="6120000">$6.12<');
+    // The tile's figure; the raw six digits stay in the notes of «Подробнее», which spell out the unit.
+    expect(spend(6_120_000)).not.toContain('data-spend-micros="6120000">6.120000<');
+    expect(spend(1)).toContain('>$0.000001<');
+    expect(spend(0)).toContain('data-spend-micros="0">$0<');
+    expect(spend(6_120_000)).toContain('· измерено');
+  });
+
+  it('«Расход» groups the calls it sums by threes with a narrow no-break space (RUN-SCREEN-FIX-01)', () => {
+    const markup = screen({ state: 'published', cost_micros: 1_000_000, cost_basis: 'measured', model_call_count: 12_345 });
+    expect(markup).toContain('вызовов 12\u202F345 · измерено');
+    expect(markup).not.toContain('вызовов 12345');
   });
 
   it('«Расход» says «по подписке» for an unmetered run with no figure, and that a run that called no provider did not', () => {
@@ -303,6 +319,29 @@ describe('the tiles', () => {
     expect(subscription).toContain('По подписке.');
     expect(subscription).not.toContain('data-spend-micros');
     expect(screen({ state: 'published' })).toContain('Прогон не обращался к провайдеру.');
+  });
+
+  it('an open run says what it has not got yet, and not what a finished run says (RUN-SCREEN-FIX-01)', () => {
+    for (const state of ['created', 'queued', 'running', 'validating'] as const) {
+      const markup = screen({ state, terminal_at: null });
+      expect(markup).toMatch(/data-run-findings-tile=""[\s\S]*?Появятся по ходу прогона\./);
+      expect(markup).toMatch(/data-run-spend="absent"[\s\S]*?Появится по ходу прогона\./);
+      expect(markup).not.toContain('Разбирать нечего.');
+      expect(markup).not.toContain('Прогон не обращался к провайдеру');
+      expect(markup).not.toContain('поэтому сообщать о стоимости нечего');
+    }
+  });
+
+  it('an open run that already carries a spend still prints it, and a finished run keeps its sentences (RUN-SCREEN-FIX-01)', () => {
+    const running = screen({ state: 'running', terminal_at: null, cost_micros: 6_120_000, cost_basis: 'estimated', model_call_count: 2 });
+    expect(running).toContain('data-run-spend="reported"');
+    expect(running).toContain('>$6.12<');
+    expect(running).not.toContain('Появится по ходу прогона.');
+    for (const state of ['published', 'partial', 'failed', 'cancelled'] as const) {
+      expect(screen({ state })).toContain('Прогон не обращался к провайдеру.');
+      expect(screen({ state })).not.toContain('по ходу прогона');
+    }
+    expect(screen({ state: 'failed', terminal_reason: 'analysis_failed' })).toContain('Разбирать нечего.');
   });
 
   it('«Расход» refuses a figure whose calls it cannot see and sends the reader to the notes, which open themselves', () => {
@@ -388,7 +427,7 @@ describe('«Этапы анализа раздела»', () => {
     expect(markup).toContain('title="Идентификатор модели прогона">claude-opus-5-5<');
     expect(markup).toMatch(/data-plan-row="server"[\s\S]*?adm1\.hlab\.kz/);
     for (const row of ['state', 'started', 'finished', 'elapsed']) expect(markup).toContain(`data-fact-row="${row}"`);
-    expect(markup).toContain('<th scope="row">Длительность</th><td>3.0 s</td>');
+    expect(markup).toContain('<th scope="row">Длительность</th><td>3 с</td>');
     expect(markup).not.toContain('data-fact-row="error"');
   });
 

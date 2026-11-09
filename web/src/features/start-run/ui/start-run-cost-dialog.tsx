@@ -7,7 +7,8 @@
  * It says what `CostApproval` says, in the same words but for two: the money is written «$1.2», as the batch
  * panel writes it, and the recorded mode is «Тестовый режим» (a Latin word does not reach a reader, `R-18`). It
  * takes its figures through the same helpers (`microsAsUsd`, `ceilingMicros`). The 1.44.0 estimate holds one model and one total, so it shows the
- * model and the total; a per-model list belongs to the estimate that carries lines (plan v3 wave 2).
+ * model and the total; a per-model list belongs to the estimate that carries lines (plan v3 wave 2). The counts (pages, characters, windows,
+ * calls, tokens) are grouped by threes with a narrow no-break space, as the application groups every large integer (`groupDigits`).
  *
  * `StartRunCostDialogView` is the markup; `StartRunCostDialog` opens it as a native modal `<dialog>`
  * (the browser keeps the focus inside, Esc is «Отмена», the page behind is inert), as the other windows
@@ -18,7 +19,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode, Ref } from 'react';
 
-import { shortModelName } from '@/entities/audit-run';
+import { groupDigits, shortModelName } from '@/entities/audit-run';
 import type { RunCostEstimate } from '@/shared/api';
 import { ceilingMicros, microsAsUsd } from '@/shared/ui';
 
@@ -78,10 +79,10 @@ export function StartRunCostDialogView({
         <p className="am-note">Тестовый режим: сохранённые ответы. Оценка не является фактическим расходом.</p>
       ) : null}
       <p>
-        Модель: {shortModelName(estimate.model_id) ?? estimate.model_id}. Страниц: {estimate.page_count}; символов: {estimate.text_characters}; окон: {estimate.windows};{' '}
-        {relaxed ? 'начальная оценка вызовов' : 'вызовов'}: {estimate.calls}.
+        Модель: {shortModelName(estimate.model_id) ?? estimate.model_id}. Страниц: {groupDigits(estimate.page_count)}; символов: {groupDigits(estimate.text_characters)}; окон: {groupDigits(estimate.windows)};{' '}
+        {relaxed ? 'начальная оценка вызовов' : 'вызовов'}: {groupDigits(estimate.calls)}.
       </p>
-      <p>Оценка входных токенов: {estimate.input_tokens}.</p>
+      <p>Оценка входных токенов: {groupDigits(estimate.input_tokens)}.</p>
       {relaxed ? (
         <p className="am-note">
           {UNCAPPED_MEANING} Подтверждение разрешает фактические расходы без предела приложения.

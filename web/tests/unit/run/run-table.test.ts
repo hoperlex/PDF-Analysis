@@ -78,7 +78,7 @@ describe('the cells of one run', () => {
     expect(cells[0]).toBe('опубликован из записи');
     expect(cells[1]).toBe(formatInstant('2026-09-10T08:00:00.000Z'));
     expect(cells[2]).toBe('Проверкина А. С.');
-    expect(cells[3]).toBe('4 m 0 s');
+    expect(cells[3]).toBe('4 мин 0 с');
     expect(cells[4]).toBe('1');
     expect(cells[5]).toBe('Прогон Разобрать');
   });
@@ -101,8 +101,8 @@ describe('the cells of one run', () => {
   });
 
   it('say the duration only when the run has ended, from its two instants', () => {
-    expect(cellsOf(table(runStatus({ created_at: '2026-09-10T08:00:00.000Z', terminal_at: '2026-09-10T08:00:00.030Z' })))[3]).toBe('30 ms');
-    expect(cellsOf(table(runStatus({ created_at: '2026-09-10T08:00:00.000Z', terminal_at: '2026-09-10T08:00:12.300Z' })))[3]).toBe('12.3 s');
+    expect(cellsOf(table(runStatus({ created_at: '2026-09-10T08:00:00.000Z', terminal_at: '2026-09-10T08:00:00.030Z' })))[3]).toBe('30 мс');
+    expect(cellsOf(table(runStatus({ created_at: '2026-09-10T08:00:00.000Z', terminal_at: '2026-09-10T08:00:12.300Z' })))[3]).toBe('12 с');
     expect(cellsOf(table(runStatus({ state: 'running', terminal_at: null })))[3]).toBe('—');
     expect(cellsOf(table(without(runStatus({ state: 'queued' }), 'terminal_at')))[3]).toBe('—');
   });

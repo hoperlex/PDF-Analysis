@@ -50,7 +50,7 @@ describe('the live line of an open run', () => {
 
   it('adds the window, the model and the server when the reading has them, and only then', () => {
     const chip = live({ state: 'running', stages: [{ stage_id: 'text_analysis', status: 'succeeded', error_code: null }] });
-    const bare = renderToStaticMarkup(createElement(RunLiveLineView, { chip, elapsed: '1.0 s' }));
+    const bare = renderToStaticMarkup(createElement(RunLiveLineView, { chip, elapsed: '1 с' }));
     expect(bare).not.toContain('data-run-live-progress');
     expect(bare).not.toContain('data-run-live-model');
     expect(bare).not.toContain('data-run-live-server');
@@ -65,13 +65,13 @@ describe('the live line of an open run', () => {
       progress: { kind: 'window', index: 2, total: 5 },
       model: { short: 'Opus 5.5', pin: 'claude-opus-5-5' },
       server: 'adm1.hlab.kz',
-      elapsed: '12 m 0 s',
+      elapsed: '12 мин 0 с',
       elapsedOf: 'chip',
     }));
     expect(markup).toContain('Сейчас: <strong>Анализ блоков</strong> · <span data-run-live-progress="window">окно 2 из 5</span>');
     expect(markup).toContain('<span data-run-live-model="true" title="claude-opus-5-5">Opus 5.5</span>');
     expect(markup).toContain('<span data-run-live-server="true">adm1.hlab.kz</span>');
-    expect(markup).toContain('в этапе 12 m 0 s');
+    expect(markup).toContain('в этапе 12 мин 0 с');
   });
 
   it('counts from the chip start when the chip has one, from the run\'s creation when it has not, and reads «—» before the clock', () => {
@@ -81,8 +81,8 @@ describe('the live line of an open run', () => {
       procedures: [],
     })[0] ?? null;
     const now = Date.parse('2026-11-08T08:02:00.000Z');
-    expect(liveElapsed(status, started, now)).toEqual({ text: '1 m 30 s', of: 'chip' });
-    expect(liveElapsed(status, null, now)).toEqual({ text: '2 m 0 s', of: 'run' });
+    expect(liveElapsed(status, started, now)).toEqual({ text: '1 мин 30 с', of: 'chip' });
+    expect(liveElapsed(status, null, now)).toEqual({ text: '2 мин 0 с', of: 'run' });
     expect(liveElapsed(status, started, null)).toEqual({ text: '—', of: 'run' });
   });
 
@@ -111,7 +111,7 @@ describe('the time a chip took, on the rail', () => {
         { stage_id: 'text_analysis', status: 'succeeded', error_code: null },
       ],
     });
-    expect(markup).toMatch(/data-run-chip="preparation"[^>]*>.*?data-chip-took="2\.5 s"/s);
+    expect(markup).toMatch(/data-run-chip="preparation"[^>]*>.*?data-chip-took="2,5 с"/s);
     expect((markup.match(/data-chip-took=/g) ?? []).length).toBe(1);
   });
 });
