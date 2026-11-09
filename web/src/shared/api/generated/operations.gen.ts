@@ -8,7 +8,7 @@
  * (web/scripts/generate-api-client.mjs, generator 1.0.0)
  * from contracts/api/v1/openapi.json
  *   AuditManager PC-01 API 1.44.0 (OpenAPI 3.1.0)
- *   sha256 f0cd51c65c6a0f27e50cb9b41a440af77f2eded90c801719ac212026c3766877
+ *   sha256 cb216d1e7b4b7ea711ef403f3de48369efacc4273fa228533fbc062a99c7d8b6
  *
  * Hand-editing this file makes the contract drift guard in web/tests/contract go
  * red. The contract belongs to session A1: change it there, then regenerate.
@@ -9947,7 +9947,7 @@ export const OPERATIONS = {
     requestMediaType: null,
     responseMediaType: 'application/json',
     successStatuses: [200],
-    errorStatuses: [401, 403, 422, 500, 503],
+    errorStatuses: [401, 403, 500, 503],
     tags: ['decision-memory'],
   },
   getDocumentVersion: {

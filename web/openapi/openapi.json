@@ -24773,9 +24773,6 @@
           "403": {
             "$ref": "#/components/responses/PermissionDenied"
           },
-          "422": {
-            "$ref": "#/components/responses/ValidationFailed"
-          },
           "500": {
             "$ref": "#/components/responses/InternalError"
           },
