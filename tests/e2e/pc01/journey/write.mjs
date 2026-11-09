@@ -193,15 +193,22 @@ function decodeJson(text) {
   }
 }
 
+/** The stages PC-01 schedules, in order (`web/src/entities/audit-run`, `PC01_STAGE_IDS`); «Запустить с этапа» starts from any but the first. */
+const PC01_CHAIN = ['source_preparation', 'page_geometry_extraction', 'document_context_build', 'text_analysis'];
+
 const COST_SCOPES = {
   run: { root: '[data-start-run-control]', label: 'Оценить стоимость', estimatePath: '/runs/cost-estimate', startPath: '/runs' },
   ar_v3_group: { root: '[data-ar-v3-group-start]', label: 'Оценить стоимость шести проверок', estimatePath: '/ar-v3-beta/groups/cost-estimate', startPath: '/ar-v3-beta/groups' },
+  // `UI-A-60` / `R-151i`, «Запустить с этапа» on an ended run's page. The dialog has no estimate button: it reads the source run
+  // and asks the price of the chosen stage as soon as the stage is chosen (`estimate.scope` is `run`), and it starts through the
+  // source run's own door (`POST /runs/{source}/start-from-stage`), so the start path is built from the source, as a re-audit's is.
+  run_from_stage: { root: '[data-run-start-from-stage="dialog"]', label: null, estimateScope: 'run', estimatePath: '/runs/cost-estimate', startPath: null },
 };
 
 /** Pure exchange checks, also exercised by source conformance without a browser. */
 export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingText) {
   assert.ok(Object.hasOwn(COST_SCOPES, scope), `unknown cost scope ${scope}`);
-  assert.equal(estimate?.scope, scope);
+  assert.equal(estimate?.scope, COST_SCOPES[scope].estimateScope ?? scope);
   assert.equal(estimate.version_uid, requestBody?.version_uid);
   assert.equal(estimate.relaxed_limits, requestBody.relaxed_limits === true);
   assert.equal(estimate.currency, 'USD');
@@ -216,6 +223,23 @@ export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingTe
     assert.equal(scope, 'run');
     assert.deepEqual(Object.keys(requestBody).sort(), ['reaudit_of_run_id', 'version_uid'], 're-audit preflight must derive routing on the server');
   }
+  if (scope === 'run_from_stage') {
+    // The price is for the stages the new run computes and its digest names the source run and the stage: the request
+    // carries those two and the version, and nothing that would choose a route.
+    assert.deepEqual(Object.keys(requestBody).sort(), ['start_from_run_id', 'start_stage_id', 'version_uid'], 'a start from a stage must derive routing on the server');
+    assert.equal(estimate.start_from_run_id, requestBody.start_from_run_id, 'the estimate names another source Run');
+    assert.equal(estimate.start_stage_id, requestBody.start_stage_id, 'the estimate names another stage');
+    // PC-01 schedules a chain, so a start from stage N takes exactly the stages before N and computes N and the rest
+    // (`runs.stage_reuse.plan_stage_reuse`): the lists the server answers are held to that, not only to being non-empty.
+    const { reused_stage_ids: reused, computed_stage_ids: computed } = estimate;
+    const position = PC01_CHAIN.indexOf(requestBody.start_stage_id);
+    assert.ok(position > 0, `${requestBody.start_stage_id} is not a stage a run can be started from`);
+    assert.ok(Array.isArray(reused) && Array.isArray(computed), 'the estimate does not say which stages are reused and which are computed');
+    assert.deepEqual(reused, PC01_CHAIN.slice(0, position), 'the estimate does not take exactly the stages before the chosen one');
+    assert.deepEqual(computed, PC01_CHAIN.slice(position), 'the estimate does not compute exactly the chosen stage and the later ones');
+  } else {
+    assert.equal(requestBody.start_from_run_id, undefined, 'only the start from a stage names a source Run to continue');
+  }
   const decimal = /^(\d+)(?:[.,](\d{1,6}))?$/.exec(ceilingText.trim());
   assert.ok(decimal, 'prefilled cost ceiling is not exact decimal USD');
   const ceiling = BigInt(decimal[1]) * 1_000_000n + BigInt((decimal[2] ?? '').padEnd(6, '0'));
@@ -223,14 +247,19 @@ export function costApprovalFromEstimate(estimate, requestBody, scope, ceilingTe
   return { scope, estimate_digest: estimate.estimate_digest, ceiling_micros: Number(ceiling),
     estimated_cost_micros: estimate.estimated_cost_micros, provider_mode: estimate.provider_mode,
     estimate_request: requestBody,
-    ...(requestBody.reaudit_of_run_id === undefined ? {} : { source_run_id: requestBody.reaudit_of_run_id }) };
+    ...(requestBody.reaudit_of_run_id === undefined ? {} : { source_run_id: requestBody.reaudit_of_run_id }),
+    ...(scope !== 'run_from_stage' ? {} : { source_run_id: requestBody.start_from_run_id, start_stage_id: requestBody.start_stage_id,
+      reused_stage_ids: estimate.reused_stage_ids, computed_stage_ids: estimate.computed_stage_ids }) };
 }
 
 export function assertCostApprovedStart(approval, exchange) {
   const body = decodeJson(exchange.requestBody);
   assert.ok(body !== undefined, 'cost-approved start has no recorded JSON body');
   const { cost_consent: consent, ...options } = body;
-  if (approval.source_run_id !== undefined) {
+  if (approval.start_stage_id !== undefined) {
+    assert.deepEqual(options, { stage_id: approval.start_stage_id }, 'a start from a stage must carry the chosen stage and consent only');
+    assert.ok(new URL(exchange.url).pathname.endsWith(`/runs/${approval.source_run_id}/start-from-stage`), 'the start from a stage addresses a different source Run');
+  } else if (approval.source_run_id !== undefined) {
     assert.deepEqual(options, {}, 're-audit start must carry consent only');
     assert.ok(new URL(exchange.url).pathname.endsWith(`/runs/${approval.source_run_id}/reaudit`), 're-audit start addresses a different source Run');
   } else {
@@ -245,7 +274,11 @@ export function assertCostApprovedStart(approval, exchange) {
 async function approveRunCost(page, action, expectedVersion, allowSpend, sourceRunId = null) {
   const standard = COST_SCOPES[action.scope];
   assert.ok(standard, `unknown cost approval scope ${action.scope}`);
-  const contract = sourceRunId === null ? standard : { ...standard, root: '[data-execution-intent="reaudit"]' };
+  // A re-audit is asked on the queue's own row; a start from a stage in its dialog on the run page. Neither has an estimate button
+  // to press: the estimate is read when the source is chosen, so the journey observes it instead of asking for it.
+  const fromStage = action.scope === 'run_from_stage';
+  assert.ok(!fromStage || (sourceRunId !== null && typeof action.stage_id === 'string'), 'a start from a stage names its source Run and its stage');
+  const contract = sourceRunId === null || fromStage ? standard : { ...standard, root: '[data-execution-intent="reaudit"]' };
   let after = 0;
   if (sourceRunId === null) {
     const enabled = `Array.from(document.querySelectorAll(${JSON.stringify(contract.root + ' button')})).some(e=>e.textContent.trim()===${JSON.stringify(contract.label)}&&!e.disabled)`;
@@ -260,7 +293,9 @@ async function approveRunCost(page, action, expectedVersion, allowSpend, sourceR
     await page.settle({ settleMs: 100, timeoutMs: 700 });
     observed = page.exchanges().slice(after).find((e) => e.method === 'POST'
       && new URL(e.url).pathname.endsWith(contract.estimatePath) && e.status !== null && e.responseBody !== null
-      && (sourceRunId === null || decodeJson(e.requestBody)?.reaudit_of_run_id === sourceRunId));
+      && (sourceRunId === null || (fromStage
+        ? decodeJson(e.requestBody)?.start_from_run_id === sourceRunId && decodeJson(e.requestBody)?.start_stage_id === action.stage_id
+        : decodeJson(e.requestBody)?.reaudit_of_run_id === sourceRunId)));
     source = sourceRunId === null ? null : page.exchanges().find((e) => e.method === 'GET'
       && new URL(e.url).pathname.endsWith(`/runs/${sourceRunId}`) && e.status !== null && e.responseBody !== null);
     if (observed !== undefined && (sourceRunId === null || source !== undefined)) break;
@@ -278,7 +313,7 @@ async function approveRunCost(page, action, expectedVersion, allowSpend, sourceR
     assert.equal(run?.run_id, sourceRunId);
     assert.equal(run.version_uid, expectedVersion, 'source Run belongs to another version');
     assert.ok(['published', 'partial', 'failed', 'cancelled'].includes(run.state), 'source Run is not terminal');
-    assert.equal(request.reaudit_of_run_id, sourceRunId);
+    assert.equal(fromStage ? request.start_from_run_id : request.reaudit_of_run_id, sourceRunId);
   }
   const input = contract.root + ' [data-cost-approval] input[type="text"]';
   const read = await page.waitFor(`(() => { const e=document.querySelector(${JSON.stringify(input)}); return e && !e.disabled && !e.closest('fieldset')?.disabled && e.getClientRects().length ? {value:e.value} : null; })()`,
@@ -1057,7 +1092,8 @@ export async function runWritePhase({
     for (const action of record.actions.filter((item) => item.do === 'approve_run_cost')) {
       if (action.result === null) continue;
       const starts = findAll('POST', action.result.source_run_id === undefined
-        ? COST_SCOPES[action.scope].startPath : `/runs/${action.result.source_run_id}/reaudit`);
+        ? COST_SCOPES[action.scope].startPath
+        : `/runs/${action.result.source_run_id}/${action.result.start_stage_id === undefined ? 'reaudit' : 'start-from-stage'}`);
       try {
         assert.ok(starts.length > 0, 'cost agreement was not followed by the declared start');
         for (const start of starts) assertCostApprovedStart(action.result, start);

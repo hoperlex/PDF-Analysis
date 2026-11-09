@@ -401,9 +401,10 @@ pair was confirmed, which the ordinary `--phase all` never does. Lane V3 found a
 | `--paused` | pauses dispatch through the API as the administrator (`PUT /execution/dispatch`, `{"paused": true}`, an idempotency key, from a cold browser of the stand's origin), reads the state back, walks, and puts dispatch back **in a `finally`** (a stand found paused is left paused; a resume the API does not confirm is a finding) | a pause the API does not confirm blocks the walk; a route that asked `getExecutionDispatch` and whose strip (`[data-pause-status]`) does not say `paused` is a finding. `read.paused` in the envelope keeps the three answers of the pause and of the resume |
 | `--state <name>` | waits (under the state's `bound_ms`) until each route that declares `read_state.<name>` shows it, before the width is read. `confirmed_pair` is the stage catalog with a confirmed pair and its table (`[data-pair-counters]` counting a pair, the pair table drawn) | a route not in the state is a finding with the last reading and the words the screen showed; a name no route declares stops the run (exit 2) |
 
-A route's `query` (`stage-compare`: `{"project": "{project_uid}"}`) writes the journey's own project into the address, so
-`/stage-comparison` reads the same workspace whether the stand holds one project or several (`useAddressProject` reads `?project=`);
-before it, a stand with two projects drew only the chooser and the walk measured a screen nobody had meant to measure.
+A route's `query` (`stage-compare` and, since `D-421`, `version-comparison`: `{"project": "{project_uid}"}`) writes the journey's own project into
+the address, so `/stage-comparison` and `/version-comparison` read the same workspace whether the stand holds one project or several
+(`useAddressProject` reads `?project=`); before it, a stand with two projects drew only the chooser and the walk measured a screen nobody had meant
+to measure. `--state project_chosen` holds `version-comparison` to the chosen-project screen (its tabs are drawn).
 
 ```
 # 1280 and 390 px, and the paused state, on a stand that already holds a project, a document and a run
@@ -672,8 +673,24 @@ night screen has both, or says why it has no refusal (`no_negative_case`).
 | «Нормы» | designate a snapshot, search, catalogue + filter | an unqualified snapshot has no button; an expert has no designation; an empty query |
 | exports | a run's CSV and Excel (the saved file is read) | admin-only is refused `permission_denied` |
 | «Очередь», «Исполнители» | pause, a waiting run, priority, cancel, re-audit, resume; worker intake off and on | an expert has no priority or pause; 500 is out of range |
+| the run page, «Запустить с этапа» | the first run is continued from «Анализ текста»: the estimate names the reused and the computed stages, the consent is given, the new run is started through the source run's door and ends `published` with the source's findings | a run that was cancelled while it waited has nothing to take: the price is refused `422 analysis_input_invalid` and nothing is started; the first run is read again and carries no mark of a start from a stage |
 | account | profile, password change, sign-out, version history | a surname is required; mismatch and wrong current password; the old pass is refused after a change |
 | «Пользователи» | archive, restore, reset password | a repeat that differs |
+
+### «Запустить с этапа» (`UI-A-60`, lane J4, `D-412`)
+
+Three steps after `worker-takes-new-work-again` (the worker takes work, dispatch is open) walk `docs/program/RUN-FROM-STAGE-01.md` on the
+recorded provider: `run-from-stage-refused-for-a-run-that-never-ran`, `run-from-stage-takes-the-earlier-stages-of-the-first-run` and
+`run-from-stage-leaves-the-first-run-as-it-was` (`FROM_STAGE_STEPS` in `test_pc01_journey_conformance.py` pins their names, cases and what each
+asserts). The action step reads the source's published finding count off its own page, chooses the stage in the dialog, waits for the plan the
+server answers (the three stages taken, «Анализ текста» computed), gives the cost consent through the new `approve_run_cost` scope
+`run_from_stage` (the dialog has no estimate button: the estimate is read when the stage is chosen, so the driver observes it and holds the
+request to `{version_uid, start_from_run_id, start_stage_id}` and the start to `{stage_id, cost_consent}` on `POST /runs/{source}/start-from-stage`),
+waits for the NEW run's page, and holds it to: the line «Запущен с этапа 4 … из прогона <source>» with its link, `data-pipeline-reused` on exactly
+the three stages in the rail, «из прогона» in the details table's duration cell of those three (not «0 ms»), `published` within the bound and the
+same number of findings as the source. The refusal drives the dialog on the run the queue steps cancelled: it ended, so the page offers the start,
+but it never began a stage, so the server refuses the price (`source_stage_not_completed` on `source_preparation`); the first stage cannot be
+tried because the dialog does not offer it.
 
 ### The journey's section, and the steps that stay on АР (`PROD-10B-JOURNEY-REBASE-01`)
 

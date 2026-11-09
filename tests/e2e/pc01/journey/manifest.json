@@ -1288,8 +1288,23 @@
         "the screen can make without asserting a tab the walk never opens. The commands (the preparation, the series, the edit",
         "batch, the order, the uploads and their parts) require explicit expert intent and are not emitted by this read journey.",
         "A comparison operation that answers 503 dependency_unavailable (a module that is off or not wired) is a state the screen",
-        "shows as «Модуль ещё недоступен», not a failure of the walk."
+        "shows as «Модуль ещё недоступен», not a failure of the walk.",
+        "`query` (D-421, lane J4; as `stage-compare` since D-380): the screen takes the header's project from `?project=` (`useAddressProject`),",
+        "so the walk names the journey's own project there. Without it a stand with two or more projects drew only the chooser, and this route",
+        "read a different screen than a stand with one (the old comment of `getComparisonOverview` said so: 'with several projects the walk chooses none').",
+        "`read_state` (D-421): `--state project_chosen` makes the walk wait until the project is chosen, i.e. the tabs are drawn, so a read of the",
+        "chosen-project screen cannot pass on the chooser."
       ],
+      "query": {"project": "{project_uid}"},
+      "read_state": {
+        "project_chosen": {
+          "bound_ms": 20000,
+          "present": [
+            {"selector": "[data-compare-tab=\"projects\"]"},
+            {"selector": "[data-compare-panel=\"projects\"]"}
+          ]
+        }
+      },
       "expects_api": [
         {"method": "GET", "path": "/projects", "operationId": "listProjects"},
         {"method": "GET", "path": "/me", "operationId": "getMe"}
@@ -1297,7 +1312,7 @@
       "optional_api": [
         {"method": "GET", "path": "/releases", "operationId": "listReleases", "$why_optional": "only an active complete session reads release notes"},
         {"method": "GET", "path": "/system/version", "operationId": "getProductVersion", "$why_optional": "the module set rides the product version; an old server omits the field and the screen then asks the operations themselves"},
-        {"method": "GET", "path": "/projects/{project_uid}/comparison-overview", "operationId": "getComparisonOverview", "$why_optional": "read once a project is chosen; with several projects the walk chooses none"},
+        {"method": "GET", "path": "/projects/{project_uid}/comparison-overview", "operationId": "getComparisonOverview", "$why_optional": "read once a project is chosen: the route's `query` names the journey's own project (D-421)"},
         {"method": "GET", "path": "/projects/{project_uid}/comparison-uploads", "operationId": "listComparisonUploads", "$why_optional": "read only while the upload dialog is open"},
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix", "operationId": "getComparisonMatrix", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
         {"method": "GET", "path": "/projects/{project_uid}/documents/{document_uid}/comparison-matrix/edits", "operationId": "listComparisonMatrixEdits", "$why_optional": "the tab «Сравнение листов» is opened by a click"},
@@ -8955,6 +8970,372 @@
         ],
         "screen": "workers",
         "case": "action"
+      },
+      {
+        "name": "run-from-stage-refused-for-a-run-that-never-ran",
+        "at": "/projects/{project_uid}/runs/{run_id}",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
+        "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
+        "bind": {
+          "run_id": "queued_run_id"
+        },
+        "$comment": [
+          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4). The run the queue steps cancelled while it waited never began a",
+          "stage, but it has ENDED, so its page offers «Запустить с этапа». Choosing «Анализ текста» asks the price of a run that would take",
+          "the three stages before it from this one, and the server answers the typed refusal `analysis_input_invalid` with the first stage it",
+          "cannot take (`source_preparation`) and the reason (`source_stage_not_completed`) instead of a figure. The dialog says so in words,",
+          "draws no plan and no consent, and sends nothing: no `POST /runs/{run_id}/start-from-stage`, and no run is created in its place.",
+          "The first stage cannot be tried, because the dialog does not offer it (a start from it reuses nothing: that is a re-audit)."
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-run-start-from-stage=\"offer\"]",
+            "text": "Запустить с этапа",
+            "settle": true
+          },
+          {
+            "do": "select",
+            "selector": "[data-run-start-from-stage=\"dialog\"] select",
+            "option_value": "text_analysis"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-start-from-stage-refusal]",
+            "text_contains": "не завершён успешно",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "expect_status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 422,
+            "expect_error_code": "analysis_input_invalid",
+            "refusal": true,
+            "count": 1
+          }
+        ],
+        "expects_not_called": [
+          {
+            "method": "POST",
+            "path": "/runs/{run_id}/start-from-stage",
+            "why": "a refused reuse writes nothing: no run is created in the place of the stage that cannot be taken"
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "estimateRunCost",
+            "json_path": "details.reason",
+            "equals": "source_stage_not_completed"
+          },
+          {
+            "of": "estimateRunCost",
+            "json_path": "details.stage_id",
+            "equals": "source_preparation"
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-start-from-stage-refusal]",
+            "text_contains": "Подготовка источника"
+          },
+          {
+            "selector": "[data-start-from-stage-refusal]",
+            "text_contains": "Новый прогон не создан"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-start-from-stage-plan]"
+          },
+          {
+            "selector": "[data-run-start-from-stage=\"dialog\"] [data-cost-approval]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-start-from-stage-failure]",
+          "[data-run-failure]"
+        ],
+        "screen": "run-from-stage",
+        "case": "refused"
+      },
+      {
+        "name": "run-from-stage-takes-the-earlier-stages-of-the-first-run",
+        "at": "/projects/{project_uid}/runs/{run_id}",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
+        "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
+        "$comment": [
+          "UI-A-60 / R-151i, `docs/program/RUN-FROM-STAGE-01.md`, D-412 (lane J4). The first run of the journey ended `published` on the recorded",
+          "provider. On its page the expert presses «Запустить с этапа», chooses «Анализ текста» and reads what the server answers for the",
+          "remaining stages: the three before it are taken from this run, only «Анализ текста» is computed, and the figure and the consent are",
+          "for that stage. After the consent the start goes through the SOURCE run's own door (`POST /runs/{run_id}/start-from-stage`, 202,",
+          "queued), the screen moves to the new run, and that run says «Запущен с этапа 4 … из прогона <source>» with a link to the source, marks",
+          "the three reused stages in the rail (`data-pipeline-reused`) and in the details table (their duration is «из прогона», not 0 с, D-412),",
+          "and finishes `published` with exactly as many findings as the source: the recorded provider answers the same request."
+        ],
+        "captures": [
+          {
+            "kind": "text",
+            "selector": "[data-run-outcome=\"published\"]",
+            "as": [
+              "source_finding_count"
+            ],
+            "matches": "Опубликованных находок:\\s*([1-9][0-9]*)",
+            "bound_ms": 30000,
+            "when": "before_actions",
+            "$why": "the finding count the source run published, read off its own page; a count of zero or one the screen does not report cannot stand for 'the same'"
+          },
+          {
+            "kind": "response",
+            "of": "startRunFromStage",
+            "json_path": "run_id",
+            "as": [
+              "from_stage_run_id"
+            ],
+            "matches": "^(run_%ID%)$",
+            "bound_ms": 30000
+          }
+        ],
+        "actions": [
+          {
+            "do": "click",
+            "selector": "[data-run-start-from-stage=\"offer\"]",
+            "text": "Запустить с этапа",
+            "settle": true
+          },
+          {
+            "do": "select",
+            "selector": "[data-run-start-from-stage=\"dialog\"] select",
+            "option_value": "text_analysis"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-start-from-stage-plan]",
+            "text_contains": "Берутся из этого прогона:",
+            "bound_ms": 30000
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-start-from-stage-plan]",
+            "text_contains": "Будут выполнены:",
+            "bound_ms": 30000
+          },
+          {
+            "do": "approve_run_cost",
+            "scope": "run_from_stage",
+            "value": "{version_uid}",
+            "source_run_id": "{run_id}",
+            "stage_id": "text_analysis",
+            "bound_ms": 30000
+          },
+          {
+            "do": "click",
+            "selector": "[data-run-start-from-stage=\"dialog\"] button",
+            "text": "Запустить"
+          },
+          {
+            "do": "wait_for",
+            "selector": "[data-run-started-from=\"{run_id}\"]",
+            "bound_ms": 30000
+          }
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "expect_status": 200
+          },
+          {
+            "method": "POST",
+            "path": "/runs/cost-estimate",
+            "operationId": "estimateRunCost",
+            "expect_status": 200,
+            "count": 1
+          },
+          {
+            "method": "POST",
+            "path": "/runs/{run_id}/start-from-stage",
+            "operationId": "startRunFromStage",
+            "expect_status": 202,
+            "count": 1
+          }
+        ],
+        "expects_response": [
+          {
+            "of": "startRunFromStage",
+            "json_path": "run_id",
+            "matches": "^run_%ID%$"
+          },
+          {
+            "of": "startRunFromStage",
+            "json_path": "state",
+            "equals": "queued",
+            "$why": "202 alone would not say the run was only accepted, not done"
+          },
+          {
+            "of": "startRunFromStage",
+            "json_path": "start_stage_id",
+            "equals": "text_analysis"
+          },
+          {
+            "of": "startRunFromStage",
+            "json_path": "started_from_run_id",
+            "matches": "^run_%ID%$"
+          }
+        ],
+        "expects_request": [
+          {
+            "of": "estimateRunCost",
+            "content_type_starts_with": "application/json",
+            "body_contains": [
+              "\"version_uid\"",
+              "\"start_from_run_id\"",
+              "\"start_stage_id\""
+            ]
+          },
+          {
+            "of": "startRunFromStage",
+            "requires_idempotency_key": true,
+            "body_contains": [
+              "\"stage_id\":\"text_analysis\"",
+              "\"cost_consent\"",
+              "\"confirmed\":true"
+            ]
+          }
+        ],
+        "await_terminal": {
+          "$comment": [
+            "The same wait as `start-run`, on the NEW run's page: the first `wait_for` of the actions held the journey there."
+          ],
+          "outcome_selector": "[data-run-outcome]",
+          "outcome_attribute": "data-run-outcome",
+          "non_terminal_value": "in_flight",
+          "accept": [
+            "published"
+          ],
+          "activity_selector": "[data-run-activity]",
+          "activity_attribute": "data-run-activity",
+          "activity_when_final": "stopped",
+          "bound_ms": 150000,
+          "poll_ms": 500
+        },
+        "expects_api_after_terminal": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "bind": {
+              "run_id": "from_stage_run_id"
+            }
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-run-started-from-note=\"text_analysis\"]",
+            "text_matches": "^Запущен с этапа 4 «Анализ текста» из прогона\\s+{run_id}:"
+          },
+          {
+            "selector": "[data-run-started-from-note=\"text_analysis\"] a[href$=\"/runs/{run_id}\"]",
+            "text_matches": "^{run_id}$"
+          },
+          {
+            "selector": "[data-run-started-from=\"{run_id}\"][data-run-start-stage=\"text_analysis\"]"
+          },
+          {
+            "selector": "[data-run-pipeline] [data-pipeline-reused]",
+            "min_count": 3
+          },
+          {
+            "selector": "[data-run-pipeline] [data-pipeline-stage=\"text_analysis\"]",
+            "text_contains": "Анализ текста"
+          },
+          {
+            "selector": "tr[data-stage-id] [data-stage-elapsed=\"reused\"]",
+            "text_contains": "из прогона",
+            "min_count": 3,
+            "$why": "D-412: the details table said «0 с» for a stage taken by reference"
+          },
+          {
+            "selector": "[data-run-outcome=\"published\"] > p:nth-of-type(2)",
+            "text_matches": "^Опубликованных находок: {source_finding_count}$",
+            "$why": "as many findings as the source run published"
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-pipeline-stage=\"text_analysis\"][data-pipeline-reused]"
+          },
+          {
+            "selector": "tr[data-stage-id=\"text_analysis\"] [data-stage-elapsed=\"reused\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-run-failure]",
+          "[data-start-from-stage-failure]",
+          "[data-start-from-stage-refusal]"
+        ],
+        "screen": "run-from-stage",
+        "case": "action"
+      },
+      {
+        "name": "run-from-stage-leaves-the-first-run-as-it-was",
+        "at": "/projects/{project_uid}/runs/{run_id}",
+        "page_module": "web/src/app/projects/[project_uid]/runs/[run_id]/page.tsx",
+        "control_module": "web/src/features/start-run-from-stage/ui/start-run-from-stage-control.tsx",
+        "$comment": [
+          "R-151i: the earlier run is unchanged (runs are immutable history). Its page, read cold after the new run ended, still says it was",
+          "started from nothing, marks no stage as taken, shows its own four measured durations and the finding count the new run matched."
+        ],
+        "expects_api": [
+          {
+            "method": "GET",
+            "path": "/runs/{run_id}",
+            "operationId": "getRunStatus",
+            "expect_status": 200
+          }
+        ],
+        "expects_present": [
+          {
+            "selector": "[data-run-outcome=\"published\"] > p:nth-of-type(2)",
+            "text_matches": "^Опубликованных находок: {source_finding_count}$"
+          },
+          {
+            "selector": "[data-run-pipeline] [data-pipeline-status=\"succeeded\"]",
+            "min_count": 4
+          },
+          {
+            "selector": "tr[data-stage-id] [data-stage-elapsed]",
+            "min_count": 4
+          }
+        ],
+        "expects_absent": [
+          {
+            "selector": "[data-run-started-from-note]"
+          },
+          {
+            "selector": "[data-run-started-from]"
+          },
+          {
+            "selector": "[data-pipeline-reused]"
+          },
+          {
+            "selector": "[data-stage-elapsed=\"reused\"]"
+          }
+        ],
+        "forbids_rendered": [
+          "[data-run-failure]"
+        ],
+        "screen": "run-from-stage",
+        "case": "refused"
       },
       {
         "name": "schedule-month-for-an-expert",
