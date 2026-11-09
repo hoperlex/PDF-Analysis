@@ -124,7 +124,7 @@ class World:
             monkeypatch.setenv(layout_route.PROVIDER_SOURCE_ENV, source)
 
     def read(self, kind: str = KIND) -> AiRoute:
-        return estimate_module.read_route(None, kind, "live")  # type: ignore[arg-type]
+        return estimate_module.read_route(SimpleNamespace(info={}), kind, "live")  # type: ignore[arg-type]
 
 
 def refused(world: World, kind: str = KIND) -> DomainError:

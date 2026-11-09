@@ -26718,7 +26718,7 @@
       "ErrorEnvelope": {
         "properties": {
           "contract_version": {
-            "const": "1.46.0"
+            "const": "1.47.0"
           },
           "error_code": {
             "$ref": "#/components/schemas/ErrorCode"
