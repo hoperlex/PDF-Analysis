@@ -1,5 +1,6 @@
 /** Public API of the `optimisation-proposals` widget (`W60-OPT-PROPOSALS-01`). */
 
+export { PROPOSAL_DECISION_PARAM, readProposalDecision, writeProposalDecision } from './model/decision-filter';
 export type { ProposalLayout } from './model/layout';
 export {
   DEFAULT_PROPOSAL_LAYOUT,

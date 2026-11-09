@@ -34,7 +34,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { FindingObservationId, FindingUid, ProjectUid, RunId, VersionUid } from '@/shared/api';
 import { getFinding, listDecisionHistory, queryKeys } from '@/shared/api';
@@ -152,13 +152,6 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     [admitted.findings],
   );
 
-  // The list shows the first finding until one is chosen; the table opens a row only when it is asked to, as the
-  // original's does, so it neither draws a page under its first row nor reads a finding nobody opened.
-  const resolved = view === 'table'
-    ? (selection !== null && findingUids.includes(selection.findingUid) ? selection : null)
-    : resolveSelection(selection, findingUids);
-  const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
-
   // «Во весь экран»: ‹ › walk the findings in the order the list shows them under its filters (`UI-A-71`: pending,
   // then accepted, then rejected; by category in the list, flat in the table).
   const [expanded, setExpanded] = useState(false);
@@ -166,6 +159,21 @@ export function ReviewPage({ projectUid, runId }: ReviewPageProps) {
     () => findingsAsShown(filterBySeverity(filterGroups(groups, verdictFilter), severityFilter), view),
     [groups, verdictFilter, severityFilter, view],
   );
+
+  // The list opens, until one is chosen, the first finding it SHOWS: the first still waiting for a decision (`D-401`).
+  // The table opens a row only when it is asked to, as the original's does, so it neither draws a page under its first
+  // row nor reads a finding nobody opened.
+  const resolved = view === 'table'
+    ? (selection !== null && findingUids.includes(selection.findingUid) ? selection : null)
+    : resolveSelection(selection, findingUids, shownFindings[0]?.finding_uid ?? null);
+  const selectedUid = resolved === null ? null : (resolved.findingUid as FindingUid);
+  // ...and keeps it open. A decision re-sorts the list, so a default that went on following the order would move to the
+  // next finding the moment the reader decided the one it opened. The default is therefore made the selection as soon as
+  // it is resolved, and written to the address as a chosen finding is, so a reload and a saved link keep it too.
+  const defaultedUid = resolved !== null && resolved.findingUid !== selection?.findingUid ? resolved.findingUid : null;
+  useEffect(() => {
+    if (defaultedUid !== null) setSelection(selectFinding(defaultedUid));
+  }, [defaultedUid]);
   const shownAt = selectedUid === null ? -1 : shownFindings.findIndex((finding) => finding.finding_uid === selectedUid);
   const stepTo = (at: number) => {
     const target = shownFindings[at];
