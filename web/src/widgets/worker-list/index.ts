@@ -1,10 +1,4 @@
 export { WorkerList } from './ui/worker-list';
-export { WorkersOverviewView } from './ui/workers-overview';
-export type { WorkersOverviewViewProps } from './ui/workers-overview';
-export { WorkersOverviewSections } from './ui/workers-overview-sections';
-export type { WorkersOverviewSectionsProps } from './ui/workers-overview-sections';
-export { attentionItems, nextJobs } from './model/attention';
-export type { AttentionItem } from './model/attention';
 export type { WorkerListProps } from './ui/worker-list';
 export { workerDiagnosticText } from './model/worker-diagnostics';
 export { CopyDiagnosticsView } from './ui/copy-diagnostics';
