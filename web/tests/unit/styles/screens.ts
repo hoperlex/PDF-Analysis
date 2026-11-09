@@ -1790,6 +1790,10 @@ export function screens(): Screen[] {
         ...(state === 'not_run' ? {} : { result_run_id: runId }),
         finding_count: state === 'not_run' || state === 'clean' ? 0 : 3,
         undecided_finding_count: state === 'awaiting_decision' ? 2 : 0,
+        // `D-361`: the «Оптимизация N» pill, with its marker while some proposals wait and without it once all are decided.
+        ...(state === 'checked' || state === 'awaiting_decision'
+          ? { optimisation_proposal_count: 7, optimisation_undecided_count: state === 'checked' ? 0 : 3 }
+          : {}),
       },
     });
     const cards = [
