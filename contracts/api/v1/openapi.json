@@ -100,6 +100,10 @@
     {
       "name": "comparison",
       "description": "The comparison modules «Сравнение версий» and «Сравнение стадий» (`ADR-0025`): the plain-PDF upload, the order of the versions of a document set, the page reads, the effective matrix of a document set and its manual edits, the series of adjacent transitions with their sheet pairs and pair tiles, the overview, the AI check of doubtful pairs, the AI description of changes, specifications, the launch queue and the MD summary and PDF reports. Sealed as stubs by `CMP-SEAL-C0`, `CMP-SEAL-C1` and `CMP-SEAL-C2`."
+    },
+    {
+      "name": "decision-memory",
+      "description": "The expert decision memory (`DECISION-MEMORY-01`, `ADR-0027`): the copy of what an expert saw and said when a decision was taken, kept after the project and the document are gone. Read-only history except the standing: an administrator withdraws a case from hints, prompts and exports and restores it, each an append-only status event with a closed reason. Forgetting a case's content is an operator tool, not an operation. The memory is not a decision authority: while the source finding exists the ledger decides."
     }
   ],
   "paths": {
@@ -24530,6 +24534,427 @@
           }
         }
       }
+    },
+    "/decision-memory/cases": {
+      "get": {
+        "tags": [
+          "decision-memory"
+        ],
+        "summary": "List Decision Memory Cases",
+        "description": "`DECISION-MEMORY-01` phase M2 (contract 1.44.0): the cases of the expert decision memory -- the copy of what an expert saw and said when a decision was taken, kept after the project and the document are gone. Newest capture first (`cursor`, `limit`). Filters, all optional: `section_code` (as of capture), `category`, `verdict` (the latest decision's), `status` (`active`, `withdrawn`, `forgotten`), `data_class` (`test` or `real`, fixed at capture) and `origin_project_uid` (an identity that may resolve nowhere any more). A case is **history, not a verdict in force**: while the source finding exists the ledger decides. `role:admin|expert`.",
+        "operationId": "listDecisionMemoryCases",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "section_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Section Code"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Category"
+            }
+          },
+          {
+            "name": "verdict",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "accepted",
+                "rejected"
+              ],
+              "title": "Verdict"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "withdrawn",
+                "forgotten"
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "data_class",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "test",
+                "real"
+              ],
+              "title": "Data Class"
+            }
+          },
+          {
+            "name": "origin_project_uid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectUid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of cases, newest capture first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionMemoryCasePage"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/decision-memory/cases/{case_id}": {
+      "get": {
+        "tags": [
+          "decision-memory"
+        ],
+        "summary": "Get Decision Memory Case",
+        "description": "`DECISION-MEMORY-01` phase M2: one case -- its summary, the model's finding and recommendation as they stood, the evidence quotes with their page geometry, the certified normative references, the crop images it references (a binding to an existing Blob), every captured decision with the expert's own comment, and the history of its standing. **A forgotten case answers its tombstone only**: `content` is `null`, the lists are empty and no decision carries a comment; the `forget` event carries the digest of what was forgotten. An unknown case is `404`. `role:admin|expert`.",
+        "operationId": "getDecisionMemoryCase",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DecisionMemoryCaseId"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The case with what it keeps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionMemoryCase"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/decision-memory/status": {
+      "get": {
+        "tags": [
+          "decision-memory"
+        ],
+        "summary": "Get Decision Memory Status",
+        "description": "`DECISION-MEMORY-01` phase M2: how many cases and decisions the memory holds, by standing and data class, and the installation settings in force -- `data_class`, what a case captured now is (`test` until an operator journals `real`), and `training_use`, whether the training export may run (`off` until the owner's permission is recorded). The settings are changed by an operator tool, not by this surface. `role:admin`.",
+        "operationId": "getDecisionMemoryStatus",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The counts and the settings in force.",
+            "headers": {
+              "X-Correlation-Id": {
+                "description": "The correlation id for this request, assigned when the caller supplied none.",
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionMemoryStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ]
+      }
+    },
+    "/decision-memory/cases/{case_id}/withdraw": {
+      "post": {
+        "tags": [
+          "decision-memory"
+        ],
+        "summary": "Withdraw Decision Memory Case",
+        "description": "`DECISION-MEMORY-01` phase M2: take a case out of hints, prompts and exports. Append-only: a `withdraw` status event with a closed `reason_code` (no free text) and the caller's account; the case itself is never edited. A case that is already withdrawn is `409 state_transition_not_allowed`; a forgotten case accepts no status event (`409 conflict`, `conflict_reason: memory_case_forgotten`); an unknown case is `404`. An exact repeat of the `Idempotency-Key` answers the first call's event and writes nothing. `role:admin`.",
+        "operationId": "withdrawDecisionMemoryCase",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DecisionMemoryCaseId"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionMemoryStatusChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The status event written, or the first call's for an exact repeat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionMemoryStatusChange"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
+    },
+    "/decision-memory/cases/{case_id}/restore": {
+      "post": {
+        "tags": [
+          "decision-memory"
+        ],
+        "summary": "Restore Decision Memory Case",
+        "description": "`DECISION-MEMORY-01` phase M2: undo a withdraw. Append-only: a `restore` status event with a closed `reason_code` and the caller's account. A case that is not withdrawn is `409 state_transition_not_allowed`; a forgotten case accepts no status event (`409 conflict`, `conflict_reason: memory_case_forgotten`); an unknown case is `404`. An exact repeat of the `Idempotency-Key` answers the first call's event and writes nothing. `role:admin`.",
+        "operationId": "restoreDecisionMemoryCase",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DecisionMemoryCaseId"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionMemoryStatusChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The status event written, or the first call's for an exact repeat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionMemoryStatusChange"
+                }
+              }
+            },
+            "headers": {
+              "X-Correlation-Id": {
+                "required": true,
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationId"
+                },
+                "description": "The correlation id for this request, assigned when the caller supplied none."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/PermissionDenied"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/StateConflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/DependencyUnavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -48425,6 +48850,909 @@
         ],
         "title": "StartRunFromStageRequest",
         "type": "object"
+      },
+      "DecisionMemoryCase": {
+        "properties": {
+          "summary": {
+            "$ref": "#/components/schemas/DecisionMemoryCaseSummary"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionMemoryContent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryDecision"
+            },
+            "type": "array",
+            "title": "Decisions"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryEvidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "norm_refs": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryNormRef"
+            },
+            "type": "array",
+            "title": "Norm Refs"
+          },
+          "crops": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryCrop"
+            },
+            "type": "array",
+            "title": "Crops"
+          },
+          "status_events": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryStatusEvent"
+            },
+            "type": "array",
+            "title": "Status Events"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "summary",
+          "content",
+          "decisions",
+          "evidence",
+          "norm_refs",
+          "crops",
+          "status_events"
+        ],
+        "title": "DecisionMemoryCase",
+        "description": "A case with everything it keeps. ``content`` is ``null`` and the lists are empty for a forgotten case (its tombstone only)."
+      },
+      "DecisionMemoryCaseId": {
+        "type": "string",
+        "pattern": "^dmc_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "DecisionMemoryCasePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryCaseSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page"
+        ],
+        "title": "DecisionMemoryCasePage"
+      },
+      "DecisionMemoryCaseSummary": {
+        "properties": {
+          "case_id": {
+            "$ref": "#/components/schemas/DecisionMemoryCaseId"
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Category"
+          },
+          "section_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Code"
+          },
+          "data_class": {
+            "type": "string",
+            "enum": [
+              "test",
+              "real"
+            ],
+            "title": "Data Class"
+          },
+          "crop_state": {
+            "type": "string",
+            "enum": [
+              "referenced",
+              "none_available"
+            ],
+            "title": "Crop State"
+          },
+          "origin_project_uid": {
+            "$ref": "#/components/schemas/ProjectUid"
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Captured At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "withdrawn",
+              "forgotten"
+            ],
+            "title": "Status"
+          },
+          "status_reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "capture_defect",
+                  "wrong_decision",
+                  "client_request",
+                  "test_data",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason Code"
+          },
+          "status_changed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Changed At"
+          },
+          "current_verdict": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "accepted",
+                  "rejected"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Verdict"
+          },
+          "current_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_origin_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "carried",
+                  "imported"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Origin Kind"
+          },
+          "current_decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Decided At"
+          },
+          "decision_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Decision Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "category",
+          "section_code",
+          "data_class",
+          "crop_state",
+          "origin_project_uid",
+          "captured_at",
+          "status",
+          "status_reason_code",
+          "status_changed_at",
+          "current_verdict",
+          "current_severity",
+          "current_origin_kind",
+          "current_decided_at",
+          "decision_count"
+        ],
+        "title": "DecisionMemoryCaseSummary",
+        "description": "One case as the list gives it: where it stands (``status``), the verdict of its latest decision and how many decisions it holds."
+      },
+      "DecisionMemoryContent": {
+        "properties": {
+          "finding_text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Finding Text"
+          },
+          "recommendation_text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Recommendation Text"
+          },
+          "proposed_severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "required_value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Value"
+          },
+          "stated_value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stated Value"
+          },
+          "stage_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Stage Id"
+          },
+          "analysis_profile_id": {
+            "$ref": "#/components/schemas/AnalysisProfileId"
+          },
+          "provider_mode": {
+            "type": "string",
+            "enum": [
+              "live",
+              "recorded"
+            ],
+            "title": "Provider Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "finding_text",
+          "recommendation_text",
+          "proposed_severity",
+          "required_value",
+          "stated_value",
+          "stage_id",
+          "analysis_profile_id",
+          "provider_mode"
+        ],
+        "title": "DecisionMemoryContent",
+        "description": "What the model proposed, as it stood when the decision was taken (immutable, a primary record from capture)."
+      },
+      "DecisionMemoryCountRow": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "withdrawn",
+              "forgotten"
+            ],
+            "title": "Status"
+          },
+          "data_class": {
+            "type": "string",
+            "enum": [
+              "test",
+              "real"
+            ],
+            "title": "Data Class"
+          },
+          "cases": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cases"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "data_class",
+          "cases"
+        ],
+        "title": "DecisionMemoryCountRow"
+      },
+      "DecisionMemoryCrop": {
+        "properties": {
+          "crop_id": {
+            "type": "string",
+            "pattern": "^dmx_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Crop Id"
+          },
+          "crop_ordinal": {
+            "type": "integer",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Crop Ordinal"
+          },
+          "evidence_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Ordinal"
+          },
+          "selection_rule": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Selection Rule"
+          },
+          "page_number": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Number"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Bbox"
+          },
+          "media_type": {
+            "type": "string",
+            "const": "image/png",
+            "title": "Media Type"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Size Bytes"
+          },
+          "width_px": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Width Px"
+          },
+          "height_px": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Height Px"
+          },
+          "portal_description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portal Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "crop_id",
+          "crop_ordinal",
+          "evidence_ordinal",
+          "selection_rule",
+          "page_number",
+          "bbox",
+          "media_type",
+          "sha256",
+          "size_bytes",
+          "width_px",
+          "height_px",
+          "portal_description"
+        ],
+        "title": "DecisionMemoryCrop",
+        "description": "A crop image the case references (a binding to an existing Blob, never a copy); ``bbox`` is the normalised box on the page."
+      },
+      "DecisionMemoryDecision": {
+        "properties": {
+          "memory_decision_id": {
+            "type": "string",
+            "pattern": "^dmd_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Memory Decision Id"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "reject"
+            ],
+            "title": "Event Type"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ],
+            "title": "Verdict"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Severity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_kind": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "carried",
+              "imported"
+            ],
+            "title": "Origin Kind"
+          },
+          "decided_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Decided At"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memory_decision_id",
+          "event_type",
+          "verdict",
+          "severity",
+          "origin_kind",
+          "decided_at",
+          "comment"
+        ],
+        "title": "DecisionMemoryDecision",
+        "description": "One captured decision. ``comment`` is the expert's own words, ``null`` for a carried decision and for a forgotten case."
+      },
+      "DecisionMemoryEvidence": {
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Ordinal"
+          },
+          "page_number": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Number"
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Quote"
+          },
+          "char_start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Char Start"
+          },
+          "char_end": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Char End"
+          },
+          "block_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^b_[0-9]{6}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Ref"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "bbox_unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Unit"
+          },
+          "bbox_origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Origin"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ordinal",
+          "page_number",
+          "quote",
+          "char_start",
+          "char_end",
+          "block_ref",
+          "bbox",
+          "bbox_unit",
+          "bbox_origin"
+        ],
+        "title": "DecisionMemoryEvidence",
+        "description": "A quoted span the expert looked at. ``bbox`` is ``[x0, y0, x1, y1]`` in ``bbox_unit`` from ``bbox_origin`` when the block was known."
+      },
+      "DecisionMemoryNormRef": {
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Ordinal"
+          },
+          "norm_document_id": {
+            "$ref": "#/components/schemas/NormDocumentId"
+          },
+          "norm_paragraph_id": {
+            "$ref": "#/components/schemas/NormParagraphId"
+          },
+          "designation": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Designation"
+          },
+          "clause_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clause Number"
+          },
+          "page_label": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Label"
+          },
+          "quote": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 20,
+            "title": "Quote"
+          },
+          "citation_state": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "rebound"
+            ],
+            "title": "Citation State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ordinal",
+          "norm_document_id",
+          "norm_paragraph_id",
+          "designation",
+          "clause_number",
+          "page_label",
+          "quote",
+          "citation_state"
+        ],
+        "title": "DecisionMemoryNormRef",
+        "description": "A certified normative reference the finding rested on (ids that stay resolvable, and the quoted norm text)."
+      },
+      "DecisionMemoryStatus": {
+        "properties": {
+          "data_class": {
+            "type": "string",
+            "enum": [
+              "test",
+              "real"
+            ],
+            "title": "Data Class"
+          },
+          "training_use": {
+            "type": "string",
+            "enum": [
+              "off",
+              "on"
+            ],
+            "title": "Training Use"
+          },
+          "cases": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cases"
+          },
+          "decisions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Decisions"
+          },
+          "by_status_and_class": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionMemoryCountRow"
+            },
+            "type": "array",
+            "title": "By Status And Class"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "data_class",
+          "training_use",
+          "cases",
+          "decisions",
+          "by_status_and_class"
+        ],
+        "title": "DecisionMemoryStatus",
+        "description": "What the memory holds and the installation settings in force (nothing journalled means ``test`` and ``off``)."
+      },
+      "DecisionMemoryStatusChange": {
+        "properties": {
+          "case_id": {
+            "$ref": "#/components/schemas/DecisionMemoryCaseId"
+          },
+          "status_event_id": {
+            "type": "string",
+            "pattern": "^dmw_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Status Event Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "withdraw",
+              "restore"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "withdrawn"
+            ],
+            "title": "Status"
+          },
+          "reason_code": {
+            "type": "string",
+            "enum": [
+              "capture_defect",
+              "wrong_decision",
+              "client_request",
+              "test_data",
+              "other"
+            ],
+            "title": "Reason Code"
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Changed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id",
+          "status_event_id",
+          "kind",
+          "status",
+          "reason_code",
+          "changed_at"
+        ],
+        "title": "DecisionMemoryStatusChange",
+        "description": "What a withdraw or a restore did: the status event written (or, for a replay, the first call's) and the standing after it."
+      },
+      "DecisionMemoryStatusChangeRequest": {
+        "properties": {
+          "reason_code": {
+            "type": "string",
+            "enum": [
+              "capture_defect",
+              "wrong_decision",
+              "client_request",
+              "test_data",
+              "other"
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason_code"
+        ],
+        "title": "DecisionMemoryStatusChangeRequest",
+        "description": "Why a case is withdrawn or restored: a closed reason (free text would put personal data into an append-only record)."
+      },
+      "DecisionMemoryStatusEvent": {
+        "properties": {
+          "status_event_id": {
+            "type": "string",
+            "pattern": "^dmw_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Status Event Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "withdraw",
+              "restore",
+              "forget"
+            ],
+            "title": "Kind"
+          },
+          "reason_code": {
+            "type": "string",
+            "enum": [
+              "capture_defect",
+              "wrong_decision",
+              "client_request",
+              "test_data",
+              "other"
+            ],
+            "title": "Reason Code"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "forgotten_content_sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forgotten Content Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status_event_id",
+          "kind",
+          "reason_code",
+          "created_at",
+          "forgotten_content_sha256"
+        ],
+        "title": "DecisionMemoryStatusEvent",
+        "description": "One change of standing, newest last. A ``forget`` carries the digest of the content that was forgotten, never the content."
       }
     }
   }

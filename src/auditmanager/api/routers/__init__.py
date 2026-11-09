@@ -68,6 +68,7 @@ from auditmanager.api.routers.section_specification import build_section_specifi
 from auditmanager.api.routers.specification_prices import build_specification_price_routes
 from auditmanager.api.routers.comparison import build_comparison_routes
 from auditmanager.api.routers.dispatch import build_dispatch_routes
+from auditmanager.api.routers.decision_memory import build_decision_memory_routes
 from auditmanager.api.routers.schedule import build_schedule_routes
 from auditmanager.api.routers.me import build_me_routes
 from auditmanager.api.routers.norms import build_norm_routes
@@ -122,6 +123,7 @@ from auditmanager.api.routers.ports import (
     ComparisonStageRunPort,
     ComparisonStageC4Port,
     DispatchPort,
+    DecisionMemoryPort,
     SchedulePort,
     CredentialPort,
     CsvExportPort,
@@ -237,6 +239,7 @@ __all__ = [
     "ComparisonSpecificationPort",
     "AnalysisProfilePort",
     "DispatchPort",
+    "DecisionMemoryPort",
     "SchedulePort",
     "OptimisationPort",
     "SectionSpecificationPort",
@@ -294,6 +297,7 @@ def build_router(
     xlsx_exports: XlsxExportPort | None = None,
     dispatch: DispatchPort | None = None,
     schedule: SchedulePort | None = None,
+    decision_memory: DecisionMemoryPort | None = None,
     optimisation: OptimisationPort | None = None,
     specification_prices: SpecificationPricesPort | None = None,
     optimisation_proposals: OptimisationProposalPort | None = None,
@@ -406,6 +410,8 @@ def build_router(
     build_dispatch_routes(router, dispatch)  # type: ignore[arg-type]
     # `UI-PARITY-P0P`. «График работ»: done work against plans, the calendar and the reserve.
     build_schedule_routes(router, schedule)  # type: ignore[arg-type]
+    # `DECISION-MEMORY-01` phase M2 (contract 1.44.0). The expert decision memory: cases, standing, status.
+    build_decision_memory_routes(router, decision_memory)  # type: ignore[arg-type]
     # `W60-PRICE-LIST-01`. Project price lists and vendor lists. Optional with a default, for
     # the reason `blocks` gives above.
     build_optimisation_routes(router, optimisation)  # type: ignore[arg-type]

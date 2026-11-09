@@ -43,6 +43,20 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchem
 from typing_extensions import TypeAliasType
 
 __all__ = [
+    "DecisionMemoryCase",
+    "DecisionMemoryCaseId",
+    "DecisionMemoryCasePage",
+    "DecisionMemoryCaseSummary",
+    "DecisionMemoryContent",
+    "DecisionMemoryCountRow",
+    "DecisionMemoryCrop",
+    "DecisionMemoryDecision",
+    "DecisionMemoryEvidence",
+    "DecisionMemoryNormRef",
+    "DecisionMemoryStatus",
+    "DecisionMemoryStatusChange",
+    "DecisionMemoryStatusChangeRequest",
+    "DecisionMemoryStatusEvent",
     "Account",
     "AccountPage",
     "AuthEvent",
@@ -8850,3 +8864,168 @@ class ExtendedRunReview(_Object):
     run_id: RunId
     status: Literal["not_started", "running", "completed", "partial", "failed", "unavailable"]
     result: dict[str, Any] | None = None
+
+
+# --- the decision memory (`DECISION-MEMORY-01` phase M2, contract 1.44.0) ----------------------------
+#
+# A case is the copy of what an expert saw and said when a decision was taken (`ADR-0027`); it outlives the project and the document it came
+# from. These schemas are read-only history except the two standing changes (withdraw, restore). **A forgotten case answers its tombstone
+# only**: ``content`` is ``null`` and the lists are empty. The memory is not a decision authority; nothing here is a verdict in force.
+
+DecisionMemoryCaseId = TypeAliasType(
+    "DecisionMemoryCaseId", Annotated[str, Field(pattern=rf"^dmc_{_ULID}$")]
+)
+_MemoryCaseStatus = Literal["active", "withdrawn", "forgotten"]
+_MemoryStatusReason = Literal["capture_defect", "wrong_decision", "client_request", "test_data", "other"]
+_MemoryDataClass = Literal["test", "real"]
+_MemoryVerdict = Literal["accepted", "rejected"]
+_MemoryOrigin = Literal["direct", "carried", "imported"]
+
+
+class DecisionMemoryCaseSummary(_Object):
+    """One case as the list gives it: where it stands (``status``), the verdict of its latest decision and how many decisions it holds."""
+
+    case_id: DecisionMemoryCaseId
+    category: Annotated[str, Field(min_length=1, max_length=64)]
+    section_code: Annotated[str, Field(min_length=1, max_length=64)] | None
+    data_class: _MemoryDataClass
+    crop_state: Literal["referenced", "none_available"]
+    origin_project_uid: ProjectUid
+    captured_at: datetime
+    status: _MemoryCaseStatus
+    status_reason_code: _MemoryStatusReason | None
+    status_changed_at: datetime | None
+    current_verdict: _MemoryVerdict | None
+    current_severity: Severity | None
+    current_origin_kind: _MemoryOrigin | None
+    current_decided_at: datetime | None
+    decision_count: Annotated[int, Field(ge=0)]
+
+
+class DecisionMemoryCasePage(_Object):
+    items: list[DecisionMemoryCaseSummary]
+    page: PageInfo
+
+
+class DecisionMemoryDecision(_Object):
+    """One captured decision. ``comment`` is the expert's own words, ``null`` for a carried decision and for a forgotten case."""
+
+    memory_decision_id: Annotated[str, Field(pattern=rf"^dmd_{_ULID}$")]
+    event_type: Literal["accept", "reject"]
+    verdict: _MemoryVerdict
+    severity: Severity | None
+    origin_kind: _MemoryOrigin
+    decided_at: datetime
+    comment: Annotated[str, Field(min_length=1, max_length=4000)] | None
+
+
+class DecisionMemoryContent(_Object):
+    """What the model proposed, as it stood when the decision was taken (immutable, a primary record from capture)."""
+
+    finding_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    recommendation_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    proposed_severity: Severity | None
+    required_value: Annotated[str, Field(min_length=1, max_length=200)] | None
+    stated_value: Annotated[str, Field(min_length=1, max_length=200)] | None
+    stage_id: Annotated[str, Field(min_length=1, max_length=64)]
+    analysis_profile_id: AnalysisProfileId
+    provider_mode: Literal["live", "recorded"]
+
+
+class DecisionMemoryEvidence(_Object):
+    """A quoted span the expert looked at. ``bbox`` is ``[x0, y0, x1, y1]`` in ``bbox_unit`` from ``bbox_origin`` when the block was known."""
+
+    ordinal: Annotated[int, Field(ge=0)]
+    page_number: Annotated[int, Field(ge=1)]
+    quote: Annotated[str, Field(min_length=1, max_length=2000)]
+    char_start: Annotated[int, Field(ge=0)]
+    char_end: Annotated[int, Field(ge=1)]
+    block_ref: Annotated[str, Field(pattern=r"^b_[0-9]{6}$")] | None
+    bbox: Annotated[list[float], Field(min_length=4, max_length=4)] | None
+    bbox_unit: Annotated[str, Field(min_length=1, max_length=32)] | None
+    bbox_origin: Annotated[str, Field(min_length=1, max_length=32)] | None
+
+
+class DecisionMemoryNormRef(_Object):
+    """A certified normative reference the finding rested on (ids that stay resolvable, and the quoted norm text)."""
+
+    ordinal: Annotated[int, Field(ge=1, le=5)]
+    norm_document_id: NormDocumentId
+    norm_paragraph_id: NormParagraphId
+    designation: Annotated[str, Field(min_length=1, max_length=512)]
+    clause_number: Annotated[str, Field(min_length=1, max_length=128)] | None
+    page_label: Annotated[int, Field(ge=1)]
+    quote: Annotated[str, Field(min_length=20, max_length=4000)]
+    citation_state: Literal["verified", "rebound"]
+
+
+class DecisionMemoryCrop(_Object):
+    """A crop image the case references (a binding to an existing Blob, never a copy); ``bbox`` is the normalised box on the page."""
+
+    crop_id: Annotated[str, Field(pattern=rf"^dmx_{_ULID}$")]
+    crop_ordinal: Annotated[int, Field(ge=1, le=4)]
+    evidence_ordinal: Annotated[int, Field(ge=0)] | None
+    selection_rule: Annotated[str, Field(min_length=1, max_length=64)]
+    page_number: Annotated[int, Field(ge=1)]
+    bbox: Annotated[list[float], Field(min_length=4, max_length=4)]
+    media_type: Literal["image/png"]
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    size_bytes: Annotated[int, Field(ge=1)]
+    width_px: Annotated[int, Field(ge=1)]
+    height_px: Annotated[int, Field(ge=1)]
+    portal_description: Annotated[str, Field(min_length=1, max_length=4000)] | None
+
+
+class DecisionMemoryStatusEvent(_Object):
+    """One change of standing, newest last. A ``forget`` carries the digest of the content that was forgotten, never the content."""
+
+    status_event_id: Annotated[str, Field(pattern=rf"^dmw_{_ULID}$")]
+    kind: Literal["withdraw", "restore", "forget"]
+    reason_code: _MemoryStatusReason
+    created_at: datetime
+    forgotten_content_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
+
+
+class DecisionMemoryCase(_Object):
+    """A case with everything it keeps. ``content`` is ``null`` and the lists are empty for a forgotten case (its tombstone only)."""
+
+    summary: DecisionMemoryCaseSummary
+    content: DecisionMemoryContent | None
+    decisions: list[DecisionMemoryDecision]
+    evidence: list[DecisionMemoryEvidence]
+    norm_refs: list[DecisionMemoryNormRef]
+    crops: list[DecisionMemoryCrop]
+    status_events: list[DecisionMemoryStatusEvent]
+
+
+class DecisionMemoryCountRow(_Object):
+    status: _MemoryCaseStatus
+    data_class: _MemoryDataClass
+    cases: Annotated[int, Field(ge=0)]
+
+
+class DecisionMemoryStatus(_Object):
+    """What the memory holds and the installation settings in force (nothing journalled means ``test`` and ``off``)."""
+
+    data_class: _MemoryDataClass
+    training_use: Literal["off", "on"]
+    cases: Annotated[int, Field(ge=0)]
+    decisions: Annotated[int, Field(ge=0)]
+    by_status_and_class: list[DecisionMemoryCountRow]
+
+
+class DecisionMemoryStatusChangeRequest(_Object):
+    """Why a case is withdrawn or restored: a closed reason (free text would put personal data into an append-only record)."""
+
+    reason_code: _MemoryStatusReason
+
+
+class DecisionMemoryStatusChange(_Object):
+    """What a withdraw or a restore did: the status event written (or, for a replay, the first call's) and the standing after it."""
+
+    case_id: DecisionMemoryCaseId
+    status_event_id: Annotated[str, Field(pattern=rf"^dmw_{_ULID}$")]
+    kind: Literal["withdraw", "restore"]
+    status: Literal["active", "withdrawn"]
+    reason_code: _MemoryStatusReason
+    changed_at: datetime

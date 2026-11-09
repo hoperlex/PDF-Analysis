@@ -2443,3 +2443,27 @@ class SchedulePort(Protocol):
     def schedule_assignments(
         self, *, moves: Sequence[tuple[str, Any, str | None]], user_uid: str, idempotency_key: str,
     ) -> None: ...
+
+
+@runtime_checkable
+class DecisionMemoryPort(Protocol):
+    """The expert decision memory (`DECISION-MEMORY-01` phase M2, contract 1.44.0): reads for ``expert``/``admin``, the standing
+    changes and the status for ``admin``. Every rule is ``auditmanager.decision_memory``'s; a withdraw and a restore are keyed."""
+
+    def list_cases(
+        self, *, section_code: str | None, category: str | None, verdict: str | None, status: str | None,
+        data_class: str | None, origin_project_uid: str | None, cursor: str | None, limit: int,
+    ) -> models.DecisionMemoryCasePage: ...
+
+    def get_case(self, *, case_id: str) -> models.DecisionMemoryCase | None: ...
+
+    def status(self) -> models.DecisionMemoryStatus: ...
+
+    def withdraw_case(
+        self, *, case_id: str, reason_code: str, user_uid: str, idempotency_key: str,
+    ) -> models.DecisionMemoryStatusChange: ...
+
+    def restore_case(
+        self, *, case_id: str, reason_code: str, user_uid: str, idempotency_key: str,
+    ) -> models.DecisionMemoryStatusChange: ...
+__all__ += ["DecisionMemoryPort"]
