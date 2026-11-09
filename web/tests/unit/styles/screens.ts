@@ -149,8 +149,8 @@ import {
   DOCUMENT_PAGE_LIMIT,
   VERSION_PAGE_LIMIT,
 } from '@/entities/document-version';
-import type { StageRow } from '@/entities/audit-run';
-import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable, runChips } from '@/entities/audit-run';
+import type { RunStagesView, StageRow } from '@/entities/audit-run';
+import { AR_V3_BETA_PROFILE_ID, RUN_PAGE_LIMIT, StageTable, runChips, runStagesKey } from '@/entities/audit-run';
 
 import {
   DOCUMENT_UID,
@@ -950,9 +950,9 @@ export function screens(): Screen[] {
       { state: 'published', stages: prepared, cost_basis: 'unmetered' as never, cost_micros: 0, model_call_count: 2 }, () => undefined,
     ));
 
-    const dialog = (overrides: Partial<RunStatus>, selected: 'preparation' | 'text' | 'merge', procedures: readonly {
+    const dialog = (overrides: Partial<RunStatus>, selected: 'preparation' | 'text' | 'blocks' | 'merge', procedures: readonly {
       id: string; title: string; status: 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'unavailable' | 'skipped'; reason?: string;
-    }[] = []) => {
+    }[] = [], stages?: RunStagesView) => {
       const status = runStatus({ run_id: RUN_ID, ...overrides });
       const client = newClient();
       client.setQueryData(queryKeys.runs.detail(RUN_ID), status);
@@ -962,7 +962,7 @@ export function screens(): Screen[] {
         procedures: procedures.map((p) => ({ title: p.title, id: p.id, status: p.status, reason: p.reason ?? null, dependency: null, errorCode: null })),
       });
       return renderScreen(client, createElement(RunStagesDialog, {
-        status, chips, selected, onSelect: () => undefined, onClose: () => undefined, showServer: true, staticOpen: true,
+        status, chips, selected, onSelect: () => undefined, onClose: () => undefined, showServer: true, staticOpen: true, stages,
       }));
     };
     add('RunStagesDialog, a queued run: the chip that waits', dialog({ state: 'queued', terminal_at: null, stages: [], executor: EXECUTOR, queue_reason: 'executor_at_capacity' }, 'preparation'));
@@ -985,6 +985,67 @@ export function screens(): Screen[] {
         { id: 'finding_correction', title: 'Предложения по уточнению', status: 'queued' },
       ],
     ));
+
+    /*
+     * `RUN-STAGES-WEB-01`: the stages of a run (`getRunStages`). A run that froze its stage plan is drawn in the window on the blocks
+     * chip (an ensemble: a leg on a subscription with its server, a judge on a key with none yet; the facts with a subscription
+     * part and a price), on a failed chip with an error code and a reason, and on the rail with one line under each model chip.
+     * The words and the colours of the new rows are judged here like every other screen's.
+     */
+    const planned = (role: 'main' | 'leg1' | 'judge', model_id: string, extra: Record<string, unknown> = {}) => ({
+      role, model_id, effort: 'medium' as const, max_output_tokens: 6000, timeout_seconds: 900, ...extra,
+    });
+    const noFacts = {
+      calls_succeeded: 0, calls_failed: 0, calls_retried: 0, input_tokens: 0, output_tokens: 0, subscription_input_tokens: 0,
+      subscription_output_tokens: 0, cost_micros: 0,
+    };
+    const stagesAnswer: RunStagesView = {
+      phase: 'read',
+      stages: {
+        run_id: RUN_ID, state: 'running', plan_source: 'stage_plan',
+        items: [
+          { chip: 'preparation', stage_ids: ['source_preparation'], plan: [], facts: { ...noFacts, state: 'done', started_at: '2026-09-10T08:00:00Z', finished_at: '2026-09-10T08:01:09Z' } },
+          {
+            chip: 'text', stage_ids: ['text_analysis'], plan: [planned('main', 'claude-sonnet-5-5', { cell_key: 'text:main', access: 'subscription', server: 'adm1.hlab.kz' })],
+            facts: {
+              ...noFacts, state: 'failed', calls_succeeded: 5, calls_failed: 1, calls_retried: 1, input_tokens: 61240, output_tokens: 9310,
+              subscription_input_tokens: 61240, subscription_output_tokens: 9310, last_error_code: 'analysis_failed', reason: 'corpus_unavailable',
+              started_at: '2026-09-10T08:01:10Z', finished_at: '2026-09-10T08:06:40Z',
+            },
+          },
+          {
+            chip: 'blocks', stage_ids: ['block_analysis'],
+            plan: [
+              planned('leg1', 'claude-opus-5-5', { cell_key: 'blocks:leg1', access: 'subscription', server: 'adm1.hlab.kz' }),
+              planned('judge', 'claude-sonnet-5-5', { cell_key: 'blocks:judge', access: 'api', max_output_tokens: 12000 }),
+            ],
+            facts: {
+              ...noFacts, state: 'running', calls_succeeded: 12, input_tokens: 102400, output_tokens: 18800, subscription_input_tokens: 90000,
+              subscription_output_tokens: 15000, cost_micros: 412000, started_at: '2026-09-10T08:06:41Z', planned: 40, completed: 12,
+            },
+          },
+        ],
+      },
+    };
+    const planStatus: Partial<RunStatus> = {
+      state: 'running', terminal_at: null, executor: EXECUTOR,
+      stages: [ok('source_preparation'), { stage_id: 'text_analysis', status: 'failed', error_code: 'analysis_failed', started_at: '2026-09-10T08:01:10.000Z', finished_at: '2026-09-10T08:06:40.000Z' }],
+    };
+    const blocksProcedure = [{ id: 'block_analysis', title: 'Анализ блоков', status: 'running' as const }];
+    add('RunStagesDialog, a run with a stage plan: a blocks ensemble, its facts, a subscription part and a price', dialog(planStatus, 'blocks', blocksProcedure, stagesAnswer));
+    add('RunStagesDialog, a run with a stage plan: a failed chip with its error code and reason', dialog(planStatus, 'text', blocksProcedure, stagesAnswer));
+    add('RunStagesDialog, the stages could not be read: the run\'s model and the line that says so', dialog(planStatus, 'text', blocksProcedure, { phase: 'error' }));
+    add(
+      'RunProgress running with the stages read: one model line under each model chip',
+      seededRun(
+        { ...planStatus, state: 'running' },
+        (client) => {
+          reading({ workflow_version: 'extended-review-v3', procedures: blocksProcedure })(client);
+          if (stagesAnswer.phase === 'read') client.setQueryData(runStagesKey(RUN_ID), stagesAnswer.stages);
+        },
+        { journal },
+      ),
+    );
   }
 
   // ------------------------------------------------------------------ the widgets

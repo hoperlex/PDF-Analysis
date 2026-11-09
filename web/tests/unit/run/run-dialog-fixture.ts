@@ -8,7 +8,7 @@ import { createElement } from 'react';
 import type { RunStatus } from '@/shared/api';
 import { queryKeys } from '@/shared/api';
 import { runChips } from '@/entities/audit-run';
-import type { ProcedureReading, RunChipDefinition } from '@/entities/audit-run';
+import type { ProcedureReading, RunChipDefinition, RunStagesView } from '@/entities/audit-run';
 import { RunStagesDialog } from '@/widgets/run-stages-dialog';
 import { startedFrom } from '@/widgets/run-progress/model/started-from';
 
@@ -21,6 +21,8 @@ export interface DialogOptions {
   readonly showServer?: boolean;
   /** The account the dialog's start control sees; none: not known yet. */
   readonly roles?: readonly string[];
+  /** The stages of the run (`useRunStages`); none: the window draws what the run reading says (`RUN-STAGES-WEB-01`). */
+  readonly stages?: RunStagesView;
 }
 
 export function runDialog(status: RunStatus, options: DialogOptions = {}): string {
@@ -39,6 +41,7 @@ export function runDialog(status: RunStatus, options: DialogOptions = {}): strin
       onClose: () => undefined,
       reusedStageIds: from?.reusedStageIds,
       showServer: options.showServer ?? true,
+      stages: options.stages,
       staticOpen: true,
     }),
   );

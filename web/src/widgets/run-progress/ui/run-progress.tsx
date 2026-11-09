@@ -111,6 +111,7 @@ import {
   shortModelName,
   terminalReasonNote,
   useArV3StartAllowed,
+  useRunStages,
   useRunStatus,
 } from '@/entities/audit-run';
 import type { RunChipDefinition } from '@/entities/audit-run';
@@ -468,6 +469,8 @@ function SpendTile({ status }: { readonly status: RunStatus }) {
 
 export function RunProgress({ projectUid, runId, actions, journal }: RunProgressProps) {
   const { status, failure, polling, retry } = useRunStatus(runId);
+  // The stages (models and facts by chip) are read with the run and polled while it is open, at the status loop's own delays.
+  const stages = useRunStages(runId, status !== null && !isTerminalRunState(status.state));
   const me = useMe();
   const reading = useExtendedReviewReading(runId);
   const [tab, setTab] = useState<RunTab>('overview');
@@ -641,6 +644,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
         chips={chips}
         executor={executor}
         model={model}
+        stages={stages.phase === 'read' ? stages.stages : undefined}
         showServer={showServer}
         liveProgress={liveProgress}
         recorded={mode === 'recorded'}
@@ -699,6 +703,7 @@ export function RunProgress({ projectUid, runId, actions, journal }: RunProgress
           onClose={() => setDialogChip(null)}
           reusedStageIds={from === null ? undefined : from.reusedStageIds}
           showServer={showServer}
+          stages={stages}
         />
       )}
     </div>
