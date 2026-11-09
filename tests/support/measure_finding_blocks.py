@@ -29,9 +29,10 @@ in ten, in three, written with a look-alike Latin letter or a letter short; ``..
 the witness's abstention on a block whose reading carries a quality flag, ``..._without_the_doubtful_guard``; and the damage no flag
 names, a letter short, ``..._dropped10`` and ``..._dropped30``; and the **naive witness**, with neither the abstention on a doubtful reading
 nor the one on a near copy, on the exact and the damaged readings, ``..._naive_*``: an ablation that patches the rule's near-copy test
-out for the call, to show what the two abstentions are worth). The shipped adapter
-does not hand the text to the rule (that wiring is in ``bootstrap/adapters.py``, `D-590`), so this reproduction calls the rule
-itself, and **fails the scenario** unless the same call without the text gives exactly the adapter's answer for every finding.
+out for the call, to show what the two abstentions are worth). The shipped adapter hands the recognised text to the rule
+(``bootstrap/adapters.py``, `D-590`), so its answer is the relation **with** the witness; this reproduction calls the rule
+itself, **fails the scenario** unless the call with the blocks' text gives exactly the adapter's answer for every finding
+(``reproduction_matches_the_adapter``), and reads the whole-width rule's figures (``figures``) from the call without the text.
 The blocks' text of the ``pz_*`` and ``stress_*`` scenarios is what the PDF's own characters inside the block read as (an exact
 reading); the quotations of the sweeps are unique on their page, so with an exact reading a wrong link needs overlapping
 blocks and the noise runs of those sets show what a damaged reading costs in coverage, not in wrong links. ``repeat_sweep_cells``
@@ -325,9 +326,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             )
             for b in portal.blocks
         ]
-        linked = {i.finding_uid: list(i.portal_block_ids) for i in links.items}
-        items = [(uid, linked[uid], labels[uid]) for uid in evidence]
-        now = analyse(items=items, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=oracle)
+        linked = {i.finding_uid: list(i.portal_block_ids) for i in links.items}      # the shipped answer: with the second witness
 
         # The rule as it was, over the same stored documents.
         from auditmanager.analysis.geometry.finding_blocks import TextLine  # noqa: PLC0415
@@ -338,6 +337,13 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
         ]
         sizes = {p.page_number: (p.width_pt, p.height_pt) for p in oracle.layer}
         usable = [f for f in evidence.items()]
+        unlinked = set(links.unlinked_pages)
+        # The whole-width rule alone (`D-353`): the rule called without the text, which is the adapter's answer before `D-590`.
+        plain = {uid: rule_links(facts, lines, sizes, blocks, unlinked, None) for uid, facts in usable}
+        now = analyse(
+            items=[(uid, plain[uid], labels[uid]) for uid, _ in usable], evidence=evidence, blocks=blocks,
+            unlinked_pages=links.unlinked_pages, oracle=oracle,
+        )
         order = {b.portal_block_id: n for n, b in enumerate(blocks)}
         before_items = []
         for uid, facts in usable:
@@ -345,12 +351,21 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             before_items.append((uid, sorted(held, key=order.__getitem__), labels[uid]))
         before = analyse(items=before_items, evidence=evidence, blocks=blocks, unlinked_pages=links.unlinked_pages, oracle=oracle)
 
-        # The rule with the second witness, over the same stored documents. First the guard: the call without the text must be
+        # The rule with the second witness, over the same stored documents. First the guard: the call with the blocks' text must be
         # the adapter's answer, finding by finding, or this reproduction is not the shipped rule and nothing below means anything.
-        unlinked = set(links.unlinked_pages)
-        plain = {uid: rule_links(facts, lines, sizes, blocks, unlinked, None) for uid, facts in usable}
-        require_same_links(plain, linked)
+        def kind(label: str) -> str:
+            return label.split()[1] if label.startswith("AUTHORED") else "recorded"
+
         texts = {b.portal_block_id: b.text for b in blocks if b.text}
+        with_text = {
+            uid: rule_links(facts, lines, sizes, blocks, unlinked, texts, WITNESS_MIN_CHARACTERS, doubtful_blocks(blocks, texts))
+            for uid, facts in usable
+        }
+        require_same_links(with_text, linked)
+        adapter_figures = figures(analyse(
+            items=[(uid, linked[uid], labels[uid]) for uid, _ in usable], evidence=evidence, blocks=blocks,
+            unlinked_pages=links.unlinked_pages, oracle=oracle,
+        ), label_of=kind)
         memo = MemoOracle(oracle)
 
         def witnessed(
@@ -387,9 +402,6 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
         if lost:
             raise AssertionError(f"the second witness removed {len(lost)} links the geometry made, e.g. {lost[:3]}")
 
-        def kind(label: str) -> str:
-            return label.split()[1] if label.startswith("AUTHORED") else "recorded"
-
         return {
             "name": scenario.name, "note": scenario.note, "run_id": run_id, "version_uid": version_uid,
             "pages": len(oracle.layer), "portal_blocks": len(blocks), "text_layer_lines": len(lines),
@@ -398,6 +410,7 @@ def run(session: Any, store: Any, scenario: Scenario) -> dict[str, Any]:
             "skipped_units": dict(scenario.skipped), "status": links.status, "unlinked_pages": links.unlinked_pages,
             "figures": figures(now, label_of=kind), "figures_before_the_fix": figures(before, label_of=kind),
             "figures_with_the_witness": figures(with_witness, label_of=kind),
+            "figures_of_the_adapter": adapter_figures,
             "witness_pairs_added_by_geometry_verdict": dict(added),
             "figures_with_the_witness_sensitivity": {name: figures(report) for name, report in sensitivity.items()},
             "reproduction_matches_the_adapter": True,
