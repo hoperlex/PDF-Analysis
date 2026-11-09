@@ -213,7 +213,7 @@ class Harness:
         return runtime._run_workflow_v2(Session(), run=self.run, window_context=None, full_document=False, **self.common(docs))
 
     def run_v3_window(self, monkeypatch: pytest.MonkeyPatch, blocks: int = 10, *, repair: bool = False,
-                      block_limit: int | None = None) -> dict[str, Any]:
+                      block_limit: int | None = None, parameter_context: bool = False) -> dict[str, Any]:
         """One v3 window under the batched coverage policy, stopped after its block analysis (``visual_only``): the production path."""
         self.checkpoints = []
         docs, _ = self.documents(blocks)
@@ -222,10 +222,17 @@ class Harness:
                   "text_page_limit": 16, "review": True, "review_scope": "full_document", "section_code": "AR",
                   "rules_sha256": extended_review_bundle_digest("AR"), **extended_coverage_policy(),
                   **({"completion_policy": "source-complete-v1", "semantic_repair_attempts": 1} if repair else {})}
+        extra = {}
+        if parameter_context:
+            from auditmanager.analysis.public import project_parameter_context_policy, project_parameters_policy
+
+            parameters = project_parameters_policy("AR", full_coverage=True, candidate_refusals=True)
+            policy.update(project_parameters_policy=parameters, project_parameter_context_policy=project_parameter_context_policy(parameters))
+            extra["project_parameters"] = {"policy": parameters, "status": "ready", "facts": [], "source_sha256": None, "manifest_sha256": None}
         if block_limit is not None:
             policy["phase_call_limits"] = {**policy["phase_call_limits"], "block_analysis": block_limit}
         window = {"window_id": "w001", "policy": policy, "offset": 0, "page_count": blocks, "global_sha256": "g" * 64,
-                  "visual_only": True, "primary_text_status": "pending"}
+                  "visual_only": True, "primary_text_status": "pending", **extra}
         return runtime._run_workflow_v2(Session(), run=self.run, window_context=window, full_document=False, **self.common(docs))
 
     def calls(self) -> list[str]:
@@ -342,6 +349,20 @@ def test_the_v3_window_identities_carry_the_role_and_the_batch_receipt_keeps_eac
     assert state["phase_call_counts"]["block_analysis"]["completed_calls"] == 6, "calls are counted one by one"
     procedures = {p["id"]: p["status"] for p in state["procedures"]}
     assert procedures["block_analysis"] == "completed"
+
+
+def test_the_parameter_context_rides_on_every_block_request_of_the_ensemble_legs_and_judge_alike(monkeypatch):
+    harness = Harness(monkeypatch, kit="codex_only")
+    state = harness.run_v3_window(monkeypatch, blocks=8, parameter_context=True)
+    assert block_calls(harness) == ["blocks:leg1", "blocks:leg2", "blocks:judge"]
+    for cell_key, request in harness.log:
+        payload = json.loads(request.body["messages"][0]["content"])
+        assert payload["project_parameter_context"]["allowed_visual_source_ids"] == [s["source_id"] for s in payload["sources"]], cell_key
+        assert "project_parameter_context" in request.body["system"]
+    receipts = state["project_parameter_context_receipts"]
+    assert sorted(receipts) == ["blocks:0:judge", "blocks:0:leg1", "blocks:0:leg2"], "one receipt per call, by its identity"
+    assert all(r["request_prepared"] and r["response_received"] for r in receipts.values())
+    assert len({r["request_sha256"] for r in receipts.values()}) == 3
 
 
 def test_the_approved_call_limit_counts_batches_and_not_calls(monkeypatch):
