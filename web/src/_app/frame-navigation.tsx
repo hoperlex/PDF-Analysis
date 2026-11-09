@@ -25,10 +25,20 @@
  * optional or global screen and leaves a required one alone. The address stays the only source
  * of the project; the links are rewritten from it on each render, so the choice outlives a click.
  *
- * ## The project's sections (`UI-A-04`)
+ * ## «Проект» or «Проекты», first in «Работа» (`R-153h`)
  *
- * Under the current project only, a «Разделы» group follows «Работа»: one link per section of that project that
- * holds documents, with its mark and a count badge, leading to the section page (`section-navigation.ts`). It is
+ * The first item of «Работа» depends on the project the address names: «Проект», linking to that project's page, when
+ * one is current, and «Проекты», linking to the list, when none is. It is not a registry row of the menu (the registry
+ * holds both screens with `inMenu: false`; the top strip's selector is unchanged): `buildNavigation` carries it as the
+ * navigation's `projectEntry`, decided by `screenDecision` like every row, and {@link FrameNavigationView} turns it into
+ * an item with `withProjectEntry` from the `projectUid` it is given — so the bar, the compact rail and the stacked menu
+ * draw the same first item, and it is `aria-current="page"` on the page it leads to. Like a required target it takes no
+ * `?project=`; the list takes the parameter it is given, as the other global screens do.
+ *
+ * ## The project's sections (`UI-A-04`, `R-153g`)
+ *
+ * Under the current project only, a «Разделы» group follows «Работа»: one link per section of that project, the ones
+ * with no document too (a muted 0, no red badge), with its mark and a count badge, leading to the section page (`section-navigation.ts`). It is
  * the same disclosure as the other groups, closed unless a section page is the one shown. Its button carries the group's own counters (`D-360`): the red sum of the sections' «не проверено экспертом» and, in grey,
  * the documents it lists, through the `Disclosure`'s `badge` slot, so they are seen while it is folded. With no project in the
  * address the group is not drawn, and `FrameNavigation` makes no read; with one, `use-section-navigation.ts` reads
@@ -70,12 +80,12 @@ import { looksLikeProjectUid } from '@/entities/project';
 import type { MenuBadge, MenuBadgeSource, MenuBadges } from './menu-badges';
 import { badgeSourceAt, badgeSourcesOf, itemLabelWithBadges, uncheckedBadges, uncheckedClause } from './menu-badges';
 import type { CurrentScreen, Navigation, NavigationGroup } from './navigation';
-import { currentScreen } from './navigation';
+import { currentScreen, itemIsCurrent, withProjectEntry } from './navigation';
 import { BadgedLinks, ItemBadges, RailBadges } from './navigation-badges';
 import { NavigationGlyph } from './navigation-glyph';
 import type { SectionNavigation } from './section-navigation';
 import {
-  SECTIONS_DOCUMENTS_LABEL, SECTIONS_EMPTY_NOTE, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, sectionEntryLabel,
+  SECTIONS_DOCUMENTS_LABEL, SECTIONS_FAILED_NOTE, SECTIONS_GROUP_LABEL, SECTIONS_LOADING_NOTE, sectionEntryLabel,
   sectionsSummary, sectionsSummaryLabel,
 } from './section-navigation';
 import { useMenuBadges } from './use-menu-badges';
@@ -121,7 +131,7 @@ function links(group: NavigationGroup, current: CurrentScreen | null, projectUid
     href: withProjectParam(item.address, projectUid),
     label: item.label,
     icon: <NavigationGlyph label={item.label} />,
-    current: current?.address === item.address,
+    current: itemIsCurrent(item, current),
   }));
 }
 
@@ -205,7 +215,10 @@ function RailLink({
   );
 }
 
-/** What a «Разделы» group holds: the list, or the sentence that says why there is none. */
+/**
+ * What a «Разделы» group holds: the list, or the sentence that says why there is none. The list is every section of
+ * the project (`R-153g`); one with no document shows a muted 0, no red badge, and links to its page like the others.
+ */
 function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
   if (sections.status === 'loading' || sections.status === 'failed') {
     return (
@@ -213,9 +226,6 @@ function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
         {sections.status === 'loading' ? SECTIONS_LOADING_NOTE : SECTIONS_FAILED_NOTE}
       </p>
     );
-  }
-  if (sections.entries.length === 0) {
-    return <p className={styles.sectionNote} data-section-nav-status="empty">{SECTIONS_EMPTY_NOTE}</p>;
   }
   return (
     <ul className="am-disclosure__list" data-section-nav={sections.entries.length}>
@@ -230,7 +240,7 @@ function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
           >
             <span className={styles.sectionMark}>{entry.abbr}</span>
             <ItemBadges badges={uncheckedBadges(entry.awaitingDecision)}>
-              <span className={styles.sectionCount}>{entry.count}</span>
+              <span className={entry.count === 0 ? `${styles.sectionCount} ${styles.sectionCountEmpty}` : styles.sectionCount}>{entry.count}</span>
             </ItemBadges>
           </Link>
         </li>
@@ -241,17 +251,21 @@ function SectionsPanel({ sections }: { readonly sections: SectionNavigation }) {
 
 /**
  * `D-360`: the group's own counters, drawn on its button so they are seen while it is folded (the original's parent row):
- * the red «не проверено экспертом» sum and, in grey, the documents the group lists. None while the list is loading,
- * failed or empty: a figure that was not read is no badge.
+ * the red «не проверено экспертом» sum and, in grey, the documents the group lists. None while the list is loading or
+ * failed: a figure that was not read is no badge. A project with no document at all reads 0, muted like an empty section.
  */
 function sectionsBadge(sections: SectionNavigation): DisclosureBadge | undefined {
-  if (sections.status !== 'ready' || sections.entries.length === 0) return undefined;
+  if (sections.status !== 'ready') return undefined;
   const summary = sectionsSummary(sections.entries);
   return {
     label: sectionsSummaryLabel(summary),
     content: (
       <ItemBadges badges={uncheckedBadges(summary.awaitingDecision)}>
-        <span className={styles.sectionCount} title={`${SECTIONS_DOCUMENTS_LABEL}: ${summary.documents}`} data-section-nav-total={summary.documents}>
+        <span
+          className={summary.documents === 0 ? `${styles.sectionCount} ${styles.sectionCountEmpty}` : styles.sectionCount}
+          title={`${SECTIONS_DOCUMENTS_LABEL}: ${summary.documents}`}
+          data-section-nav-total={summary.documents}
+        >
           {summary.documents}
         </span>
       </ItemBadges>
@@ -290,7 +304,9 @@ export function FrameNavigationView({
   disclosure = Disclosure,
 }: FrameNavigationViewProps) {
   const Group = disclosure;
-  const { groups } = navigation;
+  // `R-153h`: «Проект» or «Проекты» is the first item of «Работа», by the project the address names. One navigation for the
+  // bar, the compact rail and the stacked menu, so the item is in all three.
+  const { groups } = withProjectEntry(navigation, projectUid);
   if (groups.length === 0) return null;
   const current = currentScreen(pathname);
   const inGroup = (group: NavigationGroup): boolean => current?.group === group.group;
@@ -321,7 +337,7 @@ export function FrameNavigationView({
                     wrapTooltip={own.length > 0}
                     glyph={<NavigationGlyph label={item.label} />}
                     badges={own}
-                    current={current?.address === item.address}
+                    current={itemIsCurrent(item, current)}
                   />
                 );
               })}

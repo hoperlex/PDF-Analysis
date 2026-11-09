@@ -8,13 +8,18 @@
  * `section_breakdown` counts a document in the section an expert confirmed for its current version and leaves the
  * archived ones out. This module adds no read of its own; `use-section-navigation.ts` asks the dashboard's.
  *
- * **Only sections that hold documents are listed**, in the order of the project structure (`S-5`). A section with
- * none has no page worth opening from a menu; the project page lists all fifteen.
+ * **Every section of the project is listed** (`R-153g`), in the order of the project structure (`S-5`), the ones with
+ * no document too: the menu shows the project's whole structure, so a reader sees which sections are still empty
+ * instead of wondering where they went. (Until `R-153g` only the sections that held documents were listed.) An empty
+ * section is an entry like the others, with a count of 0 that the menu draws muted, no red badge, and a link to its
+ * section page, which says that the section holds no document yet.
  *
  * **A reading that is not whole is not a list.** `section_breakdown` carries each of the fifteen sections exactly
  * once, zeros included. A response short of that, with a section this build does not know, or naming one twice, is
  * reported as `failed` rather than as a shorter menu, the same rule `summarizeSectionBreakdown` holds for the
- * dashboard (`W46-WIRE`, `Y5-a`): a row the server did not send is not a zero.
+ * dashboard (`W46-WIRE`, `Y5-a`): a row the server did not send is not a zero. A list that is `ready` therefore holds
+ * all fifteen entries, which is why the group has no note for an empty list (it was `SECTIONS_EMPTY_NOTE` until
+ * `R-153g`): that case cannot occur.
  *
  * The labels are the section page's own: the Cyrillic mark a designer writes on a title block (`АР`) and, as the
  * link's name and tooltip, the section's name. The Latin code reaches the markup only as a data attribute.
@@ -28,7 +33,8 @@
  * **The group's own figures (`D-360`).** The original's parent row «Разделы» carries the summed red count and, in grey, how
  * many projects the sub-menu holds, so both are seen while it is folded. The same here: {@link sectionsSummary} sums the
  * entries' red figures and their documents (the original's "project" is our document), and the group's button draws
- * them beside its name (`frame-navigation.tsx`). Nothing is read for it: the sums are over the entries the group lists.
+ * them beside its name (`frame-navigation.tsx`). Nothing is read for it: the sums are over the entries the group lists,
+ * which are all of the project's sections (`R-153g`), so a project with no document has a sum of 0.
  */
 
 import type { SectionDocumentCount } from '@/shared/api';
@@ -38,14 +44,14 @@ import { routes } from '@/shared/lib';
 
 import { UNCHECKED_BADGE_LABEL, uncheckedClause } from './menu-badges';
 
-/** One sub-item: a section of the current project that holds documents. */
+/** One sub-item: a section of the current project, with the documents it holds (`R-153g`: none, too). */
 export interface SectionNavigationEntry {
   readonly code: ProjectSectionCode;
   /** The Cyrillic mark shown in the menu: `АР`, `КЖ`, `ЭОМ`. */
   readonly abbr: string;
   /** The section's name, for the link's accessible name and tooltip. */
   readonly name: string;
-  /** Documents in the section, from the server's count. Always at least 1. */
+  /** Documents in the section, from the server's count. 0 for a section with none: the menu draws it muted. */
   readonly count: number;
   /**
    * `UI-A-05`: the documents of the section no expert has checked (`audit_counts.awaiting_decision`); `null` when the
@@ -57,7 +63,7 @@ export interface SectionNavigationEntry {
   readonly current: boolean;
 }
 
-/** What the group has to say: still reading, could not be read whole, or the list. */
+/** What the group has to say: still reading, could not be read whole, or the list (always all of the sections). */
 export type SectionNavigation =
   | { readonly status: 'loading' }
   | { readonly status: 'failed' }
@@ -72,7 +78,6 @@ export const SECTIONS_DOCUMENTS_LABEL = 'Документов в раздела�
 /** The words of a group that has no list to show. */
 export const SECTIONS_LOADING_NOTE = 'Разделы проекта загружаются…';
 export const SECTIONS_FAILED_NOTE = 'Разделы проекта не удалось прочитать.';
-export const SECTIONS_EMPTY_NOTE = 'В проекте пока нет разделов с документами.';
 
 /**
  * The accessible name of a sub-item: the mark, the name and the count, which the visible badge shortens to a number,
@@ -86,7 +91,8 @@ export function sectionEntryLabel(entry: Pick<SectionNavigationEntry, 'abbr' | '
 
 /**
  * The group for `projectUid` from the dashboard's `section_breakdown` rows of that project, with the entry whose
- * page is `pathname` marked current.
+ * page is `pathname` marked current: one entry for each of the project's sections, in structure order, the empty ones
+ * included (`R-153g`).
  */
 export function sectionNavigationOf(
   rows: readonly SectionDocumentCount[],
@@ -104,8 +110,8 @@ export function sectionNavigationOf(
   }
   if (counts.size !== PROJECT_SECTIONS.length) return { status: 'failed' };
   const entries = sectionsInStructureOrder().flatMap((section): SectionNavigationEntry[] => {
+    // The reading is whole (`counts.size` is the sections' number, checked above), so every code has its count.
     const count = counts.get(section.code) ?? 0;
-    if (count < 1) return [];
     const href = routes.projectSection(projectUid, section.code);
     return [{
       code: section.code,
