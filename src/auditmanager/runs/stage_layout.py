@@ -272,9 +272,16 @@ class FrozenStagePlan:
             raise ValueError("a cell appears once in a plan")
 
     def to_json(self) -> dict[str, Any]:
+        """The document ``audit_run.stage_plan`` stores. Each cell carries exactly ``cell_key`` (``<row>:<role>``), ``model_id``, ``effort``,
+        ``max_output_tokens``, ``timeout_seconds`` and ``access``: the row and the role are the key's, and the readers (the database trigger
+        of the cell binding, ``getRunStages``) take them from it."""
         return {
             "format": PLAN_FORMAT, "layout_revision_id": self.layout_revision_id, "kit": self.kit,
-            "cells": [{**wire, "access": cell.access} for wire, cell in zip(cells_to_wire(self.cells), self.cells)],
+            "cells": [
+                {"cell_key": cell.cell_key, "model_id": cell.model_id, "effort": cell.effort,
+                 "max_output_tokens": cell.max_output_tokens, "timeout_seconds": cell.timeout_seconds, "access": cell.access}
+                for cell in self.cells
+            ],
         }
 
     @property
